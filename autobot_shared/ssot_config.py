@@ -135,7 +135,9 @@ class PortConfig(BaseSettings):
         default=8100, alias="AUTOBOT_CHROMADB_PORT"
     )  # Issue #3094: 8100 matches Ansible deploy
     npu: int = Field(default=8081, alias="AUTOBOT_NPU_WORKER_PORT")
-    tts: int = Field(default=8082, alias="AUTOBOT_TTS_WORKER_PORT")  # Issue #928
+    tts: int = Field(
+        default=8083, alias="AUTOBOT_TTS_WORKER_PORT"
+    )  # Issue #928; #3431: 8082 WSL2/Hyper-V reserved
     slm: int = Field(default=8000, alias="AUTOBOT_SLM_PORT")  # Issue #768
     prometheus: int = Field(default=9090, alias="AUTOBOT_PROMETHEUS_PORT")
     grafana: int = Field(default=3000, alias="AUTOBOT_GRAFANA_PORT")
@@ -435,10 +437,11 @@ class LLMConfig(BaseSettings):
 
 class TimeoutConfig(BaseSettings):
     """
-    Timeout configuration (in milliseconds for HTTP, seconds for LLM).
+    Timeout configuration — all values in seconds unless noted.
 
-    Note: Frontend uses milliseconds, backend uses seconds for LLM.
-    The config stores values as they appear in .env for consistency.
+    Fields are env-overridable via AUTOBOT_TIMEOUT_* variables.  The
+    existing AUTOBOT_API_TIMEOUT / AUTOBOT_LLM_TIMEOUT / … aliases are
+    preserved for backward compatibility.
     """
 
     model_config = SettingsConfigDict(
@@ -447,34 +450,143 @@ class TimeoutConfig(BaseSettings):
         extra="ignore",
     )
 
-    # API timeouts (milliseconds)
+    # ------------------------------------------------------------------ #
+    # HTTP / REST clients (seconds)                                        #
+    # ------------------------------------------------------------------ #
+
+    # Generic HTTP API call (used by most aiohttp/httpx sessions)
+    http: float = Field(default=10.0, alias="AUTOBOT_TIMEOUT_HTTP")
+
+    # Health / liveness probes — must be short to avoid blocking startup
+    health_check: float = Field(default=3.0, alias="AUTOBOT_HEALTH_CHECK_TIMEOUT")
+
+    # Connectivity probes (quick: just confirm a socket can be reached)
+    connect: float = Field(default=5.0, alias="AUTOBOT_TIMEOUT_CONNECT")
+
+    # ------------------------------------------------------------------ #
+    # LLM / AI inference (seconds)                                         #
+    # ------------------------------------------------------------------ #
+
+    # Synchronous / short LLM call (classification, routing, embedding)
+    llm: float = Field(default=30.0, alias="AUTOBOT_LLM_TIMEOUT")
+
+    # Long-running LLM call or agent loop step (research, code analysis)
+    llm_long: float = Field(default=120.0, alias="AUTOBOT_TIMEOUT_LLM_LONG")
+
+    # ------------------------------------------------------------------ #
+    # Redis operations (seconds)                                           #
+    # ------------------------------------------------------------------ #
+
+    # Individual Redis command (get/set/pipeline)
+    redis_op: float = Field(default=2.0, alias="AUTOBOT_TIMEOUT_REDIS_OP")
+
+    # ------------------------------------------------------------------ #
+    # Subprocess / shell commands (seconds)                                #
+    # ------------------------------------------------------------------ #
+
+    # Quick subprocess (health query, lspci, xrandr, …)
+    subprocess_short: float = Field(
+        default=5.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS_SHORT"
+    )
+
+    # Standard subprocess (git operations, rsync small payload)
+    subprocess: float = Field(default=30.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS")
+
+    # Long-running subprocess (Ansible playbook, large rsync, deploy)
+    subprocess_long: float = Field(
+        default=300.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS_LONG"
+    )
+
+    # Very long subprocess (full deployment pipeline, TLS provisioning)
+    subprocess_deploy: float = Field(
+        default=600.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS_DEPLOY"
+    )
+
+    # ------------------------------------------------------------------ #
+    # MCP / skill processes (seconds)                                      #
+    # ------------------------------------------------------------------ #
+
+    # Time allowed for an MCP server subprocess to start up
+    mcp_startup: float = Field(default=10.0, alias="AUTOBOT_TIMEOUT_MCP_STARTUP")
+
+    # Time allowed for a single MCP tool call round-trip
+    mcp_call: float = Field(default=30.0, alias="AUTOBOT_TIMEOUT_MCP_CALL")
+
+    # ------------------------------------------------------------------ #
+    # WebSocket (seconds)                                                  #
+    # ------------------------------------------------------------------ #
+
+    websocket: float = Field(default=30.0, alias="AUTOBOT_WEBSOCKET_TIMEOUT")
+
+    # ------------------------------------------------------------------ #
+    # Background tasks (seconds)                                           #
+    # ------------------------------------------------------------------ #
+
+    # Default cap for a background task before it is considered hung
+    background_task: float = Field(
+        default=600.0, alias="AUTOBOT_TIMEOUT_BACKGROUND_TASK"
+    )
+
+    # ------------------------------------------------------------------ #
+    # A2A task manager (seconds)                                           #
+    # ------------------------------------------------------------------ #
+
+    # How long a terminal A2A task remains queryable before eviction from
+    # the in-memory store (Issue #3823).
+    a2a_task_ttl: float = Field(default=60.0, alias="AUTOBOT_A2A_TASK_TTL_SECONDS")
+
+    # ------------------------------------------------------------------ #
+    # Skill / code validation (seconds)                                    #
+    # ------------------------------------------------------------------ #
+
+    # Sandbox execution timeout for skill package tests
+    skill_test: float = Field(default=15.0, alias="AUTOBOT_TIMEOUT_SKILL_TEST")
+
+    # Secure sandbox / subprocess execution (docker, shell code execution)
+    sandbox: float = Field(default=300.0, alias="AUTOBOT_SANDBOX_TIMEOUT")
+
+    # ------------------------------------------------------------------ #
+    # Service-to-service / LLM request (seconds)                          #
+    # ------------------------------------------------------------------ #
+
+    # General inter-service HTTP request (e.g. ServiceHTTPClient)
+    default_request: float = Field(default=30.0, alias="AUTOBOT_REQUEST_TIMEOUT")
+
+    # LLM inference request (longer than generic HTTP — model may take time)
+    llm_request: float = Field(default=60.0, alias="AUTOBOT_LLM_REQUEST_TIMEOUT")
+
+    # ------------------------------------------------------------------ #
+    # HTTP connection pool (seconds)                                       #
+    # ------------------------------------------------------------------ #
+
+    connection_pool_read: float = Field(default=60.0, alias="AUTOBOT_POOL_READ_TIMEOUT")
+    connection_pool_write: float = Field(
+        default=30.0, alias="AUTOBOT_POOL_WRITE_TIMEOUT"
+    )
+    connection_pool: float = Field(default=30.0, alias="AUTOBOT_POOL_TIMEOUT")
+
+    # ------------------------------------------------------------------ #
+    # Legacy / frontend aliases (milliseconds)                             #
+    # ------------------------------------------------------------------ #
+
+    # Kept for backward compat — frontend reads this as ms
     api: int = Field(default=10000, alias="AUTOBOT_API_TIMEOUT")
     api_retry_attempts: int = Field(default=3, alias="AUTOBOT_API_RETRY_ATTEMPTS")
     api_retry_delay: int = Field(default=1000, alias="AUTOBOT_API_RETRY_DELAY")
 
-    # LLM timeout (seconds)
-    llm: int = Field(default=30, alias="AUTOBOT_LLM_TIMEOUT")
-
-    # Health check timeout (seconds)
-    health_check: int = Field(default=3, alias="AUTOBOT_HEALTH_CHECK_TIMEOUT")
-
-    # WebSocket timeout (seconds)
-    websocket: int = Field(default=30, alias="AUTOBOT_WEBSOCKET_TIMEOUT")
+    # ------------------------------------------------------------------ #
+    # Convenience properties                                               #
+    # ------------------------------------------------------------------ #
 
     @property
     def api_seconds(self) -> float:
-        """Get API timeout in seconds."""
+        """Get legacy api timeout in seconds (milliseconds / 1000)."""
         return self.api / 1000.0
-
-    @property
-    def http(self) -> int:
-        """Alias for api timeout (milliseconds)."""
-        return self.api
 
     @property
     def http_seconds(self) -> float:
-        """Get HTTP timeout in seconds."""
-        return self.api / 1000.0
+        """Alias — returns http field directly (already in seconds)."""
+        return self.http
 
 
 class RedisConfig(BaseSettings):
@@ -693,6 +805,14 @@ class CacheL2Config(BaseSettings):
         default=0.95,
         alias="AUTOBOT_CACHE_SEMANTIC_THRESHOLD",
         description="Cosine similarity threshold for semantic cache hits (0.5-1.0)",
+    )
+    kb_dedup_threshold: float = Field(
+        default=0.92,
+        alias="AUTOBOT_KB_DEDUP_THRESHOLD",
+        description=(
+            "Cosine similarity threshold for KB fact deduplication (0.5-1.0). "
+            "Facts whose nearest ChromaDB neighbour exceeds this score are skipped."
+        ),
     )
 
 
@@ -945,6 +1065,67 @@ class DatabasePoolConfig(BaseSettings):
     )
 
 
+class PathConfig(BaseSettings):
+    """
+    File-system path configuration.
+
+    Provides a single source of truth for well-known AutoBot directories so
+    production code never needs to hard-code paths like /opt/autobot.
+
+    Override any value via environment variable (e.g. AUTOBOT_BASE_DIR=/srv/autobot).
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=str(PROJECT_ROOT / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    # Installation root — all derived paths use this as their base.
+    # Default matches the standard Ansible deployment target.
+    base_dir: str = Field(default="/opt/autobot", alias="AUTOBOT_BASE_DIR")
+
+    # Well-known sub-directories (all relative to base_dir unless absolute).
+    # Override individual paths via AUTOBOT_PLUGINS_DIR etc. when needed.
+    plugins_dir: str = Field(default="plugins", alias="AUTOBOT_PLUGINS_DIR")
+    data_dir: str = Field(default="data", alias="AUTOBOT_DATA_DIR")
+    logs_dir: str = Field(default="logs", alias="AUTOBOT_LOG_DIR")
+    models_dir: str = Field(default="models", alias="AUTOBOT_MODELS_DIR")
+    docs_dir: str = Field(default="docs", alias="AUTOBOT_DOCS_DIR")
+
+    def resolve(self, relative: str) -> Path:
+        """Resolve a path relative to base_dir."""
+        p = Path(relative)
+        if p.is_absolute():
+            return p
+        return Path(self.base_dir) / p
+
+    @property
+    def plugins_path(self) -> Path:
+        """Absolute path to the plugins directory."""
+        return self.resolve(self.plugins_dir)
+
+    @property
+    def data_path(self) -> Path:
+        """Absolute path to the data directory."""
+        return self.resolve(self.data_dir)
+
+    @property
+    def logs_path(self) -> Path:
+        """Absolute path to the logs directory."""
+        return self.resolve(self.logs_dir)
+
+    @property
+    def models_path(self) -> Path:
+        """Absolute path to the models directory."""
+        return self.resolve(self.models_dir)
+
+    @property
+    def docs_path(self) -> Path:
+        """Absolute path to the docs directory."""
+        return self.resolve(self.docs_dir)
+
+
 class FeatureConfig(BaseSettings):
     """Feature flags configuration."""
 
@@ -973,6 +1154,25 @@ class FeatureConfig(BaseSettings):
     )
     training_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_TRAINING")
     osint_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_OSINT")
+
+    # Subsystem feature flags — issue #3009 (plan short-name fields)
+    # These complement the *_enabled fields above with concise names.
+    # Heavy optional subsystems (computer_vision, training) default to False.
+    #
+    # Env var aliases use suffixes to avoid collisions with the existing
+    # *_enabled fields above (AUTOBOT_FEATURE_NPU, AUTOBOT_FEATURE_VOICE, etc.
+    # are already claimed by those fields).
+    npu: bool = Field(default=True, alias="AUTOBOT_FEATURE_NPU_2")
+    voice: bool = Field(default=True, alias="AUTOBOT_FEATURE_VOICE_2")
+    browser_automation: bool = Field(
+        default=True, alias="AUTOBOT_FEATURE_BROWSER_AUTOMATION"
+    )
+    computer_vision: bool = Field(
+        default=False, alias="AUTOBOT_FEATURE_COMPUTER_VISION_CV"
+    )
+    training: bool = Field(default=False, alias="AUTOBOT_FEATURE_TRAINING_TR")
+    graph_rag: bool = Field(default=True, alias="AUTOBOT_FEATURE_GRAPH_RAG")
+    mcp: bool = Field(default=True, alias="AUTOBOT_FEATURE_MCP")
 
 
 class AutoBotConfig(BaseSettings):
@@ -1012,6 +1212,9 @@ class AutoBotConfig(BaseSettings):
     feature: FeatureConfig = Field(default_factory=FeatureConfig)
     permission: PermissionConfig = Field(default_factory=PermissionConfig)
     database_pool: DatabasePoolConfig = Field(default_factory=DatabasePoolConfig)
+    path: PathConfig = Field(
+        default_factory=PathConfig, alias="AUTOBOT_PATH_CONFIG"
+    )  # Issue #3397; alias avoids collision with system PATH env var
 
     # Top-level settings
     deployment_mode: str = Field(default="distributed", alias="AUTOBOT_DEPLOYMENT_MODE")

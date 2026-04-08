@@ -349,12 +349,11 @@ class SimplePTY:
         if self.process:
             try:
                 self.process.terminate()
-                # Give process a moment to terminate gracefully
-                import time
-
-                time.sleep(TimingConstants.MICRO_DELAY)
-                if self.process.poll() is None:
-                    # Process didn't terminate, force kill
+                # Wait briefly for graceful shutdown; avoids blocking sleep on event loop
+                try:
+                    self.process.wait(timeout=TimingConstants.MICRO_DELAY)
+                except Exception:
+                    # Process didn't terminate within timeout — force kill
                     self.process.kill()
                     # Wait without timeout for kill to complete
                     self.process.wait()

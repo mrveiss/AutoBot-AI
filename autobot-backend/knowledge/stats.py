@@ -11,7 +11,7 @@ Implements Issue #71 - O(1) atomic counter operations for fact/document/vector c
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
@@ -121,7 +121,7 @@ class StatsMixin:
                 "total_vectors": vector_count,
                 "total_documents": vector_count,
                 "total_chunks": vector_count,
-                "initialized_at": datetime.now().isoformat(),
+                "initialized_at": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
         logger.info(
@@ -185,7 +185,7 @@ class StatsMixin:
                 "total_vectors": actual_vectors,
                 "total_documents": actual_vectors,
                 "total_chunks": actual_vectors,
-                "last_corrected": datetime.now().isoformat(),
+                "last_corrected": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
         logger.info("Stats counters corrected to actual values")
@@ -212,7 +212,7 @@ class StatsMixin:
             "stored_vectors": stored_vectors,
             "actual_vectors": actual_vectors,
             "vector_drift": vector_drift,
-            "checked_at": datetime.now().isoformat(),
+            "checked_at": datetime.now(tz=timezone.utc).isoformat(),
             "is_consistent": fact_drift == 0 and vector_drift == 0,
         }
 
@@ -355,7 +355,7 @@ class StatsMixin:
             "categories": [],
             "db_size": 0,
             "status": "online",
-            "last_updated": datetime.now().isoformat(),
+            "last_updated": datetime.now(tz=timezone.utc).isoformat(),
             "redis_db": self.redis_db,
             "vector_store": "chromadb",
             "chromadb_collection": self.chromadb_collection,
@@ -408,7 +408,7 @@ class StatsMixin:
                 "db_size": 0,
                 "status": "error",
                 "error": "Failed to retrieve knowledge base stats",
-                "last_updated": datetime.now().isoformat(),
+                "last_updated": datetime.now(tz=timezone.utc).isoformat(),
             }
 
     async def _get_memory_stats(self) -> Dict[str, float]:
@@ -500,7 +500,7 @@ class StatsMixin:
             detailed["vector_store_health"] = "healthy"
             detailed["vector_backend"] = "chromadb"
             detailed["detailed_stats"] = True
-            detailed["generated_at"] = datetime.now().isoformat()
+            detailed["generated_at"] = datetime.now(tz=timezone.utc).isoformat()
 
             return detailed
 
@@ -555,7 +555,7 @@ class StatsMixin:
         try:
             metrics = {
                 "status": "success",
-                "generated_at": datetime.now().isoformat(),
+                "generated_at": datetime.now(tz=timezone.utc).isoformat(),
                 "overall_score": 0.0,
                 "dimensions": {},
                 "issues": [],
@@ -586,7 +586,7 @@ class StatsMixin:
             return {
                 "status": "error",
                 "message": str(e),
-                "generated_at": datetime.now().isoformat(),
+                "generated_at": datetime.now(tz=timezone.utc).isoformat(),
             }
 
     def _check_fact_completeness(self, fact: Dict[str, Any], issues: List[Dict]) -> str:
@@ -778,16 +778,20 @@ class StatsMixin:
             return None
         try:
             if "T" in timestamp_str:
-                return datetime.fromisoformat(
+                dt = datetime.fromisoformat(
                     timestamp_str.replace("Z", "+00:00").split("+")[0]
                 )
-            return datetime.strptime(timestamp_str, "%Y-%m-%d")
+            else:
+                dt = datetime.strptime(timestamp_str, "%Y-%m-%d")
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
         except (ValueError, TypeError):
             return None
 
     def _compute_age_buckets(self, facts: List[Dict[str, Any]]) -> Dict[str, int]:
         """Compute age distribution buckets (Issue #398: extracted)."""
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
         buckets = {
             "last_day": 0,
             "last_week": 0,

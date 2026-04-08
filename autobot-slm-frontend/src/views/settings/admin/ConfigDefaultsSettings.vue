@@ -15,6 +15,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { createLogger } from '@/utils/debugUtils'
 import { formatDateTime } from '@/composables/useTimezone'
+import { getSlmApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('ConfigDefaultsSettings')
 const authStore = useAuthStore()
@@ -54,7 +55,7 @@ const filteredConfigs = computed(() => {
 // API helper
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T | null> {
   try {
-    const response = await fetch(`${authStore.getApiUrl()}${path}`, {
+    const response = await fetch(`${getSlmApiBase()}${path}`, {
       ...options,
       headers: { 'Content-Type': 'application/json', ...authStore.getAuthHeaders(), ...options?.headers },
     })
@@ -74,7 +75,7 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T | nul
 async function fetchDefaults(): Promise<void> {
   isLoading.value = true
   errorMessage.value = null
-  const result = await apiFetch<{ configs: ConfigEntry[]; total: number }>('/api/config/defaults')
+  const result = await apiFetch<{ configs: ConfigEntry[]; total: number }>('/config/defaults')
   if (result) configs.value = result.configs
   isLoading.value = false
 }
@@ -101,7 +102,7 @@ async function saveConfig(): Promise<void> {
   if (!key) { errorMessage.value = 'Key is required'; return }
 
   const result = await apiFetch<ConfigEntry>(
-    `/api/config/defaults/${encodeURIComponent(key)}`,
+    `/config/defaults/${encodeURIComponent(key)}`,
     { method: 'PUT', body: JSON.stringify({ value: newValue.value, value_type: newValueType.value }) }
   )
   if (result) {
@@ -115,7 +116,7 @@ async function saveConfig(): Promise<void> {
 async function deleteConfig(key: string): Promise<void> {
   if (!confirm(`Delete global config "${key}"?`)) return
   const result = await apiFetch<{ message: string }>(
-    `/api/config/defaults/${encodeURIComponent(key)}`,
+    `/config/defaults/${encodeURIComponent(key)}`,
     { method: 'DELETE' }
   )
   if (result) {

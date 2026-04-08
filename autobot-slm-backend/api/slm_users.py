@@ -21,8 +21,10 @@ from user_management.schemas.user import (
     UserListResponse,
     UserResponse,
     UserUpdate,
+    PasswordChange,
 )
 from user_management.services import TenantContext, UserService
+from user_management.services.user_service import UserNotFoundError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/slm-users", tags=["slm-users"])
@@ -131,6 +133,30 @@ async def update_slm_user(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error"
         ) from e
+
+
+@router.post("/{user_id}/change-password", status_code=status.HTTP_200_OK)
+async def change_slm_user_password(
+    user_id: uuid.UUID,
+    payload: PasswordChange,
+    current_user: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_slm_db),
+) -> dict:
+    """Reset an SLM user's password (admin action — no current password required)."""
+    logger.info("Admin password reset for SLM user: %s", user_id)
+    context = TenantContext(is_platform_admin=True)
+    user_service = UserService(db, context)
+
+    try:
+        await user_service.change_password(
+            user_id=user_id,
+            current_password=payload.current_password,
+            new_password=payload.new_password,
+            require_current=False,
+        )
+        return {"message": "Password updated successfully"}
+    except UserNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found") from e
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

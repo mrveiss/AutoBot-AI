@@ -11,16 +11,19 @@ temporal characteristics, ensuring knowledge base freshness and accuracy.
 import asyncio
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
 from autobot_shared.logging_manager import get_llm_logger
-from config import config_manager
+from config.manager import get_config_manager as _get_config_manager
 from models.atomic_fact import AtomicFact, FactType, TemporalType
 from services.fact_extraction_service import FactExtractionService
 
 logger = get_llm_logger("temporal_invalidation")
+
+# Canonical singleton; avoids routing through config/__init__ lazy alias (Issue #3829)
+config_manager = _get_config_manager()
 
 
 class InvalidationReason(Enum):
@@ -63,7 +66,7 @@ class InvalidationRule:
         self.fact_types = fact_types or []
         self.enabled = enabled
         self.predicate_filters = predicate_filters or []
-        self.created_at = datetime.now()
+        self.created_at = datetime.now(tz=timezone.utc)
 
     def matches_fact(
         self, fact: AtomicFact
@@ -82,7 +85,7 @@ class InvalidationRule:
 
         # Check age if specified
         if self.max_age_days is not None:
-            fact_age = (datetime.now() - fact.valid_from).days
+            fact_age = (datetime.now(tz=timezone.utc) - fact.valid_from).days
             if fact_age > self.max_age_days:
                 return True, InvalidationReason.TEMPORAL_EXPIRY
 
@@ -342,7 +345,7 @@ class TemporalInvalidationService:
                         "rule_id": rule_id,
                         "rule_name": rule.name,
                         "reason": reason.value,
-                        "timestamp": datetime.now().isoformat(),
+                        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                     }
                     rule_statistics[rule_id] += 1
                     break  # Only apply first matching rule
@@ -372,7 +375,7 @@ class TemporalInvalidationService:
             {
                 "fact_id": fact.fact_id,
                 "statement": f"{fact.subject} {fact.predicate} {fact.object}",
-                "age_days": (datetime.now() - fact.valid_from).days,
+                "age_days": (datetime.now(tz=timezone.utc) - fact.valid_from).days,
                 "confidence": fact.confidence,
                 "source": fact.source,
                 "reason": invalidation_reasons.get(fact.fact_id, {}),
@@ -533,7 +536,7 @@ class TemporalInvalidationService:
             invalidation_reasons,
             rule_statistics,
         ) = self._process_facts_against_rules(all_facts, enabled_rules)
-        processing_time = (datetime.now() - start_time).total_seconds()
+        processing_time = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
         invalidated_count = await self._execute_invalidation(
             dry_run, facts_to_invalidate, invalidation_reasons
         )
@@ -616,7 +619,7 @@ class TemporalInvalidationService:
         Returns:
             Dictionary with invalidation results
         """
-        start_time = datetime.now()
+        start_time = datetime.now(tz=timezone.utc)
         logger.info("Starting invalidation sweep (dry_run=%s)", dry_run)
 
         try:
@@ -640,7 +643,7 @@ class TemporalInvalidationService:
 
         except Exception as e:
             logger.error("Error in invalidation sweep: %s", e)
-            processing_time = (datetime.now() - start_time).total_seconds()
+            processing_time = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
             return self._build_sweep_error_response(
                 "Invalidation sweep failed", processing_time
             )
@@ -737,7 +740,7 @@ class TemporalInvalidationService:
                 return
 
             history_entry = {
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "sweep_id": str(uuid.uuid4()),
                 **kwargs,
             }
@@ -798,7 +801,7 @@ class TemporalInvalidationService:
                 "contradicted_by": new_fact.fact_id,
                 "new_fact_confidence": new_fact.confidence,
                 "old_fact_confidence": fact.confidence,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
         return reasons
 

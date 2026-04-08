@@ -1,4 +1,12 @@
 ---
+
+# -------------------------------------------------------------------
+# Pre-flight: Sync code_source from GitHub before roles run (#3604)
+# -------------------------------------------------------------------
+- name: "Pre-flight: Sync code_source"
+  import_playbook: pre-flight-code-sync.yml
+  tags: ['pre-flight']
+
 # Deploy Backend Services to Main Machine (Remote from SLM)
 # Issue #856: Python 3.12 deployment with pyenv
 #
@@ -33,6 +41,9 @@
     # Redis connection
     backend_redis_host: "{{ hostvars[groups['database'][0]]['ansible_host'] | default('127.0.0.1') }}"
     backend_redis_port: 6379
+
+    # Browser Worker connection
+    backend_browser_host: "{{ hostvars[groups['browser'][0]]['ansible_host'] | default('') if 'browser' in groups and groups['browser'] | length > 0 else '' }}"
 
     # Deployment settings
     backend_deploy_from_git: false  # Use existing code

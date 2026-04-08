@@ -42,7 +42,7 @@ health_check_enabled: true
 health_check_interval: 60  # seconds
 health_check_endpoints:
   - name: "Backend API"
-    url: "https://{{ coordinator_host }}:8443/api/health"  # Issue #956: HTTPS:8443 since #858/#861
+    url: "https://{{ coordinator_host }}:{{ backend_nginx_port }}/api/health"  # Issue #956: HTTPS:8443 since #858/#861
     expected_status: 200
   - name: "Redis"
     host: "{{ hostvars[groups['redis'][0]]['ansible_host'] }}"
@@ -60,7 +60,11 @@ backup_destinations:
   - local_data
 
 # Service ports (from SSOT)
-backend_port: 8443
+# backend_nginx_port: external HTTPS port exposed by nginx (TLS termination).
+# Do NOT define backend_port here — the backend role owns that variable (8001,
+# plain HTTP, uvicorn bind port).  Defining it here would override the backend
+# role's default when distributed_setup runs after backend in the same play.
+backend_nginx_port: 8443
 frontend_port: 443
 redis_port: 6379
 npu_worker_port: 8081

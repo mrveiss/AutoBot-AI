@@ -11,6 +11,7 @@ import asyncio
 import logging
 from typing import Any, Dict
 
+from autobot_shared.models.task_result import task_error, task_success
 from models.task_context import TaskExecutionContext
 from utils.command_validator import command_validator
 
@@ -42,10 +43,7 @@ class ExecuteShellCommandHandler(TaskHandler):
         Returns:
             Error result dict with security block message
         """
-        result = {
-            "status": "error",
-            "message": (f"Command blocked for security: {validation_result['reason']}"),
-        }
+        result = task_error(f"Command blocked for security: {validation_result['reason']}")
         ctx.audit_log(
             "execute_shell_command",
             "blocked",
@@ -125,11 +123,7 @@ class ExecuteShellCommandHandler(TaskHandler):
             "success",
             {"command": command, "validation_passed": True, "shell_used": use_shell},
         )
-        return {
-            "status": "success",
-            "message": "Command executed securely.",
-            "output": output,
-        }
+        return task_success("Command executed securely.", data={"output": output})
 
     def _build_error_result(
         self,
@@ -166,13 +160,11 @@ class ExecuteShellCommandHandler(TaskHandler):
                 "shell_used": use_shell,
             },
         )
-        return {
-            "status": "error",
-            "message": "Command failed.",
-            "error": error,
-            "output": output,
-            "returncode": returncode,
-        }
+        return task_error(
+            "Command failed.",
+            error=error,
+            extra={"output": output, "returncode": returncode},
+        )
 
     def _build_result_and_log(
         self,
@@ -240,10 +232,7 @@ class ExecuteShellCommandHandler(TaskHandler):
 
         except Exception as e:
             logger.error("Shell command execution error: %s", e)
-            result = {
-                "status": "error",
-                "message": "Command execution error",
-            }
+            result = task_error("Command execution error")
             ctx.audit_log(
                 "execute_shell_command",
                 "error",

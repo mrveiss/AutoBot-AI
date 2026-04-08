@@ -16,7 +16,7 @@ import json
 import logging
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List, Optional
 
@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.models.pagination import PaginationParams
 from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -189,7 +190,7 @@ async def create_batch_job(
         raise HTTPException(status_code=503, detail="Redis service unavailable")
 
     job_id = str(uuid.uuid4())
-    now = datetime.now()
+    now = datetime.now(tz=timezone.utc)
 
     job = BatchJob(
         job_id=job_id,
@@ -219,8 +220,7 @@ async def create_batch_job(
 async def list_batch_jobs(
     status: Optional[BatchJobStatus] = Query(None, description="Filter by status"),
     job_type: Optional[BatchJobType] = Query(None, description="Filter by type"),
-    limit: int = Query(50, ge=1, le=500, description="Max results"),
-    offset: int = Query(0, ge=0, description="Results offset"),
+    pagination: PaginationParams = Depends(),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -231,8 +231,7 @@ async def list_batch_jobs(
     Args:
         status: Filter by job status
         job_type: Filter by job type
-        limit: Maximum number of results
-        offset: Results offset for pagination
+        pagination: Limit and offset for result pagination
 
     Returns:
         BatchJobList: List of jobs with counts
@@ -266,7 +265,7 @@ async def list_batch_jobs(
 
     jobs.sort(key=lambda j: j.created_at, reverse=True)
     total_count = len(jobs)
-    jobs = jobs[offset : offset + limit]
+    jobs = jobs[pagination.offset : pagination.offset + pagination.limit]
 
     return BatchJobList(jobs=jobs, total_count=total_count, status_counts=status_counts)
 
@@ -458,7 +457,7 @@ async def create_batch_template(
         name=name,
         job_type=job_type,
         parameters=parameters,
-        created_at=datetime.now(),
+        created_at=datetime.now(tz=timezone.utc),
     )
 
     template_key = _get_template_key(template_id)
@@ -597,7 +596,7 @@ async def create_batch_schedule(
         job_id=job_id,
         cron_expression=cron_expression,
         enabled=enabled,
-        next_run=datetime.now(),
+        next_run=datetime.now(tz=timezone.utc),
     )
 
     schedule_key = _get_schedule_key(schedule_id)
@@ -674,7 +673,7 @@ async def get_batch_jobs_health(
         "status": "healthy" if redis_healthy else "degraded",
         "service": "batch_jobs_manager",
         "redis_connected": redis_healthy,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         "capabilities": [
             "job_management",
             "template_management",
@@ -750,7 +749,7 @@ async def get_batch_status():
         "capabilities": ["batch_load", "chat_init"],
         "max_batch_size": 10,
         "timeout": 30,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -913,7 +912,7 @@ async def get_system_health():
     return {
         "status": "healthy",
         "backend": "connected",
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         "mode": "batch_optimized",
     }
 

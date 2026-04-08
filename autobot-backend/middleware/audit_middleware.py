@@ -39,6 +39,7 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
+from constants.api_constants import PATH_API_HEALTH
 from middleware.proxy_utils import get_client_ip
 from services.audit_logger import AuditResult, get_audit_logger
 
@@ -135,7 +136,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
         self.exclude_paths = exclude_paths or [
             "/docs",
             "/openapi.json",
-            "/api/health",
+            PATH_API_HEALTH,
             "/api/metrics",
             "/static",
         ]

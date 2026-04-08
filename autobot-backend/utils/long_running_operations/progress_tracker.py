@@ -11,7 +11,7 @@ Handles real-time progress tracking and WebSocket broadcasting.
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional
 
 import redis.asyncio as redis
@@ -75,7 +75,7 @@ class OperationProgressTracker:
         operation.progress.items_processed = items_processed
         operation.progress.total_items = total_items
         operation.progress.estimated_remaining = estimated_remaining
-        operation.progress.last_update = datetime.now()
+        operation.progress.last_update = datetime.now(tz=timezone.utc)
 
         if details:
             operation.progress.details.update(details)

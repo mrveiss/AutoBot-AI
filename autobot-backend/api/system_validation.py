@@ -14,7 +14,7 @@ from pydantic import BaseModel
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from type_defs.common import Metadata
-from utils.catalog_http_exceptions import raise_not_found_error, raise_server_error
+from utils.catalog_http_exceptions import raise_catalog_error_simple, raise_server_error
 from utils.system_validator import get_system_validator
 
 logger = logging.getLogger(__name__)
@@ -195,7 +195,7 @@ async def validate_component(component_name: str):
         }
 
         if component_name.lower() not in component_methods:
-            raise_not_found_error(
+            raise_catalog_error_simple(
                 "API_0002",
                 f"Component '{component_name}' not found. Available: {list(component_methods.keys())}",
             )

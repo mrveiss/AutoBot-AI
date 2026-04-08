@@ -13,6 +13,8 @@ import structlog
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from constants.api_constants import PATH_API_HEALTH, PATH_HEALTH
+
 from security.service_auth import validate_service_auth
 
 logger = structlog.get_logger()
@@ -41,8 +43,8 @@ class ServiceAuthLoggingMiddleware(BaseHTTPMiddleware):
         Return True if the request path matches a service-auth exemption.
         """
         skip_paths = [
-            "/health",  # Health check (no prefix)
-            "/api/health",  # General health check
+            PATH_HEALTH,  # Health check (no prefix)
+            PATH_API_HEALTH,  # General health check
             "/api/version",  # Version info
             "/docs",  # API documentation
             "/openapi.json",  # OpenAPI spec

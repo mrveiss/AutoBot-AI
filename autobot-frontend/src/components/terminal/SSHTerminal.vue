@@ -25,6 +25,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 import { createLogger } from '@/utils/debugUtils'
+import { useWebSocket } from '@/composables/useWebSocket'
 
 const logger = createLogger('SSHTerminal')
 
@@ -52,7 +53,46 @@ const errorMessage = ref('')
 // Terminal instance
 let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
-let websocket: WebSocket | null = null
+
+// Reactive WebSocket URL — updated when hostId changes
+const wsUrl = ref('')
+
+const buildWsUrl = () => {
+  const params = props.chatSessionId
+    ? `?conversation_id=${props.chatSessionId}`
+    : ''
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const host = window.location.host
+  return `${protocol}//${host}/api/terminal/ws/ssh/${props.hostId}${params}`
+}
+
+const { send: wsSend, connect: wsConnect, disconnect: wsDisconnect, isConnected: wsIsConnected } = useWebSocket(wsUrl, {
+  autoConnect: false,
+  autoReconnect: false,
+  parseJSON: false,
+  onOpen: () => {
+    logger.info('SSH WebSocket connected')
+    connectionState.value = 'connected'
+    emit('connected')
+  },
+  onMessage: (data: string) => {
+    try {
+      handleMessage(JSON.parse(data))
+    } catch (e) {
+      logger.error('Failed to parse SSH message:', e)
+    }
+  },
+  onError: () => {
+    connectionState.value = 'error'
+    errorMessage.value = 'Connection error'
+    emit('error', 'Connection error')
+  },
+  onClose: (event) => {
+    logger.info('SSH WebSocket closed:', { code: event.code, reason: event.reason })
+    connectionState.value = 'disconnected'
+    emit('disconnected')
+  },
+})
 
 // Computed
 const statusText = computed(() => {
@@ -130,7 +170,7 @@ const initTerminal = () => {
 
 // Connect to SSH WebSocket
 const connect = () => {
-  if (websocket && websocket.readyState === WebSocket.OPEN) {
+  if (wsIsConnected.value) {
     logger.debug('Already connected')
     return
   }
@@ -138,50 +178,10 @@ const connect = () => {
   connectionState.value = 'connecting'
   errorMessage.value = ''
 
-  try {
-    const params = props.chatSessionId
-      ? `?conversation_id=${props.chatSessionId}`
-      : ''
-
-    // Build WebSocket URL using current page location
-    // This ensures the WebSocket goes through the Vite proxy in dev mode
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.host
-    const url = `${protocol}//${host}/api/terminal/ws/ssh/${props.hostId}${params}`
-
-    logger.info(`Connecting to SSH WebSocket: ${url}`)
-
-    websocket = new WebSocket(url)
-
-    websocket.onopen = () => {
-      logger.info('SSH WebSocket connected')
-      connectionState.value = 'connected'
-      emit('connected')
-    }
-
-    websocket.onmessage = (event) => {
-      handleMessage(JSON.parse(event.data))
-    }
-
-    websocket.onerror = (event) => {
-      logger.error('SSH WebSocket error:', event)
-      connectionState.value = 'error'
-      errorMessage.value = 'Connection error'
-      emit('error', 'Connection error')
-    }
-
-    websocket.onclose = (event) => {
-      logger.info('SSH WebSocket closed:', { code: event.code, reason: event.reason })
-      connectionState.value = 'disconnected'
-      emit('disconnected')
-    }
-
-  } catch (error) {
-    logger.error('Failed to connect:', error)
-    connectionState.value = 'error'
-    errorMessage.value = error instanceof Error ? error.message : 'Unknown error'
-    emit('error', errorMessage.value)
-  }
+  const url = buildWsUrl()
+  logger.info(`Connecting to SSH WebSocket: ${url}`)
+  wsUrl.value = url
+  wsConnect()
 }
 
 /** WebSocket message types for SSH terminal communication. */
@@ -196,9 +196,7 @@ interface SSHTerminalMessage {
 
 // Send message to server
 const sendToServer = (message: SSHTerminalMessage) => {
-  if (websocket && websocket.readyState === WebSocket.OPEN) {
-    websocket.send(JSON.stringify(message))
-  }
+  wsSend(message)
 }
 
 // Handle incoming messages
@@ -244,10 +242,7 @@ const handleMessage = (message: SSHTerminalMessage) => {
 
 // Disconnect
 const disconnect = () => {
-  if (websocket) {
-    websocket.close()
-    websocket = null
-  }
+  wsDisconnect()
 }
 
 // Resize handler
@@ -262,7 +257,7 @@ let heartbeatInterval: number | null = null
 
 const startHeartbeat = () => {
   heartbeatInterval = window.setInterval(() => {
-    if (websocket && websocket.readyState === WebSocket.OPEN) {
+    if (wsIsConnected.value) {
       sendToServer({ type: 'ping' })
     }
   }, 30000)
@@ -295,7 +290,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   stopHeartbeat()
-  disconnect()
+  // useWebSocket handles WebSocket cleanup via its own onUnmounted
   window.removeEventListener('resize', handleResize)
   if (terminal) {
     terminal.dispose()

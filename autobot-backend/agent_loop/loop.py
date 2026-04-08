@@ -17,6 +17,8 @@ and Think Tool into a cohesive execution system.
 """
 
 import asyncio
+import hashlib
+import json
 import logging
 import time
 import uuid
@@ -84,6 +86,10 @@ class AgentLoop:
         self._current_context: Optional[TaskContext] = None
         self._iteration_count = 0
         self._consecutive_errors = 0
+        # Issue #3877: explicit flag set when repetition halt fires; checked by
+        # _should_continue() so the main while-loop exits on the very next guard
+        # check rather than relying solely on _should_iterate()'s error detection.
+        self._halted_on_repetition: bool = False
 
     # =========================================================================
     # Properties
@@ -137,6 +143,7 @@ class AgentLoop:
         self._state = LoopState.INITIALIZING
         self._iteration_count = 0
         self._consecutive_errors = 0
+        self._halted_on_repetition = False
 
     async def _execute_main_loop(self) -> list[IterationResult]:
         """Execute the main iteration loop.
@@ -291,6 +298,18 @@ class AgentLoop:
         # Phase 3: Execute Tools
         self._current_phase = LoopPhase.WAIT_FOR_EXECUTION
         tool_results = await self._execute_tools(tools_to_execute)
+
+        # Issue #3859 / #3862: when the repetition-halt guard fires, the tools
+        # never actually executed.  Skip adding them to tools_executed (they
+        # didn't run) and return the error as tool_results so the LLM can see
+        # what happened and adapt rather than terminating silently.
+        if self._halted_on_repetition:
+            result.tool_results = tool_results
+            result.tools_executed = []
+            result.should_continue = False
+            result.phase_completed = LoopPhase.ITERATE
+            return result
+
         result.tools_executed = [
             t.get("tool_name", "unknown") for t in tools_to_execute
         ]
@@ -417,6 +436,23 @@ class AgentLoop:
         """
         if not tools:
             return {}
+
+        # Issue #3255 / #3877: Halt before execution if identical call repeated too often.
+        # Setting _halted_on_repetition=True ensures _should_continue() terminates the
+        # main while-loop immediately after this iteration, independent of whether
+        # _should_iterate() correctly classifies the error result.
+        repeated_tool = self._check_tool_call_repetition(tools)
+        if repeated_tool is not None:
+            self._halted_on_repetition = True
+            return {
+                repeated_tool: {
+                    "error": (
+                        f"Halted: repetitive tool call detected for '{repeated_tool}' "
+                        f"(exceeded max_identical_tool_calls="
+                        f"{self.config.max_identical_tool_calls})"
+                    )
+                }
+            }
 
         # Check if we need to think before certain tools
         await self._think_before_tools(tools)
@@ -603,8 +639,86 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
     # Helper Methods
     # =========================================================================
 
+    # =========================================================================
+    # Repetitive Tool-Call Detection (#3255)
+    # =========================================================================
+
+    @staticmethod
+    def _compute_tool_call_hash(tool: dict[str, Any]) -> str:
+        """Return a stable content hash for a tool call.
+
+        The hash is derived from the tool name and its sorted arguments so that
+        two calls with identical intent produce the same hash regardless of
+        dict-insertion order.
+
+        Issue #3255 / #3868 / #3874:
+        - Non-dict args are serialized as a tagged wrapper so distinct values
+          (e.g. a string "foo" vs None) yield distinct hashes rather than all
+          collapsing to the same empty-dict hash.
+        - json.dumps is wrapped in try/except TypeError so non-JSON-serializable
+          objects (e.g. custom class instances) fall back to a repr()-based
+          canonical form without raising.
+        """
+        tool_name = tool.get("tool_name", "")
+        args = tool.get("args", tool.get("arguments", tool.get("parameters", {})))
+
+        # Issue #3874: preserve distinctness for non-dict args instead of coercing
+        # every non-dict value to the same empty dict {}.
+        if not isinstance(args, dict):
+            args_payload: Any = {
+                "__type__": type(args).__name__,
+                "__repr__": repr(args)[:200],
+            }
+        else:
+            args_payload = args
+
+        # Issue #3868: json.dumps raises TypeError for non-serializable objects
+        # (e.g. dataclass, custom types).  Fall back to repr() so the hash is
+        # still deterministic and meaningful.
+        try:
+            canonical = json.dumps({"n": tool_name, "a": args_payload}, sort_keys=True)
+        except TypeError:
+            canonical = repr({"n": tool_name, "a": args_payload})
+
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    def _check_tool_call_repetition(
+        self, tools: list[dict[str, Any]]
+    ) -> Optional[str]:
+        """Check whether any pending tool call has been issued too many times.
+
+        Returns the offending tool name if repetition is detected, else None.
+        Records each call regardless so the counter accumulates across iterations.
+
+        Issue #3255.
+        """
+        if not self._current_context:
+            return None
+
+        threshold = self.config.max_identical_tool_calls
+        for tool in tools:
+            call_hash = self._compute_tool_call_hash(tool)
+            count = self._current_context.record_tool_call_hash(call_hash)
+            tool_name = tool.get("tool_name", "unknown")
+            if count >= threshold:
+                logger.warning(
+                    "AgentLoop: Detected repetitive tool call: %s called %d times "
+                    "with identical args (threshold=%d)",
+                    tool_name,
+                    count,
+                    threshold,
+                )
+                return tool_name
+        return None
+
     def _should_continue(self) -> bool:
-        """Check if the loop should continue."""
+        """Check if the loop should continue.
+
+        Issue #3877: Also returns False when a repetition halt has fired so the
+        main while-loop exits even if _should_iterate() did not catch the error.
+        """
+        if self._halted_on_repetition:
+            return False
         if self._state not in (LoopState.RUNNING, LoopState.PAUSED):
             return False
         if self._iteration_count >= self.config.max_iterations:

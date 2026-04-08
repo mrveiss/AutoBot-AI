@@ -11,7 +11,7 @@ import asyncio
 import logging
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable, Dict, FrozenSet, Optional
 
 from constants.threshold_constants import TimingConstants
@@ -244,7 +244,7 @@ class WorkflowExecutor:
             )
             return False
 
-        workflow.started_at = datetime.now()
+        workflow.started_at = datetime.now(tz=timezone.utc)
         workflow.prometheus_start_time = time.time()
 
         # Issue #2159: Begin cost tracking for this execution
@@ -370,7 +370,7 @@ class WorkflowExecutor:
 
         # Update step status
         current_step.status = WorkflowStepStatus.WAITING_APPROVAL
-        current_step.started_at = datetime.now()
+        current_step.started_at = datetime.now(tz=timezone.utc)
 
         # Send step confirmation request to frontend
         await self._send_step_confirmation_request(workflow, current_step)
@@ -655,7 +655,7 @@ class WorkflowExecutor:
 
         current_step.status = WorkflowStepStatus.COMPLETED
         current_step.execution_result = result
-        current_step.completed_at = datetime.now()
+        current_step.completed_at = datetime.now(tz=timezone.utc)
 
         # Issue #2601: Store result so later vision steps can reference it.
         workflow.step_results[step_id] = result
@@ -680,7 +680,7 @@ class WorkflowExecutor:
 
         if current_step.step_id == step_id:
             current_step.status = WorkflowStepStatus.SKIPPED
-            current_step.completed_at = datetime.now()
+            current_step.completed_at = datetime.now(tz=timezone.utc)
             workflow.current_step_index += 1
 
             # Continue with next step
@@ -698,7 +698,7 @@ class WorkflowExecutor:
         # Simulate execution for now.
         logger.info("Executing workflow step (session=%s)", session_id)
 
-        await asyncio.sleep(1)
+        await asyncio.sleep(TimingConstants.STANDARD_DELAY)
 
         return {
             "command": "[redacted]",
@@ -769,7 +769,7 @@ class WorkflowExecutor:
         self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]
     ) -> None:
         """Complete workflow execution"""
-        workflow.completed_at = datetime.now()
+        workflow.completed_at = datetime.now(tz=timezone.utc)
 
         # Issue #1380: Transition state machine to complete
         await self._sm_transition(workflow, WorkflowPhase.COMPLETE.value)
@@ -829,7 +829,7 @@ class WorkflowExecutor:
     ) -> None:
         """Cancel workflow execution"""
         workflow.is_cancelled = True
-        workflow.completed_at = datetime.now()
+        workflow.completed_at = datetime.now(tz=timezone.utc)
 
         # Issue #1380: Transition state machine to failed
         await self._sm_transition(
@@ -1008,7 +1008,7 @@ class WorkflowExecutor:
 
         # Update status
         approval_request.status = PlanApprovalStatus.AWAITING_APPROVAL
-        approval_request.presented_at = datetime.now()
+        approval_request.presented_at = datetime.now(tz=timezone.utc)
 
         logger.info(
             f"Plan presented for workflow {workflow.workflow_id}, "
@@ -1051,7 +1051,7 @@ class WorkflowExecutor:
 
         except asyncio.TimeoutError:
             approval_request.status = PlanApprovalStatus.TIMEOUT
-            approval_request.resolved_at = datetime.now()
+            approval_request.resolved_at = datetime.now(tz=timezone.utc)
             logger.warning(
                 f"Plan approval timeout for workflow {workflow_id} "
                 f"after {timeout_seconds}s"
@@ -1097,7 +1097,7 @@ class WorkflowExecutor:
         else:
             approval_request.status = PlanApprovalStatus.REJECTED
 
-        approval_request.resolved_at = datetime.now()
+        approval_request.resolved_at = datetime.now(tz=timezone.utc)
         approval_request.user_response = reason
 
         # Signal waiting coroutine

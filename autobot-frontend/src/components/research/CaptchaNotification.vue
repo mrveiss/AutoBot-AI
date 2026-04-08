@@ -78,6 +78,7 @@ import { useI18n } from 'vue-i18n'
 // @ts-ignore - JS module without type declarations
 import { useGlobalWebSocket } from '@/composables/useGlobalWebSocket'
 import apiClient from '@/utils/ApiClient'
+import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const { t } = useI18n()
@@ -211,7 +212,7 @@ async function markSolved() {
 
   isSubmitting.value = true
   try {
-    await apiClient.post(`/api/captcha/${activeCaptcha.value.captcha_id}/resolve`)
+    await apiClient.post(`${getApiBase()}/captcha/${activeCaptcha.value.captcha_id}/resolve`)
     activeCaptcha.value = null
     stopTimer()
   } catch (error) {
@@ -226,7 +227,7 @@ async function skipCaptcha() {
 
   isSubmitting.value = true
   try {
-    await apiClient.post(`/api/captcha/${activeCaptcha.value.captcha_id}/skip`)
+    await apiClient.post(`${getApiBase()}/captcha/${activeCaptcha.value.captcha_id}/skip`)
     activeCaptcha.value = null
     stopTimer()
   } catch (error) {

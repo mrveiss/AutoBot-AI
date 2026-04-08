@@ -1,7 +1,7 @@
 [Unit]
 Description=AutoBot SLM Backend Service
-After=network.target
-Wants=network-online.target
+After=network-online.target redis-stack-server.service postgresql.service
+Wants=network-online.target redis-stack-server.service postgresql.service
 
 [Service]
 Type=simple

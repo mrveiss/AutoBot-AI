@@ -27,6 +27,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
+from constants.ttl_constants import TTL_1_HOUR
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -37,7 +39,7 @@ logger = logging.getLogger(__name__)
 _BYTES_PER_FP32: int = 4
 
 #: TTL for cached ModelInfo entries (seconds).
-_CACHE_TTL_SECONDS: int = 3600
+_CACHE_TTL_SECONDS: int = TTL_1_HOUR
 
 # ---------------------------------------------------------------------------
 # Cache

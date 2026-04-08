@@ -2,6 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 import datetime
+from datetime import timezone
 import json
 import logging
 import os
@@ -234,7 +235,7 @@ class SecurityLayer:
         hashing/encryption would be added.
         """
         log_entry = {
-            "timestamp": datetime.datetime.now().isoformat(),
+            "timestamp": datetime.datetime.now(tz=timezone.utc).isoformat(),
             "user": user,
             "action": action,
             "outcome": outcome,

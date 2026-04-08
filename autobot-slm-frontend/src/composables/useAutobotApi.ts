@@ -12,9 +12,7 @@
 
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/stores/auth'
-
-// AutoBot backend is proxied via nginx at /autobot-api/
-const API_BASE = '/autobot-api'
+import { getBackendUrl } from '@/config/ssot-config'
 
 // Type definitions for AutoBot API responses
 
@@ -125,7 +123,7 @@ export function useAutobotApi() {
   const authStore = useAuthStore()
 
   const client: AxiosInstance = axios.create({
-    baseURL: API_BASE,
+    baseURL: getBackendUrl(),
     headers: {
       'Content-Type': 'application/json',
     },

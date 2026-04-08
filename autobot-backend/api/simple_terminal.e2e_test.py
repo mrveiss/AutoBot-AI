@@ -9,6 +9,8 @@ import time
 
 import websockets
 
+from tests.test_helpers import get_test_backend_url
+
 
 async def test_simple_terminal():
     """Test the simple terminal WebSocket endpoint"""
@@ -19,7 +21,7 @@ async def test_simple_terminal():
     session_id = f"test_{int(time.time())}"
     print(f"📝 Session ID: {session_id}")  # noqa: print
 
-    uri = f"ws://localhost:8001/api/terminal/ws/simple/{session_id}"
+    uri = get_test_backend_url().replace("https://", "wss://").replace("http://", "ws://") + f"/api/terminal/ws/{session_id}"
     print(f"🔗 Connecting to: {uri}")  # noqa: print
 
     try:
@@ -123,7 +125,7 @@ async def test_sessions_api():
 
     try:
         response = requests.get(
-            "http://localhost:8001/api/terminal/simple/sessions", timeout=5
+            get_test_backend_url() + "/api/terminal/sessions", timeout=5
         )
         if response.status_code == 200:
             sessions = response.json()
@@ -168,11 +170,12 @@ async def main():
     if terminal_success and api_success:
         print("\n🎉 SUCCESS: Simple terminal is a working replacement!")  # noqa: print
         print("User can now use the simple terminal endpoint:")  # noqa: print
+        _base = get_test_backend_url()
         print(  # noqa: print
-            "  WebSocket: ws://localhost:8001/api/terminal/ws/simple/{session_id}"
+            f"  WebSocket: {_base.replace('https://', 'wss://').replace('http://', 'ws://')}/api/terminal/ws/{{session_id}}"
         )  # noqa: print
         print(  # noqa: print
-            "  Sessions:  http://localhost:8001/api/terminal/simple/sessions"
+            f"  Sessions:  {_base}/api/terminal/sessions"
         )  # noqa: print
     else:
         print("\n💥 Some tests failed - simple terminal needs fixes")  # noqa: print

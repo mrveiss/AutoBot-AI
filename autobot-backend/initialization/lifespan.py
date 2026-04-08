@@ -93,7 +93,7 @@ async def _init_cache_coordinator() -> None:
     try:
         from cache import register_all_caches
 
-        cache_count = register_all_caches()
+        cache_count = await register_all_caches()
         logger.info(
             "✅ [ 55%] Cache: %d caches registered for coordinated management",
             cache_count,
@@ -138,6 +138,7 @@ async def _init_chat_history_manager(app: FastAPI) -> None:
     logger.info("✅ [ 30%] Chat History: Initializing chat history manager...")
     try:
         chat_history_manager = ChatHistoryManager()
+        await chat_history_manager.initialize()
         app.state.chat_history_manager = chat_history_manager
         await update_app_state("chat_history_manager", chat_history_manager)
         logger.info("✅ [ 30%] Chat History: Manager initialized successfully")
@@ -230,12 +231,26 @@ async def _check_env_drift() -> None:
 
 
 async def _init_config(app: FastAPI) -> None:
-    """Helper for initialize_critical_services. Ref: #1088."""
+    """Helper for initialize_critical_services. Ref: #1088, #3398."""
     logger.info("✅ [ 10%] Config: Loading unified configuration...")
     config = ConfigManager()
     app.state.config = config
     await update_app_state("config", config)
     logger.info("✅ [ 10%] Config: Configuration loaded successfully")
+
+    # Issue #3398: Run startup validation — log override warnings, fail fast on
+    # invalid values (e.g. negative ports, missing required keys).
+    validation_result = config.validate_startup()
+    if not validation_result.valid:
+        error_summary = "; ".join(validation_result.errors)
+        raise RuntimeError(
+            f"Configuration validation failed at startup: {error_summary}"
+        )
+    if validation_result.warnings:
+        logger.warning(
+            "Config: %d override warning(s) detected — review logged warnings above",
+            len(validation_result.warnings),
+        )
 
 
 async def _init_security_layer(app: FastAPI) -> None:
@@ -327,6 +342,34 @@ async def _init_skills(app: FastAPI) -> None:
         )
 
 
+async def _init_builtin_extensions(app: FastAPI) -> None:
+    """Register built-in extensions (permission enforcement, etc.).
+
+    Issue #3009: Wires PermissionEnforcementExtension into the extension
+    manager so all tool executions are subject to role-based permission checks.
+    Non-critical: a failure logs a warning but does not block startup.
+    """
+    try:
+        from extensions.builtin.permission_enforcement import (
+            PermissionEnforcementExtension,
+        )
+        from extensions.manager import ExtensionManager
+
+        manager = getattr(app.state, "extension_manager", None)
+        if manager is None:
+            manager = ExtensionManager()
+            app.state.extension_manager = manager
+
+        manager.register(PermissionEnforcementExtension())
+        logger.info(
+            "Built-in extensions registered (permission_enforcement)"
+        )
+    except Exception as ext_error:
+        logger.warning(
+            "Built-in extension registration failed (non-critical): %s", ext_error
+        )
+
+
 async def initialize_critical_services(app: FastAPI):
     """
     Phase 1: Initialize critical services (BLOCKING).
@@ -386,9 +429,11 @@ async def initialize_critical_services(app: FastAPI):
 
         # --- Tier 3: non-critical services (parallel) ---
         # Issue #743: Register caches with CacheCoordinator for memory optimization
+        # Issue #3009: Register built-in extensions (permission enforcement)
         await asyncio.gather(
             _init_cache_coordinator(),
             _init_skills(app),
+            _init_builtin_extensions(app),
         )
 
         logger.info("✅ [ 60%] PHASE 1 COMPLETE: All critical services operational")
@@ -823,13 +868,13 @@ async def _init_metrics_collection():
     logger.info("✅ [ 91%] Metrics Collection: Starting system metrics collection...")
     try:
         # Import here to avoid circular dependency
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         from api.analytics import analytics_controller
 
         # Initialize session tracking
         analytics_state = {}
-        analytics_state["session_start"] = datetime.now().isoformat()
+        analytics_state["session_start"] = datetime.now(tz=timezone.utc).isoformat()
 
         # Start metrics collection safely (backend is now ready to serve requests)
         collector = analytics_controller.metrics_collector
@@ -1008,7 +1053,7 @@ async def _wire_npu_task_queue() -> None:
         from services.npu_worker_manager import get_worker_manager
         from utils.task_queue import get_task_queue
 
-        redis_client = get_redis_client(async_client=True, database="main")
+        redis_client = await get_redis_client(async_client=True, database="main")
         worker_manager = await get_worker_manager(redis_client=redis_client)
         task_queue = get_task_queue()
         task_queue.npu_worker_manager = worker_manager
@@ -1019,6 +1064,28 @@ async def _wire_npu_task_queue() -> None:
         logger.warning(
             "NPU task queue wiring failed (per-worker tracking disabled): %s", e
         )
+
+
+async def _init_voice_interface(app: FastAPI) -> None:
+    """Initialize VoiceInterface and attach it to app.state (#3848).
+
+    NON-CRITICAL: voice endpoints return 503 when this is unavailable.
+    Runs in Phase 2 because voice hardware is not required for core operation.
+    """
+    logger.info("[ 99%%] Voice Interface: Initializing...")
+    try:
+        from voice_interface import VoiceInterface
+
+        voice_interface = VoiceInterface()
+        app.state.voice_interface = voice_interface
+        logger.info("[ 99%%] Voice Interface: Initialized and attached to app.state")
+    except Exception as e:
+        logger.warning(
+            "Voice interface initialization failed (non-critical): %s — "
+            "voice endpoints will return 503",
+            e,
+        )
+        app.state.voice_interface = None
 
 
 async def _wire_scheduler_executor() -> None:
@@ -1033,10 +1100,10 @@ async def _wire_scheduler_executor() -> None:
     """
     logger.info("[ 98%%] Scheduler: Wiring orchestration executor...")
     try:
-        from enhanced_orchestrator import get_orchestrator
+        from orchestrator import get_orchestrator_sync
         from workflow_scheduler import ScheduledWorkflow, workflow_scheduler
 
-        orchestrator = get_orchestrator()
+        orchestrator = get_orchestrator_sync()
 
         async def _orchestration_executor(workflow: ScheduledWorkflow):
             """Adapter: ScheduledWorkflow → EnhancedOrchestrator.execute_enhanced_workflow.
@@ -1115,6 +1182,7 @@ async def initialize_background_services(app: FastAPI):
         await _seed_agent_registry()
         await _wire_npu_task_queue()
         await _wire_scheduler_executor()
+        await _init_voice_interface(app)
 
         await update_app_state_multi(
             initialization_status="ready",

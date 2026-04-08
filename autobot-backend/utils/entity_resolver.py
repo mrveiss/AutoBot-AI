@@ -10,7 +10,7 @@ and normalize entity names across the knowledge base.
 
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional
 
@@ -18,7 +18,7 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
 from autobot_shared.logging_manager import get_llm_logger
-from config import config_manager
+from config.manager import get_config_manager as _get_config_manager
 from models.atomic_fact import AtomicFact
 from models.entity_mapping import (
     EntityMapping,
@@ -28,6 +28,9 @@ from models.entity_mapping import (
 )
 
 logger = get_llm_logger("entity_resolver")
+
+# Canonical singleton; avoids routing through config/__init__ lazy alias (Issue #3829)
+config_manager = _get_config_manager()
 
 # Entity classification patterns (Issue #315 - module-level constant)
 _ENTITY_PATTERNS = {
@@ -171,7 +174,7 @@ class EntityResolver:
             original_entities=entity_names,
             resolved_mappings={name: name for name in entity_names},
             canonical_entities=[],
-            processing_time=(datetime.now() - start_time).total_seconds(),
+            processing_time=(datetime.now(tz=timezone.utc) - start_time).total_seconds(),
         )
 
     async def resolve_entities(
@@ -187,7 +190,7 @@ class EntityResolver:
         Returns:
             EntityResolutionResult with resolved mappings
         """
-        start_time = datetime.now()
+        start_time = datetime.now(tz=timezone.utc)
         logger.info("Starting entity resolution for %s entities", len(entity_names))
 
         try:
@@ -198,7 +201,7 @@ class EntityResolver:
                 unique_entities, existing_mappings
             )
 
-            processing_time = (datetime.now() - start_time).total_seconds()
+            processing_time = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
 
             result = EntityResolutionResult(
                 original_entities=entity_names,
@@ -442,7 +445,7 @@ class EntityResolver:
                 return
 
             history_entry = {
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "total_original": result.total_original,
                 "total_canonical": result.total_canonical,
                 "resolution_rate": result.resolution_rate,

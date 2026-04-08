@@ -9,12 +9,13 @@ Routes requests to local agents or remote containers based on configuration
 import asyncio
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
+from constants.threshold_constants import exponential_backoff_delay
 from utils.service_registry import get_service_url
 
 from .base_agent import (
@@ -119,14 +120,15 @@ class AgentRegistry:
         if not agent:
             return
 
-        last_check = self.last_health_check.get(agent_type, datetime.min)
-        if not force and datetime.now() - last_check < timedelta(minutes=1):
+        aware_min = datetime.min.replace(tzinfo=timezone.utc)
+        last_check = self.last_health_check.get(agent_type, aware_min)
+        if not force and datetime.now(tz=timezone.utc) - last_check < timedelta(minutes=1):
             return  # Skip if checked recently
 
         try:
             health = await agent.health_check()
             self.agent_health[agent_type] = health
-            self.last_health_check[agent_type] = datetime.now()
+            self.last_health_check[agent_type] = datetime.now(tz=timezone.utc)
         except Exception as e:
             logger.error("Health check failed for %s: %s", agent_type, e)
 
@@ -329,14 +331,14 @@ class AgentClient:
 
                 # Wait before retry
                 if attempt < self.config.retry_attempts - 1:
-                    await asyncio.sleep(2**attempt)  # Exponential backoff
+                    await asyncio.sleep(exponential_backoff_delay(attempt))
 
                 last_error = response.error
 
             except Exception as e:
                 last_error = str(e)
                 if attempt < self.config.retry_attempts - 1:
-                    await asyncio.sleep(2**attempt)
+                    await asyncio.sleep(exponential_backoff_delay(attempt))
 
         # All retries failed
         return AgentResponse(

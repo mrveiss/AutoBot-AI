@@ -105,6 +105,38 @@ class _LazyUnifiedProcessor:
 # Singleton instance — lazy-loaded on first attribute access (Issue #940)
 unified_processor = _LazyUnifiedProcessor()
 
+# ---------------------------------------------------------------------------
+# Backward-compatibility shim (previously in multimodal_processor.py — Issue #3554)
+# The root-level .py file was shadowed by this package; its contents are
+# merged here so existing importers continue to work without changes.
+# ---------------------------------------------------------------------------
+
+# Alias for old callers that used ModalInput instead of MultiModalInput
+ModalInput = MultiModalInput
+
+
+class MultiModalProcessor:
+    """Compatibility wrapper around the lazy unified processor singleton."""
+
+    def __init__(self):
+        self._unified = unified_processor
+
+    async def process(self, input_data: MultiModalInput) -> ProcessingResult:
+        """Process multi-modal input using unified processor."""
+        return await self._unified.process(input_data)
+
+    def get_stats(self) -> dict:
+        """Get processing statistics."""
+        return self._unified.get_stats()
+
+    def reset_stats(self) -> None:
+        """Reset processing statistics."""
+        self._unified.reset_stats()
+
+
+# Global instance for backward compatibility
+multimodal_processor = MultiModalProcessor()
+
 __all__ = [
     # Types and enums
     "ModalityType",
@@ -137,4 +169,8 @@ __all__ = [
     "UnifiedMultiModalProcessor",
     # Singleton
     "unified_processor",
+    # Backward-compatibility shim (Issue #3554)
+    "ModalInput",
+    "MultiModalProcessor",
+    "multimodal_processor",
 ]

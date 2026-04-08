@@ -30,6 +30,7 @@ from models.npu_models import (
     WorkerTestResult,
 )
 from npu_integration import NPUWorkerClient
+from utils.async_initializable import AsyncInitializable
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,7 @@ logger = logging.getLogger(__name__)
 _WORKER_FULL_DATA_EVENTS = frozenset({"worker.added", "worker.updated"})
 
 
-class NPUWorkerManager:
+class NPUWorkerManager(AsyncInitializable):
     """
     Manages NPU worker registry with persistent storage and runtime state tracking.
 
@@ -61,6 +62,7 @@ class NPUWorkerManager:
             config_file: Path to worker configuration YAML file
             redis_client: Redis client for state storage
         """
+        super().__init__(component_name="npu_worker_manager")
         self.config_file = config_file or Path("config/npu_workers.yaml")
         self.redis_client = redis_client
         self._workers: Dict[str, NPUWorkerConfig] = {}
@@ -74,8 +76,10 @@ class NPUWorkerManager:
         self._worker_failure_counts: Dict[str, int] = {}
         self._worker_next_check: Dict[str, float] = {}
 
-        # Initialize from config file
-        self._load_workers_from_config()
+    async def _initialize_impl(self) -> bool:
+        """Load worker configurations from YAML (deferred from __init__ to avoid blocking I/O)."""
+        await asyncio.to_thread(self._load_workers_from_config)
+        return True
 
     def _parse_single_worker(self, worker_data: dict) -> bool:
         """Parse and store a single worker configuration (Issue #315: extracted helper).
@@ -940,6 +944,7 @@ async def get_worker_manager(redis_client=None) -> NPUWorkerManager:
             # Double-check after acquiring lock
             if _worker_manager is None:
                 _worker_manager = NPUWorkerManager(redis_client=redis_client)
+                await _worker_manager.initialize()
                 await _worker_manager.start_health_monitoring()
 
     return _worker_manager

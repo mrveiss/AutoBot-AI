@@ -23,7 +23,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -32,6 +32,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
 
 # LLM Interface for real code generation
 try:
@@ -46,21 +47,6 @@ except ImportError:
 # Issue #552: Prefix set in router_registry to match frontend calls at /api/code-generation/*
 router = APIRouter(tags=["code-generation", "analytics"])
 logger = logging.getLogger(__name__)
-
-
-async def _resolve_source_or_404(source_id: Optional[str]) -> None:
-    """Raise HTTP 404 if source_id is provided but not found (Issue #3436).
-
-    Uses a lazy import of resolve_source_root to avoid loading the full
-    codebase_analytics package at module import time.
-    """
-    if source_id is None:
-        return
-    from api.codebase_analytics.endpoints.shared import resolve_source_root
-
-    source_root = await resolve_source_root(source_id)
-    if source_root is None:
-        raise HTTPException(status_code=404, detail=f"Source '{source_id}' not found")
 
 # Issue #380: Pre-compiled regex patterns for code analysis and extraction
 _FUNC_DEF_RE = re.compile(r"def\s+(\w+)")  # Extract function name
@@ -577,7 +563,7 @@ class CodeGenerationEngine:
     def _generate_version_id(self, code: str) -> str:
         """Generate unique version ID from code content"""
         content_hash = hashlib.sha256(code.encode()).hexdigest()[:12]
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d%H%M%S")
         return f"v_{timestamp}_{content_hash}"
 
     def _generate_diff(self, original: str, modified: str) -> str:
@@ -803,7 +789,7 @@ class CodeGenerationEngine:
         version = CodeVersion(
             version_id=version_id,
             code=code,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(tz=timezone.utc),
             description=description,
         )
 
@@ -880,7 +866,7 @@ class CodeGenerationEngine:
         try:
             redis = await self._get_redis()
 
-            stats_key = f"{self._stats_key}:{datetime.now().strftime('%Y-%m-%d')}"
+            stats_key = f"{self._stats_key}:{datetime.now(tz=timezone.utc).strftime('%Y-%m-%d')}"
 
             # Increment counters
             await redis.hincrby(stats_key, f"{operation}:total", 1)
@@ -896,13 +882,27 @@ class CodeGenerationEngine:
         except Exception as e:
             logger.error("Failed to track stats: %s", e)
 
-    async def get_stats(self) -> Dict[str, Any]:
-        """Get code generation statistics"""
+    async def get_stats(self, source_id: Optional[str] = None) -> Dict[str, Any]:
+        """Get code generation statistics.
+
+        Issue #3441: When source_id is supplied, the Redis stats key is
+        namespaced as ``autobot:code_generation:stats:{source_id}:{date}``
+        so per-project generation activity is tracked independently from the
+        global counter.
+
+        Args:
+            source_id: Project source identifier used to scope the stats key,
+                       or None for global statistics.
+        """
         try:
             redis = await self._get_redis()
 
-            today = datetime.now().strftime("%Y-%m-%d")
-            stats_key = f"{self._stats_key}:{today}"
+            today = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
+            # Issue #3441: scope key to source when provided
+            key_prefix = (
+                f"{self._stats_key}:{source_id}" if source_id else self._stats_key
+            )
+            stats_key = f"{key_prefix}:{today}"
 
             stats_data = await redis.hgetall(stats_key)
 
@@ -930,7 +930,7 @@ class CodeGenerationEngine:
         except Exception as e:
             logger.error("Failed to get stats: %s", e)
             return {
-                "date": datetime.now().strftime("%Y-%m-%d"),
+                "date": datetime.now(tz=timezone.utc).strftime("%Y-%m-%d"),
                 "error": "Internal server error",
             }
 
@@ -1103,14 +1103,17 @@ async def get_stats(
     """
     Get code generation statistics.
 
-    Returns usage statistics for generation and refactoring.
+    Returns usage statistics for generation and refactoring scoped to the
+    selected project when source_id is supplied.
 
     Issue #744: Requires admin authentication.
-    Issue #3436: Accepts optional source_id to scope results to a project.
+    Issue #3441: When source_id is supplied, statistics are read from and
+    written to a per-project Redis key so each project's generation activity
+    is tracked independently.
     """
     await _resolve_source_or_404(source_id)
     engine = get_code_generation_engine()
-    return await engine.get_stats()
+    return await engine.get_stats(source_id=source_id)
 
 
 @router.get("/refactoring-types")

@@ -14,6 +14,7 @@
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ApiClient from '@/utils/ApiClient'
+import { getApiBase } from '@/config/ssot-config'
 import InteractiveScreenshot from '@/components/browser/InteractiveScreenshot.vue'
 import GUIAutomationControls from '@/components/vision/GUIAutomationControls.vue'
 import {
@@ -64,7 +65,7 @@ function toggleAutomation(): void {
 
 async function checkStatus(): Promise<void> {
   try {
-    const data = await ApiClient.get('/api/playwright/worker-status') as Record<string, unknown>
+    const data = await ApiClient.get(`${getApiBase()}/playwright/worker-status`) as Record<string, unknown>
     isConnected.value = data.status === 'connected' || data.browser_connected === true
   } catch (e) {
     logger.warn('Browser status check failed:', e)
@@ -90,7 +91,7 @@ async function navigate(): Promise<void> {
   url.value = targetUrl
 
   try {
-    const nav = await ApiClient.post('/api/playwright/navigate', { url: targetUrl }) as Record<string, unknown>
+    const nav = await ApiClient.post(`${getApiBase()}/playwright/navigate`, { url: targetUrl }) as Record<string, unknown>
     currentUrl.value = (nav.url as string) || targetUrl
     pageTitle.value = (nav.title as string) || null
     isConnected.value = true
@@ -108,7 +109,7 @@ async function navigate(): Promise<void> {
 
 async function captureScreenshot(): Promise<void> {
   try {
-    const data = await ApiClient.post('/api/playwright/worker-screenshot', {}) as Record<string, unknown>
+    const data = await ApiClient.post(`${getApiBase()}/playwright/worker-screenshot`, {}) as Record<string, unknown>
     screenshot.value = (data.screenshot as string) || null
   } catch (e) {
     logger.warn('Screenshot failed:', e)
@@ -120,7 +121,7 @@ async function goBack(): Promise<void> {
   loading.value = true
   error.value = null
   try {
-    const nav = await ApiClient.post('/api/playwright/back', {}) as Record<string, unknown>
+    const nav = await ApiClient.post(`${getApiBase()}/playwright/back`, {}) as Record<string, unknown>
     if (nav.url) { currentUrl.value = nav.url as string; url.value = nav.url as string }
     if (nav.title) pageTitle.value = nav.title as string
     if (nav.screenshot) screenshot.value = nav.screenshot as string
@@ -136,7 +137,7 @@ async function goForward(): Promise<void> {
   loading.value = true
   error.value = null
   try {
-    const nav = await ApiClient.post('/api/playwright/forward', {}) as Record<string, unknown>
+    const nav = await ApiClient.post(`${getApiBase()}/playwright/forward`, {}) as Record<string, unknown>
     if (nav.url) { currentUrl.value = nav.url as string; url.value = nav.url as string }
     if (nav.title) pageTitle.value = nav.title as string
     if (nav.screenshot) screenshot.value = nav.screenshot as string
@@ -152,7 +153,7 @@ async function reload(): Promise<void> {
   loading.value = true
   error.value = null
   try {
-    const nav = await ApiClient.post('/api/playwright/reload', {}) as Record<string, unknown>
+    const nav = await ApiClient.post(`${getApiBase()}/playwright/reload`, {}) as Record<string, unknown>
     if (nav.screenshot) screenshot.value = nav.screenshot as string
   } catch (e) {
     error.value = e instanceof Error ? e.message : t('chat.visualBrowser.reloadFailed')
@@ -165,7 +166,7 @@ async function handleInteract(payload: { action: string; params: Record<string, 
   if (!isConnected.value || loading.value) return
   loading.value = true
   try {
-    const result = await ApiClient.post('/api/playwright/interact', {
+    const result = await ApiClient.post(`${getApiBase()}/playwright/interact`, {
       action: payload.action,
       ...payload.params,
     }) as Record<string, unknown>

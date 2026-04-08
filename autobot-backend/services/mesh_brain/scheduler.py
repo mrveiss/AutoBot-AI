@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from constants.threshold_constants import TimingConstants
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -141,7 +143,7 @@ class MeshBrainScheduler:
                 await learner.consume_feedback_stream()
             except Exception as exc:
                 logger.error("edge_learner stream consumer failed: %s", exc)
-            await asyncio.sleep(1)
+            await asyncio.sleep(TimingConstants.STANDARD_DELAY)
 
     async def _run_periodic(self, name: str) -> None:
         """Run a job on its fixed interval until the scheduler is stopped."""

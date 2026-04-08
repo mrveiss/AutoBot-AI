@@ -443,7 +443,7 @@ class GracefulDegradationManager:
                     raise Exception("Simulated API failure")
 
                 # Simulate successful response
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(TimingConstants.MICRO_DELAY)
                 response = f"Normal response to: {request[:50]}..."
 
                 # Cache successful response
@@ -725,7 +725,7 @@ async def main():
             logger.debug("Degradation Level: %s", response.degradation_level.name)
 
             # Simulate some delay between requests
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(TimingConstants.SHORT_DELAY)
 
         # Test forced degradation
         logger.debug("\n" + "=" * 50)

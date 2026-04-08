@@ -8,6 +8,8 @@ import sys
 
 sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
+from tests.test_helpers import get_test_backend_url
+
 from agents.network_discovery_agent import network_discovery_agent
 from agents.security_scanner_agent import security_scanner_agent
 
@@ -141,7 +143,7 @@ async def test_workflow_integration():
             }
 
             async with session.post(
-                "http://localhost:8001/api/workflow/execute", json=workflow_data
+                get_test_backend_url() + "/api/workflow/execute", json=workflow_data
             ) as response:
                 if response.status == 200:
                     result = await response.json()

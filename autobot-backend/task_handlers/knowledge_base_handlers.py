@@ -10,6 +10,7 @@ Issue #322: Refactored to use TaskExecutionContext to eliminate data clump patte
 import logging
 from typing import Any, Dict
 
+from autobot_shared.models.task_result import task_success
 from models.task_context import TaskExecutionContext
 
 from .base import TaskHandler
@@ -49,11 +50,7 @@ class KBSearchHandler(TaskHandler):
 
         kb_results = await ctx.worker.knowledge_base.search(query, n_results)
 
-        result = {
-            "status": "success",
-            "message": "KB search successful.",
-            "results": kb_results,
-        }
+        result = task_success("KB search successful.", data={"results": kb_results})
 
         ctx.audit_log(
             "kb_search",

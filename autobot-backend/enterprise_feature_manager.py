@@ -9,7 +9,7 @@ Enables and manages enterprise-grade features for AutoBot system.
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -522,7 +522,7 @@ class EnterpriseFeatureManager:
 
             if result["success"]:
                 feature.status = FeatureStatus.ENABLED
-                feature.enabled_at = datetime.now()
+                feature.enabled_at = datetime.now(tz=timezone.utc)
 
                 if feature.health_check_endpoint:
                     await self._start_health_monitoring(feature_name, feature)
@@ -591,7 +591,6 @@ class EnterpriseFeatureManager:
                 "capabilities": [
                     "advanced_web_research",
                     "librarian_agent_coordination",
-                    "mcp_manual_integration",
                     "research_quality_control",
                 ],
                 "config_updates": config_updates,
@@ -860,7 +859,7 @@ class EnterpriseFeatureManager:
     async def get_enterprise_status(self) -> Dict[str, Any]:
         """Get comprehensive enterprise feature status."""
         status = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "feature_summary": self._build_feature_summary(),
             "features": {},
             "capabilities": self._build_capabilities_status(),
@@ -920,7 +919,7 @@ class EnterpriseFeatureManager:
 
     async def _check_feature_health(self, feature_name: str) -> Dict[str, Any]:
         """Check health of a specific feature"""
-        return {"status": "healthy", "last_check": datetime.now().isoformat()}
+        return {"status": "healthy", "last_check": datetime.now(tz=timezone.utc).isoformat()}
 
     def _get_all_service_endpoints(self) -> Dict[str, str]:
         """Get all service endpoints"""

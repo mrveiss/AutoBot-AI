@@ -327,6 +327,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import api from '@/services/api'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 const { t } = useI18n()
 
@@ -412,9 +413,9 @@ const fetchCostData = async () => {
     // Issue #552: Fixed missing /api prefix in analytics endpoints
     // Issue #701: Added type assertions for Promise.all results
     const [summaryRes, trendsRes, modelsRes] = await Promise.all([
-      api.get<ApiDataResponse>('/api/analytics/cost/summary'),
-      api.get<ApiDataResponse>('/api/analytics/cost/trends'),
-      api.get<ApiDataResponse>('/api/analytics/cost/by-model')
+      api.get<ApiDataResponse>(`${getApiBase()}/analytics/cost/summary`),
+      api.get<ApiDataResponse>(`${getApiBase()}/analytics/cost/trends`),
+      api.get<ApiDataResponse>(`${getApiBase()}/analytics/cost/by-model`)
     ])
     costSummary.value = (summaryRes as ApiDataResponse).data
     costTrends.value = (trendsRes as ApiDataResponse).data
@@ -429,8 +430,8 @@ const fetchAgentData = async () => {
     // Issue #552: Fixed missing /api prefix in analytics endpoints
     // Issue #701: Added type assertions for Promise.all results
     const [metricsRes, recsRes] = await Promise.all([
-      api.get<ApiDataResponse>('/api/analytics/agents/performance'),
-      api.get<ApiDataResponse>('/api/analytics/agents/recommendations')
+      api.get<ApiDataResponse>(`${getApiBase()}/analytics/agents/performance`),
+      api.get<ApiDataResponse>(`${getApiBase()}/analytics/agents/recommendations`)
     ])
     agentMetrics.value = (metricsRes as ApiDataResponse).data
     recommendations.value = (recsRes as ApiDataResponse).data
@@ -443,7 +444,7 @@ const fetchExportFormats = async () => {
   try {
     // Issue #552: Fixed missing /api prefix in analytics endpoints
     // Issue #701: Added type assertion for response
-    const res = await api.get<ApiDataResponse>('/api/analytics/export/formats')
+    const res = await api.get<ApiDataResponse>(`${getApiBase()}/analytics/export/formats`)
     exportFormats.value = (res as ApiDataResponse).data?.formats || []
     // Add icons
     exportFormats.value.forEach((f: any) => {
@@ -463,9 +464,9 @@ const fetchBehaviorData = async () => {
     // Issue #552: Fixed missing /api prefix in analytics endpoints
     // Issue #701: Added type assertions for Promise.all results
     const [engagementRes, featuresRes, heatmapRes] = await Promise.all([
-      api.get<ApiDataResponse>('/api/analytics/behavior/engagement'),
-      api.get<ApiDataResponse>('/api/analytics/behavior/features'),
-      api.get<ApiDataResponse>('/api/analytics/behavior/stats/heatmap')
+      api.get<ApiDataResponse>(`${getApiBase()}/analytics/behavior/engagement`),
+      api.get<ApiDataResponse>(`${getApiBase()}/analytics/behavior/features`),
+      api.get<ApiDataResponse>(`${getApiBase()}/analytics/behavior/stats/heatmap`)
     ])
     engagementMetrics.value = (engagementRes as ApiDataResponse).data
     behaviorMetrics.value = (featuresRes as ApiDataResponse).data

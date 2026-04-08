@@ -7,7 +7,7 @@ Orchestrator for AutoBot - Phase 5 Code Consolidation
 This module consolidates all orchestrator implementations into a single,
 comprehensive orchestrator that integrates the best features from:
 - src/orchestrator.py (main orchestrator)
-- src/enhanced_orchestrator.py (enhanced features)
+- src/enhanced_orchestrator.py (enhanced features, merged in #3393)
 - chat_workflow/graph.py (LangGraph StateGraph — Issue #1043, replaces legacy LangChain)
 """
 
@@ -16,24 +16,28 @@ import json
 import time
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
 from autobot_shared.logging_manager import get_logger
-from config import config_manager
+from config.manager import get_config_manager as _get_config_manager
 from constants.threshold_constants import LLMDefaults, TimingConstants
-from conversation import ConversationManager
 from llm_interface import LLMInterface
 from memory import LongTermMemoryManager
 
 # Issue #381: Import shared types from orchestration package
+# Issue #3393: Added WorkflowDocumenter, WorkflowExecutor, WorkflowPlanner for
+# execute_enhanced_workflow (merged from enhanced_orchestrator.py).
 from orchestration import (
     AgentCapability,
     AgentInteraction,
     AgentProfile,
     DocumentationType,
     WorkflowDocumentation,
+    WorkflowDocumenter,
+    WorkflowExecutor,
+    WorkflowPlanner,
 )
 from task_execution_tracker import Priority, TaskType, task_tracker
 
@@ -44,6 +48,9 @@ from utils.agent_selection import reserve_agent as _reserve_agent
 from utils.agent_selection import update_agent_performance as _update_performance
 
 logger = get_logger("orchestrator")
+
+# Canonical singleton; avoids routing through config/__init__ lazy alias (Issue #3829)
+config_manager = _get_config_manager()
 
 # Import KnowledgeBase for enhanced features
 try:
@@ -196,14 +203,12 @@ class ConsolidatedOrchestrator:
 
     def _init_core_components(self, config_mgr) -> None:
         """Initialize core orchestrator components. Issue #620."""
-        from config import config_manager as global_config_manager
-
-        self.config_manager = config_mgr or global_config_manager
+        # Use module-level singleton; avoid re-importing through the lazy alias
+        self.config_manager = config_mgr or _get_config_manager()
         self.config = OrchestratorConfig(self.config_manager)
 
         self.llm_interface = LLMInterface()
         self.memory_manager = LongTermMemoryManager()
-        self.conversation_manager = ConversationManager()
         self.agent_manager = AgentManager()
 
     def _init_task_state(self) -> None:
@@ -232,7 +237,6 @@ class ConsolidatedOrchestrator:
         self.knowledge_base = KnowledgeBase() if KNOWLEDGE_BASE_AVAILABLE else None
 
         self.auto_doc_enabled = True
-        self.doc_generation_threshold = 0.8
         self.knowledge_extraction_enabled = KNOWLEDGE_BASE_AVAILABLE
 
         self.workflow_metrics = {
@@ -424,7 +428,7 @@ class ConsolidatedOrchestrator:
             await self._ensure_working_llm_model()
 
             self.is_running = True
-            self.start_time = datetime.now()
+            self.start_time = datetime.now(tz=timezone.utc)
             logger.info("✅ Consolidated Orchestrator initialization complete")
 
         except Exception as e:
@@ -456,7 +460,7 @@ class ConsolidatedOrchestrator:
             logger.warning("Cleanup warning: %s", e)
 
         # Log final metrics
-        uptime = datetime.now() - self.start_time if self.start_time else 0
+        uptime = datetime.now(tz=timezone.utc) - self.start_time if self.start_time else 0
         logger.info("Orchestrator session %s completed:", self.session_id)
         logger.info("  Uptime: %s", uptime)
         logger.info("  Tasks completed: %s", self.metrics["tasks_completed"])
@@ -918,6 +922,158 @@ class ConsolidatedOrchestrator:
             execution_time=execution_time,
         )
 
+    # ========================================================================
+    # Enhanced Workflow Execution Methods (merged from enhanced_orchestrator #3393)
+    # ========================================================================
+
+    def _get_enhanced_planner(self) -> WorkflowPlanner:
+        """Lazy-initialize the enhanced workflow planner."""
+        if not hasattr(self, "_enh_planner") or self._enh_planner is None:
+            self._enh_planner = WorkflowPlanner(
+                base_orchestrator=self,
+                agent_registry=self.agent_registry,
+                find_best_agent_callback=self.find_best_agent_for_task,
+            )
+        return self._enh_planner
+
+    def _get_enhanced_executor(self) -> WorkflowExecutor:
+        """Lazy-initialize the enhanced workflow executor."""
+        if not hasattr(self, "_enh_executor") or self._enh_executor is None:
+            self._enh_executor = WorkflowExecutor(
+                agent_registry=self.agent_registry,
+                agent_interactions=self.agent_interactions,
+                reserve_agent_callback=self._reserve_agent,
+                release_agent_callback=self._release_agent,
+                update_performance_callback=self._update_agent_performance,
+            )
+        return self._enh_executor
+
+    def _get_enhanced_documenter(self) -> WorkflowDocumenter:
+        """Lazy-initialize the workflow documenter."""
+        if not hasattr(self, "_enh_documenter") or self._enh_documenter is None:
+            self._enh_documenter = WorkflowDocumenter(
+                knowledge_base=self.knowledge_base,
+                llm_interface=self.llm_interface,
+            )
+        return self._enh_documenter
+
+    async def execute_enhanced_workflow(
+        self,
+        user_request: str,
+        context: Optional[Dict[str, Any]] = None,
+        auto_document: bool = True,
+        require_plan_approval: bool = False,
+        plan_approval_callback=None,
+    ) -> Dict[str, Any]:
+        """Execute workflow with enhanced orchestration and auto-documentation.
+
+        Issue #3393: Merged from enhanced_orchestrator.py into ConsolidatedOrchestrator.
+        """
+        workflow_id = str(uuid.uuid4())
+        start_time = time.time()
+        context = context or {}
+
+        logger.info("Starting enhanced workflow %s: %s", workflow_id, user_request)
+
+        try:
+            if auto_document:
+                documenter = self._get_enhanced_documenter()
+                doc = documenter.create_workflow_doc(
+                    workflow_id=workflow_id,
+                    title=f"Workflow: {user_request[:50]}...",
+                    description=user_request,
+                )
+                doc.content.update(
+                    {"request": user_request, "context": context, "start_time": start_time}
+                )
+                self.workflow_documentation[workflow_id] = doc
+
+            complexity = await self.classify_request_complexity(user_request)
+            planner = self._get_enhanced_planner()
+            enhanced_steps = await planner.plan_enhanced_workflow_steps(
+                user_request, complexity, context
+            )
+
+            if require_plan_approval and plan_approval_callback is not None:
+                plan_summary = planner.create_plan_summary_for_approval(
+                    workflow_id, user_request, enhanced_steps
+                )
+                executor = self._get_enhanced_executor()
+                approval_result = await executor.request_plan_approval(
+                    workflow_id, user_request, plan_summary, plan_approval_callback
+                )
+                if not approval_result.get("approved", False):
+                    logger.info(
+                        "Workflow %s plan rejected: %s",
+                        workflow_id,
+                        approval_result.get("reason", "No reason provided"),
+                    )
+                    return {
+                        "workflow_id": workflow_id,
+                        "status": "plan_rejected",
+                        "reason": approval_result.get("reason"),
+                        "plan": approval_result.get("plan"),
+                        "execution_time": time.time() - start_time,
+                    }
+
+            executor = self._get_enhanced_executor()
+            execution_result = await executor.execute_coordinated_workflow(
+                workflow_id,
+                enhanced_steps,
+                context,
+                notification_config=context.get("notification_config"),
+            )
+
+            succeeded = execution_result["status"] == "completed"
+            self.workflow_metrics["total_workflows"] += 1
+            if succeeded:
+                self.workflow_metrics["successful_workflows"] += 1
+            total = self.workflow_metrics["total_workflows"]
+            current_avg = self.workflow_metrics["average_execution_time"]
+            self.workflow_metrics["average_execution_time"] = (
+                (current_avg * (total - 1)) + (time.time() - start_time)
+            ) / total
+
+            if auto_document:
+                documenter = self._get_enhanced_documenter()
+                await documenter.generate_workflow_documentation(
+                    workflow_id, execution_result
+                )
+                doc = documenter.get_doc(workflow_id)
+                if doc:
+                    self.workflow_documentation[workflow_id] = doc
+
+            if self.knowledge_extraction_enabled:
+                documenter = self._get_enhanced_documenter()
+                await documenter.extract_workflow_knowledge(
+                    workflow_id, user_request, execution_result, self.agent_registry
+                )
+
+            return {
+                "workflow_id": workflow_id,
+                "status": execution_result["status"],
+                "result": execution_result,
+                "execution_time": time.time() - start_time,
+                "agents_involved": execution_result.get("agents_involved", []),
+                "documentation_generated": auto_document,
+                "knowledge_extracted": self.knowledge_extraction_enabled,
+            }
+
+        except Exception as e:
+            logger.error("Enhanced workflow %s failed: %s", workflow_id, e)
+            if auto_document:
+                documenter = self._get_enhanced_documenter()
+                await documenter.document_workflow_failure(workflow_id, str(e))
+                doc = documenter.get_doc(workflow_id)
+                if doc:
+                    self.workflow_documentation[workflow_id] = doc
+            return {
+                "workflow_id": workflow_id,
+                "status": "failed",
+                "error": str(e),
+                "execution_time": time.time() - start_time,
+            }
+
     def set_phi2_enabled(self, enabled: bool):
         """Set Phi-2 model enabled status"""
         self.config.phi2_enabled = enabled
@@ -933,7 +1089,7 @@ class ConsolidatedOrchestrator:
 
     async def get_status(self) -> Dict[str, Any]:
         """Get comprehensive orchestrator status and metrics (enhanced version)"""
-        uptime = datetime.now() - self.start_time if self.start_time else 0
+        uptime = datetime.now(tz=timezone.utc) - self.start_time if self.start_time else 0
 
         return {
             "session_id": self.session_id,
@@ -1131,11 +1287,38 @@ async def shutdown_orchestrator():
 
 
 # ============================================================================
-# Backward Compatibility Alias
+# Backward Compatibility Aliases
 # ============================================================================
 
 # Provide backward compatibility for code expecting "Orchestrator" class
 Orchestrator = ConsolidatedOrchestrator
+
+# Issue #3393: EnhancedOrchestrator alias for callers previously importing from
+# enhanced_orchestrator.py (now deleted).  ConsolidatedOrchestrator is a strict
+# superset — it exposes execute_enhanced_workflow and plan_workflow_steps.
+EnhancedOrchestrator = ConsolidatedOrchestrator
+
+
+# Issue #3393: Sync accessor for callers that cannot await get_orchestrator().
+# Creates the singleton without calling initialize() — callers that need the
+# fully-initialised instance should use the async get_orchestrator() instead.
+_sync_instance_lock = __import__("threading").Lock()
+
+
+def get_orchestrator_sync() -> ConsolidatedOrchestrator:
+    """Return the shared ConsolidatedOrchestrator singleton (sync-safe).
+
+    Issue #3393: Replaces the sync get_orchestrator() that was in
+    enhanced_orchestrator.py.  Use the async get_orchestrator() when you are
+    inside an async context and need the fully-initialized instance.
+    """
+    global _orchestrator_instance
+    if _orchestrator_instance is None:
+        with _sync_instance_lock:
+            if _orchestrator_instance is None:
+                logger.info("Creating shared ConsolidatedOrchestrator singleton (sync)")
+                _orchestrator_instance = ConsolidatedOrchestrator()
+    return _orchestrator_instance
 
 
 # ============================================================================
@@ -1144,7 +1327,8 @@ Orchestrator = ConsolidatedOrchestrator
 
 __all__ = [
     # Main orchestrator classes
-    "Orchestrator",  # Backward compatibility alias
+    "Orchestrator",  # backward compatibility alias → ConsolidatedOrchestrator
+    "EnhancedOrchestrator",  # backward compatibility alias → ConsolidatedOrchestrator
     "ConsolidatedOrchestrator",
     "OrchestratorConfig",
     # Enums
@@ -1152,14 +1336,15 @@ __all__ = [
     "OrchestrationMode",
     "TaskComplexity",
     "WorkflowStatus",
-    "AgentCapability",  # Enhanced feature from enhanced_orchestrator
-    "DocumentationType",  # Enhanced feature from enhanced_orchestrator
+    "AgentCapability",
+    "DocumentationType",
     # Data classes
     "WorkflowStep",
-    "AgentProfile",  # Enhanced feature from enhanced_orchestrator
-    "WorkflowDocumentation",  # Enhanced feature from enhanced_orchestrator
-    "AgentInteraction",  # Enhanced feature from enhanced_orchestrator
+    "AgentProfile",
+    "WorkflowDocumentation",
+    "AgentInteraction",
     # Functions
     "get_orchestrator",
+    "get_orchestrator_sync",
     "shutdown_orchestrator",
 ]

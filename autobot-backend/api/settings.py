@@ -1,10 +1,17 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+import asyncio
+import copy
 import datetime
+import json
 import logging
+import os
+import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import Any, List, Optional
+
+import aiofiles
 
 from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, HTTPException
@@ -718,3 +725,316 @@ async def get_update_status(
     except Exception as e:
         logger.error("Error checking update status: %s", str(e))
         raise_server_error("UPDATES_0004", "Error checking update status")
+
+
+# ==================== Config Sync Endpoint (Issue #3398, #3881) ====================
+
+# Allowlist of permitted top-level keys for /api/settings/sync.
+# Any key not present here is rejected with HTTP 400 to prevent arbitrary
+# key injection into the config store (Issue #3881).
+_SYNC_ALLOWED_TOP_LEVEL_KEYS: frozenset = frozenset(
+    {
+        "backend",
+        "celery",
+        "chat",
+        "data",
+        "deployment",
+        "hardware",
+        "logging",
+        "memory",
+        "multimodal",
+        "network",
+        "npu",
+        "optimization",
+        "redis",
+        "security",
+        "system",
+        "task_transport",
+        "ui",
+    }
+)
+
+# Maximum nesting depth accepted in the incoming settings payload (Issue #3881).
+_SYNC_MAX_DEPTH: int = 8
+
+# Maximum raw byte size of the incoming settings payload (Issue #3881).
+_SYNC_MAX_PAYLOAD_BYTES: int = 256 * 1024  # 256 KiB
+
+
+def _exceeds_depth(obj: Any, current_depth: int = 0) -> bool:
+    """Return True when *obj* exceeds ``_SYNC_MAX_DEPTH`` nesting levels.
+
+    Only recurses into dict values; non-dict values always return False.
+    """
+    if current_depth > _SYNC_MAX_DEPTH:
+        return True
+    if isinstance(obj, dict):
+        return any(_exceeds_depth(v, current_depth + 1) for v in obj.values())
+    return False
+
+
+class ConfigSyncRequest(BaseModel):
+    """Request body for POST /api/settings/sync.
+
+    The *settings* dict is merged into the active settings.json so callers
+    can send partial payloads — only the provided keys are changed.
+    """
+
+    settings: dict
+
+
+class ConfigSyncResponse(BaseModel):
+    """Response body for POST /api/settings/sync."""
+
+    status: str
+    changed: dict  # keys that changed: {key: {"before": old, "after": new}}
+    unchanged_keys: int
+
+
+def _compute_flat_diff(before: dict, after: dict, prefix: str = "") -> dict:
+    """Return a flat dict of keys whose values changed between *before* and *after*.
+
+    Only leaf values are compared; nested dicts are recursed into.
+    """
+    diff: dict = {}
+    all_keys = set(before) | set(after)
+    for key in all_keys:
+        full_key = f"{prefix}.{key}" if prefix else key
+        bval = before.get(key)
+        aval = after.get(key)
+        if isinstance(bval, dict) and isinstance(aval, dict):
+            diff.update(_compute_flat_diff(bval, aval, prefix=full_key))
+        elif bval != aval:
+            diff[full_key] = {"before": bval, "after": aval}
+    return diff
+
+
+async def _atomic_write_json(target: Path, data: dict) -> None:
+    """Write *data* as JSON to *target* atomically via a temp-file rename.
+
+    Creates parent directories as needed.  Cleans up the temp file if the
+    write or rename fails so no partial file is left on disk.
+    """
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp_fd, tmp_path = tempfile.mkstemp(
+        dir=str(target.parent), suffix=".tmp", prefix=target.stem + "_"
+    )
+    os.close(tmp_fd)  # aiofiles will reopen by path
+    try:
+        async with aiofiles.open(tmp_path, "w", encoding="utf-8") as fh:
+            await fh.write(json.dumps(data, indent=2, ensure_ascii=False))
+        # Issue #3882: os.replace is a blocking syscall — offload to thread pool
+        # so we do not stall the event loop under high concurrency.
+        await asyncio.to_thread(os.replace, tmp_path, str(target))
+    except Exception:
+        try:
+            # Issue #3882: os.unlink is also blocking — offload to thread pool.
+            await asyncio.to_thread(os.unlink, tmp_path)
+        except OSError:
+            pass
+        raise
+
+
+def _count_unchanged_keys(incoming: dict, changed: dict) -> int:
+    """Return how many leaf keys in *incoming* were not present in *changed*."""
+    all_incoming_leaf_count = len(_compute_flat_diff({}, incoming))
+    return max(0, all_incoming_leaf_count - len(changed))
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="sync_config",
+    error_code_prefix="SETTINGS",
+)
+@router.post("/sync", response_model=ConfigSyncResponse)
+async def sync_config(
+    request: ConfigSyncRequest,
+    session: AsyncSession = Depends(get_db_session),
+    _: None = Depends(check_admin_permission),
+):
+    """Atomically merge *request.settings* into settings.json (Issue #3398).
+
+    The write is atomic: the new JSON is written to a temp file then renamed
+    over the target, preventing a half-written file from corrupting config.
+    Requires operator/admin permission.  Returns a diff of what changed so the
+    caller can display a confirmation to the user.
+    """
+    import copy
+
+    from config.loader import deep_merge
+    from constants.path_constants import PATH
+
+    if not request.settings:
+        return ConfigSyncResponse(status="skipped", changed={}, unchanged_keys=0)
+
+    # Issue #3881: Enforce max payload size before any further processing.
+    try:
+        raw_size = len(json.dumps(request.settings).encode("utf-8"))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="settings payload is not JSON-serialisable",
+        ) from exc
+    if raw_size > _SYNC_MAX_PAYLOAD_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"settings payload is too large ({raw_size} bytes); "
+                f"limit is {_SYNC_MAX_PAYLOAD_BYTES} bytes"
+            ),
+        )
+
+    # Issue #3881: Reject unknown top-level keys to block arbitrary key injection.
+    unknown_keys = set(request.settings) - _SYNC_ALLOWED_TOP_LEVEL_KEYS
+    if unknown_keys:
+        raise HTTPException(
+            status_code=400,
+            detail=f"unknown top-level config key(s): {sorted(unknown_keys)}",
+        )
+
+    # Issue #3881: Reject payloads that exceed the maximum permitted nesting depth.
+    if _exceeds_depth(request.settings):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"settings payload exceeds maximum nesting depth of {_SYNC_MAX_DEPTH}"
+            ),
+        )
+
+    before_config: dict = ConfigService.get_full_config()
+    merged_config = deep_merge(copy.deepcopy(before_config), request.settings)
+
+    settings_file = PATH.PROJECT_ROOT / "config" / "settings.json"
+    await _atomic_write_json(settings_file, merged_config)
+
+    # Invalidate the ConfigService cache so the next read picks up the new file.
+    ConfigService.clear_cache()
+
+    changed = _compute_flat_diff(before_config, merged_config)
+    unchanged_keys = _count_unchanged_keys(request.settings, changed)
+
+    # Audit trail (same pattern as existing save_settings endpoint).
+    await ConfigRevisionService(session).create_revision(
+        entity_type="system",
+        entity_id="settings",
+        before_config=before_config,
+        after_config=merged_config,
+        source="api_sync",
+        created_by="admin",
+    )
+
+    logger.info(
+        "Config sync: %d key(s) changed, %d unchanged",
+        len(changed),
+        unchanged_keys,
+    )
+
+    return ConfigSyncResponse(
+        status="ok",
+        changed=changed,
+        unchanged_keys=unchanged_keys,
+    )
+
+
+# ==================== Hardware Priority Endpoint (Issue #3288) ====================
+
+_VALID_HARDWARE_TYPES = frozenset({"npu", "gpu", "cpu"})
+
+
+class HardwarePriorityRequest(BaseModel):
+    """Request body for PATCH /api/settings/hardware-priority.
+
+    priority_order must be a permutation of ["npu", "gpu", "cpu"] — all three
+    values required, no duplicates.
+    """
+
+    priority_order: List[str]
+
+    def model_post_init(self, __context) -> None:  # noqa: ANN001
+        given = set(self.priority_order)
+        if given != _VALID_HARDWARE_TYPES or len(self.priority_order) != 3:
+            raise ValueError(
+                f"priority_order must be a permutation of {sorted(_VALID_HARDWARE_TYPES)}, "
+                f"got {self.priority_order}"
+            )
+
+
+class HardwarePriorityResponse(BaseModel):
+    """Response body for PATCH /api/settings/hardware-priority."""
+
+    status: str
+    priority_order: List[str]
+    changed: dict
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_hardware_priority",
+    error_code_prefix="SETTINGS",
+)
+@router.patch("/hardware-priority", response_model=HardwarePriorityResponse)
+async def update_hardware_priority(
+    request: HardwarePriorityRequest,
+    session: AsyncSession = Depends(get_db_session),
+    _: None = Depends(check_admin_permission),
+):
+    """Set hardware processing priority order for NPU/GPU/CPU (Issue #3288).
+
+    Persists the ordering to ``hardware.acceleration.priority_order`` in
+    ``config.yaml`` and immediately applies it to the in-process
+    ``HardwareAccelerationManager`` singleton so new agent dispatches respect
+    the updated priority without a restart.
+
+    Requires admin permission.
+    """
+    from hardware_acceleration import get_hardware_acceleration_manager
+
+    before_config: dict = ConfigService.get_full_config()
+
+    # Build the minimal patch — only the key we own
+    patch: dict = {
+        "hardware": {
+            "acceleration": {
+                "priority_order": request.priority_order,
+            }
+        }
+    }
+
+    # Deep-merge into a copy to produce the full updated config
+    from config.loader import deep_merge
+
+    merged_config = deep_merge(copy.deepcopy(before_config), patch)
+    ConfigService.save_full_config(merged_config)
+    ConfigService.clear_cache()
+
+    # Apply in-memory so the running process respects the new ordering
+    hw_manager = get_hardware_acceleration_manager()
+    hw_manager.update_priorities(request.priority_order)
+
+    # Read back the actually-applied order (filtered to available devices)
+    applied_order = [
+        t.value for t in hw_manager.current_config["priority_order"]
+    ]
+
+    changed = _compute_flat_diff(before_config, merged_config)
+
+    await ConfigRevisionService(session).create_revision(
+        entity_type="system",
+        entity_id="hardware_priority",
+        before_config=before_config,
+        after_config=merged_config,
+        source="api",
+        created_by="admin",
+    )
+
+    logger.info(
+        "Hardware priority updated: %s (changed keys: %d)",
+        request.priority_order,
+        len(changed),
+    )
+
+    return HardwarePriorityResponse(
+        status="ok",
+        priority_order=applied_order,
+        changed=changed,
+    )

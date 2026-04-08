@@ -18,6 +18,7 @@ from functools import wraps
 from typing import Any, Callable, Dict, List, Optional
 
 from autobot_shared.redis_client import get_redis_client
+from constants.ttl_constants import TTL_1_HOUR, TTL_5_MINUTES
 
 logger = logging.getLogger(__name__)
 
@@ -204,29 +205,29 @@ class AdvancedCacheManager:
         # Cache configurations for different data types
         self.cache_configs = {
             # Static data - long TTL
-            "templates": CacheConfig(CacheStrategy.STATIC, ttl=3600),  # 1 hour
+            "templates": CacheConfig(CacheStrategy.STATIC, ttl=TTL_1_HOUR),  # 1 hour
             "configurations": CacheConfig(CacheStrategy.STATIC, ttl=1800),  # 30 min
             "model_info": CacheConfig(CacheStrategy.STATIC, ttl=900),  # 15 min
             # Dynamic data - medium TTL
-            "system_status": CacheConfig(CacheStrategy.DYNAMIC, ttl=300),  # 5 min
+            "system_status": CacheConfig(CacheStrategy.DYNAMIC, ttl=TTL_5_MINUTES),  # 5 min
             "project_status": CacheConfig(CacheStrategy.DYNAMIC, ttl=180),  # 3 min
             "health_checks": CacheConfig(CacheStrategy.DYNAMIC, ttl=60),  # 1 min
             # User-scoped data - medium TTL
-            "user_preferences": CacheConfig(CacheStrategy.USER_SCOPED, ttl=3600),
+            "user_preferences": CacheConfig(CacheStrategy.USER_SCOPED, ttl=TTL_1_HOUR),
             "user_history": CacheConfig(CacheStrategy.USER_SCOPED, ttl=1800),
             # Computed results - long TTL for expensive operations
             "code_analysis": CacheConfig(CacheStrategy.COMPUTED, ttl=7200),  # 2 hours
             "search_results": CacheConfig(CacheStrategy.COMPUTED, ttl=1800),  # 30 min
             "ai_responses": CacheConfig(CacheStrategy.COMPUTED, ttl=900),  # 15 min
             # Temporary data - short TTL
-            "session_data": CacheConfig(CacheStrategy.TEMPORARY, ttl=300),
+            "session_data": CacheConfig(CacheStrategy.TEMPORARY, ttl=TTL_5_MINUTES),
             "api_rate_limits": CacheConfig(CacheStrategy.TEMPORARY, ttl=60),
             # Knowledge base data - medium TTL with size limits
             "knowledge_queries": CacheConfig(
-                CacheStrategy.KNOWLEDGE, ttl=300, max_size=1000
+                CacheStrategy.KNOWLEDGE, ttl=TTL_5_MINUTES, max_size=1000
             ),  # 5 min
             "knowledge_embeddings": CacheConfig(
-                CacheStrategy.KNOWLEDGE, ttl=3600, max_size=5000
+                CacheStrategy.KNOWLEDGE, ttl=TTL_1_HOUR, max_size=5000
             ),  # 1 hour
         }
 
@@ -261,7 +262,7 @@ class AdvancedCacheManager:
     ) -> str:
         """Generate hierarchical cache key"""
         config = self.cache_configs.get(
-            data_type, CacheConfig(CacheStrategy.DYNAMIC, 300)
+            data_type, CacheConfig(CacheStrategy.DYNAMIC, TTL_5_MINUTES)
         )
 
         if config.strategy == CacheStrategy.USER_SCOPED and user_id:
@@ -322,7 +323,7 @@ class AdvancedCacheManager:
         try:
             cache_key = self._make_cache_key(data_type, key, user_id)
             config = self.cache_configs.get(
-                data_type, CacheConfig(CacheStrategy.DYNAMIC, 300)
+                data_type, CacheConfig(CacheStrategy.DYNAMIC, TTL_5_MINUTES)
             )
             ttl = custom_ttl or config.ttl
 
@@ -965,7 +966,7 @@ class SimpleCacheManager:
     Provides simple TTL-based caching API using AdvancedCacheManager backend.
     """
 
-    def __init__(self, default_ttl: int = 300):
+    def __init__(self, default_ttl: int = TTL_5_MINUTES):
         """Initialize simple cache manager with default TTL in seconds."""
         self.default_ttl = default_ttl
         self._cache = advanced_cache
@@ -1170,7 +1171,7 @@ cache_manager = SimpleCacheManager()
 
 
 # Standalone cache_response decorator (backward compatibility)
-def cache_response(cache_key: str = None, ttl: int = 300):
+def cache_response(cache_key: str = None, ttl: int = TTL_5_MINUTES):
     """
     Standalone decorator for caching API endpoint responses.
     Backward compatibility for: from backend.utils.cache_manager import cache_response
@@ -1183,7 +1184,7 @@ def cache_response(cache_key: str = None, ttl: int = 300):
 
 
 # Simple cache decorator for non-HTTP functions (backward compatibility)
-def cache_function(cache_key: str = None, ttl: int = 300):
+def cache_function(cache_key: str = None, ttl: int = TTL_5_MINUTES):
     """
     Simple cache decorator for non-FastAPI functions.
     Backward compatibility for original cache_manager.cache_function()

@@ -21,7 +21,7 @@ repos:
     rev: 26.3.1
     hooks:
       - id: black
-        args: [--line-length=88]
+        args: [--line-length=120]
         language_version: python3
         exclude: ^autobot-infrastructure/
 
@@ -30,7 +30,7 @@ repos:
     rev: 8.0.1
     hooks:
       - id: isort
-        args: [--profile=black, --line-length=88]
+        args: [--profile=black, --line-length=120]
         exclude: ^autobot-infrastructure/
 
   # Python linting with flake8
@@ -120,7 +120,7 @@ repos:
         types: [python, ts, vue]
         pass_filenames: false
         stages: [pre-commit]
-        description: "Blocks commits with hardcoded IPs, ports, magic numbers, and role strings"
+        description: "Blocks commits with hardcoded IPs, ports, magic numbers, role strings, AutoBot file paths, and model name literals (#3397)"
 
   # Function length enforcement (Issue #620)
   - repo: local

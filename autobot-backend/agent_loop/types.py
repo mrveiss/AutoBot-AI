@@ -111,7 +111,7 @@ class IterationResult:
     """Result of a single agent loop iteration."""
 
     iteration_number: int
-    phase_completed: LoopPhase
+    phase_completed: LoopPhase = LoopPhase.ANALYZE_EVENTS  # overwritten by _execute_iteration_phases
     tools_executed: list[str] = field(default_factory=list)
     tool_results: dict[str, Any] = field(default_factory=dict)
     events_analyzed: int = 0
@@ -179,6 +179,9 @@ class AgentLoopConfig:
     # Recovery settings
     retry_failed_tools: bool = True  # Retry failed tool calls
     max_tool_retries: int = RetryConfig.MIN_RETRIES  # 2 - Max retries per tool
+
+    # Repetitive tool-call detection (#3255)
+    max_identical_tool_calls: int = 3  # Halt when same tool+args seen N times
 
     # Logging
     log_iterations: bool = True  # Log each iteration
@@ -252,10 +255,21 @@ class TaskContext:
     plan_id: Optional[str] = None
     current_step_id: Optional[str] = None
     metadata: dict = field(default_factory=dict)
+    # Repetitive tool-call detection: maps content-hash -> call count (#3255)
+    tool_call_hashes: dict[str, int] = field(default_factory=dict)
 
     def add_tool(self, tool_name: str) -> None:
         """Record tool execution."""
         self.tools_executed.append(tool_name)
+
+    def record_tool_call_hash(self, call_hash: str) -> int:
+        """Increment call count for a content hash and return the new count.
+
+        Issue #3255: Used by AgentLoop repetition detection.
+        """
+        count = self.tool_call_hashes.get(call_hash, 0) + 1
+        self.tool_call_hashes[call_hash] = count
+        return count
 
     def add_error(self, error: str) -> None:
         """Record an error."""

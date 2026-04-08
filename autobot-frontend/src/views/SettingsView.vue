@@ -47,6 +47,13 @@ Issue #753: User preference management interface
           Voice
         </button>
         <button
+          @click="activeTab = 'webresearch'"
+          :class="['settings-tab', { active: activeTab === 'webresearch' }]"
+        >
+          <i class="fas fa-search"></i>
+          {{ $t('settings.webResearch.title') }}
+        </button>
+        <button
           @click="activeTab = 'apikeys'"
           :class="['settings-tab', { active: activeTab === 'apikeys' }]"
         >
@@ -96,6 +103,19 @@ Issue #753: User preference management interface
           </div>
         </section>
 
+        <section v-if="activeTab === 'webresearch'" class="settings-section">
+          <div class="section-header">
+            <h2 class="section-title">
+              <i class="fas fa-search"></i>
+              {{ $t('settings.webResearch.title') }}
+            </h2>
+            <p class="section-description">{{ $t('settings.webResearch.desc') }}</p>
+          </div>
+          <div class="section-content">
+            <WebResearchSettingsPanel />
+          </div>
+        </section>
+
         <section v-if="activeTab === 'apikeys'" class="settings-section">
           <div class="section-header">
             <h2 class="section-title">
@@ -122,6 +142,7 @@ Issue #753: User preference management interface
 import PreferencesPanel from '@/components/ui/PreferencesPanel.vue'
 import LanguageSettingsPanel from '@/components/settings/LanguageSettingsPanel.vue'
 import VoiceSettingsPanel from '@/components/settings/VoiceSettingsPanel.vue'
+import WebResearchSettingsPanel from '@/components/settings/WebResearchSettingsPanel.vue'
 import ApiKeySetupWizard from '@/components/settings/ApiKeySetupWizard.vue'
 import { ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
@@ -130,7 +151,7 @@ const logger = createLogger('SettingsView')
 
 logger.debug('Settings view initialized')
 
-type PreferenceTab = 'appearance' | 'language' | 'voice' | 'apikeys'
+type PreferenceTab = 'appearance' | 'language' | 'voice' | 'webresearch' | 'apikeys'
 const activeTab = ref<PreferenceTab>('appearance')
 const showApiKeyWizard = ref(false)
 

@@ -16,7 +16,7 @@ import json
 import os
 import re
 import shutil
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Tuple
 
@@ -165,7 +165,7 @@ class DevLoggingFixer:
             else self.project_root / ".dev-logging-backups"
         )
         self.report = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "files_processed": 0,
             "files_modified": 0,
             "console_logs_converted": 0,
@@ -221,7 +221,7 @@ class DevLoggingFixer:
 
     def create_backup(self, file_path: Path) -> Path:
         """Create backup of file before modification."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
         relative_path = file_path.relative_to(self.project_root)
         backup_path = self.backup_dir / timestamp / relative_path
 
@@ -253,7 +253,7 @@ class DevLoggingFixer:
             js_code: JavaScript source content to write
         """
         logger_file = utils_dir / "devLogger.js"
-        with open(logger_file, "w") as f:
+        with open(logger_file, "w", encoding="utf-8") as f:
             f.write(js_code)
         print(f"✅ Created development logger utility: {logger_file}")  # noqa: print
 
@@ -580,12 +580,12 @@ All modified files have been backed up to: `{}`
             if output_file
             else (self.project_root / "dev-logging-conversion-report.md")
         )
-        with open(report_path, "w") as f:
+        with open(report_path, "w", encoding="utf-8") as f:
             f.write(report_content)
         print(f"\n📄 Report saved to: {report_path}")  # noqa: print
 
         json_report_path = report_path.with_suffix(".json")
-        with open(json_report_path, "w") as f:
+        with open(json_report_path, "w", encoding="utf-8") as f:
             json.dump(self.report, f, indent=2)
         print(f"📊 JSON report saved to: {json_report_path}")  # noqa: print
 

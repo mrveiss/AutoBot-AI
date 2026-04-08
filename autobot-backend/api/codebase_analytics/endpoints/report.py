@@ -11,7 +11,7 @@ Includes:
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -33,6 +33,7 @@ from code_intelligence.pattern_analysis import (
     PatternAnalysisReport,
 )
 from constants.path_constants import PATH
+from constants.ttl_constants import TIMEOUT_HTTP_LONG
 from utils.chromadb_client import get_all_paginated
 from utils.file_categorization import (
     FILE_CATEGORY_ARCHIVE,
@@ -266,7 +267,7 @@ def _build_report_header(
     path_info: str, total_count: int, counts: Dict[str, int]
 ) -> List[str]:
     """Build the report header with category counts table (Issue #398: extracted)."""
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     return [
         "# Code Analysis Report",
         "",
@@ -1431,7 +1432,7 @@ def _build_empty_report_header() -> List[str]:
 
     Issue #620: Extracted from _generate_empty_report_with_analyses.
     """
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     return [
         "# Code Analysis Report",
         "",
@@ -1521,7 +1522,7 @@ async def _get_cross_language_analysis() -> Optional[CrossLanguageAnalysis]:
 
         analysis = await asyncio.wait_for(
             detector.run_analysis(),
-            timeout=120.0,  # 2 minute timeout
+            timeout=TIMEOUT_HTTP_LONG,  # 2 minute timeout
         )
 
         logger.info(
@@ -1599,7 +1600,7 @@ async def _get_duplicate_analysis() -> Optional[DuplicateAnalysis]:
                 get_analytics_executor(),
                 lambda: DuplicateCodeDetector(project_root=project_root).run_analysis(),
             ),
-            timeout=120.0,  # 120 second timeout for duplicate detection
+            timeout=TIMEOUT_HTTP_LONG,  # 120 second timeout for duplicate detection
         )
 
         logger.info(

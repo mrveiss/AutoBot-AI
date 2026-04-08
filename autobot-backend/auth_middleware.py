@@ -7,16 +7,21 @@ Provides JWT-based authentication, session management, and role-based access con
 """
 
 import datetime
+from datetime import timezone
 import json
 import logging
 import os
 import secrets
 from typing import Dict, Optional, Tuple
 
-import bcrypt
-import jwt
 from fastapi import Request
 
+from autobot_shared.auth.jwt_core import (
+    decode_jwt_or_none,
+    encode_jwt,
+    hash_password,
+    verify_password,
+)
 from config import ConfigManager
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_auth_error
@@ -34,7 +39,6 @@ class AuthenticationMiddleware:
         self.security_config = config.get("security_config", {})
         self.enable_auth = self.security_config.get("enable_auth", True)
         self.jwt_secret = self._get_jwt_secret()
-        self.jwt_algorithm = "HS256"
         self.jwt_expiry_hours = 24
         self.session_timeout_minutes = self.security_config.get(
             "session_timeout_minutes", 30
@@ -99,32 +103,32 @@ class AuthenticationMiddleware:
             return secret
 
         # 3. Generate and store a secure random secret
-        logger.warning("No secure JWT secret found. Generating secure random secret.")
+        logger.warning(  # codeql-suppress py/clear-text-logging-sensitive-data: logs status only, no secret value
+            "No secure JWT secret found. Generating secure random secret."
+        )
         secure_secret = secrets.token_urlsafe(64)  # 512-bit secret
 
         # Store in configuration for consistency across restarts
         try:
             # Update the config in memory using the correct method
             config.set_nested("security_config.jwt_secret", secure_secret)
-            logger.info("Generated and stored secure JWT secret")
+            logger.info(  # codeql-suppress py/clear-text-logging-sensitive-data: logs status only, no secret value
+                "Generated and stored secure JWT secret"
+            )
             return secure_secret
         except Exception as e:
+            # codeql-suppress py/clear-text-logging-sensitive-data: exception message, no secret value
             logger.error("Failed to store JWT secret in config: %s", e)
             # Still return the secure secret even if we can't store it
             return secure_secret
 
     def hash_password(self, password: str) -> str:
-        """Hash password using bcrypt"""
-        salt = bcrypt.gensalt(rounds=12)
-        return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
+        """Hash password using bcrypt."""
+        return hash_password(password)
 
     def verify_password(self, password: str, hashed: str) -> bool:
-        """Verify password against hash"""
-        try:
-            return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
-        except Exception as e:
-            logger.error("Password verification error: %s", e)
-            return False
+        """Verify password against hash."""
+        return verify_password(password, hashed)
 
     def is_account_locked(self, username: str) -> bool:
         """Check if account is locked due to failed attempts"""
@@ -134,11 +138,11 @@ class AuthenticationMiddleware:
         attempt_data = self.failed_attempts[username]
         locked_until = attempt_data.get("locked_until")
 
-        if locked_until and datetime.datetime.now() < locked_until:
+        if locked_until and datetime.datetime.now(tz=timezone.utc) < locked_until:
             return True
 
         # Clear expired lockout
-        if locked_until and datetime.datetime.now() >= locked_until:
+        if locked_until and datetime.datetime.now(tz=timezone.utc) >= locked_until:
             self.failed_attempts[username] = {"count": 0, "locked_until": None}
 
         return False
@@ -149,11 +153,11 @@ class AuthenticationMiddleware:
             self.failed_attempts[username] = {"count": 0, "locked_until": None}
 
         self.failed_attempts[username]["count"] += 1
-        self.failed_attempts[username]["last_attempt"] = datetime.datetime.now()
+        self.failed_attempts[username]["last_attempt"] = datetime.datetime.now(tz=timezone.utc)
         self.failed_attempts[username]["ip"] = ip_address
 
         if self.failed_attempts[username]["count"] >= self.max_failed_attempts:
-            lockout_until = datetime.datetime.now() + datetime.timedelta(
+            lockout_until = datetime.datetime.now(tz=timezone.utc) + datetime.timedelta(
                 minutes=self.lockout_duration_minutes
             )
             self.failed_attempts[username]["locked_until"] = lockout_until
@@ -225,7 +229,7 @@ class AuthenticationMiddleware:
         Build and return successful authentication response.
         """
         self.clear_failed_attempts(username)
-        user_config["last_login"] = datetime.datetime.now().isoformat()
+        user_config["last_login"] = datetime.datetime.now(tz=timezone.utc).isoformat()
 
         self.security_layer.audit_log(
             action="login_successful",
@@ -273,11 +277,7 @@ class AuthenticationMiddleware:
             "username": user_data["username"],
             "role": user_data["role"],
             "email": user_data.get("email", ""),
-            "iat": datetime.datetime.utcnow(),
-            "exp": (
-                datetime.datetime.utcnow()
-                + datetime.timedelta(hours=self.jwt_expiry_hours)
-            ),
+            "iat": datetime.datetime.now(tz=datetime.timezone.utc).isoformat(),
         }
 
         # Issue #684: Include org/user hierarchy in token
@@ -286,27 +286,20 @@ class AuthenticationMiddleware:
         if user_data.get("org_id"):
             payload["org_id"] = str(user_data["org_id"])
 
-        return jwt.encode(payload, self.jwt_secret, algorithm=self.jwt_algorithm)
+        return encode_jwt(payload, secret=self.jwt_secret, expiry_hours=self.jwt_expiry_hours)
 
     def verify_jwt_token(self, token: str) -> Optional[Dict]:
-        """Verify and decode JWT token"""
-        try:
-            payload = jwt.decode(
-                token, self.jwt_secret, algorithms=[self.jwt_algorithm]
-            )
-
-            # Check if user still exists and is active
-            username = payload.get("username")
-            if username and self.is_account_locked(username):
-                return None
-
-            return payload
-        except jwt.ExpiredSignatureError:
-            logger.warning("JWT token expired")
+        """Verify and decode JWT token."""
+        payload = decode_jwt_or_none(token, self.jwt_secret)
+        if payload is None:
             return None
-        except jwt.InvalidTokenError as e:
-            logger.warning("Invalid JWT token: %s", e)
+
+        # Check if user is locked out even when token is structurally valid
+        username = payload.get("username")
+        if username and self.is_account_locked(username):
             return None
+
+        return payload
 
     def create_session(self, user_data: Dict, request: Request) -> str:
         """Create authenticated session with Redis persistence"""
@@ -315,8 +308,8 @@ class AuthenticationMiddleware:
 
         session_data = {
             "user_data": user_data,
-            "created_at": datetime.datetime.now().isoformat(),
-            "last_activity": datetime.datetime.now().isoformat(),
+            "created_at": datetime.datetime.now(tz=timezone.utc).isoformat(),
+            "last_activity": datetime.datetime.now(tz=timezone.utc).isoformat(),
             "ip_address": request.client.host if request.client else "unknown",
             "user_agent": request.headers.get("User-Agent", "unknown"),
         }
@@ -350,7 +343,7 @@ class AuthenticationMiddleware:
                 if session_data:
                     session = json.loads(session_data)
                     # Update last activity and extend TTL
-                    session["last_activity"] = datetime.datetime.now().isoformat()
+                    session["last_activity"] = datetime.datetime.now(tz=timezone.utc).isoformat()
                     self.redis_client.setex(
                         session_key,
                         self.session_timeout_minutes * 60,
@@ -370,15 +363,17 @@ class AuthenticationMiddleware:
         last_activity = session.get("last_activity")
         if isinstance(last_activity, str):
             last_activity = datetime.datetime.fromisoformat(last_activity)
+            if last_activity.tzinfo is None:
+                last_activity = last_activity.replace(tzinfo=datetime.timezone.utc)
 
-        if datetime.datetime.now() - last_activity > datetime.timedelta(
+        if datetime.datetime.now(tz=timezone.utc) - last_activity > datetime.timedelta(
             minutes=self.session_timeout_minutes
         ):
             del self.active_sessions[session_id]
             return None
 
         # Update last activity
-        session["last_activity"] = datetime.datetime.now().isoformat()
+        session["last_activity"] = datetime.datetime.now(tz=timezone.utc).isoformat()
         return session
 
     def invalidate_session(self, session_id: str):
@@ -553,7 +548,7 @@ class AuthenticationMiddleware:
                 "auth_method": user_data.get("auth_method", "unknown"),
                 "user_agent": request.headers.get("User-Agent", "unknown"),
                 "ip": ip_address,
-                "timestamp": datetime.datetime.now().isoformat(),
+                "timestamp": datetime.datetime.now(tz=timezone.utc).isoformat(),
                 "request_path": (
                     str(request.url.path) if hasattr(request, "url") else "unknown"
                 ),
@@ -705,3 +700,54 @@ def check_admin_permission(request: Request) -> bool:
         raise_auth_error("AUTH_0003", "Admin permission required for this operation")
 
     return True
+
+
+async def authenticate_websocket(websocket) -> Optional[dict]:
+    """Authenticate a WebSocket connection.
+
+    Checks for JWT token in query params. Falls back to synthetic admin
+    in single-user mode (mirrors get_user_from_request single-user bypass).
+    Returns None if unauthenticated.
+
+    Issue #2818: Add auth before websocket.accept() to reject unauthenticated
+    connections at the protocol handshake level.
+
+    Args:
+        websocket: FastAPI WebSocket instance.
+
+    Returns:
+        User dict or None if authentication fails.
+    """
+    # Check query param token
+    token = websocket.query_params.get("token")
+    if token:
+        try:
+            auth = AuthenticationMiddleware()
+            token_data = auth.verify_jwt_token(token)
+            if token_data:
+                return {
+                    "username": token_data["username"],
+                    "role": token_data["role"],
+                    "email": token_data.get("email", ""),
+                    "auth_method": "jwt_websocket",
+                }
+        except Exception:
+            logger.warning("WebSocket JWT authentication failed")
+            return None
+
+    # Single-user mode bypass — same logic as get_user_from_request
+    try:
+        from user_management.config import DeploymentMode, get_deployment_config
+
+        deployment_config = get_deployment_config()
+        if deployment_config.mode == DeploymentMode.SINGLE_USER:
+            return {
+                "username": "admin",
+                "role": "admin",
+                "email": "admin@autobot.local",
+                "source": "single_user_mode",
+            }
+    except Exception:
+        logger.debug("Suppressed exception in single-user mode check", exc_info=True)
+
+    return None

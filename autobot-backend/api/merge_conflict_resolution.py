@@ -16,7 +16,7 @@ Parent Epic: #217 - Advanced Code Intelligence
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -165,7 +165,7 @@ def _build_resolution_response(
                 "requires_review": any_require_review,
             },
             "safe_mode": safe_mode,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         },
     )
 
@@ -236,7 +236,7 @@ def _build_no_conflicts_response(file_path: str) -> JSONResponse:
             "message": "No conflicts found in file",
             "file_path": file_path,
             "conflict_count": 0,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         },
     )
 
@@ -289,7 +289,7 @@ async def analyze_conflicts(
                 "conflict_count": len(conflicts),
                 "conflicts": conflicts_data,
                 "severity_distribution": severity_counts,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 
@@ -355,7 +355,7 @@ async def resolve_conflicts(
                     "status": "success",
                     "message": "No conflicts found in file",
                     "file_path": request.file_path,
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 },
             )
 
@@ -419,7 +419,7 @@ async def analyze_repository_conflicts(
                 "total_files_with_conflicts": analysis["total_files"],
                 "total_conflicts": analysis["total_conflicts"],
                 "files": analysis["files"],
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 
@@ -463,7 +463,7 @@ async def apply_resolution(
         # Create backup if requested
         backup_path = None
         if request.create_backup:
-            backup_str = f"{safe_path}.backup.{int(datetime.now().timestamp())}"
+            backup_str = f"{safe_path}.backup.{int(datetime.now(tz=timezone.utc).timestamp())}"
             backup_safe = _assert_safe_path(backup_str)
             await asyncio.to_thread(
                 lambda: __import__("shutil").copy2(str(safe_path), str(backup_safe))
@@ -487,7 +487,7 @@ async def apply_resolution(
                 "message": "Resolution applied successfully",
                 "file_path": str(safe_path),
                 "backup_path": backup_path,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 
@@ -561,7 +561,7 @@ async def get_resolution_strategies(
             "status": "success",
             "strategies": strategies,
             "default_strategy": "semantic_merge",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         },
     )
 
@@ -603,7 +603,7 @@ async def check_file_conflicts(
                 "status": "success",
                 "file_path": str(safe_path),
                 "has_conflicts": has_conflicts,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 

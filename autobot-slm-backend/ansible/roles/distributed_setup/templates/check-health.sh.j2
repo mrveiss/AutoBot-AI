@@ -22,8 +22,8 @@ echo "=========================================="
 echo ""
 
 # Check coordinator
-echo -n "Checking Backend Coordinator ({{ coordinator_host }}:{{ backend_port }})... "
-if curl -s --max-time 5 "http://{{ coordinator_host }}:{{ backend_port }}/api/health" >/dev/null 2>&1; then
+echo -n "Checking Backend Coordinator ({{ coordinator_host }}:{{ backend_nginx_port }})... "
+if curl -s --max-time 5 "https://{{ coordinator_host }}:{{ backend_nginx_port }}/api/health" >/dev/null 2>&1; then
     echo -e "${GREEN}OK${NC}"
 else
     echo -e "${RED}Failed${NC}"
@@ -43,7 +43,7 @@ fi
 
 echo ""
 echo "Service URLs:"
-echo "  Backend API: http://{{ coordinator_host }}:{{ backend_port }}"
+echo "  Backend API: https://{{ coordinator_host }}:{{ backend_nginx_port }}"
 {% for node in fleet_nodes %}
 echo "  {{ node.name }}: http://{{ node.host }}:{{ node.port }}"
 {% endfor %}

@@ -13,11 +13,24 @@ from constants.model_constants import ModelConfig, ModelConstants
 
 logger = logging.getLogger(__name__)
 
+# Lazy singleton — imported on first call to avoid circular imports.
+_compression_service = None
+
+
+def _get_compression_service():
+    """Return the shared ContextCompressionService instance (lazy init)."""
+    global _compression_service
+    if _compression_service is None:
+        from services.memory.compression import ContextCompressionService
+
+        _compression_service = ContextCompressionService()
+    return _compression_service
+
 
 class ContextWindowManager:
     """Manages context window budgeting for LLM models."""
 
-    def __init__(self, config_path: str = "config/llm_models.yaml"):
+    def __init__(self, config_path: str = "config/context_windows.yaml"):
         """Initialize context window manager with model configuration.
 
         Args:
@@ -43,6 +56,15 @@ class ContextWindowManager:
         try:
             with open(path, "r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
+
+            # If models is a list it's the LLM provider registry (PR #3257 schema),
+            # not the context-window config dict this class expects.
+            if not isinstance(config.get("models"), dict):
+                logger.warning(
+                    "Config %s uses list-format model registry; using context-window defaults",
+                    config_path,
+                )
+                return self._get_default_config()
 
             logger.info("✅ Loaded config for %s models", len(config["models"]))
             return config
@@ -176,6 +198,42 @@ class ContextWindowManager:
 
         max_tokens = self.get_max_history_tokens(model_name)
         return estimated_tokens > max_tokens
+
+    def get_compression_threshold(self, model_name: Optional[str] = None) -> int:
+        """Get the compression_threshold for a model (defaults to 8192).
+
+        Issue #3770: Models whose context_window_tokens <= 8192 trigger
+        compression when retrieved content exceeds this value.
+
+        Args:
+            model_name: Optional model name, uses current if not specified.
+
+        Returns:
+            Token threshold above which compression should be applied.
+        """
+        model = model_name or self.current_model
+        if model not in self.config["models"]:
+            model = self.config["models"]["default"]["name"]
+        return self.config["models"][model].get("compression_threshold", 8192)
+
+    async def async_should_compress(
+        self, content_tokens: int, model_name: Optional[str] = None
+    ) -> bool:
+        """Return True when content_tokens exceed the model compression threshold.
+
+        Issue #3770: Delegates to ContextCompressionService which applies the
+        large-model guard (threshold > 8192 -> always False).
+
+        Args:
+            content_tokens: Estimated token count of content to evaluate.
+            model_name: Optional model name, uses current if not specified.
+
+        Returns:
+            True when compression should be applied.
+        """
+        model = model_name or self.current_model
+        svc = _get_compression_service()
+        return await svc.should_compress(model, content_tokens)
 
     def get_model_info(self, model_name: Optional[str] = None) -> Dict:
         """Get full model configuration.

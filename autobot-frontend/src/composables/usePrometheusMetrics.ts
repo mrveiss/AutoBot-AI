@@ -15,6 +15,8 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
 import { useApi } from './useApi'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
+import { useWebSocket } from '@/composables/useWebSocket'
 
 // Create scoped logger
 const logger = createLogger('usePrometheusMetrics')
@@ -250,9 +252,66 @@ export function usePrometheusMetrics(
   const lastUpdate = ref<Date | null>(null)
   const isConnected = ref(false)
 
-  // Polling and WebSocket state
+  // Polling state
   let pollingInterval: ReturnType<typeof setInterval> | null = null
-  let websocket: WebSocket | null = null
+
+  // Build the monitoring WebSocket URL
+  const _buildWsUrl = (): string => {
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const wsHost = import.meta.env.VITE_API_BASE_URL?.replace(/^https?:\/\//, '') ||
+                   `${import.meta.env.VITE_BACKEND_HOST || window.location.hostname}:${import.meta.env.VITE_BACKEND_PORT || '8443'}`
+    return `${wsProtocol}//${wsHost}/api/monitoring/realtime`
+  }
+
+  // WebSocket managed via useWebSocket composable
+  const {
+    isConnected: wsIsConnected,
+    send: wsSend,
+    connect: wsConnect,
+    disconnect: wsDisconnectInner,
+  } = useWebSocket(_buildWsUrl(), {
+    autoConnect: false,
+    autoReconnect: false,
+    parseJSON: false,
+    onOpen: () => {
+      isConnected.value = true
+      logger.info('WebSocket connected')
+      wsSend(JSON.stringify({
+        type: 'update_interval',
+        interval: wsUpdateInterval,
+      }))
+    },
+    onClose: () => {
+      isConnected.value = false
+      logger.info('WebSocket disconnected')
+    },
+    onError: (event) => {
+      logger.error('WebSocket error:', event)
+      error.value = 'WebSocket connection error'
+    },
+    onMessage: (data: string) => {
+      try {
+        const msg = JSON.parse(data)
+        if (msg.type === 'performance_update' && msg.data) {
+          dashboard.value = {
+            ...dashboard.value,
+            ...msg.data,
+            timestamp: msg.timestamp,
+          }
+          lastUpdate.value = new Date()
+        } else if (msg.type === 'performance_alerts' && msg.alerts) {
+          alerts.value = {
+            ...alerts.value,
+            alerts: msg.alerts,
+            total_count: msg.alerts.length,
+            timestamp: msg.timestamp,
+          } as AlertsSummary
+        }
+      } catch (err) {
+        logger.warn('Failed to parse WebSocket message:', err)
+      }
+    },
+  })
 
   // ===== Computed Values =====
 
@@ -295,7 +354,7 @@ export function usePrometheusMetrics(
 
   async function fetchDashboard(): Promise<void> {
     try {
-      const response = await api.get('/api/monitoring/dashboard/overview')
+      const response = await api.get(`${getApiBase()}/monitoring/dashboard/overview`)
       if (response.ok) {
         dashboard.value = await response.json()
         lastUpdate.value = new Date()
@@ -312,7 +371,7 @@ export function usePrometheusMetrics(
 
   async function fetchServices(): Promise<void> {
     try {
-      const response = await api.get('/api/monitoring/services/health')
+      const response = await api.get(`${getApiBase()}/monitoring/services/health`)
       if (response.ok) {
         services.value = await response.json()
         error.value = null
@@ -328,7 +387,7 @@ export function usePrometheusMetrics(
 
   async function fetchAlerts(): Promise<void> {
     try {
-      const response = await api.get('/api/monitoring/alerts/check')
+      const response = await api.get(`${getApiBase()}/monitoring/alerts/check`)
       if (response.ok) {
         alerts.value = await response.json()
         error.value = null
@@ -344,7 +403,7 @@ export function usePrometheusMetrics(
 
   async function fetchRecommendations(): Promise<void> {
     try {
-      const response = await api.get('/api/monitoring/optimization/recommendations')
+      const response = await api.get(`${getApiBase()}/monitoring/optimization/recommendations`)
       if (response.ok) {
         recommendations.value = await response.json()
         error.value = null
@@ -360,7 +419,7 @@ export function usePrometheusMetrics(
 
   async function fetchGPUDetails(): Promise<void> {
     try {
-      const response = await api.get('/api/monitoring/hardware/gpu')
+      const response = await api.get(`${getApiBase()}/monitoring/hardware/gpu`)
       if (response.ok) {
         gpuDetails.value = await response.json()
         error.value = null
@@ -376,7 +435,7 @@ export function usePrometheusMetrics(
 
   async function fetchNPUDetails(): Promise<void> {
     try {
-      const response = await api.get('/api/monitoring/hardware/npu')
+      const response = await api.get(`${getApiBase()}/monitoring/hardware/npu`)
       if (response.ok) {
         npuDetails.value = await response.json()
         error.value = null
@@ -433,80 +492,14 @@ export function usePrometheusMetrics(
   // ===== WebSocket Methods =====
 
   function connectWebSocket(): void {
-    if (websocket) return // Already connected
-
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsHost = import.meta.env.VITE_API_BASE_URL?.replace(/^https?:\/\//, '') ||
-                   `${import.meta.env.VITE_BACKEND_HOST || window.location.hostname}:${import.meta.env.VITE_BACKEND_PORT || '8443'}`
-    const wsUrl = `${wsProtocol}//${wsHost}/api/monitoring/realtime`
-
-    logger.debug(`Connecting WebSocket to: ${wsUrl}`)
-
-    try {
-      websocket = new WebSocket(wsUrl)
-
-      websocket.onopen = () => {
-        isConnected.value = true
-        logger.info('WebSocket connected')
-
-        // Request update interval
-        if (websocket && websocket.readyState === WebSocket.OPEN) {
-          websocket.send(JSON.stringify({
-            type: 'update_interval',
-            interval: wsUpdateInterval
-          }))
-        }
-      }
-
-      websocket.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data)
-
-          if (data.type === 'performance_update' && data.data) {
-            // Update dashboard with real-time data
-            dashboard.value = {
-              ...dashboard.value,
-              ...data.data,
-              timestamp: data.timestamp
-            }
-            lastUpdate.value = new Date()
-          } else if (data.type === 'performance_alerts' && data.alerts) {
-            // Update alerts
-            alerts.value = {
-              ...alerts.value,
-              alerts: data.alerts,
-              total_count: data.alerts.length,
-              timestamp: data.timestamp
-            } as AlertsSummary
-          }
-        } catch (err) {
-          logger.warn('Failed to parse WebSocket message:', err)
-        }
-      }
-
-      websocket.onerror = (event) => {
-        logger.error('WebSocket error:', event)
-        error.value = 'WebSocket connection error'
-      }
-
-      websocket.onclose = () => {
-        isConnected.value = false
-        websocket = null
-        logger.info('WebSocket disconnected')
-      }
-    } catch (err) {
-      logger.error('Failed to create WebSocket connection:', err)
-      error.value = 'Failed to establish WebSocket connection'
-    }
+    if (wsIsConnected.value) return // Already connected
+    logger.debug('Connecting WebSocket to monitoring endpoint')
+    wsConnect()
   }
 
   function disconnectWebSocket(): void {
-    if (websocket) {
-      websocket.close()
-      websocket = null
-      isConnected.value = false
-      logger.debug('WebSocket disconnected')
-    }
+    wsDisconnectInner()
+    isConnected.value = false
   }
 
   // ===== Lifecycle =====
@@ -525,7 +518,7 @@ export function usePrometheusMetrics(
 
   onUnmounted(() => {
     stopPolling()
-    disconnectWebSocket()
+    // useWebSocket handles WebSocket cleanup via its own onUnmounted
   })
 
   return {
@@ -585,7 +578,7 @@ export function useSystemMetrics(pollInterval = 10000) {
   async function fetch() {
     isLoading.value = true
     try {
-      const response = await api.get('/api/monitoring/metrics/current')
+      const response = await api.get(`${getApiBase()}/monitoring/metrics/current`)
       if (response.ok) {
         const data = await response.json()
         metrics.value = data.metrics?.system || null
@@ -646,7 +639,7 @@ export function useServiceHealth(pollInterval = 15000) {
   async function fetch() {
     isLoading.value = true
     try {
-      const response = await api.get('/api/monitoring/services/health')
+      const response = await api.get(`${getApiBase()}/monitoring/services/health`)
       if (response.ok) {
         const data: ServicesSummary = await response.json()
         services.value = data.services || []
@@ -736,7 +729,7 @@ export function useAlerts(pollInterval = 30000) {
   async function fetch() {
     isLoading.value = true
     try {
-      const response = await api.get('/api/monitoring/alerts/check')
+      const response = await api.get(`${getApiBase()}/monitoring/alerts/check`)
       if (response.ok) {
         const data: AlertsSummary = await response.json()
         alerts.value = data.alerts || []

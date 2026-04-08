@@ -5,15 +5,25 @@
 """
 Core ConfigManager using composition of specialized modules.
 
-SSOT Migration (Issue #763):
-    Infrastructure values (VMs, ports, LLM models) are now accessed via
-    ConfigRegistry with five-tier fallback:
-    Cache → Redis → Environment → Registry Defaults → Caller Default
+SSOT Migration (Issue #763, #3829):
+    Infrastructure values (VMs, ports, LLM models, timeouts) are now the
+    canonical responsibility of ``autobot_shared.ssot_config``:
 
-    For infrastructure values, use ConfigRegistry:
-        from config.registry import ConfigRegistry
-        redis_host = ConfigRegistry.get("vm.redis")  # SSOT default via registry_defaults
-        default_model = ConfigRegistry.get("llm.default_model", DEFAULT_LLM_MODEL)
+        from autobot_shared.ssot_config import config
+        redis_host    = config.vm.redis
+        ollama_url    = config.ollama_url
+        default_model = config.llm.default_model
+        llm_timeout   = config.timeout.llm
+
+    ConfigManager (this class) remains the authority for *runtime* config
+    values that users can change via the GUI and that are persisted to
+    config.yaml / settings.json:
+        - feature flags
+        - circuit-breaker thresholds
+        - batch sizes
+        - agent-specific overrides stored by the UI
+
+    Do NOT add new infrastructure values here; add them to ssot_config instead.
 """
 
 import asyncio

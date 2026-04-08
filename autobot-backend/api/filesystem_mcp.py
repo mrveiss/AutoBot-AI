@@ -61,6 +61,7 @@ async def _get_file_lock(filepath: str) -> asyncio.Lock:
 
 
 from fastapi import APIRouter, Depends, HTTPException
+from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
@@ -680,17 +681,11 @@ async def read_text_file_mcp(
 
     path_exists = await run_in_file_executor(os.path.exists, safe_path)
     if not path_exists:
-        raise HTTPException(
-            status_code=404,
-            detail=f"File not found: {request.path}",
-        )
+        raise_not_found("File", request.path)
 
     is_file = await run_in_file_executor(os.path.isfile, safe_path)
     if not is_file:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Path is not a file: {request.path}",
-        )
+        raise_invalid_input("path", f"not a file: {request.path}")
 
     # Check file size
     file_size = await run_in_file_executor(os.path.getsize, safe_path)
@@ -720,11 +715,9 @@ async def read_text_file_mcp(
             "size_bytes": file_size,
         }
     except UnicodeDecodeError:
-        raise HTTPException(
-            status_code=400, detail="File is not a text file (encoding error)"
-        )
+        raise_invalid_input("file", "not a text file (encoding error)")
     except OSError:
-        raise HTTPException(status_code=500, detail="Failed to read file")
+        raise_internal_error("Failed to read file")
 
 
 @with_error_handling(
@@ -746,17 +739,11 @@ async def read_media_file_mcp(
 
     path_exists = await run_in_file_executor(os.path.exists, safe_path)
     if not path_exists:
-        raise HTTPException(
-            status_code=404,
-            detail=f"File not found: {request.path}",
-        )
+        raise_not_found("File", request.path)
 
     is_file = await run_in_file_executor(os.path.isfile, safe_path)
     if not is_file:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Path is not a file: {request.path}",
-        )
+        raise_invalid_input("path", f"not a file: {request.path}")
 
     # Check file size
     file_size = await run_in_file_executor(os.path.getsize, safe_path)
@@ -784,9 +771,9 @@ async def read_media_file_mcp(
             "size_bytes": file_size,
         }
     except OSError:
-        raise HTTPException(status_code=500, detail="Failed to read media file")
+        raise_internal_error("Failed to read media file")
     except Exception:
-        raise HTTPException(status_code=500, detail="Error reading media file")
+        raise_internal_error("Error reading media file")
 
 
 async def _read_single_file_for_batch(path: str) -> dict:
@@ -934,9 +921,9 @@ async def write_file_mcp(
             "message": "File written successfully",
         }
     except OSError:
-        raise HTTPException(status_code=500, detail="Failed to write file")
+        raise_internal_error("Failed to write file")
     except Exception:
-        raise HTTPException(status_code=500, detail="Error writing file")
+        raise_internal_error("Error writing file")
 
 
 async def _validate_file_path(path: str) -> str:
@@ -959,11 +946,11 @@ async def _validate_file_path(path: str) -> str:
 
     path_exists = await run_in_file_executor(os.path.exists, safe)
     if not path_exists:
-        raise HTTPException(status_code=404, detail=f"File not found: {path}")
+        raise_not_found("File", path)
 
     is_file = await run_in_file_executor(os.path.isfile, safe)
     if not is_file:
-        raise HTTPException(status_code=400, detail=f"Path is not a file: {path}")
+        raise_invalid_input("path", f"not a file: {path}")
     return safe
 
 
@@ -1037,9 +1024,9 @@ async def edit_file_mcp(
     except HTTPException:
         raise
     except OSError:
-        raise HTTPException(status_code=500, detail="Failed to read/write file")
+        raise_internal_error("Failed to read/write file")
     except Exception:
-        raise HTTPException(status_code=500, detail="Error editing file")
+        raise_internal_error("Error editing file")
 
 
 @with_error_handling(
@@ -1068,7 +1055,7 @@ async def create_directory_mcp(
             "message": "Directory created successfully",
         }
     except Exception:
-        raise HTTPException(status_code=500, detail="Error creating directory")
+        raise_internal_error("Error creating directory")
 
 
 @with_error_handling(
@@ -1090,15 +1077,11 @@ async def list_directory_mcp(
 
     path_exists = await run_in_file_executor(os.path.exists, safe_path)
     if not path_exists:
-        raise HTTPException(
-            status_code=404, detail=f"Directory not found: {request.path}"
-        )
+        raise_not_found("Directory", request.path)
 
     is_dir = await run_in_file_executor(os.path.isdir, safe_path)
     if not is_dir:
-        raise HTTPException(
-            status_code=400, detail=f"Path is not a directory: {request.path}"
-        )
+        raise_invalid_input("path", f"not a directory: {request.path}")
 
     try:
         dir_contents = await run_in_file_executor(os.listdir, safe_path)
@@ -1124,7 +1107,7 @@ async def list_directory_mcp(
             "entries": entries,
         }
     except Exception:
-        raise HTTPException(status_code=500, detail="Error listing directory")
+        raise_internal_error("Error listing directory")
 
 
 async def _validate_directory_path(path: str) -> str:
@@ -1147,14 +1130,11 @@ async def _validate_directory_path(path: str) -> str:
 
     path_exists = await run_in_file_executor(os.path.exists, safe)
     if not path_exists:
-        raise HTTPException(status_code=404, detail=f"Directory not found: {path}")
+        raise_not_found("Directory", path)
 
     is_dir = await run_in_file_executor(os.path.isdir, safe)
     if not is_dir:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Path is not a directory: {path}",
-        )
+        raise_invalid_input("path", f"not a directory: {path}")
     return safe
 
 
@@ -1243,7 +1223,7 @@ async def list_directory_with_sizes_mcp(
     except HTTPException:
         raise
     except Exception:
-        raise HTTPException(status_code=500, detail="Error listing directory")
+        raise_internal_error("Error listing directory")
 
 
 @with_error_handling(
@@ -1266,9 +1246,7 @@ async def move_file_mcp(
 
     source_exists = await run_in_file_executor(os.path.exists, safe_source)
     if not source_exists:
-        raise HTTPException(
-            status_code=404, detail=f"Source not found: {request.source}"
-        )
+        raise_not_found("Source", request.source)
 
     dest_exists = await run_in_file_executor(os.path.exists, safe_dest)
     if dest_exists:
@@ -1286,7 +1264,7 @@ async def move_file_mcp(
             "message": "File moved successfully",
         }
     except Exception:
-        raise HTTPException(status_code=500, detail="Error moving file")
+        raise_internal_error("Error moving file")
 
 
 @with_error_handling(
@@ -1308,15 +1286,11 @@ async def search_files_mcp(
 
     path_exists = await run_in_file_executor(os.path.exists, safe_path)
     if not path_exists:
-        raise HTTPException(
-            status_code=404, detail=f"Directory not found: {request.path}"
-        )
+        raise_not_found("Directory", request.path)
 
     is_dir = await run_in_file_executor(os.path.isdir, safe_path)
     if not is_dir:
-        raise HTTPException(
-            status_code=400, detail=f"Path is not a directory: {request.path}"
-        )
+        raise_invalid_input("path", f"not a directory: {request.path}")
 
     try:
         exclude_patterns = request.exclude_patterns or []
@@ -1342,7 +1316,7 @@ async def search_files_mcp(
             "matches": matches,
         }
     except Exception:
-        raise HTTPException(status_code=500, detail="Error searching files")
+        raise_internal_error("Error searching files")
 
 
 @with_error_handling(
@@ -1364,15 +1338,11 @@ async def directory_tree_mcp(
 
     path_exists = await run_in_file_executor(os.path.exists, safe_path)
     if not path_exists:
-        raise HTTPException(
-            status_code=404, detail=f"Directory not found: {request.path}"
-        )
+        raise_not_found("Directory", request.path)
 
     is_dir = await run_in_file_executor(os.path.isdir, safe_path)
     if not is_dir:
-        raise HTTPException(
-            status_code=400, detail=f"Path is not a directory: {request.path}"
-        )
+        raise_invalid_input("path", f"not a directory: {request.path}")
 
     def build_tree(path):
         """Recursively build directory tree (blocking, runs in thread)"""
@@ -1402,7 +1372,7 @@ async def directory_tree_mcp(
 
         return {"success": True, "root_path": request.path, "tree": tree}
     except Exception:
-        raise HTTPException(status_code=500, detail="Error building directory tree")
+        raise_internal_error("Error building directory tree")
 
 
 @with_error_handling(
@@ -1424,7 +1394,7 @@ async def get_file_info_mcp(
 
     path_exists = await run_in_file_executor(os.path.exists, safe_path)
     if not path_exists:
-        raise HTTPException(status_code=404, detail=f"Path not found: {request.path}")
+        raise_not_found("Path", request.path)
 
     try:
         stat_info = await run_in_file_executor(os.stat, safe_path)
@@ -1449,7 +1419,7 @@ async def get_file_info_mcp(
 
         return {"success": True, **info}
     except Exception:
-        raise HTTPException(status_code=500, detail="Error getting file info")
+        raise_internal_error("Error getting file info")
 
 
 @with_error_handling(

@@ -2,10 +2,12 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Ollama Adapter - Wraps existing OllamaProvider for the adapter registry.
+Ollama Adapter - Adapter wrapping llm_providers.OllamaProvider (#1403).
 
-Issue #1403: Delegates to OllamaProvider for execution, adds
-test_environment and list_models capabilities.
+Delegates execution to ``llm_providers.OllamaProvider`` which owns the
+canonical Ollama implementation (OTel tracing via delegate, circuit breaker,
+streaming).  This adapter's sole responsibility is the ``test_environment()``
+diagnostic method used by ``api/adapters.py``.
 """
 
 import logging
@@ -16,9 +18,9 @@ import aiohttp
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.ssot_config import get_ollama_url
+from constants.api_constants import PATH_OLLAMA_TAGS
 
-from ..models import LLMRequest, LLMResponse, LLMSettings
-from ..streaming import StreamingManager
+from ..models import LLMRequest, LLMResponse
 from .base import (
     AdapterBase,
     AdapterConfig,
@@ -31,20 +33,20 @@ logger = logging.getLogger(__name__)
 
 
 class OllamaAdapter(AdapterBase):
-    """Adapter wrapping the existing OllamaProvider (#1403)."""
+    """Adapter wrapping the canonical OllamaProvider (#1403)."""
 
     def __init__(self, config: Optional[AdapterConfig] = None):
         super().__init__("ollama", config)
         self._provider = None
-        self._settings = LLMSettings()
-        self._streaming_manager = StreamingManager()
 
     def _ensure_provider(self):
-        """Lazily initialize the OllamaProvider."""
+        """Lazily construct the canonical OllamaProvider."""
         if self._provider is None:
-            from ..providers.ollama import OllamaProvider
+            from llm_providers.ollama_provider import OllamaProvider
 
-            self._provider = OllamaProvider(self._settings, self._streaming_manager)
+            base_url = self.config.settings.get("base_url")
+            settings = {"base_url": base_url} if base_url else {}
+            self._provider = OllamaProvider(settings=settings)
         return self._provider
 
     async def execute(self, request: LLMRequest) -> LLMResponse:
@@ -58,7 +60,7 @@ class OllamaAdapter(AdapterBase):
         start = time.time()
         models: List[str] = []
 
-        ollama_url = get_ollama_url()
+        ollama_url = self.config.settings.get("base_url") or get_ollama_url()
         diagnostics.append(
             DiagnosticMessage(
                 level=DiagnosticLevel.INFO,
@@ -70,7 +72,7 @@ class OllamaAdapter(AdapterBase):
             http_client = get_http_client()
             timeout = aiohttp.ClientTimeout(total=5.0)
             async with await http_client.get(
-                f"{ollama_url}/api/tags", timeout=timeout
+                f"{ollama_url}{PATH_OLLAMA_TAGS}", timeout=timeout
             ) as resp:
                 if resp.status == 200:
                     data = await resp.json()
@@ -88,7 +90,8 @@ class OllamaAdapter(AdapterBase):
                             message=f"HTTP {resp.status} from Ollama",
                         )
                     )
-        except Exception as e:
+        except Exception as exc:  # Issue #3866: log so server-side errors are visible
+            logger.warning("OllamaAdapter.test_environment() failed: %s", exc)
             diagnostics.append(
                 DiagnosticMessage(
                     level=DiagnosticLevel.ERROR,

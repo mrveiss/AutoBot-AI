@@ -7,7 +7,7 @@ generated_at: "{{ ansible_date_time.iso8601 }}"
 coordinator:
   hostname: "{{ coordinator_host }}"
   ip: "{{ coordinator_host }}"
-  port: {{ backend_port }}
+  port: {{ backend_nginx_port }}
   services:
     - backend-api
     - ollama

@@ -16,12 +16,15 @@ Related Issues: #59 (Advanced Analytics & Business Intelligence)
 
 import json
 import logging
+import uuid
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from constants.ttl_constants import TTL_1_HOUR, TTL_30_DAYS
 
 logger = logging.getLogger(__name__)
 
@@ -251,8 +254,8 @@ class AgentAnalytics:
             redis = await self.get_redis()
             running_key = f"{self.REDIS_KEY_PREFIX}running:{task_id}"
             await redis.set(
-                running_key, json.dumps(record.to_dict()), ex=3600
-            )  # 1 hour TTL
+                running_key, json.dumps(record.to_dict()), ex=TTL_1_HOUR
+            )
         except Exception as e:
             logger.error("Failed to track task start: %s", e)
 
@@ -334,7 +337,7 @@ class AgentAnalytics:
             agent_key = f"{self.AGENT_HISTORY_KEY}:{record.agent_id}"
             await redis.lpush(agent_key, json.dumps(record.to_dict()))
             await redis.ltrim(agent_key, 0, 999)  # Keep last 1000 per agent
-            await redis.expire(agent_key, 86400 * 30)  # 30 day retention
+            await redis.expire(agent_key, TTL_30_DAYS)
 
         except Exception as e:
             logger.error("Failed to store completed task: %s", e)
@@ -665,3 +668,44 @@ def get_agent_analytics() -> AgentAnalytics:
             if _agent_analytics is None:
                 _agent_analytics = AgentAnalytics()
     return _agent_analytics
+
+
+@asynccontextmanager
+async def track_agent_usage(
+    agent_name: str,
+    task_type: str,
+    token_usage: Optional[int] = None,
+) -> AsyncGenerator[None, None]:
+    """Async context manager for tracking a single agent invocation.
+
+    Usage::
+
+        async with track_agent_usage("chat", "conversation"):
+            result = await agent.do_work()
+
+    Persists start/end time, outcome (success/fail), and optional token usage
+    to Redis db=ANALYTICS via AgentAnalytics.
+    """
+    analytics = get_agent_analytics()
+    task_id = str(uuid.uuid4())
+    outcome = TaskStatus.FAILED
+
+    await analytics.track_task_start(
+        agent_id=agent_name,
+        agent_type=agent_name,
+        task_id=task_id,
+        task_name=task_type,
+    )
+
+    try:
+        yield
+        outcome = TaskStatus.COMPLETED
+    except Exception:
+        outcome = TaskStatus.FAILED
+        raise
+    finally:
+        await analytics.track_task_complete(
+            task_id=task_id,
+            status=outcome,
+            tokens_used=token_usage,
+        )

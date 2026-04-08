@@ -16,11 +16,10 @@ import type {
   ExternalAgentUpdate,
   ExternalAgentCard,
 } from '@/types/slm'
-
-const API_BASE = ''
+import { getSlmApiBase } from '@/config/ssot-config'
 
 function makeClient() {
-  const client = axios.create({ baseURL: API_BASE })
+  const client = axios.create()
   client.interceptors.request.use((config) => {
     const token = sessionStorage.getItem('slm_access_token')
     if (token) {
@@ -47,7 +46,7 @@ export function useExternalAgents() {
     isLoading.value = true
     error.value = null
     try {
-      const response = await client.get<ExternalAgent[]>('/api/external-agents')
+      const response = await client.get<ExternalAgent[]>(`${getSlmApiBase()}/external-agents`)
       agents.value = response.data
     } catch (e) {
       error.value = _extractError(e, 'Failed to fetch external agents')
@@ -58,7 +57,7 @@ export function useExternalAgents() {
 
   async function getAgent(agentId: number): Promise<ExternalAgent | null> {
     try {
-      const response = await client.get<ExternalAgent>(`/api/external-agents/${agentId}`)
+      const response = await client.get<ExternalAgent>(`${getSlmApiBase()}/external-agents/${agentId}`)
       return response.data
     } catch (e) {
       error.value = _extractError(e, 'Failed to fetch agent')
@@ -68,7 +67,7 @@ export function useExternalAgents() {
 
   async function createAgent(data: ExternalAgentCreate): Promise<ExternalAgent | null> {
     try {
-      const response = await client.post<ExternalAgent>('/api/external-agents', data)
+      const response = await client.post<ExternalAgent>(`${getSlmApiBase()}/external-agents`, data)
       return response.data
     } catch (e) {
       error.value = _extractError(e, 'Failed to register agent')
@@ -81,7 +80,7 @@ export function useExternalAgents() {
     data: ExternalAgentUpdate
   ): Promise<ExternalAgent | null> {
     try {
-      const response = await client.put<ExternalAgent>(`/api/external-agents/${agentId}`, data)
+      const response = await client.put<ExternalAgent>(`${getSlmApiBase()}/external-agents/${agentId}`, data)
       return response.data
     } catch (e) {
       error.value = _extractError(e, 'Failed to update agent')
@@ -91,7 +90,7 @@ export function useExternalAgents() {
 
   async function deleteAgent(agentId: number): Promise<boolean> {
     try {
-      await client.delete(`/api/external-agents/${agentId}`)
+      await client.delete(`${getSlmApiBase()}/external-agents/${agentId}`)
       agents.value = agents.value.filter((a) => a.id !== agentId)
       return true
     } catch (e) {
@@ -103,7 +102,7 @@ export function useExternalAgents() {
   async function verifyAgent(agentId: number): Promise<ExternalAgent | null> {
     try {
       const response = await client.post<ExternalAgent & { success: boolean }>(
-        `/api/external-agents/${agentId}/verify`
+        `${getSlmApiBase()}/external-agents/${agentId}/verify`
       )
       return response.data
     } catch (e) {
@@ -114,7 +113,7 @@ export function useExternalAgents() {
 
   async function refreshAgentCard(agentId: number): Promise<boolean> {
     try {
-      await client.post(`/api/external-agents/${agentId}/refresh`)
+      await client.post(`${getSlmApiBase()}/external-agents/${agentId}/refresh`)
       return true
     } catch (e) {
       error.value = _extractError(e, 'Failed to queue card refresh')
@@ -124,7 +123,7 @@ export function useExternalAgents() {
 
   async function fetchCards(): Promise<ExternalAgentCard[]> {
     try {
-      const response = await client.get<ExternalAgentCard[]>('/api/external-agents/cards')
+      const response = await client.get<ExternalAgentCard[]>(`${getSlmApiBase()}/external-agents/cards`)
       return response.data
     } catch (e) {
       error.value = _extractError(e, 'Failed to fetch agent cards')

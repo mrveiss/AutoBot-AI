@@ -11,15 +11,33 @@ GQA expansion. Graceful fallback: Flash Attn -> SDPA -> vanilla.
 
 Issue #1955: Flash Attention v2 with variable-length sequence optimization.
 """
+# Issue #3009: from __future__ import annotations defers annotation evaluation
+# so torch types in dataclass fields / function signatures are strings at runtime.
+from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Tuple
+from typing import TYPE_CHECKING, Any, Optional, Tuple
 
-import torch
+if TYPE_CHECKING:
+    import torch as _torch_type  # noqa: F401
 
 logger = logging.getLogger(__name__)
+
+# Issue #3009: Lazy-load torch on first use so importing this module does not
+# require torch to be installed (NPU/GPU subsystem is feature-flagged).
+_torch: Any = None
+
+
+def _get_torch() -> Any:
+    """Return the torch module, importing it on first call."""
+    global _torch  # noqa: PLW0603
+    if _torch is None:
+        import torch
+
+        _torch = torch
+    return _torch
 
 # Lazy imports for optional dependencies
 _flash_attn_available: Optional[bool] = None
@@ -124,7 +142,7 @@ def _try_load_fused_rope() -> None:
 
 def _has_sdpa() -> bool:
     """Check if PyTorch scaled_dot_product_attention is available."""
-    return hasattr(torch.nn.functional, "scaled_dot_product_attention")
+    return hasattr(_get_torch().nn.functional, "scaled_dot_product_attention")
 
 
 def detect_backend() -> AttentionBackend:
@@ -144,7 +162,9 @@ def _build_repeat_kv_fn():
     """Build a JIT-compiled repeat_kv function for GQA expansion.
 
     Issue #1955: JIT compilation avoids Python overhead on repeated calls.
+    Issue #3009: torch imported lazily — only called after torch is available.
     """
+    import torch  # noqa: PLC0415 — lazy import, torch is a heavy optional dep
 
     @torch.jit.script
     def repeat_kv(kv: torch.Tensor, n_rep: int) -> torch.Tensor:
@@ -166,8 +186,17 @@ def _build_repeat_kv_fn():
     return repeat_kv
 
 
-# Module-level JIT-compiled function
-repeat_kv = _build_repeat_kv_fn()
+# Issue #3009: repeat_kv is built lazily on first use so that importing this
+# module does not trigger a torch import at startup.
+_repeat_kv_fn = None
+
+
+def repeat_kv(kv: Any, n_rep: int) -> Any:
+    """Expand KV heads for GQA — thin wrapper around the JIT-compiled version."""
+    global _repeat_kv_fn  # noqa: PLW0603
+    if _repeat_kv_fn is None:
+        _repeat_kv_fn = _build_repeat_kv_fn()
+    return _repeat_kv_fn(kv, n_rep)
 
 
 class GrowingKVCache:
@@ -186,13 +215,14 @@ class GrowingKVCache:
         self,
         chunk_size: int = 256,
         device: Optional[torch.device] = None,
-        dtype: torch.dtype = torch.float16,
+        dtype: torch.dtype = None,
     ):
+        _t = _get_torch()
         self.chunk_size = chunk_size
-        self.device = device or torch.device(
-            "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = device or _t.device(
+            "cuda" if _t.cuda.is_available() else "cpu"
         )
-        self.dtype = dtype
+        self.dtype = dtype if dtype is not None else _t.float16
         self._state = KVCacheState(chunk_size=chunk_size)
 
     @property
@@ -224,7 +254,7 @@ class GrowingKVCache:
         """Allocate the initial cache with chunk-aligned capacity."""
         batch, _, kv_pair, num_heads, head_dim = new_kv.shape
         initial_len = self.chunk_size
-        return torch.zeros(
+        return _get_torch().zeros(
             batch,
             initial_len,
             kv_pair,
@@ -243,7 +273,8 @@ class GrowingKVCache:
         extra_chunks = ((needed - current_capacity - 1) // self.chunk_size) + 1
         extra_len = extra_chunks * self.chunk_size
         batch, _, kv_pair, num_heads, head_dim = new_kv.shape
-        extension = torch.zeros(
+        _t = _get_torch()
+        extension = _t.zeros(
             batch,
             extra_len,
             kv_pair,
@@ -252,7 +283,7 @@ class GrowingKVCache:
             device=self.device,
             dtype=self.dtype,
         )
-        self._state.cache = torch.cat([self._state.cache, extension], dim=1)
+        self._state.cache = _t.cat([self._state.cache, extension], dim=1)
         logger.debug(
             "KV cache grown by %d positions to %d total",
             extra_len,
@@ -330,7 +361,7 @@ class FlashAttentionV2:
         n_rep = num_q_heads // num_kv_heads
         k = repeat_kv(kv[:, :, 0], n_rep)
         v = repeat_kv(kv[:, :, 1], n_rep)
-        return torch.stack([k, v], dim=2)
+        return _get_torch().stack([k, v], dim=2)
 
     def _forward_flash(
         self,
@@ -423,7 +454,7 @@ class FlashAttentionV2:
 
         attn_mask = self._build_sdpa_mask(key_padding_mask, q.shape[1], q.device)
 
-        output = torch.nn.functional.scaled_dot_product_attention(
+        output = _get_torch().nn.functional.scaled_dot_product_attention(
             q_t,
             k_t,
             v_t,
@@ -448,8 +479,9 @@ class FlashAttentionV2:
 
         mask = None
         if self.config.causal and key_padding_mask is not None:
-            causal = torch.tril(
-                torch.ones(seq_len, seq_len, device=device, dtype=torch.bool)
+            _t = _get_torch()
+            causal = _t.tril(
+                _t.ones(seq_len, seq_len, device=device, dtype=_t.bool)
             )
             pad_mask = key_padding_mask[:, None, None, :]
             mask = causal[None, None, :, :] & pad_mask
@@ -477,13 +509,14 @@ class FlashAttentionV2:
         k_t = k.transpose(1, 2)
         v_t = v.transpose(1, 2)
 
-        scores = torch.matmul(q_t, k_t.transpose(-2, -1)) * scale
+        _t = _get_torch()
+        scores = _t.matmul(q_t, k_t.transpose(-2, -1)) * scale
         scores = self._apply_masks_to_scores(
             scores, key_padding_mask, q.shape[1], q.device
         )
-        weights = torch.softmax(scores, dim=-1)
+        weights = _t.softmax(scores, dim=-1)
 
-        output = torch.matmul(weights, v_t)
+        output = _t.matmul(weights, v_t)
         return AttentionOutput(
             output=output.transpose(1, 2),
             backend_used=AttentionBackend.VANILLA,
@@ -498,8 +531,9 @@ class FlashAttentionV2:
     ) -> torch.Tensor:
         """Apply causal and padding masks to attention scores."""
         if self.config.causal:
-            causal_mask = torch.triu(
-                torch.ones(seq_len, seq_len, device=device, dtype=torch.bool),
+            _t = _get_torch()
+            causal_mask = _t.triu(
+                _t.ones(seq_len, seq_len, device=device, dtype=_t.bool),
                 diagonal=1,
             )
             scores = scores.masked_fill(causal_mask[None, None, :, :], float("-inf"))
@@ -549,7 +583,7 @@ class FlashAttentionV2:
         sin: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Apply RoPE using the fused flash_attn kernel."""
-        freqs = torch.stack([cos, sin], dim=-1)
+        freqs = _get_torch().stack([cos, sin], dim=-1)
         q_rot = fused_fn(q, freqs)
         k_rot = fused_fn(k, freqs)
         return q_rot, k_rot
@@ -588,7 +622,7 @@ def _rotate_half_apply(
     """
     half = x.shape[-1] // 2
     x1, x2 = x[..., :half], x[..., half:]
-    rotated = torch.cat([-x2, x1], dim=-1)
+    rotated = _get_torch().cat([-x2, x1], dim=-1)
     return x * cos + rotated * sin
 
 

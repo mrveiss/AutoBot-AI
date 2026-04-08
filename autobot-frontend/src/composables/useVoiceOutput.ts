@@ -13,7 +13,7 @@ import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 import { useVoiceProfiles } from '@/composables/useVoiceProfiles'
 import { usePreferences } from '@/composables/usePreferences'
-import { getBackendWsUrl } from '@/config/ssot-config'
+import { getBackendWsUrl, getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useVoiceOutput')
 
@@ -259,7 +259,7 @@ export function useVoiceOutput() {
       if (language) {
         formData.append('language', language)
       }
-      const response = await fetchWithAuth('/api/voice/synthesize', {
+      const response = await fetchWithAuth(`${getApiBase()}/voice/synthesize`, {
         method: 'POST',
         body: formData,
       })

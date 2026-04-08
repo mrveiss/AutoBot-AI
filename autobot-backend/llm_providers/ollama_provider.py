@@ -4,9 +4,10 @@
 """
 Ollama provider for the multi-provider LLM layer (#1806).
 
-Wraps the existing OllamaProvider from llm_interface_pkg.providers.ollama,
-exposing the BaseProvider interface so the ProviderRegistry can treat all
-providers uniformly.
+Delegates chat_completion to ``llm_interface_pkg.providers.ollama.OllamaProvider``
+which carries OpenTelemetry tracing (Issue #697) and circuit breaker protection.
+stream_completion is implemented directly for true incremental chunk delivery
+(the delegate accumulates the full stream before returning).
 
 The base URL is read (in priority order) from:
   1. ``settings["base_url"]``
@@ -24,6 +25,7 @@ import aiohttp
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.ssot_config import get_ollama_url
+from constants.api_constants import PATH_OLLAMA_CHAT, PATH_OLLAMA_TAGS
 from llm_interface_pkg.models import LLMRequest, LLMResponse
 from llm_interface_pkg.types import ProviderType
 
@@ -79,11 +81,16 @@ class OllamaProvider(BaseProvider):
         return self._delegate
 
     async def chat_completion(self, request: LLMRequest) -> LLMResponse:
-        """Delegate to the existing Ollama provider implementation."""
+        """Delegate to llm_interface_pkg OllamaProvider (carries OTel tracing + circuit breaker).
+
+        The delegate's ``_prepare_chat_request`` calls ``get_host_from_env()``
+        which reads from SSOT config; we override ``ollama_host`` immediately
+        before the call so any settings["base_url"] override is honoured.
+        """
         self._total_requests += 1
         try:
             delegate = self._ensure_delegate()
-            # Ensure the delegate always uses the configured URL
+            # Override host so settings["base_url"] is respected over SSOT env default.
             delegate.ollama_host = self._resolve_base_url()
             response = await delegate.chat_completion(request)
             if response.error:
@@ -92,8 +99,6 @@ class OllamaProvider(BaseProvider):
         except Exception as exc:
             self._total_errors += 1
             logger.error("OllamaProvider delegation error: %s", exc)
-            import time
-
             return LLMResponse(
                 content="",
                 model=request.model_name or "",
@@ -129,7 +134,7 @@ class OllamaProvider(BaseProvider):
             http_client = get_http_client()
             timeout = aiohttp.ClientTimeout(total=None, connect=5.0, sock_read=None)
             async with await http_client.post(
-                f"{base_url}/api/chat",
+                f"{base_url}{PATH_OLLAMA_CHAT}",
                 headers={"Content-Type": "application/json"},
                 json=payload,
                 timeout=timeout,
@@ -160,7 +165,7 @@ class OllamaProvider(BaseProvider):
             http_client = get_http_client()
             timeout = aiohttp.ClientTimeout(total=5.0)
             async with await http_client.get(
-                f"{self._resolve_base_url()}/api/tags",
+                f"{self._resolve_base_url()}{PATH_OLLAMA_TAGS}",
                 timeout=timeout,
             ) as resp:
                 return resp.status == 200
@@ -173,7 +178,7 @@ class OllamaProvider(BaseProvider):
             http_client = get_http_client()
             timeout = aiohttp.ClientTimeout(total=10.0)
             async with await http_client.get(
-                f"{self._resolve_base_url()}/api/tags",
+                f"{self._resolve_base_url()}{PATH_OLLAMA_TAGS}",
                 timeout=timeout,
             ) as resp:
                 if resp.status == 200:

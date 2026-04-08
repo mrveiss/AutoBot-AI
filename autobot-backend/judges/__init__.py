@@ -18,7 +18,7 @@ Key Principles:
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -115,7 +115,7 @@ class BaseLLMJudge:
         Returns:
             JudgmentResult with detailed evaluation and reasoning
         """
-        start_time = datetime.now()
+        start_time = datetime.now(tz=timezone.utc)
 
         try:
             judgment_prompt = await self._prepare_judgment_prompt(
@@ -140,7 +140,7 @@ class BaseLLMJudge:
         judgment_result.judge_type = self.judge_type
         judgment_result.timestamp = start_time
         judgment_result.processing_time_ms = (
-            datetime.now() - start_time
+            datetime.now(tz=timezone.utc) - start_time
         ).total_seconds() * 1000
 
         self.judgment_history.append(judgment_result)
@@ -239,7 +239,7 @@ Be precise, objective, and helpful in your judgments."""
             return JudgmentResult(
                 subject_id=str(hash(str(subject))),
                 judge_type=self.judge_type,
-                timestamp=datetime.now(),
+                timestamp=datetime.now(tz=timezone.utc),
                 overall_score=float(evaluation["overall_score"]),
                 recommendation=evaluation["recommendation"],
                 confidence=JudgmentConfidence(evaluation["confidence"]),
@@ -275,7 +275,7 @@ Be precise, objective, and helpful in your judgments."""
         return JudgmentResult(
             subject_id=str(hash(str(subject))),
             judge_type=self.judge_type,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(tz=timezone.utc),
             overall_score=0.0,
             recommendation="REJECT",
             confidence=JudgmentConfidence.VERY_LOW,

@@ -6,7 +6,7 @@ Pydantic models for the code source registry (#1133).
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import List, Optional
 
@@ -53,7 +53,7 @@ class CodeSource(BaseModel):
     owner_id: Optional[str] = None
     access: SourceAccess = SourceAccess.PRIVATE
     shared_with: List[str] = Field(default_factory=list)
-    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+    created_at: str = Field(default_factory=lambda: datetime.now(tz=timezone.utc).isoformat())
 
 
 class CodeSourceCreateRequest(BaseModel):

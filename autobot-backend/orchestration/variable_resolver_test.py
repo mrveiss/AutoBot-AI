@@ -6,6 +6,7 @@
 import json
 from typing import Any, Dict
 
+from constants.status_enums import TaskStatus
 from orchestration.variable_resolver import (
     StepOutput,
     VariableResolver,
@@ -17,7 +18,7 @@ from orchestration.variable_resolver import (
 # ---------------------------------------------------------------------------
 
 
-def _output(stdout: str = "", status: str = "completed") -> StepOutput:
+def _output(stdout: str = "", status: str = TaskStatus.COMPLETED.value) -> StepOutput:
     """Build a StepOutput from raw stdout string."""
     parsed: Any = None
     if stdout:
@@ -28,7 +29,7 @@ def _output(stdout: str = "", status: str = "completed") -> StepOutput:
     return StepOutput(status=status, stdout=stdout, parsed_json=parsed)
 
 
-def _json_output(data: Dict[str, Any], status: str = "completed") -> StepOutput:
+def _json_output(data: Dict[str, Any], status: str = TaskStatus.COMPLETED.value) -> StepOutput:
     """Build a StepOutput whose parsed_json is *data*."""
     stdout = json.dumps(data)
     return StepOutput(status=status, stdout=stdout, parsed_json=data)
@@ -43,7 +44,7 @@ class TestStepOutput:
     def test_from_step_result_success(self):
         result = {"success": True, "stdout": '{"key": "value"}', "exit_code": 0}
         so = StepOutput.from_step_result(result)
-        assert so.status == "completed"
+        assert so.status == TaskStatus.COMPLETED.value
         assert so.stdout == '{"key": "value"}'
         assert so.parsed_json == {"key": "value"}
         assert so.metadata["exit_code"] == 0
@@ -51,7 +52,7 @@ class TestStepOutput:
     def test_from_step_result_failure(self):
         result = {"success": False, "stdout": "", "error": "boom"}
         so = StepOutput.from_step_result(result)
-        assert so.status == "failed"
+        assert so.status == TaskStatus.FAILED.value
         assert so.parsed_json is None
 
     def test_from_step_result_non_json_stdout(self):
@@ -103,17 +104,17 @@ class TestVariableResolverStatus:
     def setup_method(self):
         self.resolver = VariableResolver()
         self.outputs = {
-            "step1": StepOutput(status="completed", stdout=""),
-            "step2": StepOutput(status="failed", stdout=""),
+            "step1": StepOutput(status=TaskStatus.COMPLETED.value, stdout=""),
+            "step2": StepOutput(status=TaskStatus.FAILED.value, stdout=""),
         }
 
     def test_status_completed(self):
         result = self.resolver.resolve("${steps.step1.status}", self.outputs)
-        assert result == "completed"
+        assert result == TaskStatus.COMPLETED.value
 
     def test_status_failed(self):
         result = self.resolver.resolve("${steps.step2.status}", self.outputs)
-        assert result == "failed"
+        assert result == TaskStatus.FAILED.value
 
     def test_status_in_sentence(self):
         result = self.resolver.resolve(
@@ -203,7 +204,7 @@ class TestVariableResolverMultipleTokens:
 
     def test_two_tokens_in_one_string(self):
         outputs = {
-            "s1": StepOutput(status="completed", stdout=""),
+            "s1": StepOutput(status=TaskStatus.COMPLETED.value, stdout=""),
             "s2": _json_output({"msg": "hello"}),
         }
         result = self.resolver.resolve(
@@ -276,7 +277,7 @@ class TestVariableResolverMetadata:
     def test_metadata_field_access(self):
         outputs = {
             "s1": StepOutput(
-                status="completed",
+                status=TaskStatus.COMPLETED.value,
                 stdout="",
                 metadata={"exit_code": 0, "execution_time": 2.5},
             )

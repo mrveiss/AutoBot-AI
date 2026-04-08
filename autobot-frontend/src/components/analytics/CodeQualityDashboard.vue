@@ -424,7 +424,9 @@ import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue';
 import { useRoute } from 'vue-router';
 import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import { createLogger } from '@/utils/debugUtils';
-import { getCssVar } from '@/composables/useCssVars'
+import { getApiBase } from '@/config/ssot-config';
+import { getCssVar } from '@/composables/useCssVars';
+import { useWebSocket } from '@/composables/useWebSocket';
 
 const logger = createLogger('CodeQualityDashboard');
 
@@ -524,8 +526,40 @@ const trendData = ref<Array<{ date: string; score: number }>>([]);
 const codebaseStats = ref({ files: 0, lines: 0, issues: 0 });
 const drillDownData = ref({ total_files: 0, total_issues: 0, average_score: 0, files: [] as any[] });
 
-let ws: WebSocket | null = null;
-let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+// WebSocket managed via useWebSocket composable
+const _qualityWsUrl = (() => {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}/api/quality/ws`;
+})();
+const {
+  connect: wsConnect,
+  disconnect: wsDisconnect,
+} = useWebSocket(_qualityWsUrl, {
+  autoConnect: false,
+  autoReconnect: true,
+  reconnectDelay: 5000,
+  maxReconnectAttempts: 0,
+  parseJSON: false,
+  onOpen: () => {
+    wsConnected.value = true;
+    logger.debug('WebSocket connected');
+  },
+  onClose: () => {
+    wsConnected.value = false;
+    logger.debug('WebSocket disconnected');
+  },
+  onError: (error) => {
+    logger.error('WebSocket error:', error);
+    wsConnected.value = false;
+  },
+  onMessage: (data: string) => {
+    try {
+      handleWebSocketMessage(JSON.parse(data));
+    } catch (error) {
+      logger.error('Failed to parse WebSocket message:', error);
+    }
+  },
+});
 
 // Computed
 const scoreCircleLength = computed(() => 2 * Math.PI * 54);
@@ -648,7 +682,7 @@ async function loadHealthScore(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
     // Issue #3436: scope to project when sourceId is present
-    const response = await fetchWithAuth(withSourceId('/api/quality/health-score'));
+    const response = await fetchWithAuth(withSourceId(`${getApiBase()}/quality/health-score`));
     if (response.ok) {
       healthScore.value = await response.json();
     } else {
@@ -664,7 +698,7 @@ async function loadMetrics(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
     // Issue #3436: scope to project when sourceId is present
-    const response = await fetchWithAuth(withSourceId('/api/quality/metrics'));
+    const response = await fetchWithAuth(withSourceId(`${getApiBase()}/quality/metrics`));
     if (response.ok) {
       metrics.value = await response.json();
     } else {
@@ -681,7 +715,7 @@ async function loadPatterns(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
     // Issue #3436: scope to project when sourceId is present
-    const response = await fetchWithAuth(withSourceId('/api/quality/patterns'));
+    const response = await fetchWithAuth(withSourceId(`${getApiBase()}/quality/patterns`));
     if (response.ok) {
       patterns.value = await response.json();
     } else {
@@ -698,7 +732,7 @@ async function loadComplexity(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
     // Issue #3436: scope to project when sourceId is present
-    const response = await fetchWithAuth(withSourceId('/api/quality/complexity?top_n=5'));
+    const response = await fetchWithAuth(withSourceId(`${getApiBase()}/quality/complexity?top_n=5`));
     if (response.ok) {
       complexity.value = await response.json();
     } else {
@@ -714,7 +748,7 @@ async function loadTrends(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
     // Issue #3436: scope to project when sourceId is present
-    const response = await fetchWithAuth(withSourceId(`/api/quality/trends?period=${selectedPeriod.value}`));
+    const response = await fetchWithAuth(withSourceId(`${getApiBase()}/quality/trends?period=${selectedPeriod.value}`));
     if (response.ok) {
       const data = await response.json();
       trendData.value = data.data_points || [];
@@ -732,7 +766,7 @@ async function loadSnapshot(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
     // Issue #3436: scope to project when sourceId is present
-    const response = await fetchWithAuth(withSourceId('/api/quality/snapshot'));
+    const response = await fetchWithAuth(withSourceId(`${getApiBase()}/quality/snapshot`));
     if (response.ok) {
       const data = await response.json();
       codebaseStats.value = data.codebase_stats || { files: 0, lines: 0, issues: 0 };
@@ -750,7 +784,7 @@ async function drillDown(category: string): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
     // Issue #3436: scope to project when sourceId is present
-    const response = await fetchWithAuth(withSourceId(`/api/quality/drill-down/${category}`));
+    const response = await fetchWithAuth(withSourceId(`${getApiBase()}/quality/drill-down/${category}`));
     if (response.ok) {
       drillDownData.value = await response.json();
     } else {
@@ -767,7 +801,7 @@ async function exportReport(format: string): Promise<void> {
   exportMenuOpen.value = false;
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-    const response = await fetchWithAuth(`/api/quality/export?format=${format}`);
+    const response = await fetchWithAuth(`${getApiBase()}/quality/export?format=${format}`);
     if (response.ok) {
       const data = await response.json();
       if (format === 'json') {
@@ -797,34 +831,7 @@ function closeExportMenu(): void {
 
 function connectWebSocket(): void {
   // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-  const wsUrl = `ws://${window.location.host}/api/quality/ws`;
-  ws = new WebSocket(wsUrl);
-
-  ws.onopen = () => {
-    wsConnected.value = true;
-    logger.debug('WebSocket connected');
-  };
-
-  ws.onmessage = (event) => {
-    try {
-      const message = JSON.parse(event.data);
-      handleWebSocketMessage(message);
-    } catch (error) {
-      logger.error('Failed to parse WebSocket message:', error);
-    }
-  };
-
-  ws.onclose = () => {
-    wsConnected.value = false;
-    logger.debug('WebSocket disconnected');
-    // Reconnect after 5 seconds
-    wsReconnectTimer = setTimeout(connectWebSocket, 5000);
-  };
-
-  ws.onerror = (error) => {
-    logger.error('WebSocket error:', error);
-    wsConnected.value = false;
-  };
+  wsConnect();
 }
 
 function handleWebSocketMessage(message: any): void {
@@ -967,14 +974,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  if (wsReconnectTimer) {
-    clearTimeout(wsReconnectTimer);
-    wsReconnectTimer = null;
-  }
-  if (ws) {
-    ws.onclose = null;
-    ws.close();
-  }
+  // useWebSocket handles WebSocket cleanup via its own onUnmounted
 });
 
 watch(selectedPeriod, () => {

@@ -11,7 +11,7 @@ import asyncio
 import json
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -43,11 +43,11 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.ssot_config import get_config
-from config import ConfigManager
 from config.registry import ConfigRegistry
 
 # Issue #474: Import ServiceURLs for AlertManager integration
 from constants.network_constants import ServiceURLs
+from constants.threshold_constants import TimingConstants
 from type_defs.common import Metadata
 from utils.performance_monitor import (
     add_alert_callback,
@@ -61,7 +61,6 @@ from utils.performance_monitor import (
 )
 
 logger = logging.getLogger(__name__)
-config = ConfigManager()
 
 # Prometheus server URL — loaded once at import time via SSOT config (Issue #1283)
 _ssot = get_config()
@@ -398,9 +397,9 @@ def _resolve_service_urls() -> tuple:
     config manager, falling back to known static addresses on any error.
     """
     try:
-        npu_url = config.get_service_url("npu_worker", "health")
-        browser_url = config.get_service_url("browser", "health")
-        ollama_url = f"{config.get_ollama_url()}/api/version"
+        npu_url = f"http://{_ssot.vm.npu}:{_ssot.port.npu}/health"
+        browser_url = f"http://{_ssot.vm.browser}:{_ssot.port.browser}/health"
+        ollama_url = f"http://{_ssot.vm.ollama}:{_ssot.port.ollama}/api/version"
     except Exception:
         # Issue #1229: Use ConfigRegistry (defaults from SSOT via registry_defaults)
         npu_host = ConfigRegistry.get("vm.npu")
@@ -1137,7 +1136,7 @@ async def test_performance_monitoring(
 ):
     """Test endpoint to demonstrate performance monitoring. Issue #744: Requires admin authentication."""
     # Simulate some work
-    await asyncio.sleep(0.1)
+    await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
     # Collect current metrics
     metrics = await collect_metrics()
@@ -1232,7 +1231,7 @@ async def get_claude_api_status():
             "p95_latency_seconds": p95_latency,
             "failure_rate": failure_rate,
         },
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -1266,5 +1265,5 @@ async def get_github_status():
             "total_operations": total_ops,
             "p95_latency_seconds": p95_latency,
         },
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }

@@ -11,7 +11,7 @@ import os
 
 # Import the dashboard generator
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 import aiofiles
@@ -22,7 +22,7 @@ from pydantic import BaseModel
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from type_defs.common import Metadata
 from utils.catalog_http_exceptions import (
-    raise_not_found_error,
+    raise_catalog_error_simple,
     raise_server_error,
     raise_service_unavailable,
     raise_validation_error,
@@ -162,7 +162,7 @@ async def get_dashboard_status():
                 "status": "unavailable",
                 "service": "validation_dashboard",
                 "error": "Dashboard generator not available",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 
@@ -173,7 +173,7 @@ async def get_dashboard_status():
             "output_directory": str(generator.output_dir),
             "refresh_interval": generator.refresh_interval,
             "data_retention_days": generator.data_retention_days,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
     except (ImportError, AttributeError) as e:
         logger.error("Error getting dashboard status due to missing dependency: %s", e)
@@ -210,7 +210,7 @@ async def get_validation_report():
         return {
             "status": "success",
             "report": report,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     except (ImportError, AttributeError):
@@ -318,7 +318,7 @@ async def get_dashboard_file():
 
     except FileNotFoundError as e:
         logger.error("Dashboard file not found: %s", e)
-        raise_not_found_error("API_0002", "Dashboard file not found")
+        raise_catalog_error_simple("API_0002", "Dashboard file not found")
     except (OSError, IOError) as e:
         logger.error("Error serving dashboard file due to file system error: %s", e)
         raise_server_error("API_0003", "File system error")
@@ -376,7 +376,7 @@ async def generate_dashboard(
                 "include_trends": request.include_trends,
                 "include_recommendations": request.include_recommendations,
             },
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     except (ImportError, AttributeError) as e:
@@ -439,7 +439,7 @@ async def get_dashboard_metrics():
         return {
             "status": "success",
             "metrics": metrics,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     except (ImportError, AttributeError) as e:
@@ -469,7 +469,7 @@ async def get_trend_data():
         return {
             "status": "success",
             "trends": trend_data,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     except (ImportError, AttributeError) as e:
@@ -508,7 +508,7 @@ async def get_system_alerts():
                 ),
                 "info": len([a for a in report["alerts"] if a["level"] == "info"]),
             },
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     except (ImportError, AttributeError) as e:
@@ -549,7 +549,7 @@ async def get_system_recommendations():
                     [r for r in report["recommendations"] if r["urgency"] == "low"]
                 ),
             },
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     except (ImportError, AttributeError) as e:
@@ -610,7 +610,7 @@ async def judge_workflow_step(request: dict):
                 ],
                 "improvement_suggestions": judgment.improvement_suggestions,
             },
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     except (ImportError, AttributeError) as e:
@@ -668,7 +668,7 @@ async def judge_agent_response(request: dict):
                 ],
                 "improvement_suggestions": judgment.improvement_suggestions,
             },
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     except (ImportError, AttributeError) as e:
@@ -698,7 +698,7 @@ async def get_judge_status():
                 "status": "unavailable",
                 "service": "validation_judges",
                 "error": "Judges not available",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 
@@ -726,5 +726,5 @@ async def get_judge_status():
         "service": "validation_judges",
         "available_judges": list(judges.keys()),
         "judge_metrics": judge_metrics,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }

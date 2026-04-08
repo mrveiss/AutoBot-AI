@@ -265,7 +265,7 @@ async def recommend_agents(
     if not _ORCHESTRATOR_AVAILABLE:
         raise HTTPException(status_code=503, detail="Orchestrator module not available")
     try:
-        from enhanced_multi_agent_orchestrator import AgentCapability
+        from enhanced_orchestration import AgentCapability
 
         # Convert capability strings to enums
         capabilities_needed = set()

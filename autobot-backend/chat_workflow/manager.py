@@ -21,6 +21,8 @@ from typing import Any, Dict, FrozenSet, List, Optional
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
+from constants.ttl_constants import TIMEOUT_HTTP_DEFAULT, TTL_24_HOURS
+from constants.model_constants import ModelConfig, ModelConstants
 from slash_command_handler import get_slash_command_handler
 
 from .conversation import ConversationHandlerMixin
@@ -87,7 +89,7 @@ class ChatWorkflowManager(
         self._lock = asyncio.Lock()
         self.redis_manager = None  # Async Redis manager
         self.redis_client = None  # Main database connection
-        self.conversation_history_ttl = 86400  # 24 hours in seconds
+        self.conversation_history_ttl = TTL_24_HOURS
         self.transcript_dir = "data/conversation_transcripts"  # Long-term file storage
 
         # Error boundary manager for enhanced error tracking
@@ -1768,13 +1770,14 @@ before summarizing.
         self,
         original_message: str,
         execution_history: List[Dict[str, Any]],
-        system_prompt: str,
         consecutive_invalid_tool_calls: int = 0,
     ) -> str:
         """Build continuation prompt with execution results for multi-step tasks.
 
         Issue #651: Enhanced prompt structure for better multi-step task handling.
         Issue #2310: Passes consecutive_invalid_tool_calls to inject tools reminder.
+        Issue #3784: system_prompt removed — sent via Ollama system field to avoid
+        double-injection on continuation iterations.
         """
         history_parts = [
             self._format_execution_step(i, result)
@@ -1786,10 +1789,7 @@ before summarizing.
             original_message, steps_completed, consecutive_invalid_tool_calls
         )
 
-        return f"""{system_prompt}
-
----
-## MULTI-STEP TASK CONTINUATION (Step {steps_completed + 1})
+        return f"""## MULTI-STEP TASK CONTINUATION (Step {steps_completed + 1})
 
 **Commands Already Executed ({steps_completed} step(s) completed so far):**
 {history_text}
@@ -1798,15 +1798,22 @@ before summarizing.
 {instructions}"""
 
     def _get_llm_request_payload(
-        self, selected_model: str, current_prompt: str
+        self, selected_model: str, current_prompt: str, system_prompt: str = ""
     ) -> dict:
         """Build LLM request payload."""
-        return {
+        payload = {
             "model": selected_model,
             "prompt": current_prompt,
             "stream": True,
-            "options": {"temperature": 0.7, "top_p": 0.9, "num_ctx": 2048},
+            "options": {
+                "temperature": 0.7,
+                "top_p": 0.9,
+                "num_ctx": ModelConfig.CHAT_NUM_CTX,
+            },
         }
+        if system_prompt:
+            payload["system"] = system_prompt
+        return payload
 
     def _log_and_parse_tool_calls(
         self, llm_response: str, iteration: int
@@ -1891,16 +1898,19 @@ before summarizing.
         used_knowledge: bool,
         rag_citations: List[Dict[str, Any]],
         iteration: int,
+        system_prompt: str = "",
     ):
         """Process a single LLM iteration. Yields chunks, then (llm_response, tool_calls). Issue #620."""
         import aiohttp
 
-        payload = self._get_llm_request_payload(selected_model, current_prompt)
+        payload = self._get_llm_request_payload(selected_model, current_prompt, system_prompt)
         llm_response = ""
 
         try:
             async with await http_client.post(
-                ollama_endpoint, json=payload, timeout=aiohttp.ClientTimeout(total=60.0)
+                ollama_endpoint,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=None, connect=TIMEOUT_HTTP_DEFAULT),
             ) as response:
                 logger.info(
                     "[ChatWorkflowManager] Ollama response status: %s", response.status
@@ -2112,6 +2122,7 @@ before summarizing.
             ctx.used_knowledge,
             ctx.rag_citations,
             iteration,
+            system_prompt=ctx.system_prompt or "",
         ):
             if isinstance(item, tuple):
                 llm_response, tool_calls = item
@@ -2482,7 +2493,6 @@ before summarizing.
         current_prompt = self._build_continuation_prompt(
             ctx.message,
             execution_history,
-            ctx.system_prompt,
             ctx.consecutive_invalid_tool_calls,
         )
         logger.info(
@@ -3009,10 +3019,14 @@ before summarizing.
                 from .graph import delete_thread_checkpoints
 
                 await delete_thread_checkpoints(session_id)
+            if isinstance(exc, (TimeoutError, asyncio.TimeoutError)):
+                error_content = "The model is taking too long to respond. Please try again."
+            else:
+                error_content = str(exc) or f"{type(exc).__name__}: unexpected error"
             queue.put_nowait(
                 {
                     "type": "error",
-                    "content": f"Error: {exc}",
+                    "content": error_content,
                 }
             )
         finally:

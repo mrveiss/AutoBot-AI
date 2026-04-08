@@ -18,6 +18,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import apiClient from '@/utils/ApiClient'
+import { getApiBase } from '@/config/ssot-config'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
@@ -147,7 +148,7 @@ async function loadPrompts(): Promise<void> {
   error.value = null
 
   try {
-    const response = await apiClient.get('/api/prompts')
+    const response = await apiClient.get(`${getApiBase()}/prompts`)
     const data = await parseApiResponse(response)
 
     if (data?.prompts) {
@@ -183,7 +184,7 @@ async function savePrompt(): Promise<void> {
 
   try {
     const response = await apiClient.put(
-      `/api/prompts/${encodeURIComponent(selectedPrompt.value.id)}`,
+      `${getApiBase()}/prompts/${encodeURIComponent(selectedPrompt.value.id)}`,
       { content: editedContent.value }
     )
     const data = await parseApiResponse(response)
@@ -222,7 +223,7 @@ async function loadHistory(): Promise<void> {
 
   try {
     const response = await apiClient.get(
-      `/api/prompts/${encodeURIComponent(selectedPrompt.value.id)}/history`
+      `${getApiBase()}/prompts/${encodeURIComponent(selectedPrompt.value.id)}/history`
     )
     const data = await parseApiResponse(response)
 
@@ -248,7 +249,7 @@ async function revertToVersion(version: PromptVersion): Promise<void> {
 
   try {
     const response = await apiClient.post(
-      `/api/prompts/${encodeURIComponent(selectedPrompt.value.id)}/revert`,
+      `${getApiBase()}/prompts/${encodeURIComponent(selectedPrompt.value.id)}/revert`,
       { version: version.version }
     )
     const data = await parseApiResponse(response)

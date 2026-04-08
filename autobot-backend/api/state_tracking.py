@@ -8,7 +8,7 @@ Provides endpoints for comprehensive project state tracking and reporting
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
@@ -59,7 +59,7 @@ async def get_state_tracking_status():
         return {
             "status": "healthy",
             "service": "state_tracking",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "tracking_active": True,
             "snapshot_count": summary["snapshot_count"],
             "change_count": summary["change_count"],
@@ -94,7 +94,7 @@ async def get_state_summary():
         return {
             "status": "success",
             "summary": summary,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
     except (ImportError, AttributeError) as e:
         logger.error("Error getting state summary due to missing dependency: %s", e)
@@ -126,7 +126,7 @@ async def capture_state_snapshot(background_tasks: BackgroundTasks):
         return {
             "status": "success",
             "message": "State snapshot capture initiated",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
     except (ImportError, AttributeError) as e:
         logger.error("Error capturing snapshot due to missing dependency: %s", e)
@@ -174,7 +174,7 @@ async def record_state_change(request: StateChangeRequest):
             "status": "success",
             "message": "State change recorded",
             "change_type": change_type.value,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
     except (ImportError, AttributeError) as e:
         logger.error("Error recording state change due to missing dependency: %s", e)
@@ -206,7 +206,7 @@ async def get_milestones():
                 1 for m in summary["milestones"].values() if m["achieved"]
             ),
             "total_count": len(summary["milestones"]),
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
     except (ImportError, AttributeError) as e:
         logger.error("Error getting milestones due to missing dependency: %s", e)
@@ -241,7 +241,7 @@ async def get_metric_trends(metric: str, days: int = Query(7, ge=1, le=90)):
             )
 
         # Get historical data
-        cutoff_date = datetime.now() - timedelta(days=days)
+        cutoff_date = datetime.now(tz=timezone.utc) - timedelta(days=days)
 
         # Filter snapshots within time range
         relevant_snapshots = [
@@ -265,7 +265,7 @@ async def get_metric_trends(metric: str, days: int = Query(7, ge=1, le=90)):
             "days": days,
             "data_points": len(trend_data),
             "trend_data": trend_data,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
     except (ImportError, AttributeError) as e:
         logger.error("Error getting metric trends due to missing dependency: %s", e)
@@ -322,7 +322,7 @@ async def get_recent_changes(
             ],
             "total_changes": len(changes),
             "showing": len(recent_changes),
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
     except (ImportError, AttributeError) as e:
         logger.error("Error getting recent changes due to missing dependency: %s", e)
@@ -348,7 +348,7 @@ async def generate_state_report():
             "status": "success",
             "report": report,
             "format": "markdown",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
     except (ImportError, AttributeError) as e:
         logger.error("Error generating report due to missing dependency: %s", e)
@@ -377,7 +377,7 @@ async def export_state_data(request: ExportRequest):
         # Generate filename using centralized path management
         from utils.paths_manager import ensure_data_directory, get_data_path
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
         filename = f"state_tracking_export_{timestamp}.{request.format}"
 
         # Ensure data directory and reports subdirectory exist
@@ -397,7 +397,7 @@ async def export_state_data(request: ExportRequest):
             "filename": filename,
             "path": output_path,
             "format": request.format,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
     except (ImportError, AttributeError) as e:
         logger.error("Error exporting state data due to missing dependency: %s", e)
@@ -436,7 +436,7 @@ async def get_all_metrics():
             "status": "success",
             "metrics": metrics,
             "available_metrics": [m.value for m in TrackingMetric],
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
     except (ImportError, AttributeError) as e:
         logger.error("Error getting all metrics due to missing dependency: %s", e)
@@ -458,7 +458,7 @@ async def get_phase_history(phase_name: str, days: int = Query(30, ge=1, le=365)
         tracker = get_state_tracker()
 
         # Get historical data
-        cutoff_date = datetime.now() - timedelta(days=days)
+        cutoff_date = datetime.now(tz=timezone.utc) - timedelta(days=days)
 
         phase_history = []
         for snapshot in tracker.state_history:
@@ -481,7 +481,7 @@ async def get_phase_history(phase_name: str, days: int = Query(30, ge=1, le=365)
             "days": days,
             "data_points": len(phase_history),
             "history": phase_history,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
     except (ImportError, AttributeError) as e:
         logger.error("Error getting phase history due to missing dependency: %s", e)

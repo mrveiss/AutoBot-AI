@@ -11,6 +11,7 @@ import { ref, watch } from 'vue'
 import { setLocale } from '@/i18n'
 import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('usePreferences')
 
@@ -127,16 +128,33 @@ function applyLayoutDensity(density: LayoutDensity): void {
  * Sync language preference to backend personality profile
  */
 function syncLanguageToBackend(code: string): void {
-  apiClient.get('/api/personality/active').then((res) => {
+  apiClient.get(`${getApiBase()}/personality/active`).then((res) => {
     if (res.data && res.data.id) {
       apiClient.put(
-        `/api/personality/profiles/${res.data.id}`,
+        `${getApiBase()}/personality/profiles/${res.data.id}`,
         { language_code: code }
       )
     }
   }).catch((error) => {
     logger.warn('Could not sync language to backend', error)
   })
+}
+
+/**
+ * Fetch language preference from backend personality profile and apply it.
+ * Called after login to enable cross-device language sync.
+ */
+async function loadLanguageFromBackend(): Promise<void> {
+  try {
+    const res = await apiClient.get(`${getApiBase()}/personality/active`)
+    const code: string | undefined = res.data?.language_code
+    if (code && code !== language.value) {
+      await setLanguage(code)
+      logger.debug(`Language loaded from backend: ${code}`)
+    }
+  } catch (error) {
+    logger.warn('Could not load language from backend', error)
+  }
 }
 
 /**
@@ -236,6 +254,7 @@ export function usePreferences() {
     setLayoutDensity,
     setVoiceDisplayMode,
     setLanguage,
+    loadLanguageFromBackend,
     resetPreferences
   }
 }

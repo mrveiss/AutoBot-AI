@@ -19,6 +19,7 @@ import { useBackgroundTask } from '@/composables/useBackgroundTask'
 import { useTaskLoader } from '@/composables/useTaskLoader'
 import { useAnalyticsScanRunner } from '@/composables/useAnalyticsScanRunner'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useAnalyticsDataFetchers')
 
@@ -229,7 +230,7 @@ export function useAnalyticsDataFetchers(
     error: dependencyError,
     load: _loadDependencyTask,
   } = useTaskLoader<DependencyGraph>(
-    '/api/analytics/codebase/analytics/dependencies',
+    `${getApiBase()}/analytics/codebase/analytics/dependencies`,
     (r) => {
       if (r.status === 'success' && r.dependency_data) {
         return r.dependency_data as unknown as DependencyGraph
@@ -244,7 +245,7 @@ export function useAnalyticsDataFetchers(
     error: importTreeError,
     load: _loadImportTreeTask,
   } = useTaskLoader<ImportTreeNode[]>(
-    '/api/analytics/codebase/analytics/import-tree',
+    `${getApiBase()}/analytics/codebase/analytics/import-tree`,
     (r) => {
       if (r.status === 'success' && r.import_tree) {
         return r.import_tree as unknown as ImportTreeNode[]
@@ -256,7 +257,7 @@ export function useAnalyticsDataFetchers(
   )
 
   const dupTask = useBackgroundTask(
-    '/api/analytics/codebase/duplicates',
+    `${getApiBase()}/analytics/codebase/duplicates`,
   )
 
   const scanRunner = useAnalyticsScanRunner()

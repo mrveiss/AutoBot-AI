@@ -297,6 +297,7 @@ import ShareConversationDialog from './ShareConversationDialog.vue'
 import type { FileStats } from '@/composables/useConversationFiles'
 import type { SessionFact } from '@/models/repositories/ChatRepository'
 import ApiClient from '@/utils/ApiClient'
+import { getApiBase } from '@/config/ssot-config'
 import { formatDate } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -463,7 +464,7 @@ const deleteSession = async (sessionId: string) => {
   const [fileStatsResult, kbFactsResult] = await Promise.allSettled([
     // Fetch file stats
     (async () => {
-      const data = await ApiClient.get(`/api/conversation-files/conversation/${sessionId}/list`)
+      const data = await ApiClient.get(`${getApiBase()}/conversation-files/conversation/${sessionId}/list`)
       return data?.stats || null
     })(),
     // Fetch KB facts (Issue #547)
@@ -586,7 +587,7 @@ const reloadSystem = async () => {
 
   try {
     // Call real system reload API
-    const response = await ApiClient.post('/api/system/reload_config')
+    const response = await ApiClient.post(`${getApiBase()}/system/reload_config`)
     const data = await (response as any).json()
 
     if (data && data.success) {

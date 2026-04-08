@@ -197,6 +197,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import apiClient from '@/utils/ApiClient'
+import { getApiBase } from '@/config/ssot-config'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -283,7 +284,7 @@ async function executeSearch(): Promise<void> {
   try {
     logger.info(`Executing Graph-RAG search: "${queryText.value.substring(0, 50)}..."`)
 
-    const response = await apiClient.post('/api/graph-rag/search', {
+    const response = await apiClient.post(`${getApiBase()}/graph-rag/search`, {
       query: queryText.value.trim(),
       start_entity: startEntity.value.trim() || null,
       max_depth: maxDepth.value,
@@ -307,7 +308,7 @@ async function checkHealth(): Promise<void> {
   isCheckingHealth.value = true
 
   try {
-    const response = await apiClient.get('/api/graph-rag/health')
+    const response = await apiClient.get(`${getApiBase()}/graph-rag/health`)
     const parsedResponse = await parseApiResponse(response)
     healthStatus.value = parsedResponse?.data || parsedResponse
     logger.info(`Health check: ${healthStatus.value?.status}`)

@@ -32,8 +32,13 @@ from enhanced_orchestration import (
     AgentCapability,
     AgentPerformance,
     AgentTask,
+    CriteriaResult,
+    EvaluationResult,
     ExecutionStrategy,
     ExecutionStrategyHandler,
+    SuccessCriteria,
+    SuccessCriteriaEvaluator,
+    SuccessCriteriaType,
     WorkflowPlan,
     WorkflowPlanner,
 )
@@ -55,6 +60,12 @@ __all__ = [
     "create_and_execute_workflow",
     "FALLBACK_TIERS",
     "_FALLBACK_TIERS",
+    # Issue #3293
+    "SuccessCriteriaType",
+    "SuccessCriteria",
+    "CriteriaResult",
+    "EvaluationResult",
+    "SuccessCriteriaEvaluator",
 ]
 
 
@@ -260,6 +271,26 @@ class EnhancedMultiAgentOrchestrator:
             self.logger.error("Failed to create workflow plan: %s", e)
             return self._planner.create_simple_workflow_plan(goal)
 
+    async def _evaluate_criteria(
+        self, plan: WorkflowPlan, results: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Issue #3293: Evaluate structured success criteria and return serialisable dict.
+
+        Falls back to binary check when no structured criteria are defined.
+        """
+        if plan.structured_criteria:
+            evaluator = SuccessCriteriaEvaluator()
+            eval_result = await evaluator.evaluate(plan.structured_criteria, results)
+            return eval_result.to_dict()
+
+        # Legacy binary check surfaced as a minimal evaluation dict
+        binary_pass = self._planner.check_success_criteria(plan, results)
+        return {
+            "overall": "full" if binary_pass else "failed",
+            "score": 1.0 if binary_pass else 0.0,
+            "results": [],
+        }
+
     async def _handle_workflow_success(
         self,
         plan: WorkflowPlan,
@@ -267,10 +298,12 @@ class EnhancedMultiAgentOrchestrator:
         start_time: float,
     ) -> Dict[str, Any]:
         """Issue #665: Extracted from execute_workflow to reduce function length.
+        Issue #3293: Replaced binary success flag with criteria evaluation.
 
         Handle successful workflow completion including metrics update and event publishing.
         """
-        success = self._planner.check_success_criteria(plan, results)
+        criteria_eval = await self._evaluate_criteria(plan, results)
+        success = criteria_eval["overall"] in ("full", "partial")
         execution_time = time.time() - start_time
 
         await self._update_performance_metrics(plan, results, execution_time)
@@ -282,6 +315,7 @@ class EnhancedMultiAgentOrchestrator:
                 "success": success,
                 "execution_time": execution_time,
                 "results_summary": self._planner.summarize_results(results),
+                "criteria_evaluation": criteria_eval,
             },
         )
 
@@ -291,6 +325,7 @@ class EnhancedMultiAgentOrchestrator:
             "results": results,
             "execution_time": execution_time,
             "strategy_used": plan.strategy.value,
+            "criteria_evaluation": criteria_eval,
         }
 
     async def _handle_workflow_failure(

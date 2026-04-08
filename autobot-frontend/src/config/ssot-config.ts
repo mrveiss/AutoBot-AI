@@ -605,6 +605,18 @@ export function getBackendUrl(): string {
   return getConfig().backendUrl;
 }
 
+
+/**
+ * Get the API base path for the autobot backend.
+ * Returns '/api' by default. Override with VITE_API_BASE_PATH if needed.
+ *
+ * All frontend code should call this instead of hardcoding '/api'.
+ * Consistent with getSlmApiBase() pattern in autobot-slm-frontend.
+ */
+export function getApiBase(): string {
+  return import.meta.env.VITE_API_BASE_PATH || '/api'
+}
+
 /**
  * Get WebSocket URL (backward compatibility).
  */

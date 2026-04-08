@@ -30,6 +30,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Coroutine, Dict, List, Optional, Set
 
+from constants.status_enums import TaskStatus
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -353,7 +355,7 @@ class DAGExecutor:
                 " → ".join(cycle),
             )
             ctx = DAGExecutionContext(workflow_id=workflow_id)
-            ctx.status = "failed"
+            ctx.status = TaskStatus.FAILED.value
             ctx.error = f"Cycle detected in workflow graph: {' → '.join(cycle)}"
             return ctx
 
@@ -361,7 +363,7 @@ class DAGExecutor:
         roots = dag.root_nodes()
         if not roots:
             logger.error("Workflow %s DAG has no root nodes", workflow_id)
-            ctx.status = "failed"
+            ctx.status = TaskStatus.FAILED.value
             ctx.error = "DAG has no root nodes"
             return ctx
 
@@ -379,11 +381,11 @@ class DAGExecutor:
             )
         except Exception as exc:
             logger.error("Workflow %s DAG execution raised: %s", workflow_id, exc)
-            ctx.status = "failed"
+            ctx.status = TaskStatus.FAILED.value
             ctx.error = str(exc)
             return ctx
 
-        ctx.status = "completed" if ctx.error is None else "partially_completed"
+        ctx.status = TaskStatus.COMPLETED.value if ctx.error is None else TaskStatus.PARTIALLY_COMPLETED.value
         logger.info(
             "Workflow %s DAG execution finished: status=%s", workflow_id, ctx.status
         )

@@ -10,7 +10,7 @@ Handles privilege escalation requests through GUI dialogs
 import asyncio
 import logging
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -70,7 +70,7 @@ async def request_elevation(request: ElevationRequest):
             "command": request.command,
             "reason": request.reason,
             "risk_level": request.risk_level,
-            "timestamp": datetime.now(),
+            "timestamp": datetime.now(tz=timezone.utc),
             "status": "pending",
         }
 
@@ -102,6 +102,7 @@ async def authorize_elevation(auth: ElevationAuthorization):
         is_valid = await verify_sudo_password(auth.password)
 
         if not is_valid:
+            # codeql-suppress py/clear-text-logging-sensitive-data: logs request_id only, no password value
             logger.warning("Invalid sudo password for request %s", request_id)
             raise HTTPException(status_code=401, detail="Invalid password")
 
@@ -109,9 +110,9 @@ async def authorize_elevation(auth: ElevationAuthorization):
         session_token = str(uuid.uuid4())
         session_data = {
             "token": session_token,
-            "created": datetime.now(),
+            "created": datetime.now(tz=timezone.utc),
             "expires": (
-                datetime.now() + timedelta(minutes=15 if auth.remember_session else 5)
+                datetime.now(tz=timezone.utc) + timedelta(minutes=15 if auth.remember_session else 5)
             ),
             "request_id": request_id,
         }
@@ -131,7 +132,7 @@ async def authorize_elevation(auth: ElevationAuthorization):
             "success": True,
             "session_token": session_token,
             "expires_in": int(
-                (session_data["expires"] - datetime.now()).total_seconds()
+                (session_data["expires"] - datetime.now(tz=timezone.utc)).total_seconds()
             ),
             "message": "Authorization successful",
         }
@@ -185,7 +186,7 @@ async def execute_elevated_command(session_token: str, command: str):
         session_data = elevation_sessions[session_token]
 
         # Check if session is expired
-        if datetime.now() > session_data["expires"]:
+        if datetime.now(tz=timezone.utc) > session_data["expires"]:
             del elevation_sessions[session_token]
             raise HTTPException(status_code=401, detail="Session expired")
 
@@ -337,5 +338,5 @@ async def elevation_health_check():
         "pending_requests": len(
             [r for r in pending_requests.values() if r["status"] == "pending"]
         ),
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }

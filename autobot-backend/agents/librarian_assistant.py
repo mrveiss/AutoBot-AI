@@ -13,7 +13,7 @@ or the query requires current/external data.
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 from autobot_shared.http_client import get_http_client
@@ -387,7 +387,7 @@ class LibrarianAssistant:
                 "key_topics": assessment.get("key_topics", []),
                 "is_trusted": content_data.get("is_trusted", False),
                 "stored_by": "librarian_assistant",
-                "timestamp": content_data.get("timestamp", datetime.now().isoformat()),
+                "timestamp": content_data.get("timestamp", datetime.now(tz=timezone.utc).isoformat()),
             }
 
             success = self.knowledge_base.add_document(document_content, metadata)
@@ -493,7 +493,7 @@ class LibrarianAssistant:
         """
         return {
             "query": query,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "search_results": [],
             "content_extracted": [],
             "stored_in_kb": [],

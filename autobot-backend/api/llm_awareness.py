@@ -7,7 +7,7 @@ Provides endpoints for LLM agents to access system context and capabilities
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -57,7 +57,7 @@ async def get_awareness_status():
         return {
             "status": "healthy",
             "service": "llm_awareness",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "system_identity": context["system_identity"],
             "capabilities_count": context["current_capabilities"]["count"],
             "system_maturity": context["system_identity"]["system_maturity"],
@@ -123,14 +123,14 @@ async def get_system_context(
                 "status": "success",
                 "format": "summary",
                 "context": summary,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
 
         return {
             "status": "success",
             "format": "json",
             "context": context,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
     except Exception as e:
         logger.error("Error getting system context: %s", e)
@@ -170,7 +170,7 @@ async def get_capabilities_summary():
         return {
             "status": "success",
             "capabilities": capabilities_info,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
     except Exception as e:
         logger.error("Error getting capabilities summary: %s", e)
@@ -209,7 +209,7 @@ async def inject_awareness_context(request: PromptInjectionRequest):
             "original_prompt": request.prompt,
             "enhanced_prompt": enhanced_prompt,
             "context_level": request.context_level,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
     except Exception as e:
         logger.error("Error injecting context: %s", e)
@@ -233,7 +233,7 @@ async def analyze_query_with_awareness(request: QueryAnalysisRequest):
         return {
             "status": "success",
             "analysis": analysis,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
     except Exception as e:
         logger.error("Error analyzing query: %s", e)
@@ -256,7 +256,7 @@ async def get_capability_summary_text():
             "status": "success",
             "summary": summary,
             "format": "markdown",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
     except Exception as e:
         logger.error("Error creating summary: %s", e)
@@ -287,7 +287,7 @@ async def get_phase_information():
         return {
             "status": "success",
             "phase_info": phase_info,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
     except Exception as e:
         logger.error("Error getting phase information: %s", e)
@@ -312,7 +312,7 @@ async def get_awareness_metrics():
             "cache_info": {
                 "cache_active": awareness._context_cache is not None,
                 "cache_age_seconds": (
-                    (datetime.now() - awareness._cache_timestamp).seconds
+                    (datetime.now(tz=timezone.utc) - awareness._cache_timestamp).seconds
                     if awareness._cache_timestamp
                     else None
                 ),
@@ -327,7 +327,7 @@ async def get_awareness_metrics():
         return {
             "status": "success",
             "metrics": metrics,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
     except Exception as e:
         logger.error("Error getting awareness metrics: %s", e)
@@ -356,7 +356,7 @@ async def export_awareness_data(
             "message": "Awareness data exported successfully",
             "output_path": output_path,
             "format": format,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
     except Exception as e:
         logger.error("Error exporting awareness data: %s", e)
@@ -395,7 +395,7 @@ async def llm_awareness_health():
             "components": health_status,
             "system_maturity": context["system_identity"]["system_maturity"],
             "capabilities_count": context["current_capabilities"]["count"],
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
     except Exception as e:
         logger.error("LLM awareness health check failed: %s", e)

@@ -8,7 +8,7 @@ Provides endpoints for managing web research configuration and preferences.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
@@ -79,7 +79,7 @@ async def get_research_status():
                 "health": health_status,
                 "circuit_breakers": circuit_status,
                 "cache_stats": cache_stats,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 
@@ -91,7 +91,7 @@ async def get_research_status():
                 "status": "error",
                 "enabled": False,
                 "message": "Web research not available",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 
@@ -131,7 +131,7 @@ async def enable_web_research():
                     "status": "success",
                     "message": "Web research enabled successfully",
                     "enabled": True,
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 },
             )
         else:
@@ -141,7 +141,7 @@ async def enable_web_research():
                     "status": "error",
                     "message": "Failed to enable web research",
                     "enabled": False,
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 },
             )
 
@@ -185,7 +185,7 @@ async def disable_web_research():
                     "status": "success",
                     "message": "Web research disabled successfully",
                     "enabled": False,
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 },
             )
         else:
@@ -195,7 +195,7 @@ async def disable_web_research():
                     "status": "error",
                     "message": "Failed to disable web research",
                     "enabled": True,
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 },
             )
 
@@ -247,7 +247,7 @@ async def get_research_settings():
             content={
                 "status": "success",
                 "settings": settings,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 
@@ -307,7 +307,7 @@ async def update_research_settings(settings: WebResearchSettings):
                 "status": "success",
                 "message": "Web research settings updated successfully",
                 "settings": settings.dict(),
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 
@@ -344,7 +344,7 @@ async def test_web_research(query: str = "test query"):
                 "status": "success",
                 "test_query": query,
                 "result": result,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 
@@ -356,7 +356,7 @@ async def test_web_research(query: str = "test query"):
                 "status": "error",
                 "test_query": query,
                 "error": "Internal server error",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 
@@ -386,7 +386,7 @@ async def clear_research_cache():
             content={
                 "status": "success",
                 "message": "Research cache cleared successfully",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 
@@ -420,7 +420,7 @@ async def reset_circuit_breakers():
             content={
                 "status": "success",
                 "message": "Circuit breakers reset successfully",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 
@@ -462,7 +462,7 @@ async def get_usage_stats():
             content={
                 "status": "success",
                 "stats": stats,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 

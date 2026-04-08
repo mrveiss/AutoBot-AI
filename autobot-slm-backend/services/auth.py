@@ -8,17 +8,15 @@ JWT-based authentication and user management.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Optional
 
-import bcrypt
-import jwt
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jwt.exceptions import InvalidTokenError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.auth.jwt_core import decode_jwt_or_none, encode_jwt, hash_password
 from config import settings
 from models.schemas import TokenResponse, UserCreate, UserResponse
 from user_management.models.user import User
@@ -31,37 +29,24 @@ security = HTTPBearer()
 class AuthService:
     """Handles authentication and authorization."""
 
-    def __init__(self):
-        self.algorithm = "HS256"
-
     def hash_password(self, password: str) -> str:
         """Hash a password."""
-        return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        return hash_password(password)
 
     def create_access_token(
         self, data: dict, expires_delta: Optional[timedelta] = None
     ) -> str:
         """Create a JWT access token."""
-        to_encode = data.copy()
-        if expires_delta:
-            expire = datetime.utcnow() + expires_delta
-        else:
-            expire = datetime.utcnow() + timedelta(
-                minutes=settings.access_token_expire_minutes
-            )
-        to_encode.update({"exp": expire})
-        return jwt.encode(to_encode, settings.secret_key, algorithm=self.algorithm)
+        default_delta = timedelta(minutes=settings.access_token_expire_minutes)
+        return encode_jwt(
+            data,
+            secret=settings.secret_key,
+            expires_delta=expires_delta if expires_delta is not None else default_delta,
+        )
 
     def decode_token(self, token: str) -> Optional[dict]:
         """Decode and validate a JWT token."""
-        try:
-            payload = jwt.decode(
-                token, settings.secret_key, algorithms=[self.algorithm]
-            )
-            return payload
-        except InvalidTokenError as e:
-            logger.warning("JWT decode error: %s", e)
-            return None
+        return decode_jwt_or_none(token, settings.secret_key)
 
     async def create_user(
         self, db: AsyncSession, user_data: UserCreate

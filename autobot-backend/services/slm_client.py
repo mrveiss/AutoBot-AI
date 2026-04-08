@@ -34,14 +34,33 @@ import websockets
 from websockets.exceptions import ConnectionClosed, WebSocketException
 
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+from constants.ttl_constants import TTL_5_MINUTES
 
 logger = logging.getLogger(__name__)
 
-# SLM server URL from environment (no hardcoded fallback per SSOT requirements)
-# Set SLM_URL environment variable or SLM client will be unavailable
-DEFAULT_SLM_URL = os.getenv("SLM_URL")
-if not DEFAULT_SLM_URL:
-    logger.warning("SLM_URL not set - SLM client will be unavailable until configured")
+# SLM server URL from environment.  On co-located deployments (backend and SLM
+# share the same host) the env var is often not set, so default to localhost.
+# An explicit env var always wins.
+_COLOCATED_DEFAULT = "http://127.0.0.1:8000"
+DEFAULT_SLM_URL: str = os.getenv("SLM_URL") or _COLOCATED_DEFAULT
+
+# Warn at most once per process — the module is imported by several packages
+# simultaneously, which previously caused the same warning to fire 3×.
+_slm_url_warned: bool = False
+
+
+def _warn_slm_url_once(url: str) -> None:
+    """Emit the SLM_URL diagnostic warning exactly once per process."""
+    global _slm_url_warned
+    if _slm_url_warned:
+        return
+    _slm_url_warned = True
+    if not os.getenv("SLM_URL"):
+        logger.warning(
+            "SLM_URL not set — defaulting to co-located address %s. "
+            "Set SLM_URL explicitly for non-co-located deployments.",
+            url,
+        )
 
 # Ultimate fallback configuration (uses env vars where available)
 ULTIMATE_FALLBACK_CONFIG = {
@@ -156,7 +175,7 @@ ENV_VAR_MAP = {
 class AgentConfigCache:
     """In-memory cache for agent configurations with TTL."""
 
-    def __init__(self, ttl_seconds: int = 300):
+    def __init__(self, ttl_seconds: int = TTL_5_MINUTES):
         """
         Initialize cache with specified TTL.
 
@@ -253,7 +272,7 @@ class SLMClient:
         self,
         slm_url: str = DEFAULT_SLM_URL,
         auth_token: Optional[str] = None,
-        cache_ttl: int = 300,
+        cache_ttl: int = TTL_5_MINUTES,
     ):
         """
         Initialize SLM client.
@@ -612,7 +631,7 @@ def get_slm_client() -> Optional[SLMClient]:
 async def init_slm_client(
     slm_url: str = DEFAULT_SLM_URL,
     auth_token: Optional[str] = None,
-    cache_ttl: int = 300,
+    cache_ttl: int = TTL_5_MINUTES,
 ) -> SLMClient:
     """
     Initialize global SLM client.
@@ -626,6 +645,8 @@ async def init_slm_client(
         Initialized SLMClient instance
     """
     global _slm_client
+
+    _warn_slm_url_once(slm_url)
 
     if _slm_client:
         logger.warning("SLM client already initialized, disconnecting old instance")

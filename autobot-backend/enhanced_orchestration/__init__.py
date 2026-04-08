@@ -13,6 +13,13 @@ Provides advanced orchestration system with improved agent coordination.
 """
 
 from .execution_strategies import ExecutionStrategyHandler
+from .success_criteria import (
+    CriteriaResult,
+    EvaluationResult,
+    SuccessCriteria,
+    SuccessCriteriaEvaluator,
+    SuccessCriteriaType,
+)
 from .types import (
     FALLBACK_TIERS,
     AgentCapability,
@@ -35,4 +42,10 @@ __all__ = [
     "ExecutionStrategyHandler",
     # Workflow planner
     "WorkflowPlanner",
+    # Issue #3293: success criteria
+    "SuccessCriteriaType",
+    "SuccessCriteria",
+    "CriteriaResult",
+    "EvaluationResult",
+    "SuccessCriteriaEvaluator",
 ]

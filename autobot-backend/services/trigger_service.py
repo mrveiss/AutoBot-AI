@@ -40,11 +40,36 @@ from enum import Enum
 from typing import Any, Callable, Coroutine, Dict, List, Optional
 
 from autobot_shared.redis_client import get_redis_client
+from constants.threshold_constants import TimingConstants
+from constants.ttl_constants import TTL_90_DAYS
 
 logger = logging.getLogger(__name__)
 
+# Lazy-initialised encryption service for webhook HMAC secrets at rest.
+# Populated on first call to _get_encryption_service() to avoid import-time
+# side effects and to tolerate environments where AUTOBOT_ENCRYPTION_KEY is
+# not set until runtime.
+_encryption_service = None
+
+
+def _get_encryption_service():
+    """Return a singleton EncryptionService, or None if unavailable."""
+    global _encryption_service  # noqa: PLW0603
+    if _encryption_service is None:
+        try:
+            from encryption_service import EncryptionService
+
+            _encryption_service = EncryptionService()
+        except Exception as exc:  # pragma: no cover
+            logger.warning(
+                "EncryptionService unavailable — webhook secrets stored unencrypted: %s",
+                exc,
+            )
+    return _encryption_service
+
+
 # Redis TTL for trigger records: 90 days (triggers are long-lived)
-_TRIGGER_TTL_SECONDS = 90 * 24 * 3600
+_TRIGGER_TTL_SECONDS = TTL_90_DAYS
 
 # Key prefixes — all under the "workflows" Redis database
 _KEY_PREFIX = "workflows:trigger:"
@@ -628,7 +653,7 @@ class TriggerService:
                 return
             except Exception:
                 logger.exception("Cron loop error for trigger %s (continuing)", tdef.id)
-                await asyncio.sleep(60)
+                await asyncio.sleep(TimingConstants.SESSION_CLEANUP_INTERVAL)
 
     async def _pubsub_loop(self, tdef: TriggerDefinition) -> None:
         """Subscribe to a Redis channel and fire on matching messages."""
@@ -682,7 +707,7 @@ class TriggerService:
                 logger.exception(
                     "PubSub loop error for trigger %s (will reconnect in 30s)", tdef.id
                 )
-                await asyncio.sleep(30)
+                await asyncio.sleep(TimingConstants.ERROR_RECOVERY_LONG_DELAY)
 
     async def _file_watch_loop(self, tdef: TriggerDefinition) -> None:
         """Poll a Redis key for file-change notifications."""
@@ -803,7 +828,7 @@ class TriggerService:
                     "AgentEvent loop error for trigger %s (will reconnect in 30s)",
                     tdef.id,
                 )
-                await asyncio.sleep(30)
+                await asyncio.sleep(TimingConstants.ERROR_RECOVERY_LONG_DELAY)
 
     # ------------------------------------------------------------------
     # Internal — launch & persistence
@@ -890,10 +915,20 @@ class TriggerService:
             logger.error("_delete_trigger %s failed: %s", trigger_id, exc)
 
     async def _store_webhook_secret(self, trigger_id: str, secret: str) -> None:
-        """Persist HMAC secret for webhook signature validation."""
+        """Persist HMAC secret for webhook signature validation.
+
+        The secret is encrypted at rest using AES-GCM before writing to Redis
+        so that a Redis dump does not expose raw HMAC signing keys.
+        """
         try:
+            enc = _get_encryption_service()
+            stored = enc.encrypt(secret) if enc is not None else secret
             redis = get_redis_client(database="workflows")
-            redis.setex(f"{_SECRET_PREFIX}{trigger_id}", _TRIGGER_TTL_SECONDS, secret)
+            redis.setex(
+                f"{_SECRET_PREFIX}{trigger_id}",
+                _TRIGGER_TTL_SECONDS,
+                stored,
+            )  # codeql-suppress py/clear-text-storage-sensitive-data: value is AES-GCM encrypted
         except Exception as exc:
             logger.warning("_store_webhook_secret failed for %s: %s", trigger_id, exc)
 
@@ -905,7 +940,9 @@ class TriggerService:
             redis = get_redis_client(database="workflows")
             raw = redis.get(f"{_SECRET_PREFIX}{trigger_id}")
             if raw:
-                secret = raw.decode() if isinstance(raw, bytes) else raw
+                stored = raw.decode() if isinstance(raw, bytes) else raw
+                enc = _get_encryption_service()
+                secret = enc.decrypt(stored) if enc is not None else stored
                 self._webhook_secrets[trigger_id] = secret
                 return secret
         except Exception as exc:

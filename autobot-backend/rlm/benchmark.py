@@ -28,6 +28,7 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL, config as _ssot_config
 from rlm.evaluator import ResponseQualityEvaluator
 from rlm.types import RLMConfig
 
@@ -134,10 +135,10 @@ class BenchmarkSummary:
 
 async def _generate(
     prompt: str,
-    model: str = "llama3.2:latest",
+    model: str = DEFAULT_LLM_MODEL,
     temperature: float = 0.5,
     max_tokens: int = 1024,
-    timeout_s: float = 30.0,
+    timeout_s: float = _ssot_config.timeout.default_request,
 ) -> str:
     """Call Ollama generate and return the raw text."""
     from autobot_shared.ssot_config import get_config
@@ -246,7 +247,7 @@ async def _run_rlm_pass(
 
 async def run_benchmark(
     queries: Optional[List[Dict[str, Any]]] = None,
-    model: str = "llama3.2:latest",
+    model: str = DEFAULT_LLM_MODEL,
     rlm_config: Optional[RLMConfig] = None,
     max_queries: int = 0,
 ) -> Dict[str, Any]:
@@ -353,7 +354,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--model",
-        default="llama3.2:latest",
+        default=DEFAULT_LLM_MODEL,
         help="Ollama model",
     )
     parser.add_argument(

@@ -15,7 +15,8 @@ from typing import Any, Dict, Optional
 
 import aiofiles
 import yaml
-from tenacity import retry, stop_after_attempt, wait_exponential
+
+from retry_mechanism import RetryConfig, RetryStrategy, with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -148,9 +149,8 @@ class AsyncOperationsMixin:
         except Exception as e:
             logger.debug("Failed to save %s to Redis cache: %s", config_type, e)
 
-    @retry(
-        stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=5)
-    )
+    @with_retry(RetryConfig(max_attempts=3, base_delay=1.0, max_delay=5.0,
+                            strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
     async def _read_file_async(self, file_path: Path) -> Optional[Dict[str, Any]]:
         """Read config file asynchronously with retry"""
         # Issue #358 - avoid blocking
@@ -177,9 +177,8 @@ class AsyncOperationsMixin:
             logger.error("Failed to parse config file %s: %s", file_path, e)
             raise
 
-    @retry(
-        stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=5)
-    )
+    @with_retry(RetryConfig(max_attempts=3, base_delay=1.0, max_delay=5.0,
+                            strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
     async def _write_file_async(self, file_path: Path, data: Dict[str, Any]) -> None:
         """Write config file asynchronously with retry"""
         try:

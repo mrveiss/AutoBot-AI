@@ -332,6 +332,7 @@ import { useRoute } from 'vue-router'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 import { escapeHtml } from '@/utils/sanitize'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('CodeGenerationDashboard')
 
@@ -488,7 +489,7 @@ const generateCode = async () => {
   result.value = null
 
   try {
-    const response = await fetchWithAuth('/api/code-generation/generate', {
+    const response = await fetchWithAuth(`${getApiBase()}/code-generation/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(generateRequest.value)
@@ -516,7 +517,7 @@ const refactorCode = async () => {
   result.value = null
 
   try {
-    const response = await fetchWithAuth('/api/code-generation/refactor', {
+    const response = await fetchWithAuth(`${getApiBase()}/code-generation/refactor`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(refactorRequest.value)
@@ -541,7 +542,7 @@ const refactorCode = async () => {
 
 const validateCodeSubmit = async () => {
   try {
-    const response = await fetchWithAuth('/api/code-generation/validate', {
+    const response = await fetchWithAuth(`${getApiBase()}/code-generation/validate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -561,7 +562,7 @@ const validateCodeSubmit = async () => {
 const fetchStats = async () => {
   try {
     // Issue #3436: scope to project when sourceId is present
-    const response = await fetchWithAuth(withSourceId('/api/code-generation/stats'))
+    const response = await fetchWithAuth(withSourceId(`${getApiBase()}/code-generation/stats`))
     if (response.ok) {
       const data = await response.json()
       stats.value = data
@@ -573,7 +574,7 @@ const fetchStats = async () => {
 
 const fetchRefactoringTypes = async () => {
   try {
-    const response = await fetchWithAuth('/api/code-generation/refactoring-types')
+    const response = await fetchWithAuth(`${getApiBase()}/code-generation/refactoring-types`)
     if (response.ok) {
       const data = await response.json()
       refactoringTypes.value = data.types

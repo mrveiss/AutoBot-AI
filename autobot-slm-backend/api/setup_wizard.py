@@ -25,9 +25,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from api.websocket import ws_manager
+from services.ansible_secrets import fetch_deploy_secrets
 from services.auth import get_current_user
 from services.database import db_service
-from services.encryption import decrypt_data
 from services.playbook_executor import get_playbook_executor
 
 logger = logging.getLogger(__name__)
@@ -136,21 +136,40 @@ def _build_inventory_children(
 
 # Role name -> (variable_name, port) for infrastructure service discovery.
 # Maps active roles to the Ansible vars that templates expect (#1431).
+# Ports are INTERNAL service ports (uvicorn/service listen ports), not the
+# external nginx TLS port (8443).  Co-located nodes use 127.0.0.1 so uvicorn
+# binds to loopback; nginx already holds 8443 on the same host (#3426).
 _ROLE_INFRA_VARS: dict[str, tuple[str, int]] = {
-    "backend": ("backend_host", 8443),
+    "backend": ("backend_host", 8001),  # uvicorn internal port (#3426: was 8443)
     "redis": ("redis_host", 6379),
     "frontend": ("frontend_host", 5173),
     "ai-stack": ("ai_stack_host", 8080),
     "npu-worker": ("npu_worker_host", 8081),
     "browser-service": ("browser_host", 3000),
+    "tts-worker": (
+        "tts_host",
+        8083,
+    ),  # Issue #3431: 8082 is WSL2/Hyper-V reserved (Windows NPU)
 }
+
+# ChromaDB runs on the AI stack VM but is NOT a separately-routed role, so it
+# has no entry in _ROLE_INFRA_VARS.  This constant must match chromadb_port in
+# ansible/roles/ai-stack/defaults/main.yml and backend_chromadb_port in
+# ansible/roles/backend/defaults/main.yml (#3526).
+_CHROMADB_PORT = 8100
 
 
 def _build_infra_vars(
     node_roles: list,
     node_id_to_ip: dict[str, str],
+    local_ips: set | None = None,
 ) -> dict:
-    """Derive infrastructure discovery vars from active role assignments (#1431)."""
+    """Derive infrastructure discovery vars from active role assignments (#1431).
+
+    For co-located services (node IP in local_ips), uses 127.0.0.1 so that
+    uvicorn and other daemons bind to loopback rather than an external
+    interface that nginx may already hold (#3426).
+    """
     infra_vars: dict = {}
     for nr in node_roles:
         mapping = _ROLE_INFRA_VARS.get(nr.role_name)
@@ -161,42 +180,12 @@ def _build_infra_vars(
             continue
         host_var, port = mapping
         if host_var not in infra_vars:
-            infra_vars[host_var] = ip
+            # Co-located: use loopback so services bind correctly on the SLM host.
+            resolved = "127.0.0.1" if (local_ips and ip in local_ips) else ip
+            infra_vars[host_var] = resolved
             infra_vars[host_var.replace("_host", "_port")] = port
     return infra_vars
 
-
-# -- Secret key -> Ansible variable name mapping (#3079) --------------------
-
-_SECRET_TO_ANSIBLE_VAR: dict[str, str] = {
-    "hf_token": "tts_hf_token",
-}
-
-
-async def _fetch_provision_secrets() -> dict[str, str]:
-    """Read stored secrets and map them to Ansible extra_vars (#3079)."""
-    from sqlalchemy import select
-
-    from models.database import SystemSecret
-
-    extra: dict[str, str] = {}
-    try:
-        async with db_service.session() as session:
-            result = await session.execute(
-                select(SystemSecret).where(
-                    SystemSecret.key.in_(list(_SECRET_TO_ANSIBLE_VAR.keys()))
-                )
-            )
-            for secret in result.scalars().all():
-                ansible_var = _SECRET_TO_ANSIBLE_VAR.get(secret.key)
-                if not ansible_var:
-                    continue
-                value = decrypt_data(secret.encrypted_value)
-                if value:
-                    extra[ansible_var] = value
-    except Exception:
-        logger.exception("Failed to load provision secrets")
-    return extra
 
 
 def _build_host_entries(
@@ -272,9 +261,14 @@ def _apply_colocation_vars(
     frontend at / and SLM at /slm/ (#2829).  When backend is co-located too,
     sets frontend_backend_port=8001 and frontend_backend_protocol=http so
     templates proxy directly to uvicorn, eliminating the double-proxy.
+
+    Also propagates slm_colocated_frontend=True to the 00-SLM-Manager host
+    entry so Phase 4c in provision-fleet-roles.yml can rebuild the SLM
+    frontend with VITE_API_URL=/slm (#3426).
     """
     _frontend_roles = {"frontend", "autobot-frontend"}
     _backend_roles = {"backend", "autobot-backend"}
+    colocated_frontend_detected = False
     for node in db_nodes:
         inv_name = node.ansible_target
         if inv_name not in hosts:
@@ -285,10 +279,68 @@ def _apply_colocation_vars(
         is_local = node.ip_address in local_ips or node.node_id == "00-SLM-Manager"
         if is_local and roles & _frontend_roles:
             hosts[inv_name]["slm_colocated_frontend"] = True
+            colocated_frontend_detected = True
             if roles & _backend_roles:
                 hosts[inv_name]["frontend_backend_host"] = "127.0.0.1"
                 hosts[inv_name]["frontend_backend_port"] = 8001
                 hosts[inv_name]["frontend_backend_protocol"] = "http"
+
+    # Propagate to 00-SLM-Manager so Phase 4c can rebuild the SLM frontend
+    # with VITE_API_URL=/slm after the user frontend has been deployed (#3426).
+    if colocated_frontend_detected:
+        for node in db_nodes:
+            if node.node_id == "00-SLM-Manager" and node.ansible_target in hosts:
+                hosts[node.ansible_target]["slm_colocated_frontend"] = True
+                break
+
+
+def _inject_co_located_ai_stack(
+    hosts: dict[str, dict],
+    db_nodes: list,
+    fleet_has_ai_stack: bool,
+) -> list[str]:
+    """Auto-inject ai-stack onto backend nodes when no fleet node has it (#3461).
+
+    On single-host co-located deployments, users often assign backend/frontend/
+    redis but forget ai-stack (which deploys ChromaDB).  Without ChromaDB, the
+    knowledge base is permanently unhealthy.  When the full fleet has no ai-stack
+    assignment, silently add it to each backend node so Phase 5a runs the role.
+
+    In distributed setups where a dedicated AI stack VM already carries ai-stack,
+    fleet_has_ai_stack is True and this function is a no-op.
+
+    Returns the list of inventory names onto which ai-stack was injected so the
+    caller can patch infra_vars without a second DB query (#3515).
+    """
+    if fleet_has_ai_stack:
+        return []
+
+    _ai_stack_roles = {"ai-stack", "autobot-ai-stack"}
+    _backend_roles = {"backend", "autobot-backend"}
+    injected: list[str] = []
+
+    for node in db_nodes:
+        inv_name = node.ansible_target
+        if inv_name not in hosts:
+            continue
+        roles = hosts[inv_name].get("node_roles", [])
+        if not (_backend_roles & set(roles)):
+            continue
+        if _ai_stack_roles & set(roles):
+            continue
+        hosts[inv_name]["node_roles"] = list(roles) + ["ai-stack"]
+        # Co-located ai-stack shares the backend venv and symlinks owned by
+        # autobot:autobot.  Override the role's default ai_user/ai_group
+        # (autobot-ai) so the systemd service runs with the correct identity
+        # and avoids permission errors on startup (#3501).
+        hosts[inv_name]["ai_user"] = "autobot"
+        hosts[inv_name]["ai_group"] = "autobot"
+        injected.append(inv_name)
+        logger.info(
+            "Auto-injecting ai-stack onto %s (no dedicated AI stack node in fleet; #3461)",
+            inv_name,
+        )
+    return injected
 
 
 def _build_inventory_dict(
@@ -333,18 +385,22 @@ async def _fetch_inventory_data(
         list,
         list,
         dict[str, str],
+        set,
+        list[str],
     ]
 ]:
     """Load all DB data needed to build the Ansible inventory (#2823).
 
     Returns (db_nodes, hosts, node_id_to_hostname, node_id_to_ip,
-             all_node_roles, all_active, all_ip_map) or None when no nodes match.
+             all_node_roles, all_active, all_ip_map, local_ips,
+             injected_ai_stack) or None when no nodes match.
     """
     from sqlalchemy import select
 
     from autobot_shared.network_utils import get_local_ips
     from models.database import Node, NodeRole
 
+    injected_ai_stack: list[str] = []
     async with db_service.session() as session:
         query = select(Node)
         if node_ids:
@@ -369,6 +425,17 @@ async def _fetch_inventory_data(
         _apply_role_host_vars(hosts, db_nodes, all_node_roles)
         _apply_colocation_vars(hosts, db_nodes, local_ips)
 
+        # (#3461) Check full fleet for ai-stack assignment (independent of node_ids filter)
+        # so single-host setups get ChromaDB even if user forgot to assign ai-stack.
+        fleet_ai_q = select(NodeRole).where(
+            NodeRole.status.in_(["active", "inactive", "not_installed"]),
+            NodeRole.role_name.in_(["ai-stack", "autobot-ai-stack"]),
+        )
+        fleet_ai_stack = (await session.execute(fleet_ai_q)).scalars().all()
+        injected_ai_stack = _inject_co_located_ai_stack(
+            hosts, db_nodes, fleet_has_ai_stack=len(fleet_ai_stack) > 0
+        )
+
         # Fetch ALL active roles for infra var derivation (#1431)
         if node_ids:
             all_nodes = (await session.execute(select(Node))).scalars().all()
@@ -387,6 +454,8 @@ async def _fetch_inventory_data(
         all_node_roles,
         all_active,
         all_ip_map,
+        local_ips,
+        injected_ai_stack,
     )
 
 
@@ -411,11 +480,27 @@ async def _generate_dynamic_inventory(
         all_node_roles,
         all_active,
         all_ip_map,
+        local_ips,
+        injected_ai_stack,
     ) = result
     children, ansible_groups = _build_inventory_children(
         hosts, all_node_roles, node_id_to_hostname
     )
-    infra_vars = _build_infra_vars(all_active, all_ip_map)
+    infra_vars = _build_infra_vars(all_active, all_ip_map, local_ips)
+    # For co-located ai-stack (injected, no dedicated AI stack VM), _build_infra_vars
+    # never sees the injected role because it reads from DB node_roles, not the
+    # in-memory hosts dict.  Explicitly populate ai_stack_host/port so templates
+    # that reference {{ ai_stack_host }} resolve correctly (#3515).
+    if injected_ai_stack and "ai_stack_host" not in infra_vars:
+        infra_vars["ai_stack_host"] = "127.0.0.1"
+        infra_vars["ai_stack_port"] = _ROLE_INFRA_VARS["ai-stack"][1]
+    # Auto-derive backend_chromadb_host from ai_stack_host for fleet deployments (#3523).
+    # In co-located setups ai_stack_host is 127.0.0.1 (correct); in fleet setups it
+    # is the AI stack node IP (also correct).  backend_chromadb_host in role defaults
+    # is always 127.0.0.1 and has no knowledge of fleet topology.
+    if "ai_stack_host" in infra_vars and "backend_chromadb_host" not in infra_vars:
+        infra_vars["backend_chromadb_host"] = infra_vars["ai_stack_host"]
+        infra_vars["backend_chromadb_port"] = _CHROMADB_PORT
     inventory = _build_inventory_dict(hosts, children, infra_vars)
 
     fd, path = tempfile.mkstemp(suffix=".yml", prefix="wizard-inventory-")
@@ -833,8 +918,8 @@ async def _run_provisioning_task(
                 )
                 await ws_manager.send_provision_status("running", stage, elapsed)
 
-        # Issue #3079: Pass stored secrets as Ansible extra_vars
-        extra_vars = await _fetch_provision_secrets()
+        # Issue #3079: Pass stored secrets as Ansible extra_vars (#3778)
+        extra_vars = await fetch_deploy_secrets()
 
         result = await executor.execute_playbook(
             playbook_name="playbooks/provision-fleet-roles.yml",

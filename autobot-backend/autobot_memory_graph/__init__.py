@@ -16,6 +16,7 @@ Package Structure:
 - relations.py: Relationship management and traversal
 - queries.py: Search and query operations
 - user_session.py: User-centric session tracking (Issue #608)
+- property_graph.py: Queryable property graph with typed edges (#3230)
 
 Key Features:
 - Entity management (conversations, bugs, features, decisions, tasks)
@@ -43,10 +44,20 @@ from .entities import EntityOperationsMixin
 from .queries import QueryOperationsMixin
 from .relations import RelationOperationsMixin
 from .secrets import SecretManagementMixin
+from .semantic_search import (  # noqa: F401
+    HybridScorer,
+    MemoryGraphQueryProcessor,
+    QueryIntent,
+    SearchResult,
+    ensure_indexes,
+)
 from .user_session import UserSessionMixin
+from .property_graph import PropertyGraph  # noqa: F401  # Issue #3230
+from .property_graph_mixin import PropertyGraphMixin  # noqa: F401  # Issue #3230
 
 
 class AutoBotMemoryGraph(
+    PropertyGraphMixin,
     EntityOperationsMixin,
     RelationOperationsMixin,
     QueryOperationsMixin,
@@ -110,6 +121,8 @@ class AutoBotMemoryGraph(
 __all__ = [
     # Main class
     "AutoBotMemoryGraph",
+    # Property graph (#3230)
+    "PropertyGraph",
     # Core class (for advanced usage)
     "AutoBotMemoryGraphCore",
     # Constants
@@ -124,4 +137,11 @@ __all__ = [
     "QueryOperationsMixin",
     "UserSessionMixin",
     "SecretManagementMixin",
+    "PropertyGraphMixin",
+    # Semantic search (#3612)
+    "MemoryGraphQueryProcessor",
+    "HybridScorer",
+    "SearchResult",
+    "QueryIntent",
+    "ensure_indexes",
 ]

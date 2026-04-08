@@ -11,12 +11,13 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import aiofiles
 
+from constants.ttl_constants import TTL_5_MINUTES
 from enhanced_project_state_tracker import get_state_tracker
 from phase_progression_manager import get_progression_manager
 from project_state_manager import get_project_state_manager
@@ -48,7 +49,7 @@ class LLMSelfAwareness:
         # Cache for system context
         self._context_cache = None
         self._cache_timestamp = None
-        self._cache_ttl = 300  # 5 minutes
+        self._cache_ttl = TTL_5_MINUTES
 
         logger.info("LLM Self-Awareness module initialized")
 
@@ -60,7 +61,7 @@ class LLMSelfAwareness:
         """
         if not self._context_cache or not self._cache_timestamp:
             return False
-        return (datetime.now() - self._cache_timestamp).seconds < self._cache_ttl
+        return (datetime.now(tz=timezone.utc) - self._cache_timestamp).seconds < self._cache_ttl
 
     def _build_system_identity(
         self, project_status: Dict[str, Any], capabilities: Dict[str, Any]
@@ -148,7 +149,7 @@ class LLMSelfAwareness:
         Issue #620.
         """
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "environment": os.getenv("AUTOBOT_ENVIRONMENT", "production"),
             "api_endpoints_available": self._get_available_endpoints(),
             "data_sources": [
@@ -219,7 +220,7 @@ class LLMSelfAwareness:
                 self._add_detailed_context(context, state_summary)
 
             self._context_cache = context
-            self._cache_timestamp = datetime.now()
+            self._cache_timestamp = datetime.now(tz=timezone.utc)
             return context
 
         except Exception as e:
@@ -498,7 +499,7 @@ You should be aware of your current capabilities and limitations based on the sy
 
             summary = []
             summary.append("# AutoBot Capability Summary")
-            summary.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            summary.append(f"Generated: {datetime.now(tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}")
             summary.append("")
             summary.append(f"**System Maturity**: {capabilities['system_maturity']}%")
             summary.append(
@@ -631,7 +632,7 @@ You should be aware of your current capabilities and limitations based on the sy
     async def export_awareness_data(self, output_path: Optional[str] = None) -> str:
         """Export system awareness data for analysis"""
         if not output_path:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
             output_path = f"data/reports/awareness/system_awareness_{timestamp}.json"
 
         # Ensure directory exists
@@ -646,7 +647,7 @@ You should be aware of your current capabilities and limitations based on the sy
         # Add additional metadata
         export_data = {
             "export_metadata": {
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "version": "1.0.0",
                 "type": "system_awareness_export",
             },

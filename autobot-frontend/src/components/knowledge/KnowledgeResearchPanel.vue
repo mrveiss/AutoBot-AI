@@ -16,11 +16,14 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ApiClient from '@/utils/ApiClient'
-import { getBackendWsUrl } from '@/config/ssot-config'
+import { getBackendWsUrl, getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import InteractiveScreenshot from '@/components/browser/InteractiveScreenshot.vue'
+import { useUserStore } from '@/stores/useUserStore'
+import { useWebSocket } from '@/composables/useWebSocket'
 
 const logger = createLogger('KnowledgeResearchPanel')
+const userStore = useUserStore()
 
 const { t } = useI18n()
 
@@ -38,7 +41,42 @@ const viewportWidth = ref(1280)
 const viewportHeight = ref(720)
 
 let screenshotInterval: ReturnType<typeof setInterval> | null = null
-let ws: WebSocket | null = null
+
+// Research WebSocket URL — set dynamically when research starts
+const researchWsUrl = ref('')
+const {
+  send: wsSend,
+  connect: wsConnect,
+  disconnect: wsDisconnect,
+} = useWebSocket(researchWsUrl, {
+  autoConnect: false,
+  autoReconnect: false,
+  parseJSON: false,
+  onOpen: () => {
+    statusText.value = t('knowledge.research.statusStarting')
+    wsSend(JSON.stringify({ action: 'start', query: query.value.trim(), store: true }))
+  },
+  onMessage: (data: string) => {
+    try {
+      _handleEvent(JSON.parse(data) as Record<string, unknown>)
+    } catch (e) {
+      logger.warn('Failed to parse WS message:', e)
+    }
+  },
+  onError: () => {
+    logger.error('Research WS error')
+    errorMsg.value = t('knowledge.research.errorWebSocket')
+    isResearching.value = false
+    stopScreenshotPolling()
+  },
+  onClose: () => {
+    if (isResearching.value) {
+      isResearching.value = false
+      stopScreenshotPolling()
+      statusText.value = t('knowledge.research.statusDisconnected')
+    }
+  },
+})
 
 interface SourceCard {
   url: string
@@ -56,7 +94,7 @@ const sources = ref<SourceCard[]>([])
 
 async function checkBrowserStatus(): Promise<void> {
   try {
-    const data = await ApiClient.get('/api/playwright/worker-status') as Record<string, unknown>
+    const data = await ApiClient.get(`${getApiBase()}/playwright/worker-status`) as Record<string, unknown>
     browserConnected.value = data.status === 'connected' || data.browser_connected === true
   } catch (e) {
     logger.warn('Browser status check failed:', e)
@@ -68,7 +106,7 @@ async function fetchScreenshot(): Promise<void> {
   if (screenshotLoading.value) return
   screenshotLoading.value = true
   try {
-    const data = await ApiClient.post('/api/playwright/worker-screenshot', {}) as Record<string, unknown>
+    const data = await ApiClient.post(`${getApiBase()}/playwright/worker-screenshot`, {}) as Record<string, unknown>
     if (data.screenshot) {
       screenshot.value = data.screenshot as string
       browserConnected.value = true
@@ -169,10 +207,7 @@ function _handleEvent(event: Record<string, unknown>): void {
 }
 
 function closeWs(): void {
-  if (ws) {
-    ws.close()
-    ws = null
-  }
+  wsDisconnect()
 }
 
 async function startResearch(): Promise<void> {
@@ -183,50 +218,15 @@ async function startResearch(): Promise<void> {
   sources.value = []
   isResearching.value = true
   statusText.value = t('knowledge.research.statusConnecting')
-  closeWs()
+  wsDisconnect()
 
   await checkBrowserStatus()
   startScreenshotPolling()
 
-  try {
-    const wsUrl = _buildWsUrl()
-    logger.info('Connecting research WS:', wsUrl)
-    ws = new WebSocket(wsUrl)
-
-    ws.onopen = () => {
-      statusText.value = t('knowledge.research.statusStarting')
-      ws!.send(JSON.stringify({ action: 'start', query: q, store: true }))
-    }
-
-    ws.onmessage = (msg) => {
-      try {
-        const data = JSON.parse(msg.data) as Record<string, unknown>
-        _handleEvent(data)
-      } catch (e) {
-        logger.warn('Failed to parse WS message:', e)
-      }
-    }
-
-    ws.onerror = (e) => {
-      logger.error('Research WS error:', e)
-      errorMsg.value = t('knowledge.research.errorWebSocket')
-      isResearching.value = false
-      stopScreenshotPolling()
-    }
-
-    ws.onclose = () => {
-      if (isResearching.value) {
-        isResearching.value = false
-        stopScreenshotPolling()
-        statusText.value = t('knowledge.research.statusDisconnected')
-      }
-    }
-  } catch (e) {
-    logger.error('Failed to open research WS:', e)
-    errorMsg.value = t('knowledge.research.errorConnect')
-    isResearching.value = false
-    stopScreenshotPolling()
-  }
+  const wsUrl = _buildWsUrl()
+  logger.info('Connecting research WS:', wsUrl)
+  researchWsUrl.value = wsUrl
+  wsConnect()
 }
 
 function stopResearch(): void {
@@ -242,20 +242,47 @@ function handleKeydown(event: KeyboardEvent): void {
 
 // ── Source card actions ────────────────────────────────────────────────────
 
+/**
+ * Emit a user-scoped annotation signal for the given source card.
+ *
+ * Issue #3240: accept/reject decisions are stored as RAG feedback events
+ * keyed by the authenticated user's ID so the retrieval learner can
+ * personalise future search results for each user independently.
+ */
+async function _emitAnnotationFeedback(
+  card: SourceCard,
+  decision: 'accepted' | 'rejected',
+): Promise<void> {
+  const userId = userStore.currentUser?.id ?? null
+  try {
+    await ApiClient.post(`${getApiBase()}/knowledge_base/rag-feedback`, {
+      source_url: card.url,
+      title: card.title,
+      query: query.value,
+      decision,
+      user_id: userId,
+    })
+  } catch (e) {
+    logger.warn('RAG feedback emit failed (non-critical):', e)
+  }
+}
+
 async function acceptSource(card: SourceCard): Promise<void> {
   card.decision = 'accepted'
   try {
-    await ApiClient.post('/api/knowledge/verification/approve', {
+    await ApiClient.post(`${getApiBase()}/knowledge/verification/approve`, {
       source_url: card.url,
       title: card.title,
     })
   } catch (e) {
     logger.warn('Accept source API call failed (non-critical):', e)
   }
+  await _emitAnnotationFeedback(card, 'accepted')
 }
 
-function rejectSource(card: SourceCard): void {
+async function rejectSource(card: SourceCard): Promise<void> {
   card.decision = 'rejected'
+  await _emitAnnotationFeedback(card, 'rejected')
 }
 
 // ── Interactive browser control (#1416) ──────────────────────────────────
@@ -264,7 +291,7 @@ async function handleInteract(payload: { action: string; params: Record<string, 
   if (screenshotLoading.value) return
   screenshotLoading.value = true
   try {
-    const result = await ApiClient.post('/api/playwright/interact', {
+    const result = await ApiClient.post(`${getApiBase()}/playwright/interact`, {
       action: payload.action,
       ...payload.params,
     }) as Record<string, unknown>

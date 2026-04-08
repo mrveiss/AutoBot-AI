@@ -39,6 +39,13 @@ redis_tls_ca_cert: "{{ redis_tls_local_cert_dir }}/ca/ca-cert.pem"
 redis_tls_server_cert: "{{ redis_tls_local_cert_dir }}/redis/server-cert.pem"
 redis_tls_server_key: "{{ redis_tls_local_cert_dir }}/redis/server-key.pem"
 
+# File ownership enforcement (#3396)
+# User and group that own Redis data, config, log, and run directories.
+# Set to autobot:autobot so the application user has consistent read access
+# across all VMs; enforced idempotently on every Ansible run.
+redis_owner: "autobot"
+redis_group: "autobot"
+
 # Redis Exporter (Prometheus metrics)
 redis_exporter_version: "1.62.0"
 redis_exporter_port: 9121

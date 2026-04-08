@@ -115,7 +115,8 @@ import shlex
 import signal
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
@@ -134,6 +135,7 @@ from api.terminal_models import (
 )
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from constants.error_constants import ERR_SESSION_NOT_FOUND
 from services.simple_pty import simple_pty_manager
 
 # Import terminal secrets service for SSH key integration (Issue #211)
@@ -148,8 +150,136 @@ router = APIRouter(
 )
 
 
-# Import SSH terminal handlers for infrastructure host connections (Issue #715)
-from api.ssh_terminal_handlers import SSHTerminalWebSocket, ssh_terminal_manager
+# SSH terminal stub classes — previously in api/ssh_terminal_handlers.py.
+# Issue #729: SSH operations to infrastructure hosts are now handled by slm-server.
+# Issue #3383: Inlined here to eliminate the competing module.
+
+
+class SSHTerminalWebSocket:
+    """
+    Stub SSH terminal handler — redirects to SLM for infrastructure connections.
+
+    Issue #729: SSH connections to infrastructure hosts are now managed by slm-server.
+    This class provides a backward-compatible interface that returns a deprecation message.
+    """
+
+    def __init__(
+        self,
+        websocket: WebSocket,
+        session_id: str,
+        host_id: str,
+        conversation_id: Optional[str] = None,
+        redis_client=None,
+    ):
+        """Initialize SSH terminal handler stub."""
+        self.websocket = websocket
+        self.session_id = session_id
+        self.host_id = host_id
+        self.conversation_id = conversation_id
+        self.active = False
+        self.command_history: list = []
+        self.session_start_time = datetime.now(tz=timezone.utc)
+
+    async def start(self) -> bool:
+        """Start SSH terminal session — returns deprecation message."""
+        self.active = False
+        await self._send_error(
+            "SSH terminal connections to infrastructure hosts have been moved to SLM.\n"
+            "Please use slm-admin \u2192 Tools \u2192 Terminal to connect to infrastructure hosts,\n"
+            "or call the SLM API directly at: /api/terminal/ssh/{host_id}\n\n"
+            "This is part of the layer separation (#729) — infrastructure operations\n"
+            "are now managed exclusively by slm-server."
+        )
+        return False
+
+    async def cleanup(self) -> None:
+        """Clean up resources."""
+        self.active = False
+        logger.info("SSH terminal stub session cleaned up: %s", self.session_id)
+
+    async def send_message(self, message: dict) -> None:
+        """Send message to WebSocket client."""
+        try:
+            await self.websocket.send_text(json.dumps(message))
+        except Exception as e:
+            logger.error("Error sending message: %s", e)
+
+    async def _send_error(self, content: str) -> None:
+        """Send error message to client."""
+        await self.send_message(
+            {
+                "type": "error",
+                "content": content,
+                "timestamp": time.time(),
+                "redirect": {
+                    "type": "slm",
+                    "message": "Use SLM for infrastructure SSH connections",
+                    "url": "/api/terminal/ssh/{host_id}",
+                },
+            }
+        )
+
+    async def send_to_terminal(self, text: str) -> None:
+        """Send text input — not supported, redirects to SLM."""
+        await self._send_error(
+            "SSH terminal not available. Use SLM for infrastructure connections."
+        )
+
+    async def send_output(self, content: str) -> None:
+        """Send terminal output — stub."""
+
+    async def handle_message(self, message: dict) -> None:
+        """Handle incoming WebSocket message — returns deprecation notice."""
+        await self._send_error("SSH terminal moved to SLM server (#729)")
+
+
+class _SSHTerminalManager:
+    """Manager for SSH terminal sessions — stub implementation."""
+
+    def __init__(self) -> None:
+        """Initialize SSH terminal manager."""
+        self.active_sessions: Dict[str, SSHTerminalWebSocket] = {}
+        self._lock = asyncio.Lock()
+
+    async def add_session(self, session_id: str, terminal: SSHTerminalWebSocket) -> None:
+        """Add an SSH terminal session."""
+        async with self._lock:
+            self.active_sessions[session_id] = terminal
+
+    async def remove_session(self, session_id: str) -> None:
+        """Remove an SSH terminal session."""
+        async with self._lock:
+            self.active_sessions.pop(session_id, None)
+
+    async def get_session(self, session_id: str) -> Optional[SSHTerminalWebSocket]:
+        """Get an SSH terminal session."""
+        async with self._lock:
+            return self.active_sessions.get(session_id)
+
+    async def close_session(self, session_id: str) -> None:
+        """Close and clean up an SSH terminal session."""
+        terminal: Optional[SSHTerminalWebSocket] = None
+        async with self._lock:
+            terminal = self.active_sessions.get(session_id)
+        if terminal:
+            await terminal.cleanup()
+            await self.remove_session(session_id)
+
+    def list_sessions(self) -> Dict[str, Dict[str, Any]]:
+        """List all active SSH terminal sessions."""
+        return {
+            sid: {
+                "host_id": t.host_id,
+                "conversation_id": t.conversation_id,
+                "start_time": t.session_start_time.isoformat(),
+                "active": t.active,
+            }
+            for sid, t in self.active_sessions.items()
+        }
+
+
+ssh_terminal_manager = _SSHTerminalManager()
+
 
 # Import handler classes (extracted from this file - Issue #210)
 from api.terminal_handlers import ConsolidatedTerminalWebSocket, session_manager
@@ -193,7 +323,7 @@ async def create_terminal_session(
         "enable_logging": request.enable_logging,
         "enable_workflow_control": request.enable_workflow_control,
         "initial_directory": request.initial_directory,
-        "created_at": datetime.now().isoformat(),
+        "created_at": datetime.now(tz=timezone.utc).isoformat(),
     }
 
     # Store in session manager (you would use a proper store in production)
@@ -282,7 +412,7 @@ async def get_terminal_session(
     """
     config = session_manager.session_configs.get(session_id)
     if not config:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
     is_active = session_manager.has_connection(session_id)
 
@@ -316,7 +446,7 @@ async def delete_terminal_session(
     """
     config = session_manager.session_configs.get(session_id)
     if not config:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
     # Close WebSocket connection if active
     if session_manager.has_connection(session_id):
@@ -367,7 +497,7 @@ async def setup_ssh_keys(
     """
     config = session_manager.session_configs.get(session_id)
     if not config:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
     try:
         terminal_secrets = get_terminal_secrets_service()
@@ -401,7 +531,7 @@ async def list_session_ssh_keys(
     """
     config = session_manager.session_configs.get(session_id)
     if not config:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
     terminal_secrets = get_terminal_secrets_service()
     keys = terminal_secrets.get_session_keys(session_id)
@@ -433,7 +563,7 @@ async def add_key_to_ssh_agent(
     """
     config = session_manager.session_configs.get(session_id)
     if not config:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
     terminal_secrets = get_terminal_secrets_service()
     success = await terminal_secrets.add_key_to_agent(
@@ -474,7 +604,7 @@ async def get_ssh_key_path(
     """
     config = session_manager.session_configs.get(session_id)
     if not config:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
     terminal_secrets = get_terminal_secrets_service()
     key_path = terminal_secrets.get_key_path(session_id, key_name)
@@ -617,7 +747,7 @@ async def get_terminal_command_history(
     """
     config = session_manager.session_configs.get(session_id)
     if not config:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
     # Check if session has active connection
     is_active = session_manager.has_connection(session_id)
@@ -656,7 +786,7 @@ async def get_session_audit_log(
     """
     config = session_manager.session_configs.get(session_id)
     if not config:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
     # In a real implementation, you'd check user permissions here
     # For now, return basic audit information
@@ -779,53 +909,6 @@ async def consolidated_terminal_websocket(websocket: WebSocket, session_id: str)
         session_manager.remove_connection(session_id)
         if "terminal" in locals():
             await terminal.cleanup()
-
-
-# Backward compatibility endpoints
-
-
-@router.websocket("/ws/simple/{session_id}")
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="simple_terminal_websocket_compat",
-    error_code_prefix="TERMINAL",
-)
-async def simple_terminal_websocket_compat(websocket: WebSocket, session_id: str):
-    """Backward compatibility for simple terminal WebSocket"""
-    # Set session to standard security for compatibility
-    if session_id not in session_manager.session_configs:
-        session_manager.session_configs[session_id] = {
-            "session_id": session_id,
-            "security_level": SecurityLevel.STANDARD,
-            "enable_logging": False,
-            "enable_workflow_control": True,
-            "created_at": datetime.now().isoformat(),
-        }
-
-    # Route to main WebSocket handler
-    await consolidated_terminal_websocket(websocket, session_id)
-
-
-@router.websocket("/ws/secure/{session_id}")
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="secure_terminal_websocket_compat",
-    error_code_prefix="TERMINAL",
-)
-async def secure_terminal_websocket_compat(websocket: WebSocket, session_id: str):
-    """Backward compatibility for secure terminal WebSocket"""
-    # Set session to elevated security for compatibility
-    if session_id not in session_manager.session_configs:
-        session_manager.session_configs[session_id] = {
-            "session_id": session_id,
-            "security_level": SecurityLevel.ELEVATED,
-            "enable_logging": True,
-            "enable_workflow_control": True,
-            "created_at": datetime.now().isoformat(),
-        }
-
-    # Route to main WebSocket handler
-    await consolidated_terminal_websocket(websocket, session_id)
 
 
 # SSH Terminal WebSocket (Issue #715 - Infrastructure host connections)
@@ -991,32 +1074,21 @@ async def terminal_info(
     return {
         "name": "Consolidated Terminal API",
         "version": "1.0.0",
-        "description": "Unified terminal API combining all previous implementations",
+        "description": "Single canonical terminal API — all previous implementations consolidated here (#3383)",
         "features": [
             "REST API for session management",
             "WebSocket-based real-time terminal access",
             "Security assessment and command auditing",
             "Workflow automation control integration",
             "Multi-level security controls",
-            "Backward compatibility with existing endpoints",
         ],
         "endpoints": {
             "sessions": "/api/terminal/sessions",
-            "websocket_primary": "/api/terminal/ws/{session_id}",
-            # Issue #3332: /ws/simple and /ws/secure are compat aliases — use /ws/{session_id}
-            "websocket_simple": "/api/terminal/ws/simple/{session_id} (compat alias)",
-            "websocket_secure": "/api/terminal/ws/secure/{session_id} (compat alias)",
+            "websocket": "/api/terminal/ws/{session_id}",
             # Issue #729: SSH to infrastructure hosts moved to slm-server
             "websocket_ssh": "/api/terminal/ws/ssh/{host_id} (deprecated - use SLM)",
         },
         "security_levels": [level.value for level in SecurityLevel],
-        # Issue #3332: simple_terminal_websocket.py, secure_terminal_websocket.py,
-        # and base_terminal.py are deprecated — logic consolidated here.
-        "deprecated_modules": [
-            "api/simple_terminal_websocket.py",
-            "api/secure_terminal_websocket.py",
-            "api/base_terminal.py",
-        ],
         # Issue #729: Layer separation notice
         "notice": "SSH connections to infrastructure hosts have been moved to slm-server. "
         "Use slm-admin or the SLM API for infrastructure terminal access.",

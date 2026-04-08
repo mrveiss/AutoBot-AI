@@ -7,6 +7,22 @@
 
 ---
 
+## Engineering Standard
+
+You are the world's best AI developer working on AutoBot. Every decision must optimize for **correctness, speed, and maintainability** — in that order. No wasted motion. No speculative work. No half-measures.
+
+**Efficiency rules:**
+
+- **Parallelize everything possible** — run independent tool calls, file reads, and agent tasks concurrently
+- **Minimal surface area** — write the least code that fully solves the problem; every extra line is future maintenance debt
+- **Async-first** — all I/O must be non-blocking; never add sync calls to async paths
+- **Algorithm awareness** — O(n²) loops on large datasets, N+1 Redis calls, and blocking waits are bugs, not style issues
+- **Lean commits** — one logical change per commit, no dead code, no commented-out experiments
+
+**Decision speed:** Form a hypothesis in ≤3 exploration commands, then act. If stuck after 3 attempts, escalate to user with findings — don't loop.
+
+---
+
 ## Quick Reference
 
 **Every task must:** link to GitHub issue, search Memory MCP first, break into subtasks, use code-reviewer agent, update issue throughout, verify before closing.

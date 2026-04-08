@@ -195,109 +195,21 @@
         </div>
       </div>
 
-      <!-- Traditional Results Header -->
-      <div v-if="hasSearchResults" class="results-header">
-        <h4>
-          {{ $t('knowledge.search.foundResults', { count: searchResults.length, query: lastSearchQuery }) }}
-          <span v-if="useRagSearch" class="rag-enhanced-label">
-            <i class="fas fa-brain"></i>
-            {{ $t('knowledge.search.ragEnhanced') }}
-          </span>
-        </h4>
-      </div>
-
-      <!-- Results List -->
-      <div v-if="hasSearchResults" class="results-list">
-        <div
-          v-for="(result, index) in searchResults"
-          :key="result?.document?.id || `result-${index}`"
-          class="result-item"
-          @click="openDocument(result.document)"
-        >
-          <div v-if="result && result.document" class="result-header">
-            <h5 class="result-title">{{ result.document.title || $t('knowledge.search.defaultDocTitle') }}</h5>
-            <div class="score-badges">
-              <span class="result-score" :class="getScoreClass(result.score)">
-                {{ $t('knowledge.search.matchScore', { value: Math.round(result.score * 100) }) }}
-              </span>
-              <span v-if="result.rerank_score" class="rerank-score" :class="getScoreClass(result.rerank_score)">
-                <i class="fas fa-brain"></i>
-                {{ $t('knowledge.search.rerankScore', { value: Math.round(result.rerank_score * 100) }) }}
-              </span>
-            </div>
-          </div>
-          <div v-if="result && result.document" class="result-meta">
-            <span class="result-type">
-              <i class="fas fa-file-text"></i>
-              {{ result.document.type || 'text' }}
-            </span>
-            <span class="result-category">{{ result.document.category || 'general' }}</span>
-            <!-- Issue #685: Access level badge -->
-            <span v-if="getAccessLevel(result.document)" class="access-level-badge" :class="`access-${getAccessLevel(result.document)}`">
-              <i :class="getAccessLevelIcon(result.document)"></i>
-              {{ formatAccessLevel(result.document) }}
-            </span>
-          </div>
-          <div v-if="result && result.document" class="result-content">
-            <p>{{ result.highlights?.[0] || (result.document.content ? result.document.content.substring(0, 200) + '...' : 'No content') }}</p>
-          </div>
-          <div class="result-footer">
-            <span class="click-hint">
-              <i class="fas fa-hand-pointer"></i>
-              {{ $t('knowledge.search.clickToView') }}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Document Viewer Modal -->
-      <BaseModal
-        v-model="showDocumentModal"
-        :title="selectedDocument?.title || 'Document'"
-        size="large"
-        scrollable
-      >
-        <div class="document-modal-meta">
-          <span class="modal-meta-item">
-            <i class="fas fa-file-text"></i>
-            {{ selectedDocument?.type || 'text' }}
-          </span>
-          <span class="modal-meta-item">
-            <i class="fas fa-folder"></i>
-            {{ selectedDocument?.category || 'general' }}
-          </span>
-          <span v-if="selectedDocument?.updatedAt" class="modal-meta-item">
-            <i class="fas fa-clock"></i>
-            {{ new Date(selectedDocument.updatedAt).toLocaleDateString() }}
-          </span>
-        </div>
-
-        <div v-if="loadingDocument" class="modal-loading">
-          <i class="fas fa-spinner fa-spin"></i>
-          {{ $t('knowledge.search.loadingDocument') }}
-        </div>
-        <div v-else-if="selectedDocument?.content" class="document-text">
-          {{ selectedDocument.content }}
-        </div>
-        <div v-else class="modal-no-content">
-          <i class="fas fa-file-excel"></i>
-          <p>{{ $t('knowledge.search.noContent') }}</p>
-        </div>
-
-        <template #actions>
-          <button @click="copyDocument" class="modal-action-button">
-            <i class="fas fa-copy"></i>
-            {{ $t('knowledge.search.copyContent') }}
-          </button>
-          <button @click="closeDocument" class="modal-action-button modal-close-action">
-            {{ $t('knowledge.search.close') }}
-          </button>
-        </template>
-      </BaseModal>
+      <!-- Issue #3296: KB search result panel with keyboard nav + highlight -->
+      <!-- Issue #3940: Pass repository instance to eliminate duplicate creation -->
+      <KBSearchResultPanel
+        v-if="hasSearchResults || isSearching"
+        :repository="knowledgeRepo"
+        :results="searchResults"
+        :query="lastSearchQuery"
+        :loading="isSearching"
+        @select="onResultSelect"
+        @close="clearResults"
+      />
 
       <!-- No Results -->
       <EmptyState
-        v-if="!hasSearchResults"
+        v-if="!hasSearchResults && !isSearching"
         icon="fas fa-search"
         :message="$t('knowledge.search.noResults')"
       >
@@ -330,11 +242,11 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { KnowledgeRepository, type RagSearchResponse } from '@/models/repositories'
-import type { KnowledgeDocument, SearchResult } from '@/stores/useKnowledgeStore'
+import type { SearchResult } from '@/stores/useKnowledgeStore'
 import type { KnowledgeCategoryItem } from '@/types/knowledgeBase'
 import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import KBSearchResultPanel from './KBSearchResultPanel.vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('KnowledgeSearch')
@@ -371,11 +283,6 @@ const accessLevels = computed(() => [
   { value: 'system', label: t('knowledge.search.accessSystem'), icon: 'fas fa-cog' },
   { value: 'user', label: t('knowledge.search.accessUser'), icon: 'fas fa-user' }
 ])
-
-// Document viewer state
-const showDocumentModal = ref(false)
-const selectedDocument = ref<KnowledgeDocument | null>(null)
-const loadingDocument = ref(false)
 
 // RAG Options
 const ragOptions = ref({
@@ -534,87 +441,23 @@ const clearAccessLevelFilter = async () => {
   }
 }
 
-const getScoreClass = (score: number) => {
-  if (score >= 0.8) return 'score-high'
-  if (score >= 0.6) return 'score-medium'
-  return 'score-low'
-}
-
 const getConfidenceBadgeClass = (confidence: number) => {
   if (confidence >= 0.8) return 'confidence-high'
   if (confidence >= 0.6) return 'confidence-medium'
   return 'confidence-low'
 }
 
-// Issue #685: Access level badge helpers
-const getAccessLevel = (document: KnowledgeDocument): string | null => {
-  // Check both document properties and metadata
-  const level = (document as any).access_level || (document as any).metadata?.access_level
-  return level || null
+// Issue #3296: Handle result selection from KBSearchResultPanel
+const onResultSelect = (result: SearchResult) => {
+  logger.debug('Result selected:', result.document?.id)
 }
 
-const formatAccessLevel = (document: KnowledgeDocument): string => {
-  const level = getAccessLevel(document)
-  if (!level) return ''
-
-  const labels: Record<string, string> = {
-    'autobot': t('knowledge.search.accessPlatform'),
-    'general': t('knowledge.search.accessPublic'),
-    'system': t('knowledge.search.accessSystem'),
-    'user': t('knowledge.search.accessUser')
-  }
-  return labels[level] || level.charAt(0).toUpperCase() + level.slice(1)
-}
-
-const getAccessLevelIcon = (document: KnowledgeDocument): string => {
-  const level = getAccessLevel(document)
-  const icons: Record<string, string> = {
-    'autobot': 'fas fa-robot',
-    'general': 'fas fa-globe',
-    'system': 'fas fa-cog',
-    'user': 'fas fa-user'
-  }
-  return icons[level || ''] || 'fas fa-file'
-}
-
-// Document viewer methods
-const openDocument = async (document: KnowledgeDocument) => {
-  if (!document || !document.id) return
-
-  showDocumentModal.value = true
-  loadingDocument.value = true
-
-  try {
-    // Fetch full document if content is not available or truncated
-    if (!document.content || document.content.length < 300) {
-      const fullDocument = await knowledgeRepo.getDocument(document.id)
-      selectedDocument.value = fullDocument as unknown as KnowledgeDocument
-    } else {
-      selectedDocument.value = document
-    }
-  } catch (error) {
-    logger.error('Failed to load document:', error)
-    selectedDocument.value = document // Show what we have
-  } finally {
-    loadingDocument.value = false
-  }
-}
-
-const closeDocument = () => {
-  showDocumentModal.value = false
-  selectedDocument.value = null
-}
-
-const copyDocument = async () => {
-  if (!selectedDocument.value?.content) return
-
-  try {
-    await navigator.clipboard.writeText(selectedDocument.value.content)
-    // Could add a toast notification here
-    logger.debug('Document content copied to clipboard')
-  } catch (error) {
-    logger.error('Failed to copy document:', error)
-  }
+// Issue #3296: Close panel and reset search state
+const clearResults = () => {
+  searchResults.value = []
+  searchPerformed.value = false
+  ragResponse.value = null
+  ragError.value = null
 }
 </script>
 
@@ -849,91 +692,6 @@ const copyDocument = async () => {
   @apply space-y-4;
 }
 
-.results-header h4 {
-  @apply text-base font-medium text-autobot-text-primary flex items-center gap-2;
-}
-
-.rag-enhanced-label {
-  @apply px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full flex items-center gap-1;
-}
-
-.results-list {
-  @apply space-y-3;
-}
-
-.result-item {
-  @apply p-4 border border-autobot-border rounded-lg hover:bg-autobot-bg-secondary cursor-pointer;
-}
-
-.result-header {
-  @apply flex justify-between items-start mb-2;
-}
-
-.result-title {
-  @apply font-medium text-autobot-text-primary;
-}
-
-.score-badges {
-  @apply flex items-center gap-2;
-}
-
-.result-score {
-  @apply text-xs px-2 py-1 rounded-full;
-}
-
-.rerank-score {
-  @apply text-xs px-2 py-1 rounded-full flex items-center gap-1;
-}
-
-.rerank-score i {
-  @apply text-blue-500;
-}
-
-.score-high {
-  @apply bg-green-100 text-green-800;
-}
-
-.score-medium {
-  @apply bg-yellow-100 text-yellow-800;
-}
-
-.score-low {
-  @apply bg-red-100 text-red-800;
-}
-
-.result-meta {
-  @apply flex gap-4 text-xs text-autobot-text-muted mb-2;
-}
-
-/* Issue #685: Access level badge styles */
-.access-level-badge {
-  @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
-}
-
-.access-level-badge.access-autobot {
-  @apply bg-purple-100 text-purple-700;
-}
-
-.access-level-badge.access-general {
-  @apply bg-green-100 text-green-700;
-}
-
-.access-level-badge.access-system {
-  @apply bg-blue-100 text-blue-700;
-}
-
-.access-level-badge.access-user {
-  @apply bg-autobot-bg-secondary text-autobot-text-secondary;
-}
-
-.access-level-badge i {
-  @apply text-xs;
-}
-
-.result-content p {
-  @apply text-sm text-autobot-text-secondary line-clamp-2;
-}
-
 /* No Results */
 .no-results-hint {
   @apply text-sm text-autobot-text-muted mt-2;
@@ -970,71 +728,5 @@ const copyDocument = async () => {
 
 .fallback-note {
   @apply mt-2 text-orange-600 text-xs font-medium;
-}
-
-/* Result Footer with Click Hint */
-.result-footer {
-  @apply mt-3 pt-2 border-t border-autobot-border;
-}
-
-.click-hint {
-  @apply text-xs text-blue-600 flex items-center gap-1 font-medium;
-}
-
-.click-hint i {
-  @apply text-blue-500;
-}
-
-/* Document Viewer Modal - Content Styles */
-.document-modal-meta {
-  @apply flex gap-4 text-sm text-autobot-text-secondary;
-}
-
-.modal-meta-item {
-  @apply flex items-center gap-1;
-}
-
-.modal-meta-item i {
-  @apply text-autobot-text-muted;
-}
-
-.modal-loading {
-  @apply flex flex-col items-center justify-center py-12 text-autobot-text-muted;
-}
-
-.modal-loading i {
-  @apply text-3xl mb-3 text-blue-500;
-}
-
-.document-text {
-  @apply prose prose-sm max-w-none text-autobot-text-primary whitespace-pre-wrap;
-}
-
-.modal-no-content {
-  @apply flex flex-col items-center justify-center py-12 text-autobot-text-muted;
-}
-
-.modal-no-content i {
-  @apply text-4xl mb-3;
-}
-
-.modal-no-content p {
-  @apply text-autobot-text-muted;
-}
-
-.modal-action-button {
-  @apply px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2;
-}
-
-.modal-action-button:not(.modal-close-action) {
-  @apply bg-blue-600 text-white hover:bg-blue-700;
-}
-
-.modal-close-action {
-  @apply bg-autobot-bg-secondary text-autobot-text-secondary hover:bg-autobot-bg-secondary;
-}
-
-.modal-action-button i {
-  @apply text-sm;
 }
 </style>

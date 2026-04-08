@@ -240,9 +240,10 @@ class TestConsumeFeedbackStream:
         redis.hgetall = AsyncMock(return_value={})
 
         learner = _make_learner(redis)
+        # Issue #3240: no user_id → uses __global__ sentinel in stream key.
         await learner.consume_feedback_stream("2026-01-15")
 
-        stream_key = "rag:feedback:2026-01-15"
+        stream_key = "rag:feedback:__global__:2026-01-15"
         assert learner._cursors.get(stream_key) == "2000-4"
 
 

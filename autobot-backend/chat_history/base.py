@@ -71,7 +71,7 @@ class ChatHistoryBase:
             use_redis if use_redis is not None else redis_config.get("enabled", False)
         )
         self.redis_host = redis_host or redis_config.get(
-            "host", os.getenv("REDIS_HOST", unified_config.get_host("redis"))
+            "host", os.getenv("AUTOBOT_REDIS_HOST", unified_config.get_host("redis"))
         )
         self.redis_port = redis_port or redis_config.get(
             "port",
@@ -104,6 +104,9 @@ class ChatHistoryBase:
 
         # Context window management
         self.context_manager = ContextWindowManager()
+
+        # Idempotency guard for initialize()
+        self._initialized: bool = False
 
     def __init__(
         self,
@@ -142,8 +145,39 @@ class ChatHistoryBase:
         self._load_history()
 
         logger.info(
-            "ChatHistoryManager ready (Memory Graph will initialize on first async operation)"
+            "ChatHistoryManager sync setup complete — call await manager.initialize() "
+            "to finish async subsystem startup"
         )
+
+    async def initialize(self) -> None:
+        """
+        Finish async subsystem startup for ChatHistoryManager.
+
+        Must be awaited after construction (lifespan.py calls this explicitly).
+        Idempotent — safe to call more than once.
+
+        Performs:
+        - Eagerly initializes the Memory Graph so it is ready before the first
+          chat request arrives (previously deferred to "first async operation",
+          creating a race — Issue #3797 / #3886).
+        - Ensures the chats data directory exists.
+        - Sets self._initialized so callers can assert readiness.
+        """
+        if self._initialized:
+            logger.debug("ChatHistoryManager.initialize() called again — skipping (already done)")
+            return
+
+        logger.info("ChatHistoryManager: running async initialization...")
+
+        # Eagerly bring up the Memory Graph. Previously this was deferred to
+        # the first session operation, meaning the very first chat request
+        # could race against initialization. Doing it here, inside the
+        # lifespan startup, ensures the graph is ready before any request
+        # is served. _init_memory_graph() is already idempotent.
+        await self._init_memory_graph()
+
+        self._initialized = True
+        logger.info("ChatHistoryManager: async initialization complete")
 
     def _init_encryption(self):
         """Initialize encryption service if enabled."""

@@ -34,9 +34,10 @@ Usage:
 import os
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Optional
+from typing import Dict, Optional
 
 from autobot_shared.ssot_config import CLASSIFICATION_MODEL as SSOT_CLASSIFICATION_MODEL
+from constants.ttl_constants import TTL_5_MINUTES
 from autobot_shared.ssot_config import (
     DEFAULT_EMBEDDING_MODEL,
     DEFAULT_LLM_MODEL,
@@ -56,9 +57,205 @@ from autobot_shared.ssot_config import SYSTEM_MODEL as SSOT_SYSTEM_MODEL
 # Change models in autobot_shared/ssot_config.py to change the entire system.
 
 FALLBACK_MODEL = DEFAULT_LLM_MODEL
-FALLBACK_OPENAI_MODEL = "gpt-4"
-FALLBACK_ANTHROPIC_MODEL = "claude-3-5-sonnet-20241022"
-FALLBACK_GOOGLE_MODEL = "gemini-pro"
+
+# =============================================================================
+# EXPLICIT MODEL NAME CONSTANTS (#3528)
+# =============================================================================
+# Named constants for every model string used anywhere in the codebase.
+# Add new entries here rather than hardcoding strings in service files.
+
+# OpenAI — preview/reasoning aliases without dated suffix
+OPENAI_O1_PREVIEW = "o1-preview"
+
+# OpenAI — GPT-4 family
+OPENAI_GPT4 = "gpt-4"
+OPENAI_GPT4_TURBO = "gpt-4-turbo"
+OPENAI_GPT4O = "gpt-4o"
+OPENAI_GPT4O_MINI = "gpt-4o-mini"
+OPENAI_GPT4_VISION_PREVIEW = "gpt-4-vision-preview"
+OPENAI_GPT4_TURBO_PREVIEW = "gpt-4-turbo-preview"
+# OpenAI — GPT-3.5 family
+OPENAI_GPT35_TURBO = "gpt-3.5-turbo"
+OPENAI_GPT35_TURBO_16K = "gpt-3.5-turbo-16k"
+# OpenAI — reasoning models
+OPENAI_O1 = "o1"
+OPENAI_O1_MINI = "o1-mini"
+OPENAI_O3 = "o3"
+OPENAI_O3_MINI = "o3-mini"
+OPENAI_O4_MINI = "o4-mini"
+# OpenAI — GPT-4.1 family (2025)
+OPENAI_GPT41 = "gpt-4.1"
+OPENAI_GPT41_MINI = "gpt-4.1-mini"
+OPENAI_GPT41_NANO = "gpt-4.1-nano"
+
+# Anthropic — Claude 4.x
+ANTHROPIC_CLAUDE_OPUS4 = "claude-opus-4-20250514"
+ANTHROPIC_CLAUDE_HAIKU4_5 = "claude-haiku-4-5-20251001"
+ANTHROPIC_CLAUDE_SONNET4 = "claude-sonnet-4-20250514"
+# Anthropic — Claude 3.x / Sonnet 4
+ANTHROPIC_CLAUDE35_SONNET = "claude-3-5-sonnet-20241022"
+ANTHROPIC_CLAUDE35_HAIKU = "claude-3-5-haiku-20241022"
+ANTHROPIC_CLAUDE3_OPUS_DATED = "claude-3-opus-20240229"
+ANTHROPIC_CLAUDE3_SONNET_DATED = "claude-3-sonnet-20240229"
+ANTHROPIC_CLAUDE3_HAIKU_DATED = "claude-3-haiku-20240307"
+# Anthropic — short-form names used in analytics/cost matching
+ANTHROPIC_CLAUDE3_OPUS = "claude-3-opus"
+ANTHROPIC_CLAUDE3_SONNET = "claude-3-sonnet"
+ANTHROPIC_CLAUDE3_HAIKU = "claude-3-haiku"
+ANTHROPIC_CLAUDE_SONNET4_SHORT = "claude-sonnet-4"
+# Anthropic — release aliases without dated suffix (latest stable pointers)
+ANTHROPIC_CLAUDE_SONNET4_6 = "claude-sonnet-4-6"
+ANTHROPIC_CLAUDE_OPUS4_6 = "claude-opus-4-6"
+
+# Google — Gemini 2.5
+GOOGLE_GEMINI25_PRO = "gemini-2.5-pro"
+GOOGLE_GEMINI25_FLASH = "gemini-2.5-flash"
+# Google — Gemini 2.0 / 1.5
+GOOGLE_GEMINI20_FLASH = "gemini-2.0-flash"
+GOOGLE_GEMINI15_PRO = "gemini-1.5-pro"
+GOOGLE_GEMINI15_FLASH = "gemini-1.5-flash"
+# Google — legacy models
+GOOGLE_GEMINI_PRO = "gemini-pro"          # plain base model (distinct from vision)
+GOOGLE_GEMINI_PRO_VISION = "gemini-pro-vision"
+
+# DeepSeek hosted API
+DEEPSEEK_V3 = "deepseek-v3"
+DEEPSEEK_R1_API = "deepseek-r1-api"
+
+# Local / Ollama free models
+LOCAL_LLAMA3 = "llama3"
+LOCAL_LLAMA31 = "llama3.1"
+LOCAL_LLAMA32 = "llama3.2"
+LOCAL_LLAMA33 = "llama3.3"
+LOCAL_MISTRAL = "mistral"
+LOCAL_MIXTRAL = "mixtral"
+LOCAL_CODELLAMA = "codellama"
+LOCAL_QWEN25 = "qwen2.5"
+LOCAL_QWEN3 = "qwen3"
+LOCAL_DEEPSEEK_CODER = "deepseek-coder"
+LOCAL_DEEPSEEK_R1 = "deepseek-r1"
+LOCAL_PHI3 = "phi3"
+LOCAL_PHI4 = "phi4"
+LOCAL_GEMMA2 = "gemma2"
+LOCAL_GEMMA3 = "gemma3"
+
+# Substring markers used by cost/efficiency heuristics (#3528)
+# These are substrings matched with ``in model.lower()``, not full model IDs.
+EXPENSIVE_MODEL_MARKER_OPUS = "opus"
+EXPENSIVE_MODEL_MARKER_GPT4 = "gpt-4"
+
+# Fallback model aliases — defined after constants to reference them directly
+FALLBACK_OPENAI_MODEL = OPENAI_GPT4
+FALLBACK_ANTHROPIC_MODEL = ANTHROPIC_CLAUDE35_SONNET
+FALLBACK_GOOGLE_MODEL = GOOGLE_GEMINI_PRO
+
+# =============================================================================
+# MODEL_PRICING — SINGLE SOURCE OF TRUTH (#3528)
+# =============================================================================
+# Two formats are needed by different consumers; both derive from the same data.
+#
+# MODEL_PRICING_PER_1M_TOKENS  — USD per 1 million tokens (llm_cost_tracker)
+#   keys: "input", "output"
+#
+# MODEL_PRICING_PER_1K_TOKENS  — USD per 1 thousand tokens (calculators.py,
+#   CostCalculator)  keys: "prompt", "completion"
+#
+# Pricing source: provider published rates as of 2026-03.
+# Update PRICING_VERSION in llm_cost_tracker.py when editing these tables.
+
+MODEL_PRICING_PER_1M_TOKENS: Dict[str, Dict[str, float]] = {
+    # Anthropic Claude 4.x (2025-2026)
+    ANTHROPIC_CLAUDE_OPUS4: {"input": 15.00, "output": 75.00},
+    ANTHROPIC_CLAUDE_HAIKU4_5: {"input": 0.80, "output": 4.00},
+    # Anthropic Claude 3.x / Sonnet 4
+    ANTHROPIC_CLAUDE_SONNET4: {"input": 3.00, "output": 15.00},
+    ANTHROPIC_CLAUDE35_SONNET: {"input": 3.00, "output": 15.00},
+    ANTHROPIC_CLAUDE35_HAIKU: {"input": 0.80, "output": 4.00},
+    ANTHROPIC_CLAUDE3_OPUS_DATED: {"input": 15.00, "output": 75.00},
+    ANTHROPIC_CLAUDE3_SONNET_DATED: {"input": 3.00, "output": 15.00},
+    ANTHROPIC_CLAUDE3_HAIKU_DATED: {"input": 0.25, "output": 1.25},
+    # OpenAI GPT-4.1 family (2025)
+    OPENAI_GPT41: {"input": 2.00, "output": 8.00},
+    OPENAI_GPT41_MINI: {"input": 0.40, "output": 1.60},
+    OPENAI_GPT41_NANO: {"input": 0.10, "output": 0.40},
+    # OpenAI GPT-4o / GPT-4 / GPT-3.5
+    OPENAI_GPT4O: {"input": 2.50, "output": 10.00},
+    OPENAI_GPT4O_MINI: {"input": 0.15, "output": 0.60},
+    OPENAI_GPT4_TURBO: {"input": 10.00, "output": 30.00},
+    OPENAI_GPT4: {"input": 30.00, "output": 60.00},
+    OPENAI_GPT35_TURBO: {"input": 0.50, "output": 1.50},
+    # OpenAI reasoning models
+    OPENAI_O1: {"input": 15.00, "output": 60.00},
+    OPENAI_O1_MINI: {"input": 3.00, "output": 12.00},
+    OPENAI_O3: {"input": 2.00, "output": 8.00},
+    OPENAI_O3_MINI: {"input": 1.10, "output": 4.40},
+    OPENAI_O4_MINI: {"input": 1.10, "output": 4.40},
+    # Google Gemini 2.5 (2025-2026)
+    GOOGLE_GEMINI25_PRO: {"input": 1.25, "output": 10.00},
+    GOOGLE_GEMINI25_FLASH: {"input": 0.15, "output": 0.60},
+    # Google Gemini 2.0 / 1.5
+    GOOGLE_GEMINI20_FLASH: {"input": 0.10, "output": 0.40},
+    GOOGLE_GEMINI15_PRO: {"input": 1.25, "output": 5.00},
+    GOOGLE_GEMINI15_FLASH: {"input": 0.075, "output": 0.30},
+    # DeepSeek hosted API models (2025)
+    DEEPSEEK_V3: {"input": 0.27, "output": 1.10},
+    DEEPSEEK_R1_API: {"input": 0.55, "output": 2.19},
+    # Local/Ollama models (free)
+    LOCAL_LLAMA3: {"input": 0.0, "output": 0.0},
+    LOCAL_LLAMA31: {"input": 0.0, "output": 0.0},
+    LOCAL_LLAMA32: {"input": 0.0, "output": 0.0},
+    LOCAL_LLAMA33: {"input": 0.0, "output": 0.0},
+    LOCAL_MISTRAL: {"input": 0.0, "output": 0.0},
+    LOCAL_MIXTRAL: {"input": 0.0, "output": 0.0},
+    LOCAL_CODELLAMA: {"input": 0.0, "output": 0.0},
+    LOCAL_QWEN25: {"input": 0.0, "output": 0.0},
+    LOCAL_QWEN3: {"input": 0.0, "output": 0.0},
+    LOCAL_DEEPSEEK_CODER: {"input": 0.0, "output": 0.0},
+    LOCAL_DEEPSEEK_R1: {"input": 0.0, "output": 0.0},
+    LOCAL_PHI3: {"input": 0.0, "output": 0.0},
+    LOCAL_PHI4: {"input": 0.0, "output": 0.0},
+    LOCAL_GEMMA2: {"input": 0.0, "output": 0.0},
+    LOCAL_GEMMA3: {"input": 0.0, "output": 0.0},
+}
+
+# Per-1K token pricing used by TokenTracker / CostCalculator in
+# code_intelligence/llm_pattern_analysis/calculators.py (#3528).
+# Values are derived from MODEL_PRICING_PER_1M_TOKENS ÷ 1000.
+MODEL_PRICING_PER_1K_TOKENS: Dict[str, Dict[str, float]] = {
+    OPENAI_GPT4: {"prompt": 0.03, "completion": 0.06},
+    OPENAI_GPT4_TURBO: {"prompt": 0.01, "completion": 0.03},
+    OPENAI_GPT4O: {"prompt": 0.005, "completion": 0.015},
+    OPENAI_GPT35_TURBO: {"prompt": 0.0015, "completion": 0.002},
+    ANTHROPIC_CLAUDE3_OPUS: {"prompt": 0.015, "completion": 0.075},
+    ANTHROPIC_CLAUDE3_SONNET: {"prompt": 0.003, "completion": 0.015},
+    ANTHROPIC_CLAUDE3_HAIKU: {"prompt": 0.00025, "completion": 0.00125},
+    ANTHROPIC_CLAUDE_SONNET4_SHORT: {"prompt": 0.003, "completion": 0.015},
+    "ollama": {"prompt": 0.0, "completion": 0.0},  # Local, no API cost
+    "default": {"prompt": 0.001, "completion": 0.002},
+}
+
+# Per-1M token cost table used by analytics_llm_patterns.py (#3528).
+# Keys use short-form names to match partial model identifiers submitted by
+# clients (e.g. "claude-3-opus" instead of the full dated variant).
+MODEL_COSTS_PER_1M_TOKENS: Dict[str, Dict[str, float]] = {
+    # Anthropic (short-form names for analytics matching)
+    ANTHROPIC_CLAUDE3_OPUS: {"input": 15.00, "output": 75.00},
+    ANTHROPIC_CLAUDE3_SONNET: {"input": 3.00, "output": 15.00},
+    ANTHROPIC_CLAUDE3_HAIKU: {"input": 0.25, "output": 1.25},
+    ANTHROPIC_CLAUDE_SONNET4_SHORT: {"input": 3.00, "output": 15.00},
+    # OpenAI
+    OPENAI_GPT4O: {"input": 2.50, "output": 10.00},
+    OPENAI_GPT4O_MINI: {"input": 0.15, "output": 0.60},
+    OPENAI_GPT4_TURBO: {"input": 10.00, "output": 30.00},
+    OPENAI_GPT35_TURBO: {"input": 0.50, "output": 1.50},
+    # Google
+    GOOGLE_GEMINI15_PRO: {"input": 1.25, "output": 5.00},
+    GOOGLE_GEMINI15_FLASH: {"input": 0.075, "output": 0.30},
+    # Local (free)
+    LOCAL_LLAMA3: {"input": 0.0, "output": 0.0},
+    LOCAL_MISTRAL: {"input": 0.0, "output": 0.0},
+    LOCAL_CODELLAMA: {"input": 0.0, "output": 0.0},
+}
 
 
 class ModelConstants:
@@ -174,6 +371,7 @@ class ModelConfig:
     DEFAULT_REPEAT_PENALTY: float = 1.1
     DEFAULT_MAX_TOKENS: int = 2048
     DEFAULT_NUM_CTX: int = 4096  # Ollama context window
+    CHAT_NUM_CTX: int = 8192  # Chat workflow: larger window for system prompt (~3k tokens)
 
     # Timeouts (in seconds)
     # Issue #763: Was ConfigRegistry.get("timeout.llm", "30").
@@ -192,7 +390,7 @@ class ModelConfig:
     # Performance settings
     DEFAULT_CONNECTION_POOL_SIZE: int = 20
     DEFAULT_MAX_CONCURRENT_REQUESTS: int = 8
-    DEFAULT_CACHE_TTL: int = 300  # 5 minutes
+    DEFAULT_CACHE_TTL: int = TTL_5_MINUTES
     DEFAULT_MAX_CHUNKS: int = 1000  # Streaming response chunks
 
     # RAG search settings (Issue #611)

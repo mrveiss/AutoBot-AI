@@ -15,7 +15,7 @@ psutil>=7.2.2  # Issue #927: CPU monitoring for wake word optimization
 # Database
 sqlalchemy>=2.0.48
 alembic>=1.18.4
-# aiosqlite>=0.19.0  # Included from ../requirements.txt (>=0.21.0)
+aiosqlite>=0.21.0
 
 # AI/ML
 openai>=2.30.0

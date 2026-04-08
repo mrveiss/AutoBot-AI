@@ -26,10 +26,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from config import UnifiedConfig
 
 # Initialize configuration
-config = UnifiedConfig()
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level tuple for complexity calculation

@@ -16,7 +16,7 @@ when the main asyncio thread pool is saturated by indexing operations.
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 import aiofiles
@@ -278,7 +278,7 @@ class SessionListingMixin:
             "id": session_id,
             "name": f"Terminal Session {session_id[:8]}",
             "messages": [],
-            "created_at": datetime.now().isoformat(),
+            "created_at": datetime.now(tz=timezone.utc).isoformat(),
             "metadata": {
                 "auto_created": True,
                 "reason": "orphaned_terminal_files",

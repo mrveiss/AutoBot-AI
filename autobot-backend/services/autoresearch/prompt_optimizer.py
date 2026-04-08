@@ -28,6 +28,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Coroutine, Dict, List, Optional
 
+from constants.ttl_constants import TTL_7_DAYS
+
 from .archive import Archive
 from .config import AutoResearchConfig
 from .models import VariantArchiveEntry
@@ -143,6 +145,11 @@ class PromptOptimizer:
     """Generic prompt optimizer with pluggable scorers.
 
     Drives a mutation -> benchmark -> score -> keep/discard loop.
+
+    Agents other than autoresearch_hypothesis can opt in by calling
+    ``register_optimization_target``.  The registry maps agent_id to a
+    (PromptOptTarget, BenchmarkFn) pair so ``start_optimization`` can look
+    them up without hard-coding names in the route layer.
     """
 
     _MUTATION_SYSTEM_PROMPT = (
@@ -166,6 +173,32 @@ class PromptOptimizer:
         self._cancel_event = asyncio.Event()
         self._current_session: Optional[OptimizationSession] = None
         self._redis = None
+        # Registry: agent_id -> (PromptOptTarget, BenchmarkFn)
+        self._targets: Dict[str, tuple] = {}
+
+    def register_optimization_target(
+        self,
+        agent_id: str,
+        target: PromptOptTarget,
+        benchmark_fn: BenchmarkFn,
+    ) -> None:
+        """Register an agent so it can be addressed by start_optimization.
+
+        Args:
+            agent_id: Unique identifier used in StartOptimizationRequest.agent_name.
+            target: Pre-configured PromptOptTarget for this agent.
+            benchmark_fn: Async function that runs the prompt and returns output text.
+        """
+        self._targets[agent_id] = (target, benchmark_fn)
+        logger.info("PromptOptimizer: registered optimization target %r", agent_id)
+
+    def get_registered_targets(self) -> list:
+        """Return a list of all registered agent_id strings."""
+        return list(self._targets.keys())
+
+    def get_target(self, agent_id: str) -> Optional[tuple]:
+        """Return (PromptOptTarget, BenchmarkFn) for agent_id, or None."""
+        return self._targets.get(agent_id)
 
     async def optimize(
         self,
@@ -461,7 +494,7 @@ class PromptOptimizer:
         if self._redis is None:
             from autobot_shared.redis_client import get_redis_client
 
-            self._redis = get_redis_client(async_client=True, database="main")
+            self._redis = await get_redis_client(async_client=True, database="main")
         return self._redis
 
     async def _save_session(self, session: OptimizationSession) -> None:
@@ -469,7 +502,7 @@ class PromptOptimizer:
         try:
             redis = await self._get_redis()
             key = f"autoresearch:prompt_opt:session:{session.id}"
-            await redis.set(key, json.dumps(session.to_dict()), ex=86400 * 7)
+            await redis.set(key, json.dumps(session.to_dict()), ex=TTL_7_DAYS)
         except Exception:
             logger.exception("Failed to save optimization session %s", session.id)
 
@@ -481,7 +514,7 @@ class PromptOptimizer:
         try:
             redis = await self._get_redis()
             key = f"autoresearch:archive:{session_id}"
-            await redis.set(key, archive.to_json(), ex=86400 * 7)
+            await redis.set(key, archive.to_json(), ex=TTL_7_DAYS)
         except Exception:
             logger.exception("Failed to save archive for session %s", session_id)
 

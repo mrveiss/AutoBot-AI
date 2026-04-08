@@ -36,6 +36,7 @@ import type {
   CategorizedFactsResponse,
   CategoryFilterOption
 } from '@/types/knowledgeBase'
+import { getApiBase } from '@/config/ssot-config'
 
 // KnowledgeStats imported from @/types/knowledgeBase (consolidated type definition)
 
@@ -84,7 +85,7 @@ export function useKnowledgeBase() {
    */
   const fetchStats = async (): Promise<KnowledgeStats | null> => {
     try {
-      const response = await apiClient.get('/api/knowledge_base/stats')
+      const response = await apiClient.get(`${getApiBase()}/knowledge_base/stats`)
 
       if (!response) {
         throw new Error('Failed to fetch stats: No response from server');
@@ -105,7 +106,7 @@ export function useKnowledgeBase() {
    */
   const fetchCategories = async (): Promise<KnowledgeCategoryItem[]> => {
     try {
-      const response = await apiClient.get('/api/knowledge_base/categories')
+      const response = await apiClient.get(`${getApiBase()}/knowledge_base/categories`)
 
       if (!response) {
         throw new Error('Failed to fetch categories: No response from server')
@@ -130,7 +131,7 @@ export function useKnowledgeBase() {
    */
   const fetchCategory = async (category: string): Promise<CategoryResponse> => {
     try {
-      const response = await apiClient.get(`/api/knowledge_base/category/${category}`)
+      const response = await apiClient.get(`${getApiBase()}/knowledge_base/category/${category}`)
 
       if (!response) {
         throw new Error('Failed to fetch category: No response from server');
@@ -162,7 +163,7 @@ export function useKnowledgeBase() {
       }
       params.append('limit', String(limit))
 
-      const url = `/api/knowledge_base/facts/by_category?${params.toString()}`
+      const url = `${getApiBase()}/knowledge_base/facts/by_category?${params.toString()}`
       const response = await apiClient.get(url)
 
       if (!response) {
@@ -229,7 +230,7 @@ export function useKnowledgeBase() {
   const searchKnowledge = async (query: string): Promise<SearchResponse> => {
     try {
       // Issue #552: Backend expects POST for search
-      const response = await apiClient.post('/api/knowledge_base/search', { query })
+      const response = await apiClient.post(`${getApiBase()}/knowledge_base/search`, { query })
 
       if (!response) {
         throw new Error('Search failed: No response from server');
@@ -270,7 +271,7 @@ export function useKnowledgeBase() {
 
   const advancedSearch = async (options: AdvancedSearchOptions): Promise<SearchResponse> => {
     try {
-      const response = await apiClient.post('/api/knowledge_base/search', options)
+      const response = await apiClient.post(`${getApiBase()}/knowledge_base/search`, options)
 
       if (!response) {
         throw new Error('Advanced search failed: No response from server')
@@ -293,7 +294,7 @@ export function useKnowledgeBase() {
     metadata?: Record<string, unknown>
   }): Promise<AddFactResponse> => {
     try {
-      const response = await apiClient.post('/api/knowledge_base/facts', fact)
+      const response = await apiClient.post(`${getApiBase()}/knowledge_base/facts`, fact)
 
       if (!response) {
         throw new Error('Failed to add fact: No response from server');
@@ -312,7 +313,7 @@ export function useKnowledgeBase() {
    */
   const uploadKnowledgeFile = async (formData: FormData): Promise<UploadResponse> => {
     try {
-      const url = await appConfig.getApiUrl('/api/knowledge_base/upload')
+      const url = await appConfig.getApiUrl(`${getApiBase()}/knowledge_base/upload`)
 
       const response = await fetchWithAuth(url, {
         method: 'POST',
@@ -340,7 +341,7 @@ export function useKnowledgeBase() {
   const fetchMachineProfiles = async (): Promise<MachineProfile[]> => {
     try {
       // Issue #552: Fixed path - backend uses singular /api/knowledge_base/machine_profile
-      const response = await apiClient.get('/api/knowledge_base/machine_profile')
+      const response = await apiClient.get(`${getApiBase()}/knowledge_base/machine_profile`)
 
       if (!response) {
         throw new Error('Failed to fetch machine profiles: No response from server');
@@ -359,7 +360,7 @@ export function useKnowledgeBase() {
    */
   const fetchManPagesSummary = async (): Promise<ManPagesSummary | null> => {
     try {
-      const response = await apiClient.get('/api/knowledge_base/man_pages/summary')
+      const response = await apiClient.get(`${getApiBase()}/knowledge_base/man_pages/summary`)
 
       if (!response) {
         throw new Error('Failed to fetch man pages summary: No response from server');
@@ -378,7 +379,7 @@ export function useKnowledgeBase() {
    */
   const integrateManPages = async (machineId: string): Promise<IntegrationResponse> => {
     try {
-      const response = await apiClient.post('/api/knowledge_base/man_pages/integrate', {
+      const response = await apiClient.post(`${getApiBase()}/knowledge_base/man_pages/integrate`, {
         machine_id: machineId
       })
 
@@ -400,7 +401,7 @@ export function useKnowledgeBase() {
   const getVectorizationStatus = async (): Promise<VectorizationStatusResponse> => {
     try {
       // Issue #552: Fixed path - backend uses /api/knowledge_base/vectorize_facts/status
-      const response = await apiClient.get('/api/knowledge_base/vectorize_facts/status')
+      const response = await apiClient.get(`${getApiBase()}/knowledge_base/vectorize_facts/status`)
 
       if (!response) {
         throw new Error('Failed to get vectorization status: No response from server');
@@ -430,7 +431,7 @@ export function useKnowledgeBase() {
       // Get knowledge-specific timeout (300s for vectorization operations)
       const knowledgeTimeout = appConfig.getTimeout('knowledge')
 
-      const response = await apiClient.post('/api/knowledge_base/vectorize_facts', {
+      const response = await apiClient.post(`${getApiBase()}/knowledge_base/vectorize_facts`, {
         batch_size: batchSize,
         batch_delay: batchDelay,
         skip_existing: skipExisting
@@ -470,7 +471,7 @@ export function useKnowledgeBase() {
   const initializeMachineKnowledge = async (machineId: string): Promise<MachineKnowledgeResponse> => {
     try {
 
-      const response = await apiClient.post('/api/knowledge_base/machine_knowledge/initialize', {
+      const response = await apiClient.post(`${getApiBase()}/knowledge_base/machine_knowledge/initialize`, {
         machine_id: machineId
       })
 
@@ -501,7 +502,7 @@ export function useKnowledgeBase() {
   const refreshSystemKnowledge = async (): Promise<SystemKnowledgeResponse> => {
     try {
 
-      const response = await apiClient.post('/api/knowledge_base/refresh_system_knowledge', {})
+      const response = await apiClient.post(`${getApiBase()}/knowledge_base/refresh_system_knowledge`, {})
 
       logger.debug('[refreshSystemKnowledge] Response received:', {
         ok: response.ok,
@@ -529,7 +530,7 @@ export function useKnowledgeBase() {
    */
   const pollJobStatus = async (taskId: string): Promise<any> => {
     try {
-      const response = await apiClient.get(`/api/knowledge_base/job_status/${taskId}`)
+      const response = await apiClient.get(`${getApiBase()}/knowledge_base/job_status/${taskId}`)
 
       logger.debug('[pollJobStatus] Response received:', {
         ok: response.ok,
@@ -556,7 +557,7 @@ export function useKnowledgeBase() {
   const populateManPages = async (machineId: string): Promise<ManPagesPopulateResponse> => {
     try {
 
-      const response = await apiClient.post('/api/knowledge_base/populate_man_pages', {
+      const response = await apiClient.post(`${getApiBase()}/knowledge_base/populate_man_pages`, {
         machine_id: machineId
       })
 
@@ -585,7 +586,7 @@ export function useKnowledgeBase() {
   const populateAutoBotDocs = async (): Promise<AutoBotDocsResponse> => {
     try {
 
-      const response = await apiClient.post('/api/knowledge_base/populate_autobot_docs', {})
+      const response = await apiClient.post(`${getApiBase()}/knowledge_base/populate_autobot_docs`, {})
 
       logger.debug('[populateAutoBotDocs] Response received:', {
         ok: response.ok,
@@ -613,7 +614,7 @@ export function useKnowledgeBase() {
     try {
 
       const response = await apiClient.get(
-        `/api/knowledge_base/machine_profile?machine_id=${encodeURIComponent(machineId)}`
+        `${getApiBase()}/knowledge_base/machine_profile?machine_id=${encodeURIComponent(machineId)}`
       )
 
       logger.debug('[fetchMachineProfile] Response received:', {
@@ -641,7 +642,7 @@ export function useKnowledgeBase() {
   const fetchBasicStats = async (): Promise<KnowledgeStats | null> => {
     try {
 
-      const response = await apiClient.get('/api/knowledge_base/stats/basic')
+      const response = await apiClient.get(`${getApiBase()}/knowledge_base/stats/basic`)
 
       logger.debug('[fetchBasicStats] Response received:', {
         ok: response.ok,

@@ -118,6 +118,7 @@
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { apiService } from '@/services/api'
+import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const { t } = useI18n()
@@ -226,7 +227,7 @@ const handleSearch = async () => {
   searchResults.value = []
 
   try {
-    const url = `/api/user-management/users/search?q=${encodeURIComponent(query)}&limit=10`
+    const url = `${getApiBase()}/user-management/users/search?q=${encodeURIComponent(query)}&limit=10`
     const response = await apiService.get<{
       users: ShareEntity[]
       available: boolean

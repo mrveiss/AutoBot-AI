@@ -17,6 +17,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import authenticate_websocket
 from type_defs.common import SKIP_WEBSOCKET_PERSISTENCE_TYPES
 
 logger = logging.getLogger(__name__)
@@ -164,7 +165,55 @@ def _format_workflow_failed(raw_data: dict) -> Tuple[str, str]:
 def _format_workflow_cancelled(raw_data: dict) -> Tuple[str, str]:
     """Format workflow_cancelled event."""
     workflow_id = raw_data.get("workflow_id", "N/A")[:8]
-    return f"🛑 Workflow {workflow_id}: Cancelled by user", "workflow"
+    return f"Workflow {workflow_id}: Cancelled by user", "workflow"
+
+
+# Issue #3232: Chain-of-thought event formatters
+def _format_agent_step_start(raw_data: dict) -> Tuple[str, str]:
+    """Format agent.step.start event."""
+    step_name = raw_data.get("step_name", "unknown")
+    agent_type = raw_data.get("agent_type", "")
+    label = f"{agent_type}/{step_name}" if agent_type else step_name
+    return f"Step started: {label}", "agent-step"
+
+
+def _format_agent_step_complete(raw_data: dict) -> Tuple[str, str]:
+    """Format agent.step.complete event."""
+    step_name = raw_data.get("step_name", "unknown")
+    duration_ms = raw_data.get("duration_ms", 0)
+    summary = raw_data.get("output_summary") or "done"
+    return f"Step complete: {step_name} ({duration_ms:.0f}ms) — {summary}", "agent-step"
+
+
+def _format_agent_tool_call(raw_data: dict) -> Tuple[str, str]:
+    """Format agent.tool.call event."""
+    tool_name = raw_data.get("tool_name", "unknown")
+    return f"Tool call: {tool_name}", "agent-tool"
+
+
+def _format_agent_tool_result(raw_data: dict) -> Tuple[str, str]:
+    """Format agent.tool.result event."""
+    tool_name = raw_data.get("tool_name", "unknown")
+    duration_ms = raw_data.get("duration_ms", 0)
+    success = raw_data.get("success", True)
+    status = "ok" if success else "error"
+    return f"Tool result: {tool_name} [{status}] ({duration_ms:.0f}ms)", "agent-tool"
+
+
+def _format_agent_llm_chunk(raw_data: dict) -> Tuple[str, str]:
+    """Format agent.llm.chunk event (token streaming)."""
+    chunk = raw_data.get("chunk", "")
+    return chunk, "agent-llm-chunk"
+
+
+def _format_agent_plan(raw_data: dict) -> Tuple[str, str]:
+    """Format agent.plan event."""
+    step_count = raw_data.get("step_count", 0)
+    steps = raw_data.get("steps", [])
+    summary = "; ".join(steps[:3])
+    if step_count > 3:
+        summary += f" … (+{step_count - 3} more)"
+    return f"Plan ({step_count} steps): {summary}", "agent-plan"
 
 
 # Issue #336: Dispatch table for message type formatting
@@ -193,6 +242,13 @@ MESSAGE_TYPE_FORMATTERS: Dict[str, Callable[[dict], Tuple[str, str]]] = {
     "workflow_completed": _format_workflow_completed,
     "workflow_failed": _format_workflow_failed,
     "workflow_cancelled": _format_workflow_cancelled,
+    # Issue #3232: Chain-of-thought events
+    "agent.step.start": _format_agent_step_start,
+    "agent.step.complete": _format_agent_step_complete,
+    "agent.tool.call": _format_agent_tool_call,
+    "agent.tool.result": _format_agent_tool_result,
+    "agent.llm.chunk": _format_agent_llm_chunk,
+    "agent.plan": _format_agent_plan,
 }
 
 
@@ -400,6 +456,12 @@ _npu_events_lock = threading.Lock()
 @router.websocket("/ws-test")
 async def websocket_test_endpoint(websocket: WebSocket):
     """Simple test WebSocket endpoint without event manager integration."""
+    # Issue #2818: Authenticate before accepting connection
+    user = await authenticate_websocket(websocket)
+    if user is None:
+        await websocket.close(code=4001, reason="Authentication required")
+        return
+
     try:
         await websocket.accept()
         logger.info("Test WebSocket connected successfully")
@@ -503,7 +565,14 @@ async def websocket_endpoint(websocket: WebSocket):
     WebSocket endpoint for real-time event stream between backend and frontend.
 
     Issue #665: Refactored to use extracted helper methods.
+    Issue #2818: Authenticate before accepting connection.
     """
+    # Issue #2818: Authenticate before accepting connection
+    user = await authenticate_websocket(websocket)
+    if user is None:
+        await websocket.close(code=4001, reason="Authentication required")
+        return
+
     try:
         await websocket.accept()
         logger.info("WebSocket connected from client: %s", websocket.client)
@@ -555,7 +624,15 @@ async def npu_workers_websocket_endpoint(websocket: WebSocket):
     - Worker added/updated/removed events
     - Worker metrics updates
     - Initial worker list on connection
+
+    Issue #2818: Authenticate before accepting connection.
     """
+    # Issue #2818: Authenticate before accepting connection
+    user = await authenticate_websocket(websocket)
+    if user is None:
+        await websocket.close(code=4001, reason="Authentication required")
+        return
+
     try:
         await websocket.accept()
         logger.info("NPU Worker WebSocket connected from client: %s", websocket.client)

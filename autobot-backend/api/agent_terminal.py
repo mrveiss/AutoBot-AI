@@ -229,6 +229,7 @@ import logging
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from constants.error_constants import ERR_SESSION_NOT_FOUND
 from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
@@ -492,7 +493,7 @@ async def get_agent_terminal_session(
     session_info = await service.get_session_info(session_id)
 
     if not session_info:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
     return {
         "status": "success",
@@ -519,7 +520,7 @@ async def delete_agent_terminal_session(
     success = await service.close_session(session_id)
 
     if not success:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
     return {
         "status": "deleted",
@@ -794,7 +795,7 @@ async def agent_terminal_info(
 # ============================================================================
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 # In-memory store for pending host selection requests
 # In production, this would use Redis for persistence
@@ -842,7 +843,7 @@ async def request_host_selection(
         "selected_host_id": None,
         "selected_host_name": None,
         "connection_info": None,
-        "created_at": datetime.now().isoformat(),
+        "created_at": datetime.now(tz=timezone.utc).isoformat(),
         "updated_at": None,
     }
 
@@ -948,7 +949,7 @@ async def submit_host_selection(
         "ssh_port": ssh_port,
         "username": username,
     }
-    selection["updated_at"] = datetime.now().isoformat()
+    selection["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
     selection["remember_choice"] = remember_choice
 
     logger.info(
@@ -996,7 +997,7 @@ async def cancel_host_selection(
 
     # Mark as cancelled
     selection["status"] = "cancelled"
-    selection["updated_at"] = datetime.now().isoformat()
+    selection["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
 
     logger.info(f"Host selection cancelled for request {request_id}")
 

@@ -115,6 +115,7 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import apiClient from '@/utils/ApiClient'
+import { getApiBase } from '@/config/ssot-config'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
@@ -196,7 +197,7 @@ const runDryScan = async () => {
     scanResult.value = null
     statusMessage.value = null
 
-    const response = await apiClient.post('/api/knowledge-maintenance/cleanup', {
+    const response = await apiClient.post(`${getApiBase()}/knowledge-maintenance/cleanup`, {
       remove_empty: options.value.removeEmpty,
       remove_orphaned_tags: options.value.removeOrphanedTags,
       fix_metadata: options.value.fixMetadata,
@@ -241,7 +242,7 @@ const runCleanup = async () => {
   try {
     isCleaning.value = true
 
-    const response = await apiClient.post('/api/knowledge-maintenance/cleanup', {
+    const response = await apiClient.post(`${getApiBase()}/knowledge-maintenance/cleanup`, {
       remove_empty: options.value.removeEmpty,
       remove_orphaned_tags: options.value.removeOrphanedTags,
       fix_metadata: options.value.fixMetadata,

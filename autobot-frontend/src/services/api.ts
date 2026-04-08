@@ -8,6 +8,7 @@ import type {
 import apiClient from '@/utils/ApiClient'
 import type { RequestOptions } from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 // Create scoped logger for ApiService
 const logger = createLogger('ApiService')
@@ -64,60 +65,60 @@ class ApiService {
 
   // Chat API
   async sendMessage(message: string, options: Record<string, unknown> = {}): Promise<ApiResponse> {
-    return this.post('/api/chats/' + (options.chatId || 'default') + '/message', {
+    return this.post(`${getApiBase()}/chats/` + (options.chatId || 'default') + '/message', {
       message,
       ...options
     })
   }
 
   async getChatHistory(): Promise<ApiResponse<ChatMessage[]>> {
-    return this.get('/api/chat/sessions')
+    return this.get(`${getApiBase()}/chat/sessions`)
   }
 
   async getChatSessions(): Promise<ApiResponse<ChatSession[]>> {
-    return this.get('/api/chat/sessions')
+    return this.get(`${getApiBase()}/chat/sessions`)
   }
 
   async getChatMessages(chatId: string): Promise<ApiResponse<{ history: ChatMessage[] }>> {
-    return this.get(`/api/chat/sessions/${chatId}`)
+    return this.get(`${getApiBase()}/chat/sessions/${chatId}`)
   }
 
   async deleteChatHistory(chatId: string): Promise<ApiResponse> {
-    return this.delete(`/api/chats/${chatId}`)
+    return this.delete(`${getApiBase()}/chats/${chatId}`)
   }
 
   // Workflow API
   async getWorkflows(): Promise<ApiResponse> {
-    return this.get('/api/workflow/workflows')
+    return this.get(`${getApiBase()}/workflow/workflows`)
   }
 
   async getWorkflowDetails(workflowId: string): Promise<ApiResponse> {
-    return this.get(`/api/workflow/workflow/${workflowId}`)
+    return this.get(`${getApiBase()}/workflow/workflow/${workflowId}`)
   }
 
   async getWorkflowStatus(workflowId: string): Promise<ApiResponse> {
-    return this.get(`/api/workflow/workflow/${workflowId}/status`)
+    return this.get(`${getApiBase()}/workflow/workflow/${workflowId}/status`)
   }
 
   async approveWorkflowStep(workflowId: string, approval: WorkflowApproval): Promise<ApiResponse> {
-    return this.post(`/api/workflow/workflow/${workflowId}/approve`, approval)
+    return this.post(`${getApiBase()}/workflow/workflow/${workflowId}/approve`, approval)
   }
 
   async executeWorkflow(request: { message: string; [key: string]: unknown }): Promise<ApiResponse> {
-    return this.post('/api/workflow/execute', request)
+    return this.post(`${getApiBase()}/workflow/execute`, request)
   }
 
   async cancelWorkflow(workflowId: string): Promise<ApiResponse> {
-    return this.delete(`/api/workflow/workflow/${workflowId}`)
+    return this.delete(`${getApiBase()}/workflow/workflow/${workflowId}`)
   }
 
   async getPendingApprovals(workflowId: string): Promise<ApiResponse> {
-    return this.get(`/api/workflow/workflow/${workflowId}/pending_approvals`)
+    return this.get(`${getApiBase()}/workflow/workflow/${workflowId}/pending_approvals`)
   }
 
   // Research Agent API
   async performResearch(query: string, focus = 'general', maxResults = 5): Promise<ApiResponse> {
-    return this.post('/api/research/comprehensive', {
+    return this.post(`${getApiBase()}/research/comprehensive`, {
       query,
       focus,
       max_results: maxResults
@@ -125,14 +126,14 @@ class ApiService {
   }
 
   async researchTools(query: string): Promise<ApiResponse> {
-    return this.post('/api/ai-stack/research/web', {
+    return this.post(`${getApiBase()}/ai-stack/research/web`, {
       query,
       focus: 'installation_usage'
     })
   }
 
   async getInstallationGuide(toolName: string): Promise<ApiResponse> {
-    return this.post('/api/ai-stack/research/comprehensive', {
+    return this.post(`${getApiBase()}/ai-stack/research/comprehensive`, {
       query: `installation guide for ${toolName}`,
       focus: 'installation'
     })
@@ -140,11 +141,11 @@ class ApiService {
 
   // Settings API
   async getSettings(): Promise<ApiResponse> {
-    return this.get('/api/settings/')
+    return this.get(`${getApiBase()}/settings/`)
   }
 
   async updateSettings(settings: Record<string, unknown>): Promise<ApiResponse> {
-    return this.post('/api/settings/', settings)
+    return this.post(`${getApiBase()}/settings/`, settings)
   }
 
   async saveSettings(settings: Record<string, unknown>): Promise<ApiResponse> {
@@ -153,33 +154,33 @@ class ApiService {
 
   // System API
   async getSystemStatus(): Promise<ApiResponse> {
-    return this.get('/api/system/info')
+    return this.get(`${getApiBase()}/system/info`)
   }
 
   async getSystemHealth(): Promise<ApiResponse> {
-    return this.get('/api/health')
+    return this.get(`${getApiBase()}/health`)
   }
 
   async getSystemInfo(): Promise<ApiResponse> {
-    return this.get('/api/system/info')
+    return this.get(`${getApiBase()}/system/info`)
   }
 
   // Terminal API
   async executeCommand(command: string, options: Record<string, unknown> = {}): Promise<ApiResponse> {
-    return this.post('/api/agent-terminal/execute', { command, ...options })
+    return this.post(`${getApiBase()}/agent-terminal/execute`, { command, ...options })
   }
 
   async interruptProcess(): Promise<ApiResponse> {
-    return this.post('/api/agent-terminal/execute', { interrupt: true })
+    return this.post(`${getApiBase()}/agent-terminal/execute`, { interrupt: true })
   }
 
   async killAllProcesses(): Promise<ApiResponse> {
-    return this.post('/api/agent-terminal/execute', { kill: true })
+    return this.post(`${getApiBase()}/agent-terminal/execute`, { kill: true })
   }
 
   // Knowledge Base API
   async searchKnowledge(query: string, limit = 5): Promise<ApiResponse> {
-    return this.post('/api/chat-knowledge/search', {
+    return this.post(`${getApiBase()}/chat-knowledge/search`, {
       query,
       n_results: limit
     })
@@ -190,14 +191,14 @@ class ApiService {
   }
 
   async addKnowledge(content: string, metadata: Record<string, unknown> = {}): Promise<ApiResponse> {
-    return this.post('/api/chat-knowledge/knowledge/add_temporary', {
+    return this.post(`${getApiBase()}/chat-knowledge/knowledge/add_temporary`, {
       content,
       metadata
     })
   }
 
   async getChatKnowledgeContext(chatId: string): Promise<ApiResponse> {
-    return this.get(`/api/chat-knowledge/context/${chatId}`)
+    return this.get(`${getApiBase()}/chat-knowledge/context/${chatId}`)
   }
 
   async associateFileWithChat(data: {
@@ -206,17 +207,17 @@ class ApiService {
     association_type: string;
     metadata?: Record<string, unknown>;
   }): Promise<ApiResponse> {
-    return this.post('/api/chat-knowledge/files/associate', data)
+    return this.post(`${getApiBase()}/chat-knowledge/files/associate`, data)
   }
 
   async getKnowledgeBaseStats(): Promise<ApiResponse> {
-    return this.get('/api/knowledge_base/stats/basic')
+    return this.get(`${getApiBase()}/knowledge_base/stats/basic`)
   }
 
   // Monitoring & Health
   async getServiceHealth(): Promise<ApiResponse> {
     try {
-      const response = await this.get<ApiResponse>('/api/monitoring/services/health');
+      const response = await this.get<ApiResponse>(`${getApiBase()}/monitoring/services/health`);
       return response;
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -236,7 +237,7 @@ class ApiService {
   }
 
   async getSystemMetrics(): Promise<ApiResponse> {
-    return this.get('/api/service-monitor/resources')
+    return this.get(`${getApiBase()}/service-monitor/resources`)
   }
 }
 

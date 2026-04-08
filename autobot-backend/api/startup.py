@@ -10,7 +10,7 @@ import asyncio
 import json
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
@@ -73,7 +73,7 @@ def add_startup_message(
         phase=phase,
         message=message,
         progress=progress,
-        timestamp=datetime.now().isoformat(),
+        timestamp=datetime.now(tz=timezone.utc).isoformat(),
         icon=icon,
         details=details,
     )

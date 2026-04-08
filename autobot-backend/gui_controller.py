@@ -8,6 +8,8 @@ import subprocess
 
 import pyautogui
 
+from constants.threshold_constants import TimingConstants
+
 logger = logging.getLogger(__name__)
 
 
@@ -156,7 +158,7 @@ async def main():
             "Running in virtual display. GUI operations will be performed in the background.",
         )
         # Give Xvfb a moment to start
-        await asyncio.sleep(2)
+        await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
 
     # Test screenshot
     screenshot = await controller.capture_screen()

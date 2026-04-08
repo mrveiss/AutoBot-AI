@@ -1,4 +1,5 @@
 # AutoBot - AI-Powered Automation Platform
+import uuid
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
@@ -95,16 +96,16 @@ class SummarizationAgent(StandardizedAgent):
     async def process_query(
         self, request_text: str, context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Process a summarization query using LLM."""
+        """Process a summarization query using the vLLM-optimised API (Issue #3389)."""
         try:
             logger.info("Summarization Agent processing: %s...", request_text[:50])
-            messages = [
-                {"role": "system", "content": self._get_localized_system_prompt()},
-                {"role": "user", "content": request_text},
-            ]
-            response = await self.llm_interface.chat_completion(
-                messages=messages,
-                llm_type="chat",
+            session_id = (context or {}).get("session_id") or str(uuid.uuid4())
+            response = await self.llm_interface.chat_completion_optimized(
+                agent_type=self.AGENT_ID,
+                user_message=request_text,
+                session_id=session_id,
+                user_name=(context or {}).get("user_name"),
+                user_role=(context or {}).get("user_role"),
                 temperature=0.5,
                 max_tokens=LLMDefaults.SYNTHESIS_MAX_TOKENS,
                 top_p=LLMDefaults.DEFAULT_TOP_P,

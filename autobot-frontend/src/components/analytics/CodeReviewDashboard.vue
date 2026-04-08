@@ -277,6 +277,7 @@
             :key="review.id"
             class="history-item"
             @click="loadReview(review.id)"
+            style="cursor: pointer;"
           >
             <div class="history-info">
               <span class="history-path">{{ review.path }}</span>
@@ -352,6 +353,7 @@ import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
 import api from '@/services/api'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 const { t } = useI18n()
 const logger = createLogger('CodeReviewDashboard')
@@ -585,7 +587,7 @@ async function runAnalysis() {
   try {
     // Issue #701: Fixed api.get call to use params option and type assertion
     // Issue #3436: scope to project when sourceId is present
-    const response = await api.get<ApiDataResponse>('/api/code-review/analyze', {
+    const response = await api.get<ApiDataResponse>(`${getApiBase()}/code-review/analyze`, {
       params: withSourceIdParams({
         path: selectedPath.value,
         languages: selectedLanguages.value.join(',')
@@ -617,7 +619,7 @@ async function loadHistory() {
   try {
     // Issue #701: Added type assertion for response
     // Issue #3436: scope to project when sourceId is present
-    const response = await api.get<ApiDataResponse>('/api/code-review/history', {
+    const response = await api.get<ApiDataResponse>(`${getApiBase()}/code-review/history`, {
       params: withSourceIdParams()
     })
     reviewHistory.value = (response as ApiDataResponse).reviews || (response as ApiDataResponse).data?.reviews || []
@@ -628,15 +630,26 @@ async function loadHistory() {
 }
 
 async function loadReview(reviewId: string) {
+  if (!reviewId) {
+    showToast(t('analytics.codeReview.reviewNotAvailable'), 'warning')
+    return
+  }
+  loading.value = true
   try {
-    // Issue #701: Added type assertion for response
-    const response = await api.get<ApiDataResponse>(`/api/code-review/review/${reviewId}`)
-    issues.value = (response as ApiDataResponse).issues || (response as ApiDataResponse).data?.issues || []
-    selectedPath.value = (response as ApiDataResponse).path || (response as ApiDataResponse).data?.path || ''
+    const params = withSourceIdParams()
+    const response = await api.get<ApiDataResponse>(
+      `${getApiBase()}/code-review/review/${reviewId}`,
+      { params }
+    )
+    const data = response as ApiDataResponse
+    issues.value = data.issues || data.data?.issues || []
     hasAnalyzed.value = true
-  } catch (error) {
+    showToast(t('analytics.codeReview.reviewLoaded'), 'info')
+  } catch (error: unknown) {
     logger.error('Failed to load review:', error)
-    showToast(t('analytics.codeReview.failedToLoadReview'), 'error')
+    showToast(t('analytics.codeReview.analysisFailed'), 'error')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -644,7 +657,7 @@ async function loadPatterns() {
   showPatterns.value = true
   try {
     // Issue #701: Added type assertion for response
-    const response = await api.get<ApiDataResponse>('/api/code-review/patterns')
+    const response = await api.get<ApiDataResponse>(`${getApiBase()}/code-review/patterns`)
     patterns.value = (response as ApiDataResponse).patterns || (response as ApiDataResponse).data?.patterns || []
     applyPatternPrefs()
   } catch (error) {
@@ -665,7 +678,7 @@ function savePatternPrefs(): void {
 async function applyPatternPrefs(): Promise<void> {
   // Issue #638: Load preferences from backend first, fallback to localStorage
   try {
-    const response = await api.get<ApiDataResponse>('/api/analytics/code-review/patterns/preferences');
+    const response = await api.get<ApiDataResponse>(`${getApiBase()}/code-review/patterns/preferences`);
     const prefs = (response as ApiDataResponse).patterns || (response as ApiDataResponse).data?.patterns;
 
     if (prefs) {
@@ -701,7 +714,7 @@ async function togglePattern(pattern: Pattern): Promise<void> {
   const newState = !pattern.enabled;
 
   try {
-    await api.post('/api/analytics/code-review/patterns/toggle', {
+    await api.post(`${getApiBase()}/code-review/patterns/toggle`, {
       pattern_id: pattern.id,
       enabled: newState
     });
@@ -719,7 +732,7 @@ async function togglePattern(pattern: Pattern): Promise<void> {
 
 async function markResolved(issue: ReviewIssue) {
   try {
-    await api.post('/api/code-review/feedback', {
+    await api.post(`${getApiBase()}/code-review/feedback`, {
       issue_id: issue.id,
       feedback: 'resolved'
     })
@@ -734,7 +747,7 @@ async function markResolved(issue: ReviewIssue) {
 
 async function markFalsePositive(issue: ReviewIssue) {
   try {
-    await api.post('/api/code-review/feedback', {
+    await api.post(`${getApiBase()}/code-review/feedback`, {
       issue_id: issue.id,
       feedback: 'false_positive'
     })

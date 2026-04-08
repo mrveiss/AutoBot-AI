@@ -16,7 +16,7 @@ import random
 import threading
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, FrozenSet, List, Optional
 from urllib.parse import urlparse
@@ -164,7 +164,9 @@ class CaptchaSolver:
     ) -> Optional[str]:
         """Solve reCAPTCHA using solving service."""
         if not self.api_key:
-            logger.warning("No CAPTCHA API key configured")
+            logger.warning(  # codeql-suppress py/clear-text-logging-sensitive-data: logs absence of key, no key value
+                "No CAPTCHA API key configured"
+            )
             return None
         try:
             if self.service == "2captcha":
@@ -539,7 +541,7 @@ class WebResearcher:
                 "query": query,
                 "error": "Web search failed",
                 "results": [],
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
 
     async def _search_all_engines(
@@ -560,7 +562,7 @@ class WebResearcher:
                 results = await func(query, per_engine)
                 for r in results:
                     r["search_engine"] = name
-                    r["timestamp"] = datetime.now().isoformat()
+                    r["timestamp"] = datetime.now(tz=timezone.utc).isoformat()
                 all_results.extend(results)
                 await self._random_delay(2, 5)
             except Exception as e:
@@ -584,7 +586,7 @@ class WebResearcher:
             "total_found": total_found,
             "unique_results": unique_count,
             "search_engines_used": engine_count,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     # -------------------------------------------------------------------
@@ -1066,7 +1068,7 @@ class WebResearcher:
             result = await asyncio.wait_for(task, timeout=timeout_secs)
             self.circuit_breaker.call_succeeded()
             result["method_used"] = "web_search"
-            result["timestamp"] = datetime.now().isoformat()
+            result["timestamp"] = datetime.now(tz=timezone.utc).isoformat()
             if result.get("status") == "success":
                 self._cache_result(cache_key, result)
             return result
@@ -1089,7 +1091,7 @@ class WebResearcher:
             ),
             "query": query,
             "results": [],
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     def _build_rate_limited_response(self, query: str) -> Dict[str, Any]:
@@ -1099,7 +1101,7 @@ class WebResearcher:
             "message": ("Too many research requests. " "Please wait and try again."),
             "query": query,
             "results": [],
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     def _build_failure_response(self, query: str) -> Dict[str, Any]:
@@ -1109,7 +1111,7 @@ class WebResearcher:
             "message": "Research failed or circuit breaker open.",
             "query": query,
             "results": [],
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     # -------------------------------------------------------------------
@@ -1341,7 +1343,7 @@ class WebResearcher:
                 "stored_in_kb": kb_worthy,
                 "search_engines_used": search_results.get("search_engines_used", 0),
                 "total_found": search_results.get("total_found", 0),
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "from_cache": False,
                 "research_method": "advanced",
             }
@@ -1359,7 +1361,7 @@ class WebResearcher:
             "error": error,
             "sources": [],
             "summary": None,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     def _convert_to_sources(
@@ -1378,7 +1380,7 @@ class WebResearcher:
                     "quality_score": r.get("quality_score", 0.5),
                     "relevance": r.get("relevance_score", 0.5),
                     "search_engine": r.get("search_engine", "unknown"),
-                    "timestamp": r.get("timestamp", datetime.now().isoformat()),
+                    "timestamp": r.get("timestamp", datetime.now(tz=timezone.utc).isoformat()),
                 }
             )
         return sources

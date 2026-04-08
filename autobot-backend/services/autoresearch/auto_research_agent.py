@@ -45,6 +45,8 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
+from constants.ttl_constants import TTL_24_HOURS, TTL_7_DAYS
+
 from .config import AutoResearchConfig
 from .models import Experiment, ExperimentResult, HyperParams
 from .runner import ExperimentRunner
@@ -175,7 +177,7 @@ class ApprovalGate:
 
     _PENDING_KEY_TEMPLATE = "autoresearch:approval:pending:{session_id}:{exp_id}"
     _STATUS_KEY_TEMPLATE = "autoresearch:approval:status:{session_id}:{exp_id}"
-    _TTL_SECONDS = 86400  # 24 hours
+    _TTL_SECONDS = TTL_24_HOURS
 
     def __init__(self, config: Optional[AutoResearchConfig] = None):
         self.config = config or AutoResearchConfig()
@@ -888,7 +890,7 @@ class AutoResearchAgent:
         try:
             redis = await self._get_redis()
             key = f"autoresearch:session:{session.id}"
-            await redis.set(key, json.dumps(session.to_dict()), ex=86400 * 7)
+            await redis.set(key, json.dumps(session.to_dict()), ex=TTL_7_DAYS)
             await redis.zadd(
                 "autoresearch:sessions:timeline",
                 {session.id: session.started_at or time.time()},

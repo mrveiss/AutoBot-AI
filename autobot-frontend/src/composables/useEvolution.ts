@@ -11,6 +11,7 @@ import { ref, computed, isRef, type ComputedRef } from 'vue'
 import axios from 'axios'
 import { createLogger } from '@/utils/debugUtils'
 import { extractApiErrorMessage, extractErrorMessage } from '@/utils/errorExtract'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useEvolution')
 
@@ -91,7 +92,7 @@ export function useEvolution(sourceId?: string | ComputedRef<string | undefined>
 
   // API client with auth token
   const api = axios.create({
-    baseURL: '/api/analytics/evolution',
+    baseURL: `${getApiBase()}/evolution`,
     timeout: 120000, // 2 minutes for long-running analysis
     headers: {
       'Content-Type': 'application/json',

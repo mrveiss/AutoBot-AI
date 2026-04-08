@@ -10,13 +10,15 @@ import asyncio
 import logging
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 import aiohttp
 
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.ssot_config import config as _ssot_config
 from autobot_shared.ssot_config import get_ollama_url
 from config import config as global_config_manager
+from constants.api_constants import PATH_OLLAMA_GENERATE, PATH_OLLAMA_TAGS
 from constants.model_constants import ModelConstants
 from constants.network_constants import NetworkConstants
 from type_defs.common import Metadata
@@ -62,7 +64,7 @@ class ConnectionTester:
             try:
                 ollama_endpoint = get_ollama_url()
                 ollama_check_url = f"{ollama_endpoint}/api/tags"
-                timeout = aiohttp.ClientTimeout(total=3)
+                timeout = aiohttp.ClientTimeout(total=_ssot_config.timeout.health_check)
                 async with aiohttp.ClientSession(timeout=timeout) as session:
                     async with session.get(ollama_check_url) as response:
                         if response.status == 200:
@@ -75,7 +77,7 @@ class ConnectionTester:
                 "backend": "connected",
                 "ollama": ollama_status,
                 "redis_status": redis_status,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "fast_check": True,
             }
 
@@ -94,7 +96,7 @@ class ConnectionTester:
                 "ollama": "unknown",
                 "redis_status": "unknown",
                 "error": "Internal server error",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "fast_check": True,
             }
 
@@ -168,7 +170,7 @@ class ConnectionTester:
             "prompt": "Test connection - respond with 'OK'",
             "stream": False,
         }
-        gen_timeout = aiohttp.ClientTimeout(total=30)
+        gen_timeout = aiohttp.ClientTimeout(total=_ssot_config.timeout.llm)
         async with aiohttp.ClientSession(timeout=gen_timeout) as session:
             async with session.post(endpoint, json=test_payload) as resp:
                 if resp.status == 200:
@@ -206,8 +208,8 @@ class ConnectionTester:
                 endpoint, model
             )
 
-            check_url = endpoint.replace("/api/generate", "/api/tags")
-            timeout = aiohttp.ClientTimeout(total=10)
+            check_url = endpoint.replace(PATH_OLLAMA_GENERATE, PATH_OLLAMA_TAGS)
+            timeout = aiohttp.ClientTimeout(total=_ssot_config.timeout.http)
 
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get(check_url) as response:
@@ -327,7 +329,7 @@ class ConnectionTester:
         """Check Ollama embedding model availability (reduces nesting in _get_embedding_status)."""
         ollama_host = provider_config.get("host", get_ollama_url())
         tags_url = f"{ollama_host}/api/tags"
-        timeout = aiohttp.ClientTimeout(total=5)
+        timeout = aiohttp.ClientTimeout(total=_ssot_config.timeout.connect)
 
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(tags_url) as response:
@@ -429,7 +431,7 @@ class ConnectionTester:
                 "redis_search_module_loaded": redis_result.get(
                     "redis_search_module_loaded", False
                 ),
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "details": {
                     "ollama": ollama_status,
                     "redis": redis_result,
@@ -445,7 +447,7 @@ class ConnectionTester:
                 "redis_status": "unknown",
                 "redis_search_module_loaded": False,
                 "error": "Internal server error",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
 
 
@@ -522,7 +524,7 @@ class ModelManager:
             ollama_host = ollama_config.get("host", get_ollama_url())
             ollama_url = f"{ollama_host}/api/tags"
 
-            timeout = aiohttp.ClientTimeout(total=10)
+            timeout = aiohttp.ClientTimeout(total=_ssot_config.timeout.http)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get(ollama_url) as response:
                     if response.status != 200:

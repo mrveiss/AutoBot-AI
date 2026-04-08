@@ -34,9 +34,11 @@ Operation Types Supported:
 import asyncio
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from constants.threshold_constants import TimingConstants
 
 # Re-export all public API from the package
 from utils.long_running_operations import (  # Types and dataclasses; Managers
@@ -117,7 +119,7 @@ async def _process_index_file(
     return {
         "path": str(file_path),
         "size": file_stat.st_size,
-        "indexed_at": datetime.now().isoformat(),
+        "indexed_at": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -166,7 +168,7 @@ def _create_test_result(
         "file": str(test_file),
         "status": "PASS" if test_passed else "FAIL",
         "duration": duration,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -231,7 +233,7 @@ async def _execute_single_test(
         f"Test {index + 1} of {total_tests}: {test_file.name}",
     )
 
-    await asyncio.sleep(0.5)  # Simulate test execution
+    await asyncio.sleep(TimingConstants.SHORT_DELAY)  # Simulate test execution
     test_passed = random.random() > 0.1  # 90% pass rate
 
     test_result = _create_test_result(test_file, test_passed, 0.5)
@@ -312,7 +314,7 @@ async def _process_indexing_file_with_progress(
 
     Issue #620.
     """
-    await asyncio.sleep(0.1)  # Simulate processing
+    await asyncio.sleep(TimingConstants.MICRO_DELAY)  # Simulate processing
     file_info = await _process_index_file(file_path)
 
     # Update progress
@@ -388,7 +390,7 @@ def _create_indexing_operation(
         return {
             "total_files_processed": len(results),
             "files": results,
-            "completed_at": datetime.now().isoformat(),
+            "completed_at": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     return indexing_operation
@@ -510,7 +512,7 @@ if __name__ == "__main__":
                     ):
                         break
 
-                await asyncio.sleep(5)
+                await asyncio.sleep(TimingConstants.MEDIUM_DELAY)
 
             print("All operations completed!")  # noqa: print
 

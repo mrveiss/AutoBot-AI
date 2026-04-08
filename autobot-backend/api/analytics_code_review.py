@@ -12,7 +12,8 @@ import asyncio
 import json
 import logging
 import re
-from datetime import datetime
+import uuid
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
@@ -20,8 +21,13 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from auth_middleware import check_admin_permission
+from auth_middleware import check_admin_permission, get_current_user
 from constants.threshold_constants import TimingConstants
+from constants.ttl_constants import TTL_7_DAYS
+from api.analytics_shared import (
+    resolve_source_or_404 as _resolve_source_or_404,  # noqa: F401 – used by history/metrics/summary
+    resolve_source_root_or_404 as _resolve_source_root_or_404,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,22 +38,6 @@ _VALID_GIT_REF_RE = re.compile(
 )
 
 router = APIRouter(tags=["code-review", "analytics"])  # Prefix set in router_registry
-
-
-async def _resolve_source_or_404(source_id: Optional[str]) -> None:
-    """Raise HTTP 404 if source_id is provided but not found (Issue #3436).
-
-    Uses a lazy import of resolve_source_root to avoid loading the full
-    codebase_analytics package at module import time.
-    """
-    if source_id is None:
-        return
-    from api.codebase_analytics.endpoints.shared import resolve_source_root
-
-    source_root = await resolve_source_root(source_id)
-    if source_root is None:
-        raise HTTPException(status_code=404, detail=f"Source '{source_id}' not found")
-
 
 # Performance optimization: O(1) lookup for reviewable file extensions (Issue #326)
 REVIEWABLE_EXTENSIONS = {".py", ".vue", ".ts", ".js"}
@@ -478,11 +468,13 @@ async def analyze_diff(
     Analyze git diff and generate review comments.
 
     Issue #744: Requires admin authentication.
-    Issue #3436: Accepts optional source_id to scope analysis to a project.
+    Issue #3441: When source_id is supplied, only files under that project's
+    clone directory (source_root) are analysed.  Files outside source_root
+    are skipped so results are scoped to the selected project.
 
     Returns review findings with severity and suggestions.
     """
-    await _resolve_source_or_404(source_id)
+    source_root = await _resolve_source_root_or_404(source_id)
     diff_content = await get_git_diff(commit_range)
 
     if not diff_content:
@@ -500,6 +492,16 @@ async def analyze_diff(
         # Get full file content for analysis
         try:
             file_path = Path(file_info["path"])
+            # Issue #3441: restrict to source_root when provided
+            if source_root is not None:
+                resolved = file_path.resolve()
+                try:
+                    resolved.relative_to(source_root.resolve())
+                except ValueError:
+                    logger.debug(
+                        "Skipping file outside source_root: %s", file_info["path"]
+                    )
+                    continue
             # Issue #358 - avoid blocking
             if (
                 await asyncio.to_thread(file_path.exists)
@@ -516,16 +518,102 @@ async def analyze_diff(
     score = calculate_review_score(all_comments)
     summary = generate_summary(all_comments)
 
+    review_id = str(uuid.uuid4())
+    analyzed_at = datetime.now(tz=timezone.utc).isoformat()
+    result_payload = {
+        "id": review_id,
+        "path": commit_range or "HEAD~1..HEAD",
+        "issues": [c.model_dump() for c in all_comments],
+        "analyzed_at": analyzed_at,
+        "files_reviewed": len(files),
+        "score": score,
+        "summary": summary,
+    }
+
+    try:
+        from autobot_shared.redis_client import get_redis_client
+
+        redis = get_redis_client(async_client=False, database="analytics")
+        if redis:
+            effective_source = source_id or "default"
+            redis_key = f"code_review:result:{effective_source}:{review_id}"
+            await asyncio.to_thread(
+                redis.set, redis_key, json.dumps(result_payload), "ex", TTL_7_DAYS
+            )
+            history_entry = {
+                "id": review_id,
+                "path": result_payload["path"],
+                "analyzed_at": analyzed_at,
+                "total_comments": len(all_comments),
+                "score": score,
+                "source_id": effective_source,
+            }
+            await asyncio.to_thread(
+                redis.lpush,
+                f"code_review:history:{effective_source}",
+                json.dumps(history_entry),
+            )
+            await asyncio.to_thread(
+                redis.ltrim, f"code_review:history:{effective_source}", 0, 99
+            )
+            await asyncio.to_thread(
+                redis.expire, f"code_review:history:{effective_source}", TTL_7_DAYS
+            )
+            logger.info("Stored code review result %s for source %s", review_id, effective_source)
+    except Exception as exc:
+        logger.warning("Failed to persist code review result: %s", exc)
+
     return {
         "status": "success",
-        "id": f"review-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-        "timestamp": datetime.now().isoformat(),
+        "id": review_id,
+        "timestamp": analyzed_at,
         "files_reviewed": len(files),
         "total_comments": len(all_comments),
         "score": score,
         "comments": [c.model_dump() for c in all_comments],
         "summary": summary,
     }
+
+
+@router.get("/review/{review_id}")
+async def get_review_by_id(
+    review_id: str,
+    _user: dict = Depends(get_current_user),
+    source_id: Optional[str] = Query(None, description="Project source ID (optional, speeds up lookup)"),
+) -> dict[str, Any]:
+    """
+    Retrieve a persisted code review result by its UUID.
+
+    Issue #3716: Enables history drill-down by fetching the stored result.
+
+    Returns the full review payload or 404 if not found/expired.
+    """
+    try:
+        from autobot_shared.redis_client import get_redis_client
+
+        redis = get_redis_client(async_client=False, database="analytics")
+        if not redis:
+            raise HTTPException(status_code=503, detail="Analytics database unavailable")
+
+        if source_id:
+            raw = await asyncio.to_thread(
+                redis.get, f"code_review:result:{source_id}:{review_id}"
+            )
+        else:
+            # Scan across all sources for this review_id
+            pattern = f"code_review:result:*:{review_id}"
+            keys = await asyncio.to_thread(redis.keys, pattern)
+            raw = await asyncio.to_thread(redis.get, keys[0]) if keys else None
+
+        if not raw:
+            raise HTTPException(status_code=404, detail=f"Review {review_id} not found or expired")
+
+        return json.loads(raw)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Failed to retrieve review %s: %s", review_id, exc)
+        raise HTTPException(status_code=500, detail="Failed to retrieve review result")
 
 
 @router.post("/review-file")
@@ -562,7 +650,7 @@ async def review_file(
     return {
         "status": "success",
         "file_path": file_path,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         "total_comments": len(comments),
         "score": score,
         "comments": [c.model_dump() for c in comments],
@@ -606,15 +694,53 @@ async def get_review_history(
     Get review history.
 
     Issue #744: Requires admin authentication.
-    Issue #3436: Accepts optional source_id to scope results to a project.
+    Issue #3441: Accepts optional source_id; validated against known sources.
 
     Returns past reviews for trend analysis.
     """
     await _resolve_source_or_404(source_id)
-    # Issue #543: Return no-data response instead of demo data
-    return _no_data_response(
-        "No review history available. Reviews will be stored here once you run code reviews."
-    )
+
+    try:
+        from autobot_shared.redis_client import get_redis_client
+
+        redis = get_redis_client(async_client=False, database="analytics")
+        if not redis:
+            return _no_data_response("Analytics database unavailable.")
+
+        effective_source = source_id or "default"
+        raw_entries = await asyncio.to_thread(
+            redis.lrange, f"code_review:history:{effective_source}", 0, limit - 1
+        )
+
+        reviews = []
+        for raw in raw_entries:
+            entry = json.loads(raw)
+            if since:
+                try:
+                    entry_dt = datetime.fromisoformat(entry.get("analyzed_at", ""))
+                    since_dt = datetime.fromisoformat(since)
+                    # Normalise both to UTC-aware for comparison
+                    if entry_dt.tzinfo is None:
+                        entry_dt = entry_dt.replace(tzinfo=timezone.utc)
+                    if since_dt.tzinfo is None:
+                        since_dt = since_dt.replace(tzinfo=timezone.utc)
+                    if entry_dt < since_dt:
+                        continue
+                except ValueError:
+                    pass
+            reviews.append(entry)
+
+        if not reviews:
+            return _no_data_response(
+                "No review history available. Reviews will be stored here once you run code reviews."
+            )
+
+        return {"status": "success", "reviews": reviews, "total": len(reviews)}
+    except Exception as exc:
+        logger.warning("Failed to load review history: %s", exc)
+        return _no_data_response(
+            "No review history available. Reviews will be stored here once you run code reviews."
+        )
 
 
 @router.get("/metrics")
@@ -627,7 +753,7 @@ async def get_review_metrics(
     Get review metrics over time.
 
     Issue #744: Requires admin authentication.
-    Issue #3436: Accepts optional source_id to scope results to a project.
+    Issue #3441: Accepts optional source_id; validated against known sources.
 
     Returns aggregated statistics for trend analysis.
     """
@@ -661,7 +787,7 @@ async def submit_feedback(
                 "comment_id": comment_id,
                 "is_helpful": is_helpful,
                 "feedback_text": feedback_text,
-                "submitted_at": datetime.now().isoformat(),
+                "submitted_at": datetime.now(tz=timezone.utc).isoformat(),
             }
             # Issue #361 - avoid blocking
             await asyncio.to_thread(
@@ -693,7 +819,7 @@ async def get_review_summary(
     Get overall review system summary.
 
     Issue #744: Requires admin authentication.
-    Issue #3436: Accepts optional source_id to scope results to a project.
+    Issue #3441: Accepts optional source_id; validated against known sources.
 
     Returns dashboard-level metrics.
     """

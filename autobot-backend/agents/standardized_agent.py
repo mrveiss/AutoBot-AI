@@ -19,6 +19,7 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
+from memory.manager import UnifiedMemoryManager
 from prompt_manager import get_language_instruction, resolve_language
 
 from .base_agent import AgentRequest, AgentResponse, BaseAgent, DeploymentMode
@@ -53,6 +54,10 @@ class StandardizedAgent(BaseAgent):
         super().__init__(agent_type, deployment_mode)
         self.logger = logging.getLogger(f"{__name__}.{agent_type}")
 
+        # Lazy memory facade — created on first access so agents that never
+        # use memory don't pay the UnifiedMemoryManager construction cost.
+        self._memory_manager: Optional[UnifiedMemoryManager] = None
+
         # Action handlers mapping - to be configured by subclasses
         self._action_handlers: Dict[str, ActionHandler] = {}
 
@@ -66,7 +71,17 @@ class StandardizedAgent(BaseAgent):
         self._last_error = None
 
         # Lock for thread-safe counter access
-        self._stats_lock = asyncio.Lock()
+        # Named differently from BaseAgent._stats_lock (threading.Lock)
+        self._async_stats_lock = asyncio.Lock()
+
+    @property
+    def memory_manager(self) -> UnifiedMemoryManager:
+        """Unified memory facade (lazy-init). Subsystems via properties:
+        working_memory, essential_story, agent_diary.
+        """
+        if self._memory_manager is None:
+            self._memory_manager = UnifiedMemoryManager()
+        return self._memory_manager
 
     def register_action_handler(self, action: str, handler: ActionHandler):
         """Register an action handler for this agent"""
@@ -86,7 +101,8 @@ class StandardizedAgent(BaseAgent):
         """Validate action and get handler method (Issue #398: extracted).
 
         Returns:
-            (error_response, handler_config, handler_method) - error_response is set if validation fails
+            (error_response, handler_config, handler_method) - error_response is set
+            if validation fails.
         """
         if not request.action:
             return (
@@ -102,7 +118,8 @@ class StandardizedAgent(BaseAgent):
             return (
                 self._create_error_response(
                     request,
-                    f"Unsupported action '{request.action}'. Supported actions: {supported_actions}",
+                    f"Unsupported action '{request.action}'. "
+                    f"Supported actions: {supported_actions}",
                     "unsupported_action",
                 ),
                 None,
@@ -161,11 +178,37 @@ class StandardizedAgent(BaseAgent):
             },
         )
 
+    async def _before_process(self, context: dict) -> dict:
+        """Load working memory into context before request handling.
+
+        Override in subclasses to enrich the context with session state
+        or prior conversation history from ``self.memory_manager.working_memory``.
+
+        Args:
+            context: Mutable context dict forwarded from the request.
+
+        Returns:
+            Enriched context dict (may be the same object or a new one).
+        """
+        return context
+
+    async def _after_process(self, context: dict, result: Any) -> None:
+        """Persist key outputs to working memory after request handling.
+
+        Override in subclasses to write agent outputs back to
+        ``self.memory_manager.working_memory`` so downstream agents can share state.
+
+        Args:
+            context: Context dict as returned by _before_process.
+            result:  The handler return value (may be None on error).
+        """
+        pass
+
     async def process_request(self, request: AgentRequest) -> AgentResponse:
         """Standardized request processing (Issue #398: refactored to use helpers)."""
         start_time = time.time()
 
-        async with self._stats_lock:
+        async with self._async_stats_lock:
             self._request_count += 1
             self._last_request_time = start_time
 
@@ -175,6 +218,27 @@ class StandardizedAgent(BaseAgent):
                 request.request_id,
                 request.action,
             )
+
+            # --- memory lifecycle: before ---
+            context = dict(request.context or {})
+            try:
+                t0 = time.time()
+                context = await self._before_process(context)
+                self.logger.debug(
+                    "_before_process for %s took %.3fs",
+                    request.request_id,
+                    time.time() - t0,
+                )
+            except Exception as hook_exc:
+                self.logger.warning(
+                    "_before_process hook failed for %s (ignored): %s",
+                    request.request_id,
+                    hook_exc,
+                )
+
+            # Note: enriched context is available to _after_process.
+            # Handlers access request.payload directly; context carries
+            # cross-hook state (session_id, working memory entries, etc.).
 
             # Validate and get handler (Issue #398: extracted)
             (
@@ -187,8 +251,24 @@ class StandardizedAgent(BaseAgent):
 
             result = await self._call_handler_safely(handler_method, request)
 
+            # --- memory lifecycle: after ---
+            try:
+                t0 = time.time()
+                await self._after_process(context, result)
+                self.logger.debug(
+                    "_after_process for %s took %.3fs",
+                    request.request_id,
+                    time.time() - t0,
+                )
+            except Exception as hook_exc:
+                self.logger.warning(
+                    "_after_process hook failed for %s (ignored): %s",
+                    request.request_id,
+                    hook_exc,
+                )
+
             processing_time = time.time() - start_time
-            async with self._stats_lock:
+            async with self._async_stats_lock:
                 self._total_processing_time += processing_time
 
             self.logger.debug(
@@ -200,7 +280,7 @@ class StandardizedAgent(BaseAgent):
 
         except Exception as e:
             # Update error count (thread-safe)
-            async with self._stats_lock:
+            async with self._async_stats_lock:
                 self._error_count += 1
                 self._last_error = str(e)
 
@@ -319,7 +399,7 @@ class StandardizedAgent(BaseAgent):
         self.logger.info("Final stats: %s", stats)
 
         # Reset counters (thread-safe)
-        async with self._stats_lock:
+        async with self._async_stats_lock:
             self._request_count = 0
             self._total_processing_time = 0.0
             self._error_count = 0
@@ -359,6 +439,10 @@ class StandardizedAgent(BaseAgent):
             "You can call these tools by name when the user's request requires them:\n"
             + "\n".join(tool_lines)
         )
+
+    @abstractmethod
+    def _get_system_prompt(self) -> str:
+        """Return the system prompt for this agent - must be implemented by subclasses."""
 
     @abstractmethod
     def get_capabilities(self) -> List[str]:
@@ -454,6 +538,10 @@ class ExampleMigratedAgent(StandardizedAgent):
                 ),
             }
         )
+
+    def _get_system_prompt(self) -> str:
+        """Return agent system prompt."""
+        return "You are a helpful assistant."
 
     def get_capabilities(self) -> List[str]:
         """Return list of supported agent capabilities."""

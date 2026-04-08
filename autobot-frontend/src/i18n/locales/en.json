@@ -601,7 +601,34 @@
     "languageSelect": "Interface Language",
     "languageHint": "Select your preferred language. The interface will switch immediately if translations are available. AI responses will also use this language.",
     "languageChanged": "Language updated successfully",
-    "languageChangeFailed": "Failed to update language"
+    "languageChangeFailed": "Failed to update language",
+    "webResearch": {
+      "title": "Web Research",
+      "desc": "Configure automated web research behaviour and privacy settings",
+      "enabledLabel": "Enable web research",
+      "enabledHint": "Allow AutoBot to search the web when answering questions",
+      "confirmationLabel": "Require confirmation",
+      "confirmationHint": "Ask before performing a web search on your behalf",
+      "methodLabel": "Search method",
+      "methodHint": "Choose how web searches are performed",
+      "methodBasic": "Basic",
+      "methodAdvanced": "Advanced",
+      "methodApiBased": "API-based",
+      "maxResultsLabel": "Max results",
+      "maxResultsHint": "Maximum number of search results to retrieve (1–50)",
+      "timeoutLabel": "Timeout (seconds)",
+      "timeoutHint": "Maximum time to wait for search results (5–120 s)",
+      "thresholdLabel": "Auto-research threshold",
+      "thresholdHint": "Confidence level below which AutoBot triggers an automatic search",
+      "rateLimitLabel": "Rate limiting",
+      "rateLimitHint": "Limit how many requests are sent in a given time window",
+      "rateLimitRequests": "Requests",
+      "rateLimitWindow": "Window (s)",
+      "privacyLabel": "Privacy & storage",
+      "storeInKbHint": "Save research results to the knowledge base",
+      "anonymizeHint": "Anonymize requests before sending to search engines",
+      "filterAdultHint": "Filter adult content from search results"
+    }
   },
   "voice": {
     "title": "Voice",
@@ -1683,7 +1710,9 @@
       "issueResolved": "Issue marked as resolved",
       "failedToUpdate": "Failed to update issue status",
       "markedFalsePositive": "Marked as false positive",
-      "failedToLoadReview": "Failed to load review details"
+      "failedToLoadReview": "Failed to load review details",
+      "reviewLoaded": "Review loaded from history.",
+      "reviewNotAvailable": "Review details not available — run analysis again to see results."
     },
     "performanceAnalysis": {
       "title": "Performance Analysis",
@@ -3060,6 +3089,28 @@
       "aboutPopulateCommands": "Discovers available system commands and creates knowledge entries with usage information, flags, and examples.",
       "aboutIndexDocs": "Indexes documentation files from configured directories (e.g., /usr/share/doc) into the knowledge base.",
       "aboutWhenToUse": "Run <strong>Initialize</strong> first on new systems. Use <strong>Refresh Man Pages</strong> and <strong>Populate Commands</strong> after installing new software. <strong>Reindex</strong> if search performance degrades."
+    },
+    "vectorization": {
+      "actionVectorize": "Vectorize",
+      "actionRetry": "Retry",
+      "actionInProgress": "Processing...",
+      "actionAlreadyDone": "Vectorized",
+      "tooltipVectorize": "Vectorize this document",
+      "tooltipRetry": "Retry vectorization",
+      "tooltipInProgress": "Vectorization in progress",
+      "tooltipAlreadyDone": "Already vectorized"
+    },
+    "batchSelection": {
+      "selected": "{count} selected",
+      "eligible": "{count} eligible",
+      "vectorizeSelected": "Vectorize {count}",
+      "vectorizing": "Vectorizing...",
+      "noneEligible": "None eligible",
+      "vectorizeSelectedTooltip": "Vectorize {count} selected documents",
+      "vectorizingTooltip": "Vectorization in progress",
+      "noneEligibleTooltip": "All selected documents are already vectorized or pending",
+      "clearSelection": "Clear",
+      "clearSelectionTitle": "Clear selection"
     }
   },
   "workflow": {
@@ -3685,6 +3736,18 @@
       "statusDisconnected": "Disconnected",
       "statusError": "Error",
       "statusUnknown": "Unknown"
+    },
+    "modal": {
+      "executeAll": "Execute All Remaining",
+      "editCommand": "Edit",
+      "editCommandAriaLabel": "Edit this step command",
+      "editCommandLabel": "Edit command",
+      "editCommandPlaceholder": "Enter the command to execute...",
+      "editCommandEmpty": "Command cannot be empty.",
+      "editSave": "Save",
+      "editCancel": "Cancel",
+      "editReset": "Reset to original",
+      "editedBadge": "Edited"
     }
   },
   "llm": {
@@ -6255,9 +6318,18 @@
     "llmConfig": "LLM Config",
     "browserAutomation": "Browser",
     "devSpeedup": "Dev Tools",
+    "desktop": "Desktop",
+    "customDashboard": "Custom Dashboard",
     "agentRegistry": "Agents",
     "slmAdmin": "SLM Admin",
     "slmAdminTitle": "Open SLM Admin Panel",
-    "profileSettings": "Profile Settings"
+    "profileSettings": "Profile Settings",
+    "switchLanguage": "Switch language"
+  },
+  "reasoningTrace": {
+    "title": "Reasoning trace",
+    "toggleLabel": "Toggle reasoning trace panel",
+    "success": "Success",
+    "error": "Error"
   }
 }

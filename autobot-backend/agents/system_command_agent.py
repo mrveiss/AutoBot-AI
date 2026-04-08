@@ -10,7 +10,7 @@ terminal streaming
 import asyncio
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from agents.interactive_terminal_agent import InteractiveTerminalAgent
@@ -227,7 +227,7 @@ class SystemCommandAgent:
             "chat_id": chat_id,
             "command": command,
             "status": status,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
         if status == "started":
             event_data["description"] = description or f"Executing: {command}"
@@ -359,7 +359,7 @@ class SystemCommandAgent:
     def _log_command(self, command: str, chat_id: str):
         """Log command execution for audit trail"""
         log_entry = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "chat_id": chat_id,
             "command": command,
             "user": os.getenv("USER", "unknown"),

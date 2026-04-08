@@ -5,7 +5,7 @@ import asyncio
 import importlib
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 
@@ -167,7 +167,7 @@ async def get_frontend_config(admin_check: bool = Depends(check_admin_permission
     return {
         "status": "success",
         "config": frontend_config,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -194,7 +194,7 @@ async def get_system_health(
         # Check various system components
         health_status = {
             "status": "healthy",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "initialization": {
                 "status": app_state.get("initialization_status", "unknown"),
                 "message": app_state.get(
@@ -226,7 +226,7 @@ async def get_system_health(
         logger.error("Health check failed: %s", "Internal server error")
         return {
             "status": "unhealthy",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "error": "Internal server error",
         }
 
@@ -251,7 +251,7 @@ async def get_system_info(admin_check: bool = Depends(check_admin_permission)):
         "name": "AutoBot Backend",
         "version": "1.0.0",
         "python_version": python_version,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         "features": {
             "llm_integration": True,
             "knowledge_base": True,
@@ -294,7 +294,7 @@ async def reload_system_config(admin_check: bool = Depends(check_admin_permissio
     return {
         "status": "success",
         "message": "System configuration reloaded successfully",
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -326,7 +326,7 @@ async def reload_prompts(admin_check: bool = Depends(check_admin_permission)):
     return {
         "status": "success",
         "message": message,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -346,7 +346,7 @@ async def admin_check(admin_check: bool = Depends(check_admin_permission)):
     admin_status = {
         "user": os.getenv("USER", "unknown"),
         "admin": os.getuid() == 0 if hasattr(os, "getuid") else False,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
     return admin_status
@@ -390,7 +390,7 @@ async def dynamic_import(
             "file": getattr(imported_module, "__file__", "unknown"),
             "doc": getattr(imported_module, "__doc__", "No documentation"),
         },
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -433,7 +433,7 @@ async def get_detailed_health(
         logger.error("Detailed health check failed: %s", "Internal server error")
         return {
             "status": "unhealthy",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "error": "Internal server error",
             "detailed": True,
         }
@@ -552,7 +552,7 @@ async def get_cache_stats(admin_check: bool = Depends(check_admin_permission)):
 
         # Add timestamp and additional metadata
         stats_response = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "cache": cache_stats,
             "performance": {
                 "ttl_default": cache_manager.default_ttl,
@@ -589,7 +589,7 @@ async def get_cache_stats(admin_check: bool = Depends(check_admin_permission)):
     except Exception:
         logger.error("Failed to get cache stats: %s", "Internal server error")
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "error": "Internal server error",
             "cache": {"status": "error"},
         }
@@ -657,7 +657,7 @@ async def get_cache_activity(admin_check: bool = Depends(check_admin_permission)
         from utils.cache_manager import cache_manager
 
         activity_response = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "activity": {
                 "recent_keys": [],
                 "key_patterns": {},
@@ -696,7 +696,7 @@ async def get_cache_activity(admin_check: bool = Depends(check_admin_permission)
     except Exception:
         logger.error("Failed to get cache activity: %s", "Internal server error")
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "error": "Internal server error",
             "activity": {"error": "Failed to retrieve activity"},
         }
@@ -725,7 +725,7 @@ async def get_system_metrics(admin_check: bool = Depends(check_admin_permission)
         disk = psutil.disk_usage("/")
 
         metrics = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "system": {
                 "cpu_percent": cpu_percent,
                 "memory": {
@@ -761,7 +761,7 @@ async def get_system_metrics(admin_check: bool = Depends(check_admin_permission)
 
     except ImportError:
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "error": "psutil not available",
             "basic_info": {
                 "python_version": sys.version,
@@ -794,7 +794,7 @@ async def get_cache_coordinator_stats(
     try:
         from cache import get_cache_coordinator
 
-        coordinator = get_cache_coordinator()
+        coordinator = await get_cache_coordinator()
         return coordinator.get_unified_stats()
     except Exception as e:
         logger.error("Error getting cache coordinator stats: %s", str(e))
@@ -820,13 +820,13 @@ async def trigger_cache_eviction(admin_check: bool = Depends(check_admin_permiss
     try:
         from cache import get_cache_coordinator
 
-        coordinator = get_cache_coordinator()
+        coordinator = await get_cache_coordinator()
         evicted = await coordinator._coordinated_evict()
 
         return {
             "status": "eviction_complete",
             "evicted": evicted,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
     except Exception as e:
         logger.error("Error triggering cache eviction: %s", str(e))
@@ -853,13 +853,13 @@ async def clear_cache(
     try:
         from cache import get_cache_coordinator
 
-        coordinator = get_cache_coordinator()
+        coordinator = await get_cache_coordinator()
         if cache_name in coordinator._caches:
             coordinator._caches[cache_name].clear()
             return {
                 "status": "cleared",
                 "cache": cache_name,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
 
         raise HTTPException(status_code=404, detail=f"Cache '{cache_name}' not found")

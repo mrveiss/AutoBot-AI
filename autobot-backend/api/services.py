@@ -8,7 +8,7 @@ Provides service status, health checks, and system information endpoints.
 
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -212,7 +212,7 @@ async def get_services(admin_check: bool = Depends(check_admin_permission)):
             healthy_count=healthy_count,
             warning_count=warning_count,
             error_count=error_count,
-            last_updated=datetime.now(),
+            last_updated=datetime.now(tz=timezone.utc),
         )
 
     except Exception as e:
@@ -240,7 +240,7 @@ async def get_health(admin_check: bool = Depends(check_admin_permission)):
     )
     return {
         "status": "healthy",
-        "timestamp": datetime.now(),
+        "timestamp": datetime.now(tz=timezone.utc),
         "deprecated": True,
         "use_instead": "/api/system/health",
     }
@@ -335,7 +335,7 @@ def _build_vm_status_list(vm_definitions: list) -> list:
     """
     Build VMStatus list from definitions (Issue #665: extracted helper).
     """
-    now = datetime.now()
+    now = datetime.now(tz=timezone.utc)
     return [
         VMStatus(name=name, ip=ip, status="online", services=services, last_check=now)
         for name, ip, services in vm_definitions
@@ -368,7 +368,7 @@ async def get_vms_status(admin_check: bool = Depends(check_admin_permission)):
             "online_count": online_count,
             "offline_count": total_count - online_count,
             "overall_status": "healthy" if online_count == total_count else "degraded",
-            "last_updated": datetime.now(),
+            "last_updated": datetime.now(tz=timezone.utc),
         }
 
     except Exception as e:

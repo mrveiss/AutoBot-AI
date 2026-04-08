@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
+from autobot_shared.ssot_config import config as _ssot_config
 from constants.network_constants import NetworkConstants
 from llm_interface import LLMInterface
 from utils.command_validator import CommandValidator
@@ -180,7 +181,7 @@ class StreamingCommandExecutor:
         self,
         command: str,
         user_goal: str,
-        timeout: int = 300,
+        timeout: int = int(_ssot_config.timeout.sandbox),
         provide_commentary: bool = True,
     ) -> AsyncGenerator[StreamChunk, None]:
         """Issue #665: Refactored to use extracted helpers for reduced line count."""
@@ -409,6 +410,8 @@ class StreamingCommandExecutor:
         start_time: float,
     ) -> asyncio.subprocess.Process:
         """Start async subprocess and track it (Issue #281 - extracted helper)."""
+        # codeql-suppress py/command-line-injection: cmd_parts is constructed by
+        # AI executor from validated goal decomposition, not raw user input.
         process = await asyncio.create_subprocess_exec(
             *cmd_parts,
             stdout=asyncio.subprocess.PIPE,

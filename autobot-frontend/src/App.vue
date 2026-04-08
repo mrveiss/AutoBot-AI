@@ -39,9 +39,9 @@
           <nav id="navigation" class="hidden lg:block" role="navigation" :aria-label="$t('nav.mainNavigation')">
             <div class="hidden lg:flex items-center space-x-8">
                             <div class="flex items-center space-x-4">
+                <template v-for="item in navItems" :key="item.to">
                 <router-link
-                  v-for="item in navItems"
-                  :key="item.to"
+                  v-if="!item.adminOnly || userStore.isAdmin"
                   :to="item.to"
                   :class="{
                     'bg-autobot-primary text-white': $route.path.startsWith(item.to),
@@ -59,6 +59,7 @@
                     <span>{{ $t(item.labelKey) }}</span>
                   </div>
                 </router-link>
+                </template>
 
                 <!-- SLM Admin: external link (Issue #729) -->
                 <a
@@ -101,6 +102,9 @@
             <!-- Dark Mode Toggle -->
             <DarkModeToggle />
 
+            <!-- Language Switcher -->
+            <LanguageSwitcher />
+
             <!-- Mobile menu button -->
             <button
               @click="toggleMobileNav"
@@ -132,9 +136,9 @@
           class="lg:hidden absolute top-full left-0 right-0 bg-autobot-bg-secondary border-b border-autobot-border shadow-lg z-20"
         >
           <div class="px-4 py-3 space-y-2">
+            <template v-for="item in navItems" :key="item.to">
             <router-link
-              v-for="item in navItems"
-              :key="item.to"
+              v-if="!item.adminOnly || userStore.isAdmin"
               :to="item.to"
               @click="closeMobileNav"
               :class="{
@@ -153,6 +157,7 @@
                 <span>{{ $t(item.labelKey) }}</span>
               </div>
             </router-link>
+            </template>
 
             <!-- SLM Admin: external link (Issue #729) -->
             <a
@@ -172,7 +177,10 @@
               </div>
             </a>
 
-                        <!-- Profile Settings (Issue #950) -->
+                        <!-- Language Switcher -->
+            <LanguageSwitcher :mobile="true" />
+
+            <!-- Profile Settings (Issue #950) -->
             <button
               v-if="userStore.isAuthenticated"
               @click="showProfileModal = true; closeMobileNav()"
@@ -367,7 +375,9 @@
         class="h-full"
       >
         <!-- Use router-view for all content to enable proper sub-routing -->
-        <router-view class="h-full" />
+        <ErrorBoundary>
+          <router-view class="h-full" />
+        </ErrorBoundary>
       </UnifiedLoadingView>
     </main>
   </div>
@@ -377,7 +387,7 @@
 </template>
 
 <script lang="ts">
-import { ref, computed, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useAppStore } from '@/stores/useAppStore'
@@ -399,6 +409,7 @@ import ToastContainer from '@/components/ui/ToastContainer.vue';
 import HostSelectionDialog from '@/components/ui/HostSelectionDialog.vue';
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue';
 import ProfileModal from '@/components/profile/ProfileModal.vue';
+import ErrorBoundary from '@/components/common/ErrorBoundary.vue';
 
 const logger = createLogger('App');
 
@@ -412,7 +423,9 @@ export default {
     HostSelectionDialog,
     UnifiedLoadingView,
     ProfileModal,
+    ErrorBoundary,
     DarkModeToggle: defineAsyncComponent(() => import('@/components/ui/DarkModeToggle.vue')),
+    LanguageSwitcher: defineAsyncComponent(() => import('@/components/layout/LanguageSwitcher.vue')),
   },
 
   setup() {
@@ -427,8 +440,19 @@ export default {
 
     // Initialize user preferences system (Issue #753)
     import('@/composables/usePreferences').then(({ usePreferences }) => {
-      usePreferences();
+      const prefs = usePreferences();
       logger.debug('User preferences system initialized');
+
+      // Cross-device language sync: load stored language from backend after login (#1675)
+      watch(
+        () => userStore.isAuthenticated,
+        async (authenticated) => {
+          if (authenticated) {
+            await prefs.loadLanguageFromBackend();
+          }
+        },
+        { immediate: true }
+      );
     });
 
     // FIXED: Use useSystemStatus composable instead of duplicate logic
@@ -743,6 +767,9 @@ export default {
       { to: '/preferences', labelKey: 'nav.preferences', icon: 'M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z', iconRule: 'evenodd' },
       // Issue #2371: LLM Config moved to SLM admin settings
       { to: '/dev-speedup', labelKey: 'nav.devSpeedup', icon: 'M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z' },
+      // Issue #3502: Desktop and Custom Dashboard (admin-only, matching route meta)
+      { to: '/desktop', labelKey: 'nav.desktop', adminOnly: true, icon: 'M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2' },
+      { to: '/custom-dashboard', labelKey: 'nav.customDashboard', adminOnly: true, icon: 'M3 5a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2h-2.22l.123.489.804.804A1 1 0 0113 18H7a1 1 0 01-.707-1.707l.804-.804L7.22 15H5a2 2 0 01-2-2V5zm5.771 7H5V5h10v7H8.771z', iconRule: 'evenodd' },
     ];
 
     // Issue #973: Guard against Promise objects being rendered as username

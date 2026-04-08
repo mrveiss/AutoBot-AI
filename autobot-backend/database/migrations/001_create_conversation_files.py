@@ -8,7 +8,7 @@ Description: Initial migration to create conversation-specific file management d
 import asyncio
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -362,7 +362,7 @@ class ConversationFilesMigration:
         Returns:
             bool: True if migration succeeded, False otherwise
         """
-        start_time = datetime.now()
+        start_time = datetime.now(tz=timezone.utc)
 
         try:
             logger.info("=" * 80)
@@ -396,7 +396,7 @@ class ConversationFilesMigration:
             # Step 7: Record migration
             self._record_migration()
 
-            execution_time = (datetime.now() - start_time).total_seconds()
+            execution_time = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
 
             logger.info("=" * 80)
             logger.info(f"✓ Migration {self.VERSION} completed successfully")

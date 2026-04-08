@@ -10,16 +10,19 @@ Integrates with the knowledge base to store and retrieve temporal facts.
 
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from agents.knowledge_extraction_agent import KnowledgeExtractionAgent
 from autobot_shared.logging_manager import get_llm_logger
-from config import config_manager
+from config.manager import get_config_manager as _get_config_manager
 from models.atomic_fact import AtomicFact, FactExtractionResult, FactType, TemporalType
 from utils.entity_resolver import entity_resolver
 
 logger = get_llm_logger("fact_extraction_service")
+
+# Canonical singleton; avoids routing through config/__init__ lazy alias (Issue #3829)
+config_manager = _get_config_manager()
 
 
 class FactExtractionService:
@@ -400,7 +403,7 @@ class FactExtractionService:
             # Add service metadata
             fact_data.update(
                 {
-                    "storage_timestamp": datetime.now().isoformat(),
+                    "storage_timestamp": datetime.now(tz=timezone.utc).isoformat(),
                     "service_metadata": metadata or {},
                 }
             )
@@ -508,7 +511,7 @@ class FactExtractionService:
             facts_summary = {
                 "type": "atomic_facts_collection",
                 "total_facts": len(facts),
-                "extraction_timestamp": datetime.now().isoformat(),
+                "extraction_timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "facts": [],
             }
 
@@ -560,7 +563,7 @@ class FactExtractionService:
                 return
 
             history_entry = {
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "source": source,
                 "facts_extracted": len(extraction_result.facts),
                 "facts_stored": storage_results["stored_count"],

@@ -22,9 +22,11 @@ import logging
 import statistics
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, FrozenSet, List, Optional
+
+from constants.ttl_constants import TTL_5_MINUTES
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +160,7 @@ class ToolPatternAnalyzer:
         # Analysis results cache
         self.last_analysis_time: Optional[datetime] = None
         self.cached_analysis: Optional[Dict[str, Any]] = None
-        self.cache_ttl = 300  # 5 minutes
+        self.cache_ttl = TTL_5_MINUTES
 
         logger.info("Tool pattern analyzer initialized")
 
@@ -178,7 +180,7 @@ class ToolPatternAnalyzer:
         """
         tool_call = ToolCall(
             tool_name=tool_name,
-            call_time=datetime.now(),
+            call_time=datetime.now(tz=timezone.utc),
             parameters=parameters.copy(),
             response_time=response_time,
             success=success,
@@ -407,7 +409,7 @@ class ToolPatternAnalyzer:
             await self._identify_optimization_opportunities()
 
             # Cache analysis results
-            self.last_analysis_time = datetime.now()
+            self.last_analysis_time = datetime.now(tz=timezone.utc)
             self.cached_analysis = self._build_analysis_summary()
 
             logger.info(
@@ -515,7 +517,7 @@ class ToolPatternAnalyzer:
         recent_calls = [
             call
             for call in self.tool_calls
-            if (datetime.now() - call.call_time).seconds < self.analysis_window
+            if (datetime.now(tz=timezone.utc) - call.call_time).seconds < self.analysis_window
         ]
 
         # Look for Read -> Write -> Read patterns (inefficient)
@@ -712,7 +714,7 @@ class ToolPatternAnalyzer:
     def _build_analysis_summary(self) -> Dict[str, Any]:
         """Build comprehensive analysis summary"""
         return {
-            "analysis_timestamp": datetime.now().isoformat(),
+            "analysis_timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "total_tool_calls": len(self.tool_calls),
             "analysis_window_hours": self.analysis_window / 3600,
             "patterns_detected": len(self.detected_patterns),
@@ -756,7 +758,7 @@ class ToolPatternAnalyzer:
             not force_refresh
             and self.cached_analysis
             and self.last_analysis_time
-            and (datetime.now() - self.last_analysis_time).seconds < self.cache_ttl
+            and (datetime.now(tz=timezone.utc) - self.last_analysis_time).seconds < self.cache_ttl
         ):
             return self.cached_analysis
 
@@ -866,7 +868,7 @@ class ToolPatternAnalyzer:
         try:
             report = {
                 "analysis_metadata": {
-                    "generated_at": datetime.now().isoformat(),
+                    "generated_at": datetime.now(tz=timezone.utc).isoformat(),
                     "analysis_window_hours": self.analysis_window / 3600,
                     "total_tool_calls_analyzed": len(self.tool_calls),
                 },

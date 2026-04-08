@@ -13,6 +13,8 @@
 import { ref, reactive, type Ref } from 'vue'
 import { DEFAULT_CONFIG } from '@/config/defaults.js'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
+import { useUserStore } from '@/stores/useUserStore'
 
 // ---------------------------------------------------------------------------
 // Types & Interfaces
@@ -137,14 +139,14 @@ class GlobalWebSocketService {
         window.location.hostname === 'localhost'
 
       if (isViteDevServer) {
-        const wsUrl = `${wsProtocol}//${window.location.host}/api/ws`
+        const wsUrl = `${wsProtocol}//${window.location.host}${getApiBase()}/ws`
         logger.debug('Development WebSocket URL (via Vite proxy):', wsUrl)
         return wsUrl
       }
 
       // Issue #916: Use window.location.host so WebSocket goes through nginx proxy at .21
       // Nginx proxies /api/ws to backend with proxy_ssl_verify off (handles self-signed cert)
-      const wsUrl = `${wsProtocol}//${window.location.host}/api/ws`
+      const wsUrl = `${wsProtocol}//${window.location.host}${getApiBase()}/ws`
       logger.debug('Production WebSocket URL (via nginx proxy):', wsUrl)
       return wsUrl
     } catch (error: unknown) {
@@ -211,13 +213,22 @@ class GlobalWebSocketService {
       // Health check failed but continue with WebSocket attempt
     })
 
-    const wsUrl = this.state.url
+    // Issue #2818: Append JWT token as query param so backend can authenticate
+    // before accepting the WebSocket handshake.
+    let wsUrl = this.state.url
+    const userStore = useUserStore()
+    const token = userStore.authState.token
+    if (token) {
+      const separator = wsUrl.includes('?') ? '&' : '?'
+      wsUrl = `${wsUrl}${separator}token=${encodeURIComponent(token)}`
+    }
+
     logger.debug(
       'Connecting WebSocket',
-      { attempt: this.reconnectAttempts + 1, url: wsUrl }
+      { attempt: this.reconnectAttempts + 1, url: this.state.url }
     )
     this.trackEvent('connection_attempt', {
-      url: wsUrl,
+      url: this.state.url,
       attempt: this.reconnectAttempts + 1
     })
 
@@ -240,7 +251,7 @@ class GlobalWebSocketService {
     const timeoutId = setTimeout(() => controller.abort(), 2000)
 
     try {
-      const response = await fetch('/api/health', {
+      const response = await fetch(`${getApiBase()}/health`, {
         signal: controller.signal,
         cache: 'no-store'
       })

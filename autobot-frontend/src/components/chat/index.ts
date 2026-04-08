@@ -23,3 +23,5 @@ export { default as ChatTabs } from './ChatTabs.vue'
 export { default as ChatTabContent } from './ChatTabContent.vue'
 export { default as ChatFilePanel } from './ChatFilePanel.vue'
 export { default as DeleteConversationDialog } from './DeleteConversationDialog.vue'
+// Issue #3232: reasoning trace
+export { default as ReasoningTrace } from './ReasoningTrace.vue'

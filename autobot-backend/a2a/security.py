@@ -34,7 +34,13 @@ logger = logging.getLogger(__name__)
 _SECRET = os.environ.get("AUTOBOT_A2A_SECRET", "")
 
 # How long a signed card is considered fresh (seconds).
-_CARD_TTL = int(os.environ.get("AUTOBOT_A2A_CARD_TTL", "3600"))
+try:
+    _CARD_TTL = int(os.environ.get("AUTOBOT_A2A_CARD_TTL", "3600"))
+except ValueError:
+    logger.warning(
+        "AUTOBOT_A2A_CARD_TTL is not a valid integer; defaulting to 3600 s"
+    )
+    _CARD_TTL = 3600
 
 
 def _get_secret() -> bytes:

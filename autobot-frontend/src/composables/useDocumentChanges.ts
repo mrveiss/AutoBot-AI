@@ -15,6 +15,7 @@ import { ref, computed, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 // Create scoped logger for useDocumentChanges
 const logger = createLogger('useDocumentChanges')
@@ -179,7 +180,7 @@ export function useDocumentChanges() {
 
     try {
       // Issue #552: Fixed path - backend uses /api/knowledge-maintenance/*
-      const response = await ApiClient.post('/api/knowledge-maintenance/scan_host_changes', {
+      const response = await ApiClient.post(`${getApiBase()}/knowledge-maintenance/scan_host_changes`, {
         machine_id: machineId.value,
         force,
         scan_type: 'manpages',

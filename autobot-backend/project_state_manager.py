@@ -15,7 +15,7 @@ import os
 import sqlite3
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -437,7 +437,7 @@ class ProjectStateManager:
         """Save current phase to database."""
         cursor.execute(
             "INSERT OR REPLACE INTO project_state (key, value, updated_at) VALUES (?, ?, ?)",
-            ("current_phase", self.current_phase.value, datetime.now()),
+            ("current_phase", self.current_phase.value, datetime.now(tz=timezone.utc)),
         )
 
     def _save_phase_info(
@@ -462,7 +462,7 @@ class ProjectStateManager:
                 info.is_active,
                 info.is_completed,
                 info.last_validated,
-                datetime.now(),
+                datetime.now(tz=timezone.utc),
             ),
         )
 
@@ -731,7 +731,7 @@ class ProjectStateManager:
             )  # 90% threshold
 
         phase_info.validation_results = results
-        phase_info.last_validated = datetime.now()
+        phase_info.last_validated = datetime.now(tz=timezone.utc)
 
         return results
 
@@ -955,7 +955,7 @@ class ProjectStateManager:
 
         report = []
         report.append("# AutoBot Project State Validation Report")
-        report.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        report.append(f"Generated: {datetime.now(tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}")
         report.append("")
         report.append("## Overall Status")
         report.append(

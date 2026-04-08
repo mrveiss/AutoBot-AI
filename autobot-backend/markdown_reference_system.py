@@ -11,7 +11,7 @@ import json
 import logging
 import re
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -223,7 +223,7 @@ class MarkdownReferenceSystem:
                 metadata["word_count"],
                 metadata["created_at"],
                 metadata["last_modified"],
-                datetime.now(),
+                datetime.now(tz=timezone.utc),
                 document_type,
                 json.dumps(metadata["tags"]),
                 json.dumps({"encoding": "utf-8"}),
@@ -319,7 +319,7 @@ class MarkdownReferenceSystem:
                     section["content_hash"],
                     section["start_line"],
                     section["end_line"],
-                    datetime.now(),
+                    datetime.now(tz=timezone.utc),
                 ),
             )
 
@@ -430,7 +430,7 @@ class MarkdownReferenceSystem:
                     "link",
                     line.strip(),
                     line_num,
-                    datetime.now(),
+                    datetime.now(tz=timezone.utc),
                 ),
             )
 
@@ -461,7 +461,7 @@ class MarkdownReferenceSystem:
                     "mention",
                     line.strip(),
                     line_num,
-                    datetime.now(),
+                    datetime.now(tz=timezone.utc),
                 ),
             )
 

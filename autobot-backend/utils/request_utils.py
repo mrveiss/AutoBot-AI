@@ -12,7 +12,7 @@ Eliminates duplication of request-related functions across the codebase.
 
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 
@@ -44,7 +44,7 @@ def generate_chat_id() -> str:
     Returns:
         Unique chat identifier with timestamp
     """
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
     return f"chat_{timestamp}_{uuid.uuid4().hex[:8]}"
 
 
@@ -69,7 +69,7 @@ def create_request_metadata(
     metadata = {
         "request_id": request_id or generate_request_id(),
         "timestamp": time.time(),
-        "iso_timestamp": datetime.now().isoformat(),
+        "iso_timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
     if user_id:

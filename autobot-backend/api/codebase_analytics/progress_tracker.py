@@ -11,9 +11,11 @@ import asyncio
 import hashlib
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+
+from constants.ttl_constants import TTL_24_HOURS
 
 from .storage import get_redis_connection_async
 
@@ -27,7 +29,7 @@ _FILE_HASH_CHUNK_SIZE = 65536
 
 # Redis key prefix for task state (#1179: cross-worker visibility)
 _TASK_REDIS_PREFIX = "indexing_task:"
-_TASK_REDIS_TTL = 86400  # 24 hours
+_TASK_REDIS_TTL = TTL_24_HOURS
 
 # Redis key for persistent index queue (#1717: survive restarts)
 _QUEUE_REDIS_KEY = "codebase:index_queue"
@@ -308,7 +310,7 @@ def _create_initial_task_state(
         },
         "result": None,
         "error": None,
-        "started_at": datetime.now().isoformat(),
+        "started_at": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -383,9 +385,9 @@ def _mark_task_completed(
         "stats": analysis_results["stats"],
         "hardcodes_count": hardcodes_stored,
         "storage_type": storage_type,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
-    indexing_tasks[task_id]["completed_at"] = datetime.now().isoformat()
+    indexing_tasks[task_id]["completed_at"] = datetime.now(tz=timezone.utc).isoformat()
 
 
 def _mark_task_failed(task_id: str, error: Exception, indexing_tasks: Dict) -> None:
@@ -396,7 +398,7 @@ def _mark_task_failed(task_id: str, error: Exception, indexing_tasks: Dict) -> N
     """
     indexing_tasks[task_id]["status"] = "failed"
     indexing_tasks[task_id]["error"] = str(error)
-    indexing_tasks[task_id]["failed_at"] = datetime.now().isoformat()
+    indexing_tasks[task_id]["failed_at"] = datetime.now(tz=timezone.utc).isoformat()
 
 
 def _create_progress_updater(

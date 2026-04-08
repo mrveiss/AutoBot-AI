@@ -10,7 +10,7 @@ Issue #476: Added /metrics endpoint for Prometheus integration.
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException
@@ -321,7 +321,7 @@ async def log_rum_event(event: RumEvent):
 
             # Convert event to dictionary for processing
             event_data = event.dict()
-            event_data["server_timestamp"] = datetime.now().isoformat()
+            event_data["server_timestamp"] = datetime.now(tz=timezone.utc).isoformat()
 
             # Store event in memory (in production, this would go to Redis/DB)
             rum_events.append(event_data)
@@ -445,7 +445,7 @@ async def export_rum_data():
                 event_types[event_type] = event_types.get(event_type, 0) + 1
 
         export_data = {
-            "export_timestamp": datetime.now().isoformat(),
+            "export_timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "config": config_copy,
             "sessions": sessions_copy,
             "events": events_copy,
@@ -479,13 +479,13 @@ async def get_rum_status():
             # Calculate session statistics under lock
             active_sessions = 0
             total_events_today = 0
-            today = datetime.now().date()
+            today = datetime.now(tz=timezone.utc).date()
 
             for session_data in rum_sessions.values():
                 last_activity = datetime.fromisoformat(
                     session_data["last_activity"].replace("Z", "+00:00")
                 )
-                if (datetime.now() - last_activity.replace(tzinfo=None)) < timedelta(
+                if (datetime.now(tz=timezone.utc) - last_activity.replace(tzinfo=None)) < timedelta(
                     minutes=30
                 ):
                     active_sessions += 1
