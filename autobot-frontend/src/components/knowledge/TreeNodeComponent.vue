@@ -30,10 +30,12 @@
       <span v-else class="expand-spacer"></span>
 
       <!-- Node icon -->
-      <i :class="['node-icon', nodeIcon]" @click="$emit('select', node)"></i>
+      <button class="node-icon-btn" @click.stop="$emit('select', node)" type="button">
+        <i :class="['node-icon', nodeIcon]"></i>
+      </button>
 
       <!-- Node name -->
-      <span class="node-name" @click="$emit('select', node)">{{ node.name }}</span>
+      <button class="node-name-btn" @click.stop="$emit('select', node)" type="button">{{ node.name }}</button>
 
       <!-- Folder count or file size -->
       <span v-if="node.type === 'folder' && node.children" class="folder-count">
@@ -260,6 +262,22 @@ const formatSize = (bytes: number): string => {
   cursor: pointer;
 }
 
+.node-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--color-primary);
+  transition: all var(--duration-150) var(--ease-in-out);
+}
+
+.node-icon-btn:hover {
+  color: var(--color-primary-hover);
+}
+
 .node-name {
   flex: 1 1 0;
   min-width: 0;
@@ -269,6 +287,27 @@ const formatSize = (bytes: number): string => {
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
+}
+
+.node-name-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  text-align: left;
+  transition: all var(--duration-150) var(--ease-in-out);
+}
+
+.node-name-btn:hover {
+  color: var(--color-primary);
 }
 
 .folder-count {
