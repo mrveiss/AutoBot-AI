@@ -198,6 +198,7 @@
       <!-- Issue #3296: KB search result panel with keyboard nav + highlight -->
       <KBSearchResultPanel
         v-if="hasSearchResults || isSearching"
+        :repository="knowledgeRepo"
         :results="searchResults"
         :query="lastSearchQuery"
         :loading="isSearching"
