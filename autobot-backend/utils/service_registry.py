@@ -34,12 +34,12 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 import yaml
 
-# Import unified configuration system - NO HARDCODED VALUES
-from config import ConfigManager
-
-# Create singleton config instance
-config = ConfigManager()
 from autobot_shared.http_client import get_http_client
+
+# Import unified configuration system - NO HARDCODED VALUES
+from config.manager import get_config_manager
+
+config = get_config_manager()
 from constants.api_constants import PATH_API_HEALTH, PATH_HEALTH, PATH_OLLAMA_TAGS
 
 

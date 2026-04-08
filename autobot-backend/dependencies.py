@@ -12,8 +12,7 @@ import threading
 
 from fastapi import Depends
 
-from config import ConfigManager
-from config.manager import get_config_manager
+from config.manager import ConfigManager, get_config_manager
 
 
 def get_config() -> ConfigManager:

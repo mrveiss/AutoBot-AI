@@ -22,14 +22,13 @@ from autobot_shared.auth.jwt_core import (
     hash_password,
     verify_password,
 )
-from config import ConfigManager
+from config.manager import get_config_manager
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_auth_error
 
 logger = logging.getLogger(__name__)
 
-# Create singleton config instance
-config = ConfigManager()
+config = get_config_manager()
 
 
 class AuthenticationMiddleware:

@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.redis_client import get_redis_client
-from config import ConfigManager
+from config.manager import get_config_manager
 
 # Re-export all public API from the package for backward compatibility
 from utils.model_optimization import (
@@ -43,8 +43,7 @@ from utils.model_optimization import (
     TaskRequest,
 )
 
-# Create singleton config instance
-config = ConfigManager()
+config = get_config_manager()
 
 logger = logging.getLogger(__name__)
 

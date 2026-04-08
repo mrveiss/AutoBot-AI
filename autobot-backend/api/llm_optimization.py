@@ -16,15 +16,14 @@ from pydantic import BaseModel
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from config import ConfigManager
+from config.manager import get_config_manager
 from llm_interface import LLMInterface
 from utils.model_optimizer import TaskRequest, get_model_optimizer
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Create singleton config instance
-config = ConfigManager()
+config = get_config_manager()
 
 
 class OptimizationRequest(BaseModel):

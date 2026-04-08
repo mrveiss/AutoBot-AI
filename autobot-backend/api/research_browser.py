@@ -19,7 +19,7 @@ from pydantic import BaseModel
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from config import ConfigManager
+from config.manager import get_config_manager
 from constants.network_constants import NetworkConstants
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 
@@ -35,8 +35,7 @@ except ImportError:
     _BROWSER_AVAILABLE = False
     logger.warning("research_browser_manager unavailable (playwright not installed)")
 
-# Create singleton config instance
-config = ConfigManager()
+config = get_config_manager()
 
 router = APIRouter(
     dependencies=[Depends(check_admin_permission)],

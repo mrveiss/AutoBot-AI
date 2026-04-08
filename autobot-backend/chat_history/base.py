@@ -57,11 +57,8 @@ class ChatHistoryBase:
             redis_host: Optional override for Redis host
             redis_port: Optional override for Redis port
         """
-        from config import ConfigManager
-
         data_config = global_config_manager.get("data", {})
         redis_config = global_config_manager.get_redis_config()
-        unified_config = ConfigManager()
 
         self.history_file = history_file or data_config.get(
             "chat_history_file",
@@ -71,7 +68,7 @@ class ChatHistoryBase:
             use_redis if use_redis is not None else redis_config.get("enabled", False)
         )
         self.redis_host = redis_host or redis_config.get(
-            "host", os.getenv("AUTOBOT_REDIS_HOST", unified_config.get_host("redis"))
+            "host", os.getenv("AUTOBOT_REDIS_HOST", global_config_manager.get_host("redis"))
         )
         self.redis_port = redis_port or redis_config.get(
             "port",

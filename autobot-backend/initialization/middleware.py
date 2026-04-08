@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from config import ConfigManager
+from config.manager import get_config_manager
 from constants.network_constants import (  # noqa: F401 - used in docstring example
     NetworkConstants,
 )
@@ -42,7 +42,7 @@ def configure_cors(app: FastAPI, allow_origins: Optional[List[str]] = None):
     """
     # Generate from centralized configuration if not provided
     if allow_origins is None:
-        config = ConfigManager()
+        config = get_config_manager()
         allow_origins = config.get_cors_origins()
 
     app.add_middleware(
