@@ -346,6 +346,7 @@ import fcose from 'cytoscape-fcose'
 // Issue #711: Virtual scrolling for large orphaned function lists
 import { useVirtualScrollSimple } from '@/composables/useVirtualScroll'
 import { getCssVar } from '@/composables/useCssVars'
+import { useDebounce } from '@/composables/useTimeout'
 
 // Register fcose layout
 cytoscape.use(fcose)
@@ -1166,8 +1167,12 @@ function toggleClusterLayout() {
   runClusterLayout()
 }
 
-function handleSearch() {
+const debouncedUpdateCytoscapeElements = useDebounce(() => {
   updateCytoscapeElements()
+}, 300)
+
+function handleSearch() {
+  debouncedUpdateCytoscapeElements()
 }
 
 function handleModuleFilter() {
