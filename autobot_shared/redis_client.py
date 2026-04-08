@@ -212,19 +212,21 @@ def get_redis_client(
 
     Returns:
         Union[redis.Redis, async_redis.Redis, None]:
-            - redis.Redis: Synchronous client (if async_client=False)
-            - async_redis.Redis: Async client coroutine (if async_client=True)
+            - redis.Redis: Synchronous client when async_client=False (returned directly)
+            - Coroutine[async_redis.Redis]: When async_client=True, a coroutine that
+              resolves to async_redis.Redis once awaited.  The coroutine MUST be awaited
+              before calling any Redis methods — see the ASYNC PATTERN note below.
             - None: If Redis is disabled or connection fails
 
     Examples:
-        Basic usage (backward compatible - existing code works unchanged):
-            >>> redis = get_redis_client(database="main")
-            >>> redis.set("key", "value")
+        Synchronous usage (backward compatible - returned directly, no await):
+            >>> client = get_redis_client(database="main")
+            >>> client.set("key", "value")
 
-        Async usage - Direct call in async functions:
+        Async usage - MUST await the call to obtain the client:
             >>> async def store_data():
-            ...     redis = await get_redis_client(async_client=True, database="main")
-            ...     await redis.set("key", "value")
+            ...     client = await get_redis_client(async_client=True, database="main")
+            ...     await client.set("key", "value")
 
         AsyncInitializable pattern for service classes:
             >>> from autobot_shared.async_initializable import AsyncInitializable
@@ -235,11 +237,28 @@ def get_redis_client(
             ...         if self.redis:
             ...             await self.redis.close()
 
-    NOTE on Async Initialization:
-        The async client is returned as a coroutine that must be awaited. Always use
-        `await get_redis_client(async_client=True)` in async contexts. For services
-        using AsyncInitializable, initialize the client in the initialize() method,
-        not at class definition time.
+    ASYNC PATTERN — why ``await`` is required:
+        ``get_redis_client`` is a **synchronous** function.  When ``async_client=True``
+        it calls the underlying ``async def get_async_client(...)`` but does NOT await
+        it — it returns the coroutine object directly to the caller.
+
+        The caller is therefore responsible for awaiting that coroutine:
+
+            # WRONG — silently returns a coroutine object, not a Redis client.
+            # Any subsequent call (e.g. .ping(), .set()) will raise
+            # AttributeError or TypeError at runtime.
+            client = get_redis_client(async_client=True, database="main")
+            await client.ping()   # ERROR: coroutine object has no attribute 'ping'
+
+            # CORRECT — await the call; the resolved value is async_redis.Redis.
+            client = await get_redis_client(async_client=True, database="main")
+            await client.ping()   # OK
+
+        For sync callers that must obtain an async client, use
+        ``asyncio.get_event_loop().run_until_complete(...)`` or, preferably,
+        restructure the code so the initialization happens inside an async function
+        (e.g. AsyncInitializable.initialize()).  Never call ``asyncio.run()`` from
+        inside a running event loop.
     """
     if async_client:
         # Return coroutine for async client
