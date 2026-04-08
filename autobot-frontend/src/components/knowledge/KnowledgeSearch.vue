@@ -44,6 +44,7 @@
           v-model="selectedCategory"
           class="category-select"
           :disabled="loadingCategories"
+          @change="debouncedCategoryChange"
         >
           <option value="">{{ $t('knowledge.search.allCategories') }}</option>
           <option
@@ -89,7 +90,7 @@
           v-for="level in accessLevels"
           :key="level.value"
           :class="['filter-chip', { active: selectedAccessLevel === level.value }]"
-          @click="toggleAccessLevel(level.value)"
+          @click="debouncedAccessLevelChange(level.value)"
         >
           <i :class="level.icon"></i>
           {{ level.label }}
@@ -245,6 +246,7 @@ import { knowledgeRepository, type RagSearchResponse } from '@/models/repositori
 import type { SearchResult } from '@/stores/useKnowledgeStore'
 import type { KnowledgeCategoryItem } from '@/types/knowledgeBase'
 import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
+import { useDebouncedFn } from '@/composables/useDebounce'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import KBSearchResultPanel from './KBSearchResultPanel.vue'
 import { createLogger } from '@/utils/debugUtils'
@@ -290,6 +292,29 @@ const ragOptions = ref({
   enableReranking: true,
   limit: 10
 })
+
+// Issue #4035: Debounce filter changes to avoid excessive re-searches
+const { debouncedFn: debouncedCategoryChange } = useDebouncedFn(
+  async () => {
+    // Re-run search with new category filter
+    if (searchPerformed.value && searchQuery.value.trim()) {
+      await handleSearch()
+    }
+  },
+  350
+)
+
+// Issue #4035: Debounce access level filter changes
+const { debouncedFn: debouncedAccessLevelChange } = useDebouncedFn(
+  async (level: string) => {
+    selectedAccessLevel.value = selectedAccessLevel.value === level ? '' : level
+    // Re-run search with new access level filter
+    if (searchPerformed.value && searchQuery.value.trim()) {
+      await handleSearch()
+    }
+  },
+  350
+)
 
 // Load categories on mount
 onMounted(async () => {
@@ -425,14 +450,6 @@ const clearCategoryFilter = async () => {
 }
 
 // Issue #685: Access level filter methods
-const toggleAccessLevel = async (level: string) => {
-  selectedAccessLevel.value = selectedAccessLevel.value === level ? '' : level
-  // Re-run search with new access level filter
-  if (searchPerformed.value && searchQuery.value.trim()) {
-    await handleSearch()
-  }
-}
-
 const clearAccessLevelFilter = async () => {
   selectedAccessLevel.value = ''
   // Re-run search to show unfiltered results

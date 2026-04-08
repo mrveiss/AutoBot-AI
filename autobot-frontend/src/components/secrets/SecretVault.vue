@@ -12,6 +12,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useChatStore, type SessionSecret } from '@/stores/useChatStore'
 import { useSessionActivityLogger, type SecretType } from '@/composables/useSessionActivityLogger'
+import { useDebounce } from '@/composables/useDebounce'
 import { secretsApiClient } from '@/utils/SecretsApiClient'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -48,6 +49,9 @@ const successMessage = ref<string | null>(null)
 // Secrets data from API
 const secrets = ref<Array<any>>([])
 
+// Debounce search query for performance (Issue #4035)
+const debouncedSearchQuery = useDebounce(searchQuery, 400)
+
 // Get current session secrets
 const currentSession = computed(() => chatStore.currentSession)
 
@@ -70,9 +74,9 @@ const allSecrets = computed(() => {
     })
   }
 
-  // Filter by search
-  if (searchQuery.value) {
-    const query = searchQuery.value.toLowerCase()
+  // Filter by search (using debounced query)
+  if (debouncedSearchQuery.value) {
+    const query = debouncedSearchQuery.value.toLowerCase()
     filtered = filtered.filter(s =>
       s.name.toLowerCase().includes(query) ||
       (s.type && s.type.toLowerCase().includes(query)) ||
