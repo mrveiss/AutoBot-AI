@@ -334,9 +334,9 @@ class KnowledgeBaseCore:
             )
 
             # Get async Redis client using pool manager
-            self.aioredis_client = await get_redis_client(
-                async_client=True, database="knowledge"
-            )
+            # Issue #3962: Separated await from assignment to resolve coroutine handling
+            redis_coro = get_redis_client(async_client=True, database="knowledge")
+            self.aioredis_client = await redis_coro
 
             # Test async connection
             await self.aioredis_client.ping()
