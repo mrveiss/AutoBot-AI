@@ -619,16 +619,32 @@ const categorySegments = computed(() => {
   });
 });
 
+// Single pass over trendData to extract all aggregate values consumed by
+// yAxisLabels, trendPoints, and trendSummary.  The previous code called
+// Math.max(...array.map()) twice (once in yAxisLabels, once in trendPoints)
+// and .map() + Math.max() again in trendSummary — three O(n) traversals per
+// reactive update.
+const trendAggregates = computed((): { max: number; sum: number; current: number; first: number } => {
+  const data = trendData.value;
+  if (data.length === 0) return { max: 0, sum: 0, current: 0, first: 0 };
+  let max = 0, sum = 0;
+  for (const p of data) {
+    if (p.total_items > max) max = p.total_items;
+    sum += p.total_items;
+  }
+  return { max, sum, current: data[data.length - 1].total_items, first: data[0].total_items };
+});
+
 const yAxisLabels = computed(() => {
   if (trendData.value.length === 0) return ['0', '0', '0', '0', '0'];
-  const max = Math.max(...trendData.value.map(p => p.total_items));
+  const max = trendAggregates.value.max;
   return [max, Math.round(max * 0.75), Math.round(max * 0.5), Math.round(max * 0.25), 0].map(String);
 });
 
 const trendPoints = computed(() => {
   if (trendData.value.length === 0) return [];
 
-  const max = Math.max(...trendData.value.map(p => p.total_items)) || 1;
+  const max = trendAggregates.value.max || 1;
   const chartWidth = 730;
   const chartHeight = 140;
   const startX = 50;
@@ -659,15 +675,13 @@ const trendSummary = computed(() => {
     return { change: 0, average: 0, peak: 0, current: 0 };
   }
 
-  const values = trendData.value.map(p => p.total_items);
-  const current = values[values.length - 1] || 0;
-  const first = values[0] || 0;
+  const { max, sum, current, first } = trendAggregates.value;
   const change = first > 0 ? ((current - first) / first) * 100 : 0;
 
   return {
     change,
-    average: Math.round(values.reduce((a, b) => a + b, 0) / values.length),
-    peak: Math.max(...values),
+    average: Math.round(sum / trendData.value.length),
+    peak: max,
     current,
   };
 });

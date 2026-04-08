@@ -476,9 +476,13 @@ const fetchBehaviorData = async () => {
   }
 }
 
+const maxFeatureViews = computed((): number => {
+  if (!engagementMetrics.value?.feature_popularity?.length) return 0
+  return Math.max(...engagementMetrics.value.feature_popularity.map((f: any) => f.views || 0))
+})
+
 const getPopularityWidth = (views: number): string => {
-  if (!engagementMetrics.value?.feature_popularity?.length) return '0%'
-  const maxViews = Math.max(...engagementMetrics.value.feature_popularity.map((f: any) => f.views || 0))
+  const maxViews = maxFeatureViews.value
   if (maxViews === 0) return '0%'
   return `${(views / maxViews) * 100}%`
 }
