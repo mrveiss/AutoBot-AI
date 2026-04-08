@@ -261,10 +261,10 @@ check_hardcoded_paths() {
             continue
         fi
 
-        # Detect bare /opt/autobot, /tmp/autobot, /var/lib/autobot path literals
-        if echo "$line" | grep -qE '"(/opt/autobot|/tmp/autobot|/var/lib/autobot)'; then
+        # Detect bare /opt/autobot, /tmp/autobot, /var/lib/autobot path literals (both single and double quotes)
+        if echo "$line" | grep -qE '["'"'"'](?:/opt/autobot|/tmp/autobot|/var/lib/autobot)'; then
             local path_val
-            path_val=$(echo "$line" | grep -oE '"(/opt/autobot|/tmp/autobot|/var/lib/autobot)[^"]*"' | head -1)
+            path_val=$(echo "$line" | grep -oE '["'"'"'](?:/opt/autobot|/tmp/autobot|/var/lib/autobot)[^"'"'"']*["'"'"']' | head -1)
             echo -e "${RED}VIOLATION${NC} $file:$line_num"
             echo "  Hardcoded AutoBot file path: $path_val"
             echo -e "  ${CYAN}Fix: Use config.path.base_dir from ssot_config or os.environ.get('AUTOBOT_BASE_DIR', '/opt/autobot')${NC}"
@@ -302,10 +302,10 @@ check_hardcoded_model_names() {
             continue
         fi
 
-        # Detect bare model name string literals
-        if echo "$line" | grep -qE "\"(${model_pattern})\""; then
+        # Detect bare model name string literals (both single and double quotes)
+        if echo "$line" | grep -qE "[\"'](${model_pattern})[\"']"; then
             local model_val
-            model_val=$(echo "$line" | grep -oE "\"(${model_pattern})\"" | head -1)
+            model_val=$(echo "$line" | grep -oE "[\"'](${model_pattern})[\"']" | head -1)
             echo -e "${RED}VIOLATION${NC} $file:$line_num"
             echo "  Hardcoded model name: $model_val"
             echo -e "  ${CYAN}Fix: Import ROUTING_MODEL/DEFAULT_LLM_MODEL/etc from autobot_shared.ssot_config${NC}"
