@@ -19,10 +19,45 @@ from typing import Any, Dict, Optional
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.ssot_config import config as ssot_config
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import ServiceDiscoveryConfig, TimingConstants
+from utils.async_initializable import AsyncInitializable
 
 logger = logging.getLogger(__name__)
+
+
+def _build_distributed_services_config() -> Dict[str, Any]:
+    """Build distributed services config from ssot_config/NetworkConstants.
+
+    Replaces unified_config_manager.get_distributed_services_config() (#3947).
+    """
+    return {
+        "frontend": {
+            "host": ssot_config.vm.frontend,
+            "port": ssot_config.port.frontend,
+        },
+        "npu_worker": {
+            "host": ssot_config.vm.npu,
+            "port": ssot_config.port.npu,
+        },
+        "redis": {
+            "host": ssot_config.vm.redis,
+            "port": ssot_config.port.redis,
+        },
+        "ai_stack": {
+            "host": ssot_config.vm.aistack,
+            "port": ssot_config.port.aistack,
+        },
+        "browser": {
+            "host": ssot_config.vm.browser,
+            "port": ssot_config.port.browser,
+        },
+        "ollama": {
+            "host": ssot_config.vm.ollama,
+            "port": ssot_config.port.ollama,
+        },
+    }
 
 
 @dataclass
@@ -46,7 +81,7 @@ class ServiceEndpoint:
         return time.time() - self.last_check > max_age
 
 
-class DistributedServiceDiscovery:
+class DistributedServiceDiscovery(AsyncInitializable):
     """
     Service discovery for distributed VM architecture
 
@@ -58,28 +93,36 @@ class DistributedServiceDiscovery:
     """
 
     def __init__(self):
-        """Initialize distributed service discovery with registry."""
+        """Initialize distributed service discovery (no I/O — call initialize() before use)."""
+        super().__init__(component_name="distributed_service_discovery")
         self.services: Dict[str, ServiceEndpoint] = {}
         self.backup_endpoints: Dict[str, list] = {}
         self._health_check_task = None
+
+    async def _initialize_impl(self) -> bool:
+        """Deferred initialization: build service registry from configuration (#3947)."""
         self._initialize_service_registry()
+        return True
 
     def _initialize_service_registry(self):
         """
-        Initialize service registry from unified configuration.
+        Initialize service registry from ssot_config and NetworkConstants.
 
         Issue #281: Refactored from 141 lines to use extracted helper methods.
+        Issue #3947: Migrated from ConfigManager to ssot_config.
         """
-        from config import unified_config_manager
-
-        # Load configurations
-        self._services_config = unified_config_manager.get_distributed_services_config()
-        self._backend_config = unified_config_manager.get_backend_config()
-        self._redis_config = unified_config_manager.get_redis_config()
-        self._system_defaults = (
-            unified_config_manager.get_config_section("service_discovery_defaults")
-            or {}
-        )
+        # Load configurations directly from ssot_config / NetworkConstants
+        self._services_config = _build_distributed_services_config()
+        self._backend_config = {
+            "host": ssot_config.vm.main,
+            "port": ssot_config.port.backend,
+        }
+        self._redis_config = {
+            "host": ssot_config.vm.redis,
+            "port": ssot_config.port.redis,
+        }
+        # service_discovery_defaults has no ssot equivalent — use empty dict
+        self._system_defaults: Dict[str, Any] = {}
 
         # Build service registries
         primary_services = self._build_primary_services()
@@ -89,7 +132,7 @@ class DistributedServiceDiscovery:
         self.backup_endpoints.update(backup_endpoints)
 
         logger.info(
-            "🌐 Service registry initialized with %s services", len(self.services)
+            "Service registry initialized with %s services", len(self.services)
         )
 
     def _get_config_value(self, service_name: str, key: str, default_key: str):
@@ -434,77 +477,54 @@ class DistributedServiceDiscovery:
 
 
 # Global instance for easy access (thread-safe)
-import asyncio as _asyncio_lock
-
 _service_discovery = None
-_service_discovery_lock = _asyncio_lock.Lock()
+_service_discovery_lock = asyncio.Lock()
 
 
 async def get_service_discovery() -> DistributedServiceDiscovery:
-    """Get global service discovery instance (thread-safe)"""
+    """Get global service discovery instance (thread-safe, lazy-initialized via AsyncInitializable).
+
+    Issue #3947: initialize() call deferred here; __init__ is now I/O-free.
+    """
     global _service_discovery
     if not _service_discovery:
         async with _service_discovery_lock:
             # Double-check after acquiring lock
             if not _service_discovery:
-                _service_discovery = DistributedServiceDiscovery()
-                _service_discovery.start_background_health_monitoring()
+                instance = DistributedServiceDiscovery()
+                await instance.initialize()
+                instance.start_background_health_monitoring()
+                _service_discovery = instance
     return _service_discovery
 
 
 async def get_service_url(service_name: str) -> str:
-    """Quick service URL resolution without DNS delays"""
-    from config import unified_config_manager
-
+    """Quick service URL resolution without DNS delays (#3947: ConfigManager removed)."""
     discovery = await get_service_discovery()
     endpoint = await discovery.get_service_endpoint(service_name)
 
     if endpoint:
         return endpoint.url
-    else:
-        # Configuration-driven fallback
-        system_defaults = (
-            unified_config_manager.get_config_section("service_discovery_defaults")
-            or {}
-        )
-        fallback_host = system_defaults.get(
-            "fallback_host", NetworkConstants.LOCALHOST_NAME
-        )
-        fallback_port = system_defaults.get(
-            "fallback_port", NetworkConstants.BACKEND_PORT
-        )
-        return f"http://{fallback_host}:{fallback_port}"
+
+    # ssot_config fallback — no service_discovery_defaults section in ssot
+    return f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BACKEND_PORT}"
 
 
 # Synchronous helpers for backward compatibility with sync Redis clients
 def get_redis_connection_params_sync() -> Dict:
     """
-    Get Redis connection parameters synchronously for sync contexts
+    Get Redis connection parameters synchronously for sync contexts.
 
     ELIMINATES DNS TIMEOUT BY:
-    - Using pre-configured values from unified configuration
+    - Using pre-configured values from ssot_config
     - Immediate parameter return without async overhead
-    - Configuration-driven fallback addresses
 
-    Returns same dict structure as config-based approach for backward compatibility
+    Returns same dict structure as config-based approach for backward compatibility.
+    Issue #3947: ConfigManager removed — reads directly from ssot_config.
     """
-    from config import unified_config_manager
+    host = ssot_config.vm.redis or NetworkConstants.LOCALHOST_NAME
+    port = ssot_config.port.redis or NetworkConstants.REDIS_PORT
 
-    # Get Redis configuration from unified config manager
-    redis_config = unified_config_manager.get_redis_config()
-    system_defaults = (
-        unified_config_manager.get_config_section("service_discovery_defaults") or {}
-    )
-
-    # Get host and port from configuration
-    host = redis_config.get("host") or system_defaults.get(
-        "redis_host", NetworkConstants.LOCALHOST_NAME
-    )
-    port = redis_config.get("port") or system_defaults.get(
-        "redis_port", NetworkConstants.REDIS_PORT
-    )
-
-    # Return cached endpoint parameters immediately
     return {
         "host": host,
         "port": int(port),
@@ -700,21 +720,21 @@ def get_service_endpoint_sync(service_name: str) -> Optional[Dict]:
     """Get service endpoint synchronously for sync contexts.
 
     Returns endpoint information as a dict with host, port, protocol.
-    Gets values from unified configuration.
+    Issue #3947: ConfigManager removed — reads from ssot_config/NetworkConstants.
     """
-    from config import unified_config_manager
-
-    # Get configurations
-    services_config = unified_config_manager.get_distributed_services_config()
-    backend_config = unified_config_manager.get_backend_config()
-    redis_config = unified_config_manager.get_redis_config()
-    system_defaults = (
-        unified_config_manager.get_config_section("service_discovery_defaults") or {}
-    )
+    services_config = _build_distributed_services_config()
+    backend_config = {
+        "host": ssot_config.vm.main,
+        "port": ssot_config.port.backend,
+    }
+    redis_config = {
+        "host": ssot_config.vm.redis,
+        "port": ssot_config.port.redis,
+    }
 
     # Build service endpoints using helper (Issue #620)
     service_endpoints = _build_service_endpoints_map(
-        services_config, backend_config, redis_config, system_defaults
+        services_config, backend_config, redis_config, {}
     )
 
     return service_endpoints.get(service_name)
