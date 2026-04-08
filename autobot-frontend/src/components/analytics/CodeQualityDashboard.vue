@@ -706,7 +706,14 @@ async function loadHealthScore(): Promise<void> {
     // Issue #3436: scope to project when sourceId is present
     const response = await fetchWithAuth(withSourceId(`${getApiBase()}/quality/health-score`));
     if (response.ok) {
-      healthScore.value = await response.json();
+      const data = await response.json();
+      // Validate structure and merge with defaults
+      healthScore.value = {
+        overall: data.overall ?? 0,
+        grade: data.grade || 'C',
+        components: data.components || { code_quality: 0, security: 0, performance: 0 },
+        recommendations: data.recommendations || [],
+      };
     } else {
       logger.warn('Failed to load health score: HTTP', response.status);
     }
@@ -722,7 +729,9 @@ async function loadMetrics(): Promise<void> {
     // Issue #3436: scope to project when sourceId is present
     const response = await fetchWithAuth(withSourceId(`${getApiBase()}/quality/metrics`));
     if (response.ok) {
-      metrics.value = await response.json();
+      const data = await response.json();
+      // Ensure data is always an array
+      metrics.value = Array.isArray(data) ? data : data.metrics || [];
     } else {
       logger.warn('Failed to load metrics: HTTP', response.status);
       metrics.value = [];
@@ -739,7 +748,9 @@ async function loadPatterns(): Promise<void> {
     // Issue #3436: scope to project when sourceId is present
     const response = await fetchWithAuth(withSourceId(`${getApiBase()}/quality/patterns`));
     if (response.ok) {
-      patterns.value = await response.json();
+      const data = await response.json();
+      // Ensure data is always an array
+      patterns.value = Array.isArray(data) ? data : data.patterns || [];
     } else {
       logger.warn('Failed to load patterns: HTTP', response.status);
       patterns.value = [];
