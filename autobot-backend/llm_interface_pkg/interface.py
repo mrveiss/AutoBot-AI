@@ -1436,10 +1436,12 @@ class LLMInterface:
         )
 
         response = await self._execute_with_fallback(request, "vllm")
+        # Use response.model if available (from vLLM provider), otherwise fall back to resolved model_name
+        actual_model_name = response.model if response.model else model_name
         response = await self._finalize_response(
             response,
             request.messages,
-            model_name,
+            actual_model_name,
             "vllm",
             cache_key,
             request_id,
