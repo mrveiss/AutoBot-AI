@@ -19,6 +19,10 @@ from services.database import get_db
 
 logger = logging.getLogger(__name__)
 
+# This router is intentionally unauthenticated: node agents post to /sync
+# without a bearer token and are identified by node_id validated in the
+# endpoint body against the Node table (#3193).  Network-layer access control
+# (VPN / firewall) provides the perimeter guard.
 router = APIRouter(prefix="/events", tags=["events"])
 
 

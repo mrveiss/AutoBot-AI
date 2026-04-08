@@ -17,6 +17,7 @@ import pytest
 from constants.status_enums import TaskStatus
 
 from .error_handler import (
+    CHECKPOINT_TTL,
     BackoffStrategy,
     StepCheckpoint,
     StepErrorAction,
@@ -98,12 +99,15 @@ class _FakeRedis:
 
     def __init__(self) -> None:
         self._hashes: Dict[str, Dict[str, str]] = {}
+        # Record (key, ttl) pairs for every expire() call so tests can assert
+        # that the correct TTL was applied (#3231).
+        self.expire_calls: list = []
 
     def hset(self, key: str, field: str, value: str) -> None:
         self._hashes.setdefault(key, {})[field] = value
 
     def expire(self, key: str, ttl: int) -> None:
-        pass  # TTL not needed in tests
+        self.expire_calls.append((key, ttl))
 
     def hgetall(self, key: str) -> Dict[str, str]:
         return dict(self._hashes.get(key, {}))
@@ -171,6 +175,50 @@ class TestWorkflowCheckpointManager:
         cp = StepCheckpoint(step_id="s1", status=TaskStatus.COMPLETED.value, output={})
         # Must not raise
         mgr.save("wf-fail", cp)
+
+    # Issue #3231 -------------------------------------------------------
+
+    def test_checkpoint_ttl_is_30_days(self) -> None:
+        """CHECKPOINT_TTL must be at least 30 days for paused workflows."""
+        assert CHECKPOINT_TTL >= 30 * 24 * 3600, (
+            "CHECKPOINT_TTL is too short — paused workflows awaiting human "
+            "approval must survive at least 30 days"
+        )
+
+    def test_save_sets_ttl(self) -> None:
+        """Every save() must call expire() so the hash has a finite TTL."""
+        mgr = self._manager_with_fake_redis()
+        fake_redis = mgr._redis
+        mgr.save("wf-ttl", StepCheckpoint(step_id="s1", status="completed", output={}))
+        assert len(fake_redis.expire_calls) == 1
+        key, ttl = fake_redis.expire_calls[0]
+        assert "wf-ttl" in key
+        assert ttl == CHECKPOINT_TTL
+
+    def test_refresh_ttl_resets_expiry(self) -> None:
+        """refresh_ttl() must call expire() with CHECKPOINT_TTL on the hash key."""
+        mgr = self._manager_with_fake_redis()
+        fake_redis = mgr._redis
+        # Seed one checkpoint so the key exists.
+        mgr.save("wf-resume", StepCheckpoint(step_id="s1", status="completed", output={}))
+        initial_calls = len(fake_redis.expire_calls)
+
+        mgr.refresh_ttl("wf-resume")
+
+        new_calls = fake_redis.expire_calls[initial_calls:]
+        assert len(new_calls) == 1, "refresh_ttl must call expire() exactly once"
+        key, ttl = new_calls[0]
+        assert "wf-resume" in key
+        assert ttl == CHECKPOINT_TTL
+
+    def test_refresh_ttl_redis_error_does_not_raise(self) -> None:
+        """A Redis failure in refresh_ttl() must be logged, never raised (#3231)."""
+        mgr = WorkflowCheckpointManager()
+        bad_redis = MagicMock()
+        bad_redis.expire.side_effect = ConnectionError("Redis down")
+        mgr._redis = bad_redis
+        # Must not raise
+        mgr.refresh_ttl("wf-bad")
 
 
 # ---------------------------------------------------------------------------
