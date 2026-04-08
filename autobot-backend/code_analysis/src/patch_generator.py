@@ -11,10 +11,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
-from config import UnifiedConfig
 
-# Initialize unified config
-config = UnifiedConfig()
 logger = logging.getLogger(__name__)
 
 
