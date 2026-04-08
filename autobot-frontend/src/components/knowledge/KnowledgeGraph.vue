@@ -173,13 +173,25 @@
       </div>
     </div>
 
-    <!-- 3D Force Graph Container (Issue #3330) -->
+    <!-- 3D Force Graph Container (Issue #3330, Issue #3997 - lazy load) -->
     <div v-else class="graph-container">
-      <KnowledgeGraph3D
-        :entities="filteredEntities"
-        :edges="graphEdges"
-        @entity-selected="(e) => { selectedEntity = e; emit('entity-selected', e) }"
-      />
+      <Suspense>
+        <template #default>
+          <KnowledgeGraph3D
+            :entities="filteredEntities"
+            :edges="graphEdges"
+            @entity-selected="(e) => { selectedEntity = e; emit('entity-selected', e) }"
+          />
+        </template>
+        <template #fallback>
+          <div class="graph3d-loading-skeleton">
+            <div class="skeleton-spinner">
+              <i class="fas fa-spinner fa-spin"></i>
+            </div>
+            <p>{{ $t('knowledge.graph.loading3dVisualization') }}</p>
+          </div>
+        </template>
+      </Suspense>
     </div>
 
     <!-- Entity Details Panel -->
@@ -365,7 +377,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
-import { ref, shallowRef, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, shallowRef, computed, onMounted, onUnmounted, watch, nextTick, defineAsyncComponent } from 'vue'
 import cytoscape, { type Core, type NodeSingular } from 'cytoscape'
 // @ts-expect-error - cytoscape-fcose has no type declarations
 import fcose from 'cytoscape-fcose'
@@ -375,7 +387,9 @@ import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { getCssVar } from '@/composables/useCssVars'
 import MemoryOrphanManager from '@/components/knowledge/MemoryOrphanManager.vue'
-import KnowledgeGraph3D from '@/components/knowledge/KnowledgeGraph3D.vue'
+const KnowledgeGraph3D = defineAsyncComponent(() => 
+  import('@/components/knowledge/KnowledgeGraph3D.vue')
+)
 
 // Register fcose layout
 cytoscape.use(fcose)
@@ -2022,4 +2036,32 @@ watch(layoutMode, () => {
   font-size: 14px;
   margin: 0 4px;
 }
+
+/* 3D Graph Loading Skeleton */
+.graph3d-loading-skeleton {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: 500px;
+  gap: var(--spacing-md);
+  color: var(--text-tertiary);
+}
+
+.skeleton-spinner {
+  font-size: 2.5rem;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 </style>

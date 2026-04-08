@@ -63,7 +63,7 @@
       </div>
       <div class="stat-item">
         <span class="stat-value">
-          {{ store.verificationConfig.quality_threshold.toFixed(1) }}
+          {{ (store.verificationConfig?.quality_threshold ?? 0).toFixed(1) }}
         </span>
         <span class="stat-label">{{ $t('knowledge.verification.qualityThreshold') }}</span>
       </div>
