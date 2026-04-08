@@ -196,12 +196,14 @@
       </div>
 
       <!-- Issue #3296: KB search result panel with keyboard nav + highlight -->
+      <!-- Issue #3940: Pass repository instance to eliminate duplicate creation -->
       <KBSearchResultPanel
         v-if="hasSearchResults || isSearching"
         :repository="knowledgeRepo"
         :results="searchResults"
         :query="lastSearchQuery"
         :loading="isSearching"
+        :repository="knowledgeRepo"
         @select="onResultSelect"
         @close="clearResults"
       />

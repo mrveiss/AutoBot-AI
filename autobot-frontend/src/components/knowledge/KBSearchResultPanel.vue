@@ -183,6 +183,8 @@
  * - Keyboard navigation (arrow keys, Enter, Escape)
  * - Inline read-only document viewer on selection
  * - Query-term highlighting in both snippets and full content
+ *
+ * Issue #3940: Fixed `as any` cast and consolidated repository instance
  */
 
 import { ref, computed, watch, nextTick } from 'vue'
@@ -197,10 +199,10 @@ const logger = createLogger('KBSearchResultPanel')
 // ---------------------------------------------------------------------------
 
 const props = defineProps<{
-  repository: KnowledgeRepository
   results: SearchResult[]
   query: string
   loading: boolean
+  repository: KnowledgeRepository
 }>()
 
 const emit = defineEmits<{
