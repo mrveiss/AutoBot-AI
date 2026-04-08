@@ -1,21 +1,35 @@
 ---
-name: Feature request
-about: Suggest an idea for AutoBot
-title: "[FEATURE] "
-labels: feature
+name: Feature Request
+description: Suggest a new feature or enhancement
+labels: ['type:feature']
 ---
 
-## Description
-A clear and concise description of the feature.
+## Problem Statement
 
-## Use Case
-Why would this be useful? What problem does it solve?
+What problem does this solve? Who has this problem?
 
 ## Proposed Solution
-How should this work?
 
-## Alternatives Considered
-Any other approaches you've thought of?
+How should AutoBot solve this?
+
+## Alternatives
+
+What other solutions did you consider?
+
+## Related Issues/Discussions
+
+Links to related issues or discussions.
 
 ## Additional Context
-Any other context?
+
+Any other relevant information.
+
+---
+
+## Help Us Triage
+
+Does this look like a **frontend**, **backend**, **infrastructure**, or **docs** feature?
+
+Estimate difficulty: **beginner**, **intermediate**, or **advanced**?
+
+For guidance on contribution, see [CONTRIBUTORS.md](../../CONTRIBUTORS.md).
