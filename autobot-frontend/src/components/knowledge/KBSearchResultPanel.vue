@@ -308,7 +308,7 @@ async function loadDocumentContent(document: KnowledgeDocument): Promise<void> {
   loadingDoc.value = true
   try {
     const full = await props.repository.getDocument(document.id)
-    viewerContent.value = full.content ?? document.content ?? ''
+    viewerContent.value = full?.content ?? document.content ?? ''
   } catch (err) {
     logger.error('Failed to load document content:', err)
     viewerContent.value = document.content ?? ''

@@ -755,7 +755,7 @@ _SYNC_ALLOWED_TOP_LEVEL_KEYS: frozenset = frozenset(
 )
 
 # Maximum nesting depth accepted in the incoming settings payload (Issue #3881).
-_SYNC_MAX_DEPTH: int = 5
+_SYNC_MAX_DEPTH: int = 8
 
 # Maximum raw byte size of the incoming settings payload (Issue #3881).
 _SYNC_MAX_PAYLOAD_BYTES: int = 256 * 1024  # 256 KiB
