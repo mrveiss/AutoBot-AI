@@ -305,6 +305,36 @@ def get_main_redis(**kwargs) -> Optional[redis.Redis]:
     return get_redis_client(database="main", **kwargs)
 
 
+async def get_async_redis_client(
+    database: str = "main",
+) -> Optional[async_redis.Redis]:
+    """Return an async Redis client for *database*, properly awaited.
+
+    This is the safe alternative to ``get_redis_client(async_client=True)``
+    for async call-sites.  The root cause of issue #3962 was that
+    ``get_redis_client`` is a *sync* function that returns the coroutine
+    produced by ``RedisConnectionManager.get_async_client()`` without awaiting
+    it.  Callers that stored the result without ``await`` received a coroutine
+    object and later hit ``AttributeError: 'coroutine' object has no attribute
+    'ping'``.
+
+    Using an ``async def`` wrapper ensures the coroutine is always awaited
+    before the caller receives the client, making the correct usage impossible
+    to get wrong:
+
+        # Old, error-prone pattern (required explicit await at every call site):
+        client = await get_redis_client(async_client=True, database="main")
+
+        # New, safe pattern (await is built-in; impossible to forget):
+        client = await get_async_redis_client(database="main")
+
+    Returns:
+        redis.asyncio.Redis instance on success, or None if Redis is disabled
+        or the circuit breaker is open.
+    """
+    return await _get_connection_manager().get_async_client(database)
+
+
 # =============================================================================
 # Health and Metrics Functions
 # =============================================================================
