@@ -332,12 +332,12 @@ class KnowledgeBaseCore:
                 self.redis_db,
             )
 
-            # Get async Redis client — get_redis_client(async_client=True) returns a
-            # coroutine (it is sync but calls the async get_async_client internally).
-            # Must await to obtain the actual redis.asyncio.Redis instance. (#3962)
-            self.aioredis_client = await get_redis_client(
-                async_client=True, database="knowledge"
-            )
+            # Get async Redis client via the dedicated async helper (#3962).
+            # get_async_redis_client() is a true async def so callers cannot
+            # accidentally store the coroutine without awaiting it.
+            from autobot_shared.redis_client import get_async_redis_client
+
+            self.aioredis_client = await get_async_redis_client(database="knowledge")
             if self.aioredis_client is None:
                 raise Exception(
                     "Async Redis client initialization returned None "
