@@ -756,7 +756,13 @@ async function loadComplexity(): Promise<void> {
     // Issue #3436: scope to project when sourceId is present
     const response = await fetchWithAuth(withSourceId(`${getApiBase()}/quality/complexity?top_n=5`));
     if (response.ok) {
-      complexity.value = await response.json();
+      const data = await response.json();
+      // Validate structure and merge with defaults
+      complexity.value = {
+        averages: data.averages || { cyclomatic: 0, cognitive: 0 },
+        maximums: data.maximums || { cyclomatic: 0, cognitive: 0 },
+        hotspots: data.hotspots || [],
+      };
     } else {
       logger.warn('Failed to load complexity: HTTP', response.status);
     }
