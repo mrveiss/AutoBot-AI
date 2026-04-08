@@ -3,6 +3,7 @@
  *
  * Manages vectorization state, batch operations, and status tracking for knowledge base documents.
  * Provides hooks for backend integration when individual document vectorization endpoints are available.
+ * Issue #4006: Added request deduplication with TTL caching and debouncing for batch status calls
  */
 
 import { ref, computed } from 'vue'
@@ -12,9 +13,20 @@ import appConfig from '@/config/AppConfig.js'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import { useDebounce } from './useTimeout'
 
 // Create scoped logger for useKnowledgeVectorization
 const logger = createLogger('useKnowledgeVectorization')
+
+// Request cache for batch status API calls (Issue #4006)
+interface CachedRequest {
+  data: Promise<void>
+  time: number
+}
+
+// Constants for request deduplication (Issue #4006)
+const BATCH_STATUS_CACHE_TTL = 30000 // 30 seconds
+const DEBOUNCE_DELAY = 500 // 500ms debounce for refresh calls
 
 export type VectorizationStatus = 'vectorized' | 'pending' | 'failed' | 'unknown'
 
@@ -52,6 +64,9 @@ export function useKnowledgeVectorization() {
     inProgress: 0
   })
 
+  // Request deduplication cache (Issue #4006)
+  const requestCache = new Map<string, CachedRequest>()
+
   // Computed
   const hasSelection = computed(() => selectedDocuments.value.size > 0)
 
@@ -65,6 +80,35 @@ export function useKnowledgeVectorization() {
       return !state || state.status !== 'vectorized'
     })
   })
+
+  // ==================== REQUEST DEDUPLICATION (Issue #4006) ====================
+
+  /**
+   * Generate a cache key for a batch of document IDs
+   * Sorts IDs to ensure same batch gets same key regardless of order
+   */
+  const generateCacheKey = (documentIds: string[]): string => {
+    return [...documentIds].sort().join('|')
+  }
+
+  /**
+   * Clear expired cache entries
+   */
+  const clearExpiredCache = () => {
+    const now = Date.now()
+    for (const [key, cached] of requestCache.entries()) {
+      if (now - cached.time > BATCH_STATUS_CACHE_TTL) {
+        requestCache.delete(key)
+      }
+    }
+  }
+
+  /**
+   * Clear entire request cache (used for cleanup)
+   */
+  const clearRequestCache = () => {
+    requestCache.clear()
+  }
 
   // ==================== DOCUMENT STATE MANAGEMENT ====================
 
@@ -110,8 +154,15 @@ export function useKnowledgeVectorization() {
   }
 
   /**
-   * Fetch vectorization status for multiple documents in batch
-   * More efficient than calling fetchDocumentStatus individually
+   * Fetch vectorization status for multiple documents in batch.
+   * Issue #4006: Added request deduplication with TTL caching to avoid duplicate API calls.
+   *
+   * The function maintains a cache of recent requests with a 30-second TTL. If the same
+   * batch of document IDs is requested within the TTL window, the cached promise is returned
+   * instead of making a new API call. This significantly reduces API load when the component
+   * renders multiple times or when multiple components request the same batch simultaneously.
+   *
+   * Cache keys are order-invariant (sorted), so [doc1, doc2] and [doc2, doc1] use the same cache.
    *
    * @param documentIds - List of document IDs to check
    * @param documentNames - Optional map of document ID to display name (Issue #165)
@@ -122,35 +173,57 @@ export function useKnowledgeVectorization() {
   ): Promise<void> => {
     if (documentIds.length === 0) return
 
-    try {
-      // Query backend in batches of 1000 (API limit)
-      const batchSize = 1000
-      for (let i = 0; i < documentIds.length; i += batchSize) {
-        const batch = documentIds.slice(i, i + batchSize)
+    // Issue #4006: Check request cache for deduplication
+    clearExpiredCache()
+    const cacheKey = generateCacheKey(documentIds)
+    const cached = requestCache.get(cacheKey)
 
-        const response = await apiClient.post(`${getApiBase()}/knowledge_base/vectorization_status`, {
-          fact_ids: batch,
-          use_cache: true
-        })
-        const data = await parseApiResponse(response)
-
-        if (data?.statuses) {
-          // Update cache with all statuses, including document names if provided (Issue #165)
-          Object.entries(data.statuses).forEach(([docId, statusData]: [string, any]) => {
-            const status: VectorizationStatus = statusData.vectorized ? 'vectorized' : 'pending'
-            const name = documentNames?.get(docId)
-            setDocumentStatus(docId, status, undefined, undefined, name)
-          })
-        }
-      }
-    } catch (error) {
-      logger.error('Failed to fetch batch vectorization status:', error)
-      // Mark all as unknown on error, preserving names if provided (Issue #165)
-      documentIds.forEach(id => {
-        const name = documentNames?.get(id)
-        setDocumentStatus(id, 'unknown', undefined, undefined, name)
-      })
+    if (cached && Date.now() - cached.time < BATCH_STATUS_CACHE_TTL) {
+      logger.debug(`Using cached batch status for ${documentIds.length} documents (age: ${Date.now() - cached.time}ms)`)
+      return cached.data
     }
+
+    // Create the fetch promise
+    const fetchPromise = (async () => {
+      try {
+        // Query backend in batches of 1000 (API limit)
+        const batchSize = 1000
+        for (let i = 0; i < documentIds.length; i += batchSize) {
+          const batch = documentIds.slice(i, i + batchSize)
+
+          const response = await apiClient.post(`${getApiBase()}/knowledge_base/vectorization_status`, {
+            fact_ids: batch,
+            use_cache: true
+          })
+          const data = await parseApiResponse(response)
+
+          if (data?.statuses) {
+            // Update cache with all statuses, including document names if provided (Issue #165)
+            Object.entries(data.statuses).forEach(([docId, statusData]: [string, any]) => {
+              const status: VectorizationStatus = statusData.vectorized ? 'vectorized' : 'pending'
+              const name = documentNames?.get(docId)
+              setDocumentStatus(docId, status, undefined, undefined, name)
+            })
+          }
+        }
+      } catch (error) {
+        logger.error('Failed to fetch batch vectorization status:', error)
+        // Mark all as unknown on error, preserving names if provided (Issue #165)
+        documentIds.forEach(id => {
+          const name = documentNames?.get(id)
+          setDocumentStatus(id, 'unknown', undefined, undefined, name)
+        })
+      }
+    })()
+
+    // Issue #4006: Store in cache for deduplication
+    requestCache.set(cacheKey, {
+      data: fetchPromise,
+      time: Date.now()
+    })
+
+    logger.debug(`Fetching batch status for ${documentIds.length} documents`)
+    return fetchPromise
   }
 
   /**
@@ -516,11 +589,13 @@ export function useKnowledgeVectorization() {
 
   /**
    * Cleanup function to stop polling and clear state
+   * Issue #4006: Also clears request cache
    */
   const cleanup = () => {
     stopPolling()
     clearAllStatuses()
     deselectAll()
+    clearRequestCache() // Issue #4006: Clear request cache on cleanup
   }
 
   // ==================== RETURN PUBLIC API ====================
