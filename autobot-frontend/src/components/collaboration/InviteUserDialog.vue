@@ -3,16 +3,22 @@
  * Invite User Dialog Component
  *
  * Issue #874: Frontend Collaborative Session UI (#608 Phase 6)
+ * Issue #3985: Replace hardcoded mock users with real API
  *
  * Modal dialog for inviting users to collaborate on a session.
  * Supports role selection and email-based invitations.
+ * Fetches real users from the /user-management/users API endpoint.
  */
 
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSessionCollaboration } from '@/composables/useSessionCollaboration'
 import { useChatStore } from '@/stores/useChatStore'
+import { getApiBase } from '@/config/ssot-config'
+import apiClient from '@/utils/ApiClient'
+import { createLogger } from '@/utils/debugUtils'
 
+const logger = createLogger('InviteUserDialog')
 const { t } = useI18n()
 const chatStore = useChatStore()
 const { inviteCollaborator, sessionPresence } = useSessionCollaboration()
@@ -29,30 +35,91 @@ const emit = defineEmits<{
   invited: [userId: string, username: string, role: string]
 }>()
 
+// Types
+interface User {
+  id: string
+  username: string
+  email: string
+  avatar: string | null
+  display_name?: string
+}
+
+interface UserListResponse {
+  users: Array<{
+    id: string
+    username: string
+    email: string
+    display_name?: string
+    avatar_url?: string
+  }>
+  total: number
+  limit: number
+  offset: number
+}
+
 // Local state
 const searchQuery = ref('')
 const selectedRole = ref<'collaborator' | 'viewer'>('collaborator')
 const selectedUserId = ref<string | null>(null)
 const inviting = ref(false)
 const errorMessage = ref<string | null>(null)
+const loading = ref(false)
+const users = ref<User[]>([])
 
-// Mock user list (in real implementation, comes from API)
-const mockUsers = [
-  { id: 'user-1', username: 'alice', email: 'alice@example.com', avatar: null },
-  { id: 'user-2', username: 'bob', email: 'bob@example.com', avatar: null },
-  { id: 'user-3', username: 'charlie', email: 'charlie@example.com', avatar: null },
-  { id: 'user-4', username: 'diana', email: 'diana@example.com', avatar: null },
-  { id: 'user-5', username: 'eve', email: 'eve@example.com', avatar: null }
-]
+// Fetch users from API
+const fetchUsers = async () => {
+  loading.value = true
+  errorMessage.value = null
+
+  try {
+    const response = await apiClient.get<UserListResponse>(
+      `${getApiBase()}/user-management/users`,
+      {
+        params: {
+          limit: 100,
+          offset: 0,
+          include_inactive: false
+        }
+      }
+    )
+
+    if (response && response.users && Array.isArray(response.users)) {
+      users.value = response.users.map(user => ({
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        avatar: user.avatar_url || null,
+        display_name: user.display_name
+      }))
+      logger.debug(`Loaded ${users.value.length} users from API`)
+    } else {
+      logger.warn('Invalid response structure from users API', response)
+      errorMessage.value = t('collaboration.invite.failedToLoadUsers')
+    }
+  } catch (error) {
+    logger.error('Failed to fetch users:', error)
+    errorMessage.value = error instanceof Error ? error.message : t('collaboration.invite.failedToLoadUsers')
+  } finally {
+    loading.value = false
+  }
+}
+
+// Load users when dialog opens
+onMounted(() => {
+  if (props.modelValue) {
+    fetchUsers()
+  }
+})
 
 // Filter users by search query
 const filteredUsers = computed(() => {
-  if (!searchQuery.value) return mockUsers
+  if (!searchQuery.value) return users.value
 
   const query = searchQuery.value.toLowerCase()
-  return mockUsers.filter(user =>
+  return users.value.filter(user =>
     user.username.toLowerCase().includes(query) ||
-    user.email.toLowerCase().includes(query)
+    user.email.toLowerCase().includes(query) ||
+    (user.display_name && user.display_name.toLowerCase().includes(query))
   )
 })
 
@@ -78,6 +145,11 @@ const getInitials = (username: string): string => {
     .substring(0, 2)
 }
 
+// Get display name or username
+const getDisplayName = (user: User): string => {
+  return user.display_name || user.username
+}
+
 // Select user
 const selectUser = (userId: string) => {
   selectedUserId.value = userId
@@ -99,7 +171,7 @@ const sendInvitation = async () => {
     const success = inviteCollaborator(selectedUserId.value, selectedRole.value)
 
     if (success) {
-      const user = mockUsers.find(u => u.id === selectedUserId.value)
+      const user = users.value.find(u => u.id === selectedUserId.value)
       if (user) {
         emit('invited', user.id, user.username, selectedRole.value)
       }
@@ -192,12 +264,19 @@ const roleOptions = computed(() => [
                   :placeholder="$t('collaboration.invite.searchPlaceholder')"
                   class="w-full pl-10 pr-4 py-2 bg-autobot-bg-tertiary border border-autobot-border rounded-lg text-autobot-text-primary placeholder-autobot-text-muted focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                   autocomplete="off"
+                  :disabled="loading"
                 >
               </div>
             </div>
 
+            <!-- Loading indicator -->
+            <div v-if="loading" class="flex items-center justify-center py-8 text-autobot-text-muted">
+              <i class="bi bi-arrow-repeat animate-spin mr-2" />
+              <span class="text-sm">{{ $t('common.loading') }}</span>
+            </div>
+
             <!-- User list -->
-            <div class="max-h-60 overflow-y-auto custom-scrollbar space-y-1">
+            <div v-else class="max-h-60 overflow-y-auto custom-scrollbar space-y-1">
               <!-- Available users -->
               <div v-if="availableUsers.length > 0">
                 <div class="text-xs font-medium text-autobot-text-muted uppercase tracking-wide mb-2">
@@ -215,11 +294,11 @@ const roleOptions = computed(() => [
                   @click="selectUser(user.id)"
                 >
                   <div class="w-10 h-10 rounded-full bg-autobot-bg-tertiary flex items-center justify-center text-sm font-medium text-autobot-text-primary">
-                    {{ getInitials(user.username) }}
+                    {{ getInitials(getDisplayName(user)) }}
                   </div>
                   <div class="flex-1 min-w-0">
                     <div class="text-sm font-medium text-autobot-text-primary truncate">
-                      {{ user.username }}
+                      {{ getDisplayName(user) }}
                     </div>
                     <div class="text-xs text-autobot-text-muted truncate">
                       {{ user.email }}
@@ -243,11 +322,11 @@ const roleOptions = computed(() => [
                   class="w-full flex items-center gap-3 p-3 rounded-lg bg-autobot-bg-tertiary/30 opacity-50 cursor-not-allowed"
                 >
                   <div class="w-10 h-10 rounded-full bg-autobot-bg-tertiary flex items-center justify-center text-sm font-medium text-autobot-text-primary">
-                    {{ getInitials(user.username) }}
+                    {{ getInitials(getDisplayName(user)) }}
                   </div>
                   <div class="flex-1 min-w-0">
                     <div class="text-sm font-medium text-autobot-text-primary truncate">
-                      {{ user.username }}
+                      {{ getDisplayName(user) }}
                     </div>
                     <div class="text-xs text-autobot-text-muted truncate">
                       {{ user.email }}
@@ -270,7 +349,7 @@ const roleOptions = computed(() => [
             </div>
 
             <!-- Role selection -->
-            <div>
+            <div v-if="!loading">
               <label class="block text-sm font-medium text-autobot-text-secondary mb-2">
                 {{ $t('collaboration.invite.permissionLevel') }}
               </label>
@@ -335,7 +414,7 @@ const roleOptions = computed(() => [
             </button>
             <button
               class="px-4 py-2 text-sm rounded bg-blue-500 hover:bg-blue-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              :disabled="!selectedUserId || inviting"
+              :disabled="!selectedUserId || inviting || loading"
               @click="sendInvitation"
             >
               <i v-if="inviting" class="bi bi-arrow-repeat animate-spin" />
