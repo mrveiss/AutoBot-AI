@@ -262,9 +262,9 @@ check_hardcoded_paths() {
         fi
 
         # Detect bare /opt/autobot, /tmp/autobot, /var/lib/autobot path literals (both single and double quotes)
-        if echo "$line" | grep -qE '["'"'"'](?:/opt/autobot|/tmp/autobot|/var/lib/autobot)'; then
+        if echo "$line" | grep -qE "[\"'](/opt/autobot|/tmp/autobot|/var/lib/autobot)"; then
             local path_val
-            path_val=$(echo "$line" | grep -oE '["'"'"'](?:/opt/autobot|/tmp/autobot|/var/lib/autobot)[^"'"'"']*["'"'"']' | head -1)
+            path_val=$(echo "$line" | grep -oE "[\"'](/opt/autobot|/tmp/autobot|/var/lib/autobot)[^\"']*[\"']" | head -1)
             echo -e "${RED}VIOLATION${NC} $file:$line_num"
             echo "  Hardcoded AutoBot file path: $path_val"
             echo -e "  ${CYAN}Fix: Use config.path.base_dir from ssot_config or os.environ.get('AUTOBOT_BASE_DIR', '/opt/autobot')${NC}"
