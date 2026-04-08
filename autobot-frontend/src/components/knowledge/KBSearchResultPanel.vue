@@ -183,6 +183,8 @@
  * - Keyboard navigation (arrow keys, Enter, Escape)
  * - Inline read-only document viewer on selection
  * - Query-term highlighting in both snippets and full content
+ *
+ * Issue #3940: Fixed `as any` cast and consolidated repository instance
  */
 
 import { ref, computed, watch, nextTick } from 'vue'
@@ -200,6 +202,7 @@ const props = defineProps<{
   results: SearchResult[]
   query: string
   loading: boolean
+  repository: KnowledgeRepository
 }>()
 
 const emit = defineEmits<{
@@ -217,7 +220,6 @@ const selectedIndex = ref<number>(-1)
 const loadingDoc = ref(false)
 const viewerContent = ref<string>('')
 const copySuccess = ref(false)
-const knowledgeRepo = new KnowledgeRepository()
 
 // ---------------------------------------------------------------------------
 // Computed
@@ -305,8 +307,8 @@ async function loadDocumentContent(document: KnowledgeDocument): Promise<void> {
 
   loadingDoc.value = true
   try {
-    const full = await knowledgeRepo.getDocument(document.id)
-    viewerContent.value = (full as any)?.content ?? document.content ?? ''
+    const full = await props.repository.getDocument(document.id)
+    viewerContent.value = full.content ?? document.content ?? ''
   } catch (err) {
     logger.error('Failed to load document content:', err)
     viewerContent.value = document.content ?? ''
