@@ -14,6 +14,7 @@ Provides modular agent orchestration with distributed and legacy support.
 """
 
 from .agent_execution import AgentExecutor
+from .coordinator import AgentOrchestrator, get_agent_orchestrator
 from .distributed_management import DistributedAgentManager
 from .routing import AgentRouter
 from .types import (
@@ -61,4 +62,7 @@ __all__ = [
     "DistributedAgentManager",
     "AgentRouter",
     "AgentExecutor",
+    # Issue #3393: orchestrator moved from agents/agent_orchestrator.py
+    "AgentOrchestrator",
+    "get_agent_orchestrator",
 ]
