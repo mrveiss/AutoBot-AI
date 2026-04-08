@@ -239,6 +239,15 @@ class ApiService {
   async getSystemMetrics(): Promise<ApiResponse> {
     return this.get(`${getApiBase()}/service-monitor/resources`)
   }
+
+  // User Management API
+  async getUserById(userId: string): Promise<ApiResponse> {
+    return this.get(`${getApiBase()}/user-management/users/${userId}`)
+  }
+
+  async getGroupById(groupId: string): Promise<ApiResponse> {
+    return this.get(`${getApiBase()}/user-management/teams/${groupId}`)
+  }
 }
 
 export const apiService = new ApiService()
