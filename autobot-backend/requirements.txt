@@ -25,6 +25,10 @@ sentence-transformers>=5.3.0
 torch>=2.11.0  # Issue #904: ML model training
 torchmetrics>=1.9.0  # Issue #904: Training metrics
 vanna>=2.0.2  # Issue #723: Natural language to SQL via Vanna.ai
+               # SECURITY: CVE unpatched in all published releases (Dependabot alert #298,
+               # dismissed tolerable_risk 2026-04-04, Issue #3445). Monitor
+               # https://pypi.org/project/vanna/#history for a patched release; bump
+               # constraint when fix is published. Evaluate removal if no fix by 2026-07-04.
 
 # Include existing requirements
 -r ../requirements.txt
