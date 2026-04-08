@@ -333,10 +333,17 @@ class KnowledgeBaseCore:
                 self.redis_db,
             )
 
-            # Get async Redis client using pool manager
-            # Issue #3962: Separated await from assignment to resolve coroutine handling
-            redis_coro = get_redis_client(async_client=True, database="knowledge")
-            self.aioredis_client = await redis_coro
+            # Get async Redis client — get_redis_client(async_client=True) returns a
+            # coroutine (it is sync but calls the async get_async_client internally).
+            # Must await to obtain the actual redis.asyncio.Redis instance. (#3962)
+            self.aioredis_client = await get_redis_client(
+                async_client=True, database="knowledge"
+            )
+            if self.aioredis_client is None:
+                raise Exception(
+                    "Async Redis client initialization returned None "
+                    "(circuit breaker open or Redis disabled)"
+                )
 
             # Test async connection
             await self.aioredis_client.ping()
