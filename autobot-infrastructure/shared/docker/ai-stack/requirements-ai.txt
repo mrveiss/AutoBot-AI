@@ -46,7 +46,7 @@ pydantic>=2.12.5
 # Utilities
 async-timeout>=5.0.1
 packaging>=26.0
-protobuf>=7.34.1
+protobuf>=5.29.6  # opentelemetry-exporter-otlp-proto-grpc>=1.40.0 regenerated protos — C extension compatible; floor matches backend (#3973)
 python-dotenv>=1.2.2
 tenacity>=9.1.4
 tqdm>=4.67.3
