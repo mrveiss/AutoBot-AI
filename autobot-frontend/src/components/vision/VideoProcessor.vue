@@ -195,6 +195,7 @@ import { ref, computed, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
 import { useToast } from '@/composables/useToast';
+import { useThumbnailWorker } from '@/composables/useThumbnailWorker';
 import {
   visionMultimodalApiClient,
   type ProcessingIntent,
@@ -209,6 +210,7 @@ interface FrameResult extends MultiModalResponse {
 const { t } = useI18n();
 const logger = createLogger('VideoProcessor');
 const { showToast } = useToast();
+const { generateThumbnail, isSupported: isWorkerSupported } = useThumbnailWorker();
 
 // Emits
 const emit = defineEmits<{
@@ -405,7 +407,34 @@ const calculateFrameTimestamps = (): number[] => {
   return timestamps.slice(0, maxFrames.value);
 };
 
-const extractFrame = (timestamp: number): Promise<Blob | null> => {
+const extractFrame = async (timestamp: number): Promise<Blob | null> => {
+  // Try Web Worker first if supported (Issue #4038)
+  if (isWorkerSupported.value && previewUrl.value) {
+    try {
+      logger.debug(`Generating thumbnail with Web Worker at ${timestamp}s`);
+      const dataUrl = await generateThumbnail(
+        previewUrl.value,
+        timestamp,
+        320, // width
+        180, // height
+        'image/jpeg',
+        0.85 // quality
+      );
+
+      if (dataUrl) {
+        // Convert data URL to Blob
+        const response = await fetch(dataUrl);
+        const blob = await response.blob();
+        logger.debug(`Thumbnail generated successfully (${blob.size} bytes)`);
+        return blob;
+      }
+    } catch (err) {
+      logger.warn('Web Worker thumbnail generation failed, falling back to canvas:', err);
+      // Fall through to canvas-based approach
+    }
+  }
+
+  // Fallback to canvas-based approach
   return new Promise((resolve) => {
     const video = videoPreview.value;
     if (!video) {
