@@ -78,6 +78,13 @@
           @loading-timeout="handleContentLoadingTimeout"
           class="flex-1 min-h-0 flex flex-col overflow-y-auto"
         >
+          <!-- Issue #3232: Live reasoning trace panel above the chat input -->
+          <ReasoningTrace
+            v-if="activeTab === 'chat'"
+            :entries="cotEntries"
+            :is-active="cotIsActive"
+            class="mx-2 mt-1"
+          />
           <ChatTabContent
             :active-tab="activeTab"
             :current-session-id="store.currentSessionId"
@@ -163,6 +170,7 @@ import ApiClient from '@/utils/ApiClient'
 import batchApiService from '@/services/BatchApiService'
 // MIGRATED: Using AppConfig.js for better configuration management
 import appConfig from '@/config/AppConfig.js'
+import { getApiBase } from '@/config/ssot-config'
 // FIXED: Import NetworkConstants for IP fallback values
 import { NetworkConstants } from '@/constants/network'
 import { createLogger } from '@/utils/debugUtils'
@@ -183,6 +191,9 @@ import WorkflowProgressWidget from '@/components/workflow/WorkflowProgressWidget
 import VoiceConversationOverlay from './VoiceConversationOverlay.vue'
 import VoiceConversationPanel from './VoiceConversationPanel.vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
+// Issue #3232: chain-of-thought reasoning trace
+import ReasoningTrace from './ReasoningTrace.vue'
+import { useReasoningTrace } from '@/composables/useReasoningTrace'
 
 // i18n
 const { t } = useI18n()
@@ -191,6 +202,13 @@ const { t } = useI18n()
 const store = useChatStore()
 const controller = useChatController()
 const appStore = useAppStore()
+
+// Issue #3232: Chain-of-thought reasoning trace
+const {
+  entries: cotEntries,
+  isActive: cotIsActive,
+  clear: cotClear,
+} = useReasoningTrace(store.currentSessionId)
 
 // Voice output (#928)
 const {
@@ -615,7 +633,7 @@ const onCommandCommented = async (commentData: any) => {
     // This allows the agent to receive the user's alternative approach suggestion
     if (pendingCommand.value.terminalSessionId) {
       const approvalUrl = await appConfig.getApiUrl(
-        `/api/agent-terminal/sessions/${pendingCommand.value.terminalSessionId}/approve`
+        `${getApiBase()}/agent-terminal/sessions/${pendingCommand.value.terminalSessionId}/approve`
       )
 
       const response = await fetchWithAuth(approvalUrl, {
@@ -701,7 +719,7 @@ const enableAutoSave = () => {
 // Prevents 499 cascade: skips in-flight polls, backs off on failure, opens circuit
 // after 3 consecutive errors and retries slowly.
 const messagePoller = useBackoffPoller({
-  baseInterval: 10_000,          // 10 s when healthy (unchanged from before)
+  baseInterval: 30_000,          // 30 s when healthy (increased for inactive sessions #3999)
   maxInterval: 60_000,           // cap at 60 s during backoff
   backoffMultiplier: 2,
   circuitBreakerThreshold: 3,
@@ -718,8 +736,21 @@ const messagePoller = useBackoffPoller({
 })
 
 const startMessagePolling = () => {
-  logger.debug('Starting message polling (backoff poller, base 10 s)')
+  logger.debug('Starting message polling (backoff poller, base 30 s)')
   messagePoller.start()
+}
+
+// Handle visibility changes to pause/resume polling (#3999)
+// When tab is hidden, pause polling to reduce network traffic
+// When tab becomes visible, resume polling immediately
+const handleVisibilityChange = () => {
+  if (document.hidden) {
+    logger.debug('Tab hidden - pausing message polling')
+    messagePoller.pause()
+  } else {
+    logger.debug('Tab visible - resuming message polling')
+    messagePoller.resume()
+  }
 }
 
 // Keyboard shortcuts
@@ -817,11 +848,6 @@ onMounted(async () => {
   // Load NoVNC URL after initialization
   await loadNovncUrl()
 
-  // Enable auto-save if not disabled
-  if (store.settings.autoSave) {
-    controller.enableAutoSave()
-  }
-
   // Start connection monitoring
   checkConnection()
   startHeartbeat()
@@ -832,11 +858,15 @@ onMounted(async () => {
 
   // Add keyboard shortcuts
   document.addEventListener('keydown', handleKeyboardShortcuts)
+
+  // Add visibility change listener to pause/resume polling (#3999)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 
 onUnmounted(() => {
   // Clean up event listeners
   document.removeEventListener('keydown', handleKeyboardShortcuts)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
 
   // Clean up intervals
   if (heartbeatInterval.value) {
@@ -867,8 +897,23 @@ watch(() => store.currentSessionId, (newSessionId, oldSessionId) => {
     // Without this the TTS watcher fires, sees current.id !== _lastStreamingMsgId,
     // resets _lastSpokenIdx = 0, and re-speaks the full existing message.
     _primeTtsCursor()
+
+    // Issue #3232: clear reasoning trace on session switch so stale entries
+    // from the previous session are not shown in the new one.
+    cotClear()
   }
 })
+
+// Issue #3232: clear reasoning trace when a new user turn begins (isTyping goes
+// from false → true, meaning the backend just started processing a new message).
+watch(
+  () => store.isTyping,
+  (nowTyping, wasTyping) => {
+    if (nowTyping && !wasTyping) {
+      cotClear()
+    }
+  },
+)
 
 // Streaming sentence-level TTS (#1319)
 // During LLM streaming: extract completed sentences and send each to TTS immediately.
