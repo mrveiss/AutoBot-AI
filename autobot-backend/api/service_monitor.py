@@ -74,6 +74,7 @@ async def get_service_statuses() -> Dict[str, Any]:
     npu_url = f"http://{_ssot.vm.npu}:{_ssot.port.npu}/health"
     browser_url = f"http://{_ssot.vm.browser}:{_ssot.port.browser}/health"
     ollama_url = f"http://{_ssot.vm.ollama}:{_ssot.port.ollama}/api/version"
+    chromadb_url = f"http://{_ssot.vm.aistack}:{_ssot.port.aistack}/health"  # Issue #3461: ChromaDB
 
     (
         (redis_status, redis_msg),
@@ -83,11 +84,16 @@ async def get_service_statuses() -> Dict[str, Any]:
             browser_status,
             browser_msg,
         ),
+        (
+            chromadb_status,
+            chromadb_msg,
+        ),
     ) = await asyncio.gather(
         _check_redis_health(),
         _check_http_health(npu_url),
         _check_http_health(ollama_url),
         _check_http_health(browser_url),
+        _check_http_health(chromadb_url),
     )
 
     return {
@@ -97,6 +103,7 @@ async def get_service_statuses() -> Dict[str, Any]:
             "npu_worker": {"status": npu_status, "health": npu_msg},
             "ollama": {"status": ollama_status, "health": ollama_msg},
             "browser": {"status": browser_status, "health": browser_msg},
+            "chromadb": {"status": chromadb_status, "health": chromadb_msg},  # Issue #3461
         }
     }
 
@@ -110,6 +117,7 @@ async def get_vm_statuses() -> Dict[str, Any]:
     """
     npu_url = f"http://{_ssot.vm.npu}:{_ssot.port.npu}/health"
     browser_url = f"http://{_ssot.vm.browser}:{_ssot.port.browser}/health"
+    chromadb_url = f"http://{_ssot.vm.aistack}:{_ssot.port.aistack}/health"  # Issue #3461: ChromaDB
 
     (
         (redis_status, redis_msg),
@@ -118,10 +126,15 @@ async def get_vm_statuses() -> Dict[str, Any]:
             browser_status,
             browser_msg,
         ),
+        (
+            chromadb_status,
+            chromadb_msg,
+        ),
     ) = await asyncio.gather(
         _check_redis_health(),
         _check_http_health(npu_url),
         _check_http_health(browser_url),
+        _check_http_health(chromadb_url),
     )
 
     vms: List[Dict[str, str]] = [
@@ -129,5 +142,6 @@ async def get_vm_statuses() -> Dict[str, Any]:
         {"name": "Redis", "status": redis_status, "message": redis_msg},
         {"name": "NPU Worker", "status": npu_status, "message": npu_msg},
         {"name": "Browser Service", "status": browser_status, "message": browser_msg},
+        {"name": "AI Stack (ChromaDB)", "status": chromadb_status, "message": chromadb_msg},  # Issue #3461
     ]
     return {"vms": vms}
