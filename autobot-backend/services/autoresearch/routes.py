@@ -306,86 +306,111 @@ def _get_optimizer(request: Request) -> PromptOptimizer:
     return _optimizer
 
 
-def _register_autoresearch_hypothesis_target(
-    optimizer: PromptOptimizer,
-    runner: "ExperimentRunner",
-) -> None:
-    """Pre-register the autoresearch_hypothesis optimization target.
-
-    The benchmark runs the prompt through AutoResearchAgent._generate_hypothesis
-    (rule-based, no external I/O) and records score, output, and latency so the
-    optimizer can compare variants on real signal rather than a no-op echo.
-
-    Falls back to returning the raw prompt text on any exception so the
-    optimization loop degrades gracefully when the agent is unavailable.
-    """
-    import time as _time
-
-    from .auto_research_agent import AutoResearchAgent
-
-    _HYPOTHESIS_SYSTEM_PROMPT = (
+def _get_hypothesis_system_prompt() -> str:
+    """Get the AutoResearch hypothesis agent system prompt."""
+    return (
         "You are the AutoResearch hypothesis agent. Given a research direction, "
         "generate a concrete, testable hypothesis for improving a language model's "
         "validation bits-per-byte (val_bpb). The hypothesis must specify which "
         "hyperparameters to change, by how much, and why. Be precise and actionable."
     )
 
+
+def _build_hypothesis_result(statement: str, rationale: str, hyperparams: dict, latency_ms: float, error: Optional[str]) -> str:
+    """Build a JSON result string for hypothesis generation."""
+    import json as _json
+
+    return _json.dumps(
+        {
+            "output": statement,
+            "rationale": rationale,
+            "hyperparams": hyperparams,
+            "latency_ms": latency_ms,
+            "error": error,
+        },
+        ensure_ascii=False,
+    )
+
+
+async def _benchmark_autoresearch_hypothesis(
+    prompt: str,
+    runner: "ExperimentRunner",
+) -> str:
+    """Run the prompt through the AutoResearch hypothesis pipeline.
+
+    Returns a JSON-serialized dict with keys: output, latency_ms, error.
+    The optimizer stores this string as PromptVariant.output; scorers
+    receive it as prompt_output and can parse the JSON if needed.
+
+    Falls back gracefully to returning the raw prompt on any exception,
+    allowing the optimization loop to continue when the agent is unavailable.
+    """
+    import time as _time
+
+    from .auto_research_agent import AutoResearchAgent
+
+    start = _time.monotonic()
+    try:
+        agent = AutoResearchAgent(runner=runner)
+        hypothesis = agent._generate_hypothesis(
+            search_results=[],
+            prior_results=[],
+            iteration=1,
+        )
+        latency_ms = round((_time.monotonic() - start) * 1000, 1)
+        return _build_hypothesis_result(
+            hypothesis.statement,
+            hypothesis.rationale,
+            hypothesis.suggested_hyperparams,
+            latency_ms,
+            None,
+        )
+    except Exception as exc:
+        latency_ms = round((_time.monotonic() - start) * 1000, 1)
+        logger.warning(
+            "_benchmark_autoresearch_hypothesis: agent failed: %s", exc
+        )
+        return _build_hypothesis_result(
+            prompt,
+            "",
+            {},
+            latency_ms,
+            str(exc),
+        )
+
+
+def _register_autoresearch_hypothesis_target(
+    optimizer: PromptOptimizer,
+    runner: "ExperimentRunner",
+) -> None:
+    """Pre-register the autoresearch_hypothesis optimization target.
+
+    Registers both the target configuration and its benchmark function
+    with the PromptOptimizer. The benchmark evaluates prompt variants by
+    running them through AutoResearchAgent._generate_hypothesis.
+    """
+    import functools
+
+    system_prompt = _get_hypothesis_system_prompt()
+
     target = PromptOptTarget(
         agent_name="autoresearch_hypothesis",
-        current_prompt=_HYPOTHESIS_SYSTEM_PROMPT,
+        current_prompt=system_prompt,
         scorer_chain=["llm_judge"],
         mutation_count=5,
         top_k=2,
     )
 
-    async def _benchmark(prompt: str) -> str:
-        """Run the prompt through the AutoResearch hypothesis pipeline.
-
-        Returns a JSON-serialized dict with keys: output, latency_ms, error.
-        The optimizer stores this string as PromptVariant.output; scorers
-        receive it as prompt_output and can parse the JSON if needed.
-        """
-        import json as _json
-
-        start = _time.monotonic()
-        try:
-            agent = AutoResearchAgent(runner=runner)
-            hypothesis = agent._generate_hypothesis(
-                search_results=[],
-                prior_results=[],
-                iteration=1,
-            )
-            latency_ms = round((_time.monotonic() - start) * 1000, 1)
-            return _json.dumps(
-                {
-                    "output": hypothesis.statement,
-                    "rationale": hypothesis.rationale,
-                    "hyperparams": hypothesis.suggested_hyperparams,
-                    "latency_ms": latency_ms,
-                    "error": None,
-                },
-                ensure_ascii=False,
-            )
-        except Exception as exc:
-            latency_ms = round((_time.monotonic() - start) * 1000, 1)
-            logger.warning(
-                "_benchmark(autoresearch_hypothesis): agent failed: %s", exc
-            )
-            return _json.dumps(
-                {
-                    "output": prompt,
-                    "rationale": "",
-                    "hyperparams": {},
-                    "latency_ms": latency_ms,
-                    "error": str(exc),
-                },
-                ensure_ascii=False,
-            )
+    # Create a partial function binding the runner to the benchmark
+    benchmark_fn = functools.partial(
+        _benchmark_autoresearch_hypothesis,
+        runner=runner,
+    )
 
     optimizer.register_optimization_target(
         agent_id="autoresearch_hypothesis",
         target=target,
-        benchmark_fn=_benchmark,
+        benchmark_fn=benchmark_fn,
     )
 
 
