@@ -203,7 +203,6 @@
         :results="searchResults"
         :query="lastSearchQuery"
         :loading="isSearching"
-        :repository="knowledgeRepo"
         @select="onResultSelect"
         @close="clearResults"
       />
