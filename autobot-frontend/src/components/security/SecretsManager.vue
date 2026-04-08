@@ -893,8 +893,29 @@ const deletingSecret = ref<any>(null);
 // Debounced search
 const debouncedSearch = useDebounce(searchQuery, 300);
 
-// Computed
+// Cache for memoized filteredSecrets computation
+const filterCache = new Map<string, any[]>();
+
+// Helper function to generate stable cache key from filter values
+const getFilterCacheKey = (): string => {
+  return JSON.stringify([
+    selectedCategory.value,
+    selectedScope.value,
+    showExpiredOnly.value,
+    debouncedSearch.value,
+    secrets.value.length  // Include length to invalidate on additions/deletions
+  ]);
+};
+
+// Computed - Memoized with cache key based on filter parameters
 const filteredSecrets = computed(() => {
+  const cacheKey = getFilterCacheKey();
+
+  // Return cached result if available
+  if (filterCache.has(cacheKey)) {
+    return filterCache.get(cacheKey) || [];
+  }
+
   let result = [...secrets.value];
 
   // Filter by category/type
@@ -920,6 +941,14 @@ const filteredSecrets = computed(() => {
       s.description?.toLowerCase().includes(query) ||
       s.tags?.some((t: string) => t.toLowerCase().includes(query))
     );
+  }
+
+  // Store result in cache
+  filterCache.set(cacheKey, result);
+
+  // Prevent unbounded cache growth - clear when > 50 entries
+  if (filterCache.size > 50) {
+    filterCache.clear();
   }
 
   return result;
