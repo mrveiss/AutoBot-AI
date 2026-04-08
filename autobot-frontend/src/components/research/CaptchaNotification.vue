@@ -33,6 +33,7 @@
               <img
                 :src="'data:image/png;base64,' + activeCaptcha.screenshot"
                 :alt="$t('research.captcha.screenshotAlt')"
+                loading="lazy"
                 @click="openVnc"
               />
               <div class="preview-overlay" @click="openVnc">
