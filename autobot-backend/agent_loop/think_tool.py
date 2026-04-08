@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from agent_loop.types import ThinkCategory, ThinkResult
-from autobot_shared.ssot_config import ROUTING_MODEL
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +147,7 @@ class ThinkToolConfig:
     """Configuration for the Think Tool."""
 
     # LLM settings
-    model: str = ROUTING_MODEL
+    model: str = DEFAULT_LLM_MODEL
     temperature: float = 0.3  # Lower temperature for reasoning
     max_tokens: int = 1000
 

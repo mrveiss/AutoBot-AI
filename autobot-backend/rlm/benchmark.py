@@ -28,7 +28,7 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-from autobot_shared.ssot_config import ROUTING_MODEL, config as _ssot_config
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL, config as _ssot_config
 from rlm.evaluator import ResponseQualityEvaluator
 from rlm.types import RLMConfig
 
@@ -135,7 +135,7 @@ class BenchmarkSummary:
 
 async def _generate(
     prompt: str,
-    model: str = ROUTING_MODEL,
+    model: str = DEFAULT_LLM_MODEL,
     temperature: float = 0.5,
     max_tokens: int = 1024,
     timeout_s: float = _ssot_config.timeout.default_request,
@@ -247,7 +247,7 @@ async def _run_rlm_pass(
 
 async def run_benchmark(
     queries: Optional[List[Dict[str, Any]]] = None,
-    model: str = ROUTING_MODEL,
+    model: str = DEFAULT_LLM_MODEL,
     rlm_config: Optional[RLMConfig] = None,
     max_queries: int = 0,
 ) -> Dict[str, Any]:
@@ -354,7 +354,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--model",
-        default=ROUTING_MODEL,
+        default=DEFAULT_LLM_MODEL,
         help="Ollama model",
     )
     parser.add_argument(
