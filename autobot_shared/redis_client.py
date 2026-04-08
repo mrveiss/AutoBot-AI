@@ -221,10 +221,25 @@ def get_redis_client(
             >>> redis = get_redis_client(database="main")
             >>> redis.set("key", "value")
 
-        Async usage:
+        Async usage - Direct call in async functions:
             >>> async def store_data():
             ...     redis = await get_redis_client(async_client=True, database="main")
             ...     await redis.set("key", "value")
+
+        AsyncInitializable pattern for service classes:
+            >>> from autobot_shared.async_initializable import AsyncInitializable
+            >>> class MyService(AsyncInitializable):
+            ...     async def initialize(self):
+            ...         self.redis = await get_redis_client(async_client=True)
+            ...     async def cleanup(self):
+            ...         if self.redis:
+            ...             await self.redis.close()
+
+    NOTE on Async Initialization:
+        The async client is returned as a coroutine that must be awaited. Always use
+        `await get_redis_client(async_client=True)` in async contexts. For services
+        using AsyncInitializable, initialize the client in the initialize() method,
+        not at class definition time.
     """
     if async_client:
         # Return coroutine for async client
