@@ -121,7 +121,7 @@ const getPathUpTo = (index: number): string => {
 }
 
 .breadcrumb-item {
-  @apply flex items-center text-sm bg-none border-none cursor-pointer text-blue-600 hover:text-blue-800 hover:underline p-0 font-inherit;
+  @apply flex items-center text-sm bg-none border-none cursor-pointer text-blue-600 hover:text-blue-800 hover:underline p-0;
 }
 
 .breadcrumb-item .clickable {
