@@ -12,7 +12,7 @@ WorkingDirectory=/opt/autobot/autobot-browser-worker
 # Environment
 Environment="PLAYWRIGHT_PORT={{ playwright_port }}"
 Environment="BROWSER_TIMEOUT={{ browser_timeout }}"
-Environment="HEADLESS_MODE={{ headless_mode }}"
+Environment="HEADLESS={{ headless_mode | lower }}"
 Environment="DISPLAY={{ vnc_display }}"
 
 # Start command - Node.js Express server
