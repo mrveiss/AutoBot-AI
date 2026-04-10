@@ -340,16 +340,18 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import cytoscape, { type Core, type NodeSingular } from 'cytoscape'
+// Type imports only - actual implementation loaded dynamically
+import type cytoscape from 'cytoscape'
+import type { Core, NodeSingular } from 'cytoscape'
 // @ts-expect-error - cytoscape-fcose has no type declarations
-import fcose from 'cytoscape-fcose'
+// import fcose from 'cytoscape-fcose' // Lazy-loaded on demand
 // Issue #711: Virtual scrolling for large orphaned function lists
 import { useVirtualScrollSimple } from '@/composables/useVirtualScroll'
 import { getCssVar } from '@/composables/useCssVars'
 import { useDebounce } from '@/composables/useTimeout'
 
 // Register fcose layout
-cytoscape.use(fcose)
+// cytoscape.use(fcose) // Registered dynamically after loading
 
 const { t } = useI18n()
 
@@ -448,6 +450,12 @@ const cytoscapeContainer = ref<HTMLElement | null>(null)
 const clusterContainer = ref<HTMLElement | null>(null)
 let cy: Core | null = null
 let clusterCy: Core | null = null
+
+// Cytoscape lazy-loading state
+const cytoscapeLoading = ref(false)
+const cytoscapeError = ref('')
+let cytoscapeModule: typeof cytoscape | null = null
+let fcoseModule: any = null
 const clusterZoomLevel = ref(1)
 const clusterLayoutMode = ref<'force' | 'grid'>('force')
 const isFullscreen = ref(false)
