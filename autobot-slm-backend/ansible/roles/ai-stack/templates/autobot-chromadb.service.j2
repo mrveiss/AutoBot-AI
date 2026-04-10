@@ -12,7 +12,7 @@ Group={{ ai_group }}
 WorkingDirectory={{ ai_install_dir }}
 Environment="PATH={{ ai_install_dir }}/venv/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python"
-EnvironmentFile={{ ai_install_dir }}/.env
+EnvironmentFile=/etc/autobot/autobot-ai-stack.env
 ExecStart={{ ai_install_dir }}/venv/bin/chroma run --host {{ chromadb_host }} --port {{ chromadb_port }} --path {{ chromadb_persist_dir }}
 Restart=always
 RestartSec=10
