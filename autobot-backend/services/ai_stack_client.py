@@ -288,7 +288,8 @@ class AIStackClient:
     async def health_check(self) -> Metadata:
         """Check AI Stack health status and update connection_status."""
         try:
-            response = await self._make_request("GET", "/health")
+            # ChromaDB uses /api/v2 for heartbeat (not /health)
+            response = await self._make_request("GET", "/api/v2")
             if self.connection_status != "connected":
                 logger.info("AI Stack connection restored at %s", self.base_url)
             self.connection_status = "connected"
