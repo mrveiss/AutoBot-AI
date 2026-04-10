@@ -197,7 +197,7 @@ onUnmounted(() => {
             <span class="formats">{{ $t('chat.vision.formats') }}</span>
           </div>
           <div v-else-if="previewUrl" class="file-preview">
-            <img :src="previewUrl" :alt="$t('chat.vision.preview')" class="preview-image" />
+            <img :src="previewUrl" :alt="$t('chat.vision.preview')" class="preview-image" loading="lazy" />
             <div class="file-info">
               <span class="filename">{{ selectedFile.name }}</span>
               <span class="filesize">{{ formatFileSize(selectedFile.size) }}</span>
