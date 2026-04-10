@@ -40,7 +40,7 @@ _WORKER_ENV_ALLOW = frozenset(
 class IsolatedBridgeClient:
     """Client for a single bridge running as a subprocess worker."""
 
-    def __init__(self, bridge, policy):
+    def __init__(self, bridge: str, policy: BridgePolicy) -> None:
         """Initialise with bridge module name and policy."""
         self._bridge = bridge
         self._policy = policy
@@ -118,8 +118,8 @@ class IsolatedBridgeClient:
                     )
             await self.start()
 
-    def _next_id(self):
-        """Return next monotonic request id."""
+    async def _next_id(self):
+        """Return next monotonic request id (must be called with lock held)."""
         self._req_id += 1
         return self._req_id
 
@@ -127,7 +127,7 @@ class IsolatedBridgeClient:
         """Send one JSON-RPC request and await its response line."""
         assert self._proc is not None and self._proc.stdin is not None
         assert self._proc.stdout is not None
-        req_full = {"jsonrpc": _JSONRPC, "id": self._next_id(), **req}
+        req_full = {"jsonrpc": _JSONRPC, "id": await self._next_id(), **req}
         line = (json.dumps(req_full) + "\n").encode("utf-8")
         self._proc.stdin.write(line)
         await self._proc.stdin.drain()
@@ -143,7 +143,7 @@ class IsolatedBridgeClient:
             raise EOFError("bridge " + self._bridge + " closed stdout")
         return json.loads(raw.decode("utf-8"))
 
-    async def call_tool(self, tool_name, arguments, timeout=30.0):
+    async def call_tool(self, tool_name: str, arguments: Dict[str, Any], timeout: float = 30.0) -> Dict[str, Any]:
         """Invoke a tool on the isolated bridge."""
         async with self._lock:
             await self._ensure_alive()
@@ -165,19 +165,19 @@ class IsolatedBridgeClient:
                     self._proc.kill()
                 return {"success": False, "result": str(exc), "bridge": self._bridge}
 
-        if "error" in resp:
+            if "error" in resp:
+                return {
+                    "success": False,
+                    "result": resp["error"].get("message", "bridge error"),
+                    "bridge": self._bridge,
+                }
             return {
-                "success": False,
-                "result": resp["error"].get("message", "bridge error"),
+                "success": True,
+                "result": resp.get("result"),
                 "bridge": self._bridge,
             }
-        return {
-            "success": True,
-            "result": resp.get("result"),
-            "bridge": self._bridge,
-        }
 
-    async def health_check(self):
+    async def health_check(self) -> bool:
         """Return True if worker responds to a ping RPC within 2 seconds."""
         async with self._lock:
             try:

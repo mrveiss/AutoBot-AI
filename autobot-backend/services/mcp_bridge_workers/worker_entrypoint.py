@@ -130,11 +130,19 @@ async def _serve(bridge_module: str) -> None:
     loop = asyncio.get_running_loop()
     reader = asyncio.StreamReader()
     protocol = asyncio.StreamReaderProtocol(reader)
-    await loop.connect_read_pipe(lambda: protocol, sys.stdin)
+    try:
+        await loop.connect_read_pipe(lambda: protocol, sys.stdin)
+    except Exception as exc:
+        logger.error("worker: failed to connect stdin: %s", exc)
+        raise
 
-    writer_transport, writer_protocol = await loop.connect_write_pipe(
-        asyncio.streams.FlowControlMixin, sys.stdout
-    )
+    try:
+        writer_transport, writer_protocol = await loop.connect_write_pipe(
+            asyncio.streams.FlowControlMixin, sys.stdout
+        )
+    except Exception as exc:
+        logger.error("worker: failed to connect stdout: %s", exc)
+        raise
     writer = asyncio.StreamWriter(writer_transport, writer_protocol, None, loop)
 
     while True:
