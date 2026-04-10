@@ -17,7 +17,6 @@
           class="category-item"
           :class="{ active: activeSection === 'overview' }"
           @click="activeSection = 'overview'"
-          role="button"
           :aria-label="$t('workflow.views.overviewAriaLabel')"
           tabindex="0"
         >
@@ -35,7 +34,6 @@
           class="category-item"
           :class="{ active: activeSection === 'canvas' }"
           @click="activeSection = 'canvas'"
-          role="button"
           :aria-label="$t('workflow.views.visualBuilderAriaLabel')"
           tabindex="0"
         >
@@ -49,7 +47,6 @@
           class="category-item"
           :class="{ active: activeSection === 'templates' }"
           @click="activeSection = 'templates'"
-          role="button"
           :aria-label="$t('workflow.views.templatesAriaLabel')"
           tabindex="0"
         >
@@ -64,7 +61,6 @@
           class="category-item"
           :class="{ active: activeSection === 'natural-language' }"
           @click="activeSection = 'natural-language'"
-          role="button"
           :aria-label="$t('workflow.views.naturalLanguageAriaLabel')"
           tabindex="0"
         >
@@ -82,7 +78,6 @@
           class="category-item"
           :class="{ active: activeSection === 'runner' }"
           @click="activeSection = 'runner'"
-          role="button"
           :aria-label="$t('workflow.views.runnerAriaLabel')"
           tabindex="0"
         >
@@ -112,7 +107,6 @@
           class="category-item"
           :class="{ active: activeSection === 'notifications' }"
           @click="activeSection = 'notifications'"
-          role="button"
           :aria-label="$t('workflow.notifications.sidebarLabel')"
           tabindex="0"
         >
@@ -127,7 +121,6 @@
           class="category-item"
           :class="{ active: activeSection === 'gui-automation' }"
           @click="activeSection = 'gui-automation'"
-          role="button"
           :aria-label="$t('workflow.views.guiAutomationAriaLabel')"
           tabindex="0"
         >
@@ -161,7 +154,6 @@
           class="category-item"
           :class="{ active: activeSection === 'screen-analysis' }"
           @click="activeSection = 'screen-analysis'"
-          role="button"
           :aria-label="$t('workflow.views.screenAnalysisAriaLabel')"
           tabindex="0"
         >
@@ -176,7 +168,6 @@
           class="category-item"
           :class="{ active: activeSection === 'video-processing' }"
           @click="activeSection = 'video-processing'"
-          role="button"
           :aria-label="$t('workflow.views.videoProcessingAriaLabel')"
           tabindex="0"
         >
@@ -191,7 +182,6 @@
           class="category-item"
           :class="{ active: activeSection === 'media-gallery' }"
           @click="activeSection = 'media-gallery'"
-          role="button"
           :aria-label="$t('workflow.views.mediaGalleryAriaLabel')"
           tabindex="0"
         >
@@ -211,7 +201,6 @@
           class="category-item"
           :class="{ active: activeSection === 'live-dashboard' }"
           @click="activeSection = 'live-dashboard'"
-          role="button"
           :aria-label="$t('workflow.views.liveDashboardAriaLabel')"
           tabindex="0"
         >

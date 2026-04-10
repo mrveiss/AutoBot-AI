@@ -116,7 +116,6 @@ import { useVirtualList } from '@/composables/useVirtualList'
 import type { Severity } from '@/types/codeIntelligence'
 
 const { t } = useI18n()
-const containerRef = ref<HTMLElement | null>(null)
 
 interface Finding {
   severity: Severity

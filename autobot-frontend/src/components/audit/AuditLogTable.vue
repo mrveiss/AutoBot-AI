@@ -49,7 +49,7 @@
             <th
               class="col-timestamp"
               @click="sortBy('timestamp')"
-              role="button"
+             
               tabindex="0"
               :aria-sort="sortField === 'timestamp' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'"
               :aria-label="$t('audit.logTable.sortByTimestamp')"
@@ -62,7 +62,7 @@
             <th
               class="col-operation"
               @click="sortBy('operation')"
-              role="button"
+             
               tabindex="0"
               :aria-sort="sortField === 'operation' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'"
               :aria-label="$t('audit.logTable.sortByOperation')"
