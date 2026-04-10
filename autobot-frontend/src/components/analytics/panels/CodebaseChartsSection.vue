@@ -321,6 +321,81 @@ function getCategoryIcon(categoryId: string): string {
 </script>
 
 <style scoped>
+/* Codebase Statistics Section (#4063: Fix rendering gaps) */
+.stats-section {
+  margin-top: 32px;
+  padding: 24px;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 12px;
+  border: 1px solid rgba(71, 85, 105, 0.5);
+}
+
+.stats-section h3 {
+  margin: 0 0 20px 0;
+  color: var(--text-secondary);
+  font-size: 1.25rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.stats-section h3 i {
+  color: var(--chart-green);
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.section-export-buttons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.export-btn {
+  background: rgba(51, 65, 85, 0.5);
+  border: 1px solid rgba(71, 85, 105, 0.5);
+  border-radius: 6px;
+  color: var(--text-muted);
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.export-btn:hover:not(:disabled) {
+  background: rgba(71, 85, 105, 0.5);
+  color: var(--text-secondary);
+  border-color: rgba(100, 116, 139, 0.5);
+}
+
+.export-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Responsive stats grid */
+@media (max-width: 1200px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .charts-section {
   margin-top: 32px;
   padding: 24px;
