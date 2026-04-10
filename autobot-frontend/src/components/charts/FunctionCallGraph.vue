@@ -1378,6 +1378,7 @@ watch(viewMode, async (newMode) => {
 }
 
 .graph-container {
+  contain: layout style paint;
   display: flex;
   flex-direction: column;
 }
@@ -1917,6 +1918,7 @@ watch(viewMode, async (newMode) => {
 }
 
 .function-call-graph.fullscreen .graph-container {
+  contain: layout style paint;
   height: calc(100vh - 100px) !important;
 }
 
@@ -1969,7 +1971,7 @@ watch(viewMode, async (newMode) => {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-2);
-  max-height: 500px;
+  min-height: 200px; max-height: 70vh;
   overflow-y: auto;
 }
 
@@ -2081,7 +2083,7 @@ watch(viewMode, async (newMode) => {
 
 /* Issue #711: Virtual scroll container for orphaned functions */
 .orphaned-list-container {
-  height: 500px;
+  min-height: 300px;
   overflow-y: auto;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);

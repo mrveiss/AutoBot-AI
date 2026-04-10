@@ -230,6 +230,7 @@ onUnmounted(() => {
 
 /* Modal dialog */
 .dialog {
+  contain: layout style paint;
   background: var(--bg-primary);
   border-radius: var(--radius-lg);
   width: 90%;
@@ -315,6 +316,7 @@ onUnmounted(() => {
 
 .modal-fade-enter-active .dialog,
 .modal-fade-leave-active .dialog {
+  contain: layout style paint;
   transition: all var(--duration-300) var(--ease-in-out);
 }
 
@@ -325,6 +327,7 @@ onUnmounted(() => {
 
 .modal-fade-enter-from .dialog,
 .modal-fade-leave-to .dialog {
+  contain: layout style paint;
   transform: scale(0.95);
 }
 </style>

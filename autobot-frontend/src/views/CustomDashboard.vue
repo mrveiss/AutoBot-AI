@@ -621,9 +621,10 @@ onMounted(() => {
 <style scoped>
 /* Issue #704: Migrated to CSS design tokens */
 .custom-dashboard {
+  contain: layout style paint;
   display: flex;
   flex-direction: column;
-  height: 100%;
+  min-height: 100%;
   background: var(--bg-primary);
   color: var(--text-primary);
 }
