@@ -14,7 +14,7 @@ import asyncio
 import csv
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from io import StringIO
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
@@ -464,7 +464,7 @@ class BulkOperationsMixin:
         lines = [
             "# Knowledge Base Export",
             "",
-            f"Generated: {datetime.now().isoformat()}",
+            f"Generated: {datetime.now(tz=timezone.utc).isoformat()}",
             "",
         ]
 
