@@ -17,7 +17,7 @@ from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional
 
-from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_client import get_async_redis_client, get_redis_client
 from constants.ttl_constants import TTL_1_HOUR, TTL_5_MINUTES
 
 logger = logging.getLogger(__name__)
