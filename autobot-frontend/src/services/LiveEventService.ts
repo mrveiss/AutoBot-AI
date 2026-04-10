@@ -11,7 +11,7 @@
 
 import { ref, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
-import { config } from '@/config/ssot-config'
+import config from '@/config/ssot-config'
 
 export type LiveEventConnectionState =
   | 'disconnected'
