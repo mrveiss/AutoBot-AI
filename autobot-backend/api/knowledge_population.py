@@ -1016,9 +1016,17 @@ async def populate_autobot_docs(background_tasks: BackgroundTasks, request: dict
     """
     import uuid
     from services.knowledge.doc_indexer import get_doc_indexer_service
+    from services.knowledge.task_status_manager import TaskStatusManager
 
     task_id = str(uuid.uuid4())
     force_reindex = request.get("force", False) if request else False
+
+    # Create task status in Redis
+    await TaskStatusManager.create_task(
+        task_id=task_id,
+        message="Documentation indexing started",
+        total_items=0,  # Will be updated once files are discovered
+    )
 
     # Queue the actual indexing in background
     background_tasks.add_task(
@@ -1039,24 +1047,67 @@ async def populate_autobot_docs(background_tasks: BackgroundTasks, request: dict
 
 async def _index_autobot_docs_background(task_id: str, force_reindex: bool):
     """Background task: index all AutoBot documentation files."""
-    try:
-        from services.knowledge.doc_indexer import get_doc_indexer_service
+    from services.knowledge.doc_indexer import get_doc_indexer_service
+    from services.knowledge.task_status_manager import TaskStatusManager
+    import time
 
+    start_time = time.time()
+
+    try:
         logger.info("[%s] Starting background indexing (force=%s)...", task_id, force_reindex)
+
+        # Update status: initializing
+        await TaskStatusManager.update_task(
+            task_id=task_id,
+            status="running",
+            message="Initializing indexer...",
+            progress_percent=5,
+        )
 
         indexer = get_doc_indexer_service()
         if not await indexer.initialize():
             logger.error("[%s] Indexer initialization failed", task_id)
+            elapsed = time.time() - start_time
+            await TaskStatusManager.fail_task(
+                task_id=task_id,
+                error_message="Indexer initialization failed",
+            )
             return
+
+        # Update status: starting indexing
+        await TaskStatusManager.update_task(
+            task_id=task_id,
+            status="running",
+            message="Discovering and indexing files...",
+            progress_percent=10,
+        )
 
         result = await indexer.index_all(force=force_reindex)
 
+        elapsed = time.time() - start_time
+
+        # Mark task as completed
+        await TaskStatusManager.complete_task(
+            task_id=task_id,
+            message=(
+                f"Successfully indexed {result.success} documents "
+                f"({result.skipped} skipped, {result.failed} failed)"
+            ),
+            items_processed=result.success,
+            elapsed_seconds=elapsed,
+        )
+
         logger.info(
             "[%s] Indexing completed: %d success, %d skipped, %d failed (%.1fs)",
-            task_id, result.success, result.skipped, result.failed, result.elapsed_seconds
+            task_id, result.success, result.skipped, result.failed, elapsed
         )
     except Exception as e:
+        elapsed = time.time() - start_time
         logger.error("[%s] Background indexing failed: %s", task_id, e)
+        await TaskStatusManager.fail_task(
+            task_id=task_id,
+            error_message=str(e),
+        )
 
 
 @router.get("/populate_autobot_docs/status/{task_id}")
@@ -1064,14 +1115,31 @@ async def get_populate_status(task_id: str):
     """
     Poll the status of a background documentation indexing task.
 
-    Note: Task tracking is in-memory. Status is lost if service restarts.
-    For persistent task tracking, integrate with Celery or Redis.
+    Returns persistent task status stored in Redis.
+    Issue #4103: Implemented Redis-backed task tracking.
     """
-    # TODO: Implement persistent task status tracking (#4103)
+    from services.knowledge.task_status_manager import TaskStatusManager
+
+    task_status = await TaskStatusManager.get_task(task_id)
+
+    if not task_status:
+        return {
+            "status": "not_found",
+            "message": f"Task {task_id} not found",
+            "task_id": task_id,
+        }
+
     return {
-        "status": "background_task",
-        "message": "Task tracking not yet implemented. Check logs with: journalctl -u autobot-backend -g task_id",
-        "task_id": task_id
+        "task_id": task_status.task_id,
+        "status": task_status.status,
+        "message": task_status.message,
+        "progress_percent": task_status.progress_percent,
+        "items_processed": task_status.items_processed,
+        "items_total": task_status.items_total,
+        "error": task_status.error,
+        "elapsed_seconds": task_status.elapsed_seconds,
+        "created_at": task_status.created_at,
+        "updated_at": task_status.updated_at,
     }
 
 
