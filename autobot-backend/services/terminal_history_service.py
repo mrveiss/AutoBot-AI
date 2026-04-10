@@ -9,7 +9,7 @@ import logging
 import time
 from typing import List
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ class TerminalHistoryService:
         correctly in an async context.
         """
         if self._redis is None:
-            self._redis = await get_redis_client(database="main", async_client=True)
+            self._redis = await get_async_redis_client(database="main")
         return self._redis
 
     async def add_command(self, user_id: str, command: str) -> None:

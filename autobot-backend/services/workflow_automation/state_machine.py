@@ -28,7 +28,7 @@ from pydantic import BaseModel, Field
 
 from autobot_shared.message_bus import get_message_bus
 from autobot_shared.models.service_message import ServiceMessage
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from constants.redis_constants import REDIS_KEY
 from constants.ttl_constants import TTL_24_HOURS
 
@@ -131,7 +131,7 @@ class WorkflowStateMachine:
 
     async def _get_redis(self) -> Any:
         if self._redis is None:
-            self._redis = await get_redis_client(async_client=True, database="main")
+            self._redis = await get_async_redis_client(database="main")
         return self._redis
 
     # -- Create --------------------------------------------------------

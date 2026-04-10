@@ -15,7 +15,7 @@ import json
 import logging
 from typing import Any, List, Optional
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 
 from constants.ttl_constants import TTL_WORKING_MEMORY_DEFAULT
 
@@ -37,7 +37,7 @@ class WorkingMemoryService:
 
     async def _get_redis(self):
         if self._redis is None:
-            self._redis = await get_redis_client(async_client=True, database="knowledge")
+            self._redis = await get_async_redis_client(database="knowledge")
         return self._redis
 
     async def store(

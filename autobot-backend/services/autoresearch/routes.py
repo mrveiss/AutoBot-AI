@@ -572,9 +572,9 @@ async def get_variants(
     """List prompt variants for an optimization session."""
     import json as _json
 
-    from autobot_shared.redis_client import get_redis_client
+    from autobot_shared.redis_client import get_async_redis_client
 
-    redis = await get_redis_client(async_client=True, database="main")
+    redis = await get_async_redis_client(database="main")
     key = f"autoresearch:prompt_opt:session:{session_id}"
     raw = await redis.get(key)
     if raw is None:
@@ -597,7 +597,7 @@ async def submit_variant_score(
     """Submit a human score for a prompt variant."""
     import json as _json
 
-    from autobot_shared.redis_client import get_redis_client
+    from autobot_shared.redis_client import get_async_redis_client
 
     # Validate key components to prevent Redis key injection
     if not _UUID_PATTERN.match(session_id) or not _UUID_PATTERN.match(variant_id):
@@ -605,7 +605,7 @@ async def submit_variant_score(
             status_code=400, detail="Invalid session_id or variant_id format"
         )
 
-    redis = await get_redis_client(async_client=True, database="main")
+    redis = await get_async_redis_client(database="main")
     key = f"autoresearch:prompt_review:{session_id}:{variant_id}"
     notify_key = HUMAN_REVIEW_NOTIFY_KEY.format(session_id=session_id, variant_id=variant_id)
     await redis.set(
@@ -633,9 +633,9 @@ async def list_pending_approvals(
     """List pending approval requests."""
     import json as _json
 
-    from autobot_shared.redis_client import get_redis_client
+    from autobot_shared.redis_client import get_async_redis_client
 
-    redis = await get_redis_client(async_client=True, database="main")
+    redis = await get_async_redis_client(database="main")
     approvals = []
     async for key in redis.scan_iter("autoresearch:approval:pending:*"):
         raw = await redis.get(key)
@@ -666,9 +666,9 @@ async def submit_approval_decision(
     _admin: bool = Depends(check_admin_permission),
 ):
     """Submit approve/reject decision for an experiment."""
-    from autobot_shared.redis_client import get_redis_client
+    from autobot_shared.redis_client import get_async_redis_client
 
-    redis = await get_redis_client(async_client=True, database="main")
+    redis = await get_async_redis_client(database="main")
     status_key = f"autoresearch:approval:status:{session_id}:{experiment_id}"
     current = await redis.get(status_key)
     if current is None:

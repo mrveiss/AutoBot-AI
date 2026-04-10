@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional, Set
 
 from agents.agent_client import AgentRegistry as AgentClientRegistry
 from agents.llm_failsafe_agent import get_robust_llm_response
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_redis_client, get_async_redis_client
 from event_manager import event_manager
 
 from .types import (
@@ -112,9 +112,7 @@ class EnhancedMultiAgentOrchestrator:
     async def _ensure_redis(self):
         """Lazy-init async Redis client on first use (#2725)."""
         if self.redis_async is None:
-            from autobot_shared.redis_client import get_redis_client
-
-            self.redis_async = await get_redis_client(async_client=True)
+            self.redis_async = await get_async_redis_client()
 
     def _get_strategy_handler(self) -> ExecutionStrategyHandler:
         """Lazy initialization of strategy handler."""

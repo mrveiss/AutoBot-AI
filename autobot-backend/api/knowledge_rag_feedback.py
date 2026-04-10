@@ -23,7 +23,7 @@ from pydantic import BaseModel
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_30_DAYS
 from knowledge.search_components.retrieval_learner import GLOBAL_USER
 
@@ -90,7 +90,7 @@ async def record_rag_feedback(
     }
 
     try:
-        redis = await get_redis_client(async_client=True, database="analytics")
+        redis = await get_async_redis_client(database="analytics")
         if redis is None:
             logger.warning(
                 "record_rag_feedback: Redis unavailable; annotation dropped for user %s",

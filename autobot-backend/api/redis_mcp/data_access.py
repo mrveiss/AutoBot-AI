@@ -11,7 +11,7 @@ All handlers use autobot_shared.redis_client — no direct redis.Redis().
 import logging
 from typing import Any, Dict, List, Optional
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_24_HOURS
 from type_defs.common import Metadata
 
@@ -48,7 +48,7 @@ def _decode(value):
 
 async def _get_client(database: str = "main"):
     """Get an async Redis client for the given database."""
-    return await get_redis_client(async_client=True, database=database)
+    return await get_async_redis_client(database=database)
 
 
 # ---------------------------------------------------------------------------

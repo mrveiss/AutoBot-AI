@@ -26,7 +26,7 @@ from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from autobot_shared.models.service_message import ServiceMessage
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_7_DAYS
 
 logger = logging.getLogger(__name__)
@@ -113,7 +113,7 @@ class WorkflowStateMachine:
 
     async def _redis(self):
         """Get async Redis client for workflows db."""
-        return await get_redis_client(async_client=True, database=REDIS_DATABASE)
+        return await get_async_redis_client(database=REDIS_DATABASE)
 
     async def _persist(self, state: WorkflowState) -> None:
         """Serialize and store *state* in Redis."""

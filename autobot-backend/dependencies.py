@@ -221,9 +221,9 @@ async def get_async_redis_client(database: str = "main"):
     Returns:
         Async Redis client instance
     """
-    from autobot_shared.redis_client import get_redis_client as _get_redis_client
+    from autobot_shared.redis_client import get_async_redis_client as _get_async_redis_client
 
-    return await _get_redis_client(async_client=True, database=database)
+    return await _get_async_redis_client(database=database)
 
 
 # Type aliases for cleaner dependency annotations

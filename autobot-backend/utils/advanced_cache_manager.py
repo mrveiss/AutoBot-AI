@@ -17,7 +17,7 @@ from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_1_HOUR, TTL_5_MINUTES
 
 logger = logging.getLogger(__name__)
@@ -249,7 +249,7 @@ class AdvancedCacheManager:
             if self._redis_client_initialized:
                 return  # Another coroutine initialized while we waited
             try:
-                self.redis_client = await get_redis_client(async_client=True)
+                self.redis_client = await get_async_redis_client()
                 self._redis_client_initialized = True
                 logger.debug("Async Redis client initialized successfully")
             except Exception as e:
