@@ -79,14 +79,7 @@ const fetchUsers = async () => {
 
   try {
     const response = await apiClient.get<UserListResponse>(
-      `${getApiBase()}/user-management/users`,
-      {
-        params: {
-          limit: 100,
-          offset: 0,
-          include_inactive: false
-        }
-      }
+      `${getApiBase()}/user-management/users?limit=100&offset=0&include_inactive=false`
     )
 
     if (response && response.users && Array.isArray(response.users)) {

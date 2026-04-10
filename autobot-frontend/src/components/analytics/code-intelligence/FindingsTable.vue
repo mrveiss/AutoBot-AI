@@ -148,7 +148,7 @@ const expandedRow = ref<number | null>(null)
 // Reduces unnecessary filtering operations during rapid typing
 const debouncedSearchQuery = useDebounce(searchQuery, 350)
 
-const filteredFindings = computed(() => {
+const filteredFindings = computed<(Finding & { id: string })[]>(() => {
   return props.findings
     .filter(f => {
       const matchesSeverity = selectedSeverities.value.includes(f.severity)
@@ -161,7 +161,7 @@ const filteredFindings = computed(() => {
     .map((f, idx) => ({
       ...f,
       id: f.id || `finding_${idx}`
-    }))
+    })) as (Finding & { id: string })[]
 })
 
 // Virtual scrolling composable - Issue #4037
