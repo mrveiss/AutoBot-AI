@@ -17,6 +17,7 @@ import aiohttp
 import psutil
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 from constants.network_constants import NetworkConstants
 
@@ -94,13 +95,9 @@ class SystemValidator:
 
         # Service endpoints
         self.base_urls = {
-            "backend": (
-                f"http://{config.get_host('backend')}:{config.get_port('backend')}"
-            ),
-            "frontend": (
-                f"http://{config.get_host('frontend')}:{config.get_port('frontend')}"
-            ),
-            "ollama": f"http://{config.get_host('ollama')}:{config.get_port('ollama')}",
+            "backend": ssot_config.backend_url,
+            "frontend": ssot_config.frontend_url,
+            "ollama": ssot_config.ollama_url,
             "redis": None,  # Special handling for Redis
         }
 
@@ -921,9 +918,9 @@ class SystemValidator:
         import socket
 
         critical_ports = [
-            (config.get_host("backend"), config.get_port("backend"), "Backend"),
-            (config.get_host("redis"), config.get_port("redis"), "Redis"),
-            (config.get_host("ollama"), config.get_port("ollama"), "Ollama"),
+            (ssot_config.vm.main, ssot_config.port.backend, "Backend"),
+            (ssot_config.vm.redis, ssot_config.port.redis, "Redis"),
+            (ssot_config.vm.ollama, ssot_config.port.ollama, "Ollama"),
         ]
 
         for host, port, service_name in critical_ports:

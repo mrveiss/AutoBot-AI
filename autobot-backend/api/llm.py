@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 
 # Import unified configuration system - NO HARDCODED VALUES
@@ -474,7 +475,7 @@ async def get_comprehensive_llm_status(
         # Get provider-specific configurations
         local_config = llm_config.get("local", {})
         cloud_config = llm_config.get("cloud", {})
-        ollama_url = config.get_service_url("ollama")
+        ollama_url = ssot_config.ollama_url
 
         # Build comprehensive status using extracted helpers (Issue #281)
         status = {

@@ -22,6 +22,7 @@ from autobot_shared.auth.jwt_core import (
     hash_password,
     verify_password,
 )
+from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_auth_error
@@ -62,8 +63,7 @@ class AuthenticationMiddleware:
     def _init_session_storage(self):
         """Initialize Redis session storage using centralized client management"""
         try:
-            redis_config = config.get_redis_config()
-            if redis_config["enabled"]:
+            if ssot_config.redis.enabled:
                 from autobot_shared.redis_client import get_redis_client
 
                 # Use sessions database for authentication sessions

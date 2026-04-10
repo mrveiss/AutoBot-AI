@@ -23,6 +23,7 @@ import xxhash
 
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.http_client import get_http_client
+from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.tracing import get_tracer
 from config.manager import get_config_manager
 from constants.model_constants import ModelConstants
@@ -154,7 +155,7 @@ class LLMInterface:
 
         Initialize configuration values from unified config.
         """
-        self.ollama_host = config.get_service_url("ollama")
+        self.ollama_host = ssot_config.ollama_url
         self.openai_api_key = config.get(
             "openai.api_key", os.getenv("OPENAI_API_KEY", "")
         )
@@ -578,7 +579,7 @@ class LLMInterface:
 
     def reload_ollama_configuration(self):
         """Runtime reload of Ollama configuration."""
-        self.ollama_host = config.get_service_url("ollama")
+        self.ollama_host = ssot_config.ollama_url
         logger.info(
             f"LLMInterface: Runtime config reload - Ollama URL: {self.ollama_host}"
         )
