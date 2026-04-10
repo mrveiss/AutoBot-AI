@@ -52,8 +52,16 @@ from autobot_shared.redis_client import get_redis_client, get_async_redis_client
 redis_client = get_redis_client(database="main")
 redis_client.set("key", "value")
 
-# Asynchronous client — use get_async_redis_client (safe: await is built-in)
+# Asynchronous client — PREFERRED: use get_async_redis_client() directly.
+# It is an async def wrapper that awaits the connection internally, making it
+# impossible to forget the await and receive a raw coroutine object.
 async_redis = await get_async_redis_client(database="main")
+await async_redis.set("key", "value")
+
+# Asynchronous client — LEGACY: get_redis_client(async_client=True) still works
+# but requires an explicit await at every call site.  Prefer get_async_redis_client().
+# See issue #3962 for the bug this naming confusion caused.
+async_redis = await get_redis_client(async_client=True, database="main")
 await async_redis.set("key", "value")
 
 # NOTE: get_redis_client(async_client=True) is error-prone because it is a
@@ -85,7 +93,7 @@ import logging
 
 # Thread safety support for concurrent access patterns
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator, Dict, Optional, Union
+from typing import Any, AsyncGenerator, Coroutine, Dict, Optional, Union
 
 import redis
 import redis.asyncio as async_redis
@@ -469,7 +477,7 @@ async def redis_get(key: str, database: str = "main") -> Optional[Any]:
     Example:
         >>> value = await redis_get("my_key", database="cache")
     """
-    client = await get_redis_client(async_client=True, database=database)
+    client = await get_async_redis_client(database=database)
     if client:
         return await client.get(key)
     return None
@@ -496,7 +504,7 @@ async def redis_set(
         >>> success = await redis_set("my_key", "value", expire=3600, database="cache")
     """
     try:
-        client = await get_redis_client(async_client=True, database=database)
+        client = await get_async_redis_client(database=database)
         if not client:
             return False
 
@@ -525,7 +533,7 @@ async def redis_delete(key: str, database: str = "main") -> int:
     Example:
         >>> deleted_count = await redis_delete("my_key", database="cache")
     """
-    client = await get_redis_client(async_client=True, database=database)
+    client = await get_async_redis_client(database=database)
     if client:
         return await client.delete(key)
     return 0
@@ -547,7 +555,7 @@ async def redis_context(
         async with redis_context("main") as redis:
             await redis.set("key", "value")
     """
-    client = await get_redis_client(async_client=True, database=database)
+    client = await get_async_redis_client(database=database)
     try:
         yield client
     finally:
