@@ -143,9 +143,12 @@ const duplicatesBySimilarity = computed(() => {
   return groups
 })
 
-const totalDuplicateLines = computed(() => {
-  return props.duplicates.reduce((sum, d) => sum + d.lines, 0)
-})
+// Issue #4036: Memoized line count aggregation
+const totalDuplicateLines = useAggregationMemo(
+  () => props.duplicates.reduce((sum, d) => sum + d.lines, 0),
+  () => [props.duplicates],
+  { ttl: 60000 } // 1 minute TTL for line counts
+)
 
 const toggleDuplicateGroup = (similarity: string) => {
   expandedDuplicateGroups.value[similarity] = !expandedDuplicateGroups.value[similarity]

@@ -121,7 +121,8 @@
  * Issue #184: Split oversized Vue components
  */
 
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
+import { useGroupingMemo } from '@/composables/useComputedMemo'
 import EmptyState from '@/components/ui/EmptyState.vue'
 
 interface Problem {
@@ -148,35 +149,45 @@ const emit = defineEmits<{
 
 const expandedProblemTypes = ref<Record<string, boolean>>({})
 
-const problemsBySeverity = computed(() => {
-  const groups: Record<string, Problem[]> = {
-    critical: [],
-    high: [],
-    medium: [],
-    low: []
-  }
-  props.problems.forEach(p => {
-    const sev = (p.severity || 'low').toLowerCase()
-    if (groups[sev]) groups[sev].push(p)
-  })
-  return groups
-})
+// Issue #4036: Memoized grouping - avoid recalculating on every render
+const problemsBySeverity = useGroupingMemo(
+  () => {
+    const groups: Record<string, Problem[]> = {
+      critical: [],
+      high: [],
+      medium: [],
+      low: []
+    }
+    props.problems.forEach(p => {
+      const sev = (p.severity || 'low').toLowerCase()
+      if (groups[sev]) groups[sev].push(p)
+    })
+    return groups
+  },
+  () => [props.problems],
+  { ttl: 60000 } // 1 minute TTL for severity grouping
+)
 
-const problemsByType = computed(() => {
-  const groups: Record<string, { problems: Problem[], severityCounts: Record<string, number> }> = {}
-  props.problems.forEach(p => {
-    const type = p.problem_type || p.type || 'unknown'
-    if (!groups[type]) {
-      groups[type] = { problems: [], severityCounts: { critical: 0, high: 0, medium: 0, low: 0 } }
-    }
-    groups[type].problems.push(p)
-    const sev = (p.severity || 'low').toLowerCase()
-    if (groups[type].severityCounts[sev] !== undefined) {
-      groups[type].severityCounts[sev]++
-    }
-  })
-  return groups
-})
+// Issue #4036: Memoized complex grouping with severity counts
+const problemsByType = useGroupingMemo(
+  () => {
+    const groups: Record<string, { problems: Problem[], severityCounts: Record<string, number> }> = {}
+    props.problems.forEach(p => {
+      const type = p.problem_type || p.type || 'unknown'
+      if (!groups[type]) {
+        groups[type] = { problems: [], severityCounts: { critical: 0, high: 0, medium: 0, low: 0 } }
+      }
+      groups[type].problems.push(p)
+      const sev = (p.severity || 'low').toLowerCase()
+      if (groups[type].severityCounts[sev] !== undefined) {
+        groups[type].severityCounts[sev]++
+      }
+    })
+    return groups
+  },
+  () => [props.problems],
+  { ttl: 120000 } // 2 minutes TTL for type grouping (more complex)
+)
 
 const toggleProblemType = (type: string) => {
   expandedProblemTypes.value[type] = !expandedProblemTypes.value[type]

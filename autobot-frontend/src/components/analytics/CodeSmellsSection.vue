@@ -164,21 +164,26 @@ const severitySummary = computed(() => {
   return counts
 })
 
-const smellsByType = computed(() => {
-  const groups: Record<string, { smells: CodeSmell[], severityCounts: Record<string, number> }> = {}
-  props.smells.forEach(s => {
-    const type = s.smell_type || 'unknown'
-    if (!groups[type]) {
-      groups[type] = { smells: [], severityCounts: { critical: 0, high: 0, medium: 0, low: 0 } }
-    }
-    groups[type].smells.push(s)
-    const sev = (s.severity || 'low').toLowerCase()
-    if (groups[type].severityCounts[sev] !== undefined) {
-      groups[type].severityCounts[sev]++
-    }
-  })
-  return groups
-})
+// Issue #4036: Memoized type grouping with severity counts
+const smellsByType = useGroupingMemo(
+  () => {
+    const groups: Record<string, { smells: CodeSmell[], severityCounts: Record<string, number> }> = {}
+    props.smells.forEach(s => {
+      const type = s.smell_type || 'unknown'
+      if (!groups[type]) {
+        groups[type] = { smells: [], severityCounts: { critical: 0, high: 0, medium: 0, low: 0 } }
+      }
+      groups[type].smells.push(s)
+      const sev = (s.severity || 'low').toLowerCase()
+      if (groups[type].severityCounts[sev] !== undefined) {
+        groups[type].severityCounts[sev]++
+      }
+    })
+    return groups
+  },
+  () => [props.smells],
+  { ttl: 120000 } // 2 minutes TTL for type grouping
+)
 
 const toggleCodeSmellType = (type: string) => {
   expandedCodeSmellTypes.value[type] = !expandedCodeSmellTypes.value[type]
