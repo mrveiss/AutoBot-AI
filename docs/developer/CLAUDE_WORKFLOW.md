@@ -115,10 +115,37 @@ Subagents cannot autonomously acquire Bash permission. Run batch file-manipulati
 
 **GitHub CLI Workarounds:**
 
-- `gh pr edit --body "..."` silently fails when the repo has classic Projects attached (GraphQL deprecation error). Use the REST API instead:
+- **`gh pr edit --body` silently fails** when the repo has classic Projects attached. The command exits non-zero and leaves the body unchanged. Error output:
+
+  ```text
+  GraphQL: Projects (classic) is being deprecated in favor of the new Projects experience
+  ```
+
+  Affected flags: `--body`, `--title`, `--assignee`, `--label`, `--milestone`, `--reviewer`.
+  Use the REST API instead — it succeeds even with classic Projects attached:
 
   ```bash
+  # Single-line body
   gh api repos/mrveiss/AutoBot-AI/pulls/$PR_NUMBER -X PATCH -f body="new body here"
+
+  # Multi-line body (HEREDOC — required for PR descriptions with newlines)
+  gh api repos/mrveiss/AutoBot-AI/pulls/$PR_NUMBER -X PATCH -f body="$(cat <<'EOF'
+  ## Summary
+  - change one
+  - change two
+  EOF
+  )"
+
+  # Update title
+  gh api repos/mrveiss/AutoBot-AI/pulls/$PR_NUMBER -X PATCH -f title="new title"
+  ```
+
+  A convenience wrapper is available at `scripts/gh-pr-update-body.sh`:
+
+  ```bash
+  scripts/gh-pr-update-body.sh $PR_NUMBER "new body text"
+  # or pipe a file:
+  scripts/gh-pr-update-body.sh $PR_NUMBER "$(cat body.md)"
   ```
 
 ---
