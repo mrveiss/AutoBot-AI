@@ -23,7 +23,7 @@ infrastructure:
     ollama: 11434
     ai_stack: 8080
     npu_worker: 8081
-    browser_service: 3000
+    browser_service: 9001
     vnc: 6080
     websocket: 8001
     nginx: 80  # Production mode only - serves static files on frontend VM

@@ -122,7 +122,7 @@ class NetworkConstants:
     REDIS_PORT: int = int(ConfigRegistry.get("port.redis", "6379"))
     OLLAMA_PORT: int = int(ConfigRegistry.get("port.ollama", "11434"))
     VNC_PORT: int = int(ConfigRegistry.get("port.vnc", "6080"))
-    BROWSER_SERVICE_PORT: int = int(ConfigRegistry.get("port.browser", "3000"))
+    BROWSER_SERVICE_PORT: int = int(ConfigRegistry.get("port.browser", "9001"))
     AI_STACK_PORT: int = int(ConfigRegistry.get("port.aistack", "8080"))
     NPU_WORKER_PORT: int = int(ConfigRegistry.get("port.npu", "8081"))
     SLM_PORT: int = int(ConfigRegistry.get("port.slm", "8000"))

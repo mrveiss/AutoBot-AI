@@ -926,7 +926,7 @@ app.post('/automation', async (req, res) => {
   }
 });
 
-const port = parseInt(process.env.PLAYWRIGHT_PORT || '3000', 10);
+const port = parseInt(process.env.PLAYWRIGHT_PORT || '9001', 10);
 app.listen(port, '0.0.0.0', async () => {
   logger.info('Playwright service listening on port ' + port);
 
