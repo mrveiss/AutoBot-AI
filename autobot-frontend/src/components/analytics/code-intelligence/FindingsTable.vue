@@ -2,6 +2,7 @@
 <!-- Copyright (c) 2025 mrveiss -->
 <!-- Author: mrveiss -->
 <!-- Issue #566 - Code Intelligence Dashboard -->
+<!-- Issue #4037 - Virtual scrolling for large findings tables (500+ rows) -->
 
 <template>
   <div class="findings-table">
@@ -36,10 +37,10 @@
       <p>{{ emptyMessage }}</p>
     </div>
 
-    <!-- Table -->
+    <!-- Table with virtual scrolling -->
     <div v-else class="table-container">
       <table>
-        <thead>
+        <thead class="sticky top-0 z-10">
           <tr>
             <th class="col-severity">{{ $t('analytics.findings.table.severity') }}</th>
             <th class="col-file">{{ $t('analytics.findings.table.fileLine') }}</th>
@@ -47,49 +48,51 @@
             <th class="col-message">{{ $t('analytics.findings.table.message') }}</th>
           </tr>
         </thead>
-        <tbody>
-          <template v-for="(finding, index) in filteredFindings" :key="index">
+        <tbody :style="{ height: totalHeight + 'px', position: 'relative' }">
+          <!-- Virtualized findings rows -->
+          <template v-for="virtualItem in visibleItems" :key="virtualItem.index">
             <tr
-              @click="toggleExpand(index)"
-              :class="{ expanded: expandedRow === index }"
+              @click="toggleExpand(virtualItem.index)"
+              :class="{ expanded: expandedRow === virtualItem.index }"
               class="finding-row"
               role="button"
               tabindex="0"
-              :aria-expanded="expandedRow === index"
-              :aria-label="`${finding.severity} severity finding in ${finding.file_path}, click to expand details`"
-              @keydown.enter="toggleExpand(index)"
-              @keydown.space.prevent="toggleExpand(index)"
+              :aria-expanded="expandedRow === virtualItem.index"
+              :aria-label="`${virtualItem.data.severity} severity finding in ${virtualItem.data.file_path}, click to expand details`"
+              @keydown.enter="toggleExpand(virtualItem.index)"
+              @keydown.space.prevent="toggleExpand(virtualItem.index)"
+              :style="{ transform: `translateY(${virtualItem.offset}px)` }"
             >
               <td class="col-severity">
-                <span :class="['severity-badge', finding.severity]">
-                  {{ getSeverityIcon(finding.severity) }} {{ finding.severity }}
+                <span :class="['severity-badge', virtualItem.data.severity]">
+                  {{ getSeverityIcon(virtualItem.data.severity) }} {{ virtualItem.data.severity }}
                 </span>
               </td>
               <td class="col-file">
-                <code>{{ formatFilePath(finding.file_path) }}:{{ finding.line_number }}</code>
+                <code>{{ formatFilePath(virtualItem.data.file_path) }}:{{ virtualItem.data.line_number }}</code>
               </td>
-              <td class="col-type">{{ getTypeDisplay(finding) }}</td>
-              <td class="col-message">{{ truncateMessage(finding.message) }}</td>
+              <td class="col-type">{{ getTypeDisplay(virtualItem.data) }}</td>
+              <td class="col-message">{{ truncateMessage(virtualItem.data.message) }}</td>
             </tr>
             <!-- Expanded detail card -->
-            <tr v-if="expandedRow === index" class="detail-row">
+            <tr v-if="expandedRow === virtualItem.index" class="detail-row">
               <td colspan="4">
                 <div class="detail-card">
                   <div class="detail-section">
                     <strong>{{ $t('analytics.findings.table.fullMessage') }}</strong>
-                    <p>{{ finding.message }}</p>
+                    <p>{{ virtualItem.data.message }}</p>
                   </div>
                   <div class="detail-section">
                     <strong>{{ $t('analytics.findings.table.recommendation') }}</strong>
-                    <p>{{ getRemediation(finding) }}</p>
+                    <p>{{ getRemediation(virtualItem.data) }}</p>
                   </div>
-                  <div v-if="finding.owasp_category" class="detail-section">
+                  <div v-if="virtualItem.data.owasp_category" class="detail-section">
                     <strong>{{ $t('analytics.findings.table.owasp') }}</strong>
-                    <span class="owasp-tag">{{ finding.owasp_category }}</span>
+                    <span class="owasp-tag">{{ virtualItem.data.owasp_category }}</span>
                   </div>
                   <div class="detail-actions">
                     <button
-                      @click.stop="copyPath(finding)"
+                      @click.stop="copyPath(virtualItem.data)"
                       class="btn-small"
                       :aria-label="$t('analytics.findings.table.copyPathAriaLabel')"
                     >
@@ -109,9 +112,11 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useVirtualList } from '@/composables/useVirtualList'
 import type { Severity } from '@/types/codeIntelligence'
 
 const { t } = useI18n()
+const containerRef = ref<HTMLElement | null>(null)
 
 interface Finding {
   severity: Severity
@@ -124,6 +129,7 @@ interface Finding {
   remediation?: string
   recommendation?: string
   owasp_category?: string
+  id?: string
 }
 
 const props = defineProps<{
@@ -138,14 +144,24 @@ const searchQuery = ref('')
 const expandedRow = ref<number | null>(null)
 
 const filteredFindings = computed(() => {
-  return props.findings.filter(f => {
-    const matchesSeverity = selectedSeverities.value.includes(f.severity)
-    const matchesSearch = searchQuery.value === '' ||
-      f.file_path.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-      f.message.toLowerCase().includes(searchQuery.value.toLowerCase())
-    return matchesSeverity && matchesSearch
-  })
+  return props.findings
+    .filter(f => {
+      const matchesSeverity = selectedSeverities.value.includes(f.severity)
+      const matchesSearch = searchQuery.value === '' ||
+        f.file_path.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+        f.message.toLowerCase().includes(searchQuery.value.toLowerCase())
+      return matchesSeverity && matchesSearch
+    })
+    .map((f, idx) => ({
+      ...f,
+      id: f.id || `finding_${idx}`
+    }))
 })
+
+// Virtual scrolling composable - Issue #4037
+// Each finding row is approximately 50px, expanded detail rows are ~300px
+// Use a conservative estimate to avoid layout shift
+const { containerRef, visibleItems, totalHeight } = useVirtualList(filteredFindings, 50, 3)
 
 function getSeverityIcon(severity: Severity): string {
   const icons: Record<Severity, string> = {
@@ -295,11 +311,14 @@ function copyPath(finding: Finding): void {
 
 .table-container {
   overflow-x: auto;
+  max-height: 600px;
+  overflow-y: auto;
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
+  position: relative;
 }
 
 th, td {
@@ -318,6 +337,7 @@ th {
 .finding-row {
   cursor: pointer;
   transition: background 0.15s;
+  position: relative;
 }
 
 .finding-row:hover {
