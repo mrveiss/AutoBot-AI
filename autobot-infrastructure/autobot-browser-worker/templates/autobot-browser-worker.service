@@ -1,6 +1,6 @@
 # AutoBot Browser Worker - Systemd Service Unit
 # Deploys to: 172.16.168.25 (Browser VM)
-# Runs Playwright browser automation service
+# Runs Playwright browser automation service via Node.js/Express
 #
 # Installation:
 #   sudo cp autobot-browser-worker.service /etc/systemd/system/
@@ -20,39 +20,31 @@ User=autobot
 Group=autobot
 WorkingDirectory=/opt/autobot/autobot-browser-worker
 
-# Environment
-Environment="PYTHONUNBUFFERED=1"
-Environment="PYTHONDONTWRITEBYTECODE=1"
+# Environment variables
+EnvironmentFile=/etc/autobot/autobot-browser-worker.env
+Environment="NODE_ENV=production"
 Environment="PLAYWRIGHT_BROWSERS_PATH=/opt/autobot/autobot-browser-worker/browsers"
-EnvironmentFile=-/opt/autobot/autobot-browser-worker/.env
 
-# Start uvicorn server
-ExecStart=/opt/autobot/autobot-browser-worker/venv/bin/uvicorn \
-    main:app \
-    --host 0.0.0.0 \
-    --port 3000 \
-    --workers 1 \
-    --loop uvloop \
-    --log-level info
+# Start Node.js Express server
+ExecStart=/usr/bin/node /opt/autobot/autobot-browser-worker/playwright-server.js
 
 # Restart policy
-Restart=on-failure
-RestartSec=10
-TimeoutStartSec=60
+Restart=always
+RestartSec=5s
+TimeoutStartSec=30
 TimeoutStopSec=30
 
 # Resource limits (browser automation needs memory)
 MemoryMax=4G
 CPUQuota=150%
+LimitNOFILE=65535
 
 # Security
 PrivateTmp=true
 NoNewPrivileges=true
 ProtectSystem=strict
-ReadWritePaths=/opt/autobot/autobot-browser-worker/data
-ReadWritePaths=/opt/autobot/autobot-browser-worker/screenshots
-ReadWritePaths=/opt/autobot/autobot-browser-worker/logs
 ReadWritePaths=/opt/autobot/autobot-browser-worker/browsers
+ReadWritePaths=/var/log/autobot
 
 # Logging
 StandardOutput=journal
