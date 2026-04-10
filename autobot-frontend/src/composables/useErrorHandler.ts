@@ -150,7 +150,7 @@ export function useErrorState(options: UseErrorStateOptions = {}) {
 // Async Operation Wrapper
 // ========================================
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic callable constraint
+ 
 export function useAsyncHandler<T = unknown>(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic pass-through args
   operation: (...args: any[]) => Promise<T>,
