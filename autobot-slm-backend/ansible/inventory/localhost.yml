@@ -1,0 +1,42 @@
+---
+# Single-host co-located deployment inventory
+# All roles run on localhost with loopback aliases (127.0.0.x)
+# Issue #2961: Single-host deployment runbook
+
+all:
+  hosts:
+    localhost:
+      ansible_connection: local
+      ansible_user: "{{ ansible_user_id }}"
+      ansible_become: yes
+      ansible_become_method: sudo
+
+  children:
+    # Single-host: all groups map to localhost
+    slm:
+      hosts:
+        localhost:
+
+    backend:
+      hosts:
+        localhost:
+
+    frontend:
+      hosts:
+        localhost:
+
+    database:
+      hosts:
+        localhost:
+
+    aiml:
+      hosts:
+        localhost:
+
+    browser:
+      hosts:
+        localhost:
+
+    npu_workers:
+      hosts:
+        localhost:

@@ -33,11 +33,9 @@ from api.workflow_state import (
 def mock_redis():
     """Async Redis mock with common methods.
 
-    ``get_redis_client(async_client=True)`` returns a coroutine,
-    so the mock must also be awaitable.  We build a plain
-    ``AsyncMock`` for the Redis client and a separate helper
-    that returns it as an awaitable when used as a side-effect
-    for the patched ``get_redis_client``.
+    ``get_async_redis_client()`` is an async function returning the Redis
+    client.  We build a plain ``AsyncMock`` for the Redis client and patch
+    ``get_async_redis_client`` to return it.
     """
     mock = AsyncMock()
     mock.set = AsyncMock(return_value=True)
@@ -185,7 +183,7 @@ class TestWorkflowStateMachineCreate:
     """Tests for WorkflowStateMachine.create()."""
 
     @pytest.mark.asyncio
-    @patch("api.workflow_state.get_redis_client", new_callable=AsyncMock)
+    @patch("api.workflow_state.get_async_redis_client", new_callable=AsyncMock)
     async def test_create_returns_state(self, mock_get_redis, mock_redis, sample_steps):
         mock_get_redis.return_value = mock_redis
         sm = WorkflowStateMachine()
@@ -199,7 +197,7 @@ class TestWorkflowStateMachineCreate:
         assert state.done is False
 
     @pytest.mark.asyncio
-    @patch("api.workflow_state.get_redis_client", new_callable=AsyncMock)
+    @patch("api.workflow_state.get_async_redis_client", new_callable=AsyncMock)
     async def test_create_persists_to_redis(
         self, mock_get_redis, mock_redis, sample_steps
     ):
@@ -219,7 +217,7 @@ class TestWorkflowStateMachineCreate:
         assert restored.workflow_id == "wf-persist"
 
     @pytest.mark.asyncio
-    @patch("api.workflow_state.get_redis_client", new_callable=AsyncMock)
+    @patch("api.workflow_state.get_async_redis_client", new_callable=AsyncMock)
     async def test_create_adds_to_active_set(
         self, mock_get_redis, mock_redis, sample_steps
     ):
@@ -235,7 +233,7 @@ class TestWorkflowStateMachineGet:
     """Tests for WorkflowStateMachine.get()."""
 
     @pytest.mark.asyncio
-    @patch("api.workflow_state.get_redis_client", new_callable=AsyncMock)
+    @patch("api.workflow_state.get_async_redis_client", new_callable=AsyncMock)
     async def test_get_existing(self, mock_get_redis, mock_redis):
         mock_get_redis.return_value = mock_redis
         state = WorkflowState(workflow_id="wf-exist", goal="exists")
@@ -250,7 +248,7 @@ class TestWorkflowStateMachineGet:
         mock_redis.get.assert_called_once_with(f"{KEY_PREFIX}wf-exist")
 
     @pytest.mark.asyncio
-    @patch("api.workflow_state.get_redis_client", new_callable=AsyncMock)
+    @patch("api.workflow_state.get_async_redis_client", new_callable=AsyncMock)
     async def test_get_missing_returns_none(self, mock_get_redis, mock_redis):
         mock_get_redis.return_value = mock_redis
         mock_redis.get.return_value = None
@@ -265,7 +263,7 @@ class TestWorkflowStateMachineTransition:
     """Tests for WorkflowStateMachine.transition()."""
 
     @pytest.mark.asyncio
-    @patch("api.workflow_state.get_redis_client", new_callable=AsyncMock)
+    @patch("api.workflow_state.get_async_redis_client", new_callable=AsyncMock)
     async def test_transition_updates_step(self, mock_get_redis, mock_redis):
         mock_get_redis.return_value = mock_redis
         original = WorkflowState(
@@ -282,7 +280,7 @@ class TestWorkflowStateMachineTransition:
         assert "planning" in result.steps_completed
 
     @pytest.mark.asyncio
-    @patch("api.workflow_state.get_redis_client", new_callable=AsyncMock)
+    @patch("api.workflow_state.get_async_redis_client", new_callable=AsyncMock)
     async def test_transition_updates_active_service(self, mock_get_redis, mock_redis):
         mock_get_redis.return_value = mock_redis
         original = WorkflowState(
@@ -299,7 +297,7 @@ class TestWorkflowStateMachineTransition:
         assert result.active_service == "main-backend"
 
     @pytest.mark.asyncio
-    @patch("api.workflow_state.get_redis_client", new_callable=AsyncMock)
+    @patch("api.workflow_state.get_async_redis_client", new_callable=AsyncMock)
     async def test_transition_persists_updated_state(self, mock_get_redis, mock_redis):
         mock_get_redis.return_value = mock_redis
         original = WorkflowState(
@@ -317,7 +315,7 @@ class TestWorkflowStateMachineTransition:
         assert mock_redis.set.call_args[0][0] == key
 
     @pytest.mark.asyncio
-    @patch("api.workflow_state.get_redis_client", new_callable=AsyncMock)
+    @patch("api.workflow_state.get_async_redis_client", new_callable=AsyncMock)
     async def test_transition_missing_workflow_raises(self, mock_get_redis, mock_redis):
         mock_get_redis.return_value = mock_redis
         mock_redis.get.return_value = None
@@ -331,7 +329,7 @@ class TestWorkflowStateMachineComplete:
     """Tests for WorkflowStateMachine.complete()."""
 
     @pytest.mark.asyncio
-    @patch("api.workflow_state.get_redis_client", new_callable=AsyncMock)
+    @patch("api.workflow_state.get_async_redis_client", new_callable=AsyncMock)
     async def test_complete_marks_done(self, mock_get_redis, mock_redis):
         mock_get_redis.return_value = mock_redis
         original = WorkflowState(
@@ -348,7 +346,7 @@ class TestWorkflowStateMachineComplete:
         assert result.current_step == "complete"
 
     @pytest.mark.asyncio
-    @patch("api.workflow_state.get_redis_client", new_callable=AsyncMock)
+    @patch("api.workflow_state.get_async_redis_client", new_callable=AsyncMock)
     async def test_complete_removes_from_active_set(self, mock_get_redis, mock_redis):
         mock_get_redis.return_value = mock_redis
         original = WorkflowState(
@@ -364,7 +362,7 @@ class TestWorkflowStateMachineComplete:
         mock_redis.srem.assert_called_once_with(ACTIVE_SET, "wf-rm")
 
     @pytest.mark.asyncio
-    @patch("api.workflow_state.get_redis_client", new_callable=AsyncMock)
+    @patch("api.workflow_state.get_async_redis_client", new_callable=AsyncMock)
     async def test_complete_sets_ttl(self, mock_get_redis, mock_redis):
         mock_get_redis.return_value = mock_redis
         original = WorkflowState(
@@ -385,7 +383,7 @@ class TestWorkflowStateMachineFail:
     """Tests for WorkflowStateMachine.fail()."""
 
     @pytest.mark.asyncio
-    @patch("api.workflow_state.get_redis_client", new_callable=AsyncMock)
+    @patch("api.workflow_state.get_async_redis_client", new_callable=AsyncMock)
     async def test_fail_marks_failed(self, mock_get_redis, mock_redis):
         mock_get_redis.return_value = mock_redis
         original = WorkflowState(
@@ -403,7 +401,7 @@ class TestWorkflowStateMachineFail:
         assert "something broke" in result.errors
 
     @pytest.mark.asyncio
-    @patch("api.workflow_state.get_redis_client", new_callable=AsyncMock)
+    @patch("api.workflow_state.get_async_redis_client", new_callable=AsyncMock)
     async def test_fail_appends_to_existing_errors(self, mock_get_redis, mock_redis):
         mock_get_redis.return_value = mock_redis
         original = WorkflowState(
@@ -422,7 +420,7 @@ class TestWorkflowStateMachineFail:
         assert result.errors[1] == "second error"
 
     @pytest.mark.asyncio
-    @patch("api.workflow_state.get_redis_client", new_callable=AsyncMock)
+    @patch("api.workflow_state.get_async_redis_client", new_callable=AsyncMock)
     async def test_fail_missing_workflow_raises(self, mock_get_redis, mock_redis):
         mock_get_redis.return_value = mock_redis
         mock_redis.get.return_value = None
@@ -432,7 +430,7 @@ class TestWorkflowStateMachineFail:
             await sm.fail("wf-ghost", "oops")
 
     @pytest.mark.asyncio
-    @patch("api.workflow_state.get_redis_client", new_callable=AsyncMock)
+    @patch("api.workflow_state.get_async_redis_client", new_callable=AsyncMock)
     async def test_fail_removes_from_active_set(self, mock_get_redis, mock_redis):
         mock_get_redis.return_value = mock_redis
         original = WorkflowState(
@@ -452,7 +450,7 @@ class TestWorkflowStateMachineListActive:
     """Tests for WorkflowStateMachine.list_active()."""
 
     @pytest.mark.asyncio
-    @patch("api.workflow_state.get_redis_client", new_callable=AsyncMock)
+    @patch("api.workflow_state.get_async_redis_client", new_callable=AsyncMock)
     async def test_list_active_empty(self, mock_get_redis, mock_redis):
         mock_get_redis.return_value = mock_redis
         mock_redis.smembers.return_value = set()
@@ -463,7 +461,7 @@ class TestWorkflowStateMachineListActive:
         assert result == []
 
     @pytest.mark.asyncio
-    @patch("api.workflow_state.get_redis_client", new_callable=AsyncMock)
+    @patch("api.workflow_state.get_async_redis_client", new_callable=AsyncMock)
     async def test_list_active_returns_states(self, mock_get_redis, mock_redis):
         mock_get_redis.return_value = mock_redis
         s1 = WorkflowState(workflow_id="wf-a1", goal="goal 1")
@@ -488,7 +486,7 @@ class TestWorkflowStateMachineListActive:
         assert ids == {"wf-a1", "wf-a2"}
 
     @pytest.mark.asyncio
-    @patch("api.workflow_state.get_redis_client", new_callable=AsyncMock)
+    @patch("api.workflow_state.get_async_redis_client", new_callable=AsyncMock)
     async def test_list_active_skips_missing(self, mock_get_redis, mock_redis):
         mock_get_redis.return_value = mock_redis
         s1 = WorkflowState(workflow_id="wf-ok", goal="ok")

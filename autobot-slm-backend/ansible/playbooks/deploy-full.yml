@@ -7,6 +7,13 @@
   import_playbook: pre-flight-code-sync.yml
   tags: ['pre-flight']
 
+# -------------------------------------------------------------------
+# Pre-flight: Validate system requirements before deployment (#4056)
+# -------------------------------------------------------------------
+- name: "Pre-deployment: System Validation"
+  import_playbook: pre-deployment-validation.yml
+  tags: ['pre-deployment', 'validation']
+
 # AutoBot Full Deployment Playbook
 # Orchestrates complete migration from Docker to Hyper-V VMs
 

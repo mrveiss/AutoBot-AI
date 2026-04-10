@@ -6,14 +6,14 @@
     <div class="path-navigation-inline">
       <!-- Breadcrumb Navigation -->
       <div class="breadcrumb">
-        <span @click="$emit('navigate-to-path', '/')" class="breadcrumb-item">
+        <button @click="$emit('navigate-to-path', '/')" class="breadcrumb-item" type="button">
           <i class="fas fa-home"></i> {{ $t('fileBrowser.header.home') }}
-        </span>
+        </button>
         <span v-for="(part, index) in pathParts" :key="index" class="breadcrumb-item">
           <i class="fas fa-chevron-right breadcrumb-separator"></i>
-          <span @click="$emit('navigate-to-path', getPathUpTo(index))" class="clickable">
+          <button @click="$emit('navigate-to-path', getPathUpTo(index))" class="clickable" type="button">
             {{ part }}
-          </span>
+          </button>
         </span>
       </div>
 
@@ -121,7 +121,7 @@ const getPathUpTo = (index: number): string => {
 }
 
 .breadcrumb-item {
-  @apply flex items-center text-sm;
+  @apply flex items-center text-sm bg-none border-none cursor-pointer text-blue-600 hover:text-blue-800 hover:underline p-0;
 }
 
 .breadcrumb-item .clickable {

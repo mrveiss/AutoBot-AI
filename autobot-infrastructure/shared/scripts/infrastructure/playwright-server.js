@@ -1069,7 +1069,7 @@ app.get('/test-frontend-connectivity', async (req, res) => {
   }
 });
 
-const port = 3000;
+const port = parseInt(process.env.PLAYWRIGHT_PORT || '9001', 10);
 app.listen(port, '0.0.0.0', async () => {
   logger.info('Playwright service started', {
     action: 'service_start',

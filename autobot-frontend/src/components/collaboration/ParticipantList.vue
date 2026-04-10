@@ -3,16 +3,19 @@
  * Participant List Component
  *
  * Issue #3986: Connect ParticipantList to session API for real role data
+ * Issue #4037: Virtual scrolling for large participant lists
  *
  * Displays list of session participants with their roles and permissions.
  * Allows session owner to manage participant access levels.
  * Fetches real role and permission data from session API instead of mocking.
+ * Uses virtual scrolling for efficient rendering of large participant lists.
  */
 
 import { computed, ref, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSessionCollaboration, type UserPresence } from '@/composables/useSessionCollaboration'
 import { useChatStore } from '@/stores/useChatStore'
+import { useVirtualList } from '@/composables/useVirtualList'
 import { apiService, type ParticipantResponse } from '@/services/api'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -41,6 +44,7 @@ const showRoleMenu = ref<string | null>(null)
 const removingUserId = ref<string | null>(null)
 const isLoadingParticipants = ref(false)
 const participantRoles = ref<Map<string, ParticipantResponse>>(new Map())
+const containerRef = ref<HTMLElement | null>(null)
 
 // Current user is owner
 const isOwner = computed(() => {
@@ -53,6 +57,7 @@ interface ParticipantWithRole extends UserPresence {
   role: 'owner' | 'collaborator' | 'viewer'
   email?: string
   joinedAt: Date
+  id?: string
 }
 
 // Fetch real role data from session API
@@ -90,12 +95,17 @@ const participantsWithRoles = computed<ParticipantWithRole[]>(() => {
 
     return {
       ...p,
+      id: p.userId,
       role,
-      email: `${p.username}@example.com`, // Placeholder - can be enhanced with user profile API
-      joinedAt: new Date() // Placeholder - can be enhanced with actual join timestamp
+      email: `${p.username}@example.com`,
+      joinedAt: new Date()
     }
   })
 })
+
+// Virtual scrolling composable - Issue #4037
+// Each participant item is approximately 140px (with status indicator, role badge, etc.)
+const { containerRef, visibleItems, totalHeight } = useVirtualList(participantsWithRoles, 140, 2)
 
 // Get role badge styling
 const getRoleBadge = (role: ParticipantWithRole['role']): { color: string; label: string } => {
@@ -220,120 +230,8 @@ watch(
       <span>{{ $t('collaboration.participants.collaborationOffline') }}</span>
     </div>
 
-    <!-- Participant list -->
-    <div class="space-y-2">
-      <TransitionGroup name="participant">
-        <div
-          v-for="participant in participantsWithRoles"
-          :key="participant.userId"
-          :class="[
-            'participant-item rounded-lg p-3 transition-all',
-            participant.userId === myPresence?.userId
-              ? 'bg-blue-500/10 border border-blue-500/20'
-              : 'bg-autobot-bg-tertiary/50 hover:bg-autobot-bg-tertiary',
-            removingUserId === participant.userId && 'opacity-50'
-          ]"
-        >
-          <div class="flex items-start gap-3">
-            <!-- Avatar -->
-            <div class="relative shrink-0">
-              <div
-                class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium"
-                :class="participant.userId === myPresence?.userId ? 'bg-blue-600 text-white' : 'bg-autobot-bg-tertiary text-autobot-text-primary'"
-              >
-                {{ getInitials(participant.username) }}
-              </div>
-              <span
-                :class="[
-                  'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-autobot-bg-secondary',
-                  getStatusColor(participant.status)
-                ]"
-                :title="participant.status"
-              />
-            </div>
-
-            <!-- Info -->
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 mb-1">
-                <span class="text-sm font-medium text-autobot-text-primary truncate">
-                  {{ participant.username }}
-                </span>
-                <span
-                  v-if="participant.userId === myPresence?.userId"
-                  class="text-xs text-blue-400"
-                >
-                  {{ $t('collaboration.participants.you') }}
-                </span>
-              </div>
-              <div v-if="!compact" class="text-xs text-autobot-text-muted truncate mb-1">
-                {{ participant.email }}
-              </div>
-              <div class="flex items-center gap-2 flex-wrap">
-                <!-- Role badge -->
-                <button
-                  :class="[
-                    'px-2 py-0.5 text-xs rounded border',
-                    getRoleBadge(participant.role).color,
-                    isOwner && allowManagement && participant.userId !== myPresence?.userId
-                      ? 'cursor-pointer hover:opacity-80'
-                      : 'cursor-default'
-                  ]"
-                  :aria-label="$t('collaboration.participants.changeRoleFor', { name: participant.username })"
-                  @click="toggleRoleMenu(participant.userId)"
-                >
-                  {{ getRoleBadge(participant.role).label }}
-                  <i
-                    v-if="isOwner && allowManagement && participant.userId !== myPresence?.userId"
-                    class="bi bi-chevron-down ml-1"
-                  />
-                </button>
-
-                <!-- Status badge -->
-                <span class="text-xs text-autobot-text-muted">
-                  {{ participant.status }}
-                </span>
-
-                <!-- Current tab indicator -->
-                <span
-                  v-if="participant.currentTab"
-                  class="text-xs text-autobot-text-muted flex items-center gap-1"
-                >
-                  <i :class="`bi bi-${participant.currentTab === 'chat' ? 'chat-dots' : participant.currentTab}`" />
-                  <span v-if="!compact">{{ participant.currentTab }}</span>
-                </span>
-              </div>
-
-              <!-- Role menu dropdown -->
-              <div
-                v-if="showRoleMenu === participant.userId"
-                class="mt-2 bg-autobot-bg-secondary border border-autobot-border rounded-lg shadow-lg overflow-hidden"
-                role="menu"
-              >
-                <button
-                  v-for="role in ['collaborator', 'viewer'] as const"
-                  :key="role"
-                  class="w-full px-3 py-2 text-left text-xs hover:bg-autobot-bg-tertiary transition-colors text-autobot-text-primary"
-                  :class="{ 'bg-autobot-bg-tertiary': participant.role === role }"
-                  role="menuitem"
-                  @click="changeRole(participant.userId, role)"
-                >
-                  {{ getRoleBadge(role).label }}
-                </button>
-                <hr class="border-autobot-border">
-                <button
-                  class="w-full px-3 py-2 text-left text-xs hover:bg-red-500/10 transition-colors text-red-400"
-                  role="menuitem"
-                  @click="removeParticipant(participant.userId)"
-                >
-                  <i class="bi bi-person-x mr-1" />
-                  {{ $t('collaboration.participants.remove') }}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </TransitionGroup>
-
+    <!-- Participant list with virtual scrolling -->
+    <div ref="containerRef" class="overflow-y-auto custom-scrollbar relative">
       <!-- Empty state -->
       <div
         v-if="participantsWithRoles.length === 0"
@@ -342,6 +240,122 @@ watch(
         <i class="bi bi-people text-2xl mb-2" />
         <div class="text-sm">{{ $t('collaboration.participants.noParticipants') }}</div>
         <div class="text-xs">{{ $t('collaboration.participants.inviteToCollaborate') }}</div>
+      </div>
+
+      <!-- Virtualized participants list -->
+      <div v-else :style="{ height: totalHeight + 'px', position: 'relative' }">
+        <TransitionGroup name="participant" class="space-y-2">
+          <div
+            v-for="virtualItem in visibleItems"
+            :key="virtualItem.data.userId"
+          :class="[
+            'participant-item rounded-lg p-3 transition-all',
+            virtualItem.data.userId === myPresence?.userId
+              ? 'bg-blue-500/10 border border-blue-500/20'
+              : 'bg-autobot-bg-tertiary/50 hover:bg-autobot-bg-tertiary',
+            removingUserId === virtualItem.data.userId && 'opacity-50'
+          ]"
+          :style="{ transform: `translateY(${virtualItem.offset}px)` }"
+        >
+          <div class="flex items-start gap-3">
+            <!-- Avatar -->
+            <div class="relative shrink-0">
+              <div
+                class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium"
+                :class="virtualItem.data.userId === myPresence?.userId ? 'bg-blue-600 text-white' : 'bg-autobot-bg-tertiary text-autobot-text-primary'"
+              >
+                {{ getInitials(virtualItem.data.username) }}
+              </div>
+              <span
+                :class="[
+                  'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-autobot-bg-secondary',
+                  getStatusColor(virtualItem.data.status)
+                ]"
+                :title="virtualItem.data.status"
+              />
+            </div>
+
+            <!-- Info -->
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-sm font-medium text-autobot-text-primary truncate">
+                  {{ virtualItem.data.username }}
+                </span>
+                <span
+                  v-if="virtualItem.data.userId === myPresence?.userId"
+                  class="text-xs text-blue-400"
+                >
+                  {{ $t('collaboration.participants.you') }}
+                </span>
+              </div>
+              <div v-if="!compact" class="text-xs text-autobot-text-muted truncate mb-1">
+                {{ virtualItem.data.email }}
+              </div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <!-- Role badge -->
+                <button
+                  :class="[
+                    'px-2 py-0.5 text-xs rounded border',
+                    getRoleBadge(virtualItem.data.role).color,
+                    isOwner && allowManagement && virtualItem.data.userId !== myPresence?.userId
+                      ? 'cursor-pointer hover:opacity-80'
+                      : 'cursor-default'
+                  ]"
+                  :aria-label="$t('collaboration.participants.changeRoleFor', { name: virtualItem.data.username })"
+                  @click="toggleRoleMenu(virtualItem.data.userId)"
+                >
+                  {{ getRoleBadge(virtualItem.data.role).label }}
+                  <i
+                    v-if="isOwner && allowManagement && virtualItem.data.userId !== myPresence?.userId"
+                    class="bi bi-chevron-down ml-1"
+                  />
+                </button>
+
+                <!-- Status badge -->
+                <span class="text-xs text-autobot-text-muted">
+                  {{ virtualItem.data.status }}
+                </span>
+
+                <!-- Current tab indicator -->
+                <span
+                  v-if="virtualItem.data.currentTab"
+                  class="text-xs text-autobot-text-muted flex items-center gap-1"
+                >
+                  <i :class="`bi bi-${virtualItem.data.currentTab === 'chat' ? 'chat-dots' : virtualItem.data.currentTab}`" />
+                  <span v-if="!compact">{{ virtualItem.data.currentTab }}</span>
+                </span>
+              </div>
+
+              <!-- Role menu dropdown -->
+              <div
+                v-if="showRoleMenu === virtualItem.data.userId"
+                class="mt-2 bg-autobot-bg-secondary border border-autobot-border rounded-lg shadow-lg overflow-hidden"
+                role="menu"
+              >
+                <button
+                  v-for="role in ['collaborator', 'viewer'] as const"
+                  :key="role"
+                  class="w-full px-3 py-2 text-left text-xs hover:bg-autobot-bg-tertiary transition-colors text-autobot-text-primary"
+                  :class="{ 'bg-autobot-bg-tertiary': virtualItem.data.role === role }"
+                  role="menuitem"
+                  @click="changeRole(virtualItem.data.userId, role)"
+                >
+                  {{ getRoleBadge(role).label }}
+                </button>
+                <hr class="border-autobot-border">
+                <button
+                  class="w-full px-3 py-2 text-left text-xs hover:bg-red-500/10 transition-colors text-red-400"
+                  role="menuitem"
+                  @click="removeParticipant(virtualItem.data.userId)"
+                >
+                  <i class="bi bi-person-x mr-1" />
+                  {{ $t('collaboration.participants.remove') }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        </TransitionGroup>
       </div>
     </div>
   </div>
@@ -369,5 +383,23 @@ watch(
 
 .participant-move {
   transition: transform 0.3s ease;
+}
+
+/* Custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.3);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.5);
 }
 </style>

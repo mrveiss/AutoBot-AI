@@ -544,10 +544,10 @@ class RedisServiceManager:
             Tuple of (connectivity: bool, response_time_ms: float)
         """
         try:
-            from autobot_shared.redis_client import get_redis_client
+            from autobot_shared.redis_client import get_async_redis_client
 
             ping_start = datetime.now(tz=timezone.utc)
-            client = await get_redis_client(async_client=True, database="main")
+            client = await get_async_redis_client(database="main")
             await client.ping()
             response_time_ms = (datetime.now(tz=timezone.utc) - ping_start).total_seconds() * 1000
             return True, response_time_ms

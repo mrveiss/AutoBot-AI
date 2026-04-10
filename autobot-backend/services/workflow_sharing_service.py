@@ -45,7 +45,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from services.workflow_serializer import WorkflowSerializer
 
 logger = logging.getLogger(__name__)
@@ -158,7 +158,7 @@ class WorkflowSharingService:
             export_doc=export_doc.to_dict(),
         )
 
-        redis = await get_redis_client(async_client=True, database="workflows")
+        redis = await get_async_redis_client(database="workflows")
         if redis is None:
             logger.error(
                 "share_workflow: Redis unavailable for workflow %s", workflow_id
@@ -200,7 +200,7 @@ class WorkflowSharingService:
         Returns:
             True when the share existed and was deleted, False otherwise.
         """
-        redis = await get_redis_client(async_client=True, database="workflows")
+        redis = await get_async_redis_client(database="workflows")
         if redis is None:
             logger.error("unshare_workflow: Redis unavailable for share %s", share_id)
             return False
@@ -243,7 +243,7 @@ class WorkflowSharingService:
             List of share record dicts (without the embedded workflow payload
             to keep the response lightweight).
         """
-        redis = await get_redis_client(async_client=True, database="workflows")
+        redis = await get_async_redis_client(database="workflows")
         if redis is None:
             logger.error("list_shared: Redis unavailable")
             return []
@@ -297,7 +297,7 @@ class WorkflowSharingService:
         Returns:
             New workflow_id on success, None on failure.
         """
-        redis = await get_redis_client(async_client=True, database="workflows")
+        redis = await get_async_redis_client(database="workflows")
         if redis is None:
             logger.error("clone_workflow: Redis unavailable for share %s", share_id)
             return None

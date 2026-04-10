@@ -415,6 +415,7 @@ onUnmounted(() => {
 }
 
 .host-selection-dialog {
+  contain: layout style paint;
   background: var(--bg-primary);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-2xl);
@@ -576,7 +577,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-3);
-  max-height: 300px;
+  min-height: 200px; max-height: 50vh;
   overflow-y: auto;
 }
 
@@ -841,6 +842,7 @@ onUnmounted(() => {
 /* Responsive */
 @media (max-width: 640px) {
   .host-selection-dialog {
+  contain: layout style paint;
     width: 95vw;
     max-height: 90vh;
   }

@@ -465,9 +465,10 @@ onMounted(() => {
 
 <style scoped>
 .bi-view {
+  contain: layout style paint;
   display: flex;
   flex-direction: column;
-  height: 100%;
+  min-height: 100%;
   padding: var(--spacing-4);
   background: var(--bg-primary);
   overflow-y: auto;
@@ -890,7 +891,7 @@ onMounted(() => {
   padding: var(--spacing-4);
   font-size: var(--text-xs);
   font-family: var(--font-mono);
-  max-height: 400px;
+  min-height: 200px; max-height: 60vh;
   overflow: auto;
   margin-bottom: var(--spacing-4);
   color: var(--text-primary);

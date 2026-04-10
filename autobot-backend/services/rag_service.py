@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from advanced_rag_optimizer import AdvancedRAGOptimizer, RAGMetrics, SearchResult
 from autobot_shared.logging_manager import get_llm_logger
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_30_DAYS
 from knowledge.search_components.query_classifier import get_query_classifier
 from knowledge.search_components.retrieval_learner import GLOBAL_USER, get_retrieval_learner
@@ -458,7 +458,7 @@ class RAGService:
             "timestamp": str(time.time()),
         }
         try:
-            redis = await get_redis_client(async_client=True, database="analytics")
+            redis = await get_async_redis_client(database="analytics")
             if redis is None:
                 logger.debug("Redis unavailable; skipping feedback stream write")
                 return

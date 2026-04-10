@@ -112,6 +112,50 @@ app.config.warnHandler = (msg, _instance, trace) => {
 // Mount the app
 app.mount('#app')
 
+// Register Service Worker for caching strategy (Issue #4041)
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', async () => {
+    try {
+      // Register the service worker with a cache-busting parameter
+      const registration = await navigator.serviceWorker.register(
+        '/service-worker.ts' + (import.meta.env.DEV ? '' : `?v=${Date.now()}`),
+        { scope: '/' }
+      )
+
+      logger.debug('Service Worker registered successfully', {
+        scope: registration.scope,
+        updateViaCache: (registration as any).updateViaCache
+      })
+
+      // Check for updates periodically
+      setInterval(() => {
+        registration.update().catch(err => {
+          logger.warn('Service Worker update check failed:', err)
+        })
+      }, 60000) // Check every minute
+
+      // Handle Service Worker state changes
+      registration.addEventListener('updatefound', () => {
+        const newWorker = registration.installing
+        if (newWorker) {
+          newWorker.addEventListener('statechange', () => {
+            if (
+              newWorker.state === 'installed' &&
+              navigator.serviceWorker.controller
+            ) {
+              logger.info('New Service Worker available - user update prompt can be shown')
+              // You can show a prompt to user to refresh the page here
+            }
+          })
+        }
+      })
+    } catch (error) {
+      logger.warn('Service Worker registration failed:', error)
+      // Service Worker is optional - app works fine without it
+    }
+  })
+}
+
 // Performance monitoring in development
 if (import.meta.env.DEV) {
   logger.debug('Application mounted successfully')

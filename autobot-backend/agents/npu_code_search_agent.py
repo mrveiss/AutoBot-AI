@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_redis_client, get_async_redis_client
 from autobot_shared.security.path_validator import validate_path
 from constants.ttl_constants import TTL_24_HOURS
 from code_embedding_generator import get_code_embedding_generator
@@ -251,9 +251,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
     async def _ensure_redis(self):
         """Lazy-init async Redis client on first use (#2725)."""
         if self.redis_async_client is None:
-            from autobot_shared.redis_client import get_redis_client
-
-            self.redis_async_client = await get_redis_client(async_client=True)
+            self.redis_async_client = await get_async_redis_client()
 
     async def _ensure_search_engine_initialized(self):
         """Lazy-initialize NPU semantic search engine when needed (Issue #68)"""

@@ -1,0 +1,747 @@
+{
+  "67bd0bc2": {
+    "id": "graphics-67bd0bc2",
+    "category": "graphics",
+    "file": "App.vue"
+  },
+  "a039b3b9": {
+    "id": "icons-a039b3b9",
+    "category": "icons",
+    "file": "App.vue"
+  },
+  "4b9636d0": {
+    "id": "icons-4b9636d0",
+    "category": "icons",
+    "file": "App.vue"
+  },
+  "56ecf5fb": {
+    "id": "icons-56ecf5fb",
+    "category": "icons",
+    "file": "App.vue"
+  },
+  "ae5ac574": {
+    "id": "graphics-ae5ac574",
+    "category": "graphics",
+    "file": "App.vue"
+  },
+  "27d8d844": {
+    "id": "icons-27d8d844",
+    "category": "icons",
+    "file": "App.vue"
+  },
+  "d51b4fe0": {
+    "id": "icons-d51b4fe0",
+    "category": "icons",
+    "file": "App.vue"
+  },
+  "d58290bb": {
+    "id": "icons-d58290bb",
+    "category": "icons",
+    "file": "App.vue"
+  },
+  "d08851ed": {
+    "id": "icons-d08851ed",
+    "category": "icons",
+    "file": "views/AgentRegistryView.vue"
+  },
+  "3e6a79c6": {
+    "id": "icons-3e6a79c6",
+    "category": "icons",
+    "file": "views/AgentRegistryView.vue"
+  },
+  "02d217e3": {
+    "id": "icons-02d217e3",
+    "category": "icons",
+    "file": "views/AgentRegistryView.vue"
+  },
+  "0706a5fc": {
+    "id": "icons-0706a5fc",
+    "category": "icons",
+    "file": "views/WorkflowBuilderView.vue"
+  },
+  "d7ba5ad2": {
+    "id": "icons-d7ba5ad2",
+    "category": "icons",
+    "file": "views/WorkflowBuilderView.vue"
+  },
+  "fe7215e3": {
+    "id": "icons-fe7215e3",
+    "category": "icons",
+    "file": "views/WorkflowBuilderView.vue"
+  },
+  "517e69a3": {
+    "id": "icons-517e69a3",
+    "category": "icons",
+    "file": "views/WorkflowBuilderView.vue"
+  },
+  "66191bc0": {
+    "id": "icons-66191bc0",
+    "category": "icons",
+    "file": "views/WorkflowBuilderView.vue"
+  },
+  "0b2b3eba": {
+    "id": "icons-0b2b3eba",
+    "category": "icons",
+    "file": "views/WorkflowBuilderView.vue"
+  },
+  "53b2259c": {
+    "id": "icons-53b2259c",
+    "category": "icons",
+    "file": "views/WorkflowBuilderView.vue"
+  },
+  "b86d7a0a": {
+    "id": "icons-b86d7a0a",
+    "category": "icons",
+    "file": "views/WorkflowBuilderView.vue"
+  },
+  "1b3f5d76": {
+    "id": "icons-1b3f5d76",
+    "category": "icons",
+    "file": "views/WorkflowBuilderView.vue"
+  },
+  "7533a486": {
+    "id": "icons-7533a486",
+    "category": "icons",
+    "file": "views/WorkflowBuilderView.vue"
+  },
+  "8e4276a2": {
+    "id": "icons-8e4276a2",
+    "category": "icons",
+    "file": "views/WorkflowBuilderView.vue"
+  },
+  "d8656d9a": {
+    "id": "icons-d8656d9a",
+    "category": "icons",
+    "file": "views/WorkflowBuilderView.vue"
+  },
+  "0e8d0ec5": {
+    "id": "icons-0e8d0ec5",
+    "category": "icons",
+    "file": "views/WorkflowBuilderView.vue"
+  },
+  "f2b0e195": {
+    "id": "icons-f2b0e195",
+    "category": "icons",
+    "file": "views/WorkflowBuilderView.vue"
+  },
+  "f1903a48": {
+    "id": "icons-f1903a48",
+    "category": "icons",
+    "file": "views/WorkflowBuilderView.vue"
+  },
+  "3d1089fa": {
+    "id": "icons-3d1089fa",
+    "category": "icons",
+    "file": "views/WorkflowBuilderView.vue"
+  },
+  "d631c8d8": {
+    "id": "icons-d631c8d8",
+    "category": "icons",
+    "file": "views/WorkflowBuilderView.vue"
+  },
+  "bab631ba": {
+    "id": "icons-bab631ba",
+    "category": "icons",
+    "file": "views/KnowledgeView.vue"
+  },
+  "a7b6447e": {
+    "id": "icons-a7b6447e",
+    "category": "icons",
+    "file": "views/KnowledgeView.vue"
+  },
+  "66c3ddf8": {
+    "id": "icons-66c3ddf8",
+    "category": "icons",
+    "file": "views/KnowledgeView.vue"
+  },
+  "017d72c3": {
+    "id": "icons-017d72c3",
+    "category": "icons",
+    "file": "views/KnowledgeView.vue"
+  },
+  "5d9c88a1": {
+    "id": "icons-5d9c88a1",
+    "category": "icons",
+    "file": "views/KnowledgeView.vue"
+  },
+  "de5a1fab": {
+    "id": "icons-de5a1fab",
+    "category": "icons",
+    "file": "views/KnowledgeView.vue"
+  },
+  "c6671cc2": {
+    "id": "icons-c6671cc2",
+    "category": "icons",
+    "file": "views/KnowledgeView.vue"
+  },
+  "fd613a7e": {
+    "id": "icons-fd613a7e",
+    "category": "icons",
+    "file": "views/KnowledgeView.vue"
+  },
+  "b36db2ae": {
+    "id": "icons-b36db2ae",
+    "category": "icons",
+    "file": "views/KnowledgeView.vue"
+  },
+  "f3ca016c": {
+    "id": "icons-f3ca016c",
+    "category": "icons",
+    "file": "views/KnowledgeView.vue"
+  },
+  "b98644de": {
+    "id": "icons-b98644de",
+    "category": "icons",
+    "file": "views/KnowledgeView.vue"
+  },
+  "265f0aa2": {
+    "id": "icons-265f0aa2",
+    "category": "icons",
+    "file": "views/KnowledgeView.vue"
+  },
+  "b5454ae1": {
+    "id": "icons-b5454ae1",
+    "category": "icons",
+    "file": "views/AnalyticsView.vue"
+  },
+  "1e25458f": {
+    "id": "icons-1e25458f",
+    "category": "icons",
+    "file": "views/AnalyticsView.vue"
+  },
+  "4ec2d02d": {
+    "id": "icons-4ec2d02d",
+    "category": "icons",
+    "file": "views/AnalyticsView.vue"
+  },
+  "775afa3b": {
+    "id": "icons-775afa3b",
+    "category": "icons",
+    "file": "views/AnalyticsView.vue"
+  },
+  "9dc0a6ef": {
+    "id": "icons-9dc0a6ef",
+    "category": "icons",
+    "file": "views/PluginsView.vue"
+  },
+  "c57258c8": {
+    "id": "icons-c57258c8",
+    "category": "icons",
+    "file": "views/PluginsView.vue"
+  },
+  "7a0020a8": {
+    "id": "icons-7a0020a8",
+    "category": "icons",
+    "file": "views/PluginsView.vue"
+  },
+  "23e26942": {
+    "id": "icons-23e26942",
+    "category": "icons",
+    "file": "views/PluginsView.vue"
+  },
+  "8bf55002": {
+    "id": "spinners-8bf55002",
+    "category": "spinners",
+    "file": "views/PluginsView.vue"
+  },
+  "100925ae": {
+    "id": "icons-100925ae",
+    "category": "icons",
+    "file": "views/PluginsView.vue"
+  },
+  "f7e9fa72": {
+    "id": "graphics-f7e9fa72",
+    "category": "graphics",
+    "file": "views/PluginsView.vue"
+  },
+  "e9e3fdc1": {
+    "id": "icons-e9e3fdc1",
+    "category": "icons",
+    "file": "views/PluginsView.vue"
+  },
+  "76791de6": {
+    "id": "icons-76791de6",
+    "category": "icons",
+    "file": "views/PluginsView.vue"
+  },
+  "ef5ede28": {
+    "id": "icons-ef5ede28",
+    "category": "icons",
+    "file": "views/PluginsView.vue"
+  },
+  "41fd46c4": {
+    "id": "icons-41fd46c4",
+    "category": "icons",
+    "file": "views/PluginsView.vue"
+  },
+  "477a5187": {
+    "id": "icons-477a5187",
+    "category": "icons",
+    "file": "views/PluginsView.vue"
+  },
+  "cc524cce": {
+    "id": "icons-cc524cce",
+    "category": "icons",
+    "file": "components/desktop/DesktopContextPanel.vue"
+  },
+  "94d9c0b8": {
+    "id": "indicators-94d9c0b8",
+    "category": "indicators",
+    "file": "components/ui/LoadingSpinner.vue"
+  },
+  "d360e757": {
+    "id": "icons-d360e757",
+    "category": "icons",
+    "file": "components/examples/AsyncOperationExample.vue"
+  },
+  "cb28b898": {
+    "id": "icons-cb28b898",
+    "category": "icons",
+    "file": "components/examples/AsyncOperationExample.vue"
+  },
+  "d4b162c4": {
+    "id": "icons-d4b162c4",
+    "category": "icons",
+    "file": "components/base/BaseInput.vue"
+  },
+  "0366fcca": {
+    "id": "icons-0366fcca",
+    "category": "icons",
+    "file": "components/base/BaseTable.vue"
+  },
+  "f91ba949": {
+    "id": "icons-f91ba949",
+    "category": "icons",
+    "file": "components/base/BaseTable.vue"
+  },
+  "7f8196a2": {
+    "id": "icons-7f8196a2",
+    "category": "icons",
+    "file": "components/base/BaseBadge.vue"
+  },
+  "3a42742f": {
+    "id": "graphics-3a42742f",
+    "category": "graphics",
+    "file": "components/icons/IconCommunity.vue"
+  },
+  "a824f01c": {
+    "id": "icons-a824f01c",
+    "category": "icons",
+    "file": "components/icons/IconSupport.vue"
+  },
+  "3b115e4e": {
+    "id": "graphics-3b115e4e",
+    "category": "graphics",
+    "file": "components/icons/IconDocumentation.vue"
+  },
+  "8f77a30f": {
+    "id": "icons-8f77a30f",
+    "category": "icons",
+    "file": "components/icons/IconTooling.vue"
+  },
+  "59ec2fb1": {
+    "id": "graphics-59ec2fb1",
+    "category": "graphics",
+    "file": "components/icons/IconEcosystem.vue"
+  },
+  "5e5f6a06": {
+    "id": "icons-5e5f6a06",
+    "category": "icons",
+    "file": "components/knowledge/KnowledgeResearchPanel.vue"
+  },
+  "5d4fe78a": {
+    "id": "graphics-5d4fe78a",
+    "category": "graphics",
+    "file": "components/knowledge/KnowledgeResearchPanel.vue"
+  },
+  "34fdeace": {
+    "id": "icons-34fdeace",
+    "category": "icons",
+    "file": "components/knowledge/KnowledgeResearchPanel.vue"
+  },
+  "00529c35": {
+    "id": "icons-00529c35",
+    "category": "icons",
+    "file": "components/knowledge/KnowledgeResearchPanel.vue"
+  },
+  "094654da": {
+    "id": "graphics-094654da",
+    "category": "graphics",
+    "file": "components/knowledge/KnowledgeResearchPanel.vue"
+  },
+  "33dc319d": {
+    "id": "icons-33dc319d",
+    "category": "icons",
+    "file": "components/knowledge/KnowledgeResearchPanel.vue"
+  },
+  "ea197505": {
+    "id": "icons-ea197505",
+    "category": "icons",
+    "file": "components/knowledge/KnowledgeResearchPanel.vue"
+  },
+  "21f67ab7": {
+    "id": "icons-21f67ab7",
+    "category": "icons",
+    "file": "components/knowledge/KnowledgeResearchPanel.vue"
+  },
+  "f617a374": {
+    "id": "icons-f617a374",
+    "category": "icons",
+    "file": "components/knowledge/KnowledgeResearchPanel.vue"
+  },
+  "f180691f": {
+    "id": "icons-f180691f",
+    "category": "icons",
+    "file": "components/knowledge/KnowledgeResearchPanel.vue"
+  },
+  "d9813f7b": {
+    "id": "icons-d9813f7b",
+    "category": "icons",
+    "file": "components/knowledge/KnowledgeVerificationQueue.vue"
+  },
+  "5dc4c195": {
+    "id": "icons-5dc4c195",
+    "category": "icons",
+    "file": "components/knowledge/KnowledgeVerificationQueue.vue"
+  },
+  "31a9a74c": {
+    "id": "icons-31a9a74c",
+    "category": "icons",
+    "file": "components/knowledge/WebResearchSettings.vue"
+  },
+  "ded87097": {
+    "id": "icons-ded87097",
+    "category": "icons",
+    "file": "components/knowledge/WebResearchSettings.vue"
+  },
+  "7f3b8727": {
+    "id": "icons-7f3b8727",
+    "category": "icons",
+    "file": "components/knowledge/WebResearchSettings.vue"
+  },
+  "891a8a29": {
+    "id": "icons-891a8a29",
+    "category": "icons",
+    "file": "components/knowledge/WebResearchSettings.vue"
+  },
+  "657aa65a": {
+    "id": "icons-657aa65a",
+    "category": "icons",
+    "file": "components/knowledge/WebResearchSettings.vue"
+  },
+  "2cb04b13": {
+    "id": "icons-2cb04b13",
+    "category": "icons",
+    "file": "components/knowledge/WebResearchSettings.vue"
+  },
+  "77481000": {
+    "id": "icons-77481000",
+    "category": "icons",
+    "file": "components/knowledge/WebResearchSettings.vue"
+  },
+  "2ce1e2be": {
+    "id": "icons-2ce1e2be",
+    "category": "icons",
+    "file": "components/knowledge/WebResearchSettings.vue"
+  },
+  "e64ffab1": {
+    "id": "icons-e64ffab1",
+    "category": "icons",
+    "file": "components/knowledge/WebResearchSettings.vue"
+  },
+  "e66b92b1": {
+    "id": "icons-e66b92b1",
+    "category": "icons",
+    "file": "components/knowledge/WebResearchSettings.vue"
+  },
+  "a9485cea": {
+    "id": "icons-a9485cea",
+    "category": "icons",
+    "file": "components/knowledge/WebResearchSettings.vue"
+  },
+  "90f32366": {
+    "id": "icons-90f32366",
+    "category": "icons",
+    "file": "components/knowledge/WebResearchSettings.vue"
+  },
+  "3f47474a": {
+    "id": "icons-3f47474a",
+    "category": "icons",
+    "file": "components/knowledge/WebResearchSettings.vue"
+  },
+  "4ede684f": {
+    "id": "icons-4ede684f",
+    "category": "icons",
+    "file": "components/knowledge/connectors/ConnectorStatusCard.vue"
+  },
+  "1c7a4935": {
+    "id": "icons-1c7a4935",
+    "category": "icons",
+    "file": "components/knowledge/connectors/ConnectorStatusCard.vue"
+  },
+  "ef778d93": {
+    "id": "icons-ef778d93",
+    "category": "icons",
+    "file": "components/knowledge/connectors/ConnectorStatusCard.vue"
+  },
+  "7b396841": {
+    "id": "icons-7b396841",
+    "category": "icons",
+    "file": "components/knowledge/connectors/ConnectorStatusCard.vue"
+  },
+  "3bddfca7": {
+    "id": "icons-3bddfca7",
+    "category": "icons",
+    "file": "components/knowledge/connectors/ConnectorStatusCard.vue"
+  },
+  "695525c8": {
+    "id": "icons-695525c8",
+    "category": "icons",
+    "file": "components/knowledge/connectors/ConnectorManager.vue"
+  },
+  "6e4d044b": {
+    "id": "icons-6e4d044b",
+    "category": "icons",
+    "file": "components/knowledge/connectors/ConnectorManager.vue"
+  },
+  "6b7630d9": {
+    "id": "icons-6b7630d9",
+    "category": "icons",
+    "file": "components/knowledge/connectors/ConnectorConfigModal.vue"
+  },
+  "6477c932": {
+    "id": "icons-6477c932",
+    "category": "icons",
+    "file": "components/knowledge/connectors/ConnectorConfigModal.vue"
+  },
+  "3f949054": {
+    "id": "icons-3f949054",
+    "category": "icons",
+    "file": "components/knowledge/connectors/ConnectorConfigModal.vue"
+  },
+  "8c1a7503": {
+    "id": "indicators-8c1a7503",
+    "category": "indicators",
+    "file": "components/common/PermissionDenied.vue"
+  },
+  "f807a771": {
+    "id": "graphics-f807a771",
+    "category": "graphics",
+    "file": "components/workflow/WorkflowCanvas.vue"
+  },
+  "84895dfc": {
+    "id": "spinners-84895dfc",
+    "category": "spinners",
+    "file": "components/workflow/WorkflowNotificationConfig.vue"
+  },
+  "bb624b6d": {
+    "id": "spinners-bb624b6d",
+    "category": "spinners",
+    "file": "components/workflow/WorkflowNotificationConfig.vue"
+  },
+  "dac1be30": {
+    "id": "indicators-dac1be30",
+    "category": "indicators",
+    "file": "components/analytics/PerformanceAnalysisDashboard.vue"
+  },
+  "a18f79f7": {
+    "id": "charts-a18f79f7",
+    "category": "charts",
+    "file": "components/analytics/CodeReviewDashboard.vue"
+  },
+  "6b832b97": {
+    "id": "graphics-6b832b97",
+    "category": "graphics",
+    "file": "components/analytics/LogPatternDashboard.vue"
+  },
+  "5323357c": {
+    "id": "indicators-5323357c",
+    "category": "indicators",
+    "file": "components/analytics/CodeQualityDashboard.vue"
+  },
+  "c7323066": {
+    "id": "charts-c7323066",
+    "category": "charts",
+    "file": "components/analytics/CodeQualityDashboard.vue"
+  },
+  "c1b0c4c0": {
+    "id": "graphics-c1b0c4c0",
+    "category": "graphics",
+    "file": "components/analytics/HealthScoreGauge.vue"
+  },
+  "d56035ee": {
+    "id": "charts-d56035ee",
+    "category": "charts",
+    "file": "components/analytics/TechnicalDebtDashboard.vue"
+  },
+  "05af4210": {
+    "id": "charts-05af4210",
+    "category": "charts",
+    "file": "components/analytics/TechnicalDebtDashboard.vue"
+  },
+  "dc06c2ef": {
+    "id": "icons-dc06c2ef",
+    "category": "icons",
+    "file": "components/analytics/LLMPatternDashboard.vue"
+  },
+  "047144a9": {
+    "id": "icons-047144a9",
+    "category": "icons",
+    "file": "components/analytics/LLMPatternDashboard.vue"
+  },
+  "3e4a1c19": {
+    "id": "icons-3e4a1c19",
+    "category": "icons",
+    "file": "components/analytics/LLMPatternDashboard.vue"
+  },
+  "e0adf0a2": {
+    "id": "icons-e0adf0a2",
+    "category": "icons",
+    "file": "components/analytics/LLMPatternDashboard.vue"
+  },
+  "48ad11bf": {
+    "id": "icons-48ad11bf",
+    "category": "icons",
+    "file": "components/analytics/LLMPatternDashboard.vue"
+  },
+  "532d9719": {
+    "id": "charts-532d9719",
+    "category": "charts",
+    "file": "components/analytics/LLMPatternDashboard.vue"
+  },
+  "0e94e41c": {
+    "id": "icons-0e94e41c",
+    "category": "icons",
+    "file": "components/analytics/CodebaseAnalytics.vue"
+  },
+  "d72f32f7": {
+    "id": "icons-d72f32f7",
+    "category": "icons",
+    "file": "components/analytics/CodebaseAnalytics.vue"
+  },
+  "00b687b0": {
+    "id": "icons-00b687b0",
+    "category": "icons",
+    "file": "components/analytics/CodebaseAnalytics.vue"
+  },
+  "d2236ba7": {
+    "id": "icons-d2236ba7",
+    "category": "icons",
+    "file": "components/analytics/CodebaseAnalytics.vue"
+  },
+  "f251d13e": {
+    "id": "icons-f251d13e",
+    "category": "icons",
+    "file": "components/analytics/CodebaseAnalytics.vue"
+  },
+  "9ccdadd2": {
+    "id": "icons-9ccdadd2",
+    "category": "icons",
+    "file": "components/analytics/CodeGenerationDashboard.vue"
+  },
+  "9976d810": {
+    "id": "indicators-9976d810",
+    "category": "indicators",
+    "file": "components/analytics/CodeGenerationDashboard.vue"
+  },
+  "fc111d09": {
+    "id": "icons-fc111d09",
+    "category": "icons",
+    "file": "components/analytics/CodeGenerationDashboard.vue"
+  },
+  "59709e8a": {
+    "id": "icons-59709e8a",
+    "category": "icons",
+    "file": "components/analytics/CodeGenerationDashboard.vue"
+  },
+  "93673eed": {
+    "id": "icons-93673eed",
+    "category": "icons",
+    "file": "components/analytics/CodeGenerationDashboard.vue"
+  },
+  "9e1543ce": {
+    "id": "indicators-9e1543ce",
+    "category": "indicators",
+    "file": "components/analytics/CodeGenerationDashboard.vue"
+  },
+  "0ba15392": {
+    "id": "icons-0ba15392",
+    "category": "icons",
+    "file": "components/analytics/CodeGenerationDashboard.vue"
+  },
+  "56135c00": {
+    "id": "indicators-56135c00",
+    "category": "indicators",
+    "file": "components/analytics/CodeGenerationDashboard.vue"
+  },
+  "b49353f6": {
+    "id": "icons-b49353f6",
+    "category": "icons",
+    "file": "components/analytics/CodeGenerationDashboard.vue"
+  },
+  "d3ac9cef": {
+    "id": "charts-d3ac9cef",
+    "category": "charts",
+    "file": "components/analytics/CodeEvolutionTimeline.vue"
+  },
+  "b633e1e0": {
+    "id": "icons-b633e1e0",
+    "category": "icons",
+    "file": "components/agents/AgentSettingsPanel.vue"
+  },
+  "ece68a5f": {
+    "id": "icons-ece68a5f",
+    "category": "icons",
+    "file": "components/agents/AgentSettingsPanel.vue"
+  },
+  "35e25f1b": {
+    "id": "graphics-35e25f1b",
+    "category": "graphics",
+    "file": "components/agents/AgentSettingsPanel.vue"
+  },
+  "845c2045": {
+    "id": "icons-845c2045",
+    "category": "icons",
+    "file": "components/agents/AgentSettingsPanel.vue"
+  },
+  "de920456": {
+    "id": "icons-de920456",
+    "category": "icons",
+    "file": "components/agents/AgentSettingsPanel.vue"
+  },
+  "4ae1266e": {
+    "id": "icons-4ae1266e",
+    "category": "icons",
+    "file": "components/agents/AgentSettingsPanel.vue"
+  },
+  "535bc6a6": {
+    "id": "icons-535bc6a6",
+    "category": "icons",
+    "file": "components/agents/AgentSettingsPanel.vue"
+  },
+  "ccd32e89": {
+    "id": "icons-ccd32e89",
+    "category": "icons",
+    "file": "components/agents/AgentSettingsPanel.vue"
+  },
+  "7243c6d9": {
+    "id": "icons-7243c6d9",
+    "category": "icons",
+    "file": "components/agents/AgentSettingsPanel.vue"
+  },
+  "4f1bbae0": {
+    "id": "charts-4f1bbae0",
+    "category": "charts",
+    "file": "components/visualizations/WorkflowVisualization.vue"
+  },
+  "c05b00f9": {
+    "id": "charts-c05b00f9",
+    "category": "charts",
+    "file": "components/visualizations/SystemArchitectureDiagram.vue"
+  },
+  "287c1b95": {
+    "id": "graphics-287c1b95",
+    "category": "graphics",
+    "file": "components/visualizations/SystemArchitectureDiagram.vue"
+  }
+}

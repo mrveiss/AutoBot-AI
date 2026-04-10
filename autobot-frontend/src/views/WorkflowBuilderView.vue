@@ -17,7 +17,6 @@
           class="category-item"
           :class="{ active: activeSection === 'overview' }"
           @click="activeSection = 'overview'"
-          role="button"
           :aria-label="$t('workflow.views.overviewAriaLabel')"
           tabindex="0"
         >
@@ -35,7 +34,6 @@
           class="category-item"
           :class="{ active: activeSection === 'canvas' }"
           @click="activeSection = 'canvas'"
-          role="button"
           :aria-label="$t('workflow.views.visualBuilderAriaLabel')"
           tabindex="0"
         >
@@ -49,7 +47,6 @@
           class="category-item"
           :class="{ active: activeSection === 'templates' }"
           @click="activeSection = 'templates'"
-          role="button"
           :aria-label="$t('workflow.views.templatesAriaLabel')"
           tabindex="0"
         >
@@ -64,7 +61,6 @@
           class="category-item"
           :class="{ active: activeSection === 'natural-language' }"
           @click="activeSection = 'natural-language'"
-          role="button"
           :aria-label="$t('workflow.views.naturalLanguageAriaLabel')"
           tabindex="0"
         >
@@ -82,7 +78,6 @@
           class="category-item"
           :class="{ active: activeSection === 'runner' }"
           @click="activeSection = 'runner'"
-          role="button"
           :aria-label="$t('workflow.views.runnerAriaLabel')"
           tabindex="0"
         >
@@ -112,7 +107,6 @@
           class="category-item"
           :class="{ active: activeSection === 'notifications' }"
           @click="activeSection = 'notifications'"
-          role="button"
           :aria-label="$t('workflow.notifications.sidebarLabel')"
           tabindex="0"
         >
@@ -127,7 +121,6 @@
           class="category-item"
           :class="{ active: activeSection === 'gui-automation' }"
           @click="activeSection = 'gui-automation'"
-          role="button"
           :aria-label="$t('workflow.views.guiAutomationAriaLabel')"
           tabindex="0"
         >
@@ -137,6 +130,18 @@
           </svg>
           <span>{{ $t('workflow.views.guiAutomation') }}</span>
         </button>
+
+        <router-link
+          to="/automation/browser-automation"
+          class="category-item"
+          :class="{ active: $route.name === 'browser-automation' }"
+          :aria-label="$t('nav.browserAutomation')"
+        >
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.083 9h1.946c.089-1.546.383-2.97.837-4.118A6.004 6.004 0 004.083 9zM10 2a8 8 0 100 16 8 8 0 000-16zm0 2c-.076 0-.232.032-.465.262-.238.234-.497.623-.737 1.182-.389.907-.673 2.142-.766 3.556h3.936c-.093-1.414-.377-2.649-.766-3.556-.24-.56-.5-.948-.737-1.182C10.232 4.032 10.076 4 10 4zm3.971 5c-.089-1.546-.383-2.97-.837-4.118A6.004 6.004 0 0115.917 9h-1.946zm-2.003 2H8.032c.093 1.414.377 2.649.766 3.556.24.56.5.948.737 1.182.233.23.389.262.465.262.076 0 .232-.032.465-.262.238-.234.497-.623.737-1.182.389-.907.673-2.142.766-3.556zm1.166 4.118c.454-1.147.748-2.572.837-4.118h1.946a6.004 6.004 0 01-2.783 4.118zm-6.268 0C6.412 13.97 6.118 12.546 6.03 11H4.083a6.004 6.004 0 002.783 4.118z" />
+          </svg>
+          <span>{{ $t('nav.browserAutomation') }}</span>
+        </router-link>
 
         <div class="category-divider category-divider--with-status">
           <span>{{ $t('workflow.views.vision') }}</span>
@@ -149,7 +154,6 @@
           class="category-item"
           :class="{ active: activeSection === 'screen-analysis' }"
           @click="activeSection = 'screen-analysis'"
-          role="button"
           :aria-label="$t('workflow.views.screenAnalysisAriaLabel')"
           tabindex="0"
         >
@@ -164,7 +168,6 @@
           class="category-item"
           :class="{ active: activeSection === 'video-processing' }"
           @click="activeSection = 'video-processing'"
-          role="button"
           :aria-label="$t('workflow.views.videoProcessingAriaLabel')"
           tabindex="0"
         >
@@ -179,7 +182,6 @@
           class="category-item"
           :class="{ active: activeSection === 'media-gallery' }"
           @click="activeSection = 'media-gallery'"
-          role="button"
           :aria-label="$t('workflow.views.mediaGalleryAriaLabel')"
           tabindex="0"
         >
@@ -199,7 +201,6 @@
           class="category-item"
           :class="{ active: activeSection === 'live-dashboard' }"
           @click="activeSection = 'live-dashboard'"
-          role="button"
           :aria-label="$t('workflow.views.liveDashboardAriaLabel')"
           tabindex="0"
         >

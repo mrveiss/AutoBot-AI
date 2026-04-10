@@ -33,7 +33,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from constants.threshold_constants import StringParsingConstants
 from type_defs.common import Metadata
 
@@ -68,7 +68,7 @@ class FeatureFlags:
         """Get Redis connection for feature flags (uses cache DB)"""
         if not self.redis:
             # Get async Redis client for cache database (returns coroutine, must await)
-            self.redis = await get_redis_client(async_client=True, database="cache")
+            self.redis = await get_async_redis_client(database="cache")
         return self.redis
 
     async def get_enforcement_mode(self) -> EnforcementMode:

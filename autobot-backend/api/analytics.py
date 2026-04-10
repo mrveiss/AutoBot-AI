@@ -45,8 +45,14 @@ from utils.background_task_manager import BackgroundTaskManager
 # Import existing monitoring infrastructure (extracted to monitoring_hardware.py - Issue #213)
 from .monitoring_hardware import hardware_monitor
 
+# Import root cause analyzer for causal failure analysis
+from services.root_cause_analyzer import RootCauseAnalyzer
+
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["analytics"])
+
+# Module-level root cause analyzer instance (lazy initialized)
+_root_cause_analyzer = RootCauseAnalyzer()
 
 # Background task manager for dashboard overview (#1304)
 _dash_manager = BackgroundTaskManager(redis_prefix="dash_task:")
@@ -1205,6 +1211,71 @@ async def websocket_live_analytics(websocket: WebSocket):
 #         asyncio.create_task(collector.start_collection())
 #
 #     logger.info("Enhanced Analytics API initialized successfully")
+
+
+# ------------------------------------------------------------------
+# Root Cause Analysis endpoint
+# ------------------------------------------------------------------
+
+
+@router.get("/root-cause/{task_id}")
+@with_error_handling(
+    category=ErrorCategory.NOT_FOUND,
+    operation="analyze_root_cause",
+    error_code_prefix="ROOT_CAUSE",
+)
+async def analyze_root_cause(
+    task_id: str,
+    current_user: Dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Analyze root cause of task failure via causal chain traversal.
+
+    Traces the causal failure chain backward from the failure event to
+    identify root causes, confounders, and generate explanations.
+
+    Args:
+        task_id: The failed task ID
+        current_user: Authenticated user (from auth_middleware)
+
+    Returns:
+        RootCauseReport as dictionary with:
+        - task_id: Task being analyzed
+        - root_event: Primary cause (CausalEvent dict)
+        - causal_chain: List of CausalEvent dicts in causal order
+        - confidence: Overall confidence score (0.0-1.0)
+        - explanations: List of human-readable explanation strings
+        - confounders: List of secondary contributing causes
+        - chain_depth: Number of events in chain
+        - analysis_status: "success", "partial", or "failed"
+        - error_message: Error details if analysis failed
+
+    Raises:
+        HTTPException(404): If task not found or analysis failed
+        HTTPException(500): If analysis service is unavailable
+    """
+    try:
+        # Analyze the task failure
+        report = await _root_cause_analyzer.analyze_task_failure(task_id)
+
+        # Return 404 if task not found or analysis failed
+        if report.analysis_status == "failed":
+            raise HTTPException(
+                status_code=404,
+                detail=report.error_message or f"Could not analyze task {task_id}",
+            )
+
+        # Return report as dictionary for JSON serialization
+        return report.to_dict()
+
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        logger.error(f"Root cause analysis failed for task {task_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Root cause analysis service error: {str(e)}",
+        )
 
 
 # ------------------------------------------------------------------

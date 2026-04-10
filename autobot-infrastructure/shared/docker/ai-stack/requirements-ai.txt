@@ -12,7 +12,7 @@ llama-index-embeddings-ollama>=0.9.0,<1.0.0
 llama-index-llms-ollama>=0.10.1,<1.0.0
 
 # Vector Database
-chromadb>=1.5.5
+chromadb>=1.5.5,<2.0.0           # upper bound guards against breaking API changes; 1.5.5+ uses regenerated protos compatible with protobuf 5.x (#4053)
 sentence-transformers>=5.3.0
 
 # Model and Tokenization
@@ -46,7 +46,8 @@ pydantic>=2.12.5
 # Utilities
 async-timeout>=5.0.1
 packaging>=26.0
-protobuf>=5.29.6  # opentelemetry-exporter-otlp-proto-grpc>=1.40.0 regenerated protos — C extension compatible; floor matches backend (#3973)
+protobuf>=5.29.6,<8.0.0           # floor: opentelemetry-exporter-otlp-proto-grpc>=1.40.0 regenerated protos, C extension compatible (#3973); ceiling: mirrors googleapis-common-protos requirement (#4061)
+googleapis-common-protos>=1.57.0,<2.0.0  # required by opentelemetry-exporter-otlp-proto-grpc~=1.57; needs protobuf>=4.25.8 satisfied by floor above (#4061)
 python-dotenv>=1.2.2
 tenacity>=9.1.4
 tqdm>=4.67.3

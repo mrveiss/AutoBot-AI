@@ -104,6 +104,53 @@ class DecisionContext:
 
 
 @dataclass
+class InterventionOutcome:
+    """Predicted outcome of a decision intervention (counterfactual).
+
+    Used by CounterfactualReasoner to predict what would happen if we took
+    a particular decision option without actually executing it.
+    """
+
+    option: str
+    predicted_success_rate: float
+    side_effects: List[Dict[str, Any]]
+    confidence: float
+    reasoning: str
+    prediction_source: str  # "empirical", "causal", or "heuristic"
+    supporting_evidence: List[Dict[str, Any]]
+    fallback_risk: Optional[str] = None
+    estimated_latency_ms: Optional[int] = None
+    timestamp: float = field(default_factory=time.time)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert intervention outcome to dictionary representation."""
+        return {
+            "option": self.option,
+            "predicted_success_rate": self.predicted_success_rate,
+            "side_effects": self.side_effects,
+            "confidence": self.confidence,
+            "reasoning": self.reasoning,
+            "prediction_source": self.prediction_source,
+            "supporting_evidence": self.supporting_evidence,
+            "fallback_risk": self.fallback_risk,
+            "estimated_latency_ms": self.estimated_latency_ms,
+            "timestamp": self.timestamp,
+            "metadata": self.metadata,
+        }
+
+    def is_high_confidence(self, threshold: float = 0.7) -> bool:
+        """Check if outcome prediction has high confidence."""
+        return self.confidence >= threshold
+
+    def has_high_risk_side_effects(self) -> bool:
+        """Check if any side effects are high severity."""
+        return any(
+            effect.get("severity") == "high" for effect in self.side_effects
+        )
+
+
+@dataclass
 class Decision:
     """Decision made by the system."""
 

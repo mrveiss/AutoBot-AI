@@ -192,9 +192,9 @@ async def _get_redis():
     Helper for SkillManager Redis operations (Issue #731).
     """
     try:
-        from autobot_shared.redis_client import get_redis_client
+        from autobot_shared.redis_client import get_async_redis_client
 
-        return await get_redis_client(async_client=True, database="main")
+        return await get_async_redis_client(database="main")
     except Exception:
         logger.debug("Redis not available for skill persistence")
         return None

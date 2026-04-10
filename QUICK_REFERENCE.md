@@ -1,5 +1,27 @@
 # AutoBot Quick Reference Card
 
+## 🚀 **Self-Hosted Setup (3 Steps)**
+
+```bash
+# Deploy self-hosted AutoBot on your infrastructure
+git clone https://github.com/mrveiss/AutoBot-AI.git
+cd AutoBot-AI
+cp .env.example .env
+docker compose up -d
+
+# Access your self-hosted automation platform
+# Visit http://localhost in your browser
+```
+
+**Why Self-Hosted?**
+- ✅ Your data stays on your infrastructure (no cloud lock-in)
+- ✅ No per-request costs — unlimited automations
+- ✅ Millisecond latency for infrastructure decisions
+- ✅ Meet compliance requirements (HIPAA, GDPR, SOC2)
+- ✅ Full customization and control
+
+[Learn more about self-hosted automation](docs/self-hosted-advantages.md)
+
 ## 🚀 **Essential Commands**
 
 ```bash

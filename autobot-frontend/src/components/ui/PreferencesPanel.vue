@@ -42,7 +42,6 @@ Issue #753: Additional Customization (Font Size, Accent Colors, Layout Density)
             :class="['option-btn', { active: fontSize === size.value }]"
             :aria-label="t('ui.preferences.setFontSize', { size: size.label })"
             :aria-pressed="fontSize === size.value"
-            role="button"
             type="button"
           >
             {{ size.label }}
@@ -67,7 +66,6 @@ Issue #753: Additional Customization (Font Size, Accent Colors, Layout Density)
             :data-color="color.value"
             :aria-label="t('ui.preferences.setAccentColor', { color: color.label })"
             :aria-pressed="accentColor === color.value"
-            role="button"
             type="button"
           >
             <span class="color-preview" :aria-hidden="true"></span>
@@ -92,7 +90,6 @@ Issue #753: Additional Customization (Font Size, Accent Colors, Layout Density)
             :class="['option-btn', { active: layoutDensity === density.value }]"
             :aria-label="t('ui.preferences.setLayoutDensity', { density: density.label })"
             :aria-pressed="layoutDensity === density.value"
-            role="button"
             type="button"
           >
             {{ density.label }}

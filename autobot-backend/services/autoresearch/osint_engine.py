@@ -481,9 +481,9 @@ class OSINTEngine:
     async def _get_redis(self):
         """Lazy-init async Redis client (main database)."""
         if self._redis is None:
-            from autobot_shared.redis_client import get_redis_client
+            from autobot_shared.redis_client import get_async_redis_client
 
-            self._redis = await get_redis_client(async_client=True, database="main")
+            self._redis = await get_async_redis_client(database="main")
         return self._redis
 
     async def _cache_results(self, results: List[SourceResult]) -> None:

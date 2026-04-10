@@ -1,8 +1,8 @@
 # AutoBot: Self-Hosted AI Automation Platform
 
-> **One Dashboard. Your Infrastructure. Complete Control.**
+> **Self-Hosted Infrastructure Automation with Conversational AI**
 >
-> AutoBot is a self-hosted platform that brings conversational AI to distributed Linux administration, fleet management, and infrastructure automation — all from a beautiful, modern interface.
+> AutoBot is a **self-hosted AI platform** that brings conversational AI to distributed Linux administration, fleet management, and infrastructure automation — all from a beautiful, modern interface. Own your data. Control your infrastructure. No vendor lock-in.
 
 [![Docker Smoke Test](https://github.com/mrveiss/AutoBot-AI/actions/workflows/docker-smoke-test.yml/badge.svg)](https://github.com/mrveiss/AutoBot-AI/actions/workflows/docker-smoke-test.yml)
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/mrveiss?label=Sponsor&logo=GitHub&style=flat-square)](https://github.com/sponsors/mrveiss)
@@ -28,15 +28,15 @@ Visit **http://localhost** in your browser. AutoBot is ready to use.
 
 ## What AutoBot Does
 
-AutoBot combines conversational AI with distributed automation to give you:
+AutoBot is a **self-hosted infrastructure automation platform** that combines conversational AI with distributed automation. Deploy it on your own hardware and keep complete control:
 
-- **Unified Dashboard** — Manage infrastructure, fleet operations, and analytics from one place
-- **Natural Language Control** — Issue commands in plain English; AutoBot handles the complexity
-- **Knowledge Integration** — Build custom knowledge bases for your infrastructure and workflows
-- **Code Analytics** — Understand codebases, extract insights, identify risks
-- **Vision Processing** — Analyze screenshots and diagrams to guide infrastructure decisions
-- **Fleet Management** — Orchestrate multi-server deployments, updates, and monitoring with Ansible
-- **Self-Hosted & Private** — Full data control, no external dependencies, runs on your hardware
+- **Unified Self-Hosted Dashboard** — Manage infrastructure, fleet operations, and analytics from one place on your servers
+- **Natural Language Control** — Issue commands in plain English; AutoBot handles the complexity locally
+- **Self-Hosted Knowledge Bases** — Build custom knowledge bases from your infrastructure docs, runbooks, and workflows — all stored locally
+- **Code Analytics** — Understand codebases, extract insights, identify risks without sending data to external services
+- **Vision Processing** — Analyze screenshots and diagrams locally to guide infrastructure decisions
+- **Self-Hosted Fleet Management** — Orchestrate multi-server deployments, updates, and monitoring with Ansible across your infrastructure
+- **Complete Data Privacy** — Full data control, no external dependencies, runs entirely on your hardware, no cloud vendor lock-in
 
 ---
 
@@ -63,6 +63,25 @@ AutoBot combines conversational AI with distributed automation to give you:
 | **Codebase Analytics** | Code structure analysis, risk detection, dependency insights |
 | **Vision** | Image/screenshot analysis for infrastructure troubleshooting |
 | **Fleet Management** | Ansible-powered multi-server orchestration and monitoring |
+
+---
+
+## Why Self-Hosted? AutoBot vs Cloud Alternatives
+
+| Aspect | AutoBot (Self-Hosted) | Cloud AI Tools | 
+|--------|----------------------|----------------|
+| **Data Privacy** | Your data stays on your hardware | Data sent to external servers |
+| **Cost** | One-time setup, no per-request fees | Recurring API costs, usage-based pricing |
+| **Control** | Full customization, no vendor lock-in | Limited by cloud provider's roadmap |
+| **Compliance** | Meet HIPAA, GDPR, SOC2 requirements | Subject to cloud provider's compliance |
+| **Latency** | Local inference, millisecond response times | Network latency to cloud APIs |
+| **Offline Capability** | Works without internet connection | Requires constant cloud connectivity |
+| **Customization** | Run custom models, modify code | Locked to cloud provider's models |
+| **Scalability** | Scale within your infrastructure | Limited by cloud provider's quotas |
+
+For teams prioritizing **data privacy, cost efficiency, and infrastructure control**, self-hosted automation with AutoBot is the ideal choice.
+
+📚 **Learn more:** [Why Self-Hosted Infrastructure Automation?](docs/self-hosted-advantages.md)
 
 ---
 
@@ -195,6 +214,22 @@ We welcome contributions! Whether you're fixing bugs, adding features, or improv
 - 💬 **Questions?** Start a discussion in [GitHub Discussions](https://github.com/mrveiss/AutoBot-AI/discussions)
 - 🐛 **Found a bug?** Open an [issue](https://github.com/mrveiss/AutoBot-AI/issues)
 - 💡 **Have an idea?** Share it in [Discussions → Ideas](https://github.com/mrveiss/AutoBot-AI/discussions/categories/ideas)
+
+---
+
+## How to Contribute
+
+AutoBot is open source and we welcome contributions from the community!
+
+**New to open source?** Start with [good-first-issue](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Agood-first-issue) issues — these are beginner-friendly and designed as learning opportunities.
+
+**Experienced developer?** Find issues matching your skill:
+- [Frontend (Vue.js, TypeScript)](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Afrontend+label%3Ahelp-wanted)
+- [Backend (FastAPI, Python)](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Abackend+label%3Ahelp-wanted)
+- [Infrastructure (Docker, Ansible)](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Ainfrastructure+label%3Ahelp-wanted)
+- [Documentation](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Adocs+label%3Ahelp-wanted)
+
+See [CONTRIBUTORS.md](CONTRIBUTORS.md) for detailed contribution guidelines.
 
 ---
 

@@ -42,7 +42,7 @@ from typing import Any, Dict, List, Literal, Optional
 import aiofiles
 import redis.asyncio as async_redis
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from constants.network_constants import NetworkConstants
 from models.task_context import AuditQueryContext
 from type_defs.common import Metadata
@@ -264,7 +264,7 @@ class AuditLogger(AsyncInitializable):
         """Get Redis audit database (DB 10)"""
         try:
             # Use canonical Redis client pattern with 'audit' database
-            return await get_redis_client(async_client=True, database="audit")
+            return await get_async_redis_client(database="audit")
         except Exception as e:
             logger.error("Failed to get audit database: %s", e)
             self._redis_failures += 1

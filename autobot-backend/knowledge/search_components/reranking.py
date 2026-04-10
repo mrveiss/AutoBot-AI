@@ -318,10 +318,10 @@ class ResultReranker:
         if weights.staleness == 0.0:
             return None
         try:
-            from autobot_shared.redis_client import get_redis_client
+            from autobot_shared.redis_client import get_async_redis_client
             from services.mesh_brain.staleness_propagator import get_staleness_score
 
-            redis = await get_redis_client(async_client=True, database="main")
+            redis = await get_async_redis_client(database="main")
             staleness_map: Dict[str, float] = {}
             for result in results:
                 chunk_id = result.get("chunk_id") or result.get("id", "")

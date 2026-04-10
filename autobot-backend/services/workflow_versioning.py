@@ -42,7 +42,7 @@ import time
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Optional
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +133,7 @@ class WorkflowVersionStore:
         Returns:
             The new version number on success, None when Redis is unavailable.
         """
-        redis = await get_redis_client(async_client=True, database="workflows")
+        redis = await get_async_redis_client(database="workflows")
         if redis is None:
             logger.error("save_version: Redis unavailable for workflow %s", workflow_id)
             return None
@@ -172,7 +172,7 @@ class WorkflowVersionStore:
         Returns:
             True when the version existed and was removed; False otherwise.
         """
-        redis = await get_redis_client(async_client=True, database="workflows")
+        redis = await get_async_redis_client(database="workflows")
         if redis is None:
             logger.error(
                 "delete_version: Redis unavailable for workflow %s", workflow_id
@@ -211,7 +211,7 @@ class WorkflowVersionStore:
             List of summary dicts sorted by version descending.  Empty list
             when no versions exist or Redis is unavailable.
         """
-        redis = await get_redis_client(async_client=True, database="workflows")
+        redis = await get_async_redis_client(database="workflows")
         if redis is None:
             logger.error(
                 "list_versions: Redis unavailable for workflow %s", workflow_id
@@ -252,7 +252,7 @@ class WorkflowVersionStore:
         Returns:
             WorkflowVersion dataclass, or None when not found.
         """
-        redis = await get_redis_client(async_client=True, database="workflows")
+        redis = await get_async_redis_client(database="workflows")
         if redis is None:
             logger.error("get_version: Redis unavailable for workflow %s", workflow_id)
             return None

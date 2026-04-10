@@ -26,7 +26,7 @@ from typing import Any, Optional
 from fastapi import Request
 
 # Import centralized Redis client utility
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_5_MINUTES
 from type_defs.common import Metadata
 
@@ -50,7 +50,7 @@ class CacheManager:
 
         try:
             # Get async Redis client
-            self._redis_client = await get_redis_client(async_client=True)
+            self._redis_client = await get_async_redis_client()
 
             if self._redis_client:
                 logger.info("CacheManager Redis client initialized successfully")

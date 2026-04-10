@@ -190,8 +190,9 @@
  * ============================================ */
 
 .knowledge-view {
+  contain: layout style paint;
   display: flex;
-  height: 100%;
+  min-height: 100%;
   min-height: 0;
   background: var(--bg-primary);
 }
@@ -312,6 +313,7 @@
 
 @media (max-width: 768px) {
   .knowledge-view {
+  contain: layout style paint;
     flex-direction: column;
   }
 

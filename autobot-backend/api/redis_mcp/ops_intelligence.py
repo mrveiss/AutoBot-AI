@@ -11,7 +11,7 @@ Agents can chain these tools for composite diagnostics.
 import logging
 from typing import Any, Dict, List, Optional
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 async def _get_client(database: str = "main"):
     """Get an async Redis client for ops queries."""
-    return await get_redis_client(async_client=True, database=database)
+    return await get_async_redis_client(database=database)
 
 
 async def handle_redis_server_info(

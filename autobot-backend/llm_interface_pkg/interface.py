@@ -1409,7 +1409,13 @@ class LLMInterface:
 
         # Issue #3860: resolve model_name from provider config so usage
         # analytics records a non-empty value instead of "".
-        _, model_name = self._determine_provider_and_model("vllm")
+        # Issue #4054: use vLLM config key directly — _determine_provider_and_model("vllm")
+        # falls to the else branch and returns the Ollama default model name, causing
+        # cache-key collisions between Ollama and vLLM calls.  Use the same config key
+        # that VLLMProviderHandler._ensure_initialized() uses.
+        model_name = config.get(
+            "llm.vllm.default_model", "meta-llama/Llama-3.2-3B-Instruct"
+        )
 
         messages = [
             {"role": "system", "content": system_prompt},

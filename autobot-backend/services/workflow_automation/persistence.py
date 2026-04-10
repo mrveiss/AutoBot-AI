@@ -16,7 +16,7 @@ import logging
 from dataclasses import asdict
 from typing import Optional
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from constants.redis_constants import REDIS_KEY
 from constants.ttl_constants import TTL_7_DAYS
 from services.notification_service import NotificationConfig
@@ -35,7 +35,7 @@ async def save_notification_config(
     config: Optional[NotificationConfig],
 ) -> None:
     """Persist *config* to Redis, or delete the key when *config* is None."""
-    redis = await get_redis_client(async_client=True, database="main")
+    redis = await get_async_redis_client(database="main")
     if redis is None:
         logger.warning(
             "Redis unavailable — notification config not persisted (workflow=%s)",
@@ -58,7 +58,7 @@ async def load_notification_config(
     workflow_id: str,
 ) -> Optional[NotificationConfig]:
     """Load notification config from Redis; returns None when not found."""
-    redis = await get_redis_client(async_client=True, database="main")
+    redis = await get_async_redis_client(database="main")
     if redis is None:
         logger.warning(
             "Redis unavailable — cannot load notification config (workflow=%s)",
