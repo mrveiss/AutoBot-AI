@@ -48,7 +48,7 @@
             <th class="col-message">{{ $t('analytics.findings.table.message') }}</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody :style="{ height: totalHeight + 'px', position: 'relative' }">
           <!-- Virtualized findings rows -->
           <template v-for="virtualItem in visibleItems" :key="virtualItem.index">
             <tr
@@ -161,7 +161,7 @@ const filteredFindings = computed(() => {
 // Virtual scrolling composable - Issue #4037
 // Each finding row is approximately 50px, expanded detail rows are ~300px
 // Use a conservative estimate to avoid layout shift
-const { visibleItems } = useVirtualList(filteredFindings, 50, 3)
+const { containerRef, visibleItems, totalHeight } = useVirtualList(filteredFindings, 50, 3)
 
 function getSeverityIcon(severity: Severity): string {
   const icons: Record<Severity, string> = {

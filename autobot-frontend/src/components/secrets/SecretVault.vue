@@ -109,7 +109,7 @@ const allSecrets = computed(() => {
 
 // Virtual scrolling composable - Issue #4037
 // Each secret card is approximately 280px (with padding, metadata, actions)
-const { containerRef, visibleItems } = useVirtualList(allSecrets, 280, 2)
+const { containerRef, visibleItems, totalHeight } = useVirtualList(allSecrets, 280, 2)
 
 // Get secret type icon
 const getTypeIcon = (type: string): string => {
@@ -319,13 +319,14 @@ onMounted(() => {
       </div>
 
       <!-- Virtualized secrets list -->
-      <TransitionGroup v-else name="secret" class="p-4 space-y-2">
-        <div
-          v-for="virtualItem in visibleItems"
-          :key="virtualItem.data.id"
-          class="bg-gray-700/50 rounded-lg p-4 hover:bg-gray-700 transition-colors border border-gray-600"
-          :style="{ transform: `translateY(${virtualItem.offset}px)` }"
-        >
+      <div v-else :style="{ height: totalHeight + 'px', position: 'relative' }">
+        <TransitionGroup name="secret" class="p-4 space-y-2">
+          <div
+            v-for="virtualItem in visibleItems"
+            :key="virtualItem.data.id"
+            class="bg-gray-700/50 rounded-lg p-4 hover:bg-gray-700 transition-colors border border-gray-600"
+            :style="{ transform: `translateY(${virtualItem.offset}px)` }"
+          >
           <!-- Header -->
           <div class="flex items-start justify-between mb-3">
             <div class="flex items-start gap-3 flex-1 min-w-0">
@@ -421,7 +422,8 @@ onMounted(() => {
             </button>
           </div>
         </div>
-      </TransitionGroup>
+        </TransitionGroup>
+      </div>
     </div>
   </div>
 </template>

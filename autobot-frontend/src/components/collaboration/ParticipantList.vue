@@ -105,7 +105,7 @@ const participantsWithRoles = computed<ParticipantWithRole[]>(() => {
 
 // Virtual scrolling composable - Issue #4037
 // Each participant item is approximately 140px (with status indicator, role badge, etc.)
-const { visibleItems } = useVirtualList(participantsWithRoles, 140, 2)
+const { containerRef, visibleItems, totalHeight } = useVirtualList(participantsWithRoles, 140, 2)
 
 // Get role badge styling
 const getRoleBadge = (role: ParticipantWithRole['role']): { color: string; label: string } => {
@@ -231,7 +231,7 @@ watch(
     </div>
 
     <!-- Participant list with virtual scrolling -->
-    <div ref="containerRef" class="space-y-2 max-h-96 overflow-y-auto custom-scrollbar relative">
+    <div ref="containerRef" class="overflow-y-auto custom-scrollbar relative">
       <!-- Empty state -->
       <div
         v-if="participantsWithRoles.length === 0"
@@ -243,10 +243,11 @@ watch(
       </div>
 
       <!-- Virtualized participants list -->
-      <TransitionGroup v-else name="participant" class="space-y-2">
-        <div
-          v-for="virtualItem in visibleItems"
-          :key="virtualItem.data.userId"
+      <div v-else :style="{ height: totalHeight + 'px', position: 'relative' }">
+        <TransitionGroup name="participant" class="space-y-2">
+          <div
+            v-for="virtualItem in visibleItems"
+            :key="virtualItem.data.userId"
           :class="[
             'participant-item rounded-lg p-3 transition-all',
             virtualItem.data.userId === myPresence?.userId
@@ -354,7 +355,8 @@ watch(
             </div>
           </div>
         </div>
-      </TransitionGroup>
+        </TransitionGroup>
+      </div>
     </div>
   </div>
 </template>
