@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AutoBot - Offline</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .offline-container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 500px;
+      width: 100%;
+      padding: 48px 32px;
+      text-align: center;
+    }
+
+    .offline-icon {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 24px;
+      background: #f3f4f6;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+    }
+
+    h1 {
+      color: #111827;
+      font-size: 28px;
+      margin-bottom: 12px;
+      font-weight: 700;
+    }
+
+    .offline-status {
+      color: #6b7280;
+      font-size: 16px;
+      line-height: 1.5;
+      margin-bottom: 24px;
+    }
+
+    .offline-message {
+      background: #fef3c7;
+      border-left: 4px solid #f59e0b;
+      padding: 16px;
+      border-radius: 4px;
+      margin-bottom: 32px;
+      text-align: left;
+      color: #92400e;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .offline-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    button {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .btn-primary {
+      background: #667eea;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #5568d3;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-secondary {
+      background: #e5e7eb;
+      color: #374151;
+    }
+
+    .btn-secondary:hover {
+      background: #d1d5db;
+      transform: translateY(-2px);
+    }
+
+    .offline-cached {
+      margin-top: 32px;
+      padding-top: 32px;
+      border-top: 1px solid #e5e7eb;
+    }
+
+    .offline-cached h2 {
+      font-size: 16px;
+      color: #374151;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+
+    .offline-cached p {
+      font-size: 14px;
+      color: #6b7280;
+      margin-bottom: 16px;
+    }
+
+    .cached-links {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .cached-link {
+      padding: 12px;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      text-decoration: none;
+      color: #667eea;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+    }
+
+    .cached-link:hover {
+      background: #f3f4f6;
+      border-color: #d1d5db;
+    }
+
+    .footer {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid #e5e7eb;
+      font-size: 12px;
+      color: #9ca3af;
+    }
+
+    @media (max-width: 480px) {
+      .offline-container {
+        padding: 32px 24px;
+      }
+
+      h1 {
+        font-size: 24px;
+      }
+
+      .cached-links {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="offline-container">
+    <div class="offline-icon">📡</div>
+    <h1>You're Offline</h1>
+    <div class="offline-status">
+      <p>No internet connection detected. AutoBot is unavailable in offline mode.</p>
+    </div>
+
+    <div class="offline-message">
+      <strong>Tip:</strong> Some previously cached content may still be available below. Please check your internet connection and try again.
+    </div>
+
+    <div class="offline-actions">
+      <button class="btn-primary" onclick="retryConnection()">Try Again</button>
+      <button class="btn-secondary" onclick="goHome()">Go to Home</button>
+    </div>
+
+    <div class="offline-cached">
+      <h2>📚 Cached Content</h2>
+      <p>These pages were cached during your last visit:</p>
+      <div class="cached-links">
+        <a href="/" class="cached-link">Home</a>
+        <a href="/chat" class="cached-link">Chat</a>
+        <a href="/knowledge" class="cached-link">Knowledge</a>
+        <a href="/analytics" class="cached-link">Analytics</a>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>AutoBot v1.0 | Service Worker Offline Mode</p>
+      <p>Last updated: <span id="updateTime">--</span></p>
+    </div>
+  </div>
+
+  <script>
+    function retryConnection() {
+      window.location.reload()
+    }
+
+    function goHome() {
+      window.location.href = '/'
+    }
+
+    // Display last update time
+    const lastUpdate = localStorage.getItem('sw-last-update') || new Date().toLocaleTimeString()
+    document.getElementById('updateTime').textContent = lastUpdate
+
+    // Check connection periodically
+    setInterval(() => {
+      fetch('/', { method: 'HEAD', cache: 'no-store' })
+        .then(() => {
+          // Connection restored
+          window.location.href = '/'
+        })
+        .catch(() => {
+          // Still offline
+        })
+    }, 5000)
+  </script>
+</body>
+</html>
