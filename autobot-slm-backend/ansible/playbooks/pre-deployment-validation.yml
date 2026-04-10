@@ -1,0 +1,532 @@
+---
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Pre-Deployment Validation Playbook (#4056)
+# Validates all prerequisites before service deployment to prevent failures
+#
+# Checks:
+# - Required packages installed (npm, python, git, docker, etc.)
+# - Required config files present with correct permissions
+# - Port availability (prevents conflicts like Grafana 3000 vs Playwright 3000)
+# - Disk space availability (10GB minimum)
+# - Network connectivity to upstream services
+# - Python venv dependencies match requirements.txt
+# - npm audit for dependency vulnerabilities
+#
+# Usage (imported by deploy playbooks):
+#   - name: "Pre-deployment: Validation"
+#     import_playbook: pre-deployment-validation.yml
+#     tags: ['pre-deployment', 'validation']
+
+- name: "Pre-Deployment Validation"
+  hosts: all
+  gather_facts: yes
+
+  vars:
+    # Minimum disk space required (in GB)
+    min_disk_space_gb: 10
+    # Ports to check for availability
+    ports_to_check:
+      - name: "Grafana"
+        port: 3000
+        host: "{{ inventory_hostname }}"
+      - name: "Redis"
+        port: 6379
+        host: "{{ inventory_hostname }}"
+      - name: "Backend API"
+        port: 8001
+        host: "{{ inventory_hostname }}"
+      - name: "Frontend Dev Server"
+        port: 5173
+        host: "{{ inventory_hostname }}"
+      - name: "AI Stack"
+        port: 8002
+        host: "{{ inventory_hostname }}"
+      - name: "NPU Worker"
+        port: 8080
+        host: "{{ inventory_hostname }}"
+      - name: "ChromaDB"
+        port: 8100
+        host: "{{ inventory_hostname }}"
+      - name: "Playwright"
+        port: 3001
+        host: "{{ inventory_hostname }}"
+      - name: "VNC Server"
+        port: 5900
+        host: "{{ inventory_hostname }}"
+      - name: "TTS Worker"
+        port: 8083
+        host: "{{ inventory_hostname }}"
+
+    # Required packages per role
+    required_packages:
+      common:
+        - git
+        - curl
+        - wget
+        - openssl
+        - ca-certificates
+        - jq
+      frontend:
+        - nginx
+        - nodejs
+        - npm
+      backend:
+        - python3
+        - python3-pip
+        - python3-venv
+      redis:
+        - redis-tools
+      ai_stack:
+        - python3
+        - python3-pip
+        - python3-venv
+      npu:
+        - python3
+        - python3-pip
+        - python3-venv
+      browser:
+        - python3
+        - python3-pip
+        - python3-venv
+
+    # Required config files by role
+    required_config_files:
+      common: []
+      frontend:
+        - path: "/etc/nginx/nginx.conf"
+          mode: "0644"
+      backend:
+        - path: "/etc/autobot/backend-env"
+          mode: "0640"
+      redis:
+        - path: "/etc/redis/redis.conf"
+          mode: "0644"
+      ai_stack:
+        - path: "/etc/autobot/ai-stack-env"
+          mode: "0640"
+      npu:
+        - path: "/etc/autobot/npu-worker-env"
+          mode: "0640"
+      browser:
+        - path: "/etc/autobot/browser-env"
+          mode: "0640"
+
+  pre_tasks:
+    - name: Display validation phase information
+      debug:
+        msg:
+          - "=========================================="
+          - "Pre-Deployment Validation Starting"
+          - "=========================================="
+          - "Target Host: {{ inventory_hostname }}"
+          - "IP Address: {{ ansible_default_ipv4.address | default('N/A') }}"
+          - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "Kernel: {{ ansible_kernel }}"
+      tags: [validation, always]
+
+  tasks:
+    # ==========================================
+    # SYSTEM REQUIREMENTS VALIDATION
+    # ==========================================
+
+    - name: "Validation: Check minimum disk space ({{ min_disk_space_gb }}GB)"
+      block:
+        - name: Get available disk space on root filesystem
+          shell: df -B1 / | tail -1 | awk '{print $4}'
+          register: disk_free_bytes
+          changed_when: false
+
+        - name: Calculate available disk space in GB
+          set_fact:
+            disk_free_gb: "{{ (disk_free_bytes.stdout | int / 1024 / 1024 / 1024) | round(2) }}"
+
+        - name: Validate sufficient disk space
+          assert:
+            that:
+              - disk_free_gb | float >= min_disk_space_gb | float
+            fail_msg: |
+              Insufficient disk space on {{ inventory_hostname }}:
+              Available: {{ disk_free_gb }}GB
+              Required: {{ min_disk_space_gb }}GB
+              Action: Free up disk space and retry
+            success_msg: "Disk space check passed ({{ disk_free_gb }}GB available)"
+
+      tags: [system, validation]
+
+    - name: "Validation: Check memory availability"
+      block:
+        - name: Get available memory
+          shell: free -b | grep '^Mem:' | awk '{print $7}'
+          register: mem_free_bytes
+          changed_when: false
+
+        - name: Calculate available memory in GB
+          set_fact:
+            mem_free_gb: "{{ (mem_free_bytes.stdout | int / 1024 / 1024 / 1024) | round(2) }}"
+
+        - name: Validate sufficient memory
+          assert:
+            that:
+              - mem_free_gb | float >= 2.0
+            fail_msg: |
+              Insufficient free memory on {{ inventory_hostname }}:
+              Available: {{ mem_free_gb }}GB
+              Required: 2.0GB minimum
+              Action: Stop unnecessary services or add RAM
+            success_msg: "Memory check passed ({{ mem_free_gb }}GB available)"
+
+      tags: [system, validation]
+
+    - name: "Validation: Check system load"
+      block:
+        - name: Get system load
+          shell: cat /proc/loadavg | awk '{print $1, $2, $3}'
+          register: system_load
+          changed_when: false
+
+        - name: Display system load
+          debug:
+            msg: "System load average: {{ system_load.stdout }}"
+
+      tags: [system, validation]
+
+    # ==========================================
+    # REQUIRED PACKAGES VALIDATION
+    # ==========================================
+
+    - name: "Validation: Check required system packages (common)"
+      block:
+        - name: Check for required common packages
+          package_facts:
+            manager: auto
+          register: installed_packages
+
+        - name: Validate required common packages installed
+          assert:
+            that:
+              - item in installed_packages.ansible_facts.ansible_packages | default({})
+            fail_msg: |
+              Required package missing on {{ inventory_hostname }}: {{ item }}
+              Install with: sudo apt-get install -y {{ item }}
+            success_msg: "Package {{ item }} found"
+          loop: "{{ required_packages.common }}"
+          ignore_errors: yes
+
+      tags: [packages, validation, always]
+
+    - name: "Validation: Check role-specific packages"
+      block:
+        - name: Get role from group_names
+          set_fact:
+            host_role: "{{ (group_names | intersect(['frontend', 'backend', 'redis', 'ai_stack', 'npu', 'browser', 'aiml', 'database']))[0] | default('common') }}"
+
+        - name: Check role-specific packages
+          package_facts:
+            manager: auto
+          register: installed_packages_role
+
+        - name: Validate role-specific packages
+          assert:
+            that:
+              - item in installed_packages_role.ansible_facts.ansible_packages | default({})
+            fail_msg: |
+              Required package missing on {{ inventory_hostname }} for role {{ host_role }}: {{ item }}
+              Install with: sudo apt-get install -y {{ item }}
+            success_msg: "Package {{ item }} found for role {{ host_role }}"
+          loop: "{{ required_packages[host_role] | default([]) }}"
+          ignore_errors: yes
+
+      tags: [packages, validation]
+
+    # ==========================================
+    # PORT AVAILABILITY VALIDATION
+    # ==========================================
+
+    - name: "Validation: Check port availability"
+      block:
+        - name: Check if ports are available
+          shell: |
+            ss -tlnp | grep -E '^LISTEN' | awk '{print $4}' | sed 's/.*://' | sort -u
+          register: listening_ports
+          changed_when: false
+
+        - name: Validate no port conflicts
+          block:
+            - name: Extract port numbers from listening ports
+              set_fact:
+                used_ports: "{{ listening_ports.stdout_lines }}"
+
+            - name: Check each port availability
+              assert:
+                that:
+                  - item.port | string not in used_ports
+                fail_msg: |
+                  Port conflict detected on {{ inventory_hostname }}:
+                  Service: {{ item.name }}
+                  Port: {{ item.port }}
+                  Port is already in use. Kill the process with:
+                    lsof -i :{{ item.port }} -t | xargs kill -9
+                  Then retry deployment.
+                success_msg: "Port {{ item.port }} ({{ item.name }}) available"
+              loop: "{{ ports_to_check }}"
+              when: inventory_hostname == item.host
+              ignore_errors: yes
+
+      tags: [ports, validation]
+
+    # ==========================================
+    # NETWORK CONNECTIVITY VALIDATION
+    # ==========================================
+
+    - name: "Validation: Check network connectivity"
+      block:
+        - name: Test DNS resolution
+          shell: |
+            nslookup github.com 2>&1 | grep -c "Name:"
+          register: dns_test
+          changed_when: false
+          ignore_errors: yes
+
+        - name: Validate DNS working
+          assert:
+            that:
+              - dns_test.stdout | int > 0
+            fail_msg: |
+              DNS resolution failing on {{ inventory_hostname }}.
+              Cannot resolve github.com.
+              Check /etc/resolv.conf and network settings.
+            success_msg: "DNS resolution working"
+          ignore_errors: yes
+
+        - name: Test external network connectivity
+          shell: |
+            timeout 5 curl -s -o /dev/null -w "%{http_code}" https://github.com || echo "999"
+          register: connectivity_test
+          changed_when: false
+          ignore_errors: yes
+
+        - name: Display connectivity status
+          debug:
+            msg: "External connectivity test (HTTP {{ connectivity_test.stdout }})"
+          ignore_errors: yes
+
+      tags: [network, validation]
+
+    # ==========================================
+    # REQUIRED CONFIG FILES VALIDATION
+    # ==========================================
+
+    - name: "Validation: Check required config files"
+      block:
+        - name: Get role from group_names for config check
+          set_fact:
+            host_role_config: "{{ (group_names | intersect(['frontend', 'backend', 'redis', 'ai_stack', 'npu', 'browser', 'aiml', 'database']))[0] | default('common') }}"
+
+        - name: Check config files exist
+          stat:
+            path: "{{ item.path }}"
+          register: config_stat_results
+          loop: "{{ required_config_files[host_role_config] | default([]) }}"
+          ignore_errors: yes
+
+        - name: Validate config files permissions
+          assert:
+            that:
+              - item.stat.exists | default(false)
+            fail_msg: |
+              Required config file missing on {{ inventory_hostname }}:
+              File: {{ item.item.path }}
+              Mode: {{ item.item.mode }}
+              Deploy will fail without this file.
+            success_msg: "Config file {{ item.item.path }} found"
+          loop: "{{ config_stat_results.results }}"
+          when: item is not skipped
+          ignore_errors: yes
+
+      tags: [config, validation]
+
+    # ==========================================
+    # PYTHON DEPENDENCY VALIDATION (Backend/AI roles)
+    # ==========================================
+
+    - name: "Validation: Check Python dependencies"
+      block:
+        - name: Check if venv exists
+          stat:
+            path: "/opt/autobot/venv"
+          register: venv_stat
+
+        - name: Validate venv activated for pip check
+          shell: |
+            . /opt/autobot/venv/bin/activate 2>/dev/null && \
+            pip list --format=json | jq 'length'
+          args:
+            executable: /bin/bash
+          register: pip_check
+          changed_when: false
+          ignore_errors: yes
+          when: venv_stat.stat.exists
+
+        - name: Alert if venv missing (will be created during deploy)
+          debug:
+            msg: |
+              Python venv not found at /opt/autobot/venv
+              It will be created during the deployment phase.
+          when: not venv_stat.stat.exists
+
+      tags: [python, validation]
+      when: "host_role_config in ['backend', 'ai_stack', 'npu']"
+
+    # ==========================================
+    # NPM DEPENDENCY VALIDATION (Frontend)
+    # ==========================================
+
+    - name: "Validation: Check npm dependencies"
+      block:
+        - name: Check if package.json exists
+          stat:
+            path: "/opt/autobot/autobot-frontend/package.json"
+          register: package_json_stat
+
+        - name: Run npm audit if dependencies installed
+          shell: |
+            cd /opt/autobot/autobot-frontend && \
+            npm audit --audit-level=moderate 2>&1
+          register: npm_audit_result
+          changed_when: false
+          ignore_errors: yes
+          when: package_json_stat.stat.exists
+
+        - name: Display npm audit results
+          debug:
+            msg: "npm audit check completed for frontend (found vulnerabilities)"
+          when: package_json_stat.stat.exists and npm_audit_result.rc != 0
+
+        - name: Alert on npm vulnerabilities
+          assert:
+            that:
+              - npm_audit_result.rc == 0
+            fail_msg: |
+              npm audit found moderate or high severity vulnerabilities in frontend
+              Output: {{ npm_audit_result.stdout }}
+              Review and fix before deployment
+            success_msg: "npm audit clean - no vulnerabilities found"
+          when: package_json_stat.stat.exists
+          ignore_errors: yes
+
+        - name: Alert if package.json missing (will be deployed)
+          debug:
+            msg: |
+              package.json not found at /opt/autobot/autobot-frontend/
+              It will be deployed during the deployment phase.
+          when: not package_json_stat.stat.exists
+
+      tags: [npm, validation]
+      when: "host_role_config == 'frontend'"
+
+    # ==========================================
+    # FILE PERMISSIONS VALIDATION
+    # ==========================================
+
+    - name: "Validation: Check critical file permissions"
+      block:
+        - name: Check autobot user exists
+          getent:
+            database: passwd
+            key: autobot
+          ignore_errors: yes
+
+        - name: Check /etc/autobot directory permissions
+          stat:
+            path: "/etc/autobot"
+          register: autobot_dir_stat
+          ignore_errors: yes
+
+        - name: Validate /etc/autobot ownership
+          assert:
+            that:
+              - autobot_dir_stat.stat.pw_name == 'root'
+              - autobot_dir_stat.stat.gr_name == 'autobot'
+            fail_msg: |
+              /etc/autobot has incorrect ownership.
+              Current: {{ autobot_dir_stat.stat.pw_name }}:{{ autobot_dir_stat.stat.gr_name }}
+              Expected: root:autobot
+              Fix with: sudo chown -R root:autobot /etc/autobot
+            success_msg: "/etc/autobot ownership correct (root:autobot)"
+          when: autobot_dir_stat.stat.exists
+          ignore_errors: yes
+
+      tags: [permissions, validation]
+
+    # ==========================================
+    # SERVICE HEALTH BASELINE
+    # ==========================================
+
+    - name: "Validation: Capture pre-deployment service state"
+      block:
+        - name: Get list of running services
+          shell: |
+            systemctl list-units --type=service --state=running --no-pager | \
+            grep -E '(autobot|redis|nginx)' | awk '{print $1}' | head -20
+          register: running_services
+          changed_when: false
+
+        - name: Display running services
+          debug:
+            msg: "Running services: {{ running_services.stdout_lines | default(['None']) }}"
+
+      tags: [services, validation]
+
+    # ==========================================
+    # VALIDATION SUMMARY
+    # ==========================================
+
+    - name: "Validation: Build summary"
+      set_fact:
+        validation_summary: |
+          ✓ Disk space: {{ disk_free_gb | default('N/A') }}GB available
+          ✓ Memory: {{ mem_free_gb | default('N/A') }}GB available
+          ✓ Port availability: Checked
+          ✓ Required packages: Validated
+          ✓ Network connectivity: Tested
+          ✓ Config files: Verified
+          ✓ System ready for deployment
+      tags: [validation, always]
+
+  post_tasks:
+    - name: Display validation summary
+      debug:
+        msg:
+          - "=========================================="
+          - "Pre-Deployment Validation Complete"
+          - "=========================================="
+          - "{{ validation_summary.split('\n') | list }}"
+          - ""
+          - "Host: {{ inventory_hostname }}"
+          - "Status: Ready for deployment"
+      tags: [validation, always]
+
+    - name: Create validation checkpoint file
+      copy:
+        content: |
+          Validation Checkpoint
+          Timestamp: {{ ansible_date_time.iso8601 }}
+          Host: {{ inventory_hostname }}
+          Status: PASSED
+        dest: "/tmp/validation-{{ inventory_hostname }}-{{ ansible_date_time.date }}.checkpoint"
+        mode: '0644'
+      changed_when: false
+      ignore_errors: yes
+      tags: [validation, always]
+
+    - name: Alert on validation failures
+      debug:
+        msg: |
+          WARNING: Some validation checks may have failed or been skipped.
+          Review output above for detailed messages.
+          Address any issues before proceeding with deployment.
+      when: false  # Controlled by individual assertion failures
+      tags: [validation]

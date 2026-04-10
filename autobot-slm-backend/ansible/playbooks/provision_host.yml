@@ -1,7 +1,18 @@
 ---
-# Provision Host Playbook
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Provision Host Playbook with Pre-Deployment Validation
 # Initial setup of a new host with common role + service-specific role
+# Includes pre-deployment validation to ensure all prerequisites are met (#4056)
 
+# Pre-deployment validation (hosts must meet minimum requirements)
+- name: "Pre-Deployment Validation"
+  import_playbook: pre-deployment-validation.yml
+  tags: ['pre-deployment', 'validation']
+
+# Provision the host with required roles
 - name: "Provision AutoBot Host"
   hosts: "{{ target_host | default('all') }}"
   gather_facts: yes
