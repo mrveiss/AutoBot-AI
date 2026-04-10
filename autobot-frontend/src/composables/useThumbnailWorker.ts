@@ -8,6 +8,12 @@
  * - L1: Worker thread memory cache (fast, session-based)
  * - L2: localStorage cache (persistent, 24-hour TTL)
  *
+ * Optimizations:
+ * - Fast SubtleCrypto hash for cache keys (SHA-1 digest)
+ * - Efficient cache eviction using LRU strategy
+ * - Minimal memory allocations in hot path
+ * - Proper Blob lifecycle management
+ *
  * Usage:
  * ```vue
  * <script setup>
@@ -57,7 +63,9 @@ const CACHE_TTL = 24 * 60 * 60 * 1000 // 24 hours in milliseconds
 const MEMORY_CACHE_LIMIT = 50 // Max entries in memory cache
 
 // Memory cache (L1 - fast access, session-based)
+// Track access order for LRU eviction
 const memoryCache = new Map<string, CacheEntry>()
+const cacheAccessOrder: string[] = []
 
 /**
  * Initialize or get Web Worker instance
@@ -89,15 +97,16 @@ function getWorker(): Worker {
           expiresAt: Date.now() + CACHE_TTL
         }
 
-        // L1: Memory cache
+        // L1: Memory cache with LRU eviction
         if (memoryCache.size >= MEMORY_CACHE_LIMIT) {
-          // Remove oldest entry
-          const oldestKey = [...memoryCache.entries()].sort(
-            (a, b) => a[1].timestamp - b[1].timestamp
-          )[0]?.[0]
-          if (oldestKey) memoryCache.delete(oldestKey)
+          // Remove least recently used entry
+          const lruKey = cacheAccessOrder.shift()
+          if (lruKey) {
+            memoryCache.delete(lruKey)
+          }
         }
         memoryCache.set(cacheKey, entry)
+        cacheAccessOrder.push(cacheKey)
 
         // L2: localStorage cache
         try {
@@ -124,24 +133,37 @@ function getWorker(): Worker {
 }
 
 /**
- * Generate cache key from request parameters
+ * Generate cache key from request parameters using SubtleCrypto hash
+ * Efficiently creates a stable, short hash for cache lookups
  */
-function generateCacheKey(
+async function generateCacheKey(
   videoUrl: string,
   timestamp: number,
   width: number,
   height: number,
   format: string
-): string {
-  // Create a simple hash from parameters
-  const str = `${videoUrl}:${timestamp}:${width}:${height}:${format}`
-  let hash = 0
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i)
-    hash = (hash << 5) - hash + char
-    hash = hash & hash // Convert to 32-bit integer
+): Promise<string> {
+  // Create input string for hashing
+  const input = `${videoUrl}:${timestamp}:${width}:${height}:${format}`
+  const encoder = new TextEncoder()
+  const data = encoder.encode(input)
+
+  try {
+    // Use SubtleCrypto for fast, efficient hash
+    const hashBuffer = await crypto.subtle.digest('SHA-1', data)
+    const hashArray = Array.from(new Uint8Array(hashBuffer))
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+    return hashHex.substring(0, 16) // Use first 16 chars of SHA-1 hash
+  } catch {
+    // Fallback to simple string hash if SubtleCrypto unavailable
+    let hash = 0
+    for (let i = 0; i < input.length; i++) {
+      const char = input.charCodeAt(i)
+      hash = (hash << 5) - hash + char
+      hash = hash & hash // Convert to 32-bit integer
+    }
+    return `thumb-${Math.abs(hash).toString(36)}`
   }
-  return `thumb-${Math.abs(hash).toString(36)}`
 }
 
 /**
@@ -153,10 +175,18 @@ function getCachedThumbnail(cacheKey: string): string | null {
   if (memoryEntry) {
     if (Date.now() < memoryEntry.expiresAt) {
       logger.debug(`Thumbnail hit (memory): ${cacheKey}`)
+      // Update access order for LRU
+      const idx = cacheAccessOrder.indexOf(cacheKey)
+      if (idx > -1) {
+        cacheAccessOrder.splice(idx, 1)
+        cacheAccessOrder.push(cacheKey)
+      }
       return memoryEntry.data
     } else {
       // Remove expired entry
       memoryCache.delete(cacheKey)
+      const idx = cacheAccessOrder.indexOf(cacheKey)
+      if (idx > -1) cacheAccessOrder.splice(idx, 1)
     }
   }
 
@@ -169,6 +199,7 @@ function getCachedThumbnail(cacheKey: string): string | null {
         logger.debug(`Thumbnail hit (localStorage): ${cacheKey}`)
         // Promote to memory cache
         memoryCache.set(cacheKey, entry)
+        cacheAccessOrder.push(cacheKey)
         return entry.data
       } else {
         // Remove expired entry
@@ -209,7 +240,7 @@ export function useThumbnailWorker() {
       return null
     }
 
-    const cacheKey = generateCacheKey(videoUrl, timestamp, width, height, format)
+    const cacheKey = await generateCacheKey(videoUrl, timestamp, width, height, format)
 
     // Check cache first
     const cached = getCachedThumbnail(cacheKey)
@@ -273,6 +304,7 @@ export function useThumbnailWorker() {
   function clearCache(): void {
     // Clear memory cache
     memoryCache.clear()
+    cacheAccessOrder.length = 0
 
     // Clear localStorage cache
     try {

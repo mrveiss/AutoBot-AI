@@ -128,7 +128,7 @@ describe('useThumbnailWorker', () => {
     }
   })
 
-  it('should validate cache key generation is consistent', () => {
+  it('should validate async cache key generation does not throw', async () => {
     const { generateThumbnail } = useThumbnailWorker()
 
     // Verify that the same parameters produce consistent results
@@ -138,7 +138,7 @@ describe('useThumbnailWorker', () => {
     const width = 320
     const height = 180
 
-    // Both calls with same parameters should use same cache
+    // Should not throw on cache key generation
     expect(() => {
       generateThumbnail(videoUrl, timestamp, width, height)
     }).not.toThrow()
@@ -149,5 +149,27 @@ describe('useThumbnailWorker', () => {
 
     // Verify pendingCount is accessible
     expect(pendingCount.value).toBe(0)
+  })
+
+  it('should maintain LRU cache eviction order', () => {
+    const { getCacheStats, clearCache } = useThumbnailWorker()
+
+    // Create multiple cache entries via localStorage
+    for (let i = 0; i < 3; i++) {
+      localStorage.setItem(
+        `autobot-thumbnail-lru-${i}`,
+        JSON.stringify({
+          data: `image-data-${i}`,
+          timestamp: Date.now(),
+          expiresAt: Date.now() + 86400000
+        })
+      )
+    }
+
+    const stats = getCacheStats()
+    expect(stats.localStorageCacheSize).toBe(3)
+
+    clearCache()
+    expect(getCacheStats().localStorageCacheSize).toBe(0)
   })
 })

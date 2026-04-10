@@ -5,6 +5,12 @@
  *
  * Generates video/image thumbnails using OffscreenCanvas to avoid blocking main thread.
  * Processes frames efficiently and returns optimized thumbnail data.
+ *
+ * Optimizations:
+ * - Direct canvas.convertToBlob() for native binary data
+ * - ArrayBuffer-based base64 encoding instead of FileReader
+ * - Minimal string allocations during encoding
+ * - Proper memory cleanup after processing
  */
 
 interface ThumbnailRequest {
@@ -23,6 +29,27 @@ interface ThumbnailResult {
   data?: string // base64 encoded image
   error?: string
   processingTime: number
+}
+
+/**
+ * Convert binary blob to base64 string using efficient ArrayBuffer approach
+ * Avoids FileReader overhead by using direct array conversion
+ */
+async function blobToBase64(blob: Blob): Promise<string> {
+  const arrayBuffer = await blob.arrayBuffer()
+  const bytes = new Uint8Array(arrayBuffer)
+
+  // Use String.fromCharCode.apply for efficient conversion
+  // Process in chunks to avoid stack overflow on large images
+  let binary = ''
+  const chunkSize = 65536 // 64KB chunks
+
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize)
+    binary += String.fromCharCode.apply(null, Array.from(chunk))
+  }
+
+  return btoa(binary)
 }
 
 /**
@@ -96,16 +123,8 @@ async function generateThumbnail(request: ThumbnailRequest): Promise<ThumbnailRe
       quality: request.quality || 0.85
     })
 
-    // Convert blob to base64 data URL
-    const reader = new FileReader()
-    const base64Data = await new Promise<string>((resolve, reject) => {
-      reader.onload = () => {
-        const result = reader.result as string
-        resolve(result.split(',')[1]) // Extract base64 without data URL prefix
-      }
-      reader.onerror = reject
-      reader.readAsDataURL(imageBlob)
-    })
+    // Convert blob to base64 data efficiently
+    const base64Data = await blobToBase64(imageBlob)
 
     // Cleanup
     URL.revokeObjectURL(url)
