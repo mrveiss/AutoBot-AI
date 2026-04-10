@@ -314,9 +314,10 @@ function selectSession(session: typeof sessions.value[0]) {
 
 <style scoped>
 .browser-auto-view {
+  contain: layout style paint;
   display: flex;
   flex-direction: column;
-  height: 100%;
+  min-height: 100%;
   background: var(--bg-primary);
 }
 .worker-summary { text-align: right; flex-shrink: 0; }

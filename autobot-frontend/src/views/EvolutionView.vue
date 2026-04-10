@@ -470,9 +470,10 @@ onMounted(async () => {
 
 <style scoped>
 .evolution-view {
+  contain: layout style paint;
   display: flex;
   flex-direction: column;
-  height: 100%;
+  min-height: 100%;
   padding: var(--spacing-6);
   background: var(--bg-primary);
   overflow-y: auto;

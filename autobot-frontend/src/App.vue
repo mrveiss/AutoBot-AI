@@ -8,9 +8,9 @@
 
     <!-- Header - Issue #901: Professional solid color (no gradients) -->
     <!-- Hide navigation bar on login page -->
-    <header v-if="!isLoginPage" class="bg-autobot-bg-secondary border-b border-autobot-border relative z-30" style="height: 56px;">
+    <header v-if="!isLoginPage" class="bg-autobot-bg-secondary border-b border-autobot-border relative z-30" style="min-height: 56px; height: auto;">
       <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex items-center justify-between" style="height: 56px;">
+        <div class="flex items-center justify-between" style="min-height: 56px; height: auto;">
           <!-- Logo/Brand with System Status -->
           <div class="shrink-0 flex items-center">
             <button

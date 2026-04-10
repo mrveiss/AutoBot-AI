@@ -462,7 +462,7 @@ defineExpose({
 }
 
 .host-list {
-  max-height: 300px;
+  min-height: 200px; max-height: 50vh;
   overflow-y: auto;
   padding: 8px;
 }
