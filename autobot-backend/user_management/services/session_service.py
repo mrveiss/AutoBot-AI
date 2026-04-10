@@ -13,7 +13,7 @@ import logging
 import uuid
 from typing import Optional
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_24_HOURS
 
 logger = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ class SessionService:
             token: JWT token to invalidate
             ttl: Time to live in seconds (default 24 hours)
         """
-        redis_client = await get_redis_client(async_client=True, database="main")
+        redis_client = await get_async_redis_client(database="main")
         key = f"session:blacklist:{user_id}"
         token_hash = self.hash_token(token)
 
@@ -68,7 +68,7 @@ class SessionService:
         Returns:
             True if token is blacklisted, False otherwise
         """
-        redis_client = await get_redis_client(async_client=True, database="main")
+        redis_client = await get_async_redis_client(database="main")
         key = f"session:blacklist:{user_id}"
         token_hash = self.hash_token(token)
 
@@ -93,7 +93,7 @@ class SessionService:
         Returns:
             Number of sessions invalidated
         """
-        redis_client = await get_redis_client(async_client=True, database="main")
+        redis_client = await get_async_redis_client(database="main")
         key = f"session:blacklist:{user_id}"
 
         # Get existing token hashes (if any)

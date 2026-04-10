@@ -56,9 +56,9 @@ class TaskPatternLearner:
     async def _get_redis(self):
         """Lazily initialize Redis client."""
         if self._redis is None:
-            from autobot_shared.redis_client import get_redis_client
+            from autobot_shared.redis_client import get_async_redis_client
 
-            self._redis = await get_redis_client(async_client=True, database="main")
+            self._redis = await get_async_redis_client(database="main")
         return self._redis
 
     async def _get_llm(self):

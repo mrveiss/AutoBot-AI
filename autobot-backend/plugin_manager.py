@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import with_error_handling
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_redis_client, get_async_redis_client
 from autobot_shared.ssot_config import config
 from plugin_sdk.base import PluginRegistry
 from plugin_sdk.loader import PluginLoader
@@ -369,14 +369,14 @@ async def update_plugin_config(
 
 async def _save_plugin_config(plugin_name: str, config: Dict) -> None:
     """Save plugin configuration to Redis."""
-    redis = await get_redis_client(async_client=True, database="main")
+    redis = await get_async_redis_client(database="main")
     key = f"plugin:config:{plugin_name}"
     await redis.set(key, json.dumps(config))
 
 
 async def _load_plugin_config(plugin_name: str) -> Optional[Dict]:
     """Load plugin configuration from Redis."""
-    redis = await get_redis_client(async_client=True, database="main")
+    redis = await get_async_redis_client(database="main")
     key = f"plugin:config:{plugin_name}"
     data = await redis.get(key)
     return json.loads(data) if data else None

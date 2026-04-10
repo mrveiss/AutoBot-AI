@@ -28,7 +28,7 @@ import uuid
 from collections import deque
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +135,7 @@ class PropertyGraph:
     async def initialize(self) -> None:
         """Acquire async Redis connection."""
         if self._redis is None:
-            self._redis = await get_redis_client(async_client=True, database=self._database)
+            self._redis = await get_async_redis_client(database=self._database)
         logger.info("PropertyGraph initialized (db=%s)", self._database)
 
     # ------------------------------------------------------------------

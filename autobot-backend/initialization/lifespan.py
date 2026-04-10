@@ -1049,11 +1049,11 @@ async def _wire_npu_task_queue() -> None:
     """
     logger.info("[ 98%%] NPU Task Queue: Wiring NPUWorkerManager into TaskQueue...")
     try:
-        from autobot_shared.redis_client import get_redis_client
+        from autobot_shared.redis_client import get_async_redis_client
         from services.npu_worker_manager import get_worker_manager
         from utils.task_queue import get_task_queue
 
-        redis_client = await get_redis_client(async_client=True, database="main")
+        redis_client = await get_async_redis_client(database="main")
         worker_manager = await get_worker_manager(redis_client=redis_client)
         task_queue = get_task_queue()
         task_queue.npu_worker_manager = worker_manager

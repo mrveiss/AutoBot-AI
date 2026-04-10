@@ -17,7 +17,7 @@ from typing import Dict, Optional
 import structlog
 from fastapi import HTTPException, Request
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_90_DAYS
 from utils.catalog_http_exceptions import raise_auth_error, raise_server_error
 
@@ -241,7 +241,7 @@ async def validate_service_auth(request: Request) -> Dict:
         pass
 
         # Get main Redis database for service key storage
-        redis = await get_redis_client(async_client=True, database="main")
+        redis = await get_async_redis_client(database="main")
 
         # Create auth manager and validate
         auth_manager = ServiceAuthManager(redis)

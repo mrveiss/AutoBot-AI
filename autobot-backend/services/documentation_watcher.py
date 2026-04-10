@@ -289,7 +289,7 @@ class DocumentationWatcherService:
             doc_id: Relative path used as the node identifier in the mesh graph.
         """
         try:
-            from autobot_shared.redis_client import get_redis_client
+            from autobot_shared.redis_client import get_async_redis_client
             from services.mesh_brain.staleness_propagator import (
                 RedisGraphAdapter,
                 enqueue_for_reembedding,
@@ -297,7 +297,7 @@ class DocumentationWatcherService:
                 store_staleness_scores,
             )
 
-            redis = await get_redis_client(async_client=True, database="main")
+            redis = await get_async_redis_client(database="main")
             graph = RedisGraphAdapter(redis)
             staleness_result = await propagate_staleness(graph, doc_id)
             stored = await store_staleness_scores(redis, staleness_result.scores)

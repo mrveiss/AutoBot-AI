@@ -19,7 +19,7 @@ from autobot_shared.http_client import get_http_client
 from config.manager import get_config_manager
 
 config = get_config_manager()
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 
 
 @dataclass
@@ -176,7 +176,7 @@ class SystemMetricsCollector:
             1.0 if healthy, 0.0 if unhealthy
         """
         try:
-            redis_client = await get_redis_client(database="main", async_client=True)
+            redis_client = await get_async_redis_client(database="main")
 
             if not redis_client or not hasattr(redis_client, "ping"):
                 return 0.0
@@ -359,9 +359,7 @@ class SystemMetricsCollector:
         Returns:
             Async Redis client or None if unavailable
         """
-        kb_redis_client = await get_redis_client(
-            database="knowledge", async_client=True
-        )
+        kb_redis_client = await get_async_redis_client(database="knowledge")
         return kb_redis_client
 
     async def _collect_kb_vector_metrics(

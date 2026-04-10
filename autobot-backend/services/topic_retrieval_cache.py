@@ -31,7 +31,7 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from utils.async_initializable import AsyncInitializable
 
 logger = logging.getLogger(__name__)
@@ -276,7 +276,7 @@ class TopicRetrievalCache(AsyncInitializable):
     async def _fetch_chunks(self, key: str) -> Optional[List[CachedChunk]]:
         """Fetch cached chunks from Redis."""
         try:
-            client = await get_redis_client(async_client=True, database=_REDIS_DATABASE)
+            client = await get_async_redis_client(database=_REDIS_DATABASE)
             if client is None:
                 return None
             raw = await client.get(key)
@@ -298,7 +298,7 @@ class TopicRetrievalCache(AsyncInitializable):
     async def _store_chunks(self, key: str, payload: List[Dict]) -> bool:
         """Persist chunk list in Redis with TTL."""
         try:
-            client = await get_redis_client(async_client=True, database=_REDIS_DATABASE)
+            client = await get_async_redis_client(database=_REDIS_DATABASE)
             if client is None:
                 return False
             await client.set(

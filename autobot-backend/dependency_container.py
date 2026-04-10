@@ -15,7 +15,7 @@ from typing import Any, AsyncGenerator, Callable, Dict, Optional, Type, TypeVar
 
 import redis.asyncio as async_redis
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from config.manager import ConfigManager, get_config_manager
 from llm_interface import LLMInterface, get_llm_interface
 
@@ -83,7 +83,7 @@ class AsyncServiceContainer:
 
     async def _create_redis_manager(self) -> async_redis.Redis:
         """Factory for Redis manager"""
-        return await get_redis_client(async_client=True, database="main")
+        return await get_async_redis_client(database="main")
 
     async def _create_config_manager(self) -> ConfigManager:
         """Factory for config manager"""

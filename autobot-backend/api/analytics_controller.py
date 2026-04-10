@@ -27,7 +27,7 @@ import redis
 
 # Import models from dedicated module (Issue #185)
 from api.analytics_models import CodeAnalysisRequest, CommunicationPattern
-from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
 from autobot_shared.ssot_config import config as _ssot
 from constants import PATH
 from constants.threshold_constants import TimingConstants
@@ -187,7 +187,7 @@ class AnalyticsController:
                 if isinstance(database, RedisDatabase)
                 else database
             )
-            return await get_redis_client(async_client=True, database=db_name)
+            return await get_async_redis_client(database=db_name)
         except Exception as e:
             logger.error("Failed to get Redis connection for %s: %s", database, e)
             return None

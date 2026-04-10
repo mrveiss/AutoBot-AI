@@ -11,7 +11,7 @@ Issue #635.
 import logging
 import uuid
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ class PasswordChangeRateLimiter:
         Raises:
             RateLimitExceeded: If limit exceeded
         """
-        redis_client = await get_redis_client(async_client=True, database="main")
+        redis_client = await get_async_redis_client(database="main")
         key = f"password_change_attempts:{user_id}"
 
         attempts = await redis_client.get(key)
@@ -61,7 +61,7 @@ class PasswordChangeRateLimiter:
             user_id: User ID
             success: Whether attempt was successful
         """
-        redis_client = await get_redis_client(async_client=True, database="main")
+        redis_client = await get_async_redis_client(database="main")
         key = f"password_change_attempts:{user_id}"
 
         if success:

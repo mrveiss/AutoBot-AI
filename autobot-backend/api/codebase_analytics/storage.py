@@ -30,7 +30,7 @@ async def get_redis_connection():
     For async operations, use get_redis_connection_async() instead.
     """
     # Use canonical Redis utility - returns sync client
-    from autobot_shared.redis_client import get_redis_client
+    from autobot_shared.redis_client import get_async_redis_client
 
     redis_client = get_redis_client(database="analytics", async_client=False)
     if redis_client is None:
@@ -52,9 +52,9 @@ async def get_redis_connection_async():
     Returns an ASYNC Redis client for native async operations.
     Use this when you want to avoid thread pool blocking.
     """
-    from autobot_shared.redis_client import get_redis_client
+    from autobot_shared.redis_client import get_async_redis_client
 
-    redis_client = await get_redis_client(database="analytics", async_client=True)
+    redis_client = await get_async_redis_client(database="analytics")
     if redis_client is None:
         logger.warning("Async Redis client initialization returned None")
         return None

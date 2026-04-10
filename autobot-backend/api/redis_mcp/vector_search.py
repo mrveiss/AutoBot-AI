@@ -14,7 +14,7 @@ import re
 import struct
 from typing import Any, Dict, List, Optional
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ async def _text_to_embedding(text: str) -> List[float]:
 
 async def _get_client(database: str = "vectors"):
     """Get an async Redis client for vector operations."""
-    return await get_redis_client(async_client=True, database=database)
+    return await get_async_redis_client(database=database)
 
 
 def _float_list_to_bytes(vector: List[float]) -> bytes:

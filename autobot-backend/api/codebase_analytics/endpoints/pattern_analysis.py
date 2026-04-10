@@ -93,9 +93,9 @@ class PatternSummary(BaseModel):
 async def _get_checkpoint_redis():
     """Get async Redis client for checkpoints."""
     try:
-        from autobot_shared.redis_client import get_redis_client
+        from autobot_shared.redis_client import get_async_redis_client
 
-        return await get_redis_client(database="analytics", async_client=True)
+        return await get_async_redis_client(database="analytics")
     except Exception:
         return None
 

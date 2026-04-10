@@ -31,7 +31,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
 from utils.async_initializable import AsyncInitializable
 
@@ -333,7 +333,7 @@ class SemanticQueryCache(AsyncInitializable):
     async def _fetch_response(self, key: str) -> Optional[Dict]:
         """Fetch cached response payload from Redis."""
         try:
-            client = await get_redis_client(async_client=True, database=_REDIS_DATABASE)
+            client = await get_async_redis_client(database=_REDIS_DATABASE)
             if client is None:
                 return None
             raw = await client.get(key)
@@ -347,7 +347,7 @@ class SemanticQueryCache(AsyncInitializable):
     async def _store_response(self, key: str, payload: Dict) -> bool:
         """Persist response payload in Redis with TTL."""
         try:
-            client = await get_redis_client(async_client=True, database=_REDIS_DATABASE)
+            client = await get_async_redis_client(database=_REDIS_DATABASE)
             if client is None:
                 return False
             await client.set(
