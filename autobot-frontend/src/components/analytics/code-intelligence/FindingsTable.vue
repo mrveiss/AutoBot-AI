@@ -3,6 +3,7 @@
 <!-- Author: mrveiss -->
 <!-- Issue #566 - Code Intelligence Dashboard -->
 <!-- Issue #4037 - Virtual scrolling for large findings tables (500+ rows) -->
+<!-- Issue #4035 - Add debounce to search filters -->
 
 <template>
   <div class="findings-table">
@@ -110,13 +111,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useVirtualList } from '@/composables/useVirtualList'
+import { useDebounce } from '@/composables/useDebounce'
 import type { Severity } from '@/types/codeIntelligence'
 
 const { t } = useI18n()
-const containerRef = ref<HTMLElement | null>(null)
 
 interface Finding {
   severity: Severity
@@ -143,13 +144,18 @@ const selectedSeverities = ref<Severity[]>([...severityLevels])
 const searchQuery = ref('')
 const expandedRow = ref<number | null>(null)
 
+// Debounce search query for performance (Issue #4035)
+// Reduces unnecessary filtering operations during rapid typing
+const debouncedSearchQuery = useDebounce(searchQuery, 350)
+
 const filteredFindings = computed(() => {
   return props.findings
     .filter(f => {
       const matchesSeverity = selectedSeverities.value.includes(f.severity)
-      const matchesSearch = searchQuery.value === '' ||
-        f.file_path.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-        f.message.toLowerCase().includes(searchQuery.value.toLowerCase())
+      // Use debounced search query to prevent filtering on every keystroke
+      const matchesSearch = debouncedSearchQuery.value === '' ||
+        f.file_path.toLowerCase().includes(debouncedSearchQuery.value.toLowerCase()) ||
+        f.message.toLowerCase().includes(debouncedSearchQuery.value.toLowerCase())
       return matchesSeverity && matchesSearch
     })
     .map((f, idx) => ({

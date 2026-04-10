@@ -4,6 +4,7 @@
  *
  * Issue #874: Frontend Collaborative Session UI (#608 Phase 6)
  * Issue #3985: Replace hardcoded mock users with real API
+ * Issue #4035: Add debounce to search filter
  *
  * Modal dialog for inviting users to collaborate on a session.
  * Supports role selection and email-based invitations.
@@ -14,6 +15,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSessionCollaboration } from '@/composables/useSessionCollaboration'
 import { useChatStore } from '@/stores/useChatStore'
+import { useDebounce } from '@/composables/useDebounce'
 import { getApiBase } from '@/config/ssot-config'
 import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
@@ -66,6 +68,10 @@ const errorMessage = ref<string | null>(null)
 const loading = ref(false)
 const users = ref<User[]>([])
 
+// Debounce search query for performance (Issue #4035)
+// Reduces unnecessary filtering operations during rapid typing
+const debouncedSearchQuery = useDebounce(searchQuery, 350)
+
 // Fetch users from API
 const fetchUsers = async () => {
   loading.value = true
@@ -111,11 +117,11 @@ onMounted(() => {
   }
 })
 
-// Filter users by search query
+// Filter users by debounced search query
 const filteredUsers = computed(() => {
-  if (!searchQuery.value) return users.value
+  if (!debouncedSearchQuery.value) return users.value
 
-  const query = searchQuery.value.toLowerCase()
+  const query = debouncedSearchQuery.value.toLowerCase()
   return users.value.filter(user =>
     user.username.toLowerCase().includes(query) ||
     user.email.toLowerCase().includes(query) ||
