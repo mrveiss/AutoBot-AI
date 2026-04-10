@@ -195,7 +195,10 @@ class MCPDispatcher:
     async def _call_bridge(
         self, tool_name: str, bridge: str, endpoint: str, arguments: dict
     ) -> dict:
-        """Execute the HTTP call to the MCP bridge endpoint.
+        """Execute a tool call against an MCP bridge.
+
+        Routes through an isolated subprocess worker when the bridge policy
+        requires it (#3229); otherwise falls back to the in-process HTTP path.
 
         Args:
             tool_name: Name of the tool being called.
@@ -206,6 +209,13 @@ class MCPDispatcher:
         Returns:
             Dict with keys: success, result, bridge.
         """
+        # Issue #3229: isolated-worker routing.
+        from services.mcp_isolated_runtime import get_isolated_registry
+
+        isolated = await get_isolated_registry().get_or_create(bridge)
+        if isolated is not None:
+            return await isolated.call_tool(tool_name, arguments)
+
         try:
             http_client = get_http_client()
             async with await http_client.post(
