@@ -57,4 +57,5 @@ pyotp>=2.9.0  # TOTP generation and verification
 
 # Security: explicit pins to override vulnerable transitive versions
 cryptography>=46.0.6  # CVE fix — pulled in by PyJWT[crypto] and pysaml2
-pyopenssl>=26.0.0     # CVE fix — pulled in by pysaml2
+# Note: pyopenssl version resolved by pysaml2's dependencies (constraints conflict with >=26.0.0)
+# cryptography>=46.0.6 provides primary security coverage
