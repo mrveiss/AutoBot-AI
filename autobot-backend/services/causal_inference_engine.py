@@ -215,12 +215,11 @@ class CausalInferenceEngine:
             await self._ensure_initialized()
         except Exception as e:
             logger.error("Failed to initialize engine: %s", e)
-            return CausalAnalysisReport(
-                task_id=task_id,
-                error_description=error_description or "Unknown error",
-                analysis_status="failed",
-                error_message=f"Initialization failed: {str(e)}",
-                analysis_duration_ms=time.time() - start_time,
+            return self._error_report(
+                task_id,
+                error_description,
+                f"Initialization failed: {str(e)}",
+                start_time,
             )
 
         try:
@@ -228,79 +227,97 @@ class CausalInferenceEngine:
             base_report = await self.root_cause_analyzer.analyze_task_failure(task_id)
 
             if base_report.analysis_status == "failed":
-                return CausalAnalysisReport(
-                    task_id=task_id,
-                    error_description=error_description or "Unknown error",
-                    analysis_status="failed",
-                    error_message=base_report.error_message,
-                    analysis_duration_ms=(time.time() - start_time) * 1000,
+                return self._error_report(
+                    task_id,
+                    error_description,
+                    base_report.error_message,
+                    start_time,
                 )
 
-            # Step 2: Enhance with confounder detection
-            confounding_strength = self._analyze_confounders(base_report)
-
-            # Step 3: Predict interventions for each cause in chain
-            interventions = await self._predict_interventions(
-                base_report.causal_chain, base_report.root_event
+            # Steps 2-5: Analyze and synthesize report
+            return await self._synthesize_analysis(
+                task_id, error_description, base_report, start_time
             )
-
-            # Step 4: Calculate comprehensive confidence score
-            confidence = self._calculate_confidence(
-                base_report, confounding_strength, interventions
-            )
-
-            # Step 5: Determine severity and generate recommendations
-            severity = self._assess_severity(
-                base_report, confounding_strength, interventions
-            )
-            recommendations = self._generate_recommendations(interventions, severity)
-
-            analysis_duration_ms = (time.time() - start_time) * 1000
-
-            report = CausalAnalysisReport(
-                task_id=task_id,
-                error_description=(
-                    error_description or base_report.explanations[0]
-                    if base_report.explanations
-                    else "Unknown error"
-                ),
-                root_cause=base_report.root_event,
-                causal_chain=base_report.causal_chain,
-                confounders=base_report.confounders,
-                interventions=interventions,
-                severity=severity,
-                confidence=confidence,
-                chain_depth=base_report.chain_depth,
-                confounding_strength=confounding_strength,
-                analysis_status="success",
-                timestamp=datetime.now(tz=timezone.utc).isoformat(),
-                analysis_duration_ms=analysis_duration_ms,
-                recommendations=recommendations,
-            )
-
-            logger.info(
-                "Causal analysis complete: task=%s, chain_depth=%d, "
-                "confounding=%.2f, confidence=%.2f, severity=%s, "
-                "analysis_time=%.0fms",
-                task_id,
-                report.chain_depth,
-                confounding_strength,
-                confidence,
-                severity.value,
-                analysis_duration_ms,
-            )
-
-            return report
 
         except Exception as e:
             logger.error("Causal analysis failed for task %s: %s", task_id, e)
-            return CausalAnalysisReport(
-                task_id=task_id,
-                error_description=error_description or "Unknown error",
-                analysis_status="failed",
-                error_message=f"Analysis error: {str(e)}",
-                analysis_duration_ms=(time.time() - start_time) * 1000,
+            return self._error_report(
+                task_id,
+                error_description,
+                f"Analysis error: {str(e)}",
+                start_time,
             )
+
+    def _error_report(
+        self,
+        task_id: str,
+        error_description: Optional[str],
+        error_message: str,
+        start_time: float,
+    ) -> CausalAnalysisReport:
+        """Helper to create error report."""
+        return CausalAnalysisReport(
+            task_id=task_id,
+            error_description=error_description or "Unknown error",
+            analysis_status="failed",
+            error_message=error_message,
+            analysis_duration_ms=(time.time() - start_time) * 1000,
+        )
+
+    async def _synthesize_analysis(
+        self,
+        task_id: str,
+        error_description: Optional[str],
+        base_report: RootCauseReport,
+        start_time: float,
+    ) -> CausalAnalysisReport:
+        """Synthesize steps 2-5 of analysis pipeline."""
+        confounding_strength = self._analyze_confounders(base_report)
+        interventions = await self._predict_interventions(
+            base_report.causal_chain, base_report.root_event
+        )
+        confidence = self._calculate_confidence(
+            base_report, confounding_strength, interventions
+        )
+        severity = self._assess_severity(
+            base_report, confounding_strength, interventions
+        )
+        recommendations = self._generate_recommendations(interventions, severity)
+        analysis_duration_ms = (time.time() - start_time) * 1000
+
+        report = CausalAnalysisReport(
+            task_id=task_id,
+            error_description=(
+                error_description or base_report.explanations[0]
+                if base_report.explanations
+                else "Unknown error"
+            ),
+            root_cause=base_report.root_event,
+            causal_chain=base_report.causal_chain,
+            confounders=base_report.confounders,
+            interventions=interventions,
+            severity=severity,
+            confidence=confidence,
+            chain_depth=base_report.chain_depth,
+            confounding_strength=confounding_strength,
+            analysis_status="success",
+            timestamp=datetime.now(tz=timezone.utc).isoformat(),
+            analysis_duration_ms=analysis_duration_ms,
+            recommendations=recommendations,
+        )
+
+        logger.info(
+            "Causal analysis complete: task=%s, chain_depth=%d, "
+            "confounding=%.2f, confidence=%.2f, severity=%s, analysis_time=%.0fms",
+            task_id,
+            report.chain_depth,
+            confounding_strength,
+            confidence,
+            severity.value,
+            analysis_duration_ms,
+        )
+
+        return report
 
     def _analyze_confounders(self, report: RootCauseReport) -> float:
         """
@@ -381,7 +398,7 @@ class CausalInferenceEngine:
         """
         Generate intervention suggestions for a single causal event.
 
-        Interventions are tailored to the event type and context.
+        Dispatches to event-type-specific helpers based on event category.
 
         Args:
             event: Causal event to generate interventions for
@@ -389,197 +406,207 @@ class CausalInferenceEngine:
         Returns:
             List of Intervention objects for this event
         """
-        interventions: List[Intervention] = []
-
-        # Event-type-specific interventions
         event_lower = event.event_type.lower()
 
+        # Dispatch to type-specific generators
         if "timeout" in event_lower or "deadline" in event_lower:
-            interventions.append(
-                Intervention(
-                    name="Increase timeout threshold",
-                    description=f"Raise timeout for {event.name}",
-                    mechanism="More time allows slow operations to complete naturally",
-                    predicted_success_rate=0.7,
-                    cost_level="low",
-                    risk_level="low",
-                    recommendation_type=RecommendationType.IMMEDIATE,
-                    impact_rank=0,
-                    confidence=0.8,
-                    evidence=[
-                        "Timeout often fails marginal cases (just over threshold)",
-                        f"Event: {event.name}",
-                    ],
-                )
-            )
-            interventions.append(
-                Intervention(
-                    name="Optimize operation performance",
-                    description=f"Improve performance of {event.name}",
-                    mechanism="Faster execution keeps operation under timeout",
-                    predicted_success_rate=0.8,
-                    cost_level="high",
-                    risk_level="low",
-                    recommendation_type=RecommendationType.LONG_TERM,
-                    impact_rank=0,
-                    confidence=0.75,
-                    evidence=[
-                        "Root cause is slow operation, not insufficient time",
-                        "Permanent fix via optimization",
-                    ],
-                )
-            )
-
+            return self._generate_timeout_interventions(event)
         elif "pool" in event_lower or "exhaustion" in event_lower:
-            interventions.append(
-                Intervention(
-                    name="Increase resource pool size",
-                    description=f"Grow pool for {event.name}",
-                    mechanism="More resources available reduces contention and wait time",
-                    predicted_success_rate=0.85,
-                    cost_level="medium",
-                    risk_level="low",
-                    recommendation_type=RecommendationType.SHORT_TERM,
-                    impact_rank=0,
-                    confidence=0.85,
-                    evidence=[
-                        "Pool exhaustion causes direct failures",
-                        f"Event: {event.name}",
-                    ],
-                )
-            )
-            interventions.append(
-                Intervention(
-                    name="Implement resource pooling optimization",
-                    description="Reduce peak resource demand via batching or caching",
-                    mechanism="Fewer resources needed per operation",
-                    predicted_success_rate=0.75,
-                    cost_level="high",
-                    risk_level="medium",
-                    recommendation_type=RecommendationType.LONG_TERM,
-                    impact_rank=0,
-                    confidence=0.7,
-                    evidence=["Address structural inefficiency in resource usage"],
-                )
-            )
-
+            return self._generate_pool_interventions(event)
         elif "memory" in event_lower or "oom" in event_lower:
-            interventions.append(
-                Intervention(
-                    name="Increase memory allocation",
-                    description="Add more RAM to the system",
-                    mechanism="More available memory prevents allocation failures",
-                    predicted_success_rate=0.95,
-                    cost_level="medium",
-                    risk_level="low",
-                    recommendation_type=RecommendationType.SHORT_TERM,
-                    impact_rank=0,
-                    confidence=0.95,
-                    evidence=[
-                        "Direct correlation between memory and OOM errors",
-                        f"Event: {event.name}",
-                    ],
-                )
-            )
-            interventions.append(
-                Intervention(
-                    name="Implement memory leak detection",
-                    description="Profile and fix memory leaks",
-                    mechanism="Reduced waste allows normal operation within current memory",
-                    predicted_success_rate=0.8,
-                    cost_level="high",
-                    risk_level="low",
-                    recommendation_type=RecommendationType.LONG_TERM,
-                    impact_rank=0,
-                    confidence=0.75,
-                    evidence=["May be memory leak rather than just insufficient RAM"],
-                )
-            )
-
+            return self._generate_memory_interventions(event)
         elif "database" in event_lower or "query" in event_lower:
-            interventions.append(
-                Intervention(
-                    name="Add database index",
-                    description=f"Index columns used in {event.name}",
-                    mechanism="Index accelerates query execution",
-                    predicted_success_rate=0.9,
-                    cost_level="low",
-                    risk_level="low",
-                    recommendation_type=RecommendationType.SHORT_TERM,
-                    impact_rank=0,
-                    confidence=0.85,
-                    evidence=[
-                        "Missing indexes cause full table scans",
-                        f"Event: {event.name}",
-                    ],
-                )
-            )
-            interventions.append(
-                Intervention(
-                    name="Refactor query logic",
-                    description="Improve query structure and filtering",
-                    mechanism="Better queries reduce data scanned and execution time",
-                    predicted_success_rate=0.85,
-                    cost_level="high",
-                    risk_level="low",
-                    recommendation_type=RecommendationType.LONG_TERM,
-                    impact_rank=0,
-                    confidence=0.8,
-                    evidence=["Architectural fix for query performance"],
-                )
-            )
-
+            return self._generate_database_interventions(event)
         elif "connection" in event_lower or "network" in event_lower:
-            interventions.append(
-                Intervention(
-                    name="Implement retry with backoff",
-                    description="Automatically retry failed connections",
-                    mechanism="Transient failures succeed on retry",
-                    predicted_success_rate=0.7,
-                    cost_level="low",
-                    risk_level="low",
-                    recommendation_type=RecommendationType.IMMEDIATE,
-                    impact_rank=0,
-                    confidence=0.75,
-                    evidence=[
-                        "Network issues are often transient",
-                        f"Event: {event.name}",
-                    ],
-                )
-            )
-            interventions.append(
-                Intervention(
-                    name="Improve network resilience",
-                    description="Add redundancy, improve infrastructure",
-                    mechanism="Better infrastructure reduces connection failures",
-                    predicted_success_rate=0.85,
-                    cost_level="high",
-                    risk_level="low",
-                    recommendation_type=RecommendationType.LONG_TERM,
-                    impact_rank=0,
-                    confidence=0.8,
-                    evidence=["Structural fix for network reliability"],
-                )
-            )
+            return self._generate_network_interventions(event)
+        else:
+            return self._generate_generic_interventions(event)
 
-        # Generic interventions for unknown event types
-        if not interventions:
-            interventions.append(
-                Intervention(
-                    name="Retry the operation",
-                    description=f"Attempt {event.name} again",
-                    mechanism="Transient failures may succeed on retry",
-                    predicted_success_rate=0.5,
-                    cost_level="low",
-                    risk_level="low",
-                    recommendation_type=RecommendationType.IMMEDIATE,
-                    impact_rank=0,
-                    confidence=0.5,
-                    evidence=["Generic retry for unknown error type"],
-                )
-            )
+    def _generate_timeout_interventions(self, event: CausalEvent) -> List[Intervention]:
+        """Generate timeout/deadline-specific interventions."""
+        return [
+            Intervention(
+                name="Increase timeout threshold",
+                description=f"Raise timeout for {event.name}",
+                mechanism="More time allows slow operations to complete naturally",
+                predicted_success_rate=0.7,
+                cost_level="low",
+                risk_level="low",
+                recommendation_type=RecommendationType.IMMEDIATE,
+                impact_rank=0,
+                confidence=0.8,
+                evidence=[
+                    "Timeout often fails marginal cases (just over threshold)",
+                    f"Event: {event.name}",
+                ],
+            ),
+            Intervention(
+                name="Optimize operation performance",
+                description=f"Improve performance of {event.name}",
+                mechanism="Faster execution keeps operation under timeout",
+                predicted_success_rate=0.8,
+                cost_level="high",
+                risk_level="low",
+                recommendation_type=RecommendationType.LONG_TERM,
+                impact_rank=0,
+                confidence=0.75,
+                evidence=[
+                    "Root cause is slow operation, not insufficient time",
+                    "Permanent fix via optimization",
+                ],
+            ),
+        ]
 
-        return interventions
+    def _generate_pool_interventions(self, event: CausalEvent) -> List[Intervention]:
+        """Generate resource pool exhaustion-specific interventions."""
+        return [
+            Intervention(
+                name="Increase resource pool size",
+                description=f"Grow pool for {event.name}",
+                mechanism="More resources available reduces contention and wait time",
+                predicted_success_rate=0.85,
+                cost_level="medium",
+                risk_level="low",
+                recommendation_type=RecommendationType.SHORT_TERM,
+                impact_rank=0,
+                confidence=0.85,
+                evidence=[
+                    "Pool exhaustion causes direct failures",
+                    f"Event: {event.name}",
+                ],
+            ),
+            Intervention(
+                name="Implement resource pooling optimization",
+                description="Reduce peak resource demand via batching or caching",
+                mechanism="Fewer resources needed per operation",
+                predicted_success_rate=0.75,
+                cost_level="high",
+                risk_level="medium",
+                recommendation_type=RecommendationType.LONG_TERM,
+                impact_rank=0,
+                confidence=0.7,
+                evidence=["Address structural inefficiency in resource usage"],
+            ),
+        ]
+
+    def _generate_memory_interventions(self, event: CausalEvent) -> List[Intervention]:
+        """Generate memory/OOM-specific interventions."""
+        return [
+            Intervention(
+                name="Increase memory allocation",
+                description="Add more RAM to the system",
+                mechanism="More available memory prevents allocation failures",
+                predicted_success_rate=0.95,
+                cost_level="medium",
+                risk_level="low",
+                recommendation_type=RecommendationType.SHORT_TERM,
+                impact_rank=0,
+                confidence=0.95,
+                evidence=[
+                    "Direct correlation between memory and OOM errors",
+                    f"Event: {event.name}",
+                ],
+            ),
+            Intervention(
+                name="Implement memory leak detection",
+                description="Profile and fix memory leaks",
+                mechanism="Reduced waste allows normal operation within current memory",
+                predicted_success_rate=0.8,
+                cost_level="high",
+                risk_level="low",
+                recommendation_type=RecommendationType.LONG_TERM,
+                impact_rank=0,
+                confidence=0.75,
+                evidence=["May be memory leak rather than just insufficient RAM"],
+            ),
+        ]
+
+    def _generate_database_interventions(
+        self, event: CausalEvent
+    ) -> List[Intervention]:
+        """Generate database/query-specific interventions."""
+        return [
+            Intervention(
+                name="Add database index",
+                description=f"Index columns used in {event.name}",
+                mechanism="Index accelerates query execution",
+                predicted_success_rate=0.9,
+                cost_level="low",
+                risk_level="low",
+                recommendation_type=RecommendationType.SHORT_TERM,
+                impact_rank=0,
+                confidence=0.85,
+                evidence=[
+                    "Missing indexes cause full table scans",
+                    f"Event: {event.name}",
+                ],
+            ),
+            Intervention(
+                name="Refactor query logic",
+                description="Improve query structure and filtering",
+                mechanism="Better queries reduce data scanned and execution time",
+                predicted_success_rate=0.85,
+                cost_level="high",
+                risk_level="low",
+                recommendation_type=RecommendationType.LONG_TERM,
+                impact_rank=0,
+                confidence=0.8,
+                evidence=["Architectural fix for query performance"],
+            ),
+        ]
+
+    def _generate_network_interventions(
+        self, event: CausalEvent
+    ) -> List[Intervention]:
+        """Generate network/connection-specific interventions."""
+        return [
+            Intervention(
+                name="Implement retry with backoff",
+                description="Automatically retry failed connections",
+                mechanism="Transient failures succeed on retry",
+                predicted_success_rate=0.7,
+                cost_level="low",
+                risk_level="low",
+                recommendation_type=RecommendationType.IMMEDIATE,
+                impact_rank=0,
+                confidence=0.75,
+                evidence=[
+                    "Network issues are often transient",
+                    f"Event: {event.name}",
+                ],
+            ),
+            Intervention(
+                name="Improve network resilience",
+                description="Add redundancy, improve infrastructure",
+                mechanism="Better infrastructure reduces connection failures",
+                predicted_success_rate=0.85,
+                cost_level="high",
+                risk_level="low",
+                recommendation_type=RecommendationType.LONG_TERM,
+                impact_rank=0,
+                confidence=0.8,
+                evidence=["Structural fix for network reliability"],
+            ),
+        ]
+
+    def _generate_generic_interventions(
+        self, event: CausalEvent
+    ) -> List[Intervention]:
+        """Generate generic interventions for unknown event types."""
+        return [
+            Intervention(
+                name="Retry the operation",
+                description=f"Attempt {event.name} again",
+                mechanism="Transient failures may succeed on retry",
+                predicted_success_rate=0.5,
+                cost_level="low",
+                risk_level="low",
+                recommendation_type=RecommendationType.IMMEDIATE,
+                impact_rank=0,
+                confidence=0.5,
+                evidence=["Generic retry for unknown error type"],
+            ),
+        ]
 
     def _calculate_confidence(
         self,
