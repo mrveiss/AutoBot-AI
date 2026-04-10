@@ -207,7 +207,7 @@
         - name: Validate required common packages installed
           assert:
             that:
-              - item in installed_packages.ansible_facts.ansible_pkg_mgr | default({})
+              - item in installed_packages.ansible_facts.ansible_packages | default({})
             fail_msg: |
               Required package missing on {{ inventory_hostname }}: {{ item }}
               Install with: sudo apt-get install -y {{ item }}
@@ -231,7 +231,7 @@
         - name: Validate role-specific packages
           assert:
             that:
-              - item in installed_packages_role.ansible_facts.ansible_pkg_mgr | default({})
+              - item in installed_packages_role.ansible_facts.ansible_packages | default({})
             fail_msg: |
               Required package missing on {{ inventory_hostname }} for role {{ host_role }}: {{ item }}
               Install with: sudo apt-get install -y {{ item }}
@@ -361,8 +361,10 @@
 
         - name: Validate venv activated for pip check
           shell: |
-            source /opt/autobot/venv/bin/activate 2>/dev/null && \
+            . /opt/autobot/venv/bin/activate 2>/dev/null && \
             pip list --format=json | jq 'length'
+          args:
+            executable: /bin/bash
           register: pip_check
           changed_when: false
           ignore_errors: yes
@@ -392,7 +394,7 @@
         - name: Run npm audit if dependencies installed
           shell: |
             cd /opt/autobot/autobot-frontend && \
-            npm audit --audit-level=moderate 2>&1 || true
+            npm audit --audit-level=moderate 2>&1
           register: npm_audit_result
           changed_when: false
           ignore_errors: yes
@@ -400,8 +402,20 @@
 
         - name: Display npm audit results
           debug:
-            msg: "npm audit check completed for frontend"
+            msg: "npm audit check completed for frontend (found vulnerabilities)"
+          when: package_json_stat.stat.exists and npm_audit_result.rc != 0
+
+        - name: Alert on npm vulnerabilities
+          assert:
+            that:
+              - npm_audit_result.rc == 0
+            fail_msg: |
+              npm audit found moderate or high severity vulnerabilities in frontend
+              Output: {{ npm_audit_result.stdout }}
+              Review and fix before deployment
+            success_msg: "npm audit clean - no vulnerabilities found"
           when: package_json_stat.stat.exists
+          ignore_errors: yes
 
         - name: Alert if package.json missing (will be deployed)
           debug:
@@ -434,11 +448,12 @@
         - name: Validate /etc/autobot ownership
           assert:
             that:
-              - autobot_dir_stat.stat.uid == 0 or autobot_dir_stat.stat.pw_name == 'root'
+              - autobot_dir_stat.stat.pw_name == 'root'
+              - autobot_dir_stat.stat.gr_name == 'autobot'
             fail_msg: |
               /etc/autobot has incorrect ownership.
-              Current owner: {{ autobot_dir_stat.stat.pw_name }}
-              Expected: root
+              Current: {{ autobot_dir_stat.stat.pw_name }}:{{ autobot_dir_stat.stat.gr_name }}
+              Expected: root:autobot
               Fix with: sudo chown -R root:autobot /etc/autobot
             success_msg: "/etc/autobot ownership correct (root:autobot)"
           when: autobot_dir_stat.stat.exists
