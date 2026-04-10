@@ -38,7 +38,7 @@
     </div>
 
     <!-- Table with virtual scrolling -->
-    <div v-else class="table-container" ref="containerRef">
+    <div v-else class="table-container">
       <table>
         <thead class="sticky top-0 z-10">
           <tr>
