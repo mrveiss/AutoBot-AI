@@ -24,7 +24,7 @@ _SLM_AGENT_DIR = os.environ.get("SLM_AGENT_DIR", "/opt/autobot/autobot-slm-agent
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# SLM Manager roles  (.19 — separable)
+# SLM Manager roles (separable)
 # ---------------------------------------------------------------------------
 _SLM_ROLES = [
     {

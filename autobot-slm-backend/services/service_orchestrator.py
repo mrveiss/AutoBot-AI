@@ -139,9 +139,9 @@ _SERVICE_DEFINITIONS = {
         requires_sudo=False,
         description="NPU hardware AI acceleration worker",
     ),
-    # AI Stack (Ollama runs on main WSL machine .20, port 11434)
-    # NOTE: Ollama binds to 127.0.0.1 by default on .20 - health check from
-    # SLM (.19) will fail unless Ollama is configured to bind to 0.0.0.0
+    # AI Stack (Ollama runs on main WSL machine, port 11434)
+    # NOTE: Ollama binds to 127.0.0.1 by default - health check from
+    # SLM manager will fail unless Ollama is configured to bind to 0.0.0.0
     "ai-stack": ServiceDefinition(
         name="ai-stack",
         service_type=AutoBotServiceType.AI_STACK,
