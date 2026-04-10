@@ -35,6 +35,7 @@ import aiohttp
 import yaml
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.ssot_config import config as ssot_config
 
 # Import unified configuration system - NO HARDCODED VALUES
 from config.manager import get_config_manager
@@ -112,7 +113,7 @@ class ServiceRegistry:
             return cls._cached_default_services
         cls._cached_default_services = {
             "redis": {
-                "port": config.get_port("redis"),
+                "port": ssot_config.port.redis,
                 "health_endpoint": "/",
                 "schemes": {
                     "local": "redis",
@@ -121,32 +122,32 @@ class ServiceRegistry:
                 },
             },
             "ai-stack": {
-                "port": config.get_port("ai_stack"),
+                "port": ssot_config.port.aistack,
                 "health_endpoint": PATH_HEALTH,
                 "schemes": {"local": "http", "docker": "http", "distributed": "http"},
             },
             "npu-worker": {
-                "port": config.get_port("npu_worker"),
+                "port": ssot_config.port.npu,
                 "health_endpoint": PATH_HEALTH,
                 "schemes": {"local": "http", "docker": "http", "distributed": "http"},
             },
             "backend": {
-                "port": config.get_port("backend"),
+                "port": ssot_config.port.backend,
                 "health_endpoint": PATH_API_HEALTH,
                 "schemes": {"local": "http", "docker": "http", "distributed": "http"},
             },
             "frontend": {
-                "port": config.get_port("frontend"),
+                "port": ssot_config.port.frontend,
                 "health_endpoint": "/",
                 "schemes": {"local": "http", "docker": "http", "distributed": "http"},
             },
             "playwright-vnc": {
-                "port": config.get_port("browser_service"),
+                "port": ssot_config.port.browser,
                 "health_endpoint": PATH_HEALTH,
                 "schemes": {"local": "http", "docker": "http", "distributed": "http"},
             },
             "ollama": {
-                "port": config.get_port("ollama"),
+                "port": ssot_config.port.ollama,
                 "health_endpoint": PATH_OLLAMA_TAGS,
                 "schemes": {"local": "http", "docker": "http", "distributed": "http"},
             },
@@ -163,16 +164,14 @@ class ServiceRegistry:
             DeploymentMode.LOCAL: {
                 # DEFAULT HYBRID: Backend/frontend on localhost, Docker services on localhost ports
                 "default": config.get("infrastructure.defaults.localhost"),
-                "redis": config.get_host("redis"),
-                "backend": config.get_host("backend"),
-                "frontend": config.get_host("frontend"),
-                "ai-stack": config.get_host("ai_stack"),
-                "npu-worker": config.get_host("npu_worker"),
-                "playwright-vnc": config.get_host("browser_service"),
-                "ollama": config.get_host("ollama"),  # Use configured host for Ollama
-                "lmstudio": config.get_host(
-                    "lmstudio"
-                ),  # Use configured host for LM Studio
+                "redis": ssot_config.vm.redis,
+                "backend": ssot_config.vm.main,
+                "frontend": ssot_config.vm.frontend,
+                "ai-stack": ssot_config.vm.aistack,
+                "npu-worker": ssot_config.vm.npu,
+                "playwright-vnc": ssot_config.vm.browser,
+                "ollama": ssot_config.vm.ollama,
+                "lmstudio": "localhost",
             },
             DeploymentMode.DOCKER_LOCAL: {
                 "default": "autobot-{service}",

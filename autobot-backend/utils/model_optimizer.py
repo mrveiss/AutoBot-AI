@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 
 # Re-export all public API from the package for backward compatibility
@@ -82,9 +83,7 @@ class ModelOptimizer:
         self._redis_client = None
         self._models_cache: Dict[str, ModelInfo] = {}
         self._performance_history: Dict[str, Any] = {}
-        self._ollama_base_url = (
-            f"http://{config.get_host('ollama')}:{config.get_port('ollama')}"
-        )
+        self._ollama_base_url = ssot_config.ollama_url
 
         # Issue #378: Lock for Redis client initialization
         self._redis_init_lock = asyncio.Lock()
