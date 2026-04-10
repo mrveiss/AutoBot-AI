@@ -328,7 +328,7 @@ function getCategoryIcon(categoryId: string): string {
   background: rgba(30, 41, 59, 0.5);
   border-radius: 12px;
   border: 1px solid rgba(71, 85, 105, 0.5);
-}
+  contain: layout style;}
 
 .stats-section h3 {
   margin: 0 0 20px 0;
