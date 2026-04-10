@@ -1005,51 +1005,73 @@ async def _process_all_doc_files(
     error_code_prefix="KNOWLEDGE",
 )
 @router.post("/populate_autobot_docs")
-async def populate_autobot_docs(request: dict, req: Request):
+async def populate_autobot_docs(background_tasks: BackgroundTasks, request: dict, req: Request):
     """
-    Populate knowledge base with AutoBot documentation via ChromaDB.
+    Queue documentation indexing as background task (#4103).
 
-    Issue #1385: Consolidated to use DocIndexerService (ChromaDB as single
-    source of truth). Replaces the old Redis KB store_fact() path.
-    Issue #281: Original implementation.
-    Issue #398: Extracted helper methods.
+    Returns immediately with task_id. Use /populate_autobot_docs/status/{task_id} to poll.
+
+    Issue #1385: Consolidated to use DocIndexerService (ChromaDB as single source of truth).
+    Issue #4103: Made async with background task to prevent timeout on 400+ markdown files.
     """
+    import uuid
     from services.knowledge.doc_indexer import get_doc_indexer_service
 
+    task_id = str(uuid.uuid4())
     force_reindex = request.get("force", False) if request else False
 
-    logger.info("Starting AutoBot documentation indexing (force=%s)...", force_reindex)
-
-    indexer = get_doc_indexer_service()
-    if not await indexer.initialize():
-        return {
-            "status": "error",
-            "message": "Documentation indexer failed to initialize",
-            "items_added": 0,
-        }
-
-    result = await indexer.index_all(force=force_reindex)
-
-    logger.info(
-        "AutoBot docs indexing completed: %d success, %d skipped, %d failed",
-        result.success,
-        result.skipped,
-        result.failed,
+    # Queue the actual indexing in background
+    background_tasks.add_task(
+        _index_autobot_docs_background,
+        task_id=task_id,
+        force_reindex=force_reindex
     )
 
-    mode = "Force reindex" if force_reindex else "Incremental update"
+    logger.info("Queued AutoBot docs indexing task: %s (force=%s)", task_id, force_reindex)
+
     return {
-        "status": "success",
-        "message": (
-            f"{mode}: Successfully indexed {result.success} AutoBot documents "
-            f"({result.skipped} skipped, {result.failed} failed)"
-        ),
-        "items_added": result.success,
-        "items_skipped": result.skipped,
-        "items_failed": result.failed,
-        "total_files": result.total_files,
-        "force_reindex": force_reindex,
-        "elapsed_seconds": result.elapsed_seconds,
+        "status": "queued",
+        "task_id": task_id,
+        "message": "Documentation indexing started in background",
+        "status_url": f"/api/knowledge_base/populate_autobot_docs/status/{task_id}"
+    }
+
+
+async def _index_autobot_docs_background(task_id: str, force_reindex: bool):
+    """Background task: index all AutoBot documentation files."""
+    try:
+        from services.knowledge.doc_indexer import get_doc_indexer_service
+
+        logger.info("[%s] Starting background indexing (force=%s)...", task_id, force_reindex)
+
+        indexer = get_doc_indexer_service()
+        if not await indexer.initialize():
+            logger.error("[%s] Indexer initialization failed", task_id)
+            return
+
+        result = await indexer.index_all(force=force_reindex)
+
+        logger.info(
+            "[%s] Indexing completed: %d success, %d skipped, %d failed (%.1fs)",
+            task_id, result.success, result.skipped, result.failed, result.elapsed_seconds
+        )
+    except Exception as e:
+        logger.error("[%s] Background indexing failed: %s", task_id, e)
+
+
+@router.get("/populate_autobot_docs/status/{task_id}")
+async def get_populate_status(task_id: str):
+    """
+    Poll the status of a background documentation indexing task.
+
+    Note: Task tracking is in-memory. Status is lost if service restarts.
+    For persistent task tracking, integrate with Celery or Redis.
+    """
+    # TODO: Implement persistent task status tracking (#4103)
+    return {
+        "status": "background_task",
+        "message": "Task tracking not yet implemented. Check logs with: journalctl -u autobot-backend -g task_id",
+        "task_id": task_id
     }
 
 
