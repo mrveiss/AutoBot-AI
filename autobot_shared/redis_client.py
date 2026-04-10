@@ -133,6 +133,7 @@ __all__ = [
     "RedisConnectionManager",
     # Convenience functions
     "get_redis_client",
+    "get_async_redis_client",
     "get_knowledge_base_redis",
     "get_prompts_redis",
     "get_agents_redis",
