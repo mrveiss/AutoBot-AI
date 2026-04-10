@@ -16,6 +16,7 @@ import aiohttp
 import psutil
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 
 config = get_config_manager()
@@ -276,7 +277,7 @@ class SystemMetricsCollector:
             # Backend health is implicit: if metrics are being collected, backend is running.
             "redis": None,  # Special handling for Redis
             "ollama": (
-                f"http://{config.get_host('ollama')}:{config.get_port('ollama')}/api/tags"
+                f"{ssot_config.ollama_url}/api/tags"
             ),
         }
 

@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 from constants.path_constants import PATH
 
@@ -221,8 +222,8 @@ class StartupValidator:
 
         try:
             # Test basic config access
-            backend_host = config.get_host("backend")
-            redis_host = config.get_host("redis")
+            backend_host = ssot_config.vm.main
+            redis_host = ssot_config.vm.redis
 
             if not backend_host:
                 self.result.add_error("Backend host not configured")
@@ -287,8 +288,7 @@ class StartupValidator:
     async def _validate_redis_connectivity(self):
         """Test Redis connectivity using canonical Redis utility"""
         try:
-            redis_config = config.get_redis_config()
-            if not redis_config["enabled"]:
+            if not ssot_config.redis.enabled:
                 self.result.add_warning("Redis is disabled in configuration")
                 return
 
@@ -313,7 +313,7 @@ class StartupValidator:
         try:
             import aiohttp
 
-            ollama_url = config.get_service_url("ollama")
+            ollama_url = ssot_config.ollama_url
             health_url = f"{ollama_url}/api/tags"
 
             # Use singleton HTTP client for connection pooling
