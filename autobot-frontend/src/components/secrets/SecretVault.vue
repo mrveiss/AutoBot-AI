@@ -3,9 +3,11 @@
  * Secret Vault Component
  *
  * Issue #874: Frontend Collaborative Session UI (#608 Phase 6)
+ * Issue #4037: Virtual scrolling for large secret lists (100+ items)
  *
  * Manages session secrets with categorization, search, and sharing capabilities.
  * Fetches real secrets from backend API instead of using hardcoded mock data.
+ * Uses virtual scrolling for efficient rendering of large secret lists.
  */
 
 import { ref, computed, onMounted } from 'vue'
@@ -13,6 +15,7 @@ import { useI18n } from 'vue-i18n'
 import { useChatStore, type SessionSecret } from '@/stores/useChatStore'
 import { useSessionActivityLogger, type SecretType } from '@/composables/useSessionActivityLogger'
 import { useDebounce } from '@/composables/useDebounce'
+import { useVirtualList } from '@/composables/useVirtualList'
 import { secretsApiClient } from '@/utils/SecretsApiClient'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -97,8 +100,16 @@ const allSecrets = computed(() => {
     })
   }
 
-  return filtered
+  // Add id field if missing (required for virtual list)
+  return filtered.map(s => ({
+    ...s,
+    id: s.id || `secret_${Math.random()}`
+  }))
 })
+
+// Virtual scrolling composable - Issue #4037
+// Each secret card is approximately 280px (with padding, metadata, actions)
+const { containerRef, visibleItems } = useVirtualList(allSecrets, 280, 2)
 
 // Get secret type icon
 const getTypeIcon = (type: string): string => {
@@ -283,10 +294,10 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Secret list -->
-    <div class="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+    <!-- Secret list with virtual scrolling -->
+    <div ref="containerRef" class="flex-1 overflow-y-auto custom-scrollbar relative">
       <!-- Loading state -->
-      <div v-if="isLoading" class="flex items-center justify-center py-12">
+      <div v-if="isLoading" class="absolute inset-0 flex items-center justify-center bg-gray-800/50">
         <div class="flex flex-col items-center gap-3">
           <div class="animate-spin">
             <i class="bi bi-hourglass text-2xl text-blue-400" />
@@ -295,34 +306,47 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Secrets list -->
-      <TransitionGroup v-else name="secret">
+      <!-- Empty state -->
+      <div
+        v-else-if="allSecrets.length === 0"
+        class="absolute inset-0 flex flex-col items-center justify-center text-gray-500"
+      >
+        <i class="bi bi-shield-lock text-4xl mb-3" />
+        <div class="text-sm font-medium mb-1">{{ $t('secrets.vault.noSecrets') }}</div>
+        <div class="text-xs text-gray-600">
+          {{ searchQuery ? $t('secrets.vault.noSecretsSearch') : $t('secrets.vault.noSecretsHint') }}
+        </div>
+      </div>
+
+      <!-- Virtualized secrets list -->
+      <TransitionGroup v-else name="secret" class="p-4 space-y-2">
         <div
-          v-for="secret in allSecrets"
-          :key="secret.id"
+          v-for="virtualItem in visibleItems"
+          :key="virtualItem.data.id"
           class="bg-gray-700/50 rounded-lg p-4 hover:bg-gray-700 transition-colors border border-gray-600"
+          :style="{ transform: `translateY(${virtualItem.offset}px)` }"
         >
           <!-- Header -->
           <div class="flex items-start justify-between mb-3">
             <div class="flex items-start gap-3 flex-1 min-w-0">
               <div class="w-10 h-10 rounded-lg bg-gray-600 flex items-center justify-center text-lg flex-shrink-0">
-                <i :class="`bi bi-${getTypeIcon(secret.type)}`" class="text-gray-300" />
+                <i :class="`bi bi-${getTypeIcon(virtualItem.data.type)}`" class="text-gray-300" />
               </div>
               <div class="flex-1 min-w-0">
                 <h4 class="text-sm font-medium text-gray-200 truncate">
-                  {{ secret.name }}
+                  {{ virtualItem.data.name }}
                 </h4>
                 <div class="flex items-center gap-2 mt-1 flex-wrap">
                   <span
                     :class="[
                       'px-2 py-0.5 text-xs rounded',
-                      getScopeBadge(secret.scope).color
+                      getScopeBadge(virtualItem.data.scope).color
                     ]"
                   >
-                    {{ getScopeBadge(secret.scope).label }}
+                    {{ getScopeBadge(virtualItem.data.scope).label }}
                   </span>
                   <span class="text-xs text-gray-500">
-                    {{ secret.type }}
+                    {{ virtualItem.data.type }}
                   </span>
                 </div>
               </div>
@@ -333,36 +357,36 @@ onMounted(() => {
           <div class="mb-3">
             <div class="relative">
               <input
-                :type="revealedSecrets.has(secret.id) ? 'text' : 'password'"
-                :value="secret.value || '••••••••'"
+                :type="revealedSecrets.has(virtualItem.data.id) ? 'text' : 'password'"
+                :value="virtualItem.data.value || '••••••••'"
                 readonly
                 class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-xs text-gray-300 font-mono"
               >
               <button
                 class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200 transition-colors"
-                :aria-label="revealedSecrets.has(secret.id) ? $t('secrets.vault.hideSecret') : $t('secrets.vault.revealSecret')"
-                @click="toggleReveal(secret.id)"
+                :aria-label="revealedSecrets.has(virtualItem.data.id) ? $t('secrets.vault.hideSecret') : $t('secrets.vault.revealSecret')"
+                @click="toggleReveal(virtualItem.data.id)"
               >
-                <i :class="revealedSecrets.has(secret.id) ? 'bi bi-eye-slash' : 'bi bi-eye'" />
+                <i :class="revealedSecrets.has(virtualItem.data.id) ? 'bi bi-eye-slash' : 'bi bi-eye'" />
               </button>
             </div>
           </div>
 
           <!-- Metadata -->
           <div class="flex items-center gap-4 text-xs text-gray-500 mb-3">
-            <span v-if="secret.created_at">
+            <span v-if="virtualItem.data.created_at">
               <i class="bi bi-calendar mr-1" />
-              {{ $t('secrets.vault.created', { date: formatDate(secret.created_at) }) }}
+              {{ $t('secrets.vault.created', { date: formatDate(virtualItem.data.created_at) }) }}
             </span>
-            <span v-if="secret.updated_at && secret.updated_at !== secret.created_at">
+            <span v-if="virtualItem.data.updated_at && virtualItem.data.updated_at !== virtualItem.data.created_at">
               <i class="bi bi-clock mr-1" />
-              {{ $t('secrets.vault.used', { date: formatDate(secret.updated_at) }) }}
+              {{ $t('secrets.vault.used', { date: formatDate(virtualItem.data.updated_at) }) }}
             </span>
           </div>
 
           <!-- Description if available -->
-          <div v-if="secret.description" class="text-xs text-gray-400 mb-3">
-            {{ secret.description }}
+          <div v-if="virtualItem.data.description" class="text-xs text-gray-400 mb-3">
+            {{ virtualItem.data.description }}
           </div>
 
           <!-- Actions -->
@@ -371,17 +395,17 @@ onMounted(() => {
               class="px-3 py-1.5 text-xs rounded bg-gray-600 hover:bg-gray-500 text-gray-200 transition-colors flex items-center gap-1 disabled:opacity-50"
               :aria-label="$t('secrets.vault.copyAriaLabel')"
               :disabled="isLoading"
-              @click="copySecret(secret)"
+              @click="copySecret(virtualItem.data)"
             >
               <i class="bi bi-clipboard" />
               {{ $t('secrets.vault.copyBtn') }}
             </button>
             <button
-              v-if="secret.scope === 'user' || secret.scope === 'global'"
+              v-if="virtualItem.data.scope === 'user' || virtualItem.data.scope === 'global'"
               class="px-3 py-1.5 text-xs rounded bg-blue-600 hover:bg-blue-500 text-white transition-colors flex items-center gap-1 disabled:opacity-50"
               :aria-label="$t('secrets.vault.shareAriaLabel')"
               :disabled="isLoading"
-              @click="shareSecret(secret.id)"
+              @click="shareSecret(virtualItem.data.id)"
             >
               <i class="bi bi-share" />
               {{ $t('secrets.vault.shareBtn') }}
@@ -390,7 +414,7 @@ onMounted(() => {
               class="px-3 py-1.5 text-xs rounded bg-red-600 hover:bg-red-500 text-white transition-colors flex items-center gap-1 disabled:opacity-50"
               :aria-label="$t('secrets.vault.revokeAriaLabel')"
               :disabled="isLoading"
-              @click="revokeSecret(secret.id)"
+              @click="revokeSecret(virtualItem.data.id)"
             >
               <i class="bi bi-x-circle" />
               {{ $t('secrets.vault.deleteBtn') }}
@@ -398,18 +422,6 @@ onMounted(() => {
           </div>
         </div>
       </TransitionGroup>
-
-      <!-- Empty state -->
-      <div
-        v-if="!isLoading && allSecrets.length === 0"
-        class="flex flex-col items-center justify-center py-12 text-gray-500"
-      >
-        <i class="bi bi-shield-lock text-4xl mb-3" />
-        <div class="text-sm font-medium mb-1">{{ $t('secrets.vault.noSecrets') }}</div>
-        <div class="text-xs text-gray-600">
-          {{ searchQuery ? $t('secrets.vault.noSecretsSearch') : $t('secrets.vault.noSecretsHint') }}
-        </div>
-      </div>
     </div>
   </div>
 </template>
