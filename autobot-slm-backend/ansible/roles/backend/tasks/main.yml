@@ -225,6 +225,18 @@
     owner: "{{ backend_user }}"
     group: "{{ backend_group }}"
     recurse: true
+
+- name: "Backend | Sync docs directory from code_source (#4100)"
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/docs/"
+    dest: "{{ backend_install_dir }}/../docs/"
+    delete: true
+    rsync_opts:
+      - "--exclude=__pycache__"
+      - "--exclude=*.pyc"
+      - "--exclude=.git"
+      - "--exclude=archives"
+  tags: ['backend', 'deploy']
   tags: ['backend', 'deploy']
 
 - name: Create backend symlink for imports
