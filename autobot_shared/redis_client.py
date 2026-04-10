@@ -46,15 +46,19 @@ FEATURES (Consolidated from 8 implementations):
 
 MANDATORY USAGE PATTERN:
 ========================
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_redis_client, get_async_redis_client
 
 # Synchronous client
 redis_client = get_redis_client(database="main")
 redis_client.set("key", "value")
 
-# Asynchronous client
-async_redis = await get_redis_client(async_client=True, database="main")
+# Asynchronous client — use get_async_redis_client (safe: await is built-in)
+async_redis = await get_async_redis_client(database="main")
 await async_redis.set("key", "value")
+
+# NOTE: get_redis_client(async_client=True) is error-prone because it is a
+# synchronous function that returns an unawaited coroutine.  Always prefer
+# get_async_redis_client() at async call sites.
 
 DATABASE SEPARATION:
 ===================
@@ -568,7 +572,7 @@ class RedisDatabaseManager:
         OLD: manager = RedisDatabaseManager()
              client = await manager.get_async_connection(RedisDatabase.MAIN)
 
-        NEW: client = await get_redis_client(async_client=True, database="main")
+        NEW: client = await get_async_redis_client(database="main")
     """
 
     def __init__(self):
