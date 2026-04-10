@@ -123,18 +123,23 @@ const emit = defineEmits<{
 
 const expandedDeclarationTypes = ref<Record<string, boolean>>({})
 
-const declarationsByType = computed(() => {
-  const groups: Record<string, { declarations: Declaration[], exportedCount: number }> = {}
-  props.declarations.forEach(d => {
-    const type = d.declaration_type || 'unknown'
-    if (!groups[type]) {
-      groups[type] = { declarations: [], exportedCount: 0 }
-    }
-    groups[type].declarations.push(d)
-    if (d.is_exported) groups[type].exportedCount++
-  })
-  return groups
-})
+// Issue #4036: Memoized type grouping with export counts
+const declarationsByType = useGroupingMemo(
+  () => {
+    const groups: Record<string, { declarations: Declaration[], exportedCount: number }> = {}
+    props.declarations.forEach(d => {
+      const type = d.declaration_type || 'unknown'
+      if (!groups[type]) {
+        groups[type] = { declarations: [], exportedCount: 0 }
+      }
+      groups[type].declarations.push(d)
+      if (d.is_exported) groups[type].exportedCount++
+    })
+    return groups
+  },
+  () => [props.declarations],
+  { ttl: 120000 } // 2 minutes TTL for type grouping
+)
 
 const toggleDeclarationType = (type: string) => {
   expandedDeclarationTypes.value[type] = !expandedDeclarationTypes.value[type]

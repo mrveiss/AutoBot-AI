@@ -438,25 +438,30 @@ const categories = [
 ]
 
 // Computed
-const summary = computed(() => {
-  const result = {
-    critical: 0,
-    high: 0,
-    medium: 0,
-    low: 0,
-    filesAnalyzed: new Set<string>()
-  }
+// Issue #4036: Memoized aggregation - avoid recalculating severity counts on every render
+const summary = useAggregationMemo(
+  () => {
+    const result = {
+      critical: 0,
+      high: 0,
+      medium: 0,
+      low: 0,
+      filesAnalyzed: new Set<string>()
+    }
 
-  issues.value.forEach(issue => {
-    result[issue.severity]++
-    result.filesAnalyzed.add(issue.file)
-  })
+    issues.value.forEach(issue => {
+      result[issue.severity]++
+      result.filesAnalyzed.add(issue.file)
+    })
 
-  return {
-    ...result,
-    filesAnalyzed: result.filesAnalyzed.size
-  }
-})
+    return {
+      ...result,
+      filesAnalyzed: result.filesAnalyzed.size
+    }
+  },
+  () => [issues.value],
+  { ttl: 60000 } // 1 minute TTL for summary aggregation
+)
 
 const filteredIssues = computed(() => {
   if (activeCategory.value === 'all') return issues.value
@@ -465,70 +470,85 @@ const filteredIssues = computed(() => {
 
 const totalIssues = computed(() => issues.value.length)
 
-const chartSegments = computed(() => {
-  const categoryColors: Record<string, string> = {
-    security: '#ef4444',
-    performance: '#f59e0b',
-    bugs: '#8b5cf6',
-    style: '#3b82f6',
-    documentation: '#10b981'
-  }
+// Issue #4036: Memoized chart calculations - expensive SVG segment computation
+const chartSegments = useGroupingMemo(
+  () => {
+    const categoryColors: Record<string, string> = {
+      security: '#ef4444',
+      performance: '#f59e0b',
+      bugs: '#8b5cf6',
+      style: '#3b82f6',
+      documentation: '#10b981'
+    }
 
-  const counts: Record<string, number> = {}
-  issues.value.forEach(issue => {
-    counts[issue.category] = (counts[issue.category] || 0) + 1
-  })
+    const counts: Record<string, number> = {}
+    issues.value.forEach(issue => {
+      counts[issue.category] = (counts[issue.category] || 0) + 1
+    })
 
-  const total = issues.value.length || 1
-  const circumference = 2 * Math.PI * 70
-  let currentOffset = circumference / 4 // Start from top
+    const total = issues.value.length || 1
+    const circumference = 2 * Math.PI * 70
+    let currentOffset = circumference / 4 // Start from top
 
-  return Object.entries(counts).map(([category, count]) => {
-    const percentage = count / total
-    const dashLength = circumference * percentage
-    const segment = {
+    return Object.entries(counts).map(([category, count]) => {
+      const percentage = count / total
+      const dashLength = circumference * percentage
+      const segment = {
+        category,
+        color: categoryColors[category] || '#6b7280',
+        dashArray: `${dashLength} ${circumference - dashLength}`,
+        offset: currentOffset
+      }
+      currentOffset -= dashLength
+      return segment
+    })
+  },
+  () => [issues.value],
+  { ttl: 120000 } // 2 minutes TTL for chart segments
+)
+
+// Issue #4036: Memoized legend - avoids recalculating category grouping
+const legendItems = useGroupingMemo(
+  () => {
+    const categoryColors: Record<string, string> = {
+      security: '#ef4444',
+      performance: '#f59e0b',
+      bugs: '#8b5cf6',
+      style: '#3b82f6',
+      documentation: '#10b981'
+    }
+
+    const counts: Record<string, number> = {}
+    issues.value.forEach(issue => {
+      counts[issue.category] = (counts[issue.category] || 0) + 1
+    })
+
+    return Object.entries(counts).map(([category, count]) => ({
       category,
+      label: getCategoryName(category),
       color: categoryColors[category] || '#6b7280',
-      dashArray: `${dashLength} ${circumference - dashLength}`,
-      offset: currentOffset
-    }
-    currentOffset -= dashLength
-    return segment
-  })
-})
+      count
+    }))
+  },
+  () => [issues.value],
+  { ttl: 120000 } // 2 minutes TTL for legend items
+)
 
-const legendItems = computed(() => {
-  const categoryColors: Record<string, string> = {
-    security: '#ef4444',
-    performance: '#f59e0b',
-    bugs: '#8b5cf6',
-    style: '#3b82f6',
-    documentation: '#10b981'
-  }
-
-  const counts: Record<string, number> = {}
-  issues.value.forEach(issue => {
-    counts[issue.category] = (counts[issue.category] || 0) + 1
-  })
-
-  return Object.entries(counts).map(([category, count]) => ({
-    category,
-    label: getCategoryName(category),
-    color: categoryColors[category] || '#6b7280',
-    count
-  }))
-})
-
-const patternsByCategory = computed(() => {
-  const grouped: Record<string, Pattern[]> = {}
-  patterns.value.forEach(pattern => {
-    if (!grouped[pattern.category]) {
-      grouped[pattern.category] = []
-    }
-    grouped[pattern.category].push(pattern)
-  })
-  return grouped
-})
+// Issue #4036: Memoized grouping - avoid recalculating pattern categories
+const patternsByCategory = useGroupingMemo(
+  () => {
+    const grouped: Record<string, Pattern[]> = {}
+    patterns.value.forEach(pattern => {
+      if (!grouped[pattern.category]) {
+        grouped[pattern.category] = []
+      }
+      grouped[pattern.category].push(pattern)
+    })
+    return grouped
+  },
+  () => [patterns.value],
+  { ttl: 180000 } // 3 minutes TTL for patterns (rarely change)
+)
 
 // Methods
 function toggleLanguage(lang: string) {
