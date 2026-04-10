@@ -334,7 +334,7 @@ const submitWithComment = () => {
   margin-top: var(--spacing-3);
   border-radius: var(--radius-lg);
   padding: var(--spacing-3) var(--spacing-4);
-}
+  contain: layout style;}
 
 .approval-pre-approved {
   background: var(--color-info-bg);

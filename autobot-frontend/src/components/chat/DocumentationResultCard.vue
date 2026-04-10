@@ -222,7 +222,7 @@ const openDocument = () => {
   padding: var(--spacing-3-5);
   transition: all var(--duration-200) var(--ease-in-out);
   cursor: pointer;
-}
+  contain: layout style;}
 
 .doc-result-card:hover {
   border-color: var(--border-default);

@@ -107,7 +107,7 @@ defineProps<Props>()
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: var(--spacing-6);
   margin-bottom: var(--spacing-8);
-}
+  contain: layout style;}
 
 .stat-icon {
   width: 3.5rem;
