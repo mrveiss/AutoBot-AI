@@ -33,7 +33,8 @@ ansible-runner>=2.4.3            # Ansible playbook execution with event streami
 
 # Memory & Storage
 redis>=7.4.0                  # Redis for agent state and coordination
-chromadb>=1.5.5                  # Vector database for RAG agents
+chromadb>=1.5.5,<2.0.0            # Vector database for RAG agents; 1.5.5+ uses regenerated protos compatible with protobuf 5.x (#4053)
+protobuf>=5.29.6,<8.0.0           # required floor for chromadb 1.5.5+ opentelemetry exporter; resolves googleapis-common-protos conflict (#4061)
 # sqlite3                        # Built-in Python module, not a pip package
 sqlalchemy>=2.0.48                # Database ORM for advanced storage
 
