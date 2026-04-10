@@ -63,7 +63,10 @@ async function initBrowser() {
     }
     return browser;
   } catch (error) {
-    logger.error('Failed to launch browser:', error);
+    logger.error('Failed to launch browser:', error.message || error);
+    if (error.stack) {
+      logger.error('Browser launch stack:', error.stack);
+    }
     throw error;
   }
 }
@@ -825,108 +828,6 @@ app.post('/test-frontend', async (req, res) => {
       error: error.message,
       timestamp: new Date().toISOString()
     });
-  }
-});
-
-// =============================================================================
-// Persistent navigation page for BrowserTool (Issue #1120)
-// =============================================================================
-
-navPage = null;
-
-async function ensureNavPage() {
-  const b = await initBrowser();
-  if (!navPage || navPage.isClosed()) {
-    navPage = await b.newPage();
-    await navPage.setExtraHTTPHeaders({
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    });
-    logger.info('Persistent navigation page created');
-  }
-  return navPage;
-}
-
-async function captureNavScreenshot() {
-  const buf = await navPage.screenshot({ type: 'png' });
-  return buf.toString('base64');
-}
-
-app.get('/status', (req, res) => {
-  res.json({
-    status: (browser && browser.isConnected()) ? 'connected' : 'disconnected',
-    timestamp: new Date().toISOString(),
-    browser_connected: browser ? browser.isConnected() : false,
-    page_open: navPage !== null && !navPage.isClosed()
-  });
-});
-
-app.post('/navigate', async (req, res) => {
-  const { url } = req.body;
-  if (!url) {
-    return res.status(400).json({ success: false, error: 'url is required' });
-  }
-  logger.info('Navigate request:', url);
-  try {
-    const p = await ensureNavPage();
-    if (url === 'javascript:history.back()') {
-      await p.goBack({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
-    } else if (url === 'javascript:history.forward()') {
-      await p.goForward({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
-    } else if (url === 'javascript:location.reload()') {
-      await p.reload({ waitUntil: 'domcontentloaded', timeout: 15000 });
-    } else {
-      await p.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    }
-    res.json({ success: true, url: p.url(), title: await p.title() });
-  } catch (error) {
-    logger.error('Navigate error:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.post('/screenshot', async (req, res) => {
-  logger.info('Screenshot request');
-  try {
-    const p = await ensureNavPage();
-    const buf = await p.screenshot({ type: 'png', fullPage: false });
-    const b64 = buf.toString('base64');
-    res.json({ success: true, screenshot: b64, timestamp: new Date().toISOString() });
-  } catch (error) {
-    logger.error('Screenshot error:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.post('/back', async (req, res) => {
-  try {
-    const p = await ensureNavPage();
-    await p.goBack({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
-    res.json({ success: true, url: p.url(), title: await p.title() });
-  } catch (error) {
-    logger.error('Back error:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.post('/forward', async (req, res) => {
-  try {
-    const p = await ensureNavPage();
-    await p.goForward({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
-    res.json({ success: true, url: p.url(), title: await p.title() });
-  } catch (error) {
-    logger.error('Forward error:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.post('/reload', async (req, res) => {
-  try {
-    const p = await ensureNavPage();
-    await p.reload({ waitUntil: 'domcontentloaded', timeout: 15000 });
-    res.json({ success: true, url: p.url(), title: await p.title() });
-  } catch (error) {
-    logger.error('Reload error:', error);
-    res.status(500).json({ success: false, error: error.message });
   }
 });
 
