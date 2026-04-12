@@ -449,6 +449,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["slm-deployments"],
         "slm_deployments",
     ),
+    # Issue #3245: Persistent editable AI output documents
+    (
+        "api.documents",
+        "",
+        ["ai-documents"],
+        "ai_documents",
+    ),
 ]
 
 
