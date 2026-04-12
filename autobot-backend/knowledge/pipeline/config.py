@@ -86,6 +86,31 @@ def _validate_stage_config(stage_config: list, stage_name: str) -> None:
             raise ValueError(f"{stage_name}[{idx}] invalid task name")
 
 
+# Issue #3243: Audio/video/YouTube ingestion pipeline.
+# Prepends a transcription step before the standard ECL stages so that the
+# Whisper transcript is chunked and cognified identically to text documents.
+AUDIO_KNOWLEDGE_PIPELINE = {
+    "name": "audio_knowledge_enrichment",
+    "batch_size": 5,
+    "extract": [
+        # transcribe_audio runs first; its output feeds subsequent extract tasks
+        {"task": "transcribe_audio", "params": {"whisper_model": "base"}},
+        {"task": "classify_document", "params": {}},
+        {"task": "chunk_text", "params": {"max_tokens": 512, "overlap": 50}},
+        {"task": "extract_metadata", "params": {}},
+    ],
+    "cognify": [
+        {"task": "extract_entities", "params": {}},
+        {"task": "extract_relationships", "params": {}},
+        {"task": "summarize", "params": {"levels": ["sentence", "paragraph"]}},
+        {"task": "add_context", "params": {}},
+    ],
+    "load": [
+        {"task": "chromadb", "params": {}},
+    ],
+}
+
+
 def get_default_config() -> Dict[str, Any]:
     """
     Get the default knowledge enrichment pipeline configuration.
@@ -94,3 +119,12 @@ def get_default_config() -> Dict[str, Any]:
         Default pipeline configuration dict (deep copy)
     """
     return copy.deepcopy(DEFAULT_KNOWLEDGE_PIPELINE)
+
+
+def get_audio_pipeline_config() -> Dict[str, Any]:
+    """Return the audio/video pipeline configuration (Issue #3243).
+
+    Returns:
+        Audio pipeline configuration dict (deep copy)
+    """
+    return copy.deepcopy(AUDIO_KNOWLEDGE_PIPELINE)

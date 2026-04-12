@@ -1141,6 +1141,248 @@ async def upload_file_to_knowledge(
     }
 
 
+# =============================================================================
+# Issue #3243: Audio / Video / YouTube ingestion endpoint
+# =============================================================================
+
+# Allowed audio/video extensions for direct upload (mirrors AudioConnector)
+_AUDIO_ALLOWED_EXTS = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".mp4", ".mkv", ".webm"}
+# Max audio upload size: 200 MB
+_AUDIO_MAX_BYTES = 200 * 1024 * 1024
+
+
+class AudioIngestRequest(BaseModel):
+    """Request body for POST /api/knowledge_base/audio (URL-based ingestion)."""
+
+    url: str = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+        description="YouTube URL or direct audio/video URL",
+    )
+    title: str = Field(default="", max_length=500)
+    category: str = Field(default="audio", max_length=100)
+    tags: List[str] = Field(default_factory=list)
+    whisper_model: str = Field(
+        default="base",
+        pattern="^(tiny|base|small|medium|large|large-v2|large-v3)$",
+        description="Whisper model size",
+    )
+    language: Optional[str] = Field(
+        default=None, max_length=10, description="ISO-639-1 language hint"
+    )
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, v: str) -> str:
+        if not v.startswith(("http://", "https://")):
+            raise ValueError("URL must start with http:// or https://")
+        return v
+
+    @field_validator("tags")
+    @classmethod
+    def validate_tags(cls, v: list) -> list:
+        if len(v) > 20:
+            raise ValueError("Maximum 20 tags allowed")
+        return [str(t)[:50] for t in v]
+
+
+async def _ingest_audio_source(
+    kb_to_use,
+    source: str,
+    title: str,
+    category: str,
+    tags: list,
+    whisper_model: str,
+    language: Optional[str],
+) -> dict:
+    """Run transcription and store result in KB. Helper for audio endpoints.
+
+    Issue #3243: shared by both the URL and file-upload audio routes.
+    Returns a dict with success, document_id, word_count, and message.
+    """
+    import uuid as _uuid
+
+    from knowledge.connectors.models import ConnectorConfig
+
+    # Build a transient connector config for a single source
+    connector_config = ConnectorConfig(
+        connector_id=_uuid.uuid4().hex,
+        connector_type="audio",
+        name="api_audio_ingest",
+        config={
+            "sources": [source],
+            "whisper_model": whisper_model,
+            "language": language,
+        },
+    )
+
+    from knowledge.connectors.audio_connector import AudioConnector
+
+    connector = AudioConnector(connector_config)
+    sources = await connector.discover_sources()
+    if not sources:
+        raise HTTPException(status_code=400, detail="Could not locate audio source")
+
+    source_info = sources[0]
+    content_result = await connector.fetch_content(source_info.source_id)
+    if content_result is None or not content_result.content.strip():
+        raise HTTPException(
+            status_code=422, detail="Transcription produced no content"
+        )
+
+    transcript = content_result.content
+    effective_title = title or content_result.metadata.get("title", "") or source
+    metadata = {
+        "title": effective_title,
+        "source": source,
+        "category": category,
+        "tags": tags,
+        "type": "audio_transcript",
+        "audio_source": source,
+        **{
+            k: v
+            for k, v in content_result.metadata.items()
+            if k not in {"source", "category", "type"}
+        },
+    }
+
+    fact_id = await _store_fact_in_kb(kb_to_use, transcript, metadata)
+    word_count = len(transcript.split())
+    return {
+        "success": True,
+        "document_id": fact_id,
+        "title": effective_title,
+        "word_count": word_count,
+        "message": f"Audio transcribed and indexed ({word_count} words)",
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="ingest_audio_url",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.post("/audio")
+async def ingest_audio_url(
+    request: AudioIngestRequest,
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+):
+    """Transcribe a YouTube URL or direct audio/video URL and index it.
+
+    Issue #3243: Accepts a YouTube or remote audio URL, downloads the audio
+    track via yt-dlp, transcribes with Whisper (NPU if available, CPU fallback),
+    and stores the transcript in the knowledge base.
+
+    Requires admin authentication.
+    """
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb_to_use is None:
+        raise InternalError("Knowledge base not initialized")
+
+    logger.info("Audio URL ingest requested: url=%s model=%s", request.url, request.whisper_model)
+
+    return await _ingest_audio_source(
+        kb_to_use=kb_to_use,
+        source=request.url,
+        title=request.title,
+        category=request.category,
+        tags=request.tags,
+        whisper_model=request.whisper_model,
+        language=request.language,
+    )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="upload_audio_file",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.post("/audio/upload")
+async def upload_audio_file(
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+):
+    """Upload a local audio/video file (mp3, wav, m4a, ogg, flac, mp4, mkv, webm).
+
+    Issue #3243: Saves the uploaded file to a temp path, runs Whisper transcription
+    (NPU-accelerated if available, CPU fallback), then stores the transcript.
+
+    Requires admin authentication.
+
+    Form fields:
+        file:          The audio/video binary.
+        title:         Optional display title.
+        category:      Knowledge category (default "audio").
+        tags:          JSON array of tag strings.
+        whisper_model: Whisper model size (default "base").
+        language:      ISO-639-1 language hint (optional).
+    """
+    import json as _json
+    import os as _os
+    import tempfile as _tmp
+
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb_to_use is None:
+        raise InternalError("Knowledge base not initialized")
+
+    form = await req.form()
+    file = form.get("file")
+    if not file or not hasattr(file, "read"):
+        raise HTTPException(status_code=400, detail="Audio file is required")
+
+    filename = _os.path.basename(getattr(file, "filename", "audio.mp3"))
+    if contains_path_traversal(filename):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    ext = _os.path.splitext(filename.lower())[1]
+    if ext not in _AUDIO_ALLOWED_EXTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported audio format. Allowed: {', '.join(sorted(_AUDIO_ALLOWED_EXTS))}",
+        )
+
+    file_bytes = await file.read()
+    if len(file_bytes) > _AUDIO_MAX_BYTES:
+        raise HTTPException(status_code=400, detail="Audio file exceeds 200 MB limit")
+
+    title = form.get("title", "") or filename
+    category = form.get("category", "audio")
+    whisper_model = form.get("whisper_model", "base")
+    language = form.get("language") or None
+    try:
+        raw_tags = form.get("tags", "[]")
+        tags = _json.loads(raw_tags) if isinstance(raw_tags, str) else raw_tags
+        if not isinstance(tags, list):
+            tags = []
+        tags = [str(t)[:50] for t in tags[:20]]
+    except (_json.JSONDecodeError, TypeError):
+        tags = []
+
+    # Write to a temp file so AudioConnector can read it by path
+    with _tmp.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+        tmp.write(file_bytes)
+        tmp_path = tmp.name
+
+    try:
+        logger.info("Audio file upload: filename=%s size=%d", filename, len(file_bytes))
+        return await _ingest_audio_source(
+            kb_to_use=kb_to_use,
+            source=tmp_path,
+            title=title,
+            category=category,
+            tags=tags,
+            whisper_model=whisper_model,
+            language=language,
+        )
+    finally:
+        try:
+            _os.unlink(tmp_path)
+        except OSError:
+            pass
+
+
 # NOTE: Search endpoints moved to knowledge_search.py (Issue #209)
 # Includes: /search, /enhanced_search, /rag_search, /similarity_search
 

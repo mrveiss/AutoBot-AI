@@ -226,6 +226,56 @@ class NPUClient:
             return result.embeddings[0]
         return None
 
+    async def transcribe_audio(
+        self,
+        audio_path: str,
+        model: str = "base",
+        language: Optional[str] = None,
+        timeout: float = 120.0,
+    ) -> Optional[str]:
+        """Transcribe an audio file via the NPU worker's Whisper endpoint.
+
+        Issue #3243: Exposes Whisper transcription through the NPU worker so the
+        AudioConnector can offload CPU-heavy inference to NPU/GPU hardware.
+
+        Args:
+            audio_path: Absolute path to the audio file on the backend host.
+            model:      Whisper model size ("tiny", "base", "small", "medium", "large").
+            language:   ISO-639-1 language hint, or None for auto-detect.
+            timeout:    Maximum seconds to wait for the transcription result.
+
+        Returns:
+            Transcribed text string, or None if the worker is unavailable / returns
+            an error (caller should fall back to local CPU Whisper).
+        """
+        try:
+            session = await self._get_session()
+            payload: Dict[str, Any] = {"audio_path": audio_path, "model": model}
+            if language:
+                payload["language"] = language
+            async with session.post(
+                f"{self.base_url}/whisper/transcribe",
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=timeout),
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    transcript = data.get("text", "")
+                    logger.info(
+                        "NPU transcription complete: %d chars for %s",
+                        len(transcript),
+                        audio_path,
+                    )
+                    return transcript
+                logger.warning(
+                    "NPU worker returned HTTP %s for transcription of %s",
+                    response.status,
+                    audio_path,
+                )
+        except Exception as exc:
+            logger.warning("NPU transcribe_audio failed for %s: %s", audio_path, exc)
+        return None
+
     async def get_stats(self) -> Optional[Dict[str, Any]]:
         """Get NPU worker statistics"""
         try:
