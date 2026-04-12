@@ -566,3 +566,67 @@ export function useArrowKeys(
     }
   })
 }
+
+// ========================================
+// Command Palette Hotkey (Cmd/Ctrl+K)
+// ========================================
+
+/**
+ * Global command palette hotkey handler
+ * Opens command palette on Cmd+K (Mac) or Ctrl+K (Windows/Linux)
+ *
+ * @param onOpen - Callback to open command palette
+ * @param options - Configuration options
+ *
+ * @example Setup command palette hotkey
+ * ```typescript
+ * import { useCommandPaletteHotkey } from '@/composables/useKeyboard'
+ * import CommandPalette from '@/components/CommandPalette.vue'
+ *
+ * const paletteRef = ref<InstanceType<typeof CommandPalette>>()
+ * useCommandPaletteHotkey(() => paletteRef.value?.open())
+ * ```
+ */
+export function useCommandPaletteHotkey(
+  onOpen: () => void,
+  options: Omit<KeyPressOptions, 'condition' | 'preventDefault' | 'stopPropagation'> = {}
+): void {
+  const { target = document } = options
+
+  const handlePalette = (e: Event): void => {
+    const keyboardEvent = e as KeyboardEvent
+
+    // Check for Cmd+K (Mac) or Ctrl+K (Windows/Linux)
+    const isCommand = keyboardEvent.metaKey && keyboardEvent.key === 'k'
+    const isCtrlCommand = keyboardEvent.ctrlKey && keyboardEvent.key === 'k'
+
+    if (!isCommand && !isCtrlCommand) {
+      return
+    }
+
+    // Don't trigger in input fields
+    if (isInputEvent(keyboardEvent)) {
+      return
+    }
+
+    // Prevent default browser search/menu
+    keyboardEvent.preventDefault()
+    keyboardEvent.stopPropagation()
+
+    // Open palette
+    onOpen()
+  }
+
+  let cachedTarget: HTMLElement | Document | Window | null = null
+
+  onMounted(() => {
+    cachedTarget = resolveTarget(target)
+    cachedTarget.addEventListener('keydown', handlePalette)
+  })
+
+  onUnmounted(() => {
+    if (cachedTarget) {
+      cachedTarget.removeEventListener('keydown', handlePalette)
+    }
+  })
+}
