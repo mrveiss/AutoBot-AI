@@ -297,6 +297,9 @@ class BaseAgent(ABC):
 
             response.execution_time = execution_time
 
+            # Publish OBSERVATION event with any artifacts the agent collected (#4094)
+            await self._publish_completion_observation(request, response, task_id)
+
             # Record completion in Redis analytics
             if analytics is not None:
                 try:
@@ -349,6 +352,61 @@ class BaseAgent(ABC):
                 result=None,
                 error=str(e),
                 execution_time=execution_time,
+            )
+
+    async def _publish_completion_observation(
+        self,
+        request: AgentRequest,
+        response: AgentResponse,
+        task_id: str,
+    ) -> None:
+        """
+        Emit an OBSERVATION event carrying any TaskArtifacts produced by the
+        agent.  Artifacts are read from ``response.metadata["artifacts"]``
+        which should be a list of dicts matching the TaskArtifact schema.
+
+        Failures are logged at DEBUG level so they never break the caller.
+        """
+        artifacts_raw = (response.metadata or {}).get("artifacts")
+        if not artifacts_raw:
+            return
+
+        try:
+            from events.stream_manager import RedisEventStreamManager
+            from events.types import TaskArtifact, create_observation_event
+
+            artifacts = [
+                TaskArtifact.from_dict(a) if isinstance(a, dict) else a
+                for a in artifacts_raw
+            ]
+
+            obs_event = create_observation_event(
+                action_id=request.request_id,
+                tool_name=self.agent_type,
+                success=response.status == "success",
+                result=(
+                    response.result
+                    if isinstance(response.result, (str, type(None)))
+                    else str(response.result)
+                ),
+                error=response.error,
+                execution_time_ms=response.execution_time * 1000,
+                task_id=task_id,
+                artifacts=artifacts,
+            )
+
+            manager = RedisEventStreamManager()
+            await manager.publish(obs_event)
+            logger.debug(
+                "Published completion observation with %d artifact(s) for task %s",
+                len(artifacts),
+                task_id,
+            )
+        except Exception as exc:
+            logger.debug(
+                "Could not publish completion observation for task %s: %s",
+                task_id,
+                exc,
             )
 
     # Communication Protocol Methods
