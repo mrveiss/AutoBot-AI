@@ -34,6 +34,14 @@ const isResearching = ref(false)
 const statusText = ref(t('knowledge.research.statusReady'))
 const errorMsg = ref<string | null>(null)
 
+// Issue #3242: board selector state
+interface Board {
+  board_id: string
+  name: string
+}
+const boards = ref<Board[]>([])
+const selectedBoardId = ref<string>('__global__')
+
 const screenshot = ref<string | null>(null)
 const browserConnected = ref(false)
 const screenshotLoading = ref(false)
@@ -54,7 +62,13 @@ const {
   parseJSON: false,
   onOpen: () => {
     statusText.value = t('knowledge.research.statusStarting')
-    wsSend(JSON.stringify({ action: 'start', query: query.value.trim(), store: true }))
+    wsSend(JSON.stringify({
+      action: 'start',
+      query: query.value.trim(),
+      store: true,
+      // Issue #3242: pass selected board so stored facts are namespaced
+      board_id: selectedBoardId.value !== '__global__' ? selectedBoardId.value : undefined,
+    }))
   },
   onMessage: (data: string) => {
     try {
@@ -303,10 +317,26 @@ async function handleInteract(payload: { action: string; params: Record<string, 
   }
 }
 
+// ── Board helpers (Issue #3242) ───────────────────────────────────────────
+
+async function fetchBoards(): Promise<void> {
+  try {
+    const data = await ApiClient.get(`${getApiBase()}/knowledge_base/boards`) as { boards?: Board[] }
+    if (Array.isArray(data.boards)) {
+      boards.value = data.boards
+    }
+  } catch (e) {
+    logger.warn('Failed to fetch knowledge boards (non-critical):', e)
+    // Keep default __global__ board so research still works
+    boards.value = [{ board_id: '__global__', name: 'Global (all boards)' }]
+  }
+}
+
 // ── Lifecycle ────────────────────────────────────────────────────────────
 
 onMounted(() => {
   checkBrowserStatus()
+  fetchBoards()
 })
 
 onUnmounted(() => {
@@ -355,6 +385,25 @@ onUnmounted(() => {
             </svg>
             {{ $t('knowledge.research.btnStop') }}
           </button>
+        </div>
+
+        <!-- Board selector (Issue #3242) -->
+        <div class="board-selector-bar" v-if="boards.length > 1">
+          <label class="board-selector-label" for="board-select">
+            {{ $t('knowledge.research.boardLabel') }}
+          </label>
+          <select
+            id="board-select"
+            v-model="selectedBoardId"
+            class="board-select"
+            :disabled="isResearching"
+          >
+            <option
+              v-for="board in boards"
+              :key="board.board_id"
+              :value="board.board_id"
+            >{{ board.name }}</option>
+          </select>
         </div>
 
         <!-- Error -->
@@ -527,6 +576,40 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+/* ── Board selector (Issue #3242) ────────────────────────────────────────── */
+
+.board-selector-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2) var(--spacing-3);
+  border-bottom: 1px solid var(--border-default);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+
+.board-selector-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.board-select {
+  flex: 1;
+  font-size: 0.8125rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 2px var(--spacing-2);
+  cursor: pointer;
+}
+
+.board-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ── Layout ──────────────────────────────────────────────────────────────── */
 
 .research-panel {

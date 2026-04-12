@@ -149,6 +149,15 @@ class EnhancedSearchRequest(BaseModel):
         default=AccessLevelFilter.ALL.value,
         description="Filter by access level: all, autobot, general, system, user",
     )
+    # Board scoping (Issue #3242)
+    board_id: Optional[str] = Field(
+        default=None,
+        max_length=100,
+        description=(
+            "Project-scoped board ID for namespaced search. "
+            "None / '__global__' searches all boards."
+        ),
+    )
 
     @validator("category")
     def validate_category(cls, v):
@@ -187,6 +196,7 @@ class EnhancedSearchRequest(BaseModel):
             "mode": self.mode,
             "enable_reranking": self.enable_reranking,
             "min_score": self.min_score,
+            "board_id": self.board_id,
         }
 
     def get_log_summary(self) -> str:
@@ -318,6 +328,16 @@ class ConsolidatedSearchRequest(BaseModel):
         description="Include related facts in results",
     )
 
+    # Board scoping (Issue #3242)
+    board_id: Optional[str] = Field(
+        default=None,
+        max_length=100,
+        description=(
+            "Project-scoped board ID for namespaced search. "
+            "None / '__global__' searches all boards."
+        ),
+    )
+
     # Analytics
     track_analytics: bool = Field(
         default=True,
@@ -374,6 +394,7 @@ class ConsolidatedSearchRequest(BaseModel):
             "mode": self.mode,
             "enable_reranking": self.enable_reranking,
             "min_score": self.min_score,
+            "board_id": self.board_id,
         }
 
     def get_log_summary(self) -> str:

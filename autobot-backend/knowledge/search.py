@@ -370,20 +370,41 @@ class SearchMixin:
         )
 
     async def _execute_search_by_mode(
-        self, mode: str, processed_query: str, fetch_limit: int, category: Optional[str]
+        self,
+        mode: str,
+        processed_query: str,
+        fetch_limit: int,
+        category: Optional[str],
+        board_filter: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
-        """Execute search based on mode. Issue #281: Extracted helper."""
+        """Execute search based on mode. Issue #281: Extracted helper.
+
+        Issue #3242: board_filter is merged with category filters so that
+        ChromaDB ``where`` clauses include the board_id constraint.
+        """
+        # Build base filters dict, merging category and board constraints
+        base_filters: Optional[Dict[str, Any]] = None
+        filter_parts: Dict[str, Any] = {}
+        if category:
+            filter_parts["category"] = category
+        if board_filter:
+            filter_parts.update(board_filter)
+        if filter_parts:
+            base_filters = filter_parts
+
         if mode == "keyword":
             return await self._keyword_search(processed_query, fetch_limit, category)
         elif mode == "semantic":
             return await self.search(
                 processed_query,
                 top_k=fetch_limit,
-                filters={"category": category} if category else None,
+                filters=base_filters,
                 mode="vector",
             )
         else:  # hybrid mode
-            return await self._hybrid_search(processed_query, fetch_limit, category)
+            return await self._hybrid_search(
+                processed_query, fetch_limit, category, board_filter=board_filter
+            )
 
     def _apply_post_search_filters(
         self,
@@ -438,10 +459,15 @@ class SearchMixin:
         tag_filtered_ids: Optional[Set[str]],
         min_score: float,
         enable_reranking: bool,
+        board_filter: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
-        """Execute search pipeline with filtering and reranking (Issue #398: extracted)."""
+        """Execute search pipeline with filtering and reranking (Issue #398: extracted).
+
+        Issue #3242: board_filter is forwarded to the vector search path so ChromaDB
+        receives a ``where`` clause that restricts results to a single board.
+        """
         results = await self._execute_search_by_mode(
-            mode, processed_query, fetch_limit, category
+            mode, processed_query, fetch_limit, category, board_filter=board_filter
         )
         results = self._apply_post_search_filters(results, tag_filtered_ids, min_score)
         if enable_reranking and results:
@@ -460,8 +486,13 @@ class SearchMixin:
         mode: str = "hybrid",
         enable_reranking: bool = False,
         min_score: float = 0.0,
+        board_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Enhanced search with filtering and reranking (Issue #398: refactored)."""
+        """Enhanced search with filtering and reranking (Issue #398: refactored).
+
+        Issue #3242: board_id scopes search to a project board. None / '__global__'
+        searches all boards (existing behaviour, no regression).
+        """
         self.ensure_initialized()
         if not query.strip():
             return self._build_empty_query_response()
@@ -474,15 +505,23 @@ class SearchMixin:
             if early_return:
                 return early_return
 
+            # Issue #3242: inject board filter into vector search when scoped
+            effective_category = category
+            board_filter: Optional[Dict[str, Any]] = None
+            if board_id and board_id != "__global__":
+                board_filter = {"board_id": board_id}
+                logger.debug("Board-scoped search: board_id=%s", board_id)
+
             fetch_limit = self._calculate_fetch_limit(limit, offset, tags, min_score)
             results = await self._execute_enhanced_search_pipeline(
                 processed_query,
                 mode,
-                category,
+                effective_category,
                 fetch_limit,
                 tag_filtered_ids,
                 min_score,
                 enable_reranking,
+                board_filter=board_filter,
             )
 
             return self._build_success_response(
@@ -564,10 +603,20 @@ class SearchMixin:
         )
 
     async def _hybrid_search(
-        self, query: str, limit: int, category: Optional[str] = None
+        self,
+        query: str,
+        limit: int,
+        category: Optional[str] = None,
+        board_filter: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
-        """Perform hybrid search combining semantic and keyword results."""
-        return await self._get_hybrid_searcher().search(query, limit, category)
+        """Perform hybrid search combining semantic and keyword results.
+
+        Issue #3242: board_filter is threaded through to the HybridSearcher so
+        the semantic leg receives the ChromaDB ``where`` clause.
+        """
+        return await self._get_hybrid_searcher().search(
+            query, limit, category, board_filter=board_filter
+        )
 
     async def _ensure_cross_encoder(self):
         """Ensure cross-encoder model is loaded. Issue #281: Extracted helper."""

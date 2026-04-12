@@ -78,28 +78,45 @@ class HybridSearcher:
         return results
 
     async def search(
-        self, query: str, limit: int, category: Optional[str] = None
+        self,
+        query: str,
+        limit: int,
+        category: Optional[str] = None,
+        board_filter: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         """
         Perform hybrid search combining semantic and keyword results.
 
         Issue #281 refactor: Uses RRF with k=60 for fusion.
+        Issue #3242: board_filter merged with category into the semantic ``where``
+        clause so ChromaDB scopes results to the requested board.
 
         Args:
             query: Search query
             limit: Maximum results to return
             category: Optional category filter
+            board_filter: Optional ChromaDB metadata filter for board scoping
 
         Returns:
             Combined and ranked search results
         """
+        # Build merged filter for the semantic leg
+        semantic_filters: Optional[Dict[str, Any]] = None
+        filter_parts: Dict[str, Any] = {}
+        if category:
+            filter_parts["category"] = category
+        if board_filter:
+            filter_parts.update(board_filter)
+        if filter_parts:
+            semantic_filters = filter_parts
+
         try:
             # Run both searches in parallel
             semantic_task = asyncio.create_task(
                 self.semantic_search(
                     query,
                     top_k=limit,
-                    filters={"category": category} if category else None,
+                    filters=semantic_filters,
                     mode="vector",
                 )
             )
@@ -126,4 +143,6 @@ class HybridSearcher:
         except Exception as e:
             logger.error("Hybrid search failed: %s", e)
             # Fallback to semantic search
-            return await self.semantic_search(query, top_k=limit, mode="vector")
+            return await self.semantic_search(
+                query, top_k=limit, filters=semantic_filters, mode="vector"
+            )
