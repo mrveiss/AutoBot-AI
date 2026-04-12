@@ -76,6 +76,12 @@ class AddFactsRequest(BaseModel):
         default=CategoryDefaults.GENERAL, max_length=100, description="Category"
     )
     tags: List[str] = Field(default_factory=list, description="Tags for the content")
+    # Issue #3242: project-scoped board namespace
+    board_id: Optional[str] = Field(
+        default=None,
+        max_length=100,
+        description="Board ID to scope this fact. None means global board.",
+    )
 
     @field_validator("tags")
     @classmethod
@@ -95,6 +101,12 @@ class AddUrlRequest(BaseModel):
     )
     category: str = Field(default="web", max_length=100, description="Category")
     tags: List[str] = Field(default_factory=list, description="Tags")
+    # Issue #3242: project-scoped board namespace
+    board_id: Optional[str] = Field(
+        default=None,
+        max_length=100,
+        description="Board ID to scope this URL content. None means global board.",
+    )
 
     @field_validator("url")
     @classmethod
@@ -223,6 +235,11 @@ router = APIRouter()
 from api.knowledge_vectorization import router as vectorization_router
 
 router.include_router(vectorization_router)
+
+# Issue #3242: project-scoped board management endpoints
+from api.knowledge_boards import router as boards_router
+
+router.include_router(boards_router)
 
 # Import population functions (extracted from this file - Issue #209)
 from api.knowledge_population import (
@@ -486,7 +503,8 @@ def _extract_add_text_fields(request: dict) -> tuple:
 
     Returns:
         Tuple of (text, title, source, category, access_level,
-                  visibility, owner_id, organization_id, group_ids, shared_with)
+                  visibility, owner_id, organization_id, group_ids, shared_with,
+                  board_id)
     """
     text = request.get("text", "")
     title = request.get("title", "")
@@ -499,6 +517,8 @@ def _extract_add_text_fields(request: dict) -> tuple:
     organization_id = request.get("organization_id")
     group_ids = request.get("group_ids", [])
     shared_with = request.get("shared_with", [])
+    # Issue #3242: board scoping
+    board_id = request.get("board_id")
     if not text:
         raise ValueError("Text content is required")
     logger.info(
@@ -521,6 +541,7 @@ def _extract_add_text_fields(request: dict) -> tuple:
         organization_id,
         group_ids,
         shared_with,
+        board_id,
     )
 
 
@@ -534,6 +555,7 @@ def _build_ownership_metadata(
     organization_id,
     group_ids: list,
     shared_with: list,
+    board_id: Optional[str] = None,
 ) -> dict:
     """Helper for add_text_to_knowledge. Ref: #1088.
 
@@ -558,6 +580,9 @@ def _build_ownership_metadata(
         metadata["group_ids"] = group_ids
     if shared_with:
         metadata["shared_with"] = shared_with
+    # Issue #3242: board scoping — only store when non-global
+    if board_id and board_id != "__global__":
+        metadata["board_id"] = board_id
     return metadata
 
 
@@ -594,6 +619,7 @@ async def add_text_to_knowledge(
         organization_id,
         group_ids,
         shared_with,
+        board_id,
     ) = _extract_add_text_fields(request)
 
     metadata = _build_ownership_metadata(
@@ -606,6 +632,7 @@ async def add_text_to_knowledge(
         organization_id,
         group_ids,
         shared_with,
+        board_id=board_id,
     )
 
     fact_id = await _store_fact_in_kb(kb_to_use, text, metadata)
@@ -837,16 +864,17 @@ async def add_facts_to_knowledge(
         f"Adding fact: title='{request.title}', source='{request.source}', len={len(request.content)}"
     )
 
-    fact_id = await _store_fact_in_kb(
-        kb_to_use,
-        request.content,
-        {
-            "title": request.title,
-            "source": request.source,
-            "category": request.category,
-            "tags": request.tags,
-        },
-    )
+    metadata: dict = {
+        "title": request.title,
+        "source": request.source,
+        "category": request.category,
+        "tags": request.tags,
+    }
+    # Issue #3242: attach board_id when provided
+    if request.board_id and request.board_id != "__global__":
+        metadata["board_id"] = request.board_id
+
+    fact_id = await _store_fact_in_kb(kb_to_use, request.content, metadata)
 
     return {
         "success": True,
@@ -931,17 +959,18 @@ async def add_url_to_knowledge(
 
     content, title = await _fetch_and_extract_url(validated_url, request.title or "")
 
-    fact_id = await _store_fact_in_kb(
-        kb_to_use,
-        content,
-        {
-            "title": title,
-            "source": validated_url,
-            "category": request.category,
-            "tags": request.tags,
-            "type": "url",
-        },
-    )
+    url_metadata: dict = {
+        "title": title,
+        "source": validated_url,
+        "category": request.category,
+        "tags": request.tags,
+        "type": "url",
+    }
+    # Issue #3242: attach board_id when provided
+    if request.board_id and request.board_id != "__global__":
+        url_metadata["board_id"] = request.board_id
+
+    fact_id = await _store_fact_in_kb(kb_to_use, content, url_metadata)
 
     return {
         "success": True,
