@@ -9,6 +9,7 @@ Extracted from PrometheusMetricsManager as part of Issue #394.
 Extended with PerformanceMetricsRecorder as part of Issue #469.
 Extended with KnowledgeBase, LLMProvider, WebSocket, Redis recorders (Issue #470).
 Extended with FrontendMetricsRecorder for RUM metrics (Issue #476).
+Extended with MCPWorkerMetricsRecorder for worker restart budget tracking (Issue #4109).
 
 Package Structure:
 - base.py: Base recorder class with shared functionality
@@ -24,6 +25,7 @@ Package Structure:
 - websocket.py: WebSocket connection metrics (Issue #470)
 - redis.py: Redis operation metrics (Issue #470)
 - frontend.py: Frontend RUM metrics (Issue #476)
+- mcp_worker.py: MCP worker lifecycle metrics (Issue #4109)
 """
 
 from .base import BaseMetricsRecorder
@@ -35,6 +37,9 @@ from .github import GitHubMetricsRecorder
 
 # Issue #1956: Inference profiler metrics recorder
 from .inference_profiler import InferenceProfilerMetricsRecorder
+
+# Issue #4109: MCP worker restart budget exhaustion metrics
+from .mcp_worker import MCPWorkerMetricsRecorder
 
 # Issue #470: New domain-specific recorders
 from .knowledge_base import KnowledgeBaseMetricsRecorder
@@ -65,4 +70,6 @@ __all__ = [
     "FrontendMetricsRecorder",
     # Issue #1956: Inference profiler recorder
     "InferenceProfilerMetricsRecorder",
+    # Issue #4109: MCP worker metrics
+    "MCPWorkerMetricsRecorder",
 ]

@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
 from services.mcp_isolation_config import BridgePolicy, IsolationMode, policy_for
 
 logger = logging.getLogger(__name__)
@@ -84,6 +85,9 @@ class IsolatedBridgeClient:
             start_new_session=True,
         )
         self._last_restart_ts = time.monotonic()
+        metrics = get_metrics_manager()
+        metrics.set_mcp_worker_uptime(self._bridge, 0.0)
+        metrics.set_mcp_worker_permanently_failed(self._bridge, False)
 
     async def stop(self):
         """Send shutdown RPC then terminate if still alive."""
@@ -111,8 +115,23 @@ class IsolatedBridgeClient:
                     self._proc.returncode,
                 )
                 self._restart_count += 1
+                metrics = get_metrics_manager()
+                metrics.record_mcp_worker_restart(self._bridge, self._restart_count)
+
+                # Record crash interval if we had a previous restart
+                if self._last_restart_ts > 0:
+                    crash_interval = time.monotonic() - self._last_restart_ts
+                    metrics.record_mcp_worker_crash_interval(self._bridge, crash_interval)
+
                 if self._restart_count > self._policy.restart_max:
                     self._permanently_failed = True
+                    metrics.record_mcp_restart_budget_exhaustion(self._bridge)
+                    metrics.set_mcp_worker_permanently_failed(self._bridge, True)
+                    logger.error(
+                        "mcp_isolation: bridge %s exceeded restart_max (%s), entering permanent failure",
+                        self._bridge,
+                        self._policy.restart_max,
+                    )
                     raise RuntimeError(
                         "bridge " + self._bridge + " crash loop"
                     )
@@ -161,11 +180,15 @@ class IsolatedBridgeClient:
                     self._bridge,
                     exc,
                 )
+                metrics = get_metrics_manager()
+                metrics.set_mcp_circuit_breaker_activated(self._bridge, True)
                 if self._proc is not None and self._proc.returncode is None:
                     self._proc.kill()
                 return {"success": False, "result": str(exc), "bridge": self._bridge}
 
             if "error" in resp:
+                metrics = get_metrics_manager()
+                metrics.set_mcp_circuit_breaker_activated(self._bridge, True)
                 return {
                     "success": False,
                     "result": resp["error"].get("message", "bridge error"),
