@@ -261,6 +261,7 @@ class AnthropicProvider(BaseProvider):
 
             response = await client.messages.create(**call_kwargs)
             content = _extract_text_content(response.content, preserve_reasoning)
+            total_tokens = response.usage.input_tokens + response.usage.output_tokens
             return LLMResponse(
                 content=content,
                 model=response.model,
@@ -270,10 +271,13 @@ class AnthropicProvider(BaseProvider):
                 usage={
                     "prompt_tokens": response.usage.input_tokens,
                     "completion_tokens": response.usage.output_tokens,
-                    "total_tokens": (
-                        response.usage.input_tokens + response.usage.output_tokens
-                    ),
+                    "total_tokens": total_tokens,
                 },
+                provider_metadata=self._build_provider_metadata(
+                    model_api_name=response.model,
+                    api_kwargs_applied=call_kwargs,
+                    total_tokens=total_tokens,
+                ),
             )
         except Exception as exc:
             self._total_errors += 1

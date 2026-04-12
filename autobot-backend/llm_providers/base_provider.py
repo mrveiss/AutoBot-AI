@@ -108,5 +108,32 @@ class BaseProvider(ABC):
         """Safely retrieve a value from the settings dict."""
         return self.settings.get(key, default)
 
+    def _build_provider_metadata(
+        self,
+        model_api_name: str,
+        api_kwargs_applied: Dict[str, Any],
+        total_tokens: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Build the standard ``provider_metadata`` dict for an LLMResponse.
+
+        Args:
+            model_api_name:    Exact model name sent to the API (may differ from
+                               request.model_name after aliasing or fallback).
+            api_kwargs_applied: Merged kwargs actually sent to the provider API.
+            total_tokens:      Total token count from the response usage, or None.
+
+        Returns:
+            Dict suitable for ``LLMResponse.provider_metadata``.
+        """
+        metadata: Dict[str, Any] = {
+            "provider": self.provider_name,
+            "model_api_name": model_api_name,
+            "api_kwargs_applied": api_kwargs_applied,
+        }
+        if total_tokens is not None:
+            metadata["total_tokens"] = total_tokens
+        return metadata
+
 
 __all__ = ["BaseProvider"]

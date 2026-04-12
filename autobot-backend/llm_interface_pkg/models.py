@@ -111,6 +111,7 @@ class LLMResponse:
     request_id: str = ""
     error: Optional[str] = None
     fallback_used: bool = False
+    provider_metadata: Optional[Dict[str, Any]] = None
 
 
 @dataclass

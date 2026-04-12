@@ -128,6 +128,11 @@ class GroqProvider(BaseProvider):
                     "completion_tokens": response.usage.completion_tokens,
                     "total_tokens": response.usage.total_tokens,
                 },
+                provider_metadata=self._build_provider_metadata(
+                    model_api_name=response.model,
+                    api_kwargs_applied=params,
+                    total_tokens=response.usage.total_tokens,
+                ),
             )
         except Exception as exc:
             self._total_errors += 1

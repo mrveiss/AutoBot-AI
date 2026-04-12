@@ -95,6 +95,17 @@ class OllamaProvider(BaseProvider):
             response = await delegate.chat_completion(request)
             if response.error:
                 self._total_errors += 1
+            else:
+                api_kwargs = {
+                    "model": response.model,
+                    "messages": request.messages,
+                    "options": {"temperature": request.temperature},
+                }
+                response.provider_metadata = self._build_provider_metadata(
+                    model_api_name=response.model,
+                    api_kwargs_applied=api_kwargs,
+                    total_tokens=response.usage.get("total_tokens") if response.usage else None,
+                )
             return response
         except Exception as exc:
             self._total_errors += 1
