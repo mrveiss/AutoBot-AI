@@ -31,7 +31,7 @@ import logging
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -215,9 +215,72 @@ def apply_model_defaults(
     return base
 
 
+def get_prompt_prefix(model: str) -> Optional[str]:
+    """
+    Return the ``prompt_prefix`` configured for *model* in the YAML registry,
+    or ``None`` when the field is absent or empty.
+
+    The prefix is a fixed string prepended to the first user turn before the
+    request is dispatched to the provider.  It is useful for instruction-tuning
+    tokens, chain-of-thought preambles, or format constraints that apply to
+    every call made to the model.
+
+    Args:
+        model: Canonical display_name or an alias.
+
+    Returns:
+        The prefix string, or ``None``.
+    """
+    canonical = resolve_model_name(model)
+    reg = _load_registry()
+    entry = reg.get(canonical)
+    if entry is None:
+        return None
+    prefix = entry.get("prompt_prefix")
+    return str(prefix) if prefix else None
+
+
+def apply_prompt_prefix(
+    model: str,
+    messages: List[Dict[str, str]],
+) -> List[Dict[str, str]]:
+    """
+    Prepend the per-model ``prompt_prefix`` to the first user message.
+
+    The list is mutated in-place; a reference to the same list is also
+    returned for convenience.  When no prefix is configured, or when there is
+    no user message in the list, the list is returned unchanged.
+
+    The prefix is separated from the existing content by a single newline so
+    that any chain-of-thought instruction reads as a separate paragraph.
+
+    Args:
+        model:    Canonical display_name or alias.
+        messages: The ``messages`` list from an ``LLMRequest``.
+
+    Returns:
+        The (possibly mutated) messages list.
+    """
+    prefix = get_prompt_prefix(model)
+    if not prefix:
+        return messages
+    for msg in messages:
+        if msg.get("role") == "user":
+            msg["content"] = prefix + "\n" + msg["content"]
+            logger.debug(
+                "Prepended prompt_prefix for model %r (%d chars)",
+                model,
+                len(prefix),
+            )
+            break
+    return messages
+
+
 __all__ = [
     "resolve_model_name",
     "get_model_kwargs",
     "get_provider_model_id",
     "apply_model_defaults",
+    "get_prompt_prefix",
+    "apply_prompt_prefix",
 ]

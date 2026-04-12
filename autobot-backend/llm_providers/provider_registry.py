@@ -35,7 +35,7 @@ from typing import Any, Dict, List, Optional
 from llm_interface_pkg.models import LLMRequest
 
 from .base_provider import BaseProvider
-from .model_param_registry import apply_model_defaults
+from .model_param_registry import apply_model_defaults, apply_prompt_prefix
 
 logger = logging.getLogger(__name__)
 
@@ -157,10 +157,12 @@ class ProviderRegistry:
     @staticmethod
     def enrich_request(request: LLMRequest, provider_name: str) -> LLMRequest:
         """
-        Merge per-model api_kwargs from the YAML registry into *request*.
+        Merge per-model api_kwargs and prompt_prefix from the YAML registry into *request*.
 
         YAML defaults are applied first; caller-supplied
-        ``request.metadata["api_kwargs"]`` always wins.  The request object is
+        ``request.metadata["api_kwargs"]`` always wins.  When a ``prompt_prefix``
+        is configured for the model, it is prepended to the first user turn in
+        ``request.messages`` (separated by a newline).  The request object is
         mutated in-place and also returned for convenience.
 
         Args:
@@ -174,6 +176,7 @@ class ProviderRegistry:
         caller_kwargs: Dict[str, Any] = request.metadata.get("api_kwargs") or {}
         merged = apply_model_defaults(model, provider_name, caller_kwargs)
         request.metadata["api_kwargs"] = merged
+        apply_prompt_prefix(model, request.messages)
         return request
 
     # ------------------------------------------------------------------
