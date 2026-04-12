@@ -110,6 +110,18 @@ repos:
         stages: [pre-commit]
         description: "Blocks commits when current branch is also checked out in another worktree"
 
+  # Detect mass file deletions that indicate stash-handling bugs (Issue #4111)
+  - repo: local
+    hooks:
+      - id: detect-mass-deletions
+        name: Detect Mass Deletions (Issue #4111)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-detect-mass-deletions
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Blocks commits with >50 staged file deletions (likely stash bug, not intended cleanup)"
+
   # Hardcoded value detection (Issue #694)
   - repo: local
     hooks:
