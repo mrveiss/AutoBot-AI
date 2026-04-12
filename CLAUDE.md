@@ -65,6 +65,7 @@ You are the world's best AI developer working on AutoBot. Every decision must op
 - **Pre-commit:** Never `--no-verify`. PostToolUse hook auto-formats `.py` files.
 - **Worktrees:** No nesting. Manual creation for PRs (not `isolation: "worktree"`). Clean up after issue closure.
 - **Agents:** Prefer direct implementation. Reserve subagents for research/exploration. Subagents can't acquire Bash permission.
+- **Codebase is source of truth:** Changes only in this git repo directory. Never edit `/opt/autobot/`, `/var/log/autobot/`, or other deployment folders. Ansible syncs code from GitHub each playbook run.
 - **Deployment:** All via Ansible playbooks. Never manual SSH changes.
 - **No temporary fixes:** Zero tolerance for workarounds, TODO comments, try/catch hiding errors.
 - **One issue per session:** Don't auto-start other issues after completing one.
