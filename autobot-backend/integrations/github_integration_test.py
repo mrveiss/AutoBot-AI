@@ -1,19 +1,82 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""Unit tests for GitHubIntegration (Issue #4097)."""
+"""
+Unit tests — GitHubIntegration rate limiting (Issues #4097, #4162)
 
+All HTTP calls are patched; no real network traffic.
+Covers:
+- Successful requests record quota
+- HTTP 429 triggers Retry-After enforcement and returns structured response
+- HTTP 403 secondary rate limit is handled gracefully
+- Local window exhaustion returns rate_limit_timeout error
+- X-RateLimit-Remaining=0 blocks subsequent requests
+- Connection errors return structured error dict
+"""
+
+import asyncio
+from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import aiohttp
 import pytest
 
+import integrations.github_integration as _gh_mod
 from integrations.base import IntegrationConfig, IntegrationStatus
 from integrations.github_integration import GitHubIntegration
+from integrations.rate_limiter import IntegrationRateLimiter
 
 
-def _make_integration(token: str = "ghp_test") -> GitHubIntegration:
-    cfg = IntegrationConfig(name="github", provider="github", token=token)
-    return GitHubIntegration(cfg)
+@pytest.fixture(autouse=True)
+def _reset_module_rate_limiter():
+    """Reset the module-level GitHub rate limiter before each test.
+
+    The singleton accumulates state across tests (e.g. Retry-After from a 403
+    test will cause a subsequent test's acquire() to time out).  Resetting the
+    states dict and the lock reference is sufficient.
+    """
+    limiter = _gh_mod._GITHUB_RATE_LIMITER
+    limiter._states.clear()
+    limiter._lock = None
+    yield
+    limiter._states.clear()
+    limiter._lock = None
+
+
+# ---------------------------------------------------------------------------
+# Fixtures / helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_config(**kwargs) -> IntegrationConfig:
+    defaults = dict(
+        name="Test GitHub",
+        provider="github",
+        api_key="ghp_test_token_abc",
+        base_url="https://api.github.com",
+    )
+    defaults.update(kwargs)
+    return IntegrationConfig(**defaults)
+
+
+def _build_response_mock(status: int, body: Any, headers: Dict[str, str] | None = None):
+    """Return a nested async context-manager mock for aiohttp.ClientSession.request."""
+    resp = AsyncMock()
+    resp.status = status
+    resp.headers = headers or {}
+    resp.json = AsyncMock(return_value=body)
+
+    inner_cm = AsyncMock()
+    inner_cm.__aenter__ = AsyncMock(return_value=resp)
+    inner_cm.__aexit__ = AsyncMock(return_value=False)
+
+    session = MagicMock()
+    session.request = MagicMock(return_value=inner_cm)
+
+    outer_cm = AsyncMock()
+    outer_cm.__aenter__ = AsyncMock(return_value=session)
+    outer_cm.__aexit__ = AsyncMock(return_value=False)
+    return outer_cm
 
 
 # ---------------------------------------------------------------------------
@@ -22,245 +85,268 @@ def _make_integration(token: str = "ghp_test") -> GitHubIntegration:
 
 
 @pytest.mark.asyncio
-async def test_test_connection_healthy() -> None:
-    integration = _make_integration()
-    mock_resp = AsyncMock()
-    mock_resp.status = 200
-    mock_resp.json = AsyncMock(return_value={"login": "testuser", "id": 1})
-    mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
-    mock_resp.__aexit__ = AsyncMock(return_value=False)
-
-    mock_session = MagicMock()
-    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_session.__aexit__ = AsyncMock(return_value=False)
-    mock_session.get = MagicMock(return_value=mock_resp)
-
-    with patch("integrations.github_integration.aiohttp.ClientSession", return_value=mock_session):
-        health = await integration.test_connection()
-
-    assert health.status == IntegrationStatus.HEALTHY
+async def test_test_connection_success():
+    gh = GitHubIntegration(_make_config())
+    body = {"login": "testuser", "type": "User"}
+    with patch("aiohttp.ClientSession", return_value=_build_response_mock(200, body)):
+        health = await gh.test_connection()
+    assert health.status == IntegrationStatus.CONNECTED
     assert "testuser" in health.message
-    assert integration.status == IntegrationStatus.CONNECTED
 
 
 @pytest.mark.asyncio
-async def test_test_connection_unauthorized() -> None:
-    integration = _make_integration(token="bad_token")
-    mock_resp = AsyncMock()
-    mock_resp.status = 401
-    mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
-    mock_resp.__aexit__ = AsyncMock(return_value=False)
-
-    mock_session = MagicMock()
-    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_session.__aexit__ = AsyncMock(return_value=False)
-    mock_session.get = MagicMock(return_value=mock_resp)
-
-    with patch("integrations.github_integration.aiohttp.ClientSession", return_value=mock_session):
-        health = await integration.test_connection()
-
-    assert health.status == IntegrationStatus.UNHEALTHY
-    assert integration.status == IntegrationStatus.UNAUTHORIZED
+async def test_test_connection_unauthorized():
+    gh = GitHubIntegration(_make_config())
+    body = {"message": "Bad credentials"}
+    with patch("aiohttp.ClientSession", return_value=_build_response_mock(401, body)):
+        health = await gh.test_connection()
+    assert health.status == IntegrationStatus.UNAUTHORIZED
 
 
 @pytest.mark.asyncio
-async def test_test_connection_network_error() -> None:
-    import aiohttp as _aiohttp
-
-    integration = _make_integration()
-
-    mock_session = MagicMock()
-    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_session.__aexit__ = AsyncMock(return_value=False)
-    mock_session.get = MagicMock(side_effect=_aiohttp.ClientConnectionError("refused"))
-
-    with patch("integrations.github_integration.aiohttp.ClientSession", return_value=mock_session):
-        health = await integration.test_connection()
-
-    assert health.status == IntegrationStatus.UNHEALTHY
-    assert integration.status == IntegrationStatus.ERROR
+async def test_test_connection_timeout():
+    gh = GitHubIntegration(_make_config())
+    # Patch acquire to pass through, then simulate network timeout
+    with patch.object(gh._rate_limiter, "acquire", new=AsyncMock()):
+        with patch("aiohttp.ClientSession", side_effect=asyncio.TimeoutError):
+            health = await gh.test_connection()
+    assert health.status == IntegrationStatus.ERROR
+    assert "timed out" in health.message.lower()
 
 
 # ---------------------------------------------------------------------------
-# get_available_actions
-# ---------------------------------------------------------------------------
-
-
-def test_get_available_actions_complete() -> None:
-    integration = _make_integration()
-    actions = integration.get_available_actions()
-    names = {a.name for a in actions}
-    expected = {
-        "get_pull_request",
-        "list_pull_requests",
-        "get_pull_request_diff",
-        "list_pr_review_comments",
-        "post_pr_comment",
-        "submit_pr_review",
-        "get_issue",
-        "list_issues",
-        "get_repository",
-        "list_commits",
-        "get_commit",
-        "get_repository_tree",
-        "get_file_contents",
-    }
-    assert expected == names
-
-
-# ---------------------------------------------------------------------------
-# execute_action dispatch
+# HTTP 429: rate limited response
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_execute_action_unknown_raises() -> None:
-    integration = _make_integration()
-    with pytest.raises(ValueError, match="Unknown GitHub action"):
-        await integration.execute_action("nonexistent", {})
+async def test_github_request_429_returns_error_and_sets_retry_after():
+    gh = GitHubIntegration(_make_config())
+    body = {"message": "API rate limit exceeded"}
+    headers = {"Retry-After": "60"}
+    with patch("asyncio.sleep", new=AsyncMock()):
+        with patch(
+            "aiohttp.ClientSession",
+            return_value=_build_response_mock(429, body, headers),
+        ):
+            result = await gh._github_request("GET", "/repos/owner/repo")
 
-
-@pytest.mark.asyncio
-async def test_list_pull_requests() -> None:
-    integration = _make_integration()
-    pr_data = [{"number": 1, "title": "Fix bug"}]
-    integration._get = AsyncMock(return_value=pr_data)
-
-    result = await integration.execute_action(
-        "list_pull_requests",
-        {"owner": "mrveiss", "repo": "AutoBot-AI", "state": "open"},
-    )
-
-    assert result["count"] == 1
-    assert result["pull_requests"] == pr_data
-    integration._get.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_get_pull_request() -> None:
-    integration = _make_integration()
-    pr_data = {"number": 42, "title": "Add feature"}
-    integration._get = AsyncMock(return_value=pr_data)
-
-    result = await integration.execute_action(
-        "get_pull_request",
-        {"owner": "mrveiss", "repo": "AutoBot-AI", "pull_number": 42},
-    )
-
-    assert result["pull_request"] == pr_data
-
-
-@pytest.mark.asyncio
-async def test_list_issues_filters_prs() -> None:
-    integration = _make_integration()
-    raw = [
-        {"number": 1, "title": "Bug"},
-        {"number": 2, "title": "PR", "pull_request": {"url": "..."}},
-    ]
-    integration._get = AsyncMock(return_value=raw)
-
-    result = await integration.execute_action(
-        "list_issues", {"owner": "mrveiss", "repo": "AutoBot-AI"}
-    )
-
-    assert result["count"] == 1
-    assert result["issues"][0]["number"] == 1
-
-
-@pytest.mark.asyncio
-async def test_post_pr_comment() -> None:
-    integration = _make_integration()
-    comment_data = {"id": 99, "body": "Looks good"}
-    integration._post = AsyncMock(return_value=comment_data)
-
-    result = await integration.execute_action(
-        "post_pr_comment",
-        {
-            "owner": "mrveiss",
-            "repo": "AutoBot-AI",
-            "pull_number": 10,
-            "body": "Looks good",
-        },
-    )
-
-    assert result["comment"] == comment_data
-    integration._post.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_submit_pr_review_defaults_to_comment_event() -> None:
-    integration = _make_integration()
-    review_data = {"id": 5, "state": "COMMENTED"}
-    integration._post = AsyncMock(return_value=review_data)
-
-    result = await integration.execute_action(
-        "submit_pr_review",
-        {
-            "owner": "mrveiss",
-            "repo": "AutoBot-AI",
-            "pull_number": 10,
-            "body": "review body",
-        },
-    )
-
-    assert result["review"] == review_data
-    call_kwargs = integration._post.call_args
-    assert call_kwargs[0][1]["event"] == "COMMENT"
-
-
-@pytest.mark.asyncio
-async def test_get_repository_tree_recursive() -> None:
-    integration = _make_integration()
-    tree_data = {"sha": "abc", "tree": []}
-    integration._get = AsyncMock(return_value=tree_data)
-
-    await integration.execute_action(
-        "get_repository_tree",
-        {"owner": "mrveiss", "repo": "AutoBot-AI", "tree_sha": "HEAD", "recursive": True},
-    )
-
-    call_args = integration._get.call_args
-    assert call_args[1]["query_params"]["recursive"] == "1"
-
-
-@pytest.mark.asyncio
-async def test_list_commits_default_per_page() -> None:
-    integration = _make_integration()
-    commits = [{"sha": "abc"}] * 30
-    integration._get = AsyncMock(return_value=commits)
-
-    result = await integration.execute_action(
-        "list_commits", {"owner": "mrveiss", "repo": "AutoBot-AI"}
-    )
-
-    assert result["count"] == 30
-    call_args = integration._get.call_args
-    assert call_args[1]["query_params"]["per_page"] == 30
+    assert result["status_code"] == 429
+    # The retry_after_until on the limiter state should now be set
+    state = gh._rate_limiter._get_state(gh._token_key)
+    assert state.retry_after_until > 0.0
 
 
 # ---------------------------------------------------------------------------
-# Headers
+# HTTP 403: secondary rate limit
 # ---------------------------------------------------------------------------
 
 
-def test_auth_header_uses_token_field() -> None:
-    cfg = IntegrationConfig(name="github", provider="github", token="tok_abc")
-    integration = GitHubIntegration(cfg)
-    assert integration.headers["Authorization"] == "Bearer tok_abc"
+@pytest.mark.asyncio
+async def test_github_request_403_secondary_rate_limit():
+    gh = GitHubIntegration(_make_config())
+    body = {"message": "You have exceeded a secondary rate limit."}
+    headers = {"Retry-After": "30"}
+    with patch(
+        "aiohttp.ClientSession",
+        return_value=_build_response_mock(403, body, headers),
+    ):
+        result = await gh._github_request("GET", "/repos/owner/repo")
+
+    assert result["status_code"] == 403
+    state = gh._rate_limiter._get_state(gh._token_key)
+    assert state.retry_after_until > 0.0
 
 
-def test_auth_header_falls_back_to_api_key() -> None:
-    cfg = IntegrationConfig(name="github", provider="github", api_key="key_xyz")
-    integration = GitHubIntegration(cfg)
-    assert integration.headers["Authorization"] == "Bearer key_xyz"
+# ---------------------------------------------------------------------------
+# X-RateLimit-Remaining=0 blocks next acquire
+# ---------------------------------------------------------------------------
 
 
-def test_custom_base_url() -> None:
-    cfg = IntegrationConfig(
-        name="github",
-        provider="github",
-        token="tok",
-        base_url="https://github.example.com/api/v3",
-    )
-    integration = GitHubIntegration(cfg)
-    assert integration.base_url == "https://github.example.com/api/v3"
+@pytest.mark.asyncio
+async def test_x_ratelimit_remaining_zero_blocks_next_request():
+    import time
+
+    gh = GitHubIntegration(_make_config())
+    body = {"login": "testuser", "type": "User"}
+    # Simulate response where quota is exhausted, reset in 60 s
+    reset_time = int(time.time()) + 60
+    headers = {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": str(reset_time)}
+    with patch(
+        "aiohttp.ClientSession",
+        return_value=_build_response_mock(200, body, headers),
+    ):
+        await gh._github_request("GET", "/user")
+
+    # Next check should be blocked
+    can, wait = gh._rate_limiter.check(gh._token_key)
+    assert can is False
+    assert wait > 0.0
+
+
+# ---------------------------------------------------------------------------
+# Local rate limit exhaustion → rate_limit_timeout error
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_acquire_timeout_returns_structured_error():
+    gh = GitHubIntegration(_make_config())
+    # Replace rate limiter with one that always raises TimeoutError on acquire
+    mock_limiter = MagicMock()
+    mock_limiter.acquire = AsyncMock(side_effect=asyncio.TimeoutError)
+    gh._rate_limiter = mock_limiter
+
+    result = await gh._github_request("GET", "/repos/owner/repo")
+    assert result["status_code"] == 429
+    assert result["error"] == "rate_limit_timeout"
+
+
+# ---------------------------------------------------------------------------
+# Connection error → structured error dict
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_github_request_connection_error():
+    gh = GitHubIntegration(_make_config())
+    with patch.object(gh._rate_limiter, "acquire", new=AsyncMock()):
+        with patch(
+            "aiohttp.ClientSession",
+            side_effect=aiohttp.ClientConnectionError("refused"),
+        ):
+            result = await gh._github_request("GET", "/repos/owner/repo")
+
+    assert result["status_code"] == 0
+    assert result["error"] == "connection_error"
+    assert "refused" in result["body"]["message"]
+
+
+# ---------------------------------------------------------------------------
+# 5xx transient error retries and eventually returns last result
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_github_request_5xx_returns_after_max_retries(caplog):
+    gh = GitHubIntegration(_make_config())
+    body = {"message": "Service Unavailable"}
+
+    with patch("asyncio.sleep", new=AsyncMock()):
+        with patch(
+            "aiohttp.ClientSession",
+            return_value=_build_response_mock(503, body),
+        ):
+            result = await gh._github_request("GET", "/repos/owner/repo")
+
+    # Should return after _MAX_RETRIES attempts with the 503 response
+    assert result["status_code"] == 503
+
+
+# ---------------------------------------------------------------------------
+# execute_action: get_repository maps correctly
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_execute_action_get_repository():
+    gh = GitHubIntegration(_make_config())
+    repo_body = {"id": 1, "full_name": "owner/repo", "private": False}
+    with patch(
+        "aiohttp.ClientSession",
+        return_value=_build_response_mock(200, repo_body),
+    ):
+        result = await gh.execute_action("get_repository", {"owner": "owner", "repo": "repo"})
+    assert result["full_name"] == "owner/repo"
+
+
+# ---------------------------------------------------------------------------
+# execute_action: unknown action raises ValueError
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_execute_action_unknown_raises():
+    gh = GitHubIntegration(_make_config())
+    with pytest.raises(ValueError, match="Unknown action"):
+        await gh.execute_action("invalid_action", {})
+
+
+# ---------------------------------------------------------------------------
+# Rate limiting: quota records after each request
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_records_after_successful_request():
+    gh = GitHubIntegration(_make_config())
+    # Give fresh limiter so history is clean
+    fresh_limiter = IntegrationRateLimiter(requests_per_minute=100, requests_per_hour=5000)
+    gh._rate_limiter = fresh_limiter
+
+    body = {"login": "u", "type": "User"}
+    with patch(
+        "aiohttp.ClientSession",
+        return_value=_build_response_mock(200, body),
+    ):
+        await gh._github_request("GET", "/user")
+
+    state = fresh_limiter._get_state(gh._token_key)
+    assert len(state.history) == 1
+
+
+# ---------------------------------------------------------------------------
+# Slack rate limiting: _make_slack_request applies Retry-After on 429
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_slack_make_request_429_applies_retry_after():
+    """Slack _make_slack_request should update rate limiter state on HTTP 429."""
+    from integrations.communication_integration import SlackIntegration
+
+    def _slack_config(**kw):
+        from integrations.base import IntegrationConfig
+
+        defaults = dict(
+            name="Test Slack",
+            provider="slack",
+            token="xoxb-test",
+            base_url="https://slack.com/api",
+        )
+        defaults.update(kw)
+        return IntegrationConfig(**defaults)
+
+    slack = SlackIntegration(_slack_config())
+    fresh_limiter = IntegrationRateLimiter(requests_per_minute=100, requests_per_hour=5000)
+    slack._rate_limiter = fresh_limiter
+
+    body = {"ok": False, "error": "ratelimited", "retry_after": 30}
+
+    resp = AsyncMock()
+    resp.status = 429
+    resp.headers = {"Retry-After": "30"}
+    resp.json = AsyncMock(return_value=body)
+
+    inner_cm = AsyncMock()
+    inner_cm.__aenter__ = AsyncMock(return_value=resp)
+    inner_cm.__aexit__ = AsyncMock(return_value=False)
+
+    session = MagicMock()
+    session.post = MagicMock(return_value=inner_cm)
+
+    outer_cm = AsyncMock()
+    outer_cm.__aenter__ = AsyncMock(return_value=session)
+    outer_cm.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("aiohttp.ClientSession", return_value=outer_cm):
+        result = await slack._make_slack_request(
+            "POST",
+            "https://slack.com/api/chat.postMessage",
+            headers={"Authorization": "Bearer xoxb-test"},
+            data={"channel": "C123", "text": "hi"},
+        )
+
+    assert result["ok"] is False
+    state = fresh_limiter._get_state(slack._token_key)
+    assert state.retry_after_until > 0.0

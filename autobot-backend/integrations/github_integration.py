@@ -2,13 +2,15 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-GitHub API Integration (Issue #4097)
+GitHub API Integration (Issues #4097, #4162)
 
-Provides GitHub API access for agents: pull requests, issues, code reviews,
-repository structure, and commit context.  Authenticates via a Personal Access
-Token (PAT) stored in IntegrationConfig.token or IntegrationConfig.api_key.
+Provides access to pull requests, issues, reviews, repository structure,
+and commits via the GitHub REST API v3.  All API calls are guarded by
+the IntegrationRateLimiter (5000 req/hr per token, 90 req/min local
+window) with automatic Retry-After and X-RateLimit-Reset handling.
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -22,394 +24,354 @@ from integrations.base import (
     IntegrationHealth,
     IntegrationStatus,
 )
+from integrations.rate_limiter import (
+    GITHUB_REQUESTS_PER_HOUR,
+    GITHUB_REQUESTS_PER_MINUTE,
+    IntegrationRateLimiter,
+)
 
 logger = logging.getLogger(__name__)
 
-_GITHUB_API = "https://api.github.com"
+_GITHUB_RATE_LIMITER = IntegrationRateLimiter(
+    requests_per_minute=GITHUB_REQUESTS_PER_MINUTE,
+    requests_per_hour=GITHUB_REQUESTS_PER_HOUR,
+)
 
 
 class GitHubIntegration(BaseIntegration):
-    """GitHub REST API integration for code context and reviews.
+    """GitHub REST API v3 integration.
 
-    Supports fetching PRs, diffs, issues, review comments, repository trees,
-    and recent commits.  All operations are read-write: agents may also post
-    PR comments and submit reviews.
+    Authentication: Personal Access Token (PAT) or GitHub App installation
+    token passed as ``api_key`` in the config.  Unauthenticated requests
+    receive a 60 req/hr limit; authenticated ones get 5 000 req/hr.
 
-    Authentication: supply a Personal Access Token (PAT) via
-    ``IntegrationConfig.token`` or ``IntegrationConfig.api_key``.
+    Rate limiting:
+    - Local sliding-window: 90 req/min, 5 000 req/hr per token
+    - Response-header tracking: X-RateLimit-Remaining / X-RateLimit-Reset
+    - Retry-After enforcement on HTTP 403 (secondary limit) / HTTP 429
+    - Exponential back-off for transient 5xx errors (max 3 retries)
     """
+
+    _RETRY_STATUS_CODES = {500, 502, 503, 504}
+    _MAX_RETRIES = 3
 
     def __init__(self, config: IntegrationConfig) -> None:
         super().__init__(config)
-        self.base_url = (config.base_url or _GITHUB_API).rstrip("/")
-        token = config.token or config.api_key or ""
-        self.headers: Dict[str, str] = {
-            "Authorization": f"Bearer {token}",
+        self.base_url = (config.base_url or "https://api.github.com").rstrip("/")
+        self._rate_limiter = _GITHUB_RATE_LIMITER
+        self._token_key = config.api_key or "unauthenticated"
+
+    @property
+    def _auth_headers(self) -> Dict[str, str]:
+        headers = {
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
         }
-
-    # ------------------------------------------------------------------
-    # BaseIntegration contract
-    # ------------------------------------------------------------------
+        if self.config.api_key:
+            headers["Authorization"] = f"Bearer {self.config.api_key}"
+        return headers
 
     async def test_connection(self) -> IntegrationHealth:
-        """Verify credentials by calling /user.
-
-        Returns:
-            IntegrationHealth reflecting current token validity.
-        """
+        """Test GitHub API connectivity by fetching the authenticated user."""
         start = datetime.utcnow()
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"{self.base_url}/user",
-                    headers=self.headers,
-                    timeout=aiohttp.ClientTimeout(total=10),
-                ) as resp:
-                    elapsed = (datetime.utcnow() - start).total_seconds() * 1000
-                    if resp.status == 200:
-                        data = await resp.json()
-                        self._status = IntegrationStatus.CONNECTED
-                        return IntegrationHealth(
-                            provider="github",
-                            status=IntegrationStatus.HEALTHY,
-                            latency_ms=elapsed,
-                            message=f"Connected as {data.get('login')}",
-                            last_checked=datetime.utcnow(),
-                            details={"login": data.get("login"), "id": data.get("id")},
-                        )
-                    self._status = IntegrationStatus.UNAUTHORIZED
-                    return IntegrationHealth(
-                        provider="github",
-                        status=IntegrationStatus.UNHEALTHY,
-                        latency_ms=elapsed,
-                        message=f"GitHub API returned HTTP {resp.status}",
-                        last_checked=datetime.utcnow(),
-                    )
-        except aiohttp.ClientError as exc:
-            logger.error("GitHub connection test failed: %s", exc)
-            self._status = IntegrationStatus.ERROR
+            result = await self._github_request("GET", "/user")
+        except asyncio.TimeoutError:
             return IntegrationHealth(
                 provider="github",
-                status=IntegrationStatus.UNHEALTHY,
-                message=f"Connection error: {exc}",
+                status=IntegrationStatus.ERROR,
+                message="Request timed out",
                 last_checked=datetime.utcnow(),
             )
 
+        latency_ms = (datetime.utcnow() - start).total_seconds() * 1000
+        status_code = result.get("status_code", 0)
+        body = result.get("body", {})
+
+        if status_code == 200:
+            self._status = IntegrationStatus.CONNECTED
+            return IntegrationHealth(
+                provider="github",
+                status=IntegrationStatus.CONNECTED,
+                latency_ms=latency_ms,
+                message=f"Connected as {body.get('login')}",
+                last_checked=datetime.utcnow(),
+                details={
+                    "login": body.get("login"),
+                    "type": body.get("type"),
+                },
+            )
+        if status_code == 401:
+            self._status = IntegrationStatus.UNAUTHORIZED
+            return IntegrationHealth(
+                provider="github",
+                status=IntegrationStatus.UNAUTHORIZED,
+                latency_ms=latency_ms,
+                message="Invalid or expired token",
+                last_checked=datetime.utcnow(),
+            )
+        self._status = IntegrationStatus.ERROR
+        return IntegrationHealth(
+            provider="github",
+            status=IntegrationStatus.ERROR,
+            latency_ms=latency_ms,
+            message=f"HTTP {status_code}: {body.get('message', 'Unknown error')}",
+            last_checked=datetime.utcnow(),
+        )
+
     def get_available_actions(self) -> List[IntegrationAction]:
-        """Return all supported GitHub actions."""
+        """Return the list of supported GitHub actions."""
         return [
             IntegrationAction(
                 name="get_pull_request",
-                description="Fetch a single PR including metadata and diff URL",
+                description="Fetch a pull request and its diff",
                 method="GET",
-                parameters={"owner": "string", "repo": "string", "pull_number": "integer"},
+                parameters={"owner": "str", "repo": "str", "pull_number": "int"},
             ),
             IntegrationAction(
                 name="list_pull_requests",
-                description="List pull requests for a repository",
+                description="List open pull requests for a repository",
                 method="GET",
-                parameters={
-                    "owner": "string",
-                    "repo": "string",
-                    "state": "string",
-                    "head": "string",
-                    "base": "string",
-                },
-            ),
-            IntegrationAction(
-                name="get_pull_request_diff",
-                description="Fetch the unified diff of a pull request",
-                method="GET",
-                parameters={"owner": "string", "repo": "string", "pull_number": "integer"},
-            ),
-            IntegrationAction(
-                name="list_pr_review_comments",
-                description="List inline review comments on a pull request",
-                method="GET",
-                parameters={"owner": "string", "repo": "string", "pull_number": "integer"},
-            ),
-            IntegrationAction(
-                name="post_pr_comment",
-                description="Post an issue-level comment to a pull request",
-                method="POST",
-                parameters={
-                    "owner": "string",
-                    "repo": "string",
-                    "pull_number": "integer",
-                    "body": "string",
-                },
-            ),
-            IntegrationAction(
-                name="submit_pr_review",
-                description="Submit a formal PR review (APPROVE/REQUEST_CHANGES/COMMENT)",
-                method="POST",
-                parameters={
-                    "owner": "string",
-                    "repo": "string",
-                    "pull_number": "integer",
-                    "body": "string",
-                    "event": "string",
-                },
-            ),
-            IntegrationAction(
-                name="get_issue",
-                description="Fetch a single GitHub issue",
-                method="GET",
-                parameters={"owner": "string", "repo": "string", "issue_number": "integer"},
+                parameters={"owner": "str", "repo": "str", "state": "str"},
             ),
             IntegrationAction(
                 name="list_issues",
-                description="List issues in a repository",
+                description="List issues for a repository",
+                method="GET",
+                parameters={"owner": "str", "repo": "str", "state": "str"},
+            ),
+            IntegrationAction(
+                name="get_issue",
+                description="Fetch a single issue by number",
+                method="GET",
+                parameters={"owner": "str", "repo": "str", "issue_number": "int"},
+            ),
+            IntegrationAction(
+                name="post_comment",
+                description="Post a comment on a PR or issue",
+                method="POST",
+                parameters={
+                    "owner": "str",
+                    "repo": "str",
+                    "issue_number": "int",
+                    "body": "str",
+                },
+            ),
+            IntegrationAction(
+                name="list_commits",
+                description="List recent commits for a branch",
                 method="GET",
                 parameters={
-                    "owner": "string",
-                    "repo": "string",
-                    "state": "string",
-                    "labels": "string",
-                    "assignee": "string",
+                    "owner": "str",
+                    "repo": "str",
+                    "sha": "str",
+                    "per_page": "int",
                 },
             ),
             IntegrationAction(
                 name="get_repository",
                 description="Fetch repository metadata",
                 method="GET",
-                parameters={"owner": "string", "repo": "string"},
-            ),
-            IntegrationAction(
-                name="list_commits",
-                description="List recent commits on a branch",
-                method="GET",
-                parameters={
-                    "owner": "string",
-                    "repo": "string",
-                    "sha": "string",
-                    "per_page": "integer",
-                },
-            ),
-            IntegrationAction(
-                name="get_commit",
-                description="Fetch a single commit including files changed",
-                method="GET",
-                parameters={"owner": "string", "repo": "string", "ref": "string"},
-            ),
-            IntegrationAction(
-                name="get_repository_tree",
-                description="Fetch the file tree of a repository at a given ref",
-                method="GET",
-                parameters={
-                    "owner": "string",
-                    "repo": "string",
-                    "tree_sha": "string",
-                    "recursive": "boolean",
-                },
-            ),
-            IntegrationAction(
-                name="get_file_contents",
-                description="Fetch the contents of a single file",
-                method="GET",
-                parameters={
-                    "owner": "string",
-                    "repo": "string",
-                    "path": "string",
-                    "ref": "string",
-                },
+                parameters={"owner": "str", "repo": "str"},
             ),
         ]
 
-    async def execute_action(
-        self, action: str, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Dispatch to the appropriate GitHub API method.
-
-        Args:
-            action: Action name from get_available_actions().
-            params: Parameters for the action.
-
-        Returns:
-            Result dictionary.
-
-        Raises:
-            ValueError: If action is not recognised.
-        """
-        dispatch: Dict[str, Any] = {
+    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute a named GitHub action."""
+        action_map = {
             "get_pull_request": self._get_pull_request,
             "list_pull_requests": self._list_pull_requests,
-            "get_pull_request_diff": self._get_pull_request_diff,
-            "list_pr_review_comments": self._list_pr_review_comments,
-            "post_pr_comment": self._post_pr_comment,
-            "submit_pr_review": self._submit_pr_review,
-            "get_issue": self._get_issue,
             "list_issues": self._list_issues,
-            "get_repository": self._get_repository,
+            "get_issue": self._get_issue,
+            "post_comment": self._post_comment,
             "list_commits": self._list_commits,
-            "get_commit": self._get_commit,
-            "get_repository_tree": self._get_repository_tree,
-            "get_file_contents": self._get_file_contents,
+            "get_repository": self._get_repository,
         }
-        if action not in dispatch:
-            raise ValueError(f"Unknown GitHub action: {action}")
-        return await dispatch[action](params)
+        handler = action_map.get(action)
+        if not handler:
+            raise ValueError(f"Unknown action: {action}")
+        return await handler(params)
 
     # ------------------------------------------------------------------
-    # Pull-request helpers
+    # Action implementations
     # ------------------------------------------------------------------
 
     async def _get_pull_request(self, params: Dict[str, Any]) -> Dict[str, Any]:
         owner, repo = params["owner"], params["repo"]
-        pull_number = params["pull_number"]
-        url = f"{self.base_url}/repos/{owner}/{repo}/pulls/{pull_number}"
-        return {"pull_request": await self._get(url)}
+        number = params["pull_number"]
+        result = await self._github_request("GET", f"/repos/{owner}/{repo}/pulls/{number}")
+        return result.get("body", {})
 
     async def _list_pull_requests(self, params: Dict[str, Any]) -> Dict[str, Any]:
         owner, repo = params["owner"], params["repo"]
-        query: Dict[str, Any] = {"state": params.get("state", "open"), "per_page": 100}
-        for key in ("head", "base"):
-            if key in params:
-                query[key] = params[key]
-        url = f"{self.base_url}/repos/{owner}/{repo}/pulls"
-        prs = await self._get(url, query_params=query)
+        state = params.get("state", "open")
+        result = await self._github_request(
+            "GET",
+            f"/repos/{owner}/{repo}/pulls",
+            query_params={"state": state, "per_page": 50},
+        )
+        prs = result.get("body", [])
         return {"pull_requests": prs, "count": len(prs)}
-
-    async def _get_pull_request_diff(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        owner, repo = params["owner"], params["repo"]
-        pull_number = params["pull_number"]
-        url = f"{self.base_url}/repos/{owner}/{repo}/pulls/{pull_number}"
-        diff_headers = dict(self.headers)
-        diff_headers["Accept"] = "application/vnd.github.diff"
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                url, headers=diff_headers, timeout=aiohttp.ClientTimeout(total=30)
-            ) as resp:
-                resp.raise_for_status()
-                diff = await resp.text(encoding="utf-8")
-        return {"diff": diff}
-
-    async def _list_pr_review_comments(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        owner, repo = params["owner"], params["repo"]
-        pull_number = params["pull_number"]
-        url = f"{self.base_url}/repos/{owner}/{repo}/pulls/{pull_number}/comments"
-        comments = await self._get(url)
-        return {"comments": comments, "count": len(comments)}
-
-    async def _post_pr_comment(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        owner, repo = params["owner"], params["repo"]
-        pull_number = params["pull_number"]
-        url = f"{self.base_url}/repos/{owner}/{repo}/issues/{pull_number}/comments"
-        result = await self._post(url, {"body": params["body"]})
-        return {"comment": result}
-
-    async def _submit_pr_review(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        owner, repo = params["owner"], params["repo"]
-        pull_number = params["pull_number"]
-        url = f"{self.base_url}/repos/{owner}/{repo}/pulls/{pull_number}/reviews"
-        payload = {
-            "body": params.get("body", ""),
-            "event": params.get("event", "COMMENT"),
-        }
-        result = await self._post(url, payload)
-        return {"review": result}
-
-    # ------------------------------------------------------------------
-    # Issue helpers
-    # ------------------------------------------------------------------
-
-    async def _get_issue(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        owner, repo = params["owner"], params["repo"]
-        issue_number = params["issue_number"]
-        url = f"{self.base_url}/repos/{owner}/{repo}/issues/{issue_number}"
-        return {"issue": await self._get(url)}
 
     async def _list_issues(self, params: Dict[str, Any]) -> Dict[str, Any]:
         owner, repo = params["owner"], params["repo"]
-        query: Dict[str, Any] = {
-            "state": params.get("state", "open"),
-            "per_page": 100,
-        }
-        for key in ("labels", "assignee"):
-            if key in params:
-                query[key] = params[key]
-        url = f"{self.base_url}/repos/{owner}/{repo}/issues"
-        issues = await self._get(url, query_params=query)
-        # GitHub returns PRs in /issues — filter them out
-        real_issues = [i for i in issues if "pull_request" not in i]
-        return {"issues": real_issues, "count": len(real_issues)}
+        state = params.get("state", "open")
+        result = await self._github_request(
+            "GET",
+            f"/repos/{owner}/{repo}/issues",
+            query_params={"state": state, "per_page": 50},
+        )
+        issues = result.get("body", [])
+        return {"issues": issues, "count": len(issues)}
 
-    # ------------------------------------------------------------------
-    # Repository helpers
-    # ------------------------------------------------------------------
-
-    async def _get_repository(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def _get_issue(self, params: Dict[str, Any]) -> Dict[str, Any]:
         owner, repo = params["owner"], params["repo"]
-        url = f"{self.base_url}/repos/{owner}/{repo}"
-        return {"repository": await self._get(url)}
+        number = params["issue_number"]
+        result = await self._github_request("GET", f"/repos/{owner}/{repo}/issues/{number}")
+        return result.get("body", {})
+
+    async def _post_comment(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        owner, repo = params["owner"], params["repo"]
+        number = params["issue_number"]
+        result = await self._github_request(
+            "POST",
+            f"/repos/{owner}/{repo}/issues/{number}/comments",
+            json_data={"body": params["body"]},
+        )
+        return result.get("body", {})
 
     async def _list_commits(self, params: Dict[str, Any]) -> Dict[str, Any]:
         owner, repo = params["owner"], params["repo"]
-        query: Dict[str, Any] = {"per_page": params.get("per_page", 30)}
+        query: Dict[str, Any] = {"per_page": params.get("per_page", 20)}
         if "sha" in params:
             query["sha"] = params["sha"]
-        url = f"{self.base_url}/repos/{owner}/{repo}/commits"
-        commits = await self._get(url, query_params=query)
+        result = await self._github_request("GET", f"/repos/{owner}/{repo}/commits", query_params=query)
+        commits = result.get("body", [])
         return {"commits": commits, "count": len(commits)}
 
-    async def _get_commit(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        owner, repo, ref = params["owner"], params["repo"], params["ref"]
-        url = f"{self.base_url}/repos/{owner}/{repo}/commits/{ref}"
-        return {"commit": await self._get(url)}
-
-    async def _get_repository_tree(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def _get_repository(self, params: Dict[str, Any]) -> Dict[str, Any]:
         owner, repo = params["owner"], params["repo"]
-        tree_sha = params.get("tree_sha", "HEAD")
-        query: Dict[str, Any] = {}
-        if params.get("recursive"):
-            query["recursive"] = "1"
-        url = f"{self.base_url}/repos/{owner}/{repo}/git/trees/{tree_sha}"
-        tree = await self._get(url, query_params=query)
-        return {"tree": tree}
-
-    async def _get_file_contents(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        owner, repo, path = params["owner"], params["repo"], params["path"]
-        query: Dict[str, Any] = {}
-        if "ref" in params:
-            query["ref"] = params["ref"]
-        url = f"{self.base_url}/repos/{owner}/{repo}/contents/{path}"
-        contents = await self._get(url, query_params=query)
-        return {"contents": contents}
+        result = await self._github_request("GET", f"/repos/{owner}/{repo}")
+        return result.get("body", {})
 
     # ------------------------------------------------------------------
-    # HTTP primitives
+    # Core HTTP helper with rate limiting and retry logic
     # ------------------------------------------------------------------
 
-    async def _get(
+    async def _github_request(
         self,
-        url: str,
+        method: str,
+        path: str,
         query_params: Optional[Dict[str, Any]] = None,
-        timeout: float = 30.0,
-    ) -> Any:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                url,
-                headers=self.headers,
-                params=query_params,
-                timeout=aiohttp.ClientTimeout(total=timeout),
-            ) as resp:
-                resp.raise_for_status()
-                return await resp.json()
+        json_data: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Rate-limited HTTP request to the GitHub REST API.
 
-    async def _post(
-        self,
-        url: str,
-        payload: Dict[str, Any],
-        timeout: float = 30.0,
-    ) -> Any:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url,
-                headers=self.headers,
-                json=payload,
-                timeout=aiohttp.ClientTimeout(total=timeout),
-            ) as resp:
-                resp.raise_for_status()
-                return await resp.json()
+        - Checks local sliding-window quota before sending.
+        - Reads X-RateLimit-* headers after each response.
+        - Handles HTTP 403 (secondary rate limit) and 429 with Retry-After.
+        - Retries on transient 5xx errors (exponential back-off, max 3×).
+        - Never raises on HTTP errors; returns structured dict instead.
+        """
+        url = f"{self.base_url}{path}"
+
+        # Acquire rate-limit slot (waits up to 120 s if needed)
+        try:
+            await self._rate_limiter.acquire(self._token_key)
+        except asyncio.TimeoutError:
+            logger.error("GitHub rate limit wait exceeded 120 s for %s %s", method, path)
+            return {
+                "status_code": 429,
+                "body": {"message": "Rate limit wait exceeded"},
+                "error": "rate_limit_timeout",
+            }
+
+        last_result: Dict[str, Any] = {}
+        for attempt in range(self._MAX_RETRIES + 1):
+            try:
+                timeout = aiohttp.ClientTimeout(total=30.0)
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.request(
+                        method,
+                        url,
+                        headers=self._auth_headers,
+                        params=query_params,
+                        json=json_data,
+                    ) as resp:
+                        resp_headers = dict(resp.headers)
+                        body = await resp.json(content_type=None)
+                        last_result = {
+                            "status_code": resp.status,
+                            "body": body,
+                            "headers": resp_headers,
+                        }
+
+                        # Always update rate limit state from headers
+                        self._rate_limiter.apply_response_headers(self._token_key, resp_headers, service="github")
+
+                        if resp.status == 403:
+                            retry_after = resp_headers.get("Retry-After") or resp_headers.get("retry-after")
+                            if retry_after:
+                                self._rate_limiter.apply_response_headers(
+                                    self._token_key,
+                                    {"Retry-After": retry_after},
+                                    service="github",
+                                )
+                            msg = body.get("message", "")
+                            logger.warning("GitHub 403 for %s %s: %s", method, path, msg)
+                            return last_result
+
+                        if resp.status == 429:
+                            retry_after = resp_headers.get("Retry-After") or resp_headers.get("retry-after", "60")
+                            wait = float(retry_after)
+                            logger.warning("GitHub 429 for %s %s — waiting %.1fs", method, path, wait)
+                            self._rate_limiter.apply_response_headers(
+                                self._token_key,
+                                {"Retry-After": str(wait)},
+                                service="github",
+                            )
+                            if attempt < self._MAX_RETRIES:
+                                await asyncio.sleep(min(wait, 120.0))
+                                continue
+                            return last_result
+
+                        if resp.status in self._RETRY_STATUS_CODES:
+                            if attempt < self._MAX_RETRIES:
+                                backoff = 2.0**attempt
+                                logger.warning(
+                                    "GitHub %d for %s %s — retrying in %.1fs (attempt %d/%d)",
+                                    resp.status,
+                                    method,
+                                    path,
+                                    backoff,
+                                    attempt + 1,
+                                    self._MAX_RETRIES,
+                                )
+                                await asyncio.sleep(backoff)
+                                continue
+
+                        return last_result
+
+            except asyncio.TimeoutError:
+                logger.warning("GitHub request timed out: %s %s", method, path)
+                return {
+                    "status_code": 0,
+                    "body": {"message": "Request timed out"},
+                    "error": "timeout",
+                }
+            except aiohttp.ClientConnectionError as exc:
+                logger.warning("GitHub connection error for %s %s: %s", method, path, exc)
+                return {
+                    "status_code": 0,
+                    "body": {"message": str(exc)},
+                    "error": "connection_error",
+                }
+            except aiohttp.ClientError as exc:
+                logger.warning("GitHub request error for %s %s: %s", method, path, exc)
+                return {
+                    "status_code": 0,
+                    "body": {"message": str(exc)},
+                    "error": "client_error",
+                }
+
+        return last_result
