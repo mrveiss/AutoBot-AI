@@ -423,6 +423,28 @@ code_deployment() {
         fi
     done
 
+    # Validate that all critical services were distributed successfully
+    # This check catches issues early before Ansible deployment
+    info "Validating critical service directories..."
+    local critical_services=(
+        "autobot-slm-agent"
+        "autobot-slm-backend"
+        "autobot-slm-frontend"
+        "autobot_shared"
+    )
+    local validation_failed=0
+    for service in "${critical_services[@]}"; do
+        if [[ ! -d "${AUTOBOT_BASE}/${service}" ]]; then
+            error "Critical service not found: ${AUTOBOT_BASE}/${service}"
+            validation_failed=1
+        fi
+    done
+
+    if [[ $validation_failed -eq 1 ]]; then
+        error "Code distribution validation failed — critical services missing"
+        exit 1
+    fi
+
     success "Codebase ready at ${CODE_SOURCE}"
 }
 
