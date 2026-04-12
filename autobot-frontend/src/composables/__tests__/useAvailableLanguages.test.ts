@@ -30,11 +30,14 @@ describe('useAvailableLanguages', () => {
   })
 
   it('falls back to locale code when Intl.DisplayNames returns undefined', () => {
-    // Simulate a browser that returns undefined for an unknown code
-    const spy = vi.spyOn(Intl, 'DisplayNames').mockImplementation(() => ({
-      of: () => undefined,
-      resolvedOptions: () => ({} as any)
-    }))
+    // Simulate a browser that returns undefined for an unknown code.
+    // vi.spyOn on a constructor requires mockImplementation to use a class or
+    // a function that works with `new` (returns an object from within the function).
+    const spy = vi.spyOn(Intl, 'DisplayNames').mockImplementation(
+      function (_locales: any, _options: any) {
+        return { of: () => undefined, resolvedOptions: () => ({} as any) }
+      } as unknown as typeof Intl.DisplayNames
+    )
 
     const { languages } = useAvailableLanguages()
     expect(languages.value[0].name).toBe('ar')
