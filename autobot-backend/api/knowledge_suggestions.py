@@ -7,10 +7,14 @@ Knowledge Base ML-Based Suggestions API Router
 Issue #413: Provides API endpoints for tag and category suggestions
 based on content similarity using existing embeddings.
 
+Issue #3284: Adds context-based document suggestions ranked by relevance
+and recency, with preview snippets.
+
 Endpoints:
 - POST /suggestions/tags - Suggest tags for content
 - POST /suggestions/categories - Suggest categories for content
 - POST /suggestions/all - Suggest both tags and categories
+- POST /suggestions/context - Suggest KB documents relevant to conversation context
 - POST /facts/{fact_id}/auto-apply - Auto-apply suggestions to fact
 """
 
@@ -20,6 +24,7 @@ from fastapi import APIRouter, HTTPException
 
 from api.knowledge_models import (
     AutoApplySuggestionsRequest,
+    ContextSuggestionsRequest,
     SuggestAllRequest,
     SuggestCategoriesRequest,
     SuggestTagsRequest,
@@ -198,6 +203,88 @@ async def suggest_all(request: SuggestAllRequest):
         raise
     except Exception as e:
         logger.error("Combined suggestion failed: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/suggestions/context")
+async def suggest_by_context(request: ContextSuggestionsRequest):
+    """
+    Suggest KB documents relevant to the current conversation context (Issue #3284).
+
+    Performs a semantic similarity search against the knowledge base using the
+    provided context, then ranks results by a weighted combination of relevance
+    score and recency (configurable via recency_weight).
+
+    Each suggestion includes a short preview snippet so the UI can display
+    meaningful context without fetching the full document.
+
+    Args:
+        request: ContextSuggestionsRequest
+
+    Returns:
+        Dict with:
+        - success: bool
+        - suggestions: List of ranked suggestion objects, each containing:
+            - fact_id, title, snippet, relevance_score, recency_score,
+              combined_score, tags, category, created_at
+        - total_candidates: Number of documents examined before filtering
+
+    Example:
+        POST /api/knowledge_base/suggestions/context
+        {
+            "context": "How do I configure Redis connection pooling in FastAPI?",
+            "limit": 5,
+            "recency_weight": 0.2,
+            "min_score": 0.3,
+            "snippet_length": 200
+        }
+
+        Response:
+        {
+            "success": true,
+            "suggestions": [
+                {
+                    "fact_id": "abc123",
+                    "title": "Redis connection pooling guide",
+                    "snippet": "Connection pooling in Redis can be configured...",
+                    "relevance_score": 0.87,
+                    "recency_score": 0.95,
+                    "combined_score": 0.885,
+                    "tags": ["redis", "fastapi", "performance"],
+                    "category": "tech/databases",
+                    "created_at": "2025-03-15T10:30:00+00:00"
+                }
+            ],
+            "total_candidates": 18
+        }
+    """
+    try:
+        kb = await get_knowledge_base()
+        result = await kb.suggest_by_context(
+            context=request.context,
+            limit=request.limit,
+            recency_weight=request.recency_weight,
+            min_score=request.min_score,
+            snippet_length=request.snippet_length,
+        )
+
+        if not result.get("success"):
+            raise HTTPException(
+                status_code=500,
+                detail=result.get("error", "Failed to generate context suggestions"),
+            )
+
+        logger.info(
+            "Context suggestions: returned %d suggestions (context_len=%d)",
+            len(result.get("suggestions", [])),
+            len(request.context),
+        )
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Context suggestion failed: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

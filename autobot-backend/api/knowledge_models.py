@@ -1303,6 +1303,71 @@ class AutoApplySuggestionsRequest(BaseModel):
     )
 
 
+# ===== CONTEXT SUGGESTION MODELS (Issue #3284) =====
+
+
+class ContextSuggestionsRequest(BaseModel):
+    """
+    Request model for context-based KB document suggestions (Issue #3284).
+
+    Returns ranked KB documents relevant to the current conversation context,
+    scored by semantic similarity to the context and boosted by recency.
+    Each suggestion includes a short preview snippet.
+    """
+
+    context: str = Field(
+        ...,
+        min_length=10,
+        max_length=10000,
+        description="Current conversation context or query to find relevant KB documents for",
+    )
+    limit: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Maximum number of document suggestions to return",
+    )
+    recency_weight: float = Field(
+        default=0.2,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Weight of recency boost relative to relevance score (0=purely semantic, "
+            "1=purely recency)"
+        ),
+    )
+    min_score: float = Field(
+        default=0.3,
+        ge=0.0,
+        le=1.0,
+        description="Minimum combined score threshold for a suggestion to be included",
+    )
+    snippet_length: int = Field(
+        default=200,
+        ge=50,
+        le=500,
+        description="Maximum character length of the preview snippet",
+    )
+
+
+class ContextSuggestionItem(BaseModel):
+    """
+    A single context-based KB document suggestion (Issue #3284).
+
+    Returned as part of the ContextSuggestionsResponse.
+    """
+
+    fact_id: str = Field(description="Unique identifier of the KB fact")
+    title: str = Field(description="Title or first-line of the document")
+    snippet: str = Field(description="Short preview snippet of the document content")
+    relevance_score: float = Field(description="Semantic similarity score (0.0-1.0)")
+    recency_score: float = Field(description="Recency score derived from timestamp (0.0-1.0)")
+    combined_score: float = Field(description="Weighted combination of relevance and recency")
+    tags: list[str] = Field(default_factory=list, description="Tags associated with the document")
+    category: str = Field(default="", description="Category path of the document")
+    created_at: str = Field(default="", description="ISO-8601 timestamp when the fact was created")
+
+
 # ===== METADATA TEMPLATE MODELS (Issue #414) =====
 
 # Valid field types for metadata templates

@@ -13,7 +13,9 @@ from them weighted by similarity score.
 import asyncio
 import json
 import logging
+import math
 from collections import defaultdict
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 if TYPE_CHECKING:
@@ -530,6 +532,195 @@ class SuggestionsMixin:
         # Sort by confidence descending
         suggestions.sort(key=lambda x: x["confidence"], reverse=True)
         return suggestions[:limit]
+
+    # ------------------------------------------------------------------
+    # Context-based document suggestions (Issue #3284)
+    # ------------------------------------------------------------------
+
+    _RECENCY_HALF_LIFE_DAYS = 30  # Score halves every 30 days
+    _SNIPPET_ELLIPSIS = "..."
+
+    def _compute_recency_score(self, timestamp_str: str) -> float:
+        """
+        Compute a 0-1 recency score using exponential decay.
+
+        Score = exp(-lambda * age_days) where lambda = ln(2) / half_life.
+        A document created today scores 1.0; one created 30 days ago scores ~0.5.
+
+        Args:
+            timestamp_str: ISO-8601 timestamp string, may be empty.
+
+        Returns:
+            Recency score in [0.0, 1.0].
+        """
+        if not timestamp_str:
+            return 0.5  # Unknown age: neutral score
+
+        try:
+            ts = datetime.fromisoformat(timestamp_str)
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            age_days = max(0.0, (datetime.now(tz=timezone.utc) - ts).total_seconds() / 86400.0)
+            decay_lambda = math.log(2) / self._RECENCY_HALF_LIFE_DAYS
+            return math.exp(-decay_lambda * age_days)
+        except (ValueError, OverflowError, OSError):
+            return 0.5
+
+    def _build_snippet(self, content: str, snippet_length: int) -> str:
+        """
+        Extract a short preview snippet from raw document content.
+
+        Trims to the nearest word boundary and appends ellipsis when truncated.
+
+        Args:
+            content: Full document text.
+            snippet_length: Maximum character length of the snippet.
+
+        Returns:
+            Snippet string, at most snippet_length characters + ellipsis.
+        """
+        if not content:
+            return ""
+        text = content.strip()
+        if len(text) <= snippet_length:
+            return text
+        truncated = text[:snippet_length].rsplit(" ", 1)[0]
+        return truncated + self._SNIPPET_ELLIPSIS
+
+    def _extract_title(self, content: str, metadata: Dict[str, Any]) -> str:
+        """
+        Derive a human-readable title for a KB document.
+
+        Priority: metadata["title"] > metadata["source"] > first non-empty line.
+
+        Args:
+            content: Document text.
+            metadata: Fact metadata dict.
+
+        Returns:
+            Title string (never empty — falls back to truncated content).
+        """
+        for key in ("title", "source"):
+            val = metadata.get(key, "")
+            if val and isinstance(val, str) and val.strip():
+                return val.strip()
+
+        for line in content.splitlines():
+            line = line.strip()
+            if line:
+                return line[:120]
+
+        return content[:60].strip() or "Untitled"
+
+    async def suggest_by_context(
+        self,
+        context: str,
+        limit: int = 5,
+        recency_weight: float = 0.2,
+        min_score: float = 0.3,
+        snippet_length: int = 200,
+    ) -> Dict[str, Any]:
+        """
+        Return KB documents ranked by relevance to current context (Issue #3284).
+
+        Each result is scored as:
+            combined = (1 - recency_weight) * relevance + recency_weight * recency
+
+        Results below min_score are excluded. Suggestions include a short preview
+        snippet so the caller can display context without fetching the full document.
+
+        Args:
+            context: Current conversation context / user query.
+            limit: Maximum number of suggestions to return.
+            recency_weight: 0 = purely semantic, 1 = purely recency.
+            min_score: Minimum combined score threshold.
+            snippet_length: Maximum snippet character length.
+
+        Returns:
+            Dict with:
+            - success: bool
+            - suggestions: List of ContextSuggestionItem-shaped dicts
+            - total_candidates: int — number of documents examined
+        """
+        self.ensure_initialized()
+
+        if not context or not context.strip():
+            return {
+                "success": False,
+                "suggestions": [],
+                "total_candidates": 0,
+                "error": "Context is required",
+            }
+
+        try:
+            # Fetch more candidates than needed so scoring can filter/sort properly.
+            fetch_limit = min(limit * 4, 50)
+            raw_results = await self._find_similar_documents(context, fetch_limit)
+            total_candidates = len(raw_results)
+
+            suggestions = []
+            for doc in raw_results:
+                relevance = float(doc.get("score", 0.0))
+                metadata = doc.get("metadata", {})
+                content = doc.get("content", "")
+
+                # Timestamp may live on the top-level doc or inside metadata
+                timestamp_str = doc.get("timestamp", "") or metadata.get("timestamp", "")
+                recency = self._compute_recency_score(timestamp_str)
+
+                combined = (1.0 - recency_weight) * relevance + recency_weight * recency
+
+                if combined < min_score:
+                    continue
+
+                fact_id = metadata.get("fact_id", doc.get("node_id", ""))
+
+                # Parse tags stored as JSON string or list
+                raw_tags: Any = metadata.get("tags", [])
+                if isinstance(raw_tags, str):
+                    try:
+                        raw_tags = json.loads(raw_tags)
+                    except (json.JSONDecodeError, TypeError):
+                        raw_tags = [raw_tags] if raw_tags else []
+                tags: List[str] = [t for t in raw_tags if isinstance(t, str)]
+
+                suggestions.append(
+                    {
+                        "fact_id": fact_id,
+                        "title": self._extract_title(content, metadata),
+                        "snippet": self._build_snippet(content, snippet_length),
+                        "relevance_score": round(relevance, 4),
+                        "recency_score": round(recency, 4),
+                        "combined_score": round(combined, 4),
+                        "tags": tags,
+                        "category": metadata.get("category_path", metadata.get("category", "")),
+                        "created_at": timestamp_str,
+                    }
+                )
+
+            suggestions.sort(key=lambda x: x["combined_score"], reverse=True)
+            suggestions = suggestions[:limit]
+
+            logger.info(
+                "Context suggestions: returned %d/%d candidates (context_len=%d)",
+                len(suggestions),
+                total_candidates,
+                len(context),
+            )
+            return {
+                "success": True,
+                "suggestions": suggestions,
+                "total_candidates": total_candidates,
+            }
+
+        except Exception as e:
+            logger.error("Failed to generate context suggestions: %s", e)
+            return {
+                "success": False,
+                "suggestions": [],
+                "total_candidates": 0,
+                "error": "Failed to generate context suggestions",
+            }
 
     def ensure_initialized(self):
         """Ensure the knowledge base is initialized. Implemented in composed class."""
