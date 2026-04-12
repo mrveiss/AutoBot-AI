@@ -60,6 +60,7 @@ from api.redis_mcp import router as redis_mcp_router  # Issue #2511
 from api.sequential_thinking_mcp import router as sequential_thinking_mcp_router
 from api.service_messages import router as service_messages_router
 from api.settings import router as settings_router
+from api.self_capabilities import router as self_capabilities_router  # Issue #3295
 from api.structured_thinking_mcp import router as structured_thinking_mcp_router
 from api.system import router as system_router
 from api.vnc_manager import router as vnc_router
@@ -75,7 +76,7 @@ from services.knowledge_sync_service import router as knowledge_sync_router
 
 
 def _get_system_routers() -> list:
-    """Get system and settings routers (Issue #560: extracted, #1281: audit)."""
+    """Get system and settings routers (Issue #560: extracted, #1281: audit, #3295: self)."""
     return [
         (audit_router, "", ["audit"], "audit"),
         (auth_router, "/auth", ["auth"], "auth"),
@@ -87,6 +88,8 @@ def _get_system_routers() -> list:
         (data_storage_router, "", ["data-storage"], "data_storage"),
         (prompts_router, "/prompts", ["prompts"], "prompts"),
         (frontend_config_router, "", ["frontend-config"], "frontend_config"),
+        # Issue #3295: dynamic endpoint discovery for LLM self-awareness
+        (self_capabilities_router, "/self", ["self", "capabilities"], "self_capabilities"),
     ]
 
 

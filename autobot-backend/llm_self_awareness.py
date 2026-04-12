@@ -139,7 +139,7 @@ class LLMSelfAwareness:
             "current_capabilities": {"active": [], "error": str(error)},
         }
 
-    def _build_contextual_information(self) -> Dict[str, Any]:
+    async def _build_contextual_information(self) -> Dict[str, Any]:
         """
         Build contextual information section of context.
 
@@ -147,11 +147,12 @@ class LLMSelfAwareness:
             Dictionary with timestamp, environment, endpoints, and data sources.
 
         Issue #620.
+        Issue #3295: now async; delegates endpoint list to dynamic discovery.
         """
         return {
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "environment": os.getenv("AUTOBOT_ENVIRONMENT", "production"),
-            "api_endpoints_available": self._get_available_endpoints(),
+            "api_endpoints_available": await self._get_available_endpoints_async(),
             "data_sources": [
                 "knowledge_base",
                 "memory_system",
@@ -213,7 +214,7 @@ class LLMSelfAwareness:
                 "operational_status": self._build_operational_status(
                     capabilities, state_summary
                 ),
-                "contextual_information": self._build_contextual_information(),
+                "contextual_information": await self._build_contextual_information(),
             }
 
             if include_detailed:
@@ -360,49 +361,61 @@ class LLMSelfAwareness:
                 return category
         return None
 
+    async def _get_available_endpoints_async(self) -> List[str]:
+        """
+        Get list of available API endpoints from the live OpenAPI schema.
+
+        Delegates to api.self_capabilities.discover_endpoints() so the list
+        is always derived from the registered FastAPI routes rather than being
+        hardcoded.  Falls back to an empty list when the app reference is
+        unavailable (e.g. unit-test context).
+
+        Issue #3295: replaced hardcoded list with dynamic discovery.
+        """
+        try:
+            from api.self_capabilities import discover_endpoints  # local import avoids cycle
+
+            app = self._get_fastapi_app()
+            if app is None:
+                logger.warning(
+                    "llm_self_awareness: FastAPI app not available; "
+                    "returning empty endpoint list"
+                )
+                return []
+            payload = await discover_endpoints(app)
+            return payload.get("api_paths", [])
+        except Exception as exc:  # pragma: no cover
+            logger.error("llm_self_awareness: endpoint discovery failed: %s", exc)
+            return []
+
+    @staticmethod
+    def _get_fastapi_app():
+        """
+        Return the running FastAPI app instance, or None.
+
+        Imports are deferred to avoid circular dependencies at module load time.
+        """
+        try:
+            import main as _main  # noqa: PLC0415 — deferred by design
+
+            return getattr(_main, "app", None)
+        except ImportError:
+            return None
+
     def _get_available_endpoints(self) -> List[str]:
         """
-        Get list of available API endpoints.
+        Synchronous shim kept for backward compatibility with callers that
+        cannot await.  Returns an empty list; async callers should use
+        _get_available_endpoints_async() directly.
 
-        NOTE: For dynamic endpoint discovery, use FastAPI's app.routes
-        in a context where the app object is available (e.g., middleware).
-        This method returns key endpoints for LLM context awareness.
-        See backend/initialization/routers.py for the full router registry.
+        Issue #3295: synchronous path delegates note that dynamic discovery
+        requires an async context — see _get_available_endpoints_async().
         """
-        return [
-            # Core endpoints
-            "/api/chat",
-            "/api/system",
-            "/api/settings",
-            "/api/prompts",
-            "/api/knowledge_base",
-            "/api/llm",
-            "/api/redis",
-            "/api/voice",
-            "/api/vnc",
-            "/api/agent",
-            "/api/agent_config",
-            "/api/intelligent_agent",
-            "/api/files",
-            "/api/memory",
-            # MCP endpoints
-            "/api/mcp",
-            "/api/knowledge",
-            "/api/filesystem",
-            "/api/browser",
-            "/api/database",
-            "/api/git",
-            # Optional endpoints (may not be loaded)
-            "/api/terminal",
-            "/api/workflow",
-            "/api/orchestrator",
-            "/api/analytics",
-            "/api/monitoring",
-            "/api/state-tracking",
-            "/api/services",
-            "/api/vision",
-            "/api/embeddings",
-        ]
+        logger.debug(
+            "llm_self_awareness: _get_available_endpoints() called in sync context; "
+            "use _get_available_endpoints_async() for the live list"
+        )
+        return []
 
     def _get_detailed_capabilities(self) -> Dict[str, Any]:
         """Get detailed capability information"""
