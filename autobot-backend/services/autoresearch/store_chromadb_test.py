@@ -466,3 +466,186 @@ class TestEnrichedIndexing:
         )
         meta = store._build_metadata(exp)
         assert "session_id" not in meta
+
+
+# ---------------------------------------------------------------------------
+# Missing spec fields: iteration, trend, variant ID (Issue #3212)
+# ---------------------------------------------------------------------------
+
+
+class TestSpecFieldsIterationTrendVariant:
+    """Tests for iteration, trend_direction, and variant_id in _build_document
+    and _build_metadata — spec section 2.1 (#3212)."""
+
+    # --- _build_document ---
+
+    def test_document_includes_iteration(self):
+        store = _make_store()
+        exp = Experiment(
+            hypothesis="Test",
+            hyperparams=HyperParams(),
+            state=ExperimentState.COMPLETED,
+            tags=["session:s1", "iteration:3"],
+        )
+        doc = store._build_document(exp)
+        assert "Iteration: 3" in doc
+
+    def test_document_no_iteration_when_tag_absent(self):
+        store = _make_store()
+        exp = Experiment(
+            hypothesis="Test",
+            hyperparams=HyperParams(),
+            state=ExperimentState.COMPLETED,
+            tags=["session:s1"],
+        )
+        doc = store._build_document(exp)
+        assert "Iteration:" not in doc
+
+    def test_document_includes_trend(self):
+        store = _make_store()
+        exp = Experiment(
+            hypothesis="Test",
+            hyperparams=HyperParams(),
+            state=ExperimentState.COMPLETED,
+            tags=["trend:improving"],
+        )
+        doc = store._build_document(exp)
+        assert "Trend: improving" in doc
+
+    def test_document_no_trend_when_tag_absent(self):
+        store = _make_store()
+        exp = Experiment(
+            hypothesis="Test",
+            hyperparams=HyperParams(),
+            state=ExperimentState.COMPLETED,
+            tags=[],
+        )
+        doc = store._build_document(exp)
+        assert "Trend:" not in doc
+
+    def test_document_includes_variant(self):
+        store = _make_store()
+        exp = Experiment(
+            hypothesis="Test",
+            hyperparams=HyperParams(),
+            state=ExperimentState.COMPLETED,
+            tags=["variant:v-abc123"],
+        )
+        doc = store._build_document(exp)
+        assert "Variant: v-abc123" in doc
+
+    def test_document_no_variant_when_tag_absent(self):
+        store = _make_store()
+        exp = Experiment(
+            hypothesis="Test",
+            hyperparams=HyperParams(),
+            state=ExperimentState.COMPLETED,
+            tags=["session:s1"],
+        )
+        doc = store._build_document(exp)
+        assert "Variant:" not in doc
+
+    def test_document_all_three_spec_fields(self):
+        store = _make_store()
+        exp = Experiment(
+            hypothesis="Full spec test",
+            hyperparams=HyperParams(),
+            state=ExperimentState.COMPLETED,
+            tags=["session:s1", "iteration:2", "trend:plateau", "variant:v-xyz"],
+        )
+        doc = store._build_document(exp)
+        assert "Iteration: 2" in doc
+        assert "Trend: plateau" in doc
+        assert "Variant: v-xyz" in doc
+
+    # --- _build_metadata ---
+
+    def test_metadata_includes_iteration(self):
+        store = _make_store()
+        exp = Experiment(
+            hypothesis="Test",
+            hyperparams=HyperParams(),
+            state=ExperimentState.COMPLETED,
+            tags=["iteration:4"],
+        )
+        meta = store._build_metadata(exp)
+        assert meta["iteration"] == 4
+
+    def test_metadata_iteration_is_int(self):
+        store = _make_store()
+        exp = Experiment(
+            hypothesis="Test",
+            hyperparams=HyperParams(),
+            state=ExperimentState.COMPLETED,
+            tags=["iteration:7"],
+        )
+        meta = store._build_metadata(exp)
+        assert isinstance(meta["iteration"], int)
+
+    def test_metadata_no_iteration_when_tag_absent(self):
+        store = _make_store()
+        exp = Experiment(
+            hypothesis="Test",
+            hyperparams=HyperParams(),
+            state=ExperimentState.COMPLETED,
+            tags=["session:s1"],
+        )
+        meta = store._build_metadata(exp)
+        assert "iteration" not in meta
+
+    def test_metadata_includes_trend_direction(self):
+        store = _make_store()
+        exp = Experiment(
+            hypothesis="Test",
+            hyperparams=HyperParams(),
+            state=ExperimentState.COMPLETED,
+            tags=["trend:declining"],
+        )
+        meta = store._build_metadata(exp)
+        assert meta["trend_direction"] == "declining"
+
+    def test_metadata_no_trend_when_tag_absent(self):
+        store = _make_store()
+        exp = Experiment(
+            hypothesis="Test",
+            hyperparams=HyperParams(),
+            state=ExperimentState.COMPLETED,
+            tags=[],
+        )
+        meta = store._build_metadata(exp)
+        assert "trend_direction" not in meta
+
+    def test_metadata_includes_variant_id(self):
+        store = _make_store()
+        exp = Experiment(
+            hypothesis="Test",
+            hyperparams=HyperParams(),
+            state=ExperimentState.COMPLETED,
+            tags=["variant:var-001"],
+        )
+        meta = store._build_metadata(exp)
+        assert meta["variant_id"] == "var-001"
+
+    def test_metadata_no_variant_when_tag_absent(self):
+        store = _make_store()
+        exp = Experiment(
+            hypothesis="Test",
+            hyperparams=HyperParams(),
+            state=ExperimentState.COMPLETED,
+            tags=["session:s1"],
+        )
+        meta = store._build_metadata(exp)
+        assert "variant_id" not in meta
+
+    def test_metadata_all_three_spec_fields(self):
+        store = _make_store()
+        exp = Experiment(
+            hypothesis="Full spec test",
+            hyperparams=HyperParams(),
+            state=ExperimentState.COMPLETED,
+            tags=["session:s1", "iteration:1", "trend:improving", "variant:v-best"],
+        )
+        meta = store._build_metadata(exp)
+        assert meta["iteration"] == 1
+        assert meta["trend_direction"] == "improving"
+        assert meta["variant_id"] == "v-best"
