@@ -1088,6 +1088,28 @@ async def _init_voice_interface(app: FastAPI) -> None:
         app.state.voice_interface = None
 
 
+async def _init_backup_scheduler(app: FastAPI) -> None:
+    """Start the knowledge-base backup scheduler (issue #3294).
+
+    NON-CRITICAL: backup failures do not affect request handling.
+    Runs in Phase 2; scheduler wakes at AUTOBOT_BACKUP_SCHEDULE_HOUR (default 02:00 UTC).
+    """
+    logger.info("[100%%] Backup Scheduler: Initializing...")
+    try:
+        from backup.scheduler import BackupScheduler
+
+        scheduler = BackupScheduler()
+        await scheduler.start()
+        app.state.backup_scheduler = scheduler
+        logger.info("[100%%] Backup Scheduler: Started (daily at %02d:00 UTC)",
+                    scheduler._schedule_hour)
+    except Exception as e:
+        logger.warning(
+            "Backup scheduler initialization failed (non-critical): %s", e
+        )
+        app.state.backup_scheduler = None
+
+
 async def _wire_scheduler_executor() -> None:
     """Wire the orchestration WorkflowExecutor into the global WorkflowScheduler (#2166).
 
@@ -1215,6 +1237,7 @@ async def initialize_background_services(app: FastAPI):
         await _wire_scheduler_executor()
         await _init_voice_interface(app)
         await _init_plugin_manager(app)
+        await _init_backup_scheduler(app)
 
         await update_app_state_multi(
             initialization_status="ready",
@@ -1273,6 +1296,11 @@ async def cleanup_services(app: FastAPI):
         # REMOVED as part of Issue #729 - SLM moved to slm-server
         # SLM server manages its own reconciler lifecycle
         pass  # SLM reconciler now in slm-server
+
+        # Issue #3294: Stop backup scheduler
+        if hasattr(app.state, "backup_scheduler") and app.state.backup_scheduler:
+            await app.state.backup_scheduler.stop()
+            logger.info("✅ Backup scheduler stopped")
 
         # Issue #1748: Stop process adapter dispatcher
         if (
