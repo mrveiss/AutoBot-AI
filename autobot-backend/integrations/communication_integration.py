@@ -9,6 +9,7 @@ sending messages, retrieving channel history, and managing communication
 workflows.
 """
 
+import asyncio
 import logging
 import re
 from datetime import datetime
@@ -137,9 +138,81 @@ class SlackIntegration(BaseIntegration):
         form_data.add_field("filename", params["filename"])
         form_data.add_field("file", params["content"])
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, data=form_data) as resp:
-                return await resp.json()
+        try:
+            timeout = aiohttp.ClientTimeout(total=30.0)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(
+                    url, headers=headers, data=form_data
+                ) as resp:
+                    result = await resp.json()
+                    self._check_slack_response(url, resp.status, result)
+                    return result
+        except asyncio.TimeoutError:
+            self.logger.warning(
+                "Slack file upload to %s timed out (channel=%s)",
+                url,
+                params.get("channel"),
+            )
+            return {"ok": False, "error": "timeout"}
+        except aiohttp.ClientError as exc:
+            self.logger.warning(
+                "Slack file upload to %s failed: %s (channel=%s)",
+                url,
+                exc,
+                params.get("channel"),
+            )
+            return {"ok": False, "error": str(exc)}
+
+    def _check_slack_response(
+        self,
+        url: str,
+        http_status: int,
+        result: Dict[str, Any],
+    ) -> None:
+        """Log appropriate warnings/errors for non-OK Slack API responses.
+
+        Slack API returns HTTP 200 for most errors, encoding the error in the
+        JSON body as ``{"ok": false, "error": "<code>"}``.  HTTP-level status
+        codes are only used for rate limits (429) and server errors (5xx).
+
+        Args:
+            url: The API endpoint URL (used for log context only).
+            http_status: The HTTP status code from the response.
+            result: The parsed JSON response body.
+        """
+        if http_status == 429:
+            retry_after = result.get("retry_after", "unknown")
+            self.logger.warning(
+                "Slack rate limit hit for %s (HTTP 429, retry_after=%s)",
+                url,
+                retry_after,
+            )
+            return
+
+        if http_status >= 500:
+            self.logger.warning(
+                "Slack server error for %s (HTTP %d)", url, http_status
+            )
+            return
+
+        if result.get("ok"):
+            return
+
+        slack_error = result.get("error", "unknown")
+        if slack_error in ("invalid_auth", "not_authed", "account_inactive", "token_revoked"):
+            self.logger.error(
+                "Slack authentication failure at %s: %s — check bot token configuration",
+                url,
+                slack_error,
+            )
+        elif slack_error in ("channel_not_found", "not_in_channel", "is_archived"):
+            self.logger.warning(
+                "Slack channel error at %s: %s", url, slack_error
+            )
+        else:
+            self.logger.warning(
+                "Slack API error at %s: %s", url, slack_error
+            )
 
     async def _make_slack_request(
         self,
@@ -148,15 +221,36 @@ class SlackIntegration(BaseIntegration):
         headers: Optional[Dict[str, str]] = None,
         data: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Make HTTP request to Slack API."""
+        """Make HTTP request to Slack API.
+
+        Handles network errors, timeouts, rate limits (HTTP 429), auth
+        failures, and application-level Slack errors (``ok: false``).
+        Never raises; returns ``{"ok": False, "error": "<reason>"}`` on failure.
+        """
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 if method == "GET":
-                    async with session.get(url, headers=headers, params=data) as resp:
-                        return await resp.json()
-                async with session.post(url, headers=headers, json=data) as resp:
-                    return await resp.json()
+                    async with session.get(
+                        url, headers=headers, params=data
+                    ) as resp:
+                        result = await resp.json()
+                        self._check_slack_response(url, resp.status, result)
+                        return result
+                async with session.post(
+                    url, headers=headers, json=data
+                ) as resp:
+                    result = await resp.json()
+                    self._check_slack_response(url, resp.status, result)
+                    return result
+        except asyncio.TimeoutError:
+            self.logger.warning("Slack request to %s timed out", url)
+            return {"ok": False, "error": "timeout"}
+        except aiohttp.ClientConnectionError as exc:
+            self.logger.warning(
+                "Slack connection error for %s: %s", url, exc
+            )
+            return {"ok": False, "error": str(exc)}
         except aiohttp.ClientError as exc:
             self.logger.warning("Slack request to %s failed: %s", url, exc)
             return {"ok": False, "error": str(exc)}
