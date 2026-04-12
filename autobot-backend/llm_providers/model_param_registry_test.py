@@ -11,9 +11,9 @@ between tests so each test starts with a cold cache.
 
 from __future__ import annotations
 
+import sys
 import textwrap
 import types
-import sys
 from unittest.mock import patch
 
 import pytest
@@ -53,7 +53,6 @@ from llm_providers.model_param_registry import (  # noqa: E402
     get_provider_model_id,
     resolve_model_name,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -34,10 +34,7 @@ def analyze_frontend_issue():
     )
 
     return {
-        "console_logs": [
-            {"type": log.type, "text": log.text, "location": log.location}
-            for log in result.console_logs
-        ],
+        "console_logs": [{"type": log.type, "text": log.text, "location": log.location} for log in result.console_logs],
         "errors": result.errors,
         "network_requests": [
             {

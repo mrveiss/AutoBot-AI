@@ -72,9 +72,7 @@ def _cleanup_redis_databases(r) -> int:
                 for key in keys:
                     r_db.delete(key)
                 cleanup_count += len(keys)
-                logger.info(
-                    f"✅ Cleaned {len(keys)} llama_index keys from {db_name} database"
-                )
+                logger.info(f"✅ Cleaned {len(keys)} llama_index keys from {db_name} database")
 
             # Also look for doc: prefixed keys
             doc_keys = r_db.keys("doc:*")
@@ -82,9 +80,7 @@ def _cleanup_redis_databases(r) -> int:
                 for key in doc_keys:
                     r_db.delete(key)
                 cleanup_count += len(doc_keys)
-                logger.info(
-                    f"✅ Cleaned {len(doc_keys)} doc keys from {db_name} database"
-                )
+                logger.info(f"✅ Cleaned {len(doc_keys)} doc keys from {db_name} database")
 
             # Clean any vector index keys
             vector_keys = r_db.keys("*vector*")
@@ -92,9 +88,7 @@ def _cleanup_redis_databases(r) -> int:
                 for key in vector_keys:
                     r_db.delete(key)
                 cleanup_count += len(vector_keys)
-                logger.info(
-                    f"✅ Cleaned {len(vector_keys)} vector keys from {db_name} database"
-                )
+                logger.info(f"✅ Cleaned {len(vector_keys)} vector keys from {db_name} database")
 
         except Exception as e:
             logger.warning(f"⚠️  Database {db_name}: {e}")
@@ -119,9 +113,7 @@ async def _test_knowledge_base_operations(kb) -> bool:
     test_content = "AutoBot is an autonomous AI agent platform with advanced knowledge management capabilities."
 
     try:
-        doc = Document(
-            text=test_content, metadata={"source": "test", "category": "system"}
-        )
+        doc = Document(text=test_content, metadata={"source": "test", "category": "system"})
         kb.index.insert(doc)
         logger.info("✅ Successfully added test document to vector store!")
 
@@ -130,9 +122,7 @@ async def _test_knowledge_base_operations(kb) -> bool:
         logger.info(f"✅ Search test: Found {len(results)} results")
 
         if results:
-            logger.info(
-                f"   📄 Result content preview: {results[0]['content'][:100]}..."
-            )
+            logger.info(f"   📄 Result content preview: {results[0]['content'][:100]}...")
 
         # Test fact storage (sync operations)
         fact_result = await kb.store_fact(
@@ -223,9 +213,7 @@ async def test_api_compatibility():
     try:
         # Test category retrieval (this was failing before)
         # This is a mock test since we can't run the full API here
-        logger.info(
-            "✅ API compatibility: Knowledge base should now work with endpoints"
-        )
+        logger.info("✅ API compatibility: Knowledge base should now work with endpoints")
 
     except Exception as e:
         logger.warning(f"⚠️  API compatibility test incomplete: {e}")
@@ -244,9 +232,7 @@ if __name__ == "__main__":
         logger.info("2. Try importing documentation via the web UI")
         logger.info("3. Test knowledge base search functionality")
         logger.info("\nThe following issues have been fixed:")
-        logger.info(
-            "✅ Embedding dimension mismatch (now using 768-dim nomic-embed-text)"
-        )
+        logger.info("✅ Embedding dimension mismatch (now using 768-dim nomic-embed-text)")
         logger.error("✅ Redis async/await errors (now using sync operations)")
         logger.info("✅ Vector index schema conflicts (index recreated)")
         logger.info("✅ Knowledge base initialization problems")

@@ -224,9 +224,7 @@ class TestExistingPoliciesUnchanged:
 
     @pytest.mark.asyncio
     async def test_reject_still_raises(self) -> None:
-        limiter = ConcurrentWorkflowLimiter(
-            max_concurrent=1, overflow_policy=OverflowPolicy.REJECT
-        )
+        limiter = ConcurrentWorkflowLimiter(max_concurrent=1, overflow_policy=OverflowPolicy.REJECT)
         await limiter.acquire("wf-a")
 
         with pytest.raises(ConcurrencyLimitError):
@@ -234,9 +232,7 @@ class TestExistingPoliciesUnchanged:
 
     @pytest.mark.asyncio
     async def test_queue_still_waits(self) -> None:
-        limiter = ConcurrentWorkflowLimiter(
-            max_concurrent=1, overflow_policy=OverflowPolicy.QUEUE
-        )
+        limiter = ConcurrentWorkflowLimiter(max_concurrent=1, overflow_policy=OverflowPolicy.QUEUE)
         await limiter.acquire("wf-a")
 
         acquired = False

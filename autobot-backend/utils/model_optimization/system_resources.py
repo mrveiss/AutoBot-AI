@@ -75,9 +75,7 @@ class SystemResourceAnalyzer:
                     self._logger.debug("GPU %d free VRAM: %.2f GB", idx, free_gb)
 
                 total = sum(per_gpu)
-                self._logger.debug(
-                    "Total free VRAM across %d GPU(s): %.2f GB", device_count, total
-                )
+                self._logger.debug("Total free VRAM across %d GPU(s): %.2f GB", device_count, total)
                 return total, per_gpu
             finally:
                 pynvml.nvmlShutdown()

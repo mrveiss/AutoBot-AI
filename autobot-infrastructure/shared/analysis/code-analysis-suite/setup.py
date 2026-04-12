@@ -14,9 +14,7 @@ with open(os.path.join(this_directory, "README.md"), encoding="utf-8") as f:
 
 # Read requirements
 with open("requirements.txt") as f:
-    requirements = [
-        line.strip() for line in f if line.strip() and not line.startswith("#")
-    ]
+    requirements = [line.strip() for line in f if line.strip() and not line.startswith("#")]
 
 setup(
     name="autobot-code-analysis-suite",

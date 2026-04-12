@@ -122,9 +122,7 @@ class TestMCPClientHelpers:
         from examples.mcp_agent_workflows.base import MCPClient
 
         client = MCPClient(log_requests=False)
-        error = client._create_error_for_status(
-            "test", "missing_tool", 404, "not found"
-        )
+        error = client._create_error_for_status("test", "missing_tool", 404, "not found")
 
         assert error.status == 404
         assert "Tool not found" in error.message
@@ -215,9 +213,7 @@ class TestCodeVectorKnowledgeHelpers:
         except (json.JSONDecodeError, UnicodeDecodeError):
             return {}
 
-    def _decode_vector_data(
-        self, key: bytes, data: Dict[bytes, bytes]
-    ) -> Dict[str, Any] | None:
+    def _decode_vector_data(self, key: bytes, data: Dict[bytes, bytes]) -> Dict[str, Any] | None:
         """Standalone implementation for testing."""
         try:
             vector_info = {

@@ -59,9 +59,7 @@ class ManifestLoader:
             logger.warning("Failed to load manifest for %s: %s", role_name, exc)
             return None
 
-    def load(
-        self, role_name: str, *, force_reload: bool = False
-    ) -> Optional[RoleManifest]:
+    def load(self, role_name: str, *, force_reload: bool = False) -> Optional[RoleManifest]:
         """Return the RoleManifest for role_name, using cache if fresh."""
         cached = self._cache.get(role_name)
         if cached and not force_reload:

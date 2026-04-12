@@ -284,9 +284,7 @@ class SeqAnalyticsSetup:
         created_alerts = []
 
         for alert in critical_alerts:
-            created_alert = self.create_alert(
-                title=alert["title"], signal_expression=alert["expression"]
-            )
+            created_alert = self.create_alert(title=alert["title"], signal_expression=alert["expression"])
             if created_alert:
                 created_alerts.append(created_alert)
 
@@ -318,11 +316,15 @@ class SeqAnalyticsSetup:
                 ContainerName="autobot-npu-worker",
                 LogType="DockerContainer",
             ),
-            _entry("Information", "WebSocket connection established", "GlobalWebSocketService", ConnectionType="Global"),
+            _entry(
+                "Information", "WebSocket connection established", "GlobalWebSocketService", ConnectionType="Global"
+            ),
             _entry("Information", "API request completed in 45ms", "Backend-API", ResponseTime="45ms"),
             _entry("Warning", "High memory usage detected: 85%", "System-Monitor", MemoryUsage="85%"),
             _entry("Error", "Database connection failed - retrying", "Backend-Database", Error="ConnectionTimeout"),
-            _entry("Warning", "WebSocket disconnection detected", "GlobalWebSocketService", DisconnectionReason="timeout"),
+            _entry(
+                "Warning", "WebSocket disconnection detected", "GlobalWebSocketService", DisconnectionReason="timeout"
+            ),
             _entry("Information", "Chat message processed successfully", "ChatInterface", MessageType="user"),
             _entry("Information", "User authentication successful", "AuthService", AuthType="session"),
         ]
@@ -402,14 +404,10 @@ class SeqAnalyticsSetup:
             response = self.session.get(f"{self.seq_url}/api/signals")
             if response.status_code == 200:
                 signals = response.json()
-                autobot_signals = [
-                    s for s in signals if "AutoBot" in s.get("Title", "")
-                ]
+                autobot_signals = [s for s in signals if "AutoBot" in s.get("Title", "")]
 
                 for signal in autobot_signals:
-                    delete_response = self.session.delete(
-                        f"{self.seq_url}/api/signals/{signal['Id']}"
-                    )
+                    delete_response = self.session.delete(f"{self.seq_url}/api/signals/{signal['Id']}")
                     if delete_response.status_code == 200:
                         logger.info("Deleted signal: %s", signal["Title"])
         except Exception as e:
@@ -420,14 +418,10 @@ class SeqAnalyticsSetup:
             response = self.session.get(f"{self.seq_url}/api/dashboards")
             if response.status_code == 200:
                 dashboards = response.json()
-                autobot_dashboards = [
-                    d for d in dashboards if "AutoBot" in d.get("Title", "")
-                ]
+                autobot_dashboards = [d for d in dashboards if "AutoBot" in d.get("Title", "")]
 
                 for dashboard in autobot_dashboards:
-                    delete_response = self.session.delete(
-                        f"{self.seq_url}/api/dashboards/{dashboard['Id']}"
-                    )
+                    delete_response = self.session.delete(f"{self.seq_url}/api/dashboards/{dashboard['Id']}")
                     if delete_response.status_code == 200:
                         logger.info("Deleted dashboard: %s", dashboard["Title"])
         except Exception as e:
@@ -438,21 +432,11 @@ def main():
     """Entry point for Seq analytics setup CLI."""
     parser = argparse.ArgumentParser(description="AutoBot Seq Analytics Setup")
 
-    parser.add_argument(
-        "--setup-all", action="store_true", help="Setup all analytics components"
-    )
-    parser.add_argument(
-        "--cleanup", action="store_true", help="Clean up existing AutoBot items"
-    )
-    parser.add_argument(
-        "--test-connection", action="store_true", help="Test Seq connection"
-    )
-    parser.add_argument(
-        "--send-test-logs", action="store_true", help="Send test logs for verification"
-    )
-    parser.add_argument(
-        "--seq-url", default="http://localhost:5341", help="Seq server URL"
-    )
+    parser.add_argument("--setup-all", action="store_true", help="Setup all analytics components")
+    parser.add_argument("--cleanup", action="store_true", help="Clean up existing AutoBot items")
+    parser.add_argument("--test-connection", action="store_true", help="Test Seq connection")
+    parser.add_argument("--send-test-logs", action="store_true", help="Send test logs for verification")
+    parser.add_argument("--seq-url", default="http://localhost:5341", help="Seq server URL")
     parser.add_argument("--username", default="admin", help="Seq username")
     parser.add_argument(
         "--password",
@@ -477,9 +461,7 @@ def main():
         success = setup.setup_all()
         return 0 if success else 1
 
-    if not any(
-        [args.setup_all, args.cleanup, args.test_connection, args.send_test_logs]
-    ):
+    if not any([args.setup_all, args.cleanup, args.test_connection, args.send_test_logs]):
         parser.print_help()
         return 1
 

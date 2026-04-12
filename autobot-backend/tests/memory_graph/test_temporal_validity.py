@@ -9,8 +9,8 @@ Issue #3790.
 """
 
 import asyncio
-import types
 import sys
+import types
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -56,10 +56,10 @@ from autobot_memory_graph.queries import (  # noqa: E402
 )
 from autobot_memory_graph.relations import RelationOperationsMixin  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _iso(dt: datetime) -> str:
     return dt.isoformat()
@@ -69,8 +69,9 @@ def _now() -> datetime:
     return datetime.now(tz=timezone.utc)
 
 
-def _entity(valid_from: Optional[str] = None, valid_to: Optional[str] = None,
-             entity_type: str = "TASK") -> Dict[str, Any]:
+def _entity(
+    valid_from: Optional[str] = None, valid_to: Optional[str] = None, entity_type: str = "TASK"
+) -> Dict[str, Any]:
     """Build a minimal entity dict for testing."""
     return {
         "id": "aaaa-1111",
@@ -105,6 +106,7 @@ def _make_graph():
 # Unit tests — _is_entity_valid helper
 # ---------------------------------------------------------------------------
 
+
 class TestIsEntityValid:
     def test_no_metadata_key_is_valid(self):
         """Entity without metadata dict is treated as valid (legacy data)."""
@@ -125,6 +127,7 @@ class TestIsEntityValid:
 # ---------------------------------------------------------------------------
 # Unit tests — _is_entity_valid_at helper
 # ---------------------------------------------------------------------------
+
 
 class TestIsEntityValidAt:
     def test_no_bounds_always_valid(self):
@@ -159,6 +162,7 @@ class TestIsEntityValidAt:
 # ---------------------------------------------------------------------------
 # Integration-style tests — entity operations
 # ---------------------------------------------------------------------------
+
 
 class TestEntityTemporalFields:
     def test_prepare_metadata_includes_valid_fields(self):
@@ -224,12 +228,11 @@ class TestEntityTemporalFields:
 # Integration-style tests — relation operations
 # ---------------------------------------------------------------------------
 
+
 class TestRelationTemporalFields:
     def test_build_relation_objects_has_temporal_fields(self):
         graph = _make_graph()
-        rel, rev = graph._build_relation_objects(
-            "from-id", "to-id", "depends_on", 1.0, None
-        )
+        rel, rev = graph._build_relation_objects("from-id", "to-id", "depends_on", 1.0, None)
         assert "valid_from" in rel
         assert rel["valid_to"] is None
         assert "valid_from" in rev
@@ -237,9 +240,7 @@ class TestRelationTemporalFields:
 
     def test_build_relation_by_id_objects_has_temporal_fields(self):
         graph = _make_graph()
-        rel, rev = graph._build_relation_by_id_objects(
-            "from-id", "to-id", "depends_on", None
-        )
+        rel, rev = graph._build_relation_by_id_objects("from-id", "to-id", "depends_on", None)
         assert "valid_from" in rel
         assert rel["valid_to"] is None
         assert "valid_from" in rev
@@ -297,6 +298,7 @@ class TestRelationTemporalFields:
 # ---------------------------------------------------------------------------
 # Integration-style tests — query operations
 # ---------------------------------------------------------------------------
+
 
 class TestQueryTemporalFiltering:
     def _make_entities(self):
@@ -370,9 +372,7 @@ class TestQueryTemporalFiltering:
         old["name"] = "Old Entity"
 
         # Entity valid from 1h ago onwards (no end)
-        current = _entity(
-            valid_from=_iso(one_hour_ago), valid_to=None, entity_type="TASK"
-        )
+        current = _entity(valid_from=_iso(one_hour_ago), valid_to=None, entity_type="TASK")
         current["name"] = "Current Entity"
 
         # Entity of wrong type
@@ -395,8 +395,8 @@ class TestQueryTemporalFiltering:
         names = [e["name"] for e in results]
 
         assert "Current Entity" in names
-        assert "Old Entity" not in names   # expired before as_of
-        assert "Bug Entity" not in names   # wrong type
+        assert "Old Entity" not in names  # expired before as_of
+        assert "Bug Entity" not in names  # wrong type
 
     @pytest.mark.asyncio
     async def test_legacy_entity_without_valid_to_treated_as_current(self):

@@ -38,9 +38,7 @@ import psutil
 # Add AutoBot paths
 sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -90,9 +88,7 @@ class PerformanceOptimizationTester:
         }
 
         # Create results directory
-        self.results_dir = Path(
-            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results"
-        )
+        self.results_dir = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results")
         self.results_dir.mkdir(exist_ok=True)
 
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -122,16 +118,12 @@ class PerformanceOptimizationTester:
 
         # Console output
         status_emoji = {"PASS": "✅", "FAIL": "❌", "WARNING": "⚠️"}
-        logger.info(
-            f"{status_emoji.get(status, '?')} [{category}] {test_name}: {message}"
-        )
+        logger.info(f"{status_emoji.get(status, '?')} [{category}] {test_name}: {message}")
 
         # Log key metrics
         if metrics:
             for metric in metrics:
-                logger.info(
-                    f"  📊 {metric.metric_name}: {metric.value:.3f} {metric.unit}"
-                )
+                logger.info(f"  📊 {metric.metric_name}: {metric.value:.3f} {metric.unit}")
 
     async def test_gpu_acceleration_performance(self):
         """Test GPU acceleration performance (RTX 4070)"""
@@ -164,32 +156,22 @@ class PerformanceOptimizationTester:
 
                 metrics.extend(
                     [
-                        PerformanceMetric(
-                            "gpu_memory_usage", memory_usage_percent, "%", "GPU"
-                        ),
+                        PerformanceMetric("gpu_memory_usage", memory_usage_percent, "%", "GPU"),
                         PerformanceMetric("gpu_utilization", utilization, "%", "GPU"),
-                        PerformanceMetric(
-                            "gpu_memory_total", memory_total, "MB", "GPU"
-                        ),
+                        PerformanceMetric("gpu_memory_total", memory_total, "MB", "GPU"),
                     ]
                 )
 
                 # Evaluate GPU performance
                 if utilization > 0 and memory_used > 100:  # GPU is being used
                     status = "PASS"
-                    message = (
-                        f"GPU acceleration active ({gpu_name}, {utilization}% util)"
-                    )
+                    message = f"GPU acceleration active ({gpu_name}, {utilization}% util)"
 
                     if utilization < 30:
-                        recommendations.append(
-                            "Consider increasing GPU workload for better utilization"
-                        )
+                        recommendations.append("Consider increasing GPU workload for better utilization")
                 elif memory_used > 50:  # GPU memory allocated but low utilization
                     status = "WARNING"
-                    message = (
-                        f"GPU memory allocated but low utilization ({utilization}%)"
-                    )
+                    message = f"GPU memory allocated but low utilization ({utilization}%)"
                     recommendations.append("Check GPU acceleration configuration")
                 else:
                     status = "WARNING"
@@ -217,9 +199,7 @@ class PerformanceOptimizationTester:
             recommendations=recommendations,
         )
 
-    async def _test_gpu_knowledge_operations(
-        self, metrics: List[PerformanceMetric], recommendations: List[str]
-    ):
+    async def _test_gpu_knowledge_operations(self, metrics: List[PerformanceMetric], recommendations: List[str]):
         """Test GPU-accelerated knowledge base operations"""
         try:
             import requests
@@ -253,9 +233,7 @@ class PerformanceOptimizationTester:
                         results = data.get("results", [])
 
                         if len(results) >= 5:  # Good semantic search results
-                            avg_score = sum(r.get("score", 0) for r in results) / len(
-                                results
-                            )
+                            avg_score = sum(r.get("score", 0) for r in results) / len(results)
                             metrics.append(
                                 PerformanceMetric(
                                     f"search_quality_{query[:20]}",
@@ -297,17 +275,11 @@ class PerformanceOptimizationTester:
 
                 # Performance evaluation
                 if avg_search_time < 2.0:
-                    recommendations.append(
-                        "Excellent search performance - GPU acceleration likely active"
-                    )
+                    recommendations.append("Excellent search performance - GPU acceleration likely active")
                 elif avg_search_time < 5.0:
-                    recommendations.append(
-                        "Good search performance - monitor for GPU utilization"
-                    )
+                    recommendations.append("Good search performance - monitor for GPU utilization")
                 else:
-                    recommendations.append(
-                        "Slow search performance - verify GPU acceleration is enabled"
-                    )
+                    recommendations.append("Slow search performance - verify GPU acceleration is enabled")
 
         except Exception as e:
             logger.error(f"GPU knowledge operations test failed: {e}")
@@ -329,11 +301,7 @@ class PerformanceOptimizationTester:
             response = requests.get(f"{npu_url}/health", timeout=10)
             response_time = time.time() - start_time
 
-            metrics.append(
-                PerformanceMetric(
-                    "npu_worker_response_time", response_time, "seconds", "NPU"
-                )
-            )
+            metrics.append(PerformanceMetric("npu_worker_response_time", response_time, "seconds", "NPU"))
 
             if response.status_code == 200:
                 npu_data = response.json()
@@ -345,15 +313,11 @@ class PerformanceOptimizationTester:
                 if ai_acceleration:
                     status = "PASS"
                     message = "NPU worker accessible with AI acceleration"
-                    recommendations.append(
-                        "NPU acceleration available for AI workloads"
-                    )
+                    recommendations.append("NPU acceleration available for AI workloads")
                 else:
                     status = "WARNING"
                     message = "NPU worker accessible but AI acceleration unclear"
-                    recommendations.append(
-                        "Verify NPU configuration for AI acceleration"
-                    )
+                    recommendations.append("Verify NPU configuration for AI acceleration")
 
                 # Test NPU performance with AI task
                 await self._test_npu_ai_performance(npu_url, metrics, recommendations)
@@ -366,9 +330,7 @@ class PerformanceOptimizationTester:
         except Exception as e:
             status = "FAIL"
             message = f"NPU worker connectivity error: {str(e)}"
-            recommendations.append(
-                "Start NPU worker service or check network connectivity"
-            )
+            recommendations.append("Start NPU worker service or check network connectivity")
 
         self.log_result(
             "NPU Acceleration",
@@ -422,26 +384,16 @@ class PerformanceOptimizationTester:
                         )
 
                 except Exception as e:
-                    logger.warning(
-                        f"NPU processing failed for prompt: {prompt[:30]}... - {e}"
-                    )
+                    logger.warning(f"NPU processing failed for prompt: {prompt[:30]}... - {e}")
 
             if processing_times:
                 avg_processing = statistics.mean(processing_times)
-                metrics.append(
-                    PerformanceMetric(
-                        "npu_avg_processing_time", avg_processing, "seconds", "NPU"
-                    )
-                )
+                metrics.append(PerformanceMetric("npu_avg_processing_time", avg_processing, "seconds", "NPU"))
 
                 if avg_processing < 1.0:
-                    recommendations.append(
-                        "Excellent NPU performance - AI acceleration working well"
-                    )
+                    recommendations.append("Excellent NPU performance - AI acceleration working well")
                 elif avg_processing < 5.0:
-                    recommendations.append(
-                        "Good NPU performance - suitable for real-time AI tasks"
-                    )
+                    recommendations.append("Good NPU performance - suitable for real-time AI tasks")
                 else:
                     recommendations.append("NPU performance needs optimization")
 
@@ -501,13 +453,8 @@ class PerformanceOptimizationTester:
         # Run concurrent load and monitoring
         monitor_task = asyncio.create_task(cpu_monitor())
 
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=concurrent_requests
-        ) as executor:
-            futures = [
-                executor.submit(asyncio.run, cpu_intensive_request())
-                for _ in range(concurrent_requests)
-            ]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=concurrent_requests) as executor:
+            futures = [executor.submit(asyncio.run, cpu_intensive_request()) for _ in range(concurrent_requests)]
             results = [f.result() for f in concurrent.futures.as_completed(futures)]
 
         await monitor_task
@@ -553,9 +500,7 @@ class PerformanceOptimizationTester:
             else:
                 status = "PASS"
                 message = f"Low CPU utilization ({avg_cpu:.1f}%) - good efficiency"
-                recommendations.append(
-                    "Excellent CPU efficiency with room for more load"
-                )
+                recommendations.append("Excellent CPU efficiency with room for more load")
         else:
             status = "FAIL"
             message = "Failed to collect CPU metrics"
@@ -573,9 +518,7 @@ class PerformanceOptimizationTester:
             recommendations=recommendations,
         )
 
-    async def _test_thread_pool_optimization(
-        self, metrics: List[PerformanceMetric], recommendations: List[str]
-    ):
+    async def _test_thread_pool_optimization(self, metrics: List[PerformanceMetric], recommendations: List[str]):
         """Test thread pool optimization"""
         try:
             # Test different thread pool sizes
@@ -593,13 +536,9 @@ class PerformanceOptimizationTester:
                         total += i * i
                     return total
 
-                with concurrent.futures.ThreadPoolExecutor(
-                    max_workers=thread_count
-                ) as executor:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=thread_count) as executor:
                     futures = [executor.submit(cpu_work) for _ in range(20)]
-                    results = [
-                        f.result() for f in concurrent.futures.as_completed(futures)
-                    ]
+                    results = [f.result() for f in concurrent.futures.as_completed(futures)]
 
                 duration = time.time() - start_time
                 performance = len(results) / duration  # tasks per second
@@ -617,20 +556,12 @@ class PerformanceOptimizationTester:
                     best_performance = performance
                     optimal_threads = thread_count
 
-            metrics.append(
-                PerformanceMetric(
-                    "optimal_thread_count", optimal_threads, "threads", "CPU"
-                )
-            )
+            metrics.append(PerformanceMetric("optimal_thread_count", optimal_threads, "threads", "CPU"))
 
             if optimal_threads >= 12:
-                recommendations.append(
-                    f"System benefits from high thread counts (optimal: {optimal_threads})"
-                )
+                recommendations.append(f"System benefits from high thread counts (optimal: {optimal_threads})")
             else:
-                recommendations.append(
-                    f"System performs best with moderate threading (optimal: {optimal_threads})"
-                )
+                recommendations.append(f"System performs best with moderate threading (optimal: {optimal_threads})")
 
         except Exception as e:
             logger.error(f"Thread pool optimization test failed: {e}")
@@ -655,12 +586,8 @@ class PerformanceOptimizationTester:
                     "GB",
                     "Memory",
                 ),
-                PerformanceMetric(
-                    "initial_memory_percent", initial_memory_percent, "%", "Memory"
-                ),
-                PerformanceMetric(
-                    "total_memory", memory_info.total / (1024**3), "GB", "Memory"
-                ),
+                PerformanceMetric("initial_memory_percent", initial_memory_percent, "%", "Memory"),
+                PerformanceMetric("total_memory", memory_info.total / (1024**3), "GB", "Memory"),
             ]
         )
 
@@ -709,16 +636,10 @@ class PerformanceOptimizationTester:
 
         metrics.extend(
             [
-                PerformanceMetric(
-                    "final_memory_used", final_memory_used / (1024**3), "GB", "Memory"
-                ),
-                PerformanceMetric(
-                    "final_memory_percent", final_memory_percent, "%", "Memory"
-                ),
+                PerformanceMetric("final_memory_used", final_memory_used / (1024**3), "GB", "Memory"),
+                PerformanceMetric("final_memory_percent", final_memory_percent, "%", "Memory"),
                 PerformanceMetric("memory_growth", memory_growth, "MB", "Memory"),
-                PerformanceMetric(
-                    "memory_samples", len(memory_samples), "count", "Memory"
-                ),
+                PerformanceMetric("memory_samples", len(memory_samples), "count", "Memory"),
             ]
         )
 
@@ -733,9 +654,7 @@ class PerformanceOptimizationTester:
                 [
                     PerformanceMetric("max_memory_usage", max_memory, "%", "Memory"),
                     PerformanceMetric("avg_memory_usage", avg_memory, "%", "Memory"),
-                    PerformanceMetric(
-                        "memory_variance", max_memory - min_memory, "%", "Memory"
-                    ),
+                    PerformanceMetric("memory_variance", max_memory - min_memory, "%", "Memory"),
                 ]
             )
 
@@ -770,9 +689,7 @@ class PerformanceOptimizationTester:
             recommendations=recommendations,
         )
 
-    async def _test_memory_leak_detection(
-        self, metrics: List[PerformanceMetric], recommendations: List[str]
-    ):
+    async def _test_memory_leak_detection(self, metrics: List[PerformanceMetric], recommendations: List[str]):
         """Test for memory leaks through repeated operations"""
         try:
             import requests
@@ -787,9 +704,7 @@ class PerformanceOptimizationTester:
                 # Perform operations that might leak memory
                 for _ in range(10):
                     try:
-                        response = requests.get(
-                            f"{self.base_url}/api/health", timeout=5
-                        )
+                        response = requests.get(f"{self.base_url}/api/health", timeout=5)
                         if response.status_code == 200:
                             # Process response to potentially trigger memory usage
                             response.json()
@@ -817,20 +732,14 @@ class PerformanceOptimizationTester:
                             "MB",
                             "Memory",
                         ),
-                        PerformanceMetric(
-                            "max_memory_growth_per_cycle", max_growth, "MB", "Memory"
-                        ),
+                        PerformanceMetric("max_memory_growth_per_cycle", max_growth, "MB", "Memory"),
                     ]
                 )
 
                 if avg_growth_per_cycle > 10:  # More than 10MB per cycle
-                    recommendations.append(
-                        "Potential memory leak detected - investigate cleanup routines"
-                    )
+                    recommendations.append("Potential memory leak detected - investigate cleanup routines")
                 elif avg_growth_per_cycle > 5:  # More than 5MB per cycle
-                    recommendations.append(
-                        "Monitor memory growth in production environment"
-                    )
+                    recommendations.append("Monitor memory growth in production environment")
                 else:
                     recommendations.append("No significant memory leaks detected")
 
@@ -880,9 +789,7 @@ class PerformanceOptimizationTester:
                         response2.json()
 
                         # Check if responses are similar (caching working)
-                        cache_effectiveness = (
-                            cached_time < first_time * 0.8
-                        )  # 20% improvement
+                        cache_effectiveness = cached_time < first_time * 0.8  # 20% improvement
 
                         metrics.append(
                             PerformanceMetric(
@@ -898,9 +805,7 @@ class PerformanceOptimizationTester:
             if first_request_times and cached_request_times:
                 avg_first_time = statistics.mean(first_request_times)
                 avg_cached_time = statistics.mean(cached_request_times)
-                cache_improvement = (
-                    (avg_first_time - avg_cached_time) / avg_first_time
-                ) * 100
+                cache_improvement = ((avg_first_time - avg_cached_time) / avg_first_time) * 100
 
                 metrics.extend(
                     [
@@ -927,9 +832,7 @@ class PerformanceOptimizationTester:
 
                 if cache_improvement > 20:
                     status = "PASS"
-                    message = (
-                        f"Effective caching ({cache_improvement:.1f}% improvement)"
-                    )
+                    message = f"Effective caching ({cache_improvement:.1f}% improvement)"
                     recommendations.append("Caching system working effectively")
                 elif cache_improvement > 5:
                     status = "PASS"
@@ -938,9 +841,7 @@ class PerformanceOptimizationTester:
                 else:
                     status = "WARNING"
                     message = f"Limited caching benefit ({cache_improvement:.1f}% improvement)"
-                    recommendations.append(
-                        "Review caching configuration and implementation"
-                    )
+                    recommendations.append("Review caching configuration and implementation")
             else:
                 status = "FAIL"
                 message = "Unable to measure caching performance"
@@ -963,9 +864,7 @@ class PerformanceOptimizationTester:
             recommendations=recommendations,
         )
 
-    async def _test_hot_reload_detection(
-        self, metrics: List[PerformanceMetric], recommendations: List[str]
-    ):
+    async def _test_hot_reload_detection(self, metrics: List[PerformanceMetric], recommendations: List[str]):
         """Test hot reload detection and response"""
         try:
             import requests
@@ -1004,22 +903,14 @@ class PerformanceOptimizationTester:
 
             if hot_reload_available:
                 avg_reload_time = statistics.mean(reload_response_times)
-                metrics.append(
-                    PerformanceMetric(
-                        "avg_hot_reload_time", avg_reload_time, "seconds", "Hot Reload"
-                    )
-                )
+                metrics.append(PerformanceMetric("avg_hot_reload_time", avg_reload_time, "seconds", "Hot Reload"))
 
                 if avg_reload_time < 1.0:
                     recommendations.append("Fast hot reload capability available")
                 else:
-                    recommendations.append(
-                        "Hot reload available but slow - consider optimization"
-                    )
+                    recommendations.append("Hot reload available but slow - consider optimization")
             else:
-                recommendations.append(
-                    "Hot reload endpoints not detected - consider implementing for development"
-                )
+                recommendations.append("Hot reload endpoints not detected - consider implementing for development")
 
         except Exception as e:
             logger.error(f"Hot reload detection test failed: {e}")
@@ -1081,17 +972,8 @@ class PerformanceOptimizationTester:
                 "metric_analysis": {
                     category: {
                         "count": len(metrics),
-                        "avg_value": statistics.mean(
-                            [
-                                m.value
-                                for m in metrics
-                                if isinstance(m.value, (int, float))
-                            ]
-                        ),
-                        "metrics": [
-                            {"name": m.metric_name, "value": m.value, "unit": m.unit}
-                            for m in metrics
-                        ],
+                        "avg_value": statistics.mean([m.value for m in metrics if isinstance(m.value, (int, float))]),
+                        "metrics": [{"name": m.metric_name, "value": m.value, "unit": m.unit} for m in metrics],
                     }
                     for category, metrics in metric_categories.items()
                     if metrics
@@ -1101,9 +983,7 @@ class PerformanceOptimizationTester:
         }
 
         # Save report
-        report_file = (
-            self.results_dir / f"performance_optimization_report_{self.timestamp}.json"
-        )
+        report_file = self.results_dir / f"performance_optimization_report_{self.timestamp}.json"
         with open(report_file, "w") as f:
             json.dump(report, f, indent=2, default=str)
 
@@ -1144,14 +1024,10 @@ class PerformanceOptimizationTester:
         warning_tests = [r for r in self.results if r.status == "WARNING"]
 
         if failed_tests:
-            recommendations.append(
-                "🚨 Address critical performance failures before production deployment"
-            )
+            recommendations.append("🚨 Address critical performance failures before production deployment")
 
         if len(warning_tests) > len(self.results) * 0.3:
-            recommendations.append(
-                "⚠️ Multiple performance warnings detected - consider optimization"
-            )
+            recommendations.append("⚠️ Multiple performance warnings detected - consider optimization")
 
         # Hardware-specific recommendations
         gpu_tests = [r for r in self.results if "GPU" in r.category]
@@ -1159,32 +1035,24 @@ class PerformanceOptimizationTester:
         cpu_tests = [r for r in self.results if "CPU" in r.category]
 
         if gpu_tests and all(t.status == "PASS" for t in gpu_tests):
-            recommendations.append(
-                "✅ GPU acceleration working well - maximize GPU workloads"
-            )
+            recommendations.append("✅ GPU acceleration working well - maximize GPU workloads")
         elif gpu_tests:
             recommendations.append("🎮 GPU optimization opportunities available")
 
         if npu_tests and all(t.status == "PASS" for t in npu_tests):
-            recommendations.append(
-                "✅ NPU acceleration available - consider AI workload migration"
-            )
+            recommendations.append("✅ NPU acceleration available - consider AI workload migration")
         elif npu_tests:
             recommendations.append("🧠 NPU integration needs attention")
 
         if cpu_tests and all(t.status == "PASS" for t in cpu_tests):
-            recommendations.append(
-                "✅ CPU utilization optimized for multi-core architecture"
-            )
+            recommendations.append("✅ CPU utilization optimized for multi-core architecture")
 
         # Memory recommendations
         memory_tests = [r for r in self.results if "Memory" in r.category]
         if memory_tests:
             memory_warnings = [t for t in memory_tests if t.status == "WARNING"]
             if memory_warnings:
-                recommendations.append(
-                    "💾 Monitor memory usage for potential optimizations"
-                )
+                recommendations.append("💾 Monitor memory usage for potential optimizations")
             else:
                 recommendations.append("✅ Memory management performing well")
 
@@ -1196,40 +1064,22 @@ class PerformanceOptimizationTester:
                 baseline_violations += violations
 
         if baseline_violations > 0:
-            recommendations.append(
-                f"📊 {baseline_violations} performance baselines exceeded - review thresholds"
-            )
+            recommendations.append(f"📊 {baseline_violations} performance baselines exceeded - review thresholds")
         else:
-            recommendations.append(
-                "✅ All performance metrics within baseline expectations"
-            )
+            recommendations.append("✅ All performance metrics within baseline expectations")
 
         return recommendations
 
 
 async def main():
     """Main entry point for performance testing"""
-    parser = argparse.ArgumentParser(
-        description="AutoBot Phase 9 Performance Optimization Testing"
-    )
-    parser.add_argument(
-        "--benchmark", action="store_true", help="Run comprehensive benchmarks"
-    )
-    parser.add_argument(
-        "--gpu", action="store_true", help="Focus on GPU acceleration tests"
-    )
-    parser.add_argument(
-        "--npu", action="store_true", help="Focus on NPU acceleration tests"
-    )
-    parser.add_argument(
-        "--memory", action="store_true", help="Focus on memory management tests"
-    )
-    parser.add_argument(
-        "--cpu", action="store_true", help="Focus on CPU optimization tests"
-    )
-    parser.add_argument(
-        "--cache", action="store_true", help="Focus on caching and hot reload tests"
-    )
+    parser = argparse.ArgumentParser(description="AutoBot Phase 9 Performance Optimization Testing")
+    parser.add_argument("--benchmark", action="store_true", help="Run comprehensive benchmarks")
+    parser.add_argument("--gpu", action="store_true", help="Focus on GPU acceleration tests")
+    parser.add_argument("--npu", action="store_true", help="Focus on NPU acceleration tests")
+    parser.add_argument("--memory", action="store_true", help="Focus on memory management tests")
+    parser.add_argument("--cpu", action="store_true", help="Focus on CPU optimization tests")
+    parser.add_argument("--cache", action="store_true", help="Focus on caching and hot reload tests")
 
     args = parser.parse_args()
 
@@ -1239,9 +1089,7 @@ async def main():
     logger.info("🚀 Starting AutoBot Phase 9 Performance Optimization Testing")
 
     # Run selected tests
-    if args.benchmark or not any(
-        [args.gpu, args.npu, args.memory, args.cpu, args.cache]
-    ):
+    if args.benchmark or not any([args.gpu, args.npu, args.memory, args.cpu, args.cache]):
         # Run all tests
         await tester.test_gpu_acceleration_performance()
         await tester.test_npu_acceleration()

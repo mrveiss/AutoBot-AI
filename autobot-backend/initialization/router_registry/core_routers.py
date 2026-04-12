@@ -41,17 +41,17 @@ from api.knowledge_metadata import router as knowledge_metadata_router
 from api.knowledge_organization import router as knowledge_organization_router
 from api.knowledge_ownership import router as knowledge_ownership_router
 from api.knowledge_population import router as knowledge_population_router
+from api.knowledge_rag_feedback import router as knowledge_rag_feedback_router
 from api.knowledge_search import router as knowledge_search_router
 from api.knowledge_search_scoped import router as knowledge_search_scoped_router
 from api.knowledge_suggestions import router as knowledge_suggestions_router
 from api.knowledge_tags import router as knowledge_tags_router
 from api.knowledge_verification import router as knowledge_verification_router
-from api.knowledge_rag_feedback import router as knowledge_rag_feedback_router
 from api.llm import router as llm_router
 from api.llm_providers import router as llm_providers_router
-from api.models import router as models_router
 from api.mcp_registry import router as mcp_registry_router
 from api.memory import router as memory_router
+from api.models import router as models_router
 from api.overseer_handlers import router as overseer_router
 from api.process_management import router as process_management_router  # Issue #1406
 from api.prometheus_mcp import router as prometheus_mcp_router

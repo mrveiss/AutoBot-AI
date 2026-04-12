@@ -26,13 +26,13 @@ from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
 from circuit_breaker import circuit_breaker_async
+from constants.model_constants import OPENAI_O1_MINI  # used in _OPENAI_MODELS list
 from constants.model_constants import (
-    OPENAI_GPT35_TURBO,
     OPENAI_GPT4,
+    OPENAI_GPT4_TURBO,
     OPENAI_GPT4O,
     OPENAI_GPT4O_MINI,
-    OPENAI_GPT4_TURBO,
-    OPENAI_O1_MINI,  # used in _OPENAI_MODELS list
+    OPENAI_GPT35_TURBO,
 )
 from llm_interface_pkg.models import LLMRequest, LLMResponse
 from llm_interface_pkg.types import ProviderType

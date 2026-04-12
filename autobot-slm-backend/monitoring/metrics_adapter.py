@@ -43,9 +43,7 @@ class MetricsAdapter:
 
                 self._legacy_system_metrics = SystemMetricsCollector()
             except ImportError:
-                logger.warning(
-                    "Legacy SystemMetricsCollector not available for dual-write"
-                )
+                logger.warning("Legacy SystemMetricsCollector not available for dual-write")
         return self._legacy_system_metrics
 
     def _get_legacy_error_metrics(self):
@@ -57,9 +55,7 @@ class MetricsAdapter:
                 # ErrorMetricsCollector may require redis_client parameter
                 self._legacy_error_metrics = ErrorMetricsCollector()
             except ImportError:
-                logger.warning(
-                    "Legacy ErrorMetricsCollector not available for dual-write"
-                )
+                logger.warning("Legacy ErrorMetricsCollector not available for dual-write")
         return self._legacy_error_metrics
 
     def _get_legacy_claude_monitor(self):
@@ -129,9 +125,7 @@ class MetricsAdapter:
 
     # Error Metrics
 
-    def record_error(
-        self, category: str, component: str, error_code: str = "unknown", **kwargs
-    ):
+    def record_error(self, category: str, component: str, error_code: str = "unknown", **kwargs):
         """Record error to both systems"""
         # Write to Prometheus (primary)
         self.prometheus.record_error(category, component, error_code)
@@ -153,9 +147,7 @@ class MetricsAdapter:
 
     # Claude API Metrics
 
-    def record_claude_api_request(
-        self, tool_name: str, success: bool, payload_bytes: Optional[int] = None
-    ):
+    def record_claude_api_request(self, tool_name: str, success: bool, payload_bytes: Optional[int] = None):
         """Record Claude API request to both systems"""
         # Write to Prometheus (primary)
         self.prometheus.record_claude_api_request(tool_name, success)
@@ -198,9 +190,7 @@ class MetricsAdapter:
 
     # Service Health Metrics
 
-    def record_service_health(
-        self, service_name: str, health_score: float, status: str = "online"
-    ):
+    def record_service_health(self, service_name: str, health_score: float, status: str = "online"):
         """Record service health to both systems"""
         # Write to Prometheus (primary)
         self.prometheus.update_service_health(service_name, health_score)

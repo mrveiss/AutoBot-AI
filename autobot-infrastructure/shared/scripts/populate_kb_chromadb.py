@@ -63,9 +63,7 @@ def _find_documentation_files(project_root: Path) -> list:
     return filtered_files
 
 
-def _add_documents_to_index(
-    filtered_files: list, project_root: Path, index, Document
-) -> tuple:
+def _add_documents_to_index(filtered_files: list, project_root: Path, index, Document) -> tuple:
     """
     Add documents to the ChromaDB index.
 
@@ -143,9 +141,7 @@ async def populate_with_chromadb():
 
     llm = LlamaIndexOllamaLLM(model=default_model, base_url=ollama_base_url)
 
-    embed_model = OllamaEmbedding(
-        model_name="nomic-embed-text", base_url=ollama_base_url
-    )
+    embed_model = OllamaEmbedding(model_name="nomic-embed-text", base_url=ollama_base_url)
 
     # Configure settings
     Settings.llm = llm
@@ -160,9 +156,7 @@ async def populate_with_chromadb():
     )
     vector_store = ChromaVectorStore(chroma_collection=collection)
     storage_context = StorageContext.from_defaults(vector_store=vector_store)
-    index = VectorStoreIndex.from_documents(
-        [], storage_context=storage_context, embed_model=embed_model
-    )
+    index = VectorStoreIndex.from_documents([], storage_context=storage_context, embed_model=embed_model)
 
     logger.info("ChromaDB knowledge base initialized successfully!")
 
@@ -171,9 +165,7 @@ async def populate_with_chromadb():
     filtered_files = _find_documentation_files(project_root)
     logger.info("Found %d documentation files", len(filtered_files))
 
-    success_count, error_count = _add_documents_to_index(
-        filtered_files, project_root, index, Document
-    )
+    success_count, error_count = _add_documents_to_index(filtered_files, project_root, index, Document)
 
     logger.info("Added %d documents successfully!", success_count)
     logger.info("Errors: %d", error_count)
@@ -189,9 +181,7 @@ async def populate_with_chromadb():
             logger.info("Query: '%s'", query)
             logger.info("Response: %s...", str(response)[:200])
     except Exception:
-        logger.warning(
-            "Search test skipped: LLM model '%s' not available", default_model
-        )
+        logger.warning("Search test skipped: LLM model '%s' not available", default_model)
         logger.info("To enable search testing: ollama pull %s", default_model)
         logger.info("Knowledge base is populated and ready for use")
         return

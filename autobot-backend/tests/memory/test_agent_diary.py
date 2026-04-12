@@ -7,22 +7,21 @@ Tests for AgentDiaryService (issue #3789).
 All KB calls are mocked so these tests run without Redis / ChromaDB.
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from memory.agent_diary import AgentDiaryService
+import pytest
 
+from memory.agent_diary import AgentDiaryService
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_kb_mock(store_result=None, search_result=None, all_facts_result=None):
     """Return an async mock KnowledgeBase stub."""
     kb = MagicMock()
-    kb.store_fact = AsyncMock(
-        return_value=store_result or {"status": "success", "fact_id": "fact-001"}
-    )
+    kb.store_fact = AsyncMock(return_value=store_result or {"status": "success", "fact_id": "fact-001"})
     kb.search = AsyncMock(return_value=search_result or [])
     kb.get_all_facts = AsyncMock(return_value=all_facts_result or [])
     return kb
@@ -43,6 +42,7 @@ def _result_with_ts(ts: str, agent: str = "agent_a") -> dict:
 # ---------------------------------------------------------------------------
 # write()
 # ---------------------------------------------------------------------------
+
 
 class TestWrite:
     @pytest.mark.asyncio
@@ -82,6 +82,7 @@ class TestWrite:
 # ---------------------------------------------------------------------------
 # read()
 # ---------------------------------------------------------------------------
+
 
 class TestRead:
     @pytest.mark.asyncio
@@ -164,6 +165,7 @@ class TestRead:
 # ---------------------------------------------------------------------------
 # search()
 # ---------------------------------------------------------------------------
+
 
 class TestSearch:
     @pytest.mark.asyncio

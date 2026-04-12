@@ -56,9 +56,7 @@ sys.modules.setdefault("sqlalchemy.ext.asyncio", MagicMock())
 
 import importlib.util  # noqa: E402
 
-_spec = importlib.util.spec_from_file_location(
-    "nodes_execution", Path(__file__).parent / "nodes_execution.py"
-)
+_spec = importlib.util.spec_from_file_location("nodes_execution", Path(__file__).parent / "nodes_execution.py")
 _mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
 
@@ -347,9 +345,7 @@ class TestValidateCommandFindArgs:
             cmd = f"find /tmp {flag} extra_arg"
             with pytest.raises(HTTPException) as exc_info:
                 _validate_command(cmd)
-            assert (
-                exc_info.value.status_code == 400
-            ), f"Expected HTTP 400 for find with flag {flag!r}"
+            assert exc_info.value.status_code == 400, f"Expected HTTP 400 for find with flag {flag!r}"
 
 
 class TestShellMetacharactersAreInertWithShellFalse:
@@ -378,9 +374,7 @@ class TestShellMetacharactersAreInertWithShellFalse:
             ("cat /var/log/autobot.log; bash", "cat"),
         ],
     )
-    def test_metachar_cmds_pass_validation_but_shell_is_false(
-        self, cmd, expected_first_token
-    ):
+    def test_metachar_cmds_pass_validation_but_shell_is_false(self, cmd, expected_first_token):
         """_validate_command returns the executable; shell=False makes the rest inert."""
         executable = _validate_command(cmd)
         assert executable == expected_first_token
@@ -574,9 +568,7 @@ class TestRunViaSshKnownHosts:
     """Verify SSH is called with known_hosts checking, not StrictHostKeyChecking=no."""
 
     @pytest.mark.asyncio
-    async def test_uses_strict_host_key_checking_when_known_hosts_exists(
-        self, tmp_path
-    ):
+    async def test_uses_strict_host_key_checking_when_known_hosts_exists(self, tmp_path):
         """When known_hosts file exists, StrictHostKeyChecking=yes is passed."""
         known_hosts = tmp_path / "known_hosts"
         known_hosts.write_text("10.0.0.1 ssh-rsa AAAA...", encoding="utf-8")
@@ -596,20 +588,14 @@ class TestRunViaSshKnownHosts:
             patch.object(_mod, "_SSH_KEY_PATH", "/nonexistent/key"),
             patch("asyncio.create_subprocess_exec", side_effect=fake_exec),
         ):
-            await _run_via_ssh(
-                "10.0.0.1", "autobot", 22, ["systemctl", "status", "nginx"], 10
-            )
+            await _run_via_ssh("10.0.0.1", "autobot", 22, ["systemctl", "status", "nginx"], 10)
 
         ssh_opts = " ".join(captured_cmd)
-        assert (
-            "StrictHostKeyChecking=yes" in ssh_opts
-        ), f"Expected StrictHostKeyChecking=yes in: {ssh_opts}"
+        assert "StrictHostKeyChecking=yes" in ssh_opts, f"Expected StrictHostKeyChecking=yes in: {ssh_opts}"
         assert "StrictHostKeyChecking=no" not in ssh_opts
 
     @pytest.mark.asyncio
-    async def test_falls_back_to_system_known_hosts_when_user_file_absent(
-        self, tmp_path
-    ):
+    async def test_falls_back_to_system_known_hosts_when_user_file_absent(self, tmp_path):
         """Falls back to system known_hosts when per-user file is absent (#3469)."""
         missing_user_path = str(tmp_path / "nonexistent_known_hosts")
         system_known_hosts = tmp_path / "ssh_known_hosts"
@@ -634,12 +620,8 @@ class TestRunViaSshKnownHosts:
             await _run_via_ssh("10.0.0.2", "autobot", 22, ["df", "-h"], 10)
 
         ssh_opts = " ".join(captured_cmd)
-        assert (
-            "StrictHostKeyChecking=yes" in ssh_opts
-        ), f"Expected strict checking: {ssh_opts}"
-        assert (
-            str(system_known_hosts) in ssh_opts
-        ), f"Expected system known_hosts: {ssh_opts}"
+        assert "StrictHostKeyChecking=yes" in ssh_opts, f"Expected strict checking: {ssh_opts}"
+        assert str(system_known_hosts) in ssh_opts, f"Expected system known_hosts: {ssh_opts}"
         assert "/dev/null" not in ssh_opts, "Must not use /dev/null as known_hosts"
         assert "accept-new" not in ssh_opts, "Must not use accept-new when file exists"
 
@@ -693,9 +675,7 @@ class TestRunViaSshKnownHosts:
         # The individual tokens must appear as separate items in the argument
         # list — NOT as a single concatenated string.
         for token in tokens:
-            assert (
-                token in captured_args
-            ), f"Token {token!r} not found as individual arg in: {captured_args}"
+            assert token in captured_args, f"Token {token!r} not found as individual arg in: {captured_args}"
 
 
 # ---------------------------------------------------------------------------

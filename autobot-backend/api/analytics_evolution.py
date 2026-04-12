@@ -23,11 +23,11 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
+from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.security.path_validator import validate_path
-from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
 
 logger = logging.getLogger(__name__)
 router = APIRouter(

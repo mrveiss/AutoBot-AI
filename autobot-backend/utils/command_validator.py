@@ -302,17 +302,14 @@ class CommandValidator:
         """
         base_command = command_parts[0]
         if base_command not in self.whitelist:
-            return None, self._invalid_result(
-                f"Command '{base_command}' not in whitelist"
-            )
+            return None, self._invalid_result(f"Command '{base_command}' not in whitelist")
 
         pattern = self.whitelist[base_command]
         args = command_parts[1:] if len(command_parts) > 1 else []
 
         if len(args) > pattern.max_args:
             return None, self._invalid_result(
-                f"Too many arguments for '{base_command}' "
-                f"(max: {pattern.max_args}, got: {len(args)})"
+                f"Too many arguments for '{base_command}' " f"(max: {pattern.max_args}, got: {len(args)})"
             )
 
         arg_validation = self._validate_arguments(args, pattern)
@@ -321,17 +318,13 @@ class CommandValidator:
 
         return pattern, None
 
-    def validate_command(
-        self, command_string: str
-    ) -> Dict[str, Union[bool, str, List[str]]]:
+    def validate_command(self, command_string: str) -> Dict[str, Union[bool, str, List[str]]]:
         """Validate a command string against security policies."""
         try:
             # Check for dangerous patterns
             dangerous_check = self._check_dangerous_patterns(command_string)
             if not dangerous_check["safe"]:
-                return self._invalid_result(
-                    f"Dangerous pattern detected: {dangerous_check['pattern']}"
-                )
+                return self._invalid_result(f"Dangerous pattern detected: {dangerous_check['pattern']}")
 
             # Parse command
             command_parts, error = self._parse_command(command_string)
@@ -365,16 +358,11 @@ class CommandValidator:
         # Issue #380: Use pre-compiled patterns from module level
         for compiled_pattern in _DANGEROUS_PATTERNS:
             if compiled_pattern.search(command):
-                self.logger.warning(
-                    f"Dangerous pattern detected: {compiled_pattern.pattern} in command: "
-                    f"{command}"
-                )
+                self.logger.warning(f"Dangerous pattern detected: {compiled_pattern.pattern} in command: " f"{command}")
                 return {"safe": False, "pattern": compiled_pattern.pattern}
         return {"safe": True, "pattern": ""}
 
-    def _validate_arguments(
-        self, args: List[str], pattern: CommandPattern
-    ) -> Dict[str, Union[bool, str]]:
+    def _validate_arguments(self, args: List[str], pattern: CommandPattern) -> Dict[str, Union[bool, str]]:
         """Validate command arguments against allowed patterns."""
         for arg in args:
             # Check if argument is in allowed list
@@ -389,10 +377,7 @@ class CommandValidator:
                 if not valid_pattern:
                     return {
                         "valid": False,
-                        "reason": (
-                            f"Argument '{arg}' not allowed for command "
-                            f"'{pattern.command}'"
-                        ),
+                        "reason": (f"Argument '{arg}' not allowed for command " f"'{pattern.command}'"),
                     }
 
             # Check for injection attempts in arguments
@@ -401,11 +386,7 @@ class CommandValidator:
                 if injection_char in arg:
                     return {
                         "valid": False,
-                        "reason": (
-                            "Potential injection character "
-                            f"'{injection_char}' "
-                            f"in argument '{arg}'"
-                        ),
+                        "reason": ("Potential injection character " f"'{injection_char}' " f"in argument '{arg}'"),
                     }
 
         return {"valid": True, "reason": "Arguments validated successfully"}

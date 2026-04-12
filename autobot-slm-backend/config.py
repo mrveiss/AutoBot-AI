@@ -74,9 +74,7 @@ def _get_cors_origins() -> list:
         origins.add(f"https://{NetworkConstants.FRONTEND_VM_IP}")
         return sorted(origins)
     except ImportError:
-        logger.warning(
-            "autobot_shared not available; falling back to localhost CORS only"
-        )
+        logger.warning("autobot_shared not available; falling back to localhost CORS only")
         return ["https://127.0.0.1", "http://127.0.0.1"]
 
 
@@ -100,9 +98,7 @@ def _get_trusted_proxies() -> list:
         proxies.append(NetworkConstants.SLM_VM_IP)
         proxies.append(NetworkConstants.FRONTEND_VM_IP)
     except ImportError:
-        logger.warning(
-            "autobot_shared not available; trusted_proxies limited to localhost"
-        )
+        logger.warning("autobot_shared not available; trusted_proxies limited to localhost")
     return proxies
 
 
@@ -133,9 +129,7 @@ class Settings(BaseSettings):
     data_dir: Path = Path(__file__).parent / "data"
     config_dir: Path = Path(__file__).parent / "config"
     ansible_dir: Path = Path(__file__).parent / "ansible"
-    backup_dir: Path = Path(
-        os.getenv("SLM_BACKUP_DIR", str(Path.home() / "slm-backups"))
-    )
+    backup_dir: Path = Path(os.getenv("SLM_BACKUP_DIR", str(Path.home() / "slm-backups")))
 
     # ==========================================================================
     # PostgreSQL Database Configuration (Issue #786)
@@ -161,12 +155,8 @@ class Settings(BaseSettings):
     # Database connection pool settings (#2860) — SSOT-coordinated defaults.
     # SLM_DB_POOL_* env vars still override for per-service tuning.
     db_pool_size: int = int(os.getenv("SLM_DB_POOL_SIZE", str(_SSOT_POOL_SIZE)))
-    db_pool_max_overflow: int = int(
-        os.getenv("SLM_DB_POOL_MAX_OVERFLOW", str(_SSOT_MAX_OVERFLOW))
-    )
-    db_pool_recycle: int = int(
-        os.getenv("SLM_DB_POOL_RECYCLE", str(_SSOT_POOL_RECYCLE))
-    )
+    db_pool_max_overflow: int = int(os.getenv("SLM_DB_POOL_MAX_OVERFLOW", str(_SSOT_MAX_OVERFLOW)))
+    db_pool_recycle: int = int(os.getenv("SLM_DB_POOL_RECYCLE", str(_SSOT_POOL_RECYCLE)))
 
     # Server
     host: str = "0.0.0.0"  # nosec B104 — bound behind nginx reverse proxy
@@ -181,9 +171,7 @@ class Settings(BaseSettings):
     # HMAC signing key for API key hashing (#2160).
     # Default preserves backward compatibility with existing hashed keys.
     # Override in production via SLM_HMAC_API_KEY_SECRET env var.
-    hmac_api_key_secret: str = os.getenv(
-        "SLM_HMAC_API_KEY_SECRET", "autobot-api-key-v1"
-    )
+    hmac_api_key_secret: str = os.getenv("SLM_HMAC_API_KEY_SECRET", "autobot-api-key-v1")
 
     # Encryption for sensitive data (credentials, etc.)
     encryption_key: str = os.getenv("SLM_ENCRYPTION_KEY", "")

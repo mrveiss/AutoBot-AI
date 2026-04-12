@@ -27,9 +27,7 @@ class PruningReport:
 class MeshDB(Protocol):
     """Protocol for mesh database operations required by MeshPruner."""
 
-    async def decay_edges(
-        self, origins: list[str], not_reinforced_since: datetime, decay_factor: float
-    ) -> int: ...
+    async def decay_edges(self, origins: list[str], not_reinforced_since: datetime, decay_factor: float) -> int: ...
 
     async def delete_edges(self, max_weight: float) -> int: ...
 

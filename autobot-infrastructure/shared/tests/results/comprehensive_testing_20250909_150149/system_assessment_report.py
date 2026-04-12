@@ -135,9 +135,7 @@ class AutoBotSystemTester:
         ]
 
         for path, method, description in core_endpoints:
-            success, result, duration = self.test_with_timeout(
-                self.test_api_endpoint, 8, path, method
-            )
+            success, result, duration = self.test_with_timeout(self.test_api_endpoint, 8, path, method)
 
             if not success:
                 self.add_result(
@@ -248,9 +246,7 @@ class AutoBotSystemTester:
         print("🔗 Testing Service Integration...")
 
         # Test Redis integration
-        success, result, duration = self.test_with_timeout(
-            self.test_api_endpoint, 5, "/api/cache/stats", "GET"
-        )
+        success, result, duration = self.test_with_timeout(self.test_api_endpoint, 5, "/api/cache/stats", "GET")
 
         if success and result[0]:
             self.add_result(
@@ -273,9 +269,7 @@ class AutoBotSystemTester:
             )
 
         # Test Ollama integration
-        success, result, duration = self.test_with_timeout(
-            self.test_api_endpoint, 8, "/api/llm/status", "GET"
-        )
+        success, result, duration = self.test_with_timeout(self.test_api_endpoint, 8, "/api/llm/status", "GET")
 
         if success and result[0]:
             self.add_result(
@@ -304,11 +298,7 @@ class AutoBotSystemTester:
 
         if success and result[0]:
             response_data = result[1].get("response_data", {})
-            total_docs = (
-                response_data.get("total_documents", 0)
-                if isinstance(response_data, dict)
-                else 0
-            )
+            total_docs = response_data.get("total_documents", 0) if isinstance(response_data, dict) else 0
 
             if total_docs > 0:
                 self.add_result(
@@ -356,9 +346,7 @@ class AutoBotSystemTester:
             success_count = 0
 
             for i in range(3):  # Test 3 times for average
-                success, result, duration = self.test_with_timeout(
-                    self.test_api_endpoint, 5, endpoint, "GET"
-                )
+                success, result, duration = self.test_with_timeout(self.test_api_endpoint, 5, endpoint, "GET")
 
                 if success and result[0]:
                     times.append(result[1]["response_time"])
@@ -412,9 +400,7 @@ class AutoBotSystemTester:
 
         # Check if uvicorn is running
         try:
-            result = subprocess.run(
-                ["pgrep", "-", "uvicorn"], capture_output=True, text=True, timeout=5
-            )
+            result = subprocess.run(["pgrep", "-", "uvicorn"], capture_output=True, text=True, timeout=5)
             if result.returncode == 0:
                 pids = result.stdout.strip().split("\n")
                 self.add_result(
@@ -442,9 +428,7 @@ class AutoBotSystemTester:
 
         # Check if Ollama is running
         try:
-            result = subprocess.run(
-                ["pgrep", "-", "ollama"], capture_output=True, text=True, timeout=5
-            )
+            result = subprocess.run(["pgrep", "-", "ollama"], capture_output=True, text=True, timeout=5)
             if result.returncode == 0:
                 pids = result.stdout.strip().split("\n")
                 self.add_result(
@@ -663,9 +647,7 @@ class AutoBotSystemTester:
         total_warnings = sum(1 for r in self.results if r.status == "WARNING")
         total_timeouts = sum(1 for r in self.results if r.status == "TIMEOUT")
 
-        overall_success_rate = (
-            (total_passed / total_tests * 100) if total_tests > 0 else 0
-        )
+        overall_success_rate = (total_passed / total_tests * 100) if total_tests > 0 else 0
 
         # Count by severity
         critical_issues = sum(1 for r in self.results if r.severity == "CRITICAL")
@@ -728,22 +710,12 @@ class AutoBotSystemTester:
 
         print("\n📋 Results by Category:")
         for category, cat_data in report["category_results"].items():
-            success_rate = (
-                (cat_data["passed"] / cat_data["total"] * 100)
-                if cat_data["total"] > 0
-                else 0
-            )
-            status_icon = (
-                "✅" if success_rate == 100 else "⚠️" if success_rate >= 80 else "❌"
-            )
-            print(
-                f"   {status_icon} {category}: {success_rate:.1f}% ({cat_data['passed']}/{cat_data['total']})"
-            )
+            success_rate = (cat_data["passed"] / cat_data["total"] * 100) if cat_data["total"] > 0 else 0
+            status_icon = "✅" if success_rate == 100 else "⚠️" if success_rate >= 80 else "❌"
+            print(f"   {status_icon} {category}: {success_rate:.1f}% ({cat_data['passed']}/{cat_data['total']})")
 
             # Show failures
-            failures = [
-                r for r in cat_data["results"] if r.status in ["FAIL", "TIMEOUT"]
-            ]
+            failures = [r for r in cat_data["results"] if r.status in ["FAIL", "TIMEOUT"]]
             if failures:
                 for failure in failures[:2]:  # Show first 2 failures
                     severity_icon = {
@@ -765,9 +737,7 @@ class AutoBotSystemTester:
         elif stats["success_rate"] >= 70:
             print("   🟠 FAIR - System is functional but needs attention")
         else:
-            print(
-                "   🔴 POOR - System has significant issues requiring immediate attention"
-            )
+            print("   🔴 POOR - System has significant issues requiring immediate attention")
 
         # Recommendations
         print("\n💡 Key Recommendations:")
@@ -827,7 +797,9 @@ def main():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # Save to multiple formats
-    results_dir = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results/comprehensive_testing_20250909_150149"
+    results_dir = (
+        "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results/comprehensive_testing_20250909_150149"
+    )
     os.makedirs(results_dir, exist_ok=True)
 
     # JSON report for detailed analysis
@@ -845,9 +817,7 @@ def main():
         stats = report["overall_statistics"]
         f.write(f"Overall Success Rate: {stats['success_rate']:.1f}%\n")
         f.write(f"Total Tests: {stats['total_tests']}\n")
-        f.write(
-            f"Passed: {stats['passed']}, Failed: {stats['failed']}, Warnings: {stats['warnings']}\n\n"
-        )
+        f.write(f"Passed: {stats['passed']}, Failed: {stats['failed']}, Warnings: {stats['warnings']}\n\n")
 
         f.write("Detailed Results:\n")
         f.write("-" * 50 + "\n")

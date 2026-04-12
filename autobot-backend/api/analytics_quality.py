@@ -20,8 +20,8 @@ from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from auth_middleware import check_admin_permission
 from api.analytics_shared import resolve_source_root_or_404 as _resolve_source_root_or_404
+from auth_middleware import check_admin_permission
 
 logger = logging.getLogger(__name__)
 

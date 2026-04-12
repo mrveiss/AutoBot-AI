@@ -62,8 +62,7 @@ def _build_security_templates():
         ),
         FixTemplate(
             pattern=(
-                r'subprocess\.(?:run|call|Popen)\s*\([\'"]'
-                r'([^\'"]*)\{([^}]+)\}([^\'"]*)[\'"]\s*,\s*shell=True\)'
+                r'subprocess\.(?:run|call|Popen)\s*\([\'"]' r'([^\'"]*)\{([^}]+)\}([^\'"]*)[\'"]\s*,\s*shell=True\)'
             ),
             replacement=r'subprocess.\1(["\2".format(\3)], shell=False)',
             fix_type="command_injection",
@@ -114,10 +113,7 @@ def _build_performance_templates():
         ),
         FixTemplate(
             pattern=r"requests\.([a-z]+)\s*\(",
-            replacement=(
-                r"async with aiohttp.ClientSession() as session:\n"
-                r"        async with session.\1("
-            ),
+            replacement=(r"async with aiohttp.ClientSession() as session:\n" r"        async with session.\1("),
             fix_type="blocking_call",
             description="Replace blocking requests with async aiohttp",
             confidence=0.6,
@@ -133,11 +129,7 @@ def _build_code_quality_templates():
     """
     return [
         FixTemplate(
-            pattern=(
-                r"(\s*)(.*?)\s*=\s*\[\]\s*\n"
-                r"\1for\s+([^:]+):\s*\n"
-                r"\1\s+\2\.append\(([^)]+)\)"
-            ),
+            pattern=(r"(\s*)(.*?)\s*=\s*\[\]\s*\n" r"\1for\s+([^:]+):\s*\n" r"\1\s+\2\.append\(([^)]+)\)"),
             replacement=r"\1\2 = [\4 for \3]",
             fix_type="list_comprehension",
             description="Replace loop with list comprehension",
@@ -217,9 +209,7 @@ class AutomatedFixGenerator:
 
         return templates
 
-    async def generate_fixes(
-        self, analysis_results: Dict[str, Any], generate_patches: bool = True
-    ) -> Dict[str, Any]:
+    async def generate_fixes(self, analysis_results: Dict[str, Any], generate_patches: bool = True) -> Dict[str, Any]:
         """Generate automated fixes based on analysis results"""
 
         start_time = time.time()
@@ -230,37 +220,27 @@ class AutomatedFixGenerator:
 
         # Generate security fixes
         if analysis_results.get("security"):
-            security_fixes = await self._generate_security_fixes(
-                analysis_results["security"]
-            )
+            security_fixes = await self._generate_security_fixes(analysis_results["security"])
             all_fixes.extend(security_fixes)
 
         # Generate performance fixes
         if analysis_results.get("performance"):
-            performance_fixes = await self._generate_performance_fixes(
-                analysis_results["performance"]
-            )
+            performance_fixes = await self._generate_performance_fixes(analysis_results["performance"])
             all_fixes.extend(performance_fixes)
 
         # Generate duplication fixes
         if analysis_results.get("duplication"):
-            duplication_fixes = await self._generate_duplication_fixes(
-                analysis_results["duplication"]
-            )
+            duplication_fixes = await self._generate_duplication_fixes(analysis_results["duplication"])
             all_fixes.extend(duplication_fixes)
 
         # Generate environment fixes
         if analysis_results.get("environment"):
-            env_fixes = await self._generate_environment_fixes(
-                analysis_results["environment"]
-            )
+            env_fixes = await self._generate_environment_fixes(analysis_results["environment"])
             all_fixes.extend(env_fixes)
 
         # Generate API consistency fixes
         if analysis_results.get("api_consistency"):
-            api_fixes = await self._generate_api_fixes(
-                analysis_results["api_consistency"]
-            )
+            api_fixes = await self._generate_api_fixes(analysis_results["api_consistency"])
             all_fixes.extend(api_fixes)
 
         # Prioritize fixes
@@ -269,9 +249,7 @@ class AutomatedFixGenerator:
         # Generate patches if requested
         patches = []
         if generate_patches:
-            patches = await self._generate_patches(
-                prioritized_fixes[:20]
-            )  # Top 20 fixes
+            patches = await self._generate_patches(prioritized_fixes[:20])  # Top 20 fixes
 
         # Calculate fix statistics
         fix_stats = self._calculate_fix_statistics(all_fixes)
@@ -292,14 +270,10 @@ class AutomatedFixGenerator:
         # Cache results
         await self._cache_fixes(results)
 
-        logger.info(
-            f"Generated {len(all_fixes)} automated fixes in {generation_time:.2f}s"
-        )
+        logger.info(f"Generated {len(all_fixes)} automated fixes in {generation_time:.2f}s")
         return results
 
-    async def _generate_security_fixes(
-        self, security_results: Dict[str, Any]
-    ) -> List[CodeFix]:
+    async def _generate_security_fixes(self, security_results: Dict[str, Any]) -> List[CodeFix]:
         """Generate security-related fixes"""
 
         fixes = []
@@ -342,21 +316,15 @@ class AutomatedFixGenerator:
                                         explanation=f"Security fix for {vuln_type}: {vuln.get('description', '')}",
                                         confidence=template.confidence,
                                         risk_level=template.risk_level,
-                                        validation_tests=[
-                                            f"test_{template.fix_type}_fix()"
-                                        ],
+                                        validation_tests=[f"test_{template.fix_type}_fix()"],
                                     )
                                 )
             except Exception as e:
-                logger.warning(
-                    f"Could not generate fix for {file_path}:{line_number}: {e}"
-                )
+                logger.warning(f"Could not generate fix for {file_path}:{line_number}: {e}")
 
         return fixes
 
-    async def _generate_performance_fixes(
-        self, performance_results: Dict[str, Any]
-    ) -> List[CodeFix]:
+    async def _generate_performance_fixes(self, performance_results: Dict[str, Any]) -> List[CodeFix]:
         """Generate performance-related fixes"""
 
         fixes = []
@@ -397,28 +365,20 @@ class AutomatedFixGenerator:
                                         explanation=f"Performance fix for {issue_type}: {issue.get('description', '')}",
                                         confidence=template.confidence,
                                         risk_level=template.risk_level,
-                                        validation_tests=[
-                                            f"test_{template.fix_type}_performance()"
-                                        ],
+                                        validation_tests=[f"test_{template.fix_type}_performance()"],
                                     )
                                 )
             except Exception as e:
-                logger.warning(
-                    f"Could not generate performance fix for {file_path}:{line_number}: {e}"
-                )
+                logger.warning(f"Could not generate performance fix for {file_path}:{line_number}: {e}")
 
         return fixes
 
-    async def _generate_duplication_fixes(
-        self, duplication_results: Dict[str, Any]
-    ) -> List[CodeFix]:
+    async def _generate_duplication_fixes(self, duplication_results: Dict[str, Any]) -> List[CodeFix]:
         """Generate fixes for code duplication"""
 
         fixes = []
 
-        for group in duplication_results.get("duplicate_groups", [])[
-            :10
-        ]:  # Top 10 groups
+        for group in duplication_results.get("duplicate_groups", [])[:10]:  # Top 10 groups
             if group.get("count", 0) > 1:
                 # Suggest creating a shared utility function
                 files = group.get("files", [])
@@ -434,8 +394,7 @@ class AutomatedFixGenerator:
                             fixed_code=f"# Extract to shared function in utils/",
                             description="Extract duplicate code to shared utility function",
                             explanation=(
-                                f'Found {group.get("count")} similar code blocks. '
-                                "Extract common functionality."
+                                f'Found {group.get("count")} similar code blocks. ' "Extract common functionality."
                             ),
                             confidence=0.7,
                             risk_level="medium",
@@ -445,9 +404,7 @@ class AutomatedFixGenerator:
 
         return fixes
 
-    async def _generate_environment_fixes(
-        self, env_results: Dict[str, Any]
-    ) -> List[CodeFix]:
+    async def _generate_environment_fixes(self, env_results: Dict[str, Any]) -> List[CodeFix]:
         """Generate environment configuration fixes"""
 
         fixes = []
@@ -473,9 +430,7 @@ class AutomatedFixGenerator:
                         for template in self.fix_templates.get("environment", []):
                             match = re.search(template.pattern, original_line)
                             if match:
-                                var_name = (
-                                    match.group(1) if match.groups() else "CONFIG_VALUE"
-                                )
+                                var_name = match.group(1) if match.groups() else "CONFIG_VALUE"
                                 fixed_line = re.sub(
                                     template.pattern,
                                     template.replacement,
@@ -494,15 +449,11 @@ class AutomatedFixGenerator:
                                         explanation=f"Move hardcoded {value.get('category')} to environment variable",
                                         confidence=template.confidence,
                                         risk_level=template.risk_level,
-                                        validation_tests=[
-                                            f"test_env_var_{var_name.lower()}()"
-                                        ],
+                                        validation_tests=[f"test_env_var_{var_name.lower()}()"],
                                     )
                                 )
                 except Exception as e:
-                    logger.warning(
-                        f"Could not generate env fix for {file_path}:{line_number}: {e}"
-                    )
+                    logger.warning(f"Could not generate env fix for {file_path}:{line_number}: {e}")
 
         return fixes
 
@@ -539,11 +490,7 @@ class AutomatedFixGenerator:
             confidence_weight = fix.confidence * 100
             risk_penalty = {"low": 0, "medium": -20, "high": -50}
 
-            return (
-                severity_weight.get(fix.severity, 0)
-                + confidence_weight
-                + risk_penalty.get(fix.risk_level, 0)
-            )
+            return severity_weight.get(fix.severity, 0) + confidence_weight + risk_penalty.get(fix.risk_level, 0)
 
         return sorted(fixes, key=priority_score, reverse=True)
 
@@ -553,11 +500,7 @@ class AutomatedFixGenerator:
         patches = []
 
         for fix in fixes:
-            if (
-                fix.file_path != "Multiple files"
-                and fix.risk_level == "low"
-                and fix.confidence > 0.8
-            ):
+            if fix.file_path != "Multiple files" and fix.risk_level == "low" and fix.confidence > 0.8:
                 try:
                     # Create unified diff patch
                     patch_content = f"""--- a/{fix.file_path}
@@ -615,12 +558,8 @@ class AutomatedFixGenerator:
             "by_confidence": by_confidence,
             "by_risk": by_risk,
             "total_fixes": len(fixes),
-            "automated_fixes": len(
-                [f for f in fixes if f.confidence > 0.8 and f.risk_level == "low"]
-            ),
-            "manual_review_required": len(
-                [f for f in fixes if f.confidence <= 0.6 or f.risk_level == "high"]
-            ),
+            "automated_fixes": len([f for f in fixes if f.confidence > 0.8 and f.risk_level == "low"]),
+            "manual_review_required": len([f for f in fixes if f.confidence <= 0.6 or f.risk_level == "high"]),
         }
 
     def _generate_fix_recommendations(self, fixes: List[CodeFix]) -> List[str]:
@@ -628,41 +567,23 @@ class AutomatedFixGenerator:
 
         recommendations = []
 
-        automated_fixes = [
-            f for f in fixes if f.confidence > 0.8 and f.risk_level == "low"
-        ]
-        manual_fixes = [
-            f for f in fixes if f.confidence <= 0.6 or f.risk_level == "high"
-        ]
+        automated_fixes = [f for f in fixes if f.confidence > 0.8 and f.risk_level == "low"]
+        manual_fixes = [f for f in fixes if f.confidence <= 0.6 or f.risk_level == "high"]
 
         if automated_fixes:
-            recommendations.append(
-                f"✅ {len(automated_fixes)} fixes can be applied automatically with high confidence"
-            )
+            recommendations.append(f"✅ {len(automated_fixes)} fixes can be applied automatically with high confidence")
 
         if manual_fixes:
-            recommendations.append(
-                f"🔍 {len(manual_fixes)} fixes require manual review before applying"
-            )
+            recommendations.append(f"🔍 {len(manual_fixes)} fixes require manual review before applying")
 
         # Type-specific recommendations
-        security_fixes = [
-            f
-            for f in fixes
-            if f.fix_type.startswith("security") or "injection" in f.fix_type
-        ]
+        security_fixes = [f for f in fixes if f.fix_type.startswith("security") or "injection" in f.fix_type]
         if security_fixes:
-            recommendations.append(
-                f"🛡️ Prioritize {len(security_fixes)} security fixes - apply immediately"
-            )
+            recommendations.append(f"🛡️ Prioritize {len(security_fixes)} security fixes - apply immediately")
 
-        performance_fixes = [
-            f for f in fixes if "performance" in f.fix_type or "memory" in f.fix_type
-        ]
+        performance_fixes = [f for f in fixes if "performance" in f.fix_type or "memory" in f.fix_type]
         if performance_fixes:
-            recommendations.append(
-                f"⚡ Apply {len(performance_fixes)} performance fixes to improve system efficiency"
-            )
+            recommendations.append(f"⚡ Apply {len(performance_fixes)} performance fixes to improve system efficiency")
 
         # General recommendations
         recommendations.extend(
@@ -702,15 +623,11 @@ class AutomatedFixGenerator:
         await self._ensure_redis()
         if self.redis_client:
             try:
-                await self.redis_client.setex(
-                    self.FIXES_KEY, 3600, json.dumps(results, default=str)
-                )  # 1 hour
+                await self.redis_client.setex(self.FIXES_KEY, 3600, json.dumps(results, default=str))  # 1 hour
             except Exception as e:
                 logger.warning(f"Failed to cache fixes: {e}")
 
-    async def apply_safe_fixes(
-        self, fixes_results: Dict[str, Any], dry_run: bool = True
-    ) -> Dict[str, Any]:
+    async def apply_safe_fixes(self, fixes_results: Dict[str, Any], dry_run: bool = True) -> Dict[str, Any]:
         """Apply safe, low-risk fixes automatically"""
 
         if dry_run:
@@ -720,9 +637,7 @@ class AutomatedFixGenerator:
         failed_fixes = []
 
         safe_fixes = [
-            fix
-            for fix in fixes_results.get("fixes", [])
-            if fix["confidence"] > 0.9 and fix["risk_level"] == "low"
+            fix for fix in fixes_results.get("fixes", []) if fix["confidence"] > 0.9 and fix["risk_level"] == "low"
         ]
 
         for fix in safe_fixes[:10]:  # Apply top 10 safe fixes
@@ -776,9 +691,7 @@ class AutomatedFixGenerator:
                     logger.info(f"Applied fix to {file_path}:{line_number}")
                     return True
                 else:
-                    logger.warning(
-                        f"Line content mismatch in {file_path}:{line_number}"
-                    )
+                    logger.warning(f"Line content mismatch in {file_path}:{line_number}")
                     return False
             else:
                 logger.warning(f"Line number {line_number} out of range in {file_path}")

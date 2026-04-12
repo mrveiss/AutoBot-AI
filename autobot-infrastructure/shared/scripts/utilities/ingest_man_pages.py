@@ -261,9 +261,7 @@ ADVANCED_COMMANDS = (
 )
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -352,11 +350,7 @@ class ManPageIngester:
         """
         try:
             with open(command_file, "r") as f:
-                commands = [
-                    line.strip()
-                    for line in f
-                    if line.strip() and not line.startswith("#")
-                ]
+                commands = [line.strip() for line in f if line.strip() and not line.startswith("#")]
 
             logger.info("Loaded %s commands from %s", len(commands), command_file)
             self.ingest_command_list(commands, "custom")
@@ -400,29 +394,21 @@ class ManPageIngester:
 
 def main():
     """Main function for the ingestion script."""
-    parser = argparse.ArgumentParser(
-        description="Ingest command manuals into AutoBot knowledge base"
-    )
+    parser = argparse.ArgumentParser(description="Ingest command manuals into AutoBot knowledge base")
     parser.add_argument(
         "--mode",
         choices=["essential", "advanced", "all", "custom"],
         default="essential",
         help="Ingestion mode (default: essential)",
     )
-    parser.add_argument(
-        "--custom-file", help="Path to custom command list file (for custom mode)"
-    )
+    parser.add_argument("--custom-file", help="Path to custom command list file (for custom mode)")
     parser.add_argument(
         "--db-path",
         default="data/knowledge_base.db",
         help="Path to knowledge base database",
     )
-    parser.add_argument(
-        "--verify", action="store_true", help="Verify ingestion after completion"
-    )
-    parser.add_argument(
-        "--force", action="store_true", help="Force re-ingestion of existing commands"
-    )
+    parser.add_argument("--verify", action="store_true", help="Verify ingestion after completion")
+    parser.add_argument("--force", action="store_true", help="Force re-ingestion of existing commands")
 
     args = parser.parse_args()
 

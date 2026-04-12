@@ -29,9 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot_shared"))
 from autobot_shared.redis_client import get_redis_client
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -58,9 +56,7 @@ class SessionMigrator:
     async def connect_redis(self) -> None:
         """Connect to Redis database"""
         try:
-            self.redis_client = await get_redis_client(
-                async_client=True, database="main"
-            )
+            self.redis_client = await get_redis_client(async_client=True, database="main")
             await self.redis_client.ping()
             logger.info("Connected to Redis successfully")
         except Exception as e:
@@ -167,9 +163,7 @@ class SessionMigrator:
             # Infer owner from first message
             owner_id = await self.get_first_message_sender(session_id)
             if not owner_id:
-                logger.warning(
-                    f"Session {session_id} has no messages, " f"defaulting to 'admin'"
-                )
+                logger.warning(f"Session {session_id} has no messages, " f"defaulting to 'admin'")
                 owner_id = "admin"
 
             # Add owner and timestamp
@@ -182,21 +176,14 @@ class SessionMigrator:
 
             if "created_at" not in session_data:
                 # Use lastModified if available, else now
-                created_at = session_data.get(
-                    "lastModified", datetime.utcnow().isoformat()
-                )
+                created_at = session_data.get("lastModified", datetime.utcnow().isoformat())
                 session_data["created_at"] = created_at
 
             # Generate rollback SQL
-            self.rollback_sql.append(
-                f"-- Rollback session {session_id}\n" f"-- Remove owner: {owner_id}\n"
-            )
+            self.rollback_sql.append(f"-- Rollback session {session_id}\n" f"-- Remove owner: {owner_id}\n")
 
             if self.dry_run:
-                logger.info(
-                    f"[DRY RUN] Would migrate session {session_id} "
-                    f"with owner: {owner_id}"
-                )
+                logger.info(f"[DRY RUN] Would migrate session {session_id} " f"with owner: {owner_id}")
                 self.stats["migrated"] += 1
                 return True
 
@@ -216,9 +203,7 @@ class SessionMigrator:
             self.stats["failed"] += 1
             return False
 
-    async def _register_ownership(
-        self, session_id: str, owner_id: str, metadata: Dict
-    ) -> None:
+    async def _register_ownership(self, session_id: str, owner_id: str, metadata: Dict) -> None:
         """Register session ownership in Redis indices.
 
         Args:
@@ -278,12 +263,8 @@ class SessionMigrator:
 
 async def main():
     """Main entry point"""
-    parser = argparse.ArgumentParser(
-        description="Migrate sessions to add user attribution"
-    )
-    parser.add_argument(
-        "--dry-run", action="store_true", help="Report changes without applying them"
-    )
+    parser = argparse.ArgumentParser(description="Migrate sessions to add user attribution")
+    parser.add_argument("--dry-run", action="store_true", help="Report changes without applying them")
     args = parser.parse_args()
 
     migrator = SessionMigrator(dry_run=args.dry_run)

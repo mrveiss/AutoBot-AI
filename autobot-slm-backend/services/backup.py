@@ -24,9 +24,7 @@ from models.database import Backup, BackupStatus, Node
 logger = logging.getLogger(__name__)
 
 # Backup storage directory
-BACKUP_STORAGE_DIR = Path(
-    settings.backup_dir if hasattr(settings, "backup_dir") else "/var/lib/slm/backups"
-)
+BACKUP_STORAGE_DIR = Path(settings.backup_dir if hasattr(settings, "backup_dir") else "/var/lib/slm/backups")
 
 
 class BackupService:
@@ -36,9 +34,7 @@ class BackupService:
         # Ensure backup directory exists
         BACKUP_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
-    async def _mark_backup_in_progress(
-        self, db: AsyncSession, backup_id: str
-    ) -> Optional["Backup"]:
+    async def _mark_backup_in_progress(self, db: AsyncSession, backup_id: str) -> Optional["Backup"]:
         """Mark backup as in_progress and return record. Helper for execute_redis_backup. Ref: #1088."""
         result = await db.execute(select(Backup).where(Backup.backup_id == backup_id))
         backup = result.scalar_one_or_none()
@@ -65,15 +61,11 @@ class BackupService:
 
         try:
             # Step 1: Discover Redis configuration (data dir, auth)
-            redis_auth_prefix, rdb_path = await self._discover_redis_config(
-                host, ssh_user, ssh_port
-            )
+            redis_auth_prefix, rdb_path = await self._discover_redis_config(host, ssh_user, ssh_port)
 
             # Step 2: Trigger BGSAVE
             logger.info("Starting Redis BGSAVE on %s", host)
-            bgsave_cmd = self._build_ssh_command(
-                host, ssh_user, ssh_port, f"{redis_auth_prefix} redis-cli BGSAVE"
-            )
+            bgsave_cmd = self._build_ssh_command(host, ssh_user, ssh_port, f"{redis_auth_prefix} redis-cli BGSAVE")
             success, output = await self._run_command(bgsave_cmd, timeout=30)
             if not success:
                 return await self._fail_backup(db, backup, f"BGSAVE failed: {output}")
@@ -83,9 +75,7 @@ class BackupService:
             await self._wait_for_bgsave(host, ssh_user, ssh_port, redis_auth_prefix)
 
             # Step 4: Get RDB file size and checksum
-            size_bytes, checksum = await self._get_rdb_file_info(
-                host, ssh_user, ssh_port, rdb_path
-            )
+            size_bytes, checksum = await self._get_rdb_file_info(host, ssh_user, ssh_port, rdb_path)
 
             # Step 5: Copy backup to SLM storage
             copy_success, backup_path, copy_error = await self._copy_backup_to_storage(
@@ -110,17 +100,13 @@ class BackupService:
             logger.exception("Backup error: %s", e)
             return await self._fail_backup(db, backup, "Backup operation failed")
 
-    async def _stop_redis_for_restore(
-        self, host: str, ssh_user: str, ssh_port: int
-    ) -> None:
+    async def _stop_redis_for_restore(self, host: str, ssh_user: str, ssh_port: int) -> None:
         """Stop Redis service on the target node.
 
         Helper for execute_restore (Issue #665).
         """
         logger.info("Stopping Redis on %s for restore", host)
-        stop_cmd = self._build_ssh_command(
-            host, ssh_user, ssh_port, "sudo systemctl stop redis-server"
-        )
+        stop_cmd = self._build_ssh_command(host, ssh_user, ssh_port, "sudo systemctl stop redis-server")
         await self._run_command(stop_cmd, timeout=30)
 
     async def _copy_local_backup_to_target(
@@ -153,8 +139,7 @@ class BackupService:
             host,
             ssh_user,
             ssh_port,
-            "sudo mv /tmp/restore.rdb /var/lib/redis/dump.rdb && "
-            "sudo chown redis:redis /var/lib/redis/dump.rdb",
+            "sudo mv /tmp/restore.rdb /var/lib/redis/dump.rdb && " "sudo chown redis:redis /var/lib/redis/dump.rdb",
         )
         success, output = await self._run_command(mv_cmd, timeout=30)
         if not success:
@@ -171,18 +156,14 @@ class BackupService:
 
         Returns (success, error_message).
         """
-        verify_cmd = self._build_ssh_command(
-            host, ssh_user, ssh_port, f"test -f {backup_path} && echo 'exists'"
-        )
+        verify_cmd = self._build_ssh_command(host, ssh_user, ssh_port, f"test -f {backup_path} && echo 'exists'")
         success, output = await self._run_command(verify_cmd, timeout=10)
         if not success or "exists" not in output:
             return False, "Backup file not found on target"
 
         return True, ""
 
-    async def _start_and_verify_redis(
-        self, host: str, ssh_user: str, ssh_port: int
-    ) -> Tuple[bool, str]:
+    async def _start_and_verify_redis(self, host: str, ssh_user: str, ssh_port: int) -> Tuple[bool, str]:
         """Start Redis service and verify it's healthy.
 
         Helper for execute_restore (Issue #665).
@@ -191,9 +172,7 @@ class BackupService:
         """
         # Start Redis
         logger.info("Starting Redis on %s after restore", host)
-        start_cmd = self._build_ssh_command(
-            host, ssh_user, ssh_port, "sudo systemctl start redis-server"
-        )
+        start_cmd = self._build_ssh_command(host, ssh_user, ssh_port, "sudo systemctl start redis-server")
         success, output = await self._run_command(start_cmd, timeout=30)
         if not success:
             return False, f"Failed to start Redis: {output}"
@@ -201,9 +180,7 @@ class BackupService:
         # Wait for Redis to be ready and verify data
         await asyncio.sleep(3)  # Give Redis time to load data
 
-        verify_cmd = self._build_ssh_command(
-            host, ssh_user, ssh_port, "redis-cli PING && redis-cli DBSIZE"
-        )
+        verify_cmd = self._build_ssh_command(host, ssh_user, ssh_port, "redis-cli PING && redis-cli DBSIZE")
         success, verify_output = await self._run_command(verify_cmd, timeout=15)
         if not success or "PONG" not in verify_output:
             return False, f"Redis not healthy after restore: {verify_output}"
@@ -239,22 +216,16 @@ class BackupService:
             # Step 2: Copy backup file to target
             backup_path = backup.backup_path
             if backup.extra_data and backup.extra_data.get("location") == "local":
-                success, error = await self._copy_local_backup_to_target(
-                    backup, host, ssh_user, ssh_port
-                )
+                success, error = await self._copy_local_backup_to_target(backup, host, ssh_user, ssh_port)
                 if not success:
                     return False, error
             else:
-                success, error = await self._verify_remote_backup_exists(
-                    backup_path, host, ssh_user, ssh_port
-                )
+                success, error = await self._verify_remote_backup_exists(backup_path, host, ssh_user, ssh_port)
                 if not success:
                     return False, error
 
             # Step 3: Start Redis and verify
-            success, verify_output = await self._start_and_verify_redis(
-                host, ssh_user, ssh_port
-            )
+            success, verify_output = await self._start_and_verify_redis(host, ssh_user, ssh_port)
             if not success:
                 return False, verify_output
 
@@ -276,9 +247,7 @@ class BackupService:
         from services.database import db_service
 
         async with db_service.session() as db:
-            result = await db.execute(
-                select(Backup).where(Backup.backup_id == backup_id)
-            )
+            result = await db.execute(select(Backup).where(Backup.backup_id == backup_id))
             backup = result.scalar_one_or_none()
             if not backup:
                 return {"valid": False, "error": "Backup not found"}
@@ -327,9 +296,7 @@ class BackupService:
         initial_lastsave = None
 
         while (datetime.utcnow() - start_time).seconds < max_wait:
-            cmd = self._build_ssh_command(
-                host, ssh_user, ssh_port, f"{redis_auth_prefix} redis-cli LASTSAVE"
-            )
+            cmd = self._build_ssh_command(host, ssh_user, ssh_port, f"{redis_auth_prefix} redis-cli LASTSAVE")
             success, output = await self._run_command(cmd, timeout=10)
 
             if success:
@@ -347,9 +314,7 @@ class BackupService:
 
         return False
 
-    async def _fail_backup(
-        self, db: AsyncSession, backup: Backup, error: str
-    ) -> Tuple[bool, str]:
+    async def _fail_backup(self, db: AsyncSession, backup: Backup, error: str) -> Tuple[bool, str]:
         """Mark backup as failed and return error."""
         backup.status = BackupStatus.FAILED.value
         backup.error = error[:500]
@@ -407,9 +372,7 @@ class BackupService:
             logger.warning("Checksum calculation failed: %s", e)
             return None
 
-    async def _discover_redis_config(
-        self, host: str, ssh_user: str, ssh_port: int
-    ) -> Tuple[str, str]:
+    async def _discover_redis_config(self, host: str, ssh_user: str, ssh_port: int) -> Tuple[str, str]:
         """Discover Redis authentication prefix and RDB file path.
 
         Helper for execute_redis_backup (Issue #665).
@@ -427,27 +390,21 @@ class BackupService:
         success, auth_output = await self._run_command(auth_cmd, timeout=10)
         redis_password = auth_output.strip() if success else ""
         if redis_password:
-            redis_auth_prefix = (
-                "REDISCLI_AUTH=$(grep -E '^requirepass' /etc/redis/redis.conf "
-                "| awk '{print $2}')"
-            )
+            redis_auth_prefix = "REDISCLI_AUTH=$(grep -E '^requirepass' /etc/redis/redis.conf " "| awk '{print $2}')"
 
         # Get Redis data directory and filename
         config_cmd = self._build_ssh_command(
             host,
             ssh_user,
             ssh_port,
-            f"{redis_auth_prefix} redis-cli CONFIG GET dir && "
-            f"{redis_auth_prefix} redis-cli CONFIG GET dbfilename",
+            f"{redis_auth_prefix} redis-cli CONFIG GET dir && " f"{redis_auth_prefix} redis-cli CONFIG GET dbfilename",
         )
         success, config_output = await self._run_command(config_cmd, timeout=15)
 
         redis_dir = "/var/lib/redis"
         redis_dbfilename = "dump.rdb"
         if success:
-            lines = [
-                ln.strip() for ln in config_output.strip().split("\n") if ln.strip()
-            ]
+            lines = [ln.strip() for ln in config_output.strip().split("\n") if ln.strip()]
             for i, line in enumerate(lines):
                 if line == "dir" and i + 1 < len(lines):
                     redis_dir = lines[i + 1]
@@ -566,9 +523,7 @@ class BackupService:
 
             backup.status = BackupStatus.COMPLETED.value
             backup.backup_path = str(backup_path)
-            backup.size_bytes = (
-                backup_path.stat().st_size if backup_path.exists() else size_bytes
-            )
+            backup.size_bytes = backup_path.stat().st_size if backup_path.exists() else size_bytes
             backup.checksum = local_checksum or remote_checksum
             backup.extra_data = {
                 "location": "local",

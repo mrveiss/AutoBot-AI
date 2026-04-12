@@ -22,9 +22,7 @@ from agents.classification_agent import ClassificationAgent
 from conversation import conversation_manager
 
 # Setup logging
-logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -64,9 +62,7 @@ async def test_conversation_flow():
 
         logger.info("✅ Conversation processing successful:")
         logger.info(f"   Response: {result['response'][:100]}...")
-        print(
-            f"   Classification: {result.get('classification', {}).get('complexity', 'None')}"
-        )
+        print(f"   Classification: {result.get('classification', {}).get('complexity', 'None')}")
         logger.info(f"   Processing time: {result.get('processing_time', 0):.2f}s")
         logger.info(f"   KB results: {result.get('kb_results_count', 0)}")
 
@@ -85,9 +81,7 @@ def test_backend_api():
 
     try:
         # Get the backend URL from config
-        backend_url = config.config.get_nested(
-            "backend.api_endpoint", "http://127.0.0.3:8001"
-        )
+        backend_url = config.config.get_nested("backend.api_endpoint", "http://127.0.0.3:8001")
 
         # Test the chat endpoint
         url = f"{backend_url}/api/chat"

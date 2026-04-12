@@ -207,11 +207,7 @@ class BackgroundTaskManager:
 
         async with self._lock:
             self._cleanup_stuck()
-            running = sum(
-                1
-                for t in self._tasks.values()
-                if t.get("status") in ("pending", "running")
-            )
+            running = sum(1 for t in self._tasks.values() if t.get("status") in ("pending", "running"))
             if running >= self._max_concurrent:
                 raise HTTPException(
                     status_code=409,
@@ -265,9 +261,7 @@ class BackgroundTaskManager:
         sid = (task.get("params") or {}).get("source_id", "")
         await self._save_latest_result(result, task["completed_at"], source_id=sid)
 
-    async def _save_latest_result(
-        self, result: Any, completed_at: str, source_id: str = ""
-    ) -> None:
+    async def _save_latest_result(self, result: Any, completed_at: str, source_id: str = "") -> None:
         """Store latest completed result at a well-known Redis key (#1540).
 
         Issue #1757: When source_id is provided, key is scoped per-project.
@@ -329,9 +323,7 @@ class BackgroundTaskManager:
             started = redis_task.get("started_at")
             if started:
                 try:
-                    elapsed = (
-                        datetime.now(tz=timezone.utc) - datetime.fromisoformat(started)
-                    ).total_seconds()
+                    elapsed = (datetime.now(tz=timezone.utc) - datetime.fromisoformat(started)).total_seconds()
                     if elapsed > self._timeout:
                         redis_task["status"] = "failed"
                         redis_task["error"] = "Task timed out (auto-recovered)"
@@ -341,12 +333,9 @@ class BackgroundTaskManager:
                         _redis = await self._get_redis()
                         if _redis:
                             cache = RedisCache(_redis, default_ttl=self._ttl)
-                            await cache.set_json(
-                                f"{self._prefix}{task_id}", redis_task
-                            )
+                            await cache.set_json(f"{self._prefix}{task_id}", redis_task)
                         logger.info(
-                            "Auto-recovered zombie task %s "
-                            "(running %.0fs, timeout %ds)",
+                            "Auto-recovered zombie task %s " "(running %.0fs, timeout %ds)",
                             task_id,
                             elapsed,
                             self._timeout,

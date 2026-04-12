@@ -31,9 +31,7 @@ try:
     MEMORY_PROFILER_AVAILABLE = True
 except ImportError:
     # Use sys.stderr for early init before logger is available
-    sys.stderr.write(
-        "memory_profiler not available - install with: pip install memory-profiler\n"
-    )
+    sys.stderr.write("memory_profiler not available - install with: pip install memory-profiler\n")
     MEMORY_PROFILER_AVAILABLE = False
 
 # Setup logging
@@ -142,15 +140,11 @@ class MemoryProfiler:
                 "generation_0": gc.get_count()[0],
                 "generation_1": gc.get_count()[1],
                 "generation_2": gc.get_count()[2],
-                "total_collections": sum(
-                    gc.get_stats()[i]["collections"] for i in range(3)
-                ),
+                "total_collections": sum(gc.get_stats()[i]["collections"] for i in range(3)),
             },
         }
 
-        logger.info(
-            f"🧮 Python Objects: {total_objects:,} total objects, {len(object_counts)} unique types"
-        )
+        logger.info(f"🧮 Python Objects: {total_objects:,} total objects, {len(object_counts)} unique types")
 
         return object_analysis
 
@@ -191,9 +185,7 @@ class MemoryProfiler:
                         if size > 1024 * 1024:
                             large_files.append(
                                 {
-                                    "path": str(
-                                        file_path.relative_to(self.project_root)
-                                    ),
+                                    "path": str(file_path.relative_to(self.project_root)),
                                     "size_mb": round(size / (1024**2), 2),
                                     "extension": file_path.suffix.lower(),
                                 }
@@ -262,9 +254,7 @@ class MemoryProfiler:
                     {
                         "type": obj_type,
                         "count": count,
-                        "recommendation": self._get_object_recommendation(
-                            obj_type, count
-                        ),
+                        "recommendation": self._get_object_recommendation(obj_type, count),
                     }
                 )
 
@@ -317,9 +307,7 @@ class MemoryProfiler:
         if obj_type == "dict":
             return f"High dict count ({count:,}) - consider using __slots__ or namedtuples where appropriate"
         elif obj_type == "list":
-            return (
-                f"High list count ({count:,}) - consider generators for large datasets"
-            )
+            return f"High list count ({count:,}) - consider generators for large datasets"
         elif obj_type == "str":
             return f"High string count ({count:,}) - consider string interning or efficient concatenation"
         elif obj_type == "function":
@@ -337,40 +325,28 @@ class MemoryProfiler:
 
         mem_usage = system_memory.get("virtual_memory", {}).get("percentage", 0)
         if mem_usage > 80:
-            recommendations.append(
-                "🔴 CRITICAL: System memory usage >80% - immediate action required"
-            )
+            recommendations.append("🔴 CRITICAL: System memory usage >80% - immediate action required")
         elif mem_usage > 60:
-            recommendations.append(
-                "🟡 WARNING: System memory usage >60% - monitor closely"
-            )
+            recommendations.append("🟡 WARNING: System memory usage >60% - monitor closely")
 
         # Process memory recommendations
         rss_mb = process_memory.get("rss_mb", 0)
         if rss_mb > 1000:
-            recommendations.append(
-                "🔴 CRITICAL: Process using >1GB memory - optimization needed"
-            )
+            recommendations.append("🔴 CRITICAL: Process using >1GB memory - optimization needed")
         elif rss_mb > 500:
-            recommendations.append(
-                "🟡 WARNING: Process using >500MB memory - consider optimization"
-            )
+            recommendations.append("🟡 WARNING: Process using >500MB memory - consider optimization")
 
         # Object count recommendations
         object_analysis = self.profile_results.get("object_analysis", {})
         total_objects = object_analysis.get("total_objects", 0)
         if total_objects > 100000:
-            recommendations.append(
-                "🟡 High Python object count - review object lifecycle management"
-            )
+            recommendations.append("🟡 High Python object count - review object lifecycle management")
 
         # File size recommendations
         file_analysis = self.profile_results.get("file_analysis", {})
         large_files_count = file_analysis.get("large_files_count", 0)
         if large_files_count > 10:
-            recommendations.append(
-                "📁 Multiple large files detected - review storage optimization"
-            )
+            recommendations.append("📁 Multiple large files detected - review storage optimization")
 
         # General recommendations
         recommendations.extend(
@@ -445,10 +421,7 @@ class MemoryProfiler:
 
         # Issue #622: Use list comprehension + join for O(n) performance
         top_objects = object_analysis.get("top_object_types", {})
-        object_lines = [
-            f"- **{obj_type}:** {count:,} instances"
-            for obj_type, count in list(top_objects.items())[:10]
-        ]
+        object_lines = [f"- **{obj_type}:** {count:,} instances" for obj_type, count in list(top_objects.items())[:10]]
         report += "\n".join(object_lines) + "\n" if object_lines else ""
 
         report += """
@@ -469,10 +442,7 @@ class MemoryProfiler:
 
         # Issue #622: Use list comprehension + join for O(n) performance
         largest_files = file_analysis.get("largest_files", [])
-        file_lines = [
-            f"- **{file_info['path']}:** {file_info['size_mb']}MB"
-            for file_info in largest_files[:10]
-        ]
+        file_lines = [f"- **{file_info['path']}:** {file_info['size_mb']}MB" for file_info in largest_files[:10]]
         report += "\n".join(file_lines) + "\n" if file_lines else ""
 
         report += "\n## 🎯 Optimization Opportunities\n\n"
@@ -485,8 +455,7 @@ class MemoryProfiler:
         if large_file_opps:
             report += "### Large Files\n"
             large_file_lines = [
-                f"- **{opp['file']}** ({opp['size_mb']}MB): {opp['recommendation']}"
-                for opp in large_file_opps[:5]
+                f"- **{opp['file']}** ({opp['size_mb']}MB): {opp['recommendation']}" for opp in large_file_opps[:5]
             ]
             report += "\n".join(large_file_lines) + "\n\n"
 
@@ -495,8 +464,7 @@ class MemoryProfiler:
         if object_opps:
             report += "### Object Patterns\n"
             object_pattern_lines = [
-                f"- **{opp['type']}** ({opp['count']:,} instances): {opp['recommendation']}"
-                for opp in object_opps
+                f"- **{opp['type']}** ({opp['count']:,} instances): {opp['recommendation']}" for opp in object_opps
             ]
             report += "\n".join(object_pattern_lines) + "\n\n"
 
@@ -517,9 +485,7 @@ class MemoryProfiler:
         self.profile_results["process_memory"] = self.get_process_memory_info()
         self.profile_results["object_analysis"] = self.analyze_python_objects()
         self.profile_results["file_analysis"] = self.analyze_large_files()
-        self.profile_results[
-            "optimization_opportunities"
-        ] = self.identify_optimization_opportunities()
+        self.profile_results["optimization_opportunities"] = self.identify_optimization_opportunities()
         self.profile_results["recommendations"] = self.generate_recommendations()
 
         self.save_reports()
@@ -535,15 +501,9 @@ class MemoryProfiler:
         logger.info(
             f"🖥️  System Memory: {system_mem['used_gb']}GB / {system_mem['total_gb']}GB ({system_mem['percentage']:.1f}%)"
         )
-        logger.info(
-            f"⚡ Process Memory: {process_mem['rss_mb']}MB RSS ({process_mem['percentage']:.1f}%)"
-        )
-        logger.info(
-            f"🐍 Python Objects: {self.profile_results['object_analysis']['total_objects']:,} total"
-        )
-        logger.info(
-            f"📁 Large Files: {self.profile_results['file_analysis']['large_files_count']} files >1MB"
-        )
+        logger.info(f"⚡ Process Memory: {process_mem['rss_mb']}MB RSS ({process_mem['percentage']:.1f}%)")
+        logger.info(f"🐍 Python Objects: {self.profile_results['object_analysis']['total_objects']:,} total")
+        logger.info(f"📁 Large Files: {self.profile_results['file_analysis']['large_files_count']} files >1MB")
 
         recommendations = self.profile_results["recommendations"]
         critical_recs = [r for r in recommendations if "🔴 CRITICAL" in r]
@@ -570,9 +530,7 @@ def main():
     results = profiler.run_full_profile()
 
     # Exit with warning code if critical issues found
-    critical_issues = [
-        r for r in results.get("recommendations", []) if "🔴 CRITICAL" in r
-    ]
+    critical_issues = [r for r in results.get("recommendations", []) if "🔴 CRITICAL" in r]
     sys.exit(1 if critical_issues else 0)
 
 

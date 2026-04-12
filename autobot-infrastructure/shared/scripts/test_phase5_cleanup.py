@@ -123,9 +123,7 @@ def test_error_metrics_cleanup():
         if any("deprecated" in str(warning.message).lower() for warning in w):
             print("  ✅ redis_client deprecation warning emitted")
         else:
-            print(
-                "  ⚠️  redis_client deprecation warning not captured (may use logger)"
-            )
+            print("  ⚠️  redis_client deprecation warning not captured (may use logger)")
 
     return True
 
@@ -154,9 +152,7 @@ def test_claude_api_monitor_deprecation():
         from monitoring.claude_api_monitor import get_api_monitor
 
         _ = get_api_monitor()
-        deprecation_warnings = [
-            warning for warning in w if issubclass(warning.category, DeprecationWarning)
-        ]
+        deprecation_warnings = [warning for warning in w if issubclass(warning.category, DeprecationWarning)]
         if deprecation_warnings:
             print("  ✅ get_api_monitor() emits DeprecationWarning")
         else:
@@ -169,9 +165,7 @@ def test_claude_api_monitor_deprecation():
         from monitoring.claude_api_monitor import record_api_call
 
         record_api_call(payload_size=100)
-        deprecation_warnings = [
-            warning for warning in w if issubclass(warning.category, DeprecationWarning)
-        ]
+        deprecation_warnings = [warning for warning in w if issubclass(warning.category, DeprecationWarning)]
         if deprecation_warnings:
             print("  ✅ record_api_call() emits DeprecationWarning")
         else:
@@ -281,12 +275,7 @@ def test_grafana_integration():
 
     # Check Vue component exists
     vue_component = (
-        Path(__file__).parent.parent
-        / "autobot-vue"
-        / "src"
-        / "components"
-        / "monitoring"
-        / "GrafanaDashboard.vue"
+        Path(__file__).parent.parent / "autobot-vue" / "src" / "components" / "monitoring" / "GrafanaDashboard.vue"
     )
 
     if vue_component.exists():

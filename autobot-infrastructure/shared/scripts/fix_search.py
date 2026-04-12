@@ -25,9 +25,7 @@ def upload_docs_as_searchable_facts():
         files = glob.glob(os.path.join(project_root, pattern), recursive=True)
         doc_files.extend(files)
 
-    filtered_files = [
-        f for f in set(doc_files) if os.path.isfile(f) and "node_modules" not in f
-    ]
+    filtered_files = [f for f in set(doc_files) if os.path.isfile(f) and "node_modules" not in f]
 
     print(f"Found {len(filtered_files)} documentation files")
 

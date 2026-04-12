@@ -30,9 +30,7 @@ class AutoBotInventory:
     """Generate Ansible inventory from AutoBot service registry"""
 
     def __init__(self):
-        self.redis_host = os.getenv(
-            "REDIS_HOST", os.getenv("AUTOBOT_REDIS_HOST", "localhost")
-        )
+        self.redis_host = os.getenv("REDIS_HOST", os.getenv("AUTOBOT_REDIS_HOST", "localhost"))
         self.redis_port = int(os.getenv("REDIS_PORT", "6379"))
         self.redis_db = int(os.getenv("REDIS_DB", "0"))
         self.inventory = {"_meta": {"hostvars": {}}}
@@ -54,9 +52,7 @@ class AutoBotInventory:
             client.ping()
             return client
         except Exception as e:
-            sys.stderr.write(
-                f"ERROR: Cannot connect to Redis at {self.redis_host}:{self.redis_port}\n"
-            )
+            sys.stderr.write(f"ERROR: Cannot connect to Redis at {self.redis_host}:{self.redis_port}\n")
             sys.stderr.write(f"       {str(e)}\n")
             return None
 
@@ -88,11 +84,7 @@ class AutoBotInventory:
                         "ansible_host": host_data.get("ip", "127.0.0.1"),
                         "vm_role": host_data.get("role", "unknown"),
                         "vm_hostname": hostname,
-                        "services": (
-                            host_data.get("services", "").split(",")
-                            if host_data.get("services")
-                            else []
-                        ),
+                        "services": (host_data.get("services", "").split(",") if host_data.get("services") else []),
                         "status": host_data.get("status", "unknown"),
                         "last_seen": host_data.get("last_seen", "never"),
                     }
@@ -106,9 +98,7 @@ class AutoBotInventory:
         hosts = self.get_hosts_from_redis(redis_client)
 
         if not hosts:
-            sys.stderr.write(
-                "WARNING: No hosts found in Redis, using fallback static inventory\n"
-            )
+            sys.stderr.write("WARNING: No hosts found in Redis, using fallback static inventory\n")
             return self.build_fallback_inventory()
 
         # Group hosts by role

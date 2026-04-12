@@ -47,9 +47,7 @@ def find_trailing_comma_tuples(content: str, filepath: str) -> list[dict]:
                                 "line": end_line,
                                 "col": node.value.end_col_offset,
                                 "content": line_content,
-                                "target": node.targets[0].id
-                                if isinstance(node.targets[0], ast.Name)
-                                else "unknown",
+                                "target": node.targets[0].id if isinstance(node.targets[0], ast.Name) else "unknown",
                             }
                         )
 
@@ -65,9 +63,7 @@ def trailing_comma_corrector(content: str, issues: list[dict]) -> str:
         if line_idx < len(lines):
             # Remove trailing comma after closing paren
             # Pattern: ),  or ), # comment
-            lines[line_idx] = re.sub(
-                r"(\))\s*,(\s*(?:#.*)?)$", r"\1\2", lines[line_idx]
-            )
+            lines[line_idx] = re.sub(r"(\))\s*,(\s*(?:#.*)?)$", r"\1\2", lines[line_idx])
 
     return "\n".join(lines)
 
@@ -133,18 +129,14 @@ def main():
                 files_fixed += 1
                 total_fixed += count
                 rel_path = py_file.relative_to(project_root)
-                print(
-                    f"{'Would fix' if dry_run else 'Fixed'} {count} issue(s) in {rel_path}"
-                )
+                print(f"{'Would fix' if dry_run else 'Fixed'} {count} issue(s) in {rel_path}")
 
                 if verbose:
                     for issue in issues:
                         print(f"  Line {issue['line']}: {issue['target']} = (...),")
 
     print()
-    print(
-        f"{'Would fix' if dry_run else 'Fixed'} {total_fixed} trailing comma tuple(s) in {files_fixed} file(s)"
-    )
+    print(f"{'Would fix' if dry_run else 'Fixed'} {total_fixed} trailing comma tuple(s) in {files_fixed} file(s)")
 
     if dry_run:
         print("\nRun without --dry-run to apply fixes.")

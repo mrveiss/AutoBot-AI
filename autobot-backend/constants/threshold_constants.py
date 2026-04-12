@@ -508,8 +508,8 @@ class ProtocolDefaults:
     TCP: str = "tcp"
 
     # Health endpoints — imported from api_constants (Issue #3531)
-    from constants.api_constants import PATH_HEALTH as HEALTH_ENDPOINT  # noqa: F401
     from constants.api_constants import PATH_API_HEALTH as API_HEALTH_ENDPOINT  # noqa: F401
+    from constants.api_constants import PATH_HEALTH as HEALTH_ENDPOINT  # noqa: F401
 
     # API version
     API_VERSION: str = "1.0"

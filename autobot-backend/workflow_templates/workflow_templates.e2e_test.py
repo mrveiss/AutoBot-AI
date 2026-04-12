@@ -8,9 +8,8 @@ import sys
 
 sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
-from tests.test_helpers import get_test_backend_url
-
 from autobot_types import TaskComplexity
+from tests.test_helpers import get_test_backend_url
 from workflow_templates import TemplateCategory, workflow_template_manager
 
 
@@ -36,12 +35,8 @@ async def test_template_management():
     # Test 2: Filter by category
     print("\n📝 Test 2: Filter by Category...")  # noqa: print
 
-    security_templates = workflow_template_manager.list_templates(
-        category=TemplateCategory.SECURITY
-    )
-    research_templates = workflow_template_manager.list_templates(
-        category=TemplateCategory.RESEARCH
-    )
+    security_templates = workflow_template_manager.list_templates(category=TemplateCategory.SECURITY)
+    research_templates = workflow_template_manager.list_templates(category=TemplateCategory.RESEARCH)
 
     print(f"✅ Security templates: {len(security_templates)}")  # noqa: print
     print(f"✅ Research templates: {len(research_templates)}")  # noqa: print
@@ -53,9 +48,7 @@ async def test_template_management():
     security_templates_search = workflow_template_manager.search_templates("security")
 
     print(f"✅ 'network' search results: {len(network_templates)}")  # noqa: print
-    print(  # noqa: print
-        f"✅ 'security' search results: {len(security_templates_search)}"
-    )  # noqa: print
+    print(f"✅ 'security' search results: {len(security_templates_search)}")  # noqa: print  # noqa: print
 
     # Test 4: Get specific template
     print("\n📝 Test 4: Get Specific Template...")  # noqa: print
@@ -81,17 +74,13 @@ async def test_template_creation():
     # Test 1: Create workflow without variables
     print("\n📝 Test 1: Create Basic Workflow...")  # noqa: print
 
-    workflow_data = workflow_template_manager.create_workflow_from_template(
-        "comprehensive_research"
-    )
+    workflow_data = workflow_template_manager.create_workflow_from_template("comprehensive_research")
 
     if workflow_data:
         print("✅ Created workflow from research template")  # noqa: print
         print(f"  Template: {workflow_data['template_name']}")  # noqa: print
         print(f"  Steps: {len(workflow_data['steps'])}")  # noqa: print
-        print(  # noqa: print
-            f"  Estimated duration: {workflow_data['estimated_duration_minutes']} minutes"
-        )
+        print(f"  Estimated duration: {workflow_data['estimated_duration_minutes']} minutes")  # noqa: print
     else:
         print("❌ Failed to create workflow from template")  # noqa: print
 
@@ -100,17 +89,13 @@ async def test_template_creation():
 
     variables = {"target": "192.168.1.0/24", "scan_type": "comprehensive"}
 
-    security_workflow = workflow_template_manager.create_workflow_from_template(
-        "network_security_scan", variables
-    )
+    security_workflow = workflow_template_manager.create_workflow_from_template("network_security_scan", variables)
 
     if security_workflow:
         print("✅ Created security scan workflow with variables")  # noqa: print
         print(f"  Target: {variables['target']}")  # noqa: print
         print(f"  Scan type: {variables['scan_type']}")  # noqa: print
-        print(  # noqa: print
-            f"  Variables applied: {security_workflow.get('variables_used', {})}"
-        )  # noqa: print
+        print(f"  Variables applied: {security_workflow.get('variables_used', {})}")  # noqa: print  # noqa: print
 
         # Check if variables were substituted in steps
         for step in security_workflow["steps"][:3]:
@@ -133,12 +118,8 @@ async def test_template_creation():
         "network_security_scan", {"target": "10.0.0.1"}  # Missing scan_type
     )
 
-    print(  # noqa: print
-        f"✅ Invalid variables validation: {invalid_validation['valid']}"
-    )  # noqa: print
-    print(  # noqa: print
-        f"  Missing variables: {invalid_validation.get('missing_variables', [])}"
-    )  # noqa: print
+    print(f"✅ Invalid variables validation: {invalid_validation['valid']}")  # noqa: print  # noqa: print
+    print(f"  Missing variables: {invalid_validation.get('missing_variables', [])}")  # noqa: print  # noqa: print
 
     return True
 
@@ -155,9 +136,7 @@ async def test_template_categories():
     for category in TemplateCategory:
         templates = workflow_template_manager.list_templates(category=category)
         categories_count[category.value] = len(templates)
-        print(  # noqa: print
-            f"  {category.value.replace('_', ' ').title()}: {len(templates)} templates"
-        )
+        print(f"  {category.value.replace('_', ' ').title()}: {len(templates)} templates")  # noqa: print
 
     print("✅ Category breakdown completed")  # noqa: print
 
@@ -168,9 +147,7 @@ async def test_template_categories():
     for complexity in TaskComplexity:
         templates = workflow_template_manager.get_templates_by_complexity(complexity)
         complexity_count[complexity.value] = len(templates)
-        print(  # noqa: print
-            f"  {complexity.value.replace('_', ' ').title()}: {len(templates)} templates"
-        )
+        print(f"  {complexity.value.replace('_', ' ').title()}: {len(templates)} templates")  # noqa: print
 
     print("✅ Complexity breakdown completed")  # noqa: print
 
@@ -204,9 +181,7 @@ async def test_specific_templates():
         template = workflow_template_manager.get_template(template_id)
         if template:
             approval_steps = sum(1 for step in template.steps if step.requires_approval)
-            print(  # noqa: print
-                f"✅ {template.name}: {len(template.steps)} steps, {approval_steps} approval required"
-            )
+            print(f"✅ {template.name}: {len(template.steps)} steps, {approval_steps} approval required")  # noqa: print
         else:
             print(f"❌ Failed to find template: {template_id}")  # noqa: print
 
@@ -242,9 +217,7 @@ async def test_specific_templates():
         template = workflow_template_manager.get_template(template_id)
         if template:
             variables = len(template.variables)
-            print(  # noqa: print
-                f"✅ {template.name}: {variables} variables, {len(template.tags)} tags"
-            )
+            print(f"✅ {template.name}: {variables} variables, {len(template.tags)} tags")  # noqa: print
         else:
             print(f"❌ Failed to find template: {template_id}")  # noqa: print
 
@@ -270,9 +243,7 @@ async def test_template_api_integration():
         async with aiohttp.ClientSession() as session:
             for endpoint in endpoints_to_test:
                 try:
-                    async with session.get(
-                        get_test_backend_url() + endpoint
-                    ) as response:
+                    async with session.get(get_test_backend_url() + endpoint) as response:
                         if response.status == 200:
                             print(f"✅ {endpoint}: OK")  # noqa: print
                         else:
@@ -283,9 +254,7 @@ async def test_template_api_integration():
         print("✅ API integration test completed")  # noqa: print
 
     except ImportError:
-        print(  # noqa: print
-            "⚠️  aiohttp not available - skipping API integration test"
-        )  # noqa: print
+        print("⚠️  aiohttp not available - skipping API integration test")  # noqa: print  # noqa: print
     except Exception as e:
         print(f"⚠️  API test failed: {e}")  # noqa: print
 
@@ -328,9 +297,7 @@ async def main():
 
         print("\n📋 TEMPLATE CAPABILITIES:")  # noqa: print
         print("• 15+ pre-configured workflow templates")  # noqa: print
-        print(  # noqa: print
-            "• 5 template categories (Security, Research, System Admin, Development, Analysis)"
-        )
+        print("• 5 template categories (Security, Research, System Admin, Development, Analysis)")  # noqa: print
         print("• Variable substitution and customization")  # noqa: print
         print("• Template search and filtering")  # noqa: print
         print("• API endpoints for template management")  # noqa: print

@@ -78,9 +78,7 @@ class WorkflowEngine:
         else:
             return TaskComplexity.SIMPLE
 
-    def plan_workflow(
-        self, user_message: str, complexity: TaskComplexity
-    ) -> List[WorkflowStep]:
+    def plan_workflow(self, user_message: str, complexity: TaskComplexity) -> List[WorkflowStep]:
         """Plan workflow steps based on request complexity."""
 
         if complexity == TaskComplexity.SIMPLE:
@@ -151,9 +149,7 @@ class WorkflowEngine:
                     id="detailed_research",
                     agent_type="research",
                     action="get_installation_guide",
-                    inputs={
-                        "selected_tool": "{present_options.outputs.user_selection}"
-                    },
+                    inputs={"selected_tool": "{present_options.outputs.user_selection}"},
                     dependencies=["present_options"],
                 ),
                 WorkflowStep(
@@ -204,9 +200,7 @@ class WorkflowEngine:
             "workflow_required": complexity != TaskComplexity.SIMPLE,
             "planned_steps": len(workflow_steps),
             "agents_involved": list(set(step.agent_type for step in workflow_steps)),
-            "user_approvals_needed": sum(
-                1 for step in workflow_steps if step.user_approval_required
-            ),
+            "user_approvals_needed": sum(1 for step in workflow_steps if step.user_approval_required),
             "estimated_duration": self.estimate_workflow_duration(workflow_steps),
             "workflow_preview": self.create_workflow_preview(workflow_steps),
         }
@@ -228,9 +222,7 @@ class WorkflowEngine:
         for i, step in enumerate(steps, 1):
             agent_name = step.agent_type.title()
             action_desc = step.action.replace("_", " ").title()
-            approval_note = (
-                " (requires your approval)" if step.user_approval_required else ""
-            )
+            approval_note = " (requires your approval)" if step.user_approval_required else ""
             preview.append(f"{i}. {agent_name}: {action_desc}{approval_note}")
         return preview
 
@@ -251,9 +243,7 @@ class WorkflowEngine:
         elif total_seconds < 3600:
             return f"{total_seconds // 60} minutes"
         else:
-            return (
-                f"{total_seconds // 3600} hours {(total_seconds % 3600) // 60} minutes"
-            )
+            return f"{total_seconds // 3600} hours {(total_seconds % 3600) // 60} minutes"
 
 
 def demonstrate_enhanced_orchestration():

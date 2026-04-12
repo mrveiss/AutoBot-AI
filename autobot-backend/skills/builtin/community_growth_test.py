@@ -214,9 +214,7 @@ async def test_reddit_post_missing_title(skill: CommunityGrowthSkill):
 @pytest.mark.asyncio()
 async def test_twitter_post_dry_run(skill: CommunityGrowthSkill):
     """twitter_post with dry_run=True returns success without calling API."""
-    result = await skill.execute(
-        "twitter_post", {"content": "Hello Twitter!", "dry_run": True}
-    )
+    result = await skill.execute("twitter_post", {"content": "Hello Twitter!", "dry_run": True})
     assert result["success"] is True
     assert result["dry_run"] is True
 
@@ -225,9 +223,7 @@ async def test_twitter_post_dry_run(skill: CommunityGrowthSkill):
 async def test_twitter_post_truncates_long_content(skill: CommunityGrowthSkill):
     """twitter_post with dry_run truncates content over 280 chars."""
     long_content = "x" * 300
-    result = await skill.execute(
-        "twitter_post", {"content": long_content, "dry_run": True}
-    )
+    result = await skill.execute("twitter_post", {"content": long_content, "dry_run": True})
     assert result["success"] is True
 
 
@@ -249,9 +245,7 @@ async def test_twitter_post_no_token():
 @pytest.mark.asyncio()
 async def test_discord_notify_dry_run(skill: CommunityGrowthSkill):
     """discord_notify with dry_run=True returns success without calling webhook."""
-    result = await skill.execute(
-        "discord_notify", {"content": "Hello Discord!", "dry_run": True}
-    )
+    result = await skill.execute("discord_notify", {"content": "Hello Discord!", "dry_run": True})
     assert result["success"] is True
     assert result["dry_run"] is True
 
@@ -309,9 +303,7 @@ async def test_github_get_releases_success(skill: CommunityGrowthSkill):
 
     with patch("skills.builtin.community_growth.aiohttp.ClientSession") as mock_cs:
         mock_cs.return_value = session_cm
-        result = await skill.execute(
-            "github_get_releases", {"repo": "mrveiss/AutoBot-AI", "limit": 1}
-        )
+        result = await skill.execute("github_get_releases", {"repo": "mrveiss/AutoBot-AI", "limit": 1})
 
     assert result["success"] is True
     assert len(result["releases"]) == 1

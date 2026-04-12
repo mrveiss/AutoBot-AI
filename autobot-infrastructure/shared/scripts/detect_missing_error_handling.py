@@ -321,10 +321,7 @@ class ErrorHandlingAnalyzer(ast.NodeVisitor):
             if not call_name:
                 continue
 
-            if any(
-                log in call_name.lower()
-                for log in ["log", "logger", "print", "warn", "error"]
-            ):
+            if any(log in call_name.lower() for log in ["log", "logger", "print", "warn", "error"]):
                 return True
         return False
 

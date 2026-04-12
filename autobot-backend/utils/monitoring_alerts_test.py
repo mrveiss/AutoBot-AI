@@ -10,9 +10,7 @@ from datetime import datetime
 from tests.test_helpers import get_test_backend_url
 
 # Setup logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -31,9 +29,7 @@ async def test_monitoring_alerts():
         default_rules = alerts_manager.get_alert_rules()
         logger.info(f"📋 Found {len(default_rules)} default alert rules:")
         for rule in default_rules[:5]:  # Show first 5
-            logger.info(
-                f"  - {rule.name} ({rule.severity.value}): {rule.metric_path} {rule.operator} {rule.threshold}"
-            )
+            logger.info(f"  - {rule.name} ({rule.severity.value}): {rule.metric_path} {rule.operator} {rule.threshold}")
 
         # Check notification channels
         logger.info("📢 Notification channels:")
@@ -175,29 +171,21 @@ async def test_monitoring_alerts():
             )
 
             success = await log_channel.send_alert(test_notification_alert)
-            logger.info(
-                f"📝 Log channel test: {'✅ Success' if success else '❌ Failed'}"
-            )
+            logger.info(f"📝 Log channel test: {'✅ Success' if success else '❌ Failed'}")
 
             recovery_success = await log_channel.send_recovery(test_notification_alert)
-            logger.info(
-                f"📝 Log recovery test: {'✅ Success' if recovery_success else '❌ Failed'}"
-            )
+            logger.info(f"📝 Log recovery test: {'✅ Success' if recovery_success else '❌ Failed'}")
 
         # Test Redis channel
         redis_channel = alerts_manager.notification_channels.get("redis")
         if redis_channel and redis_channel.enabled:
             success = await redis_channel.send_alert(test_notification_alert)
-            logger.info(
-                f"📡 Redis channel test: {'✅ Success' if success else '❌ Failed'}"
-            )
+            logger.info(f"📡 Redis channel test: {'✅ Success' if success else '❌ Failed'}")
 
         # Summary
         logger.info("📊 Monitoring Alerts System Test Summary:")
         logger.info(f"  ✅ Default rules loaded: {len(default_rules)}")
-        logger.info(
-            f"  ✅ Notification channels: {len(alerts_manager.notification_channels)}"
-        )
+        logger.info(f"  ✅ Notification channels: {len(alerts_manager.notification_channels)}")
         logger.info("  ✅ Custom rule creation: Working")
         logger.info("  ✅ Alert acknowledgment: Working")
         logger.info("  ✅ Alert resolution: Working")
@@ -227,26 +215,16 @@ async def test_api_integration():
         # Test health endpoint
         async with aiohttp.ClientSession() as session:
             try:
-                async with session.get(
-                    get_test_backend_url() + "/api/alerts/health"
-                ) as response:
+                async with session.get(get_test_backend_url() + "/api/alerts/health") as response:
                     if response.status == 200:
                         data = await response.json()
                         logger.info(f"✅ Health check passed: {data['status']}")
-                        logger.info(
-                            f"  📊 Active alerts: {data.get('active_alerts_count', 0)}"
-                        )
-                        logger.info(
-                            f"  📋 Alert rules: {data.get('alert_rules_count', 0)}"
-                        )
+                        logger.info(f"  📊 Active alerts: {data.get('active_alerts_count', 0)}")
+                        logger.info(f"  📋 Alert rules: {data.get('alert_rules_count', 0)}")
                     else:
-                        logger.warning(
-                            f"⚠️ Health check returned status {response.status}"
-                        )
+                        logger.warning(f"⚠️ Health check returned status {response.status}")
             except Exception as e:
-                logger.warning(
-                    f"⚠️ Could not connect to API (expected if backend not running): {e}"
-                )
+                logger.warning(f"⚠️ Could not connect to API (expected if backend not running): {e}")
 
         logger.info("📊 API Integration Test:")
         logger.info("  ✅ Health endpoint structure: Working")

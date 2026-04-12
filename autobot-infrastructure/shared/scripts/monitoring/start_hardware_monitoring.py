@@ -101,19 +101,14 @@ class Phase9MonitoringManager:
                 logger.warning("Failed to collect baseline metrics")
 
             # Run initial GPU optimization if enabled
-            if (
-                self.config["gpu_optimization_enabled"]
-                and gpu_capabilities["gpu_available"]
-            ):
+            if self.config["gpu_optimization_enabled"] and gpu_capabilities["gpu_available"]:
                 logger.info("Running initial GPU optimization...")
                 optimization_result = await optimize_gpu_for_multimodal()
                 if optimization_result.success:
                     logger.info(
                         f"GPU optimization completed: {optimization_result.performance_improvement:.1f}% improvement"
                     )
-                    self.optimizations_applied += len(
-                        optimization_result.applied_optimizations
-                    )
+                    self.optimizations_applied += len(optimization_result.applied_optimizations)
                 else:
                     logger.warning("GPU optimization failed")
 
@@ -170,9 +165,7 @@ class Phase9MonitoringManager:
 
             # Generate final report
             uptime = time.time() - self.start_time if self.start_time else 0
-            logger.info(
-                f"Monitoring stopped. Uptime: {uptime:.1f}s, Metrics collected: {self.metrics_collected}"
-            )
+            logger.info(f"Monitoring stopped. Uptime: {uptime:.1f}s, Metrics collected: {self.metrics_collected}")
 
             return True
 
@@ -203,15 +196,11 @@ class Phase9MonitoringManager:
                         logger.info(
                             f"Periodic optimization completed: {optimization_result.performance_improvement:.1f}% improvement"
                         )
-                        self.optimizations_applied += len(
-                            optimization_result.applied_optimizations
-                        )
+                        self.optimizations_applied += len(optimization_result.applied_optimizations)
                     else:
                         logger.warning("Periodic optimization failed")
                 else:
-                    logger.info(
-                        f"GPU efficiency is good ({overall_efficiency:.1f}%), skipping optimization"
-                    )
+                    logger.info(f"GPU efficiency is good ({overall_efficiency:.1f}%), skipping optimization")
 
             except Exception as e:
                 logger.error(f"Error in periodic optimization loop: {e}")
@@ -261,22 +250,16 @@ class Phase9MonitoringManager:
             if dashboard_data.get("system"):
                 system = dashboard_data["system"]
                 summary_parts.append(f"CPU: {system.get('cpu_usage_percent', 0):.0f}%")
-                summary_parts.append(
-                    f"MEM: {system.get('memory_usage_percent', 0):.0f}%"
-                )
+                summary_parts.append(f"MEM: {system.get('memory_usage_percent', 0):.0f}%")
 
             # Alert summary
             recent_alerts = dashboard_data.get("recent_alerts", [])
             if recent_alerts:
-                critical_alerts = sum(
-                    1 for alert in recent_alerts if alert.get("severity") == "critical"
-                )
+                critical_alerts = sum(1 for alert in recent_alerts if alert.get("severity") == "critical")
                 if critical_alerts > 0:
                     summary_parts.append(f"⚠️ {critical_alerts} critical alerts")
 
-            logger.info(
-                f"DASHBOARD: {' | '.join(summary_parts)} | Collected: {self.metrics_collected}"
-            )
+            logger.info(f"DASHBOARD: {' | '.join(summary_parts)} | Collected: {self.metrics_collected}")
 
         except Exception as e:
             logger.error(f"Error logging dashboard summary: {e}")
@@ -290,9 +273,7 @@ class Phase9MonitoringManager:
                 category = alert.get("category", "unknown")
                 message = alert.get("message", "No message")
 
-                log_level = (
-                    logging.CRITICAL if severity == "critical" else logging.WARNING
-                )
+                log_level = logging.CRITICAL if severity == "critical" else logging.WARNING
                 logger.log(
                     log_level,
                     f"PERFORMANCE ALERT [{severity.upper()}] {category}: {message}",
@@ -310,10 +291,7 @@ class Phase9MonitoringManager:
         try:
             category = alert.get("category", "")
 
-            if (
-                category == "gpu"
-                and "thermal throttling" in alert.get("message", "").lower()
-            ):
+            if category == "gpu" and "thermal throttling" in alert.get("message", "").lower():
                 logger.critical("GPU thermal throttling detected - reducing GPU load")
                 # Could implement automated GPU load reduction here
 
@@ -321,9 +299,7 @@ class Phase9MonitoringManager:
                 logger.critical("High memory usage detected - triggering cleanup")
                 # Could implement automated memory cleanup here
 
-            elif (
-                category == "service" and "critical" in alert.get("message", "").lower()
-            ):
+            elif category == "service" and "critical" in alert.get("message", "").lower():
                 logger.critical("Critical service issue detected")
                 # Could implement service restart or fallback here
 
@@ -365,9 +341,7 @@ class Phase9MonitoringManager:
             with open(benchmark_file, "w") as f:
                 json.dump(results, f, indent=2, default=str)
 
-            logger.info(
-                f"Benchmark suite completed. Results saved to: {benchmark_file}"
-            )
+            logger.info(f"Benchmark suite completed. Results saved to: {benchmark_file}")
             return results
 
         except Exception as e:
@@ -452,9 +426,7 @@ async def _handle_test_command(manager):
 
 async def main():
     """Main function for Phase 9 monitoring management."""
-    parser = argparse.ArgumentParser(
-        description="AutoBot Phase 9 Performance Monitoring"
-    )
+    parser = argparse.ArgumentParser(description="AutoBot Phase 9 Performance Monitoring")
     parser.add_argument(
         "command",
         choices=["start", "stop", "status", "benchmark", "test"],

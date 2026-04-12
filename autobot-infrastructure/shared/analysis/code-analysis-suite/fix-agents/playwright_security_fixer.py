@@ -61,9 +61,7 @@ class PlaywrightSecurityFixer:
             print(f"❌ Failed to create backup: {e}")
             return ""
 
-    def scan_for_xss_patterns(
-        self, content: str, file_path: str
-    ) -> List[Dict[str, Any]]:
+    def scan_for_xss_patterns(self, content: str, file_path: str) -> List[Dict[str, Any]]:
         """Scan for XSS vulnerability patterns."""
         vulnerabilities = []
 
@@ -160,15 +158,9 @@ class PlaywrightSecurityFixer:
         # Check if CSP already exists
         if "Content-Security-Policy" not in head_content:
             new_head_content = head_content + security_headers
-            new_content = content.replace(
-                head_match.group(), head_start + new_head_content + head_end
-            )
-            enhancements.append(
-                "Content Security Policy (CSP) injected - Playwright optimized"
-            )
-            enhancements.append(
-                "Security meta tags added (X-Content-Type-Options, X-Frame-Options, X-XSS-Protection)"
-            )
+            new_content = content.replace(head_match.group(), head_start + new_head_content + head_end)
+            enhancements.append("Content Security Policy (CSP) injected - Playwright optimized")
+            enhancements.append("Security meta tags added (X-Content-Type-Options, X-Frame-Options, X-XSS-Protection)")
             return new_content, enhancements
         else:
             enhancements.append("CSP already present - no injection needed")
@@ -260,24 +252,15 @@ class PlaywrightSecurityFixer:
             match = re.search(pattern, content, re.IGNORECASE)
             if match:
                 insert_pos = match.start()
-                new_content = (
-                    content[:insert_pos]
-                    + protection_script
-                    + "\n"
-                    + content[insert_pos:]
-                )
+                new_content = content[:insert_pos] + protection_script + "\n" + content[insert_pos:]
                 enhancements.append("Runtime XSS protection script injected")
                 return new_content, enhancements
 
         # Fallback: append before closing body
         body_end = content.rfind("</body>")
         if body_end != -1:
-            new_content = (
-                content[:body_end] + protection_script + "\n" + content[body_end:]
-            )
-            enhancements.append(
-                "Runtime XSS protection script injected (fallback position)"
-            )
+            new_content = content[:body_end] + protection_script + "\n" + content[body_end:]
+            enhancements.append("Runtime XSS protection script injected (fallback position)")
             return new_content, enhancements
 
         return content, enhancements
@@ -296,16 +279,12 @@ class PlaywrightSecurityFixer:
 
             # Scan for vulnerabilities
             vulnerabilities = self.scan_for_xss_patterns(original_content, file_path)
-            print(
-                f"🔍 Found {len(vulnerabilities)} potential XSS vulnerability patterns"
-            )
+            print(f"🔍 Found {len(vulnerabilities)} potential XSS vulnerability patterns")
 
             # Display vulnerability summary
             severity_counts = {}
             for vuln in vulnerabilities:
-                severity_counts[vuln["severity"]] = (
-                    severity_counts.get(vuln["severity"], 0) + 1
-                )
+                severity_counts[vuln["severity"]] = severity_counts.get(vuln["severity"], 0) + 1
 
             for severity, count in severity_counts.items():
                 severity_icons = {
@@ -328,21 +307,15 @@ class PlaywrightSecurityFixer:
             all_enhancements = []
 
             # Inject security headers
-            enhanced_content, header_enhancements = self.inject_security_headers(
-                enhanced_content
-            )
+            enhanced_content, header_enhancements = self.inject_security_headers(enhanced_content)
             all_enhancements.extend(header_enhancements)
 
             # Inject runtime protection
-            enhanced_content, runtime_enhancements = self.inject_runtime_protection(
-                enhanced_content
-            )
+            enhanced_content, runtime_enhancements = self.inject_runtime_protection(enhanced_content)
             all_enhancements.extend(runtime_enhancements)
 
             # Basic validation
-            if (
-                len(enhanced_content) < original_size * 0.9
-            ):  # Content shouldn't shrink significantly
+            if len(enhanced_content) < original_size * 0.9:  # Content shouldn't shrink significantly
                 print("❌ Enhanced content appears corrupted")
                 return {
                     "file": file_path,
@@ -400,9 +373,7 @@ class PlaywrightSecurityFixer:
         for result in results:
             if result["status"] == "enhanced":
                 self.report["vulnerabilities"].extend(result.get("vulnerabilities", []))
-                self.report["security_enhancements"].extend(
-                    result.get("enhancements", [])
-                )
+                self.report["security_enhancements"].extend(result.get("enhancements", []))
 
         # Generate markdown report
         report = f"""# Playwright Security Enhancement Report
@@ -470,12 +441,8 @@ class PlaywrightSecurityFixer:
             report += f"- **Status:** {result['status'].upper()}\n"
 
             if result["status"] == "enhanced":
-                report += (
-                    f"- **Vulnerabilities Found:** {result['vulnerabilities_found']}\n"
-                )
-                report += (
-                    f"- **Security Enhancements:** {result['enhancements_applied']}\n"
-                )
+                report += f"- **Vulnerabilities Found:** {result['vulnerabilities_found']}\n"
+                report += f"- **Security Enhancements:** {result['enhancements_applied']}\n"
                 report += f"- **Backup Location:** `{result['backup_path']}`\n"
                 report += f"- **File Size:** {result['original_size']:,} → {result['enhanced_size']:,} bytes\n"
 
@@ -551,9 +518,7 @@ class PlaywrightSecurityFixer:
         # Find HTML files to process
         html_files = []
 
-        if os.path.isfile(target_path) and target_path.lower().endswith(
-            (".html", ".htm")
-        ):
+        if os.path.isfile(target_path) and target_path.lower().endswith((".html", ".htm")):
             html_files = [target_path]
         elif os.path.isdir(target_path):
             print(f"📂 Scanning directory: {target_path}")
@@ -578,9 +543,7 @@ class PlaywrightSecurityFixer:
         print(f"\n📊 Generating security report...")
         report_content = self.generate_security_report(results)
 
-        output_dir = (
-            os.path.dirname(target_path) if os.path.isfile(target_path) else target_path
-        )
+        output_dir = os.path.dirname(target_path) if os.path.isfile(target_path) else target_path
         report_path = self.save_report(report_content, output_dir)
 
         if report_path:
@@ -612,9 +575,7 @@ def main():
         print("Usage: python playwright_security_fixer.py <file_or_directory_path>")
         print("\nExamples:")
         print("  python playwright_security_fixer.py tests/playwright-report/")
-        print(
-            "  python playwright_security_fixer.py tests/playwright-report/index.html"
-        )
+        print("  python playwright_security_fixer.py tests/playwright-report/index.html")
         sys.exit(1)
 
     target_path = sys.argv[1]

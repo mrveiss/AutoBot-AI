@@ -18,7 +18,6 @@ import pytest
 
 from agents.npu_code_search_agent import CodeSearchResult, NPUCodeSearchAgent, SearchStats
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

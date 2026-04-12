@@ -29,16 +29,10 @@ class DocumentParser:
             ".pdf": "application/pdf",
             # Microsoft Office
             ".doc": "application/msword",
-            ".docx": (
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            ),
-            ".xlsx": (
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            ),
+            ".docx": ("application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+            ".xlsx": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
             ".ppt": "application/vnd.ms-powerpoint",
-            ".pptx": (
-                "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-            ),
+            ".pptx": ("application/vnd.openxmlformats-officedocument.presentationml.presentation"),
             # OpenDocument
             ".odt": "application/vnd.oasis.opendocument.text",
             ".ods": "application/vnd.oasis.opendocument.spreadsheet",
@@ -46,9 +40,7 @@ class DocumentParser:
             ".odg": "application/vnd.oasis.opendocument.graphics",
         }
 
-    async def extract_text(
-        self, file_path: Path, mime_type: Optional[str] = None
-    ) -> Tuple[str, Dict[str, any]]:
+    async def extract_text(self, file_path: Path, mime_type: Optional[str] = None) -> Tuple[str, Dict[str, any]]:
         """
         Extract text from document
 
@@ -68,8 +60,7 @@ class DocumentParser:
 
         if extension not in self.supported_formats:
             raise ValueError(
-                f"Unsupported document format: {extension}. "
-                f"Supported: {', '.join(self.supported_formats.keys())}"
+                f"Unsupported document format: {extension}. " f"Supported: {', '.join(self.supported_formats.keys())}"
             )
 
         # Run extraction in thread pool to avoid blocking
@@ -103,9 +94,7 @@ class DocumentParser:
 
         return None
 
-    def _extract_text_sync(
-        self, file_path: Path, extension: str
-    ) -> Tuple[str, Dict[str, any]]:
+    def _extract_text_sync(self, file_path: Path, extension: str) -> Tuple[str, Dict[str, any]]:
         """Synchronous text extraction (Issue #315 - refactored to dispatch table)."""
         metadata = {
             "file_name": file_path.name,
@@ -308,10 +297,7 @@ class DocumentParser:
             text = textract.process(str(file_path)).decode("utf-8")
             return text
         except ImportError:
-            logger.warning(
-                "textract not installed - cannot parse .doc files. "
-                "Install with: pip install textract"
-            )
+            logger.warning("textract not installed - cannot parse .doc files. " "Install with: pip install textract")
             metadata["warning"] = "textract required for .doc files"
             return ""
         except Exception as e:

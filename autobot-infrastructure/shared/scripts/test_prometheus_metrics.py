@@ -34,13 +34,9 @@ def test_prometheus_metrics():
     # Test that all new metrics exist
     logger.info("\n✓ Checking System Metrics...")
     assert hasattr(metrics_manager, "system_cpu_usage"), "Missing system_cpu_usage"
-    assert hasattr(
-        metrics_manager, "system_memory_usage"
-    ), "Missing system_memory_usage"
+    assert hasattr(metrics_manager, "system_memory_usage"), "Missing system_memory_usage"
     assert hasattr(metrics_manager, "system_disk_usage"), "Missing system_disk_usage"
-    assert hasattr(
-        metrics_manager, "system_network_bytes"
-    ), "Missing system_network_bytes"
+    assert hasattr(metrics_manager, "system_network_bytes"), "Missing system_network_bytes"
     logger.info("  ✓ All system metrics initialized")
 
     logger.error("\n✓ Checking Error Metrics...")
@@ -49,27 +45,15 @@ def test_prometheus_metrics():
     logger.error("  ✓ All error metrics initialized")
 
     logger.info("\n✓ Checking Claude API Metrics...")
-    assert hasattr(
-        metrics_manager, "claude_api_requests_total"
-    ), "Missing claude_api_requests_total"
-    assert hasattr(
-        metrics_manager, "claude_api_payload_bytes"
-    ), "Missing claude_api_payload_bytes"
-    assert hasattr(
-        metrics_manager, "claude_api_response_time"
-    ), "Missing claude_api_response_time"
-    assert hasattr(
-        metrics_manager, "claude_api_rate_limit_remaining"
-    ), "Missing claude_api_rate_limit_remaining"
+    assert hasattr(metrics_manager, "claude_api_requests_total"), "Missing claude_api_requests_total"
+    assert hasattr(metrics_manager, "claude_api_payload_bytes"), "Missing claude_api_payload_bytes"
+    assert hasattr(metrics_manager, "claude_api_response_time"), "Missing claude_api_response_time"
+    assert hasattr(metrics_manager, "claude_api_rate_limit_remaining"), "Missing claude_api_rate_limit_remaining"
     logger.info("  ✓ All Claude API metrics initialized")
 
     logger.info("\n✓ Checking Service Health Metrics...")
-    assert hasattr(
-        metrics_manager, "service_health_score"
-    ), "Missing service_health_score"
-    assert hasattr(
-        metrics_manager, "service_response_time"
-    ), "Missing service_response_time"
+    assert hasattr(metrics_manager, "service_health_score"), "Missing service_health_score"
+    assert hasattr(metrics_manager, "service_response_time"), "Missing service_response_time"
     assert hasattr(metrics_manager, "service_status"), "Missing service_status"
     logger.info("  ✓ All service health metrics initialized")
 

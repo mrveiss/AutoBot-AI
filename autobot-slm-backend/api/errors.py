@@ -211,9 +211,7 @@ class ResolveResponse(BaseModel):
 # =============================================================================
 
 
-async def _get_node_hostname_map(
-    db: AsyncSession, node_ids: List[str]
-) -> Dict[str, str]:
+async def _get_node_hostname_map(db: AsyncSession, node_ids: List[str]) -> Dict[str, str]:
     """Get mapping of node_id to hostname."""
     if not node_ids:
         return {}
@@ -235,9 +233,7 @@ async def _get_error_counts_by_period(db: AsyncSession) -> Dict[str, int]:
         result = await db.execute(
             select(func.count(NodeEvent.id)).where(
                 NodeEvent.created_at >= cutoff,
-                NodeEvent.severity.in_(
-                    [EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]
-                ),
+                NodeEvent.severity.in_([EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]),
             )
         )
         counts[period] = result.scalar() or 0
@@ -255,9 +251,7 @@ async def _calculate_error_trend(db: AsyncSession) -> str:
     recent_result = await db.execute(
         select(func.count(NodeEvent.id)).where(
             NodeEvent.created_at >= recent_cutoff,
-            NodeEvent.severity.in_(
-                [EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]
-            ),
+            NodeEvent.severity.in_([EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]),
         )
     )
     recent_count = recent_result.scalar() or 0
@@ -267,9 +261,7 @@ async def _calculate_error_trend(db: AsyncSession) -> str:
         select(func.count(NodeEvent.id)).where(
             NodeEvent.created_at >= prev_cutoff,
             NodeEvent.created_at < recent_cutoff,
-            NodeEvent.severity.in_(
-                [EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]
-            ),
+            NodeEvent.severity.in_([EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]),
         )
     )
     prev_count = prev_result.scalar() or 0
@@ -317,9 +309,7 @@ async def get_error_statistics(
     # Get total errors
     total_result = await db.execute(
         select(func.count(NodeEvent.id)).where(
-            NodeEvent.severity.in_(
-                [EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]
-            )
+            NodeEvent.severity.in_([EventSeverity.ERROR.value, EventSeverity.CRITICAL.value])
         )
     )
     total = total_result.scalar() or 0
@@ -330,9 +320,7 @@ async def get_error_statistics(
     # Get resolved/unresolved counts
     resolved_result = await db.execute(
         select(func.count(NodeEvent.id)).where(
-            NodeEvent.severity.in_(
-                [EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]
-            ),
+            NodeEvent.severity.in_([EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]),
             NodeEvent.resolved.is_(True),
         )
     )
@@ -358,15 +346,9 @@ async def get_error_statistics(
 
 def _build_recent_error_queries(severity: Optional[str], resolved: Optional[bool]):
     """Helper for get_recent_errors. Ref: #1088."""
-    query = select(NodeEvent).where(
-        NodeEvent.severity.in_(
-            [EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]
-        )
-    )
+    query = select(NodeEvent).where(NodeEvent.severity.in_([EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]))
     count_query = select(func.count(NodeEvent.id)).where(
-        NodeEvent.severity.in_(
-            [EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]
-        )
+        NodeEvent.severity.in_([EventSeverity.ERROR.value, EventSeverity.CRITICAL.value])
     )
     if severity:
         query = query.where(NodeEvent.severity == severity)
@@ -411,11 +393,7 @@ async def get_recent_errors(
     count_result = await db.execute(count_query)
     total = count_result.scalar() or 0
 
-    query = (
-        query.order_by(NodeEvent.created_at.desc())
-        .offset((page - 1) * per_page)
-        .limit(per_page)
-    )
+    query = query.order_by(NodeEvent.created_at.desc()).offset((page - 1) * per_page).limit(per_page)
     result = await db.execute(query)
     events = result.scalars().all()
 
@@ -423,9 +401,7 @@ async def get_recent_errors(
     hostnames = await _get_node_hostname_map(db, node_ids)
     errors = _build_recent_error_list(events, hostnames)
 
-    return RecentErrorsResponse(
-        errors=errors, total=total, page=page, per_page=per_page
-    )
+    return RecentErrorsResponse(errors=errors, total=total, page=page, per_page=per_page)
 
 
 @router.get("/categories", response_model=CategoriesResponse)
@@ -441,9 +417,7 @@ async def get_error_categories(
         select(NodeEvent.event_type, func.count(NodeEvent.id).label("count"))
         .where(
             NodeEvent.created_at >= cutoff,
-            NodeEvent.severity.in_(
-                [EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]
-            ),
+            NodeEvent.severity.in_([EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]),
         )
         .group_by(NodeEvent.event_type)
         .order_by(func.count(NodeEvent.id).desc())
@@ -477,9 +451,7 @@ async def get_error_components(
         select(NodeEvent.node_id, func.count(NodeEvent.id).label("count"))
         .where(
             NodeEvent.created_at >= cutoff,
-            NodeEvent.severity.in_(
-                [EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]
-            ),
+            NodeEvent.severity.in_([EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]),
         )
         .group_by(NodeEvent.node_id)
         .order_by(func.count(NodeEvent.id).desc())
@@ -511,21 +483,15 @@ async def get_error_health(
 ) -> ErrorHealthResponse:
     """Get error subsystem health status."""
     # Get thresholds from settings
-    warning_threshold = await _get_setting_value(
-        db, "error_alert_threshold_warning", 20
-    )
-    critical_threshold = await _get_setting_value(
-        db, "error_alert_threshold_critical", 50
-    )
+    warning_threshold = await _get_setting_value(db, "error_alert_threshold_warning", 20)
+    critical_threshold = await _get_setting_value(db, "error_alert_threshold_critical", 50)
 
     # Calculate current error rate (errors in last hour)
     cutoff = datetime.utcnow() - timedelta(hours=1)
     result = await db.execute(
         select(func.count(NodeEvent.id)).where(
             NodeEvent.created_at >= cutoff,
-            NodeEvent.severity.in_(
-                [EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]
-            ),
+            NodeEvent.severity.in_([EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]),
         )
     )
     error_rate = result.scalar() or 0
@@ -568,11 +534,7 @@ async def clear_errors(
     older_than_hours: Optional[int] = Query(None, ge=1),
 ) -> ClearResponse:
     """Clear error history."""
-    query = delete(NodeEvent).where(
-        NodeEvent.severity.in_(
-            [EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]
-        )
-    )
+    query = delete(NodeEvent).where(NodeEvent.severity.in_([EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]))
 
     if severity:
         query = delete(NodeEvent).where(NodeEvent.severity == severity)
@@ -609,31 +571,23 @@ async def create_test_error(
     db.add(event)
     await db.commit()
 
-    logger.info(
-        "Test error created: %s by %s", event_id, user.get("username", "unknown")
-    )
+    logger.info("Test error created: %s by %s", event_id, user.get("username", "unknown"))
 
-    return TestErrorResponse(
-        event_id=event_id, message="Test error created successfully"
-    )
+    return TestErrorResponse(event_id=event_id, message="Test error created successfully")
 
 
 async def _get_metrics_total_and_unresolved(db: AsyncSession):
     """Helper for get_metrics_summary. Ref: #1088."""
     total_result = await db.execute(
         select(func.count(NodeEvent.id)).where(
-            NodeEvent.severity.in_(
-                [EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]
-            )
+            NodeEvent.severity.in_([EventSeverity.ERROR.value, EventSeverity.CRITICAL.value])
         )
     )
     total = total_result.scalar() or 0
 
     unresolved_result = await db.execute(
         select(func.count(NodeEvent.id)).where(
-            NodeEvent.severity.in_(
-                [EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]
-            ),
+            NodeEvent.severity.in_([EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]),
             NodeEvent.resolved.is_(False),
         )
     )
@@ -645,11 +599,7 @@ async def _get_metrics_top_type_and_node(db: AsyncSession):
     """Helper for get_metrics_summary. Ref: #1088."""
     top_type_result = await db.execute(
         select(NodeEvent.event_type)
-        .where(
-            NodeEvent.severity.in_(
-                [EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]
-            )
-        )
+        .where(NodeEvent.severity.in_([EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]))
         .group_by(NodeEvent.event_type)
         .order_by(func.count(NodeEvent.id).desc())
         .limit(1)
@@ -658,11 +608,7 @@ async def _get_metrics_top_type_and_node(db: AsyncSession):
 
     top_node_result = await db.execute(
         select(NodeEvent.node_id)
-        .where(
-            NodeEvent.severity.in_(
-                [EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]
-            )
-        )
+        .where(NodeEvent.severity.in_([EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]))
         .group_by(NodeEvent.node_id)
         .order_by(func.count(NodeEvent.id).desc())
         .limit(1)
@@ -710,16 +656,12 @@ def _make_timeline_point(bucket_start, bucket_end, events) -> TimelinePoint:
     return TimelinePoint(
         timestamp=bucket_start,
         count=len(bucket_events),
-        critical=sum(
-            1 for e in bucket_events if e.severity == EventSeverity.CRITICAL.value
-        ),
+        critical=sum(1 for e in bucket_events if e.severity == EventSeverity.CRITICAL.value),
         error=sum(1 for e in bucket_events if e.severity == EventSeverity.ERROR.value),
     )
 
 
-def _build_timeline_points(
-    events, start, hours: int, interval: str
-) -> List[TimelinePoint]:
+def _build_timeline_points(events, start, hours: int, interval: str) -> List[TimelinePoint]:
     """Helper for get_error_timeline. Ref: #1088."""
     timeline = []
     if interval == "hour":
@@ -750,9 +692,7 @@ async def get_error_timeline(
         select(NodeEvent)
         .where(
             NodeEvent.created_at >= start,
-            NodeEvent.severity.in_(
-                [EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]
-            ),
+            NodeEvent.severity.in_([EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]),
         )
         .order_by(NodeEvent.created_at)
     )
@@ -783,9 +723,7 @@ async def get_top_errors(
         )
         .where(
             NodeEvent.created_at >= cutoff,
-            NodeEvent.severity.in_(
-                [EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]
-            ),
+            NodeEvent.severity.in_([EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]),
         )
         .group_by(NodeEvent.event_type, NodeEvent.message)
         .order_by(func.count(NodeEvent.id).desc())
@@ -831,9 +769,7 @@ async def resolve_error(
     event = result.scalar_one_or_none()
 
     if not event:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Error not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Error not found")
 
     now = datetime.utcnow()
     username = user.get("username", "unknown")
@@ -847,9 +783,7 @@ async def resolve_error(
 
     logger.info("Error %s resolved by %s", event_id, username)
 
-    return ResolveResponse(
-        event_id=event_id, resolved=True, resolved_at=now, resolved_by=username
-    )
+    return ResolveResponse(event_id=event_id, resolved=True, resolved_at=now, resolved_by=username)
 
 
 @router.post("/metrics/alert-threshold", response_model=AlertThresholdResponse)
@@ -911,9 +845,7 @@ async def cleanup_old_errors(
     result = await db.execute(
         delete(NodeEvent).where(
             NodeEvent.created_at < cutoff,
-            NodeEvent.severity.in_(
-                [EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]
-            ),
+            NodeEvent.severity.in_([EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]),
         )
     )
     await db.commit()

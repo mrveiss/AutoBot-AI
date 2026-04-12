@@ -54,9 +54,7 @@ class ResearchPreferences(BaseModel):
 async def get_research_status():
     """Get current web research status and configuration"""
     try:
-        from agents.web_researcher import (
-            get_web_researcher as get_web_research_integration,
-        )
+        from agents.web_researcher import get_web_researcher as get_web_research_integration
 
         # Get web research integration instance
         integration = get_web_research_integration()
@@ -107,9 +105,7 @@ async def enable_web_research():
     try:
         from unified_unified_config_manager import unified_unified_config_manager
 
-        from agents.web_researcher import (
-            get_web_researcher as get_web_research_integration,
-        )
+        from agents.web_researcher import get_web_researcher as get_web_research_integration
         from services.config_service import ConfigService
 
         # Enable in integration
@@ -161,9 +157,7 @@ async def disable_web_research():
     try:
         from unified_unified_config_manager import unified_unified_config_manager
 
-        from agents.web_researcher import (
-            get_web_researcher as get_web_research_integration,
-        )
+        from agents.web_researcher import get_web_researcher as get_web_research_integration
         from services.config_service import ConfigService
 
         # Disable in integration
@@ -370,9 +364,7 @@ async def test_web_research(query: str = "test query"):
 async def clear_research_cache():
     """Clear web research cache"""
     try:
-        from agents.web_researcher import (
-            get_web_researcher as get_web_research_integration,
-        )
+        from agents.web_researcher import get_web_researcher as get_web_research_integration
 
         integration = get_web_research_integration()
 
@@ -404,9 +396,7 @@ async def clear_research_cache():
 async def reset_circuit_breakers():
     """Reset all circuit breakers for web research"""
     try:
-        from agents.web_researcher import (
-            get_web_researcher as get_web_research_integration,
-        )
+        from agents.web_researcher import get_web_researcher as get_web_research_integration
 
         integration = get_web_research_integration()
 
@@ -438,9 +428,7 @@ async def reset_circuit_breakers():
 async def get_usage_stats():
     """Get web research usage statistics"""
     try:
-        from agents.web_researcher import (
-            get_web_researcher as get_web_research_integration,
-        )
+        from agents.web_researcher import get_web_researcher as get_web_research_integration
 
         integration = get_web_research_integration()
 

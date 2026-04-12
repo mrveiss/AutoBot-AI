@@ -117,9 +117,7 @@ async def main():
         logger.info(f"📦 Total vectors in Redis: {vector_count}")
 
         logger.info("✅ Index dimension fix completed!")
-        logger.info(
-            "⏳ Note: It may take a few minutes for all vectors " "to be indexed."
-        )
+        logger.info("⏳ Note: It may take a few minutes for all vectors " "to be indexed.")
 
     except Exception as e:
         logger.error(f"❌ Error: {e}")

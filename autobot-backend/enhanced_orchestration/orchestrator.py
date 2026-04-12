@@ -19,9 +19,11 @@ from typing import Any, Dict, List, Optional, Set
 
 from agents.agent_client import AgentRegistry as AgentClientRegistry
 from agents.llm_failsafe_agent import get_robust_llm_response
-from autobot_shared.redis_client import get_redis_client, get_async_redis_client
+from autobot_shared.redis_client import get_async_redis_client, get_redis_client
 from event_manager import event_manager
 
+from .execution_strategies import ExecutionStrategyHandler
+from .success_criteria import SuccessCriteriaEvaluator
 from .types import (
     FALLBACK_TIERS,
     AgentCapability,
@@ -30,8 +32,6 @@ from .types import (
     ExecutionStrategy,
     WorkflowPlan,
 )
-from .execution_strategies import ExecutionStrategyHandler
-from .success_criteria import SuccessCriteriaEvaluator
 from .workflow_planning import WorkflowPlanner
 
 logger = logging.getLogger(__name__)

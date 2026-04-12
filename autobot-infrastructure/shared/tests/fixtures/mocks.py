@@ -58,10 +58,7 @@ class MockLLMInterface:
         elif "completion" in prompt_lower:
             return "Task completed successfully!"
         elif "command" in prompt_lower:
-            return (
-                "COMMAND: echo 'This is a test response'\n"
-                "EXPLANATION: Testing the system"
-            )
+            return "COMMAND: echo 'This is a test response'\n" "EXPLANATION: Testing the system"
         else:
             return "Command executing..."
 
@@ -190,9 +187,7 @@ class MockKnowledgeBase:
         query_lower = query.lower()
 
         # Simple keyword matching
-        matches = [
-            fact for fact in self._facts if query_lower in fact["content"].lower()
-        ]
+        matches = [fact for fact in self._facts if query_lower in fact["content"].lower()]
         return matches[:limit]
 
     @property

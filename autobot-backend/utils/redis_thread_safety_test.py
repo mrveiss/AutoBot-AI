@@ -103,9 +103,7 @@ class TestPoolStatisticsThreadSafety:
         """Verify get_pool_statistics raises ValueError for missing pool"""
         manager = RedisConnectionManager()
 
-        with pytest.raises(
-            ValueError, match="No sync pool found for database 'nonexistent'"
-        ):
+        with pytest.raises(ValueError, match="No sync pool found for database 'nonexistent'"):
             manager.get_pool_statistics("nonexistent")
 
 

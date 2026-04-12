@@ -52,9 +52,7 @@ def test_path_utils():
         success = PathUtils.ensure_path_exists(test_file_path, is_file=True)
         logger.info(f"  Ensured parent directory for file: {success}")
         assert success, "Should create parent directory"
-        assert os.path.exists(
-            os.path.dirname(test_file_path)
-        ), "Parent directory should exist"
+        assert os.path.exists(os.path.dirname(test_file_path)), "Parent directory should exist"
 
     logger.info("  ✓ PathUtils tests passed!")
 
@@ -77,9 +75,7 @@ def test_path_resolution_consistency():
 
         # Verify it's absolute
         if test_path:  # Skip empty paths
-            assert os.path.isabs(
-                resolved
-            ), f"Path '{test_path}' should resolve to absolute path"
+            assert os.path.isabs(resolved), f"Path '{test_path}' should resolve to absolute path"
 
     logger.info("  ✓ Path resolution consistency tests passed!")
 
@@ -103,28 +99,16 @@ def verify_no_duplicate_code():
         sync_content = f.read()
 
     # Verify PathUtils import exists
-    assert (
-        "from utils.common import PathUtils" in async_content
-    ), "Async memory manager should import PathUtils"
-    assert (
-        "from utils.common import PathUtils" in sync_content
-    ), "Sync memory manager should import PathUtils"
+    assert "from utils.common import PathUtils" in async_content, "Async memory manager should import PathUtils"
+    assert "from utils.common import PathUtils" in sync_content, "Sync memory manager should import PathUtils"
 
     # Verify old _resolve_path methods are removed
-    assert (
-        "def _resolve_path(" not in async_content
-    ), "Async memory manager should not have _resolve_path method"
-    assert (
-        "def _resolve_path(" not in sync_content
-    ), "Sync memory manager should not have _resolve_path method"
+    assert "def _resolve_path(" not in async_content, "Async memory manager should not have _resolve_path method"
+    assert "def _resolve_path(" not in sync_content, "Sync memory manager should not have _resolve_path method"
 
     # Verify PathUtils.resolve_path is used
-    assert (
-        "PathUtils.resolve_path(" in async_content
-    ), "Async memory manager should use PathUtils.resolve_path"
-    assert (
-        "PathUtils.resolve_path(" in sync_content
-    ), "Sync memory manager should use PathUtils.resolve_path"
+    assert "PathUtils.resolve_path(" in async_content, "Async memory manager should use PathUtils.resolve_path"
+    assert "PathUtils.resolve_path(" in sync_content, "Sync memory manager should use PathUtils.resolve_path"
 
     logger.info("  ✓ Duplicate code successfully removed!")
 

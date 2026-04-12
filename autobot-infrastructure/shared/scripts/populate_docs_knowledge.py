@@ -84,9 +84,7 @@ def _gather_documentation_files(project_root: Path) -> list:
 
     unique_files = set(all_files)
     filtered_files = [
-        fp
-        for fp in unique_files
-        if not _should_exclude_file(fp, exclude_patterns) and os.path.isfile(fp)
+        fp for fp in unique_files if not _should_exclude_file(fp, exclude_patterns) and os.path.isfile(fp)
     ]
 
     return sorted(filtered_files)
@@ -153,9 +151,7 @@ async def populate_docs_knowledge():
 
         logger.info("Found %s documentation files to index", len(filtered_files))
 
-        successful_adds, failed_adds = await _process_documentation_files(
-            kb, filtered_files, project_root
-        )
+        successful_adds, failed_adds = await _process_documentation_files(kb, filtered_files, project_root)
 
         logger.info("=== Documentation Population Complete ===")
         logger.info("✓ Successfully added: %s documents", successful_adds)

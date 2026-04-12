@@ -27,9 +27,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 from utils.redis_client import get_redis_client
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -195,9 +193,7 @@ class NPUWorker:
             if self.redis_client:
                 logger.info("✅ Connected to Redis via centralized client")
             else:
-                logger.warning(
-                    "⚠️ Redis client not available, continuing without Redis"
-                )
+                logger.warning("⚠️ Redis client not available, continuing without Redis")
         except Exception as e:
             logger.error("❌ Redis connection failed: %s", e)
             self.redis_client = None
@@ -218,9 +214,7 @@ class NPUWorker:
             import platform
 
             if platform.system() != "Windows":
-                logger.warning(
-                    "⚠️ NPU worker optimized for Windows - running in fallback mode"
-                )
+                logger.warning("⚠️ NPU worker optimized for Windows - running in fallback mode")
                 self.npu_available = False
                 return
 
@@ -244,9 +238,7 @@ class NPUWorker:
                     self.npu_available = False
 
             except ImportError:
-                logger.error(
-                    "❌ OpenVINO not installed - install with: pip install openvino"
-                )
+                logger.error("❌ OpenVINO not installed - install with: pip install openvino")
                 self.npu_available = False
             except Exception as e:
                 logger.error("❌ NPU initialization failed: %s", e)
@@ -289,9 +281,7 @@ class NPUWorker:
                     "size_mb": self.estimate_model_size(model_name),
                 }
 
-                logger.info(
-                    f"✅ Model {model_name} loaded on NPU ({time.time() - start_time:.2f}s)"
-                )
+                logger.info(f"✅ Model {model_name} loaded on NPU ({time.time() - start_time:.2f}s)")
             else:
                 # CPU fallback
                 logger.info("📥 Loading %s for CPU fallback...", model_name)
@@ -326,9 +316,7 @@ class NPUWorker:
         while True:
             try:
                 # Check for pending NPU tasks
-                task_data = await self.redis_client.blpop(
-                    "npu_tasks_pending", timeout=5
-                )
+                task_data = await self.redis_client.blpop("npu_tasks_pending", timeout=5)
 
                 if task_data:
                     _, task_json = task_data
@@ -371,9 +359,7 @@ class NPUWorker:
             # Update stats
             self.task_stats["tasks_completed"] += 1
 
-            logger.info(
-                f"✅ Task {task_id} completed in {(end_time - start_time)*1000:.2f}ms"
-            )
+            logger.info(f"✅ Task {task_id} completed in {(end_time - start_time)*1000:.2f}ms")
 
         except Exception as e:
             logger.error("❌ Task %s failed: %s", task_id, e)
@@ -387,16 +373,12 @@ class NPUWorker:
                 "failed_at": datetime.now().isoformat(),
             }
 
-            await self.redis_client.lpush(
-                "npu_tasks_failed", json.dumps(error_response)
-            )
+            await self.redis_client.lpush("npu_tasks_failed", json.dumps(error_response))
             await self.redis_client.lrem("npu_tasks_processing", 1, json.dumps(task))
 
             self.task_stats["tasks_failed"] += 1
 
-    async def process_task(
-        self, task_id: str, task_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def process_task(self, task_id: str, task_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process a specific task."""
         task_type = task_data.get("task_type")
         model_name = task_data.get("model_name")
@@ -419,9 +401,7 @@ class NPUWorker:
         else:
             raise ValueError(f"Unsupported task type: {task_type}")
 
-    async def process_chat_task(
-        self, input_data: Dict[str, Any], model_name: str
-    ) -> Dict[str, Any]:
+    async def process_chat_task(self, input_data: Dict[str, Any], model_name: str) -> Dict[str, Any]:
         """Process chat inference task."""
         message = input_data.get("message", "")
 
@@ -429,17 +409,13 @@ class NPUWorker:
         await asyncio.sleep(0.1)  # NPU would be much faster
 
         return {
-            "response": f"NPU processed: {message[:50]}..."
-            if len(message) > 50
-            else f"NPU processed: {message}",
+            "response": f"NPU processed: {message[:50]}..." if len(message) > 50 else f"NPU processed: {message}",
             "model_used": model_name,
             "device": "NPU" if self.npu_available else "CPU",
             "confidence": 0.95,
         }
 
-    async def process_embedding_task(
-        self, input_data: Dict[str, Any], model_name: str
-    ) -> Dict[str, Any]:
+    async def process_embedding_task(self, input_data: Dict[str, Any], model_name: str) -> Dict[str, Any]:
         """Process embedding generation task."""
         text = input_data.get("text", "")
 
@@ -458,9 +434,7 @@ class NPUWorker:
             "text_length": len(text),
         }
 
-    async def process_classification_task(
-        self, input_data: Dict[str, Any], model_name: str
-    ) -> Dict[str, Any]:
+    async def process_classification_task(self, input_data: Dict[str, Any], model_name: str) -> Dict[str, Any]:
         """Process text classification task."""
         input_data.get("text", "")
 
@@ -499,9 +473,7 @@ class NPUWorker:
         """Get NPU power usage in watts."""
         # Simulate NPU power usage (would be real power data)
         base_power = 2.0  # Idle power
-        active_power = (
-            await self.get_npu_utilization() / 100.0
-        ) * 8.0  # Max 8W under load
+        active_power = (await self.get_npu_utilization() / 100.0) * 8.0  # Max 8W under load
         return base_power + active_power
 
     async def get_available_models(self) -> List[str]:

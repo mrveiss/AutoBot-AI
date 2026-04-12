@@ -48,9 +48,7 @@ class OperationExecutionContext:
         message: str = "",
     ) -> None:
         """Update operation progress."""
-        total_items = (
-            total if total is not None else self.operation.progress.total_items
-        )
+        total_items = total if total is not None else self.operation.progress.total_items
         await self.progress_tracker.update_progress(
             self.operation,
             current_step=step,
@@ -119,9 +117,7 @@ class LongRunningOperationManager:
     async def start_background_processor(self) -> None:
         """Start the background operation processor."""
         if self._background_processor_task is None:
-            self._background_processor_task = asyncio.create_task(
-                self._background_processor()
-            )
+            self._background_processor_task = asyncio.create_task(self._background_processor())
 
     async def stop_background_processor(self) -> None:
         """Stop the background operation processor."""
@@ -154,9 +150,7 @@ class LongRunningOperationManager:
                     async with self._lock:
                         self.active_operations += 1
 
-                    task = asyncio.create_task(
-                        self._execute_operation_with_monitoring(operation)
-                    )
+                    task = asyncio.create_task(self._execute_operation_with_monitoring(operation))
 
                     async with self._lock:
                         self.operation_tasks[operation_id] = task
@@ -224,9 +218,7 @@ class LongRunningOperationManager:
 
         return await self._execute_operation_with_monitoring(operation)
 
-    async def _execute_operation_with_monitoring(
-        self, operation: LongRunningOperation
-    ) -> Any:
+    async def _execute_operation_with_monitoring(self, operation: LongRunningOperation) -> Any:
         """Execute operation with monitoring and checkpoint support."""
         operation.start_execution()
 
@@ -288,17 +280,11 @@ class LongRunningOperationManager:
 
         Issue #620.
         """
-        checkpoint_task = asyncio.create_task(
-            self._periodic_checkpoint(operation, checkpoint_interval)
-        )
-        progress_task = asyncio.create_task(
-            self._periodic_progress_report(operation, progress_interval)
-        )
+        checkpoint_task = asyncio.create_task(self._periodic_checkpoint(operation, checkpoint_interval))
+        progress_task = asyncio.create_task(self._periodic_progress_report(operation, progress_interval))
         return checkpoint_task, progress_task
 
-    def _cancel_periodic_tasks(
-        self, checkpoint_task: asyncio.Task, progress_task: asyncio.Task
-    ) -> None:
+    def _cancel_periodic_tasks(self, checkpoint_task: asyncio.Task, progress_task: asyncio.Task) -> None:
         """
         Cancel periodic monitoring tasks.
 
@@ -311,9 +297,7 @@ class LongRunningOperationManager:
         checkpoint_task.cancel()
         progress_task.cancel()
 
-    async def _run_operation_with_timeout(
-        self, operation: LongRunningOperation, timeout_seconds: int
-    ) -> Any:
+    async def _run_operation_with_timeout(self, operation: LongRunningOperation, timeout_seconds: int) -> Any:
         """
         Execute operation function with timeout.
 
@@ -340,9 +324,7 @@ class LongRunningOperationManager:
             timeout=timeout_seconds,
         )
 
-    async def _mark_operation_completed(
-        self, operation: LongRunningOperation, result: Any
-    ) -> None:
+    async def _mark_operation_completed(self, operation: LongRunningOperation, result: Any) -> None:
         """
         Mark operation as completed and update progress.
 
@@ -364,18 +346,14 @@ class LongRunningOperationManager:
 
         logger.info("Operation %s completed successfully", operation.operation_id)
 
-    async def _execute_with_context(
-        self, operation_function: Callable, context: OperationExecutionContext
-    ) -> Any:
+    async def _execute_with_context(self, operation_function: Callable, context: OperationExecutionContext) -> Any:
         """Execute operation function with context."""
         if asyncio.iscoroutinefunction(operation_function):
             return await operation_function(context)
         else:
             return await asyncio.to_thread(operation_function, context)
 
-    async def _periodic_checkpoint(
-        self, operation: LongRunningOperation, interval: float
-    ) -> None:
+    async def _periodic_checkpoint(self, operation: LongRunningOperation, interval: float) -> None:
         """Periodic checkpoint saving."""
         while True:
             try:
@@ -394,9 +372,7 @@ class LongRunningOperationManager:
             except Exception as e:
                 logger.warning("Checkpoint save failed: %s", e)
 
-    async def _periodic_progress_report(
-        self, operation: LongRunningOperation, interval: float
-    ) -> None:
+    async def _periodic_progress_report(self, operation: LongRunningOperation, interval: float) -> None:
         """Periodic progress reporting."""
         while True:
             try:
@@ -475,9 +451,7 @@ class LongRunningOperationManager:
             operations = [op for op in operations if op.status == status_filter]
 
         if operation_type_filter:
-            operations = [
-                op for op in operations if op.operation_type == operation_type_filter
-            ]
+            operations = [op for op in operations if op.operation_type == operation_type_filter]
 
         operations.sort(key=lambda x: (x.priority.value, x.created_at), reverse=True)
         return operations

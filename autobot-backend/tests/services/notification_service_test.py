@@ -166,11 +166,7 @@ class TestSendDispatch:
     async def test_email_channel_calls_send_email(self):
         svc = self._svc()
         config = _make_config(
-            channels={
-                NotificationEvent.WORKFLOW_COMPLETED.value: [
-                    NotificationChannel.EMAIL.value
-                ]
-            },
+            channels={NotificationEvent.WORKFLOW_COMPLETED.value: [NotificationChannel.EMAIL.value]},
             email_recipients=["user@example.com"],
         )
         with patch.object(svc, "_send_email", new_callable=AsyncMock) as mock_email:
@@ -188,11 +184,7 @@ class TestSendDispatch:
     async def test_slack_channel_calls_send_slack(self):
         svc = self._svc()
         config = _make_config(
-            channels={
-                NotificationEvent.WORKFLOW_FAILED.value: [
-                    NotificationChannel.SLACK.value
-                ]
-            },
+            channels={NotificationEvent.WORKFLOW_FAILED.value: [NotificationChannel.SLACK.value]},
             slack_webhook_url="https://hooks.slack.com/T123",
         )
         with patch.object(svc, "_send_slack", new_callable=AsyncMock) as mock_slack:
@@ -210,9 +202,7 @@ class TestSendDispatch:
     async def test_webhook_channel_calls_send_webhook(self):
         svc = self._svc()
         config = _make_config(
-            channels={
-                NotificationEvent.STEP_FAILED.value: [NotificationChannel.WEBHOOK.value]
-            },
+            channels={NotificationEvent.STEP_FAILED.value: [NotificationChannel.WEBHOOK.value]},
             webhook_url="https://myapp.example.com/notify",
         )
         with patch.object(svc, "_send_webhook", new_callable=AsyncMock) as mock_wh:
@@ -230,11 +220,7 @@ class TestSendDispatch:
     async def test_in_app_channel_calls_send_in_app(self):
         svc = self._svc()
         config = _make_config(
-            channels={
-                NotificationEvent.APPROVAL_NEEDED.value: [
-                    NotificationChannel.IN_APP.value
-                ]
-            },
+            channels={NotificationEvent.APPROVAL_NEEDED.value: [NotificationChannel.IN_APP.value]},
             user_id="user-007",
         )
         with patch.object(svc, "_send_in_app", new_callable=AsyncMock) as mock_ia:
@@ -252,11 +238,7 @@ class TestSendDispatch:
     async def test_multiple_email_recipients_each_get_email(self):
         svc = self._svc()
         config = _make_config(
-            channels={
-                NotificationEvent.WORKFLOW_COMPLETED.value: [
-                    NotificationChannel.EMAIL.value
-                ]
-            },
+            channels={NotificationEvent.WORKFLOW_COMPLETED.value: [NotificationChannel.EMAIL.value]},
             email_recipients=["a@x.com", "b@x.com"],
         )
         with patch.object(svc, "_send_email", new_callable=AsyncMock) as mock_email:
@@ -271,9 +253,7 @@ class TestSendDispatch:
     @pytest.mark.asyncio
     async def test_unknown_channel_is_skipped_without_raising(self):
         svc = self._svc()
-        config = _make_config(
-            channels={NotificationEvent.WORKFLOW_COMPLETED.value: ["carrier_pigeon"]}
-        )
+        config = _make_config(channels={NotificationEvent.WORKFLOW_COMPLETED.value: ["carrier_pigeon"]})
         await svc.send(
             event=NotificationEvent.WORKFLOW_COMPLETED,
             workflow_id="wf-unknown",
@@ -295,9 +275,7 @@ class TestSendDispatch:
             email_recipients=["err@x.com"],
             user_id="user-fallback",
         )
-        with patch.object(
-            svc, "_send_email", new_callable=AsyncMock, side_effect=OSError("SMTP down")
-        ):
+        with patch.object(svc, "_send_email", new_callable=AsyncMock, side_effect=OSError("SMTP down")):
             with patch.object(svc, "_send_in_app", new_callable=AsyncMock) as mock_ia:
                 await svc.send(
                     event=NotificationEvent.WORKFLOW_FAILED,
@@ -311,11 +289,7 @@ class TestSendDispatch:
     async def test_slack_missing_webhook_url_skips_silently(self):
         svc = self._svc()
         config = _make_config(
-            channels={
-                NotificationEvent.WORKFLOW_COMPLETED.value: [
-                    NotificationChannel.SLACK.value
-                ]
-            },
+            channels={NotificationEvent.WORKFLOW_COMPLETED.value: [NotificationChannel.SLACK.value]},
             slack_webhook_url=None,
         )
         with patch.object(svc, "_send_slack", new_callable=AsyncMock) as mock_slack:
@@ -331,11 +305,7 @@ class TestSendDispatch:
     async def test_webhook_missing_url_skips_silently(self):
         svc = self._svc()
         config = _make_config(
-            channels={
-                NotificationEvent.WORKFLOW_COMPLETED.value: [
-                    NotificationChannel.WEBHOOK.value
-                ]
-            },
+            channels={NotificationEvent.WORKFLOW_COMPLETED.value: [NotificationChannel.WEBHOOK.value]},
             webhook_url=None,
         )
         with patch.object(svc, "_send_webhook", new_callable=AsyncMock) as mock_wh:
@@ -351,11 +321,7 @@ class TestSendDispatch:
     async def test_in_app_missing_user_id_skips_silently(self):
         svc = self._svc()
         config = _make_config(
-            channels={
-                NotificationEvent.APPROVAL_NEEDED.value: [
-                    NotificationChannel.IN_APP.value
-                ]
-            },
+            channels={NotificationEvent.APPROVAL_NEEDED.value: [NotificationChannel.IN_APP.value]},
             user_id=None,
         )
         with patch.object(svc, "_send_in_app", new_callable=AsyncMock) as mock_ia:
@@ -408,9 +374,7 @@ class TestSendWebhook:
         mock_resp = AsyncMock()
         mock_resp.status = 400
         mock_resp.text = AsyncMock(return_value="Bad Request")
-        mock_resp.raise_for_status = MagicMock(
-            side_effect=_aiohttp.ClientResponseError(None, None, status=400)
-        )
+        mock_resp.raise_for_status = MagicMock(side_effect=_aiohttp.ClientResponseError(None, None, status=400))
         mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
         mock_resp.__aexit__ = AsyncMock(return_value=False)
 
@@ -438,9 +402,7 @@ class TestSendSlack:
         svc = NotificationService()
         with patch.object(svc, "_send_webhook", new_callable=AsyncMock) as mock_wh:
             await svc._send_slack("https://hooks.slack.com/abc", "hello")
-        mock_wh.assert_awaited_once_with(
-            "https://hooks.slack.com/abc", {"text": "hello"}
-        )
+        mock_wh.assert_awaited_once_with("https://hooks.slack.com/abc", {"text": "hello"})
 
 
 # ===========================================================================
@@ -512,9 +474,7 @@ class TestNotificationStoreStore:
             new_callable=AsyncMock,
             return_value=mock_redis,
         ):
-            result = await store.store(
-                user_id="u4", event="step_failed", workflow_id="wf-4", message="Err"
-            )
+            result = await store.store(user_id="u4", event="step_failed", workflow_id="wf-4", message="Err")
         assert result is None
 
     @pytest.mark.asyncio

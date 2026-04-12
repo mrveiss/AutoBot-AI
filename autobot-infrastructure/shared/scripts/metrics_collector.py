@@ -461,9 +461,7 @@ class MetricsCollector:
                 alert = Alert(**alert_data)
                 self.alerts.append(alert)
 
-            self.print_step(
-                f"Loaded {len(self.alerts)} alert configurations", "success"
-            )
+            self.print_step(f"Loaded {len(self.alerts)} alert configurations", "success")
 
         except Exception as e:
             self.print_step(f"Failed to load alerts: {e}", "error")
@@ -493,10 +491,7 @@ class MetricsCollector:
             elif alert.condition == "below" and metric.value < alert.threshold:
                 condition_met = True
             elif alert.condition == "outside_range":
-                if (
-                    metric.value < alert.threshold
-                    or metric.value > alert.threshold_high
-                ):
+                if metric.value < alert.threshold or metric.value > alert.threshold_high:
                     condition_met = True
 
             # Update state
@@ -599,9 +594,7 @@ class MetricsCollector:
             for metric in metrics:
                 writer.writerow(
                     {
-                        "timestamp": datetime.fromtimestamp(
-                            metric.timestamp
-                        ).isoformat(),
+                        "timestamp": datetime.fromtimestamp(metric.timestamp).isoformat(),
                         "name": metric.name,
                         "value": metric.value,
                         "unit": metric.unit,
@@ -610,9 +603,7 @@ class MetricsCollector:
                 )
         return output.getvalue()
 
-    def export_metrics(
-        self, format_type: str = "prometheus", last_hours: int = 1
-    ) -> str:
+    def export_metrics(self, format_type: str = "prometheus", last_hours: int = 1) -> str:
         """Export metrics in specified format."""
         self.print_header(f"Exporting Metrics ({format_type})")
 
@@ -638,9 +629,7 @@ class MetricsCollector:
         else:
             return self._export_csv(metrics)
 
-    def _load_disk_metrics(
-        self, metric_name: str, cutoff_time: float, last_hours: int
-    ) -> List[Metric]:
+    def _load_disk_metrics(self, metric_name: str, cutoff_time: float, last_hours: int) -> List[Metric]:
         """Load historical metrics from disk files.
 
         Helper for analyze_metrics (#825).
@@ -648,9 +637,7 @@ class MetricsCollector:
         disk_metrics = []
         for hours_ago in range(1, last_hours + 1):
             timestamp = datetime.now() - timedelta(hours=hours_ago)
-            hour_file = (
-                self.storage_dir / f"metrics_{timestamp.strftime('%Y%m%d_%H')}.json"
-            )
+            hour_file = self.storage_dir / f"metrics_{timestamp.strftime('%Y%m%d_%H')}.json"
             if not hour_file.exists():
                 continue
             try:
@@ -683,9 +670,7 @@ class MetricsCollector:
             },
         }
 
-    def analyze_metrics(
-        self, metric_name: str = None, last_hours: int = 24
-    ) -> Dict[str, Any]:
+    def analyze_metrics(self, metric_name: str = None, last_hours: int = 24) -> Dict[str, Any]:
         """Analyze metrics and generate statistics."""
         self.print_header("Analyzing Metrics")
         cutoff_time = time.time() - (last_hours * 3600)
@@ -697,9 +682,7 @@ class MetricsCollector:
                     if not metric_name or metric.name == metric_name:
                         all_metrics.append(metric)
 
-        all_metrics.extend(
-            self._load_disk_metrics(metric_name, cutoff_time, last_hours)
-        )
+        all_metrics.extend(self._load_disk_metrics(metric_name, cutoff_time, last_hours))
 
         by_metric = defaultdict(list)
         for metric in all_metrics:
@@ -881,9 +864,7 @@ Examples:
   python scripts/metrics_collector.py --dashboard --output grafana_dashboard.json
         """,
     )
-    parser.add_argument(
-        "--collect", action="store_true", help="Start metrics collection"
-    )
+    parser.add_argument("--collect", action="store_true", help="Start metrics collection")
     parser.add_argument("--export", action="store_true", help="Export metrics")
     parser.add_argument("--analyze", action="store_true", help="Analyze metrics")
     parser.add_argument("--setup-alerts", action="store_true", help="Setup alert rules")

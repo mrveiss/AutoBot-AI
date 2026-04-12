@@ -7,12 +7,13 @@ Entity Resolver Tests - Unit tests for entity resolution cognifier.
 Issue #3395: RAG optimization — semantic chunking, fact extraction, entity resolution.
 """
 
-import pytest
 from uuid import uuid4
 
+import pytest
+
+from knowledge.pipeline.base import PipelineContext
 from knowledge.pipeline.cognifiers.entity_resolver import EntityResolver
 from knowledge.pipeline.models.entity import Entity
-from knowledge.pipeline.base import PipelineContext
 
 
 @pytest.fixture

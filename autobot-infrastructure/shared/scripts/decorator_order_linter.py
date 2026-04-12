@@ -95,12 +95,8 @@ def decorator_order_corrector_in_file(file_path: Path) -> tuple[int, list[str]]:
                 for idx, handler_line in enumerate(error_handler_lines):
                     lines.insert(router_line_idx + idx, handler_line)
 
-                endpoint_name = lines[
-                    router_line_idx + len(error_handler_lines)
-                ].strip()
-                fixes.append(
-                    f"{file_path.name}:{router_line_idx + 1} - {endpoint_name}"
-                )
+                endpoint_name = lines[router_line_idx + len(error_handler_lines)].strip()
+                fixes.append(f"{file_path.name}:{router_line_idx + 1} - {endpoint_name}")
                 fixed_count += 1
 
                 # Skip ahead to avoid re-processing

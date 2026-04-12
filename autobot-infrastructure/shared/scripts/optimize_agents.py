@@ -53,18 +53,14 @@ def optimize_agent_file(file_path: Path) -> tuple[bool, int, int]:
 
 def main():
     """Main optimization routine."""
-    agents_dir = Path(
-        "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.claude/agents"
-    )
+    agents_dir = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.claude/agents")
 
     if not agents_dir.exists():
         print(f"❌ Error: Agents directory not found: {agents_dir}")
         return 1
 
     # Get all .md files except MANDATORY_LOCAL_EDIT_POLICY.md
-    agent_files = [
-        f for f in agents_dir.glob("*.md") if f.name != "MANDATORY_LOCAL_EDIT_POLICY.md"
-    ]
+    agent_files = [f for f in agents_dir.glob("*.md") if f.name != "MANDATORY_LOCAL_EDIT_POLICY.md"]
 
     if not agent_files:
         print(f"❌ Error: No agent files found in {agents_dir}")

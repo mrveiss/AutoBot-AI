@@ -99,9 +99,7 @@ class SkillManager:
         cache = RedisCache(redis_client)
         return await cache.get_json(f"{REDIS_USER_SKILLS_PREFIX}{user_id}", default={})
 
-    async def save_user_skill_preferences(
-        self, user_id: str, preferences: Dict[str, bool]
-    ) -> bool:
+    async def save_user_skill_preferences(self, user_id: str, preferences: Dict[str, bool]) -> bool:
         """Save per-user skill preferences to Redis."""
         redis_client = await _get_redis()
         if not redis_client:
@@ -109,9 +107,7 @@ class SkillManager:
         cache = RedisCache(redis_client)
         return await cache.set_json(f"{REDIS_USER_SKILLS_PREFIX}{user_id}", preferences)
 
-    async def persist_skill_config(
-        self, skill_name: str, config: Dict[str, Any]
-    ) -> bool:
+    async def persist_skill_config(self, skill_name: str, config: Dict[str, Any]) -> bool:
         """Persist a skill's configuration to Redis."""
         redis_client = await _get_redis()
         if not redis_client:

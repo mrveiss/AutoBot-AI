@@ -37,18 +37,16 @@ from functools import lru_cache
 from typing import Dict, Optional
 
 from autobot_shared.ssot_config import CLASSIFICATION_MODEL as SSOT_CLASSIFICATION_MODEL
-from constants.ttl_constants import TTL_5_MINUTES
 from autobot_shared.ssot_config import (
     DEFAULT_EMBEDDING_MODEL,
     DEFAULT_LLM_MODEL,
 )
 from autobot_shared.ssot_config import INSTRUCTION_MODEL as SSOT_INSTRUCTION_MODEL
-from autobot_shared.ssot_config import (
-    LIGHT_PROCESSING_MODEL as SSOT_LIGHT_PROCESSING_MODEL,
-)
+from autobot_shared.ssot_config import LIGHT_PROCESSING_MODEL as SSOT_LIGHT_PROCESSING_MODEL
 from autobot_shared.ssot_config import QUALITY_MODEL as SSOT_QUALITY_MODEL
 from autobot_shared.ssot_config import ROUTING_MODEL as SSOT_ROUTING_MODEL
 from autobot_shared.ssot_config import SYSTEM_MODEL as SSOT_SYSTEM_MODEL
+from constants.ttl_constants import TTL_5_MINUTES
 
 # =============================================================================
 # FALLBACK DEFAULTS - DEFINED ONCE, USED EVERYWHERE (#2553)

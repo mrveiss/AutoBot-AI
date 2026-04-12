@@ -112,9 +112,7 @@ async def main():
         "source": "quick_test",
     }
 
-    result = await kb.store_fact(
-        content="Test man page with OS context", metadata=test_metadata
-    )
+    result = await kb.store_fact(content="Test man page with OS context", metadata=test_metadata)
 
     if result.get("status") == "success":
         fact_id = result.get("fact_id")

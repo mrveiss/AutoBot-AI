@@ -98,9 +98,7 @@ async def test_direct_ollama_completion():
         end_time = time.time()
 
         logger.info("✅ Direct Ollama response in %.2fs!", end_time - start_time)
-        logger.info(
-            "   Response: %s...", response_data.get("response", "No response")[:100]
-        )
+        logger.info("   Response: %s...", response_data.get("response", "No response")[:100])
 
         return True
 

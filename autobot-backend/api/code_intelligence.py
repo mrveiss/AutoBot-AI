@@ -21,7 +21,6 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
-from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -44,6 +43,7 @@ from code_intelligence.security_analyzer import (
 )
 from constants.ttl_constants import TTL_5_MINUTES
 from utils.background_task_manager import BackgroundTaskManager
+from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 
 logger = logging.getLogger(__name__)
 

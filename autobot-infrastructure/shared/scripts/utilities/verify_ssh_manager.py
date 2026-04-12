@@ -66,9 +66,7 @@ def _check_ssh_key() -> str:
         return ssh_key_path
     else:
         logger.error("   SSH key not found: %s", ssh_key_path)
-        logger.error(
-            '   Generate with: ssh-keygen -t rsa -b 4096 -f %s -N ""', ssh_key_path
-        )
+        logger.error('   Generate with: ssh-keygen -t rsa -b 4096 -f %s -N ""', ssh_key_path)
         return ""
 
 
@@ -174,9 +172,7 @@ async def _test_command_execution(ssh_key_path: str) -> None:
             logger.info("   - Output: %s", result.stdout.strip())
             logger.info("   - Execution time: %.3fs", result.execution_time)
         else:
-            logger.warning(
-                "   Command execution failed (exit code: %d)", result.exit_code
-            )
+            logger.warning("   Command execution failed (exit code: %d)", result.exit_code)
 
         await ssh_manager.stop()
 

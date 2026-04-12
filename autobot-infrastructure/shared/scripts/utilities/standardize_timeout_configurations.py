@@ -38,9 +38,7 @@ from typing import List, Tuple
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -264,9 +262,7 @@ class TimeoutConfigurationAnalyzer:
         for file_path in redis_files:
             full_path = self.project_root / file_path
             if full_path.exists():
-                self._scan_file_for_patterns(
-                    full_path, redis_timeout_patterns, "redis_timeout"
-                )
+                self._scan_file_for_patterns(full_path, redis_timeout_patterns, "redis_timeout")
 
         return self.issues
 
@@ -323,9 +319,7 @@ class TimeoutConfigurationAnalyzer:
             if file_path.is_file():
                 # Skip excluded files
                 relative_path = str(file_path.relative_to(self.project_root))
-                if any(
-                    re.search(pattern, relative_path) for pattern in exclude_patterns
-                ):
+                if any(re.search(pattern, relative_path) for pattern in exclude_patterns):
                     continue
 
                 # Only scan text files
@@ -341,9 +335,7 @@ class TimeoutConfigurationAnalyzer:
                 ]:
                     self._scan_file_for_patterns(file_path, patterns, issue_type)
 
-    def _scan_file_for_patterns(
-        self, file_path: Path, patterns: List[str], issue_type: str
-    ):
+    def _scan_file_for_patterns(self, file_path: Path, patterns: List[str], issue_type: str):
         """Scan a single file for timeout patterns.
 
         Issue #511: Optimized O(n³) → O(n²) by combining patterns into a single
@@ -360,9 +352,7 @@ class TimeoutConfigurationAnalyzer:
 
             for line_num, line in enumerate(lines, 1):
                 for match in compiled.finditer(line):
-                    self._create_timeout_issue(
-                        file_path, line_num, line.strip(), match, issue_type
-                    )
+                    self._create_timeout_issue(file_path, line_num, line.strip(), match, issue_type)
 
         except (UnicodeDecodeError, PermissionError) as e:
             logger.warning("Could not read file %s: %s", file_path, e)
@@ -397,9 +387,7 @@ class TimeoutConfigurationAnalyzer:
 
         self.issues.append(issue)
 
-    def _analyze_timeout_context(
-        self, file_path: str, line: str, value: str, issue_type: str
-    ) -> Tuple[str, str, str]:
+    def _analyze_timeout_context(self, file_path: str, line: str, value: str, issue_type: str) -> Tuple[str, str, str]:
         """Analyze timeout context to determine severity and recommendations"""
         try:
             numeric_value = float(value)
@@ -485,9 +473,7 @@ class TimeoutConfigurationAnalyzer:
 
         return fixed_files
 
-    def _fix_file_redis_timeouts(
-        self, file_path: str, issues: List[TimeoutIssue], dry_run: bool
-    ) -> bool:
+    def _fix_file_redis_timeouts(self, file_path: str, issues: List[TimeoutIssue], dry_run: bool) -> bool:
         """Fix Redis timeouts in a specific file"""
         full_path = self.project_root / file_path
 
@@ -531,9 +517,7 @@ class TimeoutConfigurationAnalyzer:
                 with open(full_path, "w") as f:
                     f.writelines(lines)
 
-                logger.info(
-                    "Fixed Redis timeouts in %s (backup: %s)", file_path, backup_path
-                )
+                logger.info("Fixed Redis timeouts in %s (backup: %s)", file_path, backup_path)
                 return True
             elif modified:
                 logger.info("[DRY RUN] Would fix Redis timeouts in %s", file_path)
@@ -549,15 +533,9 @@ class TimeoutConfigurationAnalyzer:
         report = {
             "timestamp": datetime.now().isoformat(),
             "total_issues": len(self.issues),
-            "critical_issues": len(
-                [i for i in self.issues if i.severity == "critical"]
-            ),
-            "high_priority_issues": len(
-                [i for i in self.issues if i.severity == "high"]
-            ),
-            "medium_priority_issues": len(
-                [i for i in self.issues if i.severity == "medium"]
-            ),
+            "critical_issues": len([i for i in self.issues if i.severity == "critical"]),
+            "high_priority_issues": len([i for i in self.issues if i.severity == "high"]),
+            "medium_priority_issues": len([i for i in self.issues if i.severity == "medium"]),
             "low_priority_issues": len([i for i in self.issues if i.severity == "low"]),
             "issues_by_type": {},
             "issues_by_file": {},
@@ -584,14 +562,10 @@ class TimeoutConfigurationAnalyzer:
             )
 
         if report["issues_by_type"].get("redis_timeout", 0) > 5:
-            report["recommendations"].append(
-                "Standardize Redis timeout configurations using unified config module"
-            )
+            report["recommendations"].append("Standardize Redis timeout configurations using unified config module")
 
         if report["high_priority_issues"] > 10:
-            report["recommendations"].append(
-                "Review and standardize hardcoded timeout values across the codebase"
-            )
+            report["recommendations"].append("Review and standardize hardcoded timeout values across the codebase")
 
         return report
 
@@ -652,17 +626,13 @@ async def main():
     """Main execution function"""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="AutoBot Timeout Configuration Standardization"
-    )
+    parser = argparse.ArgumentParser(description="AutoBot Timeout Configuration Standardization")
     parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Show what would be changed without making changes",
     )
-    parser.add_argument(
-        "--fix-redis", action="store_true", help="Fix Redis timeout configurations"
-    )
+    parser.add_argument("--fix-redis", action="store_true", help="Fix Redis timeout configurations")
     parser.add_argument(
         "--scan-hardcoded",
         action="store_true",
@@ -687,12 +657,7 @@ async def main():
     # Generate and save report
     report = analyzer.generate_report()
 
-    report_path = (
-        Path(args.project_root)
-        / "reports"
-        / "performance"
-        / "timeout_configuration_analysis.json"
-    )
+    report_path = Path(args.project_root) / "reports" / "performance" / "timeout_configuration_analysis.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(report_path, "w") as f:

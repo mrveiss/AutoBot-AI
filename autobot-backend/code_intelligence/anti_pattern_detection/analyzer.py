@@ -43,9 +43,7 @@ except ImportError:
 # Issue #607: Import shared caches for performance optimization
 try:
     from code_intelligence.shared.ast_cache import get_ast_with_content
-    from code_intelligence.shared.file_cache import (
-        get_python_files as get_cached_python_files,
-    )
+    from code_intelligence.shared.file_cache import get_python_files as get_cached_python_files
 
     HAS_SHARED_CACHE = True
 except ImportError:

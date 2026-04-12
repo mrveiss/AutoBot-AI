@@ -160,9 +160,7 @@ class Role(Base, TimestampMixin):
 
     def has_permission(self, permission_name: str) -> bool:
         """Check if this role has a specific permission."""
-        return any(
-            rp.permission.name == permission_name for rp in self.role_permissions
-        )
+        return any(rp.permission.name == permission_name for rp in self.role_permissions)
 
     def get_permissions(self) -> list[str]:
         """Get list of permission names for this role."""

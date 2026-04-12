@@ -96,10 +96,7 @@ class ErrorBoundaryManager:
         # Fallback handler for common operations
         common_fallbacks = {
             "llm_interface.chat_completion": {
-                "content": (
-                    "I apologize, but I'm having trouble processing "
-                    "your request. Please try again."
-                ),
+                "content": ("I apologize, but I'm having trouble processing " "your request. Please try again."),
                 "error": True,
             },
             "knowledge_base.search": [],
@@ -118,9 +115,7 @@ class ErrorBoundaryManager:
         # Configure error file handler
         error_handler = logging.FileHandler(log_dir / "error_boundary.log")
         error_handler.setLevel(logging.ERROR)
-        error_formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
+        error_formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         error_handler.setFormatter(error_formatter)
         logger.addHandler(error_handler)
 
@@ -184,9 +179,7 @@ class ErrorBoundaryManager:
 
         return ErrorCategory.SYSTEM
 
-    def determine_severity(
-        self, error: Exception, context: ErrorContext
-    ) -> ErrorSeverity:
+    def determine_severity(self, error: Exception, context: ErrorContext) -> ErrorSeverity:
         """
         Determine error severity based on error type and context.
 
@@ -257,9 +250,7 @@ class ErrorBoundaryManager:
             context=context,
         ) from error
 
-    def create_error_report(
-        self, error: Exception, context: ErrorContext
-    ) -> ErrorReport:
+    def create_error_report(self, error: Exception, context: ErrorContext) -> ErrorReport:
         """
         Create a structured error report.
 
@@ -401,9 +392,7 @@ class ErrorBoundaryManager:
                     "components": {},
                 }
 
-            categories, severities, components = self._calculate_error_groupings(
-                recent_errors
-            )
+            categories, severities, components = self._calculate_error_groupings(recent_errors)
 
             return {
                 "total_errors": total_errors,
@@ -444,9 +433,7 @@ class ErrorBoundaryManager:
             raise
 
     @asynccontextmanager
-    async def async_error_boundary(
-        self, component: str, function: str, **context_kwargs
-    ):
+    async def async_error_boundary(self, component: str, function: str, **context_kwargs):
         """
         Async context manager for error boundaries.
 

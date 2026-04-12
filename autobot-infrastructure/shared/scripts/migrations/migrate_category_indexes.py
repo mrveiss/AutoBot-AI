@@ -63,9 +63,7 @@ def _connect_to_redis() -> redis.Redis:
     redis_password = os.getenv("REDIS_PASSWORD") or os.getenv("AUTOBOT_REDIS_PASSWORD")
     redis_db = int(os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE", "1"))
 
-    logger.info(
-        "Connecting to Redis at %s:%s (db=%s)", redis_host, redis_port, redis_db
-    )
+    logger.info("Connecting to Redis at %s:%s (db=%s)", redis_host, redis_port, redis_db)
 
     try:
         redis_client = redis.Redis(
@@ -134,9 +132,7 @@ def _scan_all_fact_keys(redis_client: redis.Redis) -> list:
     return all_fact_keys
 
 
-def _process_facts_and_build_indexes(
-    redis_client: redis.Redis, all_fact_keys: list
-) -> tuple:
+def _process_facts_and_build_indexes(redis_client: redis.Redis, all_fact_keys: list) -> tuple:
     """
     Process facts in chunks and build category indexes.
 
@@ -171,18 +167,10 @@ def _process_facts_and_build_indexes(
                     skipped_count += 1
                     continue
 
-                metadata_str = (
-                    metadata_raw.decode("utf-8")
-                    if isinstance(metadata_raw, bytes)
-                    else str(metadata_raw)
-                )
+                metadata_str = metadata_raw.decode("utf-8") if isinstance(metadata_raw, bytes) else str(metadata_raw)
                 metadata = json.loads(metadata_str)
 
-                fact_key_str = (
-                    fact_key.decode("utf-8")
-                    if isinstance(fact_key, bytes)
-                    else str(fact_key)
-                )
+                fact_key_str = fact_key.decode("utf-8") if isinstance(fact_key, bytes) else str(fact_key)
                 fact_id = fact_key_str.replace("fact:", "")
 
                 source = metadata.get("source", "")
@@ -197,9 +185,7 @@ def _process_facts_and_build_indexes(
                 index_key = f"category:index:{main_category}"
                 redis_client.sadd(index_key, fact_id)
 
-                category_counts[main_category] = (
-                    category_counts.get(main_category, 0) + 1
-                )
+                category_counts[main_category] = category_counts.get(main_category, 0) + 1
                 indexed_count += 1
 
             except (json.JSONDecodeError, KeyError, TypeError) as e:
@@ -254,9 +240,7 @@ def _report_and_verify_results(
         actual_count = redis_client.scard(index_key)
         expected_count = category_counts[cat]
         status = "✅" if actual_count == expected_count else "❌"
-        logger.info(
-            "  %s %s: %s (expected %s)", status, index_key, actual_count, expected_count
-        )
+        logger.info("  %s %s: %s (expected %s)", status, index_key, actual_count, expected_count)
 
     logger.info("\n" + "=" * 60)
     logger.info("Category indexes created successfully!")

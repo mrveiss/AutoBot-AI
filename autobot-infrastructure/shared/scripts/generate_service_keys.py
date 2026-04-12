@@ -26,9 +26,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "autobot-backend"))
 sys.path.insert(0, str(PROJECT_ROOT / "autobot_shared"))
 
-from autobot_shared.ssot_config import config  # noqa: E402
-
 from autobot_shared.redis_client import get_redis_client  # noqa: E402
+from autobot_shared.ssot_config import config  # noqa: E402
 from security.service_auth import ServiceAuthManager  # noqa: E402
 
 # Service definitions for AutoBot's distributed VM infrastructure.
@@ -102,9 +101,7 @@ def _save_backup(generated_keys, redis_host, redis_port):
     backup_dir = Path("config/service-keys")
     backup_dir.mkdir(parents=True, exist_ok=True)
 
-    backup_file = (
-        backup_dir / f"service-keys-{datetime.now().strftime('%Y%m%d-%H%M%S')}.yaml"
-    )
+    backup_file = backup_dir / f"service-keys-{datetime.now().strftime('%Y%m%d-%H%M%S')}.yaml"
 
     with open(backup_file, "w", encoding="utf-8") as f:
         yaml.safe_dump(

@@ -347,9 +347,7 @@ class TestSourceContracts:
     @pytest.mark.asyncio
     async def test_nasa_firms_success(self):
         csv = "latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite\n"
-        csv += "\n".join(
-            f"34.{i},-118.{i},312.1,0.4,0.4,2024-01-01,0104,N" for i in range(5)
-        )
+        csv += "\n".join(f"34.{i},-118.{i},312.1,0.4,0.4,2024-01-01,0104,N" for i in range(5))
         mock_client = AsyncMock()
         mock_client.get = AsyncMock(return_value=self._mock_response(csv))
         result = await NASAFIRMSSource().sweep(mock_client)

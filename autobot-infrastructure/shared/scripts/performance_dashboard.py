@@ -227,11 +227,7 @@ def _generate_service_status_html(data: Dict[str, Any]) -> str:
         error_rate = service_data.get("error_rate", 0)
         response_time = service_data.get("avg_response_time_ms", 0)
 
-        status_class = (
-            "service-healthy"
-            if error_rate < 5 and response_time < 1000
-            else "service-unhealthy"
-        )
+        status_class = "service-healthy" if error_rate < 5 and response_time < 1000 else "service-unhealthy"
         "Healthy" if error_rate < 5 and response_time < 1000 else "Issues"
 
         html += """
@@ -320,9 +316,7 @@ def _generate_alerts_html(data: Dict[str, Any]) -> str:
     html = '<div class="alerts-list">'
 
     for alert in alerts[:5]:  # Show last 5 alerts
-        alert_class = (
-            "alert-critical" if alert.get("severity") == "critical" else "alert-warning"
-        )
+        alert_class = "alert-critical" if alert.get("severity") == "critical" else "alert-warning"
         severity_icon = "🔴" if alert.get("severity") == "critical" else "🟡"
 
         html += """
@@ -385,9 +379,7 @@ def _generate_mock_trend_data() -> list:
     return trends
 
 
-def _build_chart_config(
-    labels: list, cpu_data: list, memory_data: list, response_data: list
-) -> str:
+def _build_chart_config(labels: list, cpu_data: list, memory_data: list, response_data: list) -> str:
     """
     Build Chart.js configuration string.
 

@@ -59,9 +59,7 @@ def _check_signature_generation(auth_mgr):
     logger.info("Testing signature generation:")
     logger.info("-" * 50)
     try:
-        test_sig = auth_mgr.generate_signature(
-            "test-service", "a" * 64, "POST", "/api/test", 1234567890
-        )
+        test_sig = auth_mgr.generate_signature("test-service", "a" * 64, "POST", "/api/test", 1234567890)
         logger.info("  Signature: %s*** (%d chars)", test_sig[:8], len(test_sig))
         logger.info("")
         return True

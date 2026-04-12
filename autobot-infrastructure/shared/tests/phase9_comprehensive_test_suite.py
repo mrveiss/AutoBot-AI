@@ -36,9 +36,7 @@ import requests
 import websockets
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 # Add AutoBot paths
@@ -94,9 +92,7 @@ class Phase9TestSuite:
         self.session.timeout = self.config.timeout
 
         # Create results directory
-        self.results_dir = Path(
-            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results"
-        )
+        self.results_dir = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results")
         self.results_dir.mkdir(exist_ok=True)
 
         # Test execution timestamp
@@ -128,9 +124,7 @@ class Phase9TestSuite:
 
         # Log to console
         status_emoji = {"PASS": "✅", "FAIL": "❌", "WARNING": "⚠️", "SKIP": "⏭️"}
-        logger.info(
-            f"{status_emoji.get(status, '?')} [{category}] {test_name}: {message}"
-        )
+        logger.info(f"{status_emoji.get(status, '?')} [{category}] {test_name}: {message}")
 
         if error_info and status == "FAIL":
             logger.error(f"Error details: {error_info}")
@@ -221,9 +215,7 @@ class Phase9TestSuite:
             )
 
         # Overall architecture health
-        passing_services = sum(
-            1 for r in connectivity_results.values() if r["status"] == "PASS"
-        )
+        passing_services = sum(1 for r in connectivity_results.values() if r["status"] == "PASS")
         total_services = len(services)
 
         if passing_services == total_services:
@@ -275,13 +267,7 @@ class Phase9TestSuite:
                         data = response.json()
                         status = "PASS"
                         message = f"{description} successful"
-                        details = {
-                            "data_keys": (
-                                list(data.keys())
-                                if isinstance(data, dict)
-                                else "non-dict"
-                            )
-                        }
+                        details = {"data_keys": (list(data.keys()) if isinstance(data, dict) else "non-dict")}
                     except json.JSONDecodeError:
                         status = "WARNING"
                         message = f"{description} returned non-JSON response"
@@ -339,17 +325,12 @@ class Phase9TestSuite:
 
         start_time = time.time()
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            futures = [
-                executor.submit(asyncio.run, single_request())
-                for _ in range(concurrent_requests)
-            ]
+            futures = [executor.submit(asyncio.run, single_request()) for _ in range(concurrent_requests)]
             results = [f.result() for f in concurrent.futures.as_completed(futures)]
         total_duration = time.time() - start_time
 
         successful_requests = sum(1 for r in results if r["success"])
-        avg_response_time = sum(r["duration"] for r in results if r["success"]) / max(
-            successful_requests, 1
-        )
+        avg_response_time = sum(r["duration"] for r in results if r["success"]) / max(successful_requests, 1)
 
         if successful_requests >= concurrent_requests * 0.9:
             status = "PASS"
@@ -414,9 +395,7 @@ class Phase9TestSuite:
                 )
 
                 if chat_response.status_code != 201:
-                    raise Exception(
-                        f"Failed to create chat: {chat_response.status_code}"
-                    )
+                    raise Exception(f"Failed to create chat: {chat_response.status_code}")
 
                 chat_data = chat_response.json()
                 chat_id = chat_data["id"]
@@ -435,9 +414,7 @@ class Phase9TestSuite:
 
                     # Validate response structure
                     required_fields = ["response", "message_type", "processing_time"]
-                    missing_fields = [
-                        f for f in required_fields if f not in response_data
-                    ]
+                    missing_fields = [f for f in required_fields if f not in response_data]
 
                     if not missing_fields:
                         status = "PASS"
@@ -490,9 +467,7 @@ class Phase9TestSuite:
         # Test knowledge base statistics
         start_time = time.time()
         try:
-            stats_response = self.session.get(
-                f"{base_url}/api/knowledge_base/stats/basic", timeout=15
-            )
+            stats_response = self.session.get(f"{base_url}/api/knowledge_base/stats/basic", timeout=15)
             duration = time.time() - start_time
 
             if stats_response.status_code == 200:
@@ -507,14 +482,10 @@ class Phase9TestSuite:
                     message = f"Knowledge base loaded with {total_documents} documents"
                 elif total_documents >= 1000:
                     status = "WARNING"
-                    message = (
-                        f"Knowledge base partially loaded ({total_documents} documents)"
-                    )
+                    message = f"Knowledge base partially loaded ({total_documents} documents)"
                 else:
                     status = "FAIL"
-                    message = (
-                        f"Knowledge base poorly populated ({total_documents} documents)"
-                    )
+                    message = f"Knowledge base poorly populated ({total_documents} documents)"
 
                 details = {
                     "total_documents": total_documents,
@@ -523,9 +494,7 @@ class Phase9TestSuite:
                 }
             else:
                 status = "FAIL"
-                message = (
-                    f"Knowledge base stats failed (HTTP {stats_response.status_code})"
-                )
+                message = f"Knowledge base stats failed (HTTP {stats_response.status_code})"
                 details = {"status_code": stats_response.status_code}
 
         except Exception as e:
@@ -583,8 +552,7 @@ class Phase9TestSuite:
                     details = {
                         "query": query,
                         "result_count": len(results),
-                        "avg_score": sum(r.get("score", 0) for r in results)
-                        / max(len(results), 1),
+                        "avg_score": sum(r.get("score", 0) for r in results) / max(len(results), 1),
                     }
                 else:
                     status = "FAIL"
@@ -631,9 +599,7 @@ class Phase9TestSuite:
                     message = f"Ollama accessible with {len(available_models)} models"
                     details = {
                         "model_count": len(available_models),
-                        "models": [
-                            m.get("name", "unknown") for m in available_models[:5]
-                        ],
+                        "models": [m.get("name", "unknown") for m in available_models[:5]],
                     }
                 else:
                     status = "WARNING"
@@ -641,9 +607,7 @@ class Phase9TestSuite:
                     details = {"model_count": 0}
             else:
                 status = "FAIL"
-                message = (
-                    f"Ollama health check failed (HTTP {health_response.status_code})"
-                )
+                message = f"Ollama health check failed (HTTP {health_response.status_code})"
                 details = {"status_code": health_response.status_code}
 
         except Exception as e:
@@ -744,9 +708,7 @@ class Phase9TestSuite:
                 details = {"status_code": frontend_response.status_code}
             else:
                 status = "FAIL"
-                message = (
-                    f"Frontend inaccessible (HTTP {frontend_response.status_code})"
-                )
+                message = f"Frontend inaccessible (HTTP {frontend_response.status_code})"
                 details = {"status_code": frontend_response.status_code}
 
         except Exception as e:
@@ -835,9 +797,7 @@ class Phase9TestSuite:
                     details = {"content_length": len(content)}
             else:
                 status = "FAIL"
-                message = (
-                    f"VNC interface inaccessible (HTTP {vnc_response.status_code})"
-                )
+                message = f"VNC interface inaccessible (HTTP {vnc_response.status_code})"
                 details = {"status_code": vnc_response.status_code}
 
         except Exception as e:
@@ -863,9 +823,7 @@ class Phase9TestSuite:
         start_time = time.time()
         try:
             # Check if VNC/KeX processes are running
-            result = subprocess.run(
-                ["pgrep", "-", "vnc|kex"], capture_output=True, text=True, timeout=5
-            )
+            result = subprocess.run(["pgrep", "-", "vnc|kex"], capture_output=True, text=True, timeout=5)
             duration = time.time() - start_time
 
             if result.returncode == 0 and result.stdout.strip():
@@ -954,14 +912,8 @@ class Phase9TestSuite:
                     }
 
             # Evaluate database architecture
-            accessible_dbs = sum(
-                1 for db in database_results.values() if db["accessible"]
-            )
-            total_keys = sum(
-                db.get("key_count", 0)
-                for db in database_results.values()
-                if db["accessible"]
-            )
+            accessible_dbs = sum(1 for db in database_results.values() if db["accessible"])
+            total_keys = sum(db.get("key_count", 0) for db in database_results.values() if db["accessible"])
 
             if accessible_dbs >= 10:
                 status = "PASS"
@@ -1087,9 +1039,7 @@ class Phase9TestSuite:
         start_time = time.time()
         try:
             # Check if multimodal endpoints are available
-            multimodal_response = self.session.get(
-                f"{backend_url}/api/multimodal/capabilities", timeout=10
-            )
+            multimodal_response = self.session.get(f"{backend_url}/api/multimodal/capabilities", timeout=10)
             duration = time.time() - start_time
 
             if multimodal_response.status_code == 200:
@@ -1127,9 +1077,7 @@ class Phase9TestSuite:
             details=details,
         )
 
-    async def run_comprehensive_test_suite(
-        self, include_performance: bool = False, include_integration: bool = True
-    ):
+    async def run_comprehensive_test_suite(self, include_performance: bool = False, include_integration: bool = True):
         """Run the complete Phase 9 test suite"""
         logger.info("🚀 Starting AutoBot Phase 9 Comprehensive Test Suite")
         logger.info(f"Test execution timestamp: {self.timestamp}")
@@ -1157,9 +1105,7 @@ class Phase9TestSuite:
             try:
                 await test_method()
             except Exception as e:
-                logger.error(
-                    f"Test method {test_method.__name__} failed with error: {e}"
-                )
+                logger.error(f"Test method {test_method.__name__} failed with error: {e}")
                 self.log_result(
                     test_method.__name__,
                     "Test Framework",
@@ -1230,9 +1176,7 @@ class Phase9TestSuite:
         }
 
         # Save report to file
-        report_file = (
-            self.results_dir / f"phase9_comprehensive_test_report_{self.timestamp}.json"
-        )
+        report_file = self.results_dir / f"phase9_comprehensive_test_report_{self.timestamp}.json"
         with open(report_file, "w") as f:
             json.dump(report, f, indent=2)
 
@@ -1316,71 +1260,48 @@ class Phase9TestSuite:
         critical_failures = [
             r
             for r in self.results
-            if r.status == "FAIL"
-            and r.category in ["Infrastructure", "Backend API", "Database Architecture"]
+            if r.status == "FAIL" and r.category in ["Infrastructure", "Backend API", "Database Architecture"]
         ]
 
         if critical_failures:
-            recommendations.append(
-                "🚨 CRITICAL: Address infrastructure failures before proceeding with development"
-            )
+            recommendations.append("🚨 CRITICAL: Address infrastructure failures before proceeding with development")
 
         # Check for performance issues
         performance_warnings = [
-            r
-            for r in self.results
-            if r.status in ["FAIL", "WARNING"] and r.category == "Performance"
+            r for r in self.results if r.status in ["FAIL", "WARNING"] and r.category == "Performance"
         ]
 
         if performance_warnings:
-            recommendations.append(
-                "⚡ Consider performance optimization for GPU/NPU acceleration"
-            )
+            recommendations.append("⚡ Consider performance optimization for GPU/NPU acceleration")
 
         # Check for integration issues
         integration_issues = [
-            r
-            for r in self.results
-            if r.status in ["FAIL", "WARNING"] and "Integration" in r.category
+            r for r in self.results if r.status in ["FAIL", "WARNING"] and "Integration" in r.category
         ]
 
         if integration_issues:
-            recommendations.append(
-                "🔗 Review frontend-backend integration and WebSocket connectivity"
-            )
+            recommendations.append("🔗 Review frontend-backend integration and WebSocket connectivity")
 
         # Check overall health
-        pass_rate = (
-            sum(1 for r in self.results if r.status == "PASS") / len(self.results)
-        ) * 100
+        pass_rate = (sum(1 for r in self.results if r.status == "PASS") / len(self.results)) * 100
 
         if pass_rate >= 95:
-            recommendations.append(
-                "✅ System health excellent - ready for production use"
-            )
+            recommendations.append("✅ System health excellent - ready for production use")
         elif pass_rate >= 85:
             recommendations.append("✅ System health good - minor issues to address")
         elif pass_rate >= 75:
-            recommendations.append(
-                "⚠️ System health acceptable - address warnings before production"
-            )
+            recommendations.append("⚠️ System health acceptable - address warnings before production")
         else:
-            recommendations.append(
-                "❌ System health poor - significant issues require immediate attention"
-            )
+            recommendations.append("❌ System health poor - significant issues require immediate attention")
 
         return recommendations
 
 
 async def main():
     """Main entry point for test suite"""
-    parser = argparse.ArgumentParser(
-        description="AutoBot Phase 9 Comprehensive Test Suite"
-    )
+    parser = argparse.ArgumentParser(description="AutoBot Phase 9 Comprehensive Test Suite")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
-    parser.add_argument(
-        "--performance", action="store_true", help="Include performance tests"
-    )
+    parser.add_argument("--performance", action="store_true", help="Include performance tests")
     parser.add_argument(
         "--integration",
         action="store_true",

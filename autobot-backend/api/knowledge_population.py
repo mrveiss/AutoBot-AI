@@ -1015,6 +1015,7 @@ async def populate_autobot_docs(background_tasks: BackgroundTasks, request: dict
     Issue #4103: Made async with background task to prevent timeout on 400+ markdown files.
     """
     import uuid
+
     from services.knowledge.doc_indexer import get_doc_indexer_service
     from services.knowledge.task_status_manager import TaskStatusManager
 
@@ -1047,9 +1048,10 @@ async def populate_autobot_docs(background_tasks: BackgroundTasks, request: dict
 
 async def _index_autobot_docs_background(task_id: str, force_reindex: bool):
     """Background task: index all AutoBot documentation files."""
+    import time
+
     from services.knowledge.doc_indexer import get_doc_indexer_service
     from services.knowledge.task_status_manager import TaskStatusManager
-    import time
 
     start_time = time.time()
 

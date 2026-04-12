@@ -51,10 +51,7 @@ def migrate(db_url: str) -> None:
             row = cur.fetchone()
 
             if row is None:
-                logger.info(
-                    "Table 'users' not found — skipping rename "
-                    "(fresh install or already migrated)"
-                )
+                logger.info("Table 'users' not found — skipping rename " "(fresh install or already migrated)")
                 return
 
             pk_type = row[0].lower()

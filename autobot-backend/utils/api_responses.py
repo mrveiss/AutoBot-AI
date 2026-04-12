@@ -118,9 +118,7 @@ class ErrorResponse(BaseModel):
     success: bool = Field(False, description="Always false for errors")
     error: str = Field(..., description="Error message")
     error_code: Optional[str] = Field(None, description="Machine-readable error code")
-    details: Optional[Dict[str, Any]] = Field(
-        None, description="Additional error details"
-    )
+    details: Optional[Dict[str, Any]] = Field(None, description="Additional error details")
     timestamp: str = Field(
         default_factory=lambda: datetime.utcnow().isoformat(),
         description="Error timestamp (ISO 8601)",
@@ -606,9 +604,7 @@ def raise_forbidden(message: str = "Forbidden", **kwargs):
 
 def raise_internal_error(message: str = "Internal server error", **kwargs):
     """Raise HTTPException for 500 Internal Server Error"""
-    raise HTTPException(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=message
-    )
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=message)
 
 
 def raise_conflict(message: str = "Resource conflict", **kwargs):

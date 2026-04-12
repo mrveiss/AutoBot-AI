@@ -10,8 +10,8 @@ are made.
 
 from __future__ import annotations
 
-import types
 import sys
+import types
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -40,9 +40,8 @@ _make_groq_stub()
 _make_xxhash_stub()
 
 
-from llm_providers.groq_provider import GroqProvider  # noqa: E402
 from llm_interface_pkg.models import LLMRequest  # noqa: E402
-
+from llm_providers.groq_provider import GroqProvider  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers

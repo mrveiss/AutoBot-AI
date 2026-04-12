@@ -51,9 +51,7 @@ class DNSCacheService:
                     data = json.load(f)
                     # Filter out old entries (older than 5 minutes)
                     cutoff = time.time() - 300
-                    self.cache = {
-                        k: v for k, v in data.items() if v.get("timestamp", 0) > cutoff
-                    }
+                    self.cache = {k: v for k, v in data.items() if v.get("timestamp", 0) > cutoff}
                 logger.info("Loaded %s cached DNS entries", len(self.cache))
         except Exception as e:
             logger.warning("Could not load DNS cache: %s", e)
@@ -136,12 +134,8 @@ class DNSCacheService:
         start_time = time.time()
 
         # Group by priority for efficient processing
-        high_priority = [
-            h for h, c in self.hostnames.items() if c["priority"] == "high"
-        ]
-        medium_priority = [
-            h for h, c in self.hostnames.items() if c["priority"] == "medium"
-        ]
+        high_priority = [h for h, c in self.hostnames.items() if c["priority"] == "high"]
+        medium_priority = [h for h, c in self.hostnames.items() if c["priority"] == "medium"]
         low_priority = [h for h, c in self.hostnames.items() if c["priority"] == "low"]
 
         # Process high priority first, then others concurrently
@@ -162,9 +156,7 @@ class DNSCacheService:
                     self.cache[hostname] = results[i]
 
         total_time = time.time() - start_time
-        logger.info(
-            f"✅ DNS cache refreshed in {total_time:.1f}s ({len(self.cache)} entries)"
-        )
+        logger.info(f"✅ DNS cache refreshed in {total_time:.1f}s ({len(self.cache)} entries)")
 
         self.save_cache()
 
@@ -172,18 +164,14 @@ class DNSCacheService:
         """Get current cache status"""
         now = time.time()
         fresh_entries = sum(
-            1
-            for entry in self.cache.values()
-            if now - entry.get("timestamp", 0) < self.refresh_interval * 2
+            1 for entry in self.cache.values() if now - entry.get("timestamp", 0) < self.refresh_interval * 2
         )
 
         return {
             "total_entries": len(self.cache),
             "fresh_entries": fresh_entries,
             "last_refresh": datetime.fromtimestamp(
-                max(entry.get("timestamp", 0) for entry in self.cache.values())
-                if self.cache
-                else 0
+                max(entry.get("timestamp", 0) for entry in self.cache.values()) if self.cache else 0
             ).isoformat(),
             "cache_file": str(self.cache_file),
             "refresh_interval": self.refresh_interval,
@@ -192,9 +180,7 @@ class DNSCacheService:
     def generate_hosts_entries(self) -> str:
         """Generate /etc/hosts entries from cache"""
         entries = []
-        entries.append(
-            "# AutoBot DNS Cache - Generated at " + datetime.now().isoformat()
-        )
+        entries.append("# AutoBot DNS Cache - Generated at " + datetime.now().isoformat())
 
         for hostname, data in self.cache.items():
             ip = data.get("resolved_ip")
@@ -205,9 +191,7 @@ class DNSCacheService:
 
     async def run_daemon(self):
         """Run DNS cache service daemon"""
-        logger.info(
-            "🚀 Starting DNS Cache Service (refresh every %ss)", self.refresh_interval
-        )
+        logger.info("🚀 Starting DNS Cache Service (refresh every %ss)", self.refresh_interval)
 
         # Initial cache refresh
         await self.refresh_cache()
@@ -246,22 +230,14 @@ async def main():
         default=30,
         help="Refresh interval in seconds (default: 30)",
     )
-    parser.add_argument(
-        "--cache-file", default="/tmp/autobot-dns-cache.json", help="Cache file path"
-    )
+    parser.add_argument("--cache-file", default="/tmp/autobot-dns-cache.json", help="Cache file path")
     parser.add_argument("--once", action="store_true", help="Run once and exit")
-    parser.add_argument(
-        "--status", action="store_true", help="Show cache status and exit"
-    )
-    parser.add_argument(
-        "--hosts", action="store_true", help="Generate /etc/hosts entries and exit"
-    )
+    parser.add_argument("--status", action="store_true", help="Show cache status and exit")
+    parser.add_argument("--hosts", action="store_true", help="Generate /etc/hosts entries and exit")
 
     args = parser.parse_args()
 
-    service = DNSCacheService(
-        cache_file=args.cache_file, refresh_interval=args.interval
-    )
+    service = DNSCacheService(cache_file=args.cache_file, refresh_interval=args.interval)
 
     if args.status:
         status = service.get_cache_status()

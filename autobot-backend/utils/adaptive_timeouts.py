@@ -85,9 +85,7 @@ class AdaptiveTimeoutConfig:
         try:
             return cls.TIMEOUTS[category].get(operation_type, fallback)
         except KeyError:
-            logger.warning(
-                f"Unknown timeout category: {category}, using fallback: {fallback}s"
-            )
+            logger.warning(f"Unknown timeout category: {category}, using fallback: {fallback}s")
             return fallback
 
 
@@ -128,9 +126,7 @@ class AdaptiveTimeout:
             return await asyncio.wait_for(operation(), timeout=timeout_duration)
         else:
             # Run sync operation in thread pool
-            return await asyncio.wait_for(
-                asyncio.to_thread(operation), timeout=timeout_duration
-            )
+            return await asyncio.wait_for(asyncio.to_thread(operation), timeout=timeout_duration)
 
     def _log_operation_start(
         self,
@@ -151,9 +147,7 @@ class AdaptiveTimeout:
             Formatted context string for use in subsequent logs
         """
         context_str = f" ({context})" if context else ""
-        logger.info(
-            f"Starting {self.category.value} operation{context_str} with {timeout_duration}s timeout"
-        )
+        logger.info(f"Starting {self.category.value} operation{context_str} with {timeout_duration}s timeout")
         return context_str
 
     def _log_operation_success(self, timeout_duration: float) -> float:
@@ -169,9 +163,7 @@ class AdaptiveTimeout:
             Elapsed time in seconds
         """
         elapsed = time.time() - self.start_time
-        logger.info(
-            f"Operation completed in {elapsed:.2f}s (timeout was {timeout_duration}s)"
-        )
+        logger.info(f"Operation completed in {elapsed:.2f}s (timeout was {timeout_duration}s)")
         return elapsed
 
     def _log_timeout_error(self, timeout_duration: float, context_str: str) -> float:
@@ -214,19 +206,13 @@ class AdaptiveTimeout:
         """
         self.start_time = time.time()
         timeout_duration = self.config.get_timeout(self.category, operation_type)
-        warning_threshold = self.config.get_timeout(
-            self.category, "warning", timeout_duration * 0.7
-        )
+        warning_threshold = self.config.get_timeout(self.category, "warning", timeout_duration * 0.7)
 
         context_str = self._log_operation_start(timeout_duration, context)
-        warning_task = asyncio.create_task(
-            self._send_timeout_warning(warning_threshold, operation_type)
-        )
+        warning_task = asyncio.create_task(self._send_timeout_warning(warning_threshold, operation_type))
 
         try:
-            result = await self._execute_operation_with_timeout(
-                operation, timeout_duration
-            )
+            result = await self._execute_operation_with_timeout(operation, timeout_duration)
             warning_task.cancel()
             self._log_operation_success(timeout_duration)
             return result
@@ -243,9 +229,7 @@ class AdaptiveTimeout:
             logger.error("Operation failed after %.2fs: %s", elapsed, e)
             return fallback_result
 
-    async def _send_timeout_warning(
-        self, warning_threshold: float, operation_type: str
-    ):
+    async def _send_timeout_warning(self, warning_threshold: float, operation_type: str):
         """Send warning before timeout occurs"""
         try:
             await asyncio.sleep(warning_threshold)
@@ -280,18 +264,14 @@ class AdaptiveTimeout:
 
         elif self.category == TimeoutCategory.COMMAND_EXECUTION:
             # For commands, try shorter timeout or background
-            return await self._handle_command_timeout(
-                operation, operation_type, background_allowed
-            )
+            return await self._handle_command_timeout(operation, operation_type, background_allowed)
 
         else:
             # Generic fallback
             logger.info("Using fallback result for %s timeout", self.category.value)
             return fallback_result
 
-    async def _handle_background_installation(
-        self, operation: Callable, operation_type: str
-    ) -> Dict[str, Any]:
+    async def _handle_background_installation(self, operation: Callable, operation_type: str) -> Dict[str, Any]:
         """Handle installation timeout by offering background execution"""
         logger.info("Starting background installation process...")
 
@@ -315,9 +295,7 @@ class AdaptiveTimeout:
             if asyncio.iscoroutinefunction(operation):
                 result = await asyncio.wait_for(operation(), timeout=extended_timeout)
             else:
-                result = await asyncio.wait_for(
-                    asyncio.to_thread(operation), timeout=extended_timeout
-                )
+                result = await asyncio.wait_for(asyncio.to_thread(operation), timeout=extended_timeout)
 
             logger.info("Background installation completed successfully")
             return result
@@ -326,16 +304,12 @@ class AdaptiveTimeout:
             logger.error("Background installation failed: %s", e)
             return {"status": "failed", "error": "Internal server error"}
 
-    async def _handle_user_interaction_timeout(
-        self, operation: Callable, elapsed_time: float
-    ) -> Any:
+    async def _handle_user_interaction_timeout(self, operation: Callable, elapsed_time: float) -> Any:
         """Handle user interaction timeout with retry"""
         max_attempts = self.config.TIMEOUTS[self.category]["max_attempts"]
         retry_timeout = self.config.TIMEOUTS[self.category]["retry"]
 
-        logger.info(
-            f"User interaction timed out after {elapsed_time:.2f}s, offering retry..."
-        )
+        logger.info(f"User interaction timed out after {elapsed_time:.2f}s, offering retry...")
 
         # For user interactions, we return a clear timeout status
         return {
@@ -354,9 +328,7 @@ class AdaptiveTimeout:
         if background_allowed and operation_type != "interactive":
             logger.info("Moving command to background execution...")
             background_task = asyncio.create_task(
-                self.execute_with_intelligent_timeout(
-                    operation, "batch", background_allowed=False
-                )
+                self.execute_with_intelligent_timeout(operation, "batch", background_allowed=False)
             )
             return {
                 "status": "moved_to_background",
@@ -388,9 +360,7 @@ async def execute_installation_with_timeout(
     )
 
 
-async def execute_user_permission_with_timeout(
-    operation: Callable, context: Optional[Dict[str, Any]] = None
-) -> Any:
+async def execute_user_permission_with_timeout(operation: Callable, context: Optional[Dict[str, Any]] = None) -> Any:
     """Execute user permission request with adaptive timeout"""
     timeout_handler = AdaptiveTimeout(TimeoutCategory.USER_INTERACTION)
     return await timeout_handler.execute_with_intelligent_timeout(
@@ -419,9 +389,7 @@ async def execute_command_with_timeout(
 
 
 # Monitoring functions
-def log_adaptive_timeout_metrics(
-    original_timeout: float, new_timeout: float, operation_type: str
-):
+def log_adaptive_timeout_metrics(original_timeout: float, new_timeout: float, operation_type: str):
     """Log timeout adaptation metrics"""
     improvement_seconds = original_timeout - new_timeout
     improvement_percent = (improvement_seconds / original_timeout) * 100
@@ -445,9 +413,7 @@ if __name__ == "__main__":
             await asyncio.sleep(35)  # Will timeout
             return True
 
-        result = await execute_user_permission_with_timeout(
-            mock_user_permission, context={"task": "test_permission"}
-        )
+        result = await execute_user_permission_with_timeout(mock_user_permission, context={"task": "test_permission"})
         print(f"User permission result: {result}")  # noqa: print
 
         # Test installation timeout (was 600s, now 120s with background)

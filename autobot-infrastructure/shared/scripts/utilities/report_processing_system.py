@@ -99,9 +99,7 @@ class ReportDiscoveryAgent:
 
         # Log discovery summary
         total_files = sum(len(files) for files in discovered.values())
-        self.logger.info(
-            f"Discovered {total_files} report files across {len(discovered)} categories"
-        )
+        self.logger.info(f"Discovered {total_files} report files across {len(discovered)} categories")
 
         for category, files in discovered.items():
             if files:
@@ -193,9 +191,7 @@ class ErrorAnalysisAgent:
             ],
         }
 
-    async def analyze_reports(
-        self, report_files: List[ReportFile]
-    ) -> Dict[str, List[ProcessingResult]]:
+    async def analyze_reports(self, report_files: List[ReportFile]) -> Dict[str, List[ProcessingResult]]:
         """Analyze all reports for errors and warnings"""
         self.logger.info(f"Starting error analysis for {len(report_files)} files")
 
@@ -227,17 +223,12 @@ class ErrorAnalysisAgent:
         loop = asyncio.get_event_loop()
 
         with ThreadPoolExecutor(max_workers=3) as executor:
-            futures = [
-                loop.run_in_executor(executor, self._analyze_file, report_file)
-                for report_file in batch
-            ]
+            futures = [loop.run_in_executor(executor, self._analyze_file, report_file) for report_file in batch]
 
             results = await asyncio.gather(*futures, return_exceptions=True)
 
             # Filter out exceptions and return valid results
-            return [
-                result for result in results if isinstance(result, ProcessingResult)
-            ]
+            return [result for result in results if isinstance(result, ProcessingResult)]
 
     def _analyze_file(self, report_file: ReportFile) -> ProcessingResult:
         """Analyze individual file for errors and warnings"""
@@ -304,9 +295,7 @@ class ArchiveOrganizationAgent:
         self.archive_root = self.base_path / "reports" / "archives"
         self.timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    def prepare_archive_structure(
-        self, categories: Dict[str, List[ReportFile]]
-    ) -> Dict[str, Path]:
+    def prepare_archive_structure(self, categories: Dict[str, List[ReportFile]]) -> Dict[str, Path]:
         """Create archive directory structure"""
         self.logger.info("Preparing archive structure")
 
@@ -342,33 +331,22 @@ class ArchiveOrganizationAgent:
             batch_results = await self._archive_batch(batch, archive_dirs)
             results.extend(batch_results)
 
-        self.logger.info(
-            f"Archived {len([r for r in results if r.success])} files successfully"
-        )
+        self.logger.info(f"Archived {len([r for r in results if r.success])} files successfully")
         return results
 
-    async def _archive_batch(
-        self, batch: List[ReportFile], archive_dirs: Dict[str, Path]
-    ) -> List[ProcessingResult]:
+    async def _archive_batch(self, batch: List[ReportFile], archive_dirs: Dict[str, Path]) -> List[ProcessingResult]:
         """Archive a batch of files"""
         loop = asyncio.get_event_loop()
 
         with ThreadPoolExecutor(max_workers=3) as executor:
             futures = [
-                loop.run_in_executor(
-                    executor, self._archive_file, report_file, archive_dirs
-                )
-                for report_file in batch
+                loop.run_in_executor(executor, self._archive_file, report_file, archive_dirs) for report_file in batch
             ]
 
             results = await asyncio.gather(*futures, return_exceptions=True)
-            return [
-                result for result in results if isinstance(result, ProcessingResult)
-            ]
+            return [result for result in results if isinstance(result, ProcessingResult)]
 
-    def _archive_file(
-        self, report_file: ReportFile, archive_dirs: Dict[str, Path]
-    ) -> ProcessingResult:
+    def _archive_file(self, report_file: ReportFile, archive_dirs: Dict[str, Path]) -> ProcessingResult:
         """Archive individual file"""
         start_time = datetime.datetime.now()
 
@@ -442,9 +420,7 @@ class ArchiveOrganizationAgent:
 class ReportProcessingCoordinator:
     """Main coordinator for multi-agent report processing"""
 
-    def __init__(
-        self, base_path: str = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
-    ):
+    def __init__(self, base_path: str = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"):
         self.base_path = base_path
         self.logger = logging.getLogger("Coordinator")
         self.processing_start = datetime.datetime.now()
@@ -490,19 +466,13 @@ class ReportProcessingCoordinator:
 
             # Phase 3: Archive Preparation
             self.logger.info("📁 PHASE 3: Archive Structure Preparation")
-            archive_dirs = self.archive_agent.prepare_archive_structure(
-                discovered_reports
-            )
+            archive_dirs = self.archive_agent.prepare_archive_structure(discovered_reports)
 
             # Phase 4: File Archival (Parallel)
             self.logger.info("📦 PHASE 4: File Archival")
-            archive_results = await self.archive_agent.archive_files(
-                all_files, archive_dirs
-            )
+            archive_results = await self.archive_agent.archive_files(all_files, archive_dirs)
 
-            self.stats["archived_files"] = len(
-                [r for r in archive_results if r.success]
-            )
+            self.stats["archived_files"] = len([r for r in archive_results if r.success])
 
             # Phase 5: Generate Summary
             self.logger.info("📊 PHASE 5: Summary Generation")
@@ -511,9 +481,7 @@ class ReportProcessingCoordinator:
             )
 
             # Calculate total processing time
-            self.stats["processing_time"] = (
-                datetime.datetime.now() - self.processing_start
-            ).total_seconds()
+            self.stats["processing_time"] = (datetime.datetime.now() - self.processing_start).total_seconds()
 
             self.logger.info("✅ MISSION COMPLETED SUCCESSFULLY")
             self.logger.info("=" * 60)
@@ -559,17 +527,12 @@ class ReportProcessingCoordinator:
             "critical_files": len(analysis_results["critical_errors"]),
             "warning_files": len(analysis_results["warnings"]),
             "clean_files": len(analysis_results["clean_files"]),
-            "top_error_patterns": self._get_top_error_patterns(
-                analysis_results["critical_errors"]
-            ),
+            "top_error_patterns": self._get_top_error_patterns(analysis_results["critical_errors"]),
         }
 
         # Archive summary
         summary["archive_summary"] = {
-            "archive_location": str(
-                self.archive_agent.archive_root
-                / f"archive_{self.archive_agent.timestamp}"
-            ),
+            "archive_location": str(self.archive_agent.archive_root / f"archive_{self.archive_agent.timestamp}"),
             "categories_created": list(archive_dirs.keys()),
             "successful_archives": len([r for r in archive_results if r.success]),
             "failed_archives": len([r for r in archive_results if not r.success]),
@@ -585,9 +548,7 @@ class ReportProcessingCoordinator:
 
         # Save detailed report
         report_path = archive_dirs["summary"] / "detailed_processing_report.md"
-        await self._save_detailed_report(
-            summary, discovered_reports, analysis_results, report_path
-        )
+        await self._save_detailed_report(summary, discovered_reports, analysis_results, report_path)
 
         return summary
 
@@ -618,9 +579,9 @@ class ReportProcessingCoordinator:
                 f"🟡 WARNING: {len(analysis_results['warnings'])} files have warnings that should be reviewed"
             )
 
-        if len(analysis_results["clean_files"]) > len(
-            analysis_results["critical_errors"]
-        ) + len(analysis_results["warnings"]):
+        if len(analysis_results["clean_files"]) > len(analysis_results["critical_errors"]) + len(
+            analysis_results["warnings"]
+        ):
             recommendations.append(
                 f"🟢 POSITIVE: {len(analysis_results['clean_files'])} files are clean and ready for production"
             )
@@ -738,9 +699,7 @@ async def main():
         print(f"📦 {summary['statistics']['archived_files']} files archived")
         print(f"🔍 {summary['statistics']['errors_found']} critical issues found")
         print(f"⚠️  {summary['statistics']['warnings_found']} warnings identified")
-        print(
-            f"⏱️  Completed in {summary['statistics']['processing_time']:.2f} seconds"
-        )
+        print(f"⏱️  Completed in {summary['statistics']['processing_time']:.2f} seconds")
         print(f"📁 Archive: {summary['archive_summary']['archive_location']}")
 
         return summary

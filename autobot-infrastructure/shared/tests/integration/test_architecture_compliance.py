@@ -119,9 +119,7 @@ class TestNetworkConfiguration:
         redis_config = unified_config_manager.get_redis_config()
         redis_port = redis_config.get("port")
 
-        assert (
-            redis_port == 6379
-        ), f"Redis must use standard port 6379, currently configured for: {redis_port}"
+        assert redis_port == 6379, f"Redis must use standard port 6379, currently configured for: {redis_port}"
 
 
 class TestConfigurationSource:
@@ -134,15 +132,12 @@ class TestConfigurationSource:
 
         # These should come from configuration, not be hardcoded
         assert REDIS_HOST != NetworkConstants.REDIS_VM_IP or (
-            hasattr(redis_helper, "redis_config")
-            and redis_helper.redis_config is not None
+            hasattr(redis_helper, "redis_config") and redis_helper.redis_config is not None
         ), "redis_helper should use configuration, not hardcoded IP"
 
     def test_service_discovery_has_defaults(self):
         """Ensure service_discovery_defaults section exists"""
-        defaults = unified_config_manager.get_config_section(
-            "service_discovery_defaults"
-        )
+        defaults = unified_config_manager.get_config_section("service_discovery_defaults")
 
         assert defaults is not None, "service_discovery_defaults section must exist"
         assert "redis_host" in defaults, "redis_host must be in defaults"
@@ -171,12 +166,8 @@ class TestRedisConnection:
         from utils.redis_helper import TIMEOUT_CONFIG
 
         assert TIMEOUT_CONFIG["socket_timeout"] > 0, "socket_timeout must be positive"
-        assert (
-            TIMEOUT_CONFIG["socket_connect_timeout"] > 0
-        ), "socket_connect_timeout must be positive"
-        assert (
-            TIMEOUT_CONFIG["retry_on_timeout"] is True
-        ), "retry_on_timeout should be enabled"
+        assert TIMEOUT_CONFIG["socket_connect_timeout"] > 0, "socket_connect_timeout must be positive"
+        assert TIMEOUT_CONFIG["retry_on_timeout"] is True, "retry_on_timeout should be enabled"
         assert TIMEOUT_CONFIG["max_retries"] > 0, "max_retries must be positive"
 
 
@@ -229,9 +220,7 @@ class TestSingleFrontendServer:
         # Backend should NOT be configured to run frontend
         backend_config = unified_config_manager.get_backend_config()
         backend_host = backend_config.get("host")
-        assert (
-            backend_host != NetworkConstants.FRONTEND_VM_IP
-        ), "Backend must not run on frontend VM"
+        assert backend_host != NetworkConstants.FRONTEND_VM_IP, "Backend must not run on frontend VM"
 
 
 if __name__ == "__main__":

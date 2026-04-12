@@ -55,13 +55,8 @@ def test_refactor_single_file():
             logger.info(f"  Line {i}: {line.strip()}")
 
     # Check if import is needed
-    if (
-        "NetworkConstants" in new_content
-        and "from constants import NetworkConstants" not in new_content
-    ):
-        logger.info(
-            "\nWould need to add import: from constants import NetworkConstants"
-        )
+    if "NetworkConstants" in new_content and "from constants import NetworkConstants" not in new_content:
+        logger.info("\nWould need to add import: from constants import NetworkConstants")
 
     logger.info(f"\nChanges made: {content != new_content}")
 

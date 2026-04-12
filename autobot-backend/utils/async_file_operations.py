@@ -42,9 +42,7 @@ class AsyncFileOperations:
         self.file_cache: Dict[str, Dict] = {}
         self.cache_ttl = TTL_5_MINUTES
 
-    async def read_text_file(
-        self, file_path: Union[str, Path], encoding: str = "utf-8"
-    ) -> str:
+    async def read_text_file(self, file_path: Union[str, Path], encoding: str = "utf-8") -> str:
         """
         Read text file asynchronously without blocking
 
@@ -95,9 +93,7 @@ class AsyncFileOperations:
 
             # Create directories if needed
             if create_dirs and file_path.parent:
-                await asyncio.to_thread(
-                    file_path.parent.mkdir, parents=True, exist_ok=True
-                )
+                await asyncio.to_thread(file_path.parent.mkdir, parents=True, exist_ok=True)
 
             # Write file asynchronously
             async with aiofiles.open(file_path, mode="w", encoding=encoding) as f:
@@ -140,9 +136,7 @@ class AsyncFileOperations:
             logger.error("📊 Error loading JSON from %s: %s", file_path, e)
             return {}
 
-    async def write_json_file(
-        self, file_path: Union[str, Path], data: Dict[str, Any], indent: int = 2
-    ) -> bool:
+    async def write_json_file(self, file_path: Union[str, Path], data: Dict[str, Any], indent: int = 2) -> bool:
         """
         Write JSON file asynchronously without blocking
 
@@ -150,9 +144,7 @@ class AsyncFileOperations:
         """
         try:
             # Serialize JSON in thread to avoid blocking
-            content = await asyncio.to_thread(
-                json.dumps, data, indent=indent, ensure_ascii=False
-            )
+            content = await asyncio.to_thread(json.dumps, data, indent=indent, ensure_ascii=False)
 
             # Write asynchronously
             result = await self.write_text_file(file_path, content)
@@ -191,9 +183,7 @@ class AsyncFileOperations:
             logger.error("📏 Error getting file size %s: %s", file_path, e)
             return 0
 
-    async def list_directory(
-        self, dir_path: Union[str, Path], pattern: Optional[str] = None
-    ) -> List[str]:
+    async def list_directory(self, dir_path: Union[str, Path], pattern: Optional[str] = None) -> List[str]:
         """
         List directory contents asynchronously without blocking
 
@@ -217,9 +207,7 @@ class AsyncFileOperations:
             logger.error("📁 Error listing directory %s: %s", dir_path, e)
             return []
 
-    async def create_temp_file(
-        self, content: str, suffix: str = ".tmp", prefix: str = "autobot_"
-    ) -> Optional[str]:
+    async def create_temp_file(self, content: str, suffix: str = ".tmp", prefix: str = "autobot_") -> Optional[str]:
         """
         Create temporary file asynchronously without blocking
 
@@ -227,9 +215,7 @@ class AsyncFileOperations:
         """
         try:
             # Create temp file in thread
-            fd, temp_path = await asyncio.to_thread(
-                tempfile.mkstemp, suffix=suffix, prefix=prefix
-            )
+            fd, temp_path = await asyncio.to_thread(tempfile.mkstemp, suffix=suffix, prefix=prefix)
 
             # Close file descriptor and write content asynchronously
             await asyncio.to_thread(os.close, fd)
@@ -323,9 +309,7 @@ async def read_file_async(file_path: Union[str, Path], encoding: str = "utf-8") 
     return await ops.read_text_file(file_path, encoding)
 
 
-async def write_file_async(
-    file_path: Union[str, Path], content: str, encoding: str = "utf-8"
-) -> bool:
+async def write_file_async(file_path: Union[str, Path], content: str, encoding: str = "utf-8") -> bool:
     """Write text file asynchronously - ROOT CAUSE FIX for sync file I/O"""
     ops = await get_async_file_operations()
     return await ops.write_text_file(file_path, content, encoding)

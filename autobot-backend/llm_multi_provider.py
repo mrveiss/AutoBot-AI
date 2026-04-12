@@ -39,12 +39,13 @@ config_manager = _get_cfg()
 from dotenv import load_dotenv
 
 from autobot_shared.logging_manager import get_llm_logger
-from autobot_shared.ssot_config import DEFAULT_LLM_MODEL, config as _ssot_config
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+from autobot_shared.ssot_config import config as _ssot_config
 from constants.model_constants import (
-    OPENAI_GPT35_TURBO,
-    OPENAI_GPT35_TURBO_16K,
     OPENAI_GPT4,
     OPENAI_GPT4_TURBO,
+    OPENAI_GPT35_TURBO,
+    OPENAI_GPT35_TURBO_16K,
 )
 from constants.threshold_constants import TimingConstants
 

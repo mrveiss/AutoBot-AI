@@ -24,9 +24,7 @@ from utils.system_context import (
     get_system_context,
 )
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -59,9 +57,7 @@ def _get_man_page_content(command: str, section: str) -> tuple:
     man_content = result.stdout.strip()
     logger.info(f"✓ Man page retrieved ({len(man_content)} characters)")
 
-    desc_result = subprocess.run(
-        ["man", "-k", f"^{command}$"], capture_output=True, text=True, timeout=5
-    )
+    desc_result = subprocess.run(["man", "-k", f"^{command}$"], capture_output=True, text=True, timeout=5)
 
     description = "System command"
     if desc_result.returncode == 0:
@@ -195,9 +191,7 @@ async def test_single_man_page(command="ls", section="1"):
         logger.info(f"✓ Compatible with: {', '.join(compatible_oses)}")
 
         # Generate unique key
-        unique_key = generate_unique_key(
-            system_ctx["machine_id"], system_ctx["os_name"], command, section
-        )
+        unique_key = generate_unique_key(system_ctx["machine_id"], system_ctx["os_name"], command, section)
         logger.info(f"✓ Unique Key: {unique_key}")
 
         # Issue #281: Use extracted helper for man page content
@@ -220,9 +214,7 @@ async def test_single_man_page(command="ls", section="1"):
 """
 
         # Issue #281: Use extracted helper for metadata
-        metadata = _build_man_page_metadata(
-            command, section, system_ctx, compatible_oses, unique_key
-        )
+        metadata = _build_man_page_metadata(command, section, system_ctx, compatible_oses, unique_key)
 
         # Issue #281: Use extracted helper for storing and verifying
         result = await _store_and_verify_fact(kb_v2, content, metadata)

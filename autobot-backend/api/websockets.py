@@ -16,8 +16,8 @@ from typing import Callable, Dict, Optional, Tuple
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from auth_middleware import authenticate_websocket
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from type_defs.common import SKIP_WEBSOCKET_PERSISTENCE_TYPES
 
 logger = logging.getLogger(__name__)

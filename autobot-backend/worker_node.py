@@ -63,9 +63,7 @@ class WorkerNode:
         """
         self.worker_id = f"worker_{os.getpid()}"
 
-        self.task_transport_type = global_config_manager.get_nested(
-            "task_transport.type", "local"
-        )
+        self.task_transport_type = global_config_manager.get_nested("task_transport.type", "local")
         self.redis_client = None
         if self.task_transport_type == "redis":
             # Use centralized Redis client utility
@@ -73,14 +71,9 @@ class WorkerNode:
             if self.redis_client:
                 logger.info("Worker connected to Redis via centralized utility")
             else:
-                logger.error(
-                    "Worker failed to get Redis client from centralized utility"
-                )
+                logger.error("Worker failed to get Redis client from centralized utility")
         else:
-            logger.info(
-                "Worker node configured for local task transport. "
-                "No Redis connection."
-            )
+            logger.info("Worker node configured for local task transport. " "No Redis connection.")
 
         # Initialize modules that worker might need for task execution
         self.llm_interface = LLMInterface()
@@ -120,9 +113,7 @@ class WorkerNode:
             },
             "ram": {
                 "total_gb": round(psutil.virtual_memory().total / BYTES_PER_GB, 2),
-                "available_gb": round(
-                    psutil.virtual_memory().available / BYTES_PER_GB, 2
-                ),
+                "available_gb": round(psutil.virtual_memory().available / BYTES_PER_GB, 2),
                 "usage_percent": psutil.virtual_memory().percent,
             },
             "kb_supported": True,
@@ -168,8 +159,7 @@ class WorkerNode:
                 subprocess.check_output(  # nosec B607 - nvidia-smi is safe
                     [
                         "nvidia-smi",
-                        "--query-gpu=name,memory.total,memory.used,memory.free,"
-                        "utilization.gpu,utilization.memory",
+                        "--query-gpu=name,memory.total,memory.used,memory.free," "utilization.gpu,utilization.memory",
                         "--format=csv,noheader,nounits",
                     ]
                 )
@@ -260,17 +250,13 @@ class WorkerNode:
         if self.redis_client:
             channel = "worker_capabilities"
             # Issue #361 - avoid blocking
-            await asyncio.to_thread(
-                self.redis_client.publish, channel, json.dumps(capabilities)
-            )
+            await asyncio.to_thread(self.redis_client.publish, channel, json.dumps(capabilities))
             logger.info("Worker capabilities reported to Redis channel '%s'.", channel)
         else:
             logger.debug("Worker capabilities detected (local mode): %s", capabilities)
             await event_manager.publish("worker_capability_report", capabilities)
 
-    def _validate_user_role(
-        self, task_type: str, task_id: str, user_role: Optional[str]
-    ) -> Optional[Dict[str, Any]]:
+    def _validate_user_role(self, task_type: str, task_id: str, user_role: Optional[str]) -> Optional[Dict[str, Any]]:
         """Validate that user_role is provided for task execution.
 
         Args:
@@ -326,10 +312,7 @@ class WorkerNode:
         )
         return {
             "status": "error",
-            "message": (
-                f"Permission denied for role '{user_role}' to execute "
-                f"task type '{task_type}'."
-            ),
+            "message": (f"Permission denied for role '{user_role}' to execute " f"task type '{task_type}'."),
         }
 
     async def execute_task(self, task_payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -354,9 +337,7 @@ class WorkerNode:
             return role_error
 
         # Check task permission
-        perm_error = self._check_task_permission(
-            task_type, task_id, task_payload, user_role
-        )
+        perm_error = self._check_task_permission(task_type, task_id, task_payload, user_role)
         if perm_error:
             return perm_error
 
@@ -368,9 +349,7 @@ class WorkerNode:
         await self._publish_task_completion(task_id, result)
         return result
 
-    async def _publish_task_start(
-        self, task_id: str, task_type: str, user_role: str
-    ) -> None:
+    async def _publish_task_start(self, task_id: str, task_type: str, user_role: str) -> None:
         """Publish task start event and log execution start. Issue #620."""
         await event_manager.publish(
             "worker_task_start",
@@ -384,9 +363,7 @@ class WorkerNode:
             user_role,
         )
 
-    async def _publish_task_completion(
-        self, task_id: str, result: Dict[str, Any]
-    ) -> None:
+    async def _publish_task_completion(self, task_id: str, result: Dict[str, Any]) -> None:
         """Publish task completion event and log result. Issue #620."""
         await event_manager.publish(
             "worker_task_end",
@@ -411,10 +388,7 @@ class WorkerNode:
         if self.redis_client:
             pubsub = self.redis_client.pubsub()
             pubsub.subscribe("orchestrator_tasks")
-            logger.info(
-                f"Worker {self.worker_id} listening for tasks on "
-                "'orchestrator_tasks' channel."
-            )
+            logger.info(f"Worker {self.worker_id} listening for tasks on " "'orchestrator_tasks' channel.")
 
             for message in pubsub.listen():
                 if message["type"] == "message":
@@ -423,10 +397,7 @@ class WorkerNode:
                     logger.info("Worker %s received task: %s", self.worker_id, task_id)
                     asyncio.create_task(self._process_and_respond(task_payload))
         else:
-            logger.info(
-                f"Worker {self.worker_id} running in local task execution mode. "
-                "No external task listening."
-            )
+            logger.info(f"Worker {self.worker_id} running in local task execution mode. " "No external task listening.")
             while True:
                 await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY * 2)
 
@@ -443,13 +414,8 @@ class WorkerNode:
         if self.redis_client:
             response_channel = f"worker_results_{task_id}"
             # Issue #361 - avoid blocking
-            await asyncio.to_thread(
-                self.redis_client.publish, response_channel, json.dumps(result)
-            )
-            logger.debug(
-                f"Worker {self.worker_id} sent result for task {task_id} to "
-                f"'{response_channel}'."
-            )
+            await asyncio.to_thread(self.redis_client.publish, response_channel, json.dumps(result))
+            logger.debug(f"Worker {self.worker_id} sent result for task {task_id} to " f"'{response_channel}'.")
         else:
             pass
 

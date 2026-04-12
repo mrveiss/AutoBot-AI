@@ -25,9 +25,7 @@ from utils.system_context import (
     get_system_context,
 )
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -124,9 +122,7 @@ async def _get_man_page_description(command: str) -> str:
     return ""
 
 
-def _build_man_page_metadata(
-    command: str, section: str, system_ctx: dict, unique_key: str
-) -> dict:
+def _build_man_page_metadata(command: str, section: str, system_ctx: dict, unique_key: str) -> dict:
     """
     Build metadata dict for man page fact.
 
@@ -199,9 +195,7 @@ async def _get_man_content(command: str, section: str) -> str:
     return stdout.decode().strip()
 
 
-def _format_man_content(
-    command: str, section: str, description: str, man_content: str, system_ctx: dict
-) -> str:
+def _format_man_content(command: str, section: str, description: str, man_content: str, system_ctx: dict) -> str:
     """
     Format man page content with system context.
 
@@ -218,11 +212,7 @@ def _format_man_content(
         Formatted content string
     """
     section_name = (
-        "User Commands"
-        if section == "1"
-        else "Configuration Files"
-        if section == "5"
-        else "System Administration"
+        "User Commands" if section == "1" else "Configuration Files" if section == "5" else "System Administration"
     )
 
     return f"""# {command}({section}) - {description}
@@ -258,19 +248,13 @@ async def index_command_batch(kb_v2, commands_batch, system_ctx=None):
             description = await _get_man_page_description(command)
 
             # Build content with enhanced context
-            content = _format_man_content(
-                command, section, description, man_content, system_ctx
-            )
+            content = _format_man_content(command, section, description, man_content, system_ctx)
 
             # Generate unique key
-            unique_key = generate_unique_key(
-                system_ctx["machine_id"], system_ctx["os_name"], command, section
-            )
+            unique_key = generate_unique_key(system_ctx["machine_id"], system_ctx["os_name"], command, section)
 
             # Build metadata
-            metadata = _build_man_page_metadata(
-                command, section, system_ctx, unique_key
-            )
+            metadata = _build_man_page_metadata(command, section, system_ctx, unique_key)
 
             # Store in Knowledge Base
             result = await kb_v2.store_fact(content=content, metadata=metadata)
@@ -298,9 +282,7 @@ async def _log_system_context(system_ctx: dict):
         system_ctx: System context dictionary
     """
     logger.info("\n3. Detecting system context...")
-    logger.info(
-        "✓ Machine: %s (%s)", system_ctx["machine_id"], system_ctx["machine_ip"]
-    )
+    logger.info("✓ Machine: %s (%s)", system_ctx["machine_id"], system_ctx["machine_ip"])
     logger.info("✓ OS: %s %s", system_ctx["os_name"], system_ctx["os_version"])
     logger.info("✓ Architecture: %s", system_ctx["architecture"])
     logger.info(
@@ -378,9 +360,7 @@ async def main():
         await _log_system_context(system_ctx)
 
         # Index in batches
-        total_indexed = await _index_commands_in_batches(
-            kb_v2, all_commands, system_ctx
-        )
+        total_indexed = await _index_commands_in_batches(kb_v2, all_commands, system_ctx)
 
         # Get final stats
         stats = await kb_v2.get_stats()

@@ -91,10 +91,7 @@ class CodeQualityFixer:
                 if line_num < len(lines):
                     line = lines[line_num]
                     # Only remove if it's a simple single import
-                    if (
-                        f"import {unused}" in line
-                        or f"from .* import.*{unused}" in line
-                    ):
+                    if f"import {unused}" in line or f"from .* import.*{unused}" in line:
                         lines_to_remove.add(line_num)
 
         # Remove lines in reverse order to maintain indices
@@ -161,9 +158,7 @@ class CodeQualityFixer:
 
         return content
 
-    def fix_directory(
-        self, directory: Path, extensions: List[str] = None
-    ) -> Dict[str, int]:
+    def fix_directory(self, directory: Path, extensions: List[str] = None) -> Dict[str, int]:
         """Fix all Python files in directory"""
         if extensions is None:
             extensions = [".py"]
@@ -237,11 +232,7 @@ def main():
     print(f"\nCode Quality Fix Summary:")
     print(f"Files processed: {total_files}")
     print(f"Files fixed: {total_fixed}")
-    print(
-        f"Success rate: {(total_fixed/total_files*100):.1f}%"
-        if total_files > 0
-        else "0%"
-    )
+    print(f"Success rate: {(total_fixed/total_files*100):.1f}%" if total_files > 0 else "0%")
 
 
 if __name__ == "__main__":

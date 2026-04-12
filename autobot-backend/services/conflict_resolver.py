@@ -30,9 +30,6 @@ import logging
 import time
 from typing import Optional
 
-from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.ssot_config import config
-
 from api.knowledge_grounding_models import (
     Claim,
     Conflict,
@@ -45,6 +42,8 @@ from api.knowledge_grounding_models import (
     ReviewTicketStatus,
     SourceType,
 )
+from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.ssot_config import config
 
 logger = logging.getLogger(__name__)
 

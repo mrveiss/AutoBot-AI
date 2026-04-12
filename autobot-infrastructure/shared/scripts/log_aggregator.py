@@ -258,9 +258,7 @@ class LogAggregator:
             if source_name in self.log_sources:
                 source_config = self.log_sources[source_name]
                 task = asyncio.create_task(
-                    self._tail_single_source(
-                        source_name, source_config, follow, lines, filter_level
-                    )
+                    self._tail_single_source(source_name, source_config, follow, lines, filter_level)
                 )
                 tasks.append(task)
 
@@ -283,17 +281,11 @@ class LogAggregator:
         source_type = source_config["type"]
 
         if source_type == LogSource.FILE:
-            await self._tail_file_source(
-                source_name, source_config, follow, lines, filter_level
-            )
+            await self._tail_file_source(source_name, source_config, follow, lines, filter_level)
         elif source_type == LogSource.DOCKER:
-            await self._tail_docker_source(
-                source_name, source_config, follow, lines, filter_level
-            )
+            await self._tail_docker_source(source_name, source_config, follow, lines, filter_level)
         elif source_type == LogSource.SYSTEMD:
-            await self._tail_systemd_source(
-                source_name, source_config, follow, lines, filter_level
-            )
+            await self._tail_systemd_source(source_name, source_config, follow, lines, filter_level)
 
     async def _tail_file_source(
         self,
@@ -331,9 +323,7 @@ class LogAggregator:
                 parsed = self.parse_log_line(line_str, format_type)
 
                 # Apply level filter
-                if filter_level and not self._should_show_log(
-                    parsed["level"], filter_level
-                ):
+                if filter_level and not self._should_show_log(parsed["level"], filter_level):
                     continue
 
                 # Format and print
@@ -370,9 +360,7 @@ class LogAggregator:
                 if line_str:
                     parsed = self.parse_log_line(line_str, format_type)
 
-                    if filter_level and not self._should_show_log(
-                        parsed["level"], filter_level
-                    ):
+                    if filter_level and not self._should_show_log(parsed["level"], filter_level):
                         continue
 
                     self._print_log_line(source_name, parsed)
@@ -394,9 +382,7 @@ class LogAggregator:
 
     def _print_log_line(self, source: str, parsed: Dict[str, Any]) -> None:
         """Print formatted log line."""
-        timestamp = parsed.get(
-            "timestamp", datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        )
+        timestamp = parsed.get("timestamp", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         level = parsed.get("level", "INFO")
         message = parsed.get("message", parsed.get("raw", ""))
 
@@ -425,9 +411,7 @@ class LogAggregator:
             if re.search(alert["pattern"], message, re.IGNORECASE):
                 self._trigger_alert(source, parsed, alert)
 
-    def _trigger_alert(
-        self, source: str, log_entry: Dict[str, Any], alert_config: Dict[str, Any]
-    ) -> None:
+    def _trigger_alert(self, source: str, log_entry: Dict[str, Any], alert_config: Dict[str, Any]) -> None:
         """Trigger an alert for matching pattern."""
         alert = {
             "timestamp": datetime.now().isoformat(),
@@ -507,9 +491,7 @@ class LogAggregator:
         if not log_path.exists():
             return []
 
-        return await self._search_file_source(
-            source_name, log_path, config, pattern, since_time, case_sensitive
-        )
+        return await self._search_file_source(source_name, log_path, config, pattern, since_time, case_sensitive)
 
     async def _search_file_source(
         self,
@@ -543,9 +525,7 @@ class LogAggregator:
 
         return results
 
-    def _is_log_within_timeframe(
-        self, parsed: Dict[str, Any], since_time: datetime
-    ) -> bool:
+    def _is_log_within_timeframe(self, parsed: Dict[str, Any], since_time: datetime) -> bool:
         """Check if log entry is within the specified timeframe. (Issue #315 - extracted)"""
         if not parsed.get("timestamp"):
             return True  # Include logs without timestamps
@@ -556,9 +536,7 @@ class LogAggregator:
         except Exception:
             return True  # Invalid timestamp, include log anyway
 
-    def analyze_logs(
-        self, sources: List[str] = None, last_hours: int = 24
-    ) -> Dict[str, Any]:
+    def analyze_logs(self, sources: List[str] = None, last_hours: int = 24) -> Dict[str, Any]:
         """Analyze log patterns and generate statistics."""
         if not sources:
             sources = list(self.log_sources.keys())
@@ -607,11 +585,7 @@ class LogAggregator:
                     all_alerts = json.load(f)
                     # Filter recent alerts
                     cutoff_time = datetime.now() - timedelta(hours=last_hours)
-                    analysis["alerts"] = [
-                        a
-                        for a in all_alerts
-                        if datetime.fromisoformat(a["timestamp"]) > cutoff_time
-                    ]
+                    analysis["alerts"] = [a for a in all_alerts if datetime.fromisoformat(a["timestamp"]) > cutoff_time]
             except Exception:
                 logger.debug("Suppressed exception in try block", exc_info=True)
 
@@ -644,9 +618,7 @@ class LogAggregator:
                 parsed = self.parse_log_line(line, config.get("format", "text"))
                 self._update_analysis_stats(source_name, parsed, analysis)
 
-    def _update_analysis_stats(
-        self, source_name: str, parsed: Dict[str, Any], analysis: Dict[str, Any]
-    ) -> None:
+    def _update_analysis_stats(self, source_name: str, parsed: Dict[str, Any], analysis: Dict[str, Any]) -> None:
         """Update analysis statistics with parsed log entry. (Issue #315 - extracted)"""
         analysis["statistics"]["total_entries"] += 1
         analysis["statistics"]["by_level"][parsed["level"]] += 1
@@ -684,9 +656,7 @@ class LogAggregator:
 
         # Export based on format
         if format_type == "json":
-            output = json.dumps(
-                {"logs": logs, "exported_at": datetime.now().isoformat()}, indent=2
-            )
+            output = json.dumps({"logs": logs, "exported_at": datetime.now().isoformat()}, indent=2)
         elif format_type == "csv":
             import csv
             import io
@@ -758,9 +728,7 @@ class LogAggregator:
                     "class": "pythonjsonlogger.jsonlogger.JsonFormatter",
                     "format": "%(asctime)s %(name)s %(levelname)s %(message)s",
                 },
-                "standard": {
-                    "format": "%(asctime)s [%(name)s] %(levelname)s: %(message)s"
-                },
+                "standard": {"format": "%(asctime)s [%(name)s] %(levelname)s: %(message)s"},
             },
             "handlers": {
                 "file": {
@@ -839,20 +807,14 @@ Examples:
     parser.add_argument("--search", help="Search logs for pattern")
     parser.add_argument("--analyze", action="store_true", help="Analyze log patterns")
     parser.add_argument("--export", action="store_true", help="Export logs")
-    parser.add_argument(
-        "--setup", action="store_true", help="Setup centralized logging"
-    )
+    parser.add_argument("--setup", action="store_true", help="Setup centralized logging")
 
     # Options
     parser.add_argument("--services", help="Comma-separated list of services")
     parser.add_argument("--last-hours", type=int, default=24, help="Hours to look back")
     parser.add_argument("--lines", type=int, default=100, help="Initial lines to show")
-    parser.add_argument(
-        "--follow", action="store_true", default=True, help="Follow log output"
-    )
-    parser.add_argument(
-        "--no-follow", dest="follow", action="store_false", help="Don't follow"
-    )
+    parser.add_argument("--follow", action="store_true", default=True, help="Follow log output")
+    parser.add_argument("--no-follow", dest="follow", action="store_false", help="Don't follow")
     parser.add_argument(
         "--filter-level",
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
@@ -865,16 +827,12 @@ Examples:
         help="Export format",
     )
     parser.add_argument("--output", help="Output file for export/analysis")
-    parser.add_argument(
-        "--case-sensitive", action="store_true", help="Case-sensitive search"
-    )
+    parser.add_argument("--case-sensitive", action="store_true", help="Case-sensitive search")
 
     return parser
 
 
-async def _handle_search_command(
-    log_aggregator: LogAggregator, args: argparse.Namespace, services: List[str]
-) -> None:
+async def _handle_search_command(log_aggregator: LogAggregator, args: argparse.Namespace, services: List[str]) -> None:
     """Handle search command. (Issue #315 - extracted)"""
     results = await log_aggregator.search_logs(
         pattern=args.search,
@@ -891,9 +849,7 @@ async def _handle_search_command(
         _print_search_results(log_aggregator, results)
 
 
-def _print_search_results(
-    log_aggregator: LogAggregator, results: List[Dict[str, Any]]
-) -> None:
+def _print_search_results(log_aggregator: LogAggregator, results: List[Dict[str, Any]]) -> None:
     """Print search results to console. (Issue #315 - extracted)"""
     for result in results[:50]:  # Show first 50 results
         log_aggregator._print_log_line(result.get("source", "unknown"), result)
@@ -902,9 +858,7 @@ def _print_search_results(
         logger.info(f"\n... and {len(results) - 50} more results")
 
 
-def _handle_analyze_command(
-    log_aggregator: LogAggregator, args: argparse.Namespace, services: List[str]
-) -> None:
+def _handle_analyze_command(log_aggregator: LogAggregator, args: argparse.Namespace, services: List[str]) -> None:
     """Handle analyze command. (Issue #315 - extracted)"""
     analysis = log_aggregator.analyze_logs(sources=services, last_hours=args.last_hours)
 
@@ -926,9 +880,7 @@ def _print_analysis_summary(analysis: Dict[str, Any]) -> None:
     logger.info(f"   Recent alerts: {len(analysis['alerts'])}")
 
 
-def _handle_export_command(
-    log_aggregator: LogAggregator, args: argparse.Namespace, services: List[str]
-) -> None:
+def _handle_export_command(log_aggregator: LogAggregator, args: argparse.Namespace, services: List[str]) -> None:
     """Handle export command. (Issue #315 - extracted)"""
     output = log_aggregator.export_logs(
         sources=services,

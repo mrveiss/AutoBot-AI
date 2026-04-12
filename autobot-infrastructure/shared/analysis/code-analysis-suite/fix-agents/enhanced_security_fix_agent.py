@@ -207,9 +207,7 @@ class EnhancedSecurityFixAgent:
             return True
 
         # Check for React/framework internal usage
-        if any(
-            framework in match for framework in ["React", "Vue", "Angular", "__webpack"]
-        ):
+        if any(framework in match for framework in ["React", "Vue", "Angular", "__webpack"]):
             return True
 
         return False
@@ -218,14 +216,9 @@ class EnhancedSecurityFixAgent:
         """Detect if code appears to be from a minified library."""
         indicators = [
             len(code) > 200,  # Very long single line
-            re.search(
-                r"[a-zA-Z]\.[a-zA-Z]\.[a-zA-Z]", code
-            ),  # Minified property access
+            re.search(r"[a-zA-Z]\.[a-zA-Z]\.[a-zA-Z]", code),  # Minified property access
             code.count(",") > 10 and "\n" not in code,  # Many commas, no newlines
-            any(
-                lib in code.lower()
-                for lib in ["react", "vue", "angular", "jquery", "lodash"]
-            ),
+            any(lib in code.lower() for lib in ["react", "vue", "angular", "jquery", "lodash"]),
         ]
         return sum(indicators) >= 2
 
@@ -249,9 +242,7 @@ class EnhancedSecurityFixAgent:
             print(f"❌ Failed to create backup: {e}")
             return ""
 
-    def scan_for_vulnerabilities(
-        self, content: str, file_path: str
-    ) -> List[Dict[str, Any]]:
+    def scan_for_vulnerabilities(self, content: str, file_path: str) -> List[Dict[str, Any]]:
         """Enhanced vulnerability scanning with context analysis."""
         vulnerabilities = []
 
@@ -294,9 +285,7 @@ class EnhancedSecurityFixAgent:
         enhancements = []
 
         # Find head section
-        head_match = re.search(
-            r"<head[^>]*>(.*?)</head>", content, re.DOTALL | re.IGNORECASE
-        )
+        head_match = re.search(r"<head[^>]*>(.*?)</head>", content, re.DOTALL | re.IGNORECASE)
         if not head_match:
             return content, enhancements
 
@@ -307,9 +296,7 @@ class EnhancedSecurityFixAgent:
         # Check if CSP already exists
         if not re.search(r"Content-Security-Policy", head_content, re.IGNORECASE):
             # Inject CSP header
-            new_head_content = (
-                "\n" + self.security_enhancements["csp_header"] + "\n" + head_content
-            )
+            new_head_content = "\n" + self.security_enhancements["csp_header"] + "\n" + head_content
             content = content[:head_start] + new_head_content + content[head_end:]
             enhancements.append("Content Security Policy (CSP) injected")
 
@@ -375,9 +362,7 @@ class EnhancedSecurityFixAgent:
                 # Replace in content
                 start_pos = vuln["position"]["start"]
                 end_pos = vuln["position"]["end"]
-                fixed_content = (
-                    fixed_content[:start_pos] + fixed_match + fixed_content[end_pos:]
-                )
+                fixed_content = fixed_content[:start_pos] + fixed_match + fixed_content[end_pos:]
 
                 fix_applied = {
                     "type": vuln_type,
@@ -460,12 +445,7 @@ class EnhancedSecurityFixAgent:
             script_opens = content.count("<script")
             script_closes = content.count("</script>")
 
-            return (
-                has_doctype
-                and has_html_tag
-                and has_head_tag
-                and script_opens == script_closes
-            )
+            return has_doctype and has_html_tag and has_head_tag and script_opens == script_closes
 
         except Exception:
             return False
@@ -492,9 +472,7 @@ class EnhancedSecurityFixAgent:
             direct_vulns = len(vulnerabilities) - library_vulns
 
             if library_vulns > 0:
-                print(
-                    f"   📚 {library_vulns} in library/framework code (will be mitigated with CSP)"
-                )
+                print(f"   📚 {library_vulns} in library/framework code (will be mitigated with CSP)")
             if direct_vulns > 0:
                 print(f"   🎯 {direct_vulns} in direct application code (will be fixed)")
 
@@ -513,21 +491,15 @@ class EnhancedSecurityFixAgent:
             all_enhancements = []
 
             # Inject security headers
-            enhanced_content, header_enhancements = self.inject_security_headers(
-                enhanced_content
-            )
+            enhanced_content, header_enhancements = self.inject_security_headers(enhanced_content)
             all_enhancements.extend(header_enhancements)
 
             # Inject DOM sanitization
-            enhanced_content, dom_enhancements = self.inject_dom_sanitization(
-                enhanced_content
-            )
+            enhanced_content, dom_enhancements = self.inject_dom_sanitization(enhanced_content)
             all_enhancements.extend(dom_enhancements)
 
             # Apply targeted fixes
-            enhanced_content, fixes_applied = self.apply_targeted_fixes(
-                enhanced_content, vulnerabilities
-            )
+            enhanced_content, fixes_applied = self.apply_targeted_fixes(enhanced_content, vulnerabilities)
 
             # Validate the enhanced content
             if not self.validate_html_structure(enhanced_content):
@@ -545,9 +517,7 @@ class EnhancedSecurityFixAgent:
             # Calculate enhanced file hash
             enhanced_hash = hashlib.sha256(enhanced_content.encode()).hexdigest()
 
-            print(
-                f"✅ Applied {len(fixes_applied)} direct fixes and {len(all_enhancements)} security enhancements"
-            )
+            print(f"✅ Applied {len(fixes_applied)} direct fixes and {len(all_enhancements)} security enhancements")
 
             result = {
                 "file": file_path,
@@ -615,9 +585,7 @@ class EnhancedSecurityFixAgent:
             if result["status"] == "enhanced":
                 self.report["vulnerabilities"].extend(result["vulnerabilities"])
                 self.report["fixes_applied"].extend(result["fixes"])
-                self.report["security_enhancements"].extend(
-                    result.get("enhancements", [])
-                )
+                self.report["security_enhancements"].extend(result.get("enhancements", []))
 
         # Enhanced recommendations
         self.report["recommendations"] = [
@@ -680,8 +648,7 @@ class EnhancedSecurityFixAgent:
                     }[severity]
                     report_content += f"- {icon} **{severity}:** {severity_counts[severity]} vulnerabilities\n"
             report_content += (
-                f"- 📚 **Library/Framework Code:** "
-                f"{library_vulns} vulnerabilities (mitigated with CSP)\n\n"
+                f"- 📚 **Library/Framework Code:** " f"{library_vulns} vulnerabilities (mitigated with CSP)\n\n"
             )
 
         # Security enhancements applied
@@ -693,11 +660,7 @@ class EnhancedSecurityFixAgent:
             report_content += "\n"
 
         # Detailed vulnerability list (non-library only)
-        direct_vulns = [
-            v
-            for v in self.report["vulnerabilities"]
-            if not v.get("is_library_code", False)
-        ]
+        direct_vulns = [v for v in self.report["vulnerabilities"] if not v.get("is_library_code", False)]
         if direct_vulns:
             report_content += "### Critical Vulnerabilities Fixed:\n\n"
             for i, vuln in enumerate(direct_vulns, 1):
@@ -709,34 +672,24 @@ class EnhancedSecurityFixAgent:
                 }
                 icon = severity_icon.get(vuln["severity"], "⚪")
 
-                report_content += (
-                    f"**{i}. {vuln['type'].replace('_', ' ').title()}** {icon}\n"
-                )
+                report_content += f"**{i}. {vuln['type'].replace('_', ' ').title()}** {icon}\n"
                 report_content += f"- **File:** `{vuln['file']}`\n"
                 report_content += f"- **Line:** {vuln['line']}\n"
                 report_content += f"- **Severity:** {vuln['severity']}\n"
                 ellipsis = "..." if len(vuln["match"]) > 100 else ""
-                report_content += (
-                    f"- **Pattern:** `{vuln['match'][:100]}{ellipsis}`\n\n"
-                )
+                report_content += f"- **Pattern:** `{vuln['match'][:100]}{ellipsis}`\n\n"
 
         # Applied fixes
         if self.report["fixes_applied"]:
             report_content += "## Direct Security Fixes Applied\n\n"
             for i, fix in enumerate(self.report["fixes_applied"], 1):
-                report_content += (
-                    f"**Fix {i}:** {fix['type'].replace('_', ' ').title()}\n"
-                )
+                report_content += f"**Fix {i}:** {fix['type'].replace('_', ' ').title()}\n"
                 report_content += f"- **Line:** {fix['line']}\n"
                 report_content += f"- **Severity:** {fix['severity']}\n"
                 orig_ellipsis = "..." if len(fix["original"]) > 80 else ""
                 fixed_ellipsis = "..." if len(fix["fixed"]) > 80 else ""
-                report_content += (
-                    f"- **Original:** `{fix['original'][:80]}{orig_ellipsis}`\n"
-                )
-                report_content += (
-                    f"- **Fixed:** `{fix['fixed'][:80]}{fixed_ellipsis}`\n\n"
-                )
+                report_content += f"- **Original:** `{fix['original'][:80]}{orig_ellipsis}`\n"
+                report_content += f"- **Fixed:** `{fix['fixed'][:80]}{fixed_ellipsis}`\n\n"
 
         # Recommendations
         report_content += "## Security Recommendations & Status\n\n"
@@ -752,19 +705,11 @@ class EnhancedSecurityFixAgent:
             report_content += f"- Status: {result['status'].upper()}\n"
 
             if result["status"] == "enhanced":
-                report_content += (
-                    f"- Vulnerabilities Found: {result['vulnerabilities_found']}\n"
-                )
-                report_content += (
-                    f"  - Library Code: {result.get('library_vulnerabilities', 0)}\n"
-                )
-                report_content += (
-                    f"  - Direct Code: {result.get('direct_vulnerabilities', 0)}\n"
-                )
+                report_content += f"- Vulnerabilities Found: {result['vulnerabilities_found']}\n"
+                report_content += f"  - Library Code: {result.get('library_vulnerabilities', 0)}\n"
+                report_content += f"  - Direct Code: {result.get('direct_vulnerabilities', 0)}\n"
                 report_content += f"- Direct Fixes Applied: {result['fixes_applied']}\n"
-                report_content += (
-                    f"- Security Enhancements: {result['security_enhancements']}\n"
-                )
+                report_content += f"- Security Enhancements: {result['security_enhancements']}\n"
                 report_content += f"- Backup Created: `{result['backup_path']}`\n"
             elif result["status"] == "error":
                 report_content += f"- Error: {result['error']}\n"
@@ -889,9 +834,7 @@ def main():
     """Main entry point."""
     if len(sys.argv) != 2:
         print("Usage: python enhanced_security_fix_agent.py <file_or_directory_path>")
-        print(
-            "Example: python enhanced_security_fix_agent.py /path/to/playwright-report/"
-        )
+        print("Example: python enhanced_security_fix_agent.py /path/to/playwright-report/")
         sys.exit(1)
 
     target_path = sys.argv[1]

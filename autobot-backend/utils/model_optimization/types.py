@@ -102,9 +102,7 @@ class ModelPerformanceLevel(Enum):
 
 # Issue #380: Module-level frozensets to avoid repeated list creation
 CODE_TASK_TYPES = frozenset({"code", "programming", "development"})
-CODE_COMPLEXITY_KEYWORDS = frozenset(
-    {"complex", "algorithm", "optimize", "architecture"}
-)
+CODE_COMPLEXITY_KEYWORDS = frozenset({"complex", "algorithm", "optimize", "architecture"})
 
 
 @dataclass
@@ -115,9 +113,7 @@ class SystemResources:
     memory_percent: float
     available_memory_gb: float
     gpu_vram_gb: float = 0.0  # Total free VRAM across all GPUs in GB (#1966, #2032)
-    per_gpu_vram_gb: List[float] = field(
-        default_factory=list
-    )  # Per-GPU free VRAM (#2032)
+    per_gpu_vram_gb: List[float] = field(default_factory=list)  # Per-GPU free VRAM (#2032)
 
     def allows_large_models(self) -> bool:
         """Tell if system can handle large models."""
@@ -154,9 +150,7 @@ class TaskRequest:
     context_length: int = 0
     user_preference: Optional[str] = None
 
-    def analyze_complexity(
-        self, complexity_keywords: Dict[ModelCapabilityTier, List[str]]
-    ) -> ModelCapabilityTier:
+    def analyze_complexity(self, complexity_keywords: Dict[ModelCapabilityTier, List[str]]) -> ModelCapabilityTier:
         """Tell what complexity this task has (Tell Don't Ask)."""
         query_lower = self.query.lower()
         task_type = self.task_type.lower()
@@ -222,21 +216,13 @@ class ModelInfo:
         tracker = ModelPerformanceTracker(redis_client, cache_ttl, logger)
         await tracker.save_performance(self)
 
-    def update_performance(
-        self, response_time: float, tokens_per_second: float, success: bool
-    ):
+    def update_performance(self, response_time: float, tokens_per_second: float, success: bool):
         """Update running performance averages."""
         if self.use_count > 0:
             total_count = self.use_count + 1
-            self.avg_response_time = (
-                self.avg_response_time * self.use_count + response_time
-            ) / total_count
-            self.avg_tokens_per_second = (
-                self.avg_tokens_per_second * self.use_count + tokens_per_second
-            ) / total_count
-            self.success_rate = (
-                self.success_rate * self.use_count + (1.0 if success else 0.0)
-            ) / total_count
+            self.avg_response_time = (self.avg_response_time * self.use_count + response_time) / total_count
+            self.avg_tokens_per_second = (self.avg_tokens_per_second * self.use_count + tokens_per_second) / total_count
+            self.success_rate = (self.success_rate * self.use_count + (1.0 if success else 0.0)) / total_count
         else:
             self.avg_response_time = response_time
             self.avg_tokens_per_second = tokens_per_second
@@ -311,13 +297,9 @@ class ModelInfo:
 
     def estimate_memory_gb(self, context_tokens: int = 2048) -> float:
         """Estimate memory this model needs in GB (Issue #1966)."""
-        return estimate_model_memory_gb(
-            self.parameter_size, self.quantization, context_tokens
-        )
+        return estimate_model_memory_gb(self.parameter_size, self.quantization, context_tokens)
 
-    def fits_resource_constraints(
-        self, resources: "SystemResources | Dict[str, float]"
-    ) -> bool:
+    def fits_resource_constraints(self, resources: "SystemResources | Dict[str, float]") -> bool:
         """Check if this model fits within available resources (#1966, #2015).
 
         When a GPU is present, LLM weights load into VRAM — not system RAM.
@@ -351,10 +333,7 @@ class ModelInfo:
 
     def is_overused_lightweight(self) -> bool:
         """Check if this lightweight model is being overused."""
-        return (
-            self.performance_level == ModelPerformanceLevel.LIGHTWEIGHT
-            and self.use_count > 50
-        )
+        return self.performance_level == ModelPerformanceLevel.LIGHTWEIGHT and self.use_count > 50
 
     def to_info_dict(self) -> Dict[str, Any]:
         """Convert to info dictionary for API response."""
@@ -388,9 +367,7 @@ class ModelInfo:
         """Convert to performance history response."""
         # Calculate efficiency metrics
         tokens_per_gb = self.avg_tokens_per_second / max(self.size_gb, 0.1)
-        response_efficiency = (
-            1.0 / max(self.avg_response_time, 0.1) if self.avg_response_time > 0 else 0
-        )
+        response_efficiency = 1.0 / max(self.avg_response_time, 0.1) if self.avg_response_time > 0 else 0
         overall_score = (
             (
                 self.success_rate * 40
@@ -426,11 +403,7 @@ class ModelInfo:
 
     def to_comparison_dict(self) -> Dict[str, Any]:
         """Convert to comparison dict for model comparison API."""
-        efficiency_score = (
-            (self.avg_tokens_per_second / max(self.size_gb, 0.1))
-            if self.size_gb > 0
-            else 0
-        )
+        efficiency_score = (self.avg_tokens_per_second / max(self.size_gb, 0.1)) if self.size_gb > 0 else 0
         performance_score = (
             (
                 self.success_rate * 50

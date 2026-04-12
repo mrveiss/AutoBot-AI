@@ -24,11 +24,10 @@ from fastapi.testclient import TestClient
 
 import api.knowledge_boards as boards_mod
 from api.knowledge_boards import (
-    GLOBAL_BOARD_ID,
     _BOARDS_KEY,
-    router as boards_router,
+    GLOBAL_BOARD_ID,
 )
-
+from api.knowledge_boards import router as boards_router
 
 # ---------------------------------------------------------------------------
 # Fake in-process Redis hash

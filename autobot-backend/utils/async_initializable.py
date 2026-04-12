@@ -235,9 +235,7 @@ class AsyncInitializable(ABC):
         )
         return True
 
-    async def _handle_init_failure(
-        self, attempt: int, error: Exception, current_delay: float
-    ) -> float:
+    async def _handle_init_failure(self, attempt: int, error: Exception, current_delay: float) -> float:
         """Handle initialization failure with retry logic (Issue #315). Returns next delay."""
         self._metrics.last_error = str(error)
         self._metrics.retry_count = attempt
@@ -253,8 +251,7 @@ class AsyncInitializable(ABC):
 
         # Final attempt failed
         logger.error(
-            f"{self._component_name} initialization failed after "
-            f"{self._max_retries + 1} attempts: {error}"
+            f"{self._component_name} initialization failed after " f"{self._max_retries + 1} attempts: {error}"
         )
         await self._safe_cleanup()
         return current_delay
@@ -290,9 +287,7 @@ class AsyncInitializable(ABC):
         async with self._initialization_lock:
             # Double-check: Another coroutine may have initialized while we waited
             if self._initialized:
-                logger.debug(
-                    "%s was initialized by another coroutine", self._component_name
-                )
+                logger.debug("%s was initialized by another coroutine", self._component_name)
                 return True
 
             # Start metrics tracking
@@ -310,9 +305,7 @@ class AsyncInitializable(ABC):
                         f"(attempt {attempt + 1}/{self._max_retries + 1})"
                     )
                 except Exception as e:
-                    current_delay = await self._handle_init_failure(
-                        attempt, e, current_delay
-                    )
+                    current_delay = await self._handle_init_failure(attempt, e, current_delay)
 
             # All attempts failed
             self._metrics.end_time = time.time()
@@ -328,8 +321,7 @@ class AsyncInitializable(ABC):
         """
         if not await self.initialize():
             raise RuntimeError(
-                f"{self._component_name} initialization failed. "
-                f"Last error: {self._metrics.last_error}"
+                f"{self._component_name} initialization failed. " f"Last error: {self._metrics.last_error}"
             )
 
 
@@ -409,9 +401,7 @@ class SyncInitializable(ABC):
         )
         return True
 
-    def _handle_sync_init_failure(
-        self, attempt: int, error: Exception, current_delay: float
-    ) -> float:
+    def _handle_sync_init_failure(self, attempt: int, error: Exception, current_delay: float) -> float:
         """Handle initialization failure with retry logic (Issue #315). Returns next delay."""
         import time as time_module
 
@@ -429,8 +419,7 @@ class SyncInitializable(ABC):
 
         # Final attempt failed
         logger.error(
-            f"{self._component_name} initialization failed after "
-            f"{self._max_retries + 1} attempts: {error}"
+            f"{self._component_name} initialization failed after " f"{self._max_retries + 1} attempts: {error}"
         )
         self._safe_sync_cleanup()
         return current_delay
@@ -459,9 +448,7 @@ class SyncInitializable(ABC):
         with self._initialization_lock:
             # Double-check
             if self._initialized:
-                logger.debug(
-                    "%s was initialized by another thread", self._component_name
-                )
+                logger.debug("%s was initialized by another thread", self._component_name)
                 return True
 
             # Start metrics tracking
@@ -479,9 +466,7 @@ class SyncInitializable(ABC):
                         f"(attempt {attempt + 1}/{self._max_retries + 1})"
                     )
                 except Exception as e:
-                    current_delay = self._handle_sync_init_failure(
-                        attempt, e, current_delay
-                    )
+                    current_delay = self._handle_sync_init_failure(attempt, e, current_delay)
 
             # All attempts failed
             self._metrics.end_time = time.time()
@@ -497,6 +482,5 @@ class SyncInitializable(ABC):
         """
         if not self.initialize():
             raise RuntimeError(
-                f"{self._component_name} initialization failed. "
-                f"Last error: {self._metrics.last_error}"
+                f"{self._component_name} initialization failed. " f"Last error: {self._metrics.last_error}"
             )

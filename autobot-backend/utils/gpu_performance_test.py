@@ -82,15 +82,9 @@ async def performance_test():
     # System info
     print("Hardware Configuration:")  # noqa: print
     print(f"- CPU: Intel Ultra 9 185H ({psutil.cpu_count()} cores)")  # noqa: print
-    print(  # noqa: print
-        f"- GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'None'}"
-    )
-    print(  # noqa: print
-        f"- GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB"
-    )
-    print(  # noqa: print
-        f"- System Memory: {psutil.virtual_memory().total / 1024**3:.1f} GB"
-    )  # noqa: print
+    print(f"- GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'None'}")  # noqa: print
+    print(f"- GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")  # noqa: print
+    print(f"- System Memory: {psutil.virtual_memory().total / 1024**3:.1f} GB")  # noqa: print  # noqa: print
     print(f"- Current CPU Usage: {psutil.cpu_percent()}%")  # noqa: print
     print()  # noqa: print
 
@@ -99,9 +93,7 @@ async def performance_test():
     if gpu_before:
         print("GPU Status (Before):")  # noqa: print
         print(f"- Utilization: {gpu_before['gpu_util']}%")  # noqa: print
-        print(  # noqa: print
-            f"- Memory Used: {gpu_before['memory_used']}/{gpu_before['memory_total']} MB"
-        )
+        print(f"- Memory Used: {gpu_before['memory_used']}/{gpu_before['memory_total']} MB")  # noqa: print
         print(f"- Temperature: {gpu_before['temperature']}°C")  # noqa: print
         print(f"- Power Draw: {gpu_before['power']} W")  # noqa: print
         print()  # noqa: print
@@ -142,17 +134,13 @@ async def performance_test():
     print(f"Processing Time: {processing_time:.2f} seconds")  # noqa: print
     print(f"Memory Usage: {memory_used:.1f} MB")  # noqa: print
     print(f"Chunks Created: {len(chunks)}")  # noqa: print
-    print(  # noqa: print
-        f"Average Chunk Size: {sum(len(c.content) for c in chunks) // len(chunks)} chars"
-    )
+    print(f"Average Chunk Size: {sum(len(c.content) for c in chunks) // len(chunks)} chars")  # noqa: print
     print()  # noqa: print
 
     if gpu_after:
         print("GPU Utilization During Processing:")  # noqa: print
         print(f"- GPU Utilization: {gpu_after['gpu_util']}%")  # noqa: print
-        print(  # noqa: print
-            f"- Memory Used: {gpu_after['memory_used']}/{gpu_after['memory_total']} MB"
-        )
+        print(f"- Memory Used: {gpu_after['memory_used']}/{gpu_after['memory_total']} MB")  # noqa: print
         print(f"- Temperature: {gpu_after['temperature']}°C")  # noqa: print
         print(f"- Power Draw: {gpu_after['power']} W")  # noqa: print
         print()  # noqa: print
@@ -173,9 +161,7 @@ async def performance_test():
 
     # GPU utilization analysis
     if gpu_after and gpu_after["gpu_util"] < 50:
-        print(  # noqa: print
-            f"⚠️ GPU underutilized ({gpu_after['gpu_util']}%) - Opportunity for optimization"
-        )
+        print(f"⚠️ GPU underutilized ({gpu_after['gpu_util']}%) - Opportunity for optimization")  # noqa: print
         print("   - Increase batch sizes for embedding computation")  # noqa: print
         print("   - Enable mixed precision (FP16) for faster inference")  # noqa: print
         print("   - Optimize tensor operations for RTX 4070")  # noqa: print
@@ -186,21 +172,15 @@ async def performance_test():
     sentences_estimated = len(TEST_TEXT.split("."))
     sentences_per_second = sentences_estimated / processing_time
 
-    print(  # noqa: print
-        f"\nCurrent Performance: {sentences_per_second:.1f} sentences/second"
-    )  # noqa: print
-    print(  # noqa: print
-        f"Target Performance: {sentences_per_second * 3:.1f} sentences/second (3x improvement)"
-    )
+    print(f"\nCurrent Performance: {sentences_per_second:.1f} sentences/second")  # noqa: print  # noqa: print
+    print(f"Target Performance: {sentences_per_second * 3:.1f} sentences/second (3x improvement)")  # noqa: print
 
     # Memory efficiency
     if gpu_after:
         memory_util = gpu_after["memory_used"] / gpu_after["memory_total"] * 100
         print(f"GPU Memory Utilization: {memory_util:.1f}%")  # noqa: print
         if memory_util < 30:
-            print(  # noqa: print
-                "   - GPU memory underutilized, can handle larger batches"
-            )  # noqa: print
+            print("   - GPU memory underutilized, can handle larger batches")  # noqa: print  # noqa: print
         elif memory_util > 85:
             print("   - GPU memory highly utilized, good efficiency")  # noqa: print
 
@@ -208,9 +188,7 @@ async def performance_test():
     final_cpu = psutil.cpu_percent()
     print(f"CPU Utilization: {final_cpu}%")  # noqa: print
     if final_cpu < 20:
-        print(  # noqa: print
-            "   - CPU underutilized, opportunity for parallel processing"
-        )  # noqa: print
+        print("   - CPU underutilized, opportunity for parallel processing")  # noqa: print  # noqa: print
 
     return {
         "processing_time": processing_time,
@@ -233,32 +211,18 @@ async def npu_assessment():
         async with aiohttp.ClientSession() as session:
             # Test NPU worker health
             try:
-                async with session.get(
-                    "http://10.0.0.3:8081/health", timeout=5
-                ) as resp:
+                async with session.get("http://10.0.0.3:8081/health", timeout=5) as resp:
                     health_data = await resp.json()
-                    print(  # noqa: print
-                        f"NPU Worker Status: {health_data.get('status', 'unknown')}"
-                    )  # noqa: print
-                    print(  # noqa: print
-                        f"Device: {health_data.get('device', 'unknown')}"
-                    )  # noqa: print
-                    print(  # noqa: print
-                        f"Models Loaded: {health_data.get('models_loaded', 0)}"
-                    )  # noqa: print
-                    print(  # noqa: print
-                        f"Requests Processed: {health_data.get('requests_processed', 0)}"
-                    )
+                    print(f"NPU Worker Status: {health_data.get('status', 'unknown')}")  # noqa: print  # noqa: print
+                    print(f"Device: {health_data.get('device', 'unknown')}")  # noqa: print  # noqa: print
+                    print(f"Models Loaded: {health_data.get('models_loaded', 0)}")  # noqa: print  # noqa: print
+                    print(f"Requests Processed: {health_data.get('requests_processed', 0)}")  # noqa: print
 
                     if health_data.get("device") == "CPU":
-                        print(  # noqa: print
-                            "⚠️ NPU Worker running on CPU - No Intel NPU acceleration detected"
-                        )
+                        print("⚠️ NPU Worker running on CPU - No Intel NPU acceleration detected")  # noqa: print
                         return False
                     else:
-                        print(  # noqa: print
-                            "✅ NPU Worker potentially using hardware acceleration"
-                        )  # noqa: print
+                        print("✅ NPU Worker potentially using hardware acceleration")  # noqa: print  # noqa: print
                         return True
 
             except asyncio.TimeoutError:
@@ -287,9 +251,7 @@ if __name__ == "__main__":
 
         if results["gpu_util"] < 50:
             print("🚀 HIGH PRIORITY: GPU Optimization")  # noqa: print
-            print(  # noqa: print
-                "   1. Increase embedding batch sizes (current: adaptive)"
-            )  # noqa: print
+            print("   1. Increase embedding batch sizes (current: adaptive)")  # noqa: print  # noqa: print
             print("   2. Enable FP16 mixed precision")  # noqa: print
             print("   3. Optimize GPU memory pooling")  # noqa: print
             print("   4. Target: 70-85% GPU utilization")  # noqa: print
@@ -312,9 +274,7 @@ if __name__ == "__main__":
         print(  # noqa: print
             f"- Processing Speed: {results['processing_time']:.2f}s → {results['processing_time']/3:.2f}s (3x faster)"
         )
-        print(  # noqa: print
-            f"- GPU Utilization: {results['gpu_util']:.0f}% → 75% (optimal)"
-        )  # noqa: print
+        print(f"- GPU Utilization: {results['gpu_util']:.0f}% → 75% (optimal)")  # noqa: print  # noqa: print
         print(  # noqa: print
             f"- Throughput: {results['sentences_per_second']:.1f} → {results['sentences_per_second']*3:.1f} sentences/sec"
         )

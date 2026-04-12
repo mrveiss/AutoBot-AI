@@ -64,15 +64,9 @@ class WorkflowTemplateManager:
 
         return sorted(templates, key=lambda t: t.name)
 
-    def get_templates_by_complexity(
-        self, complexity: TaskComplexity
-    ) -> List[WorkflowTemplate]:
+    def get_templates_by_complexity(self, complexity: TaskComplexity) -> List[WorkflowTemplate]:
         """Get templates by complexity level."""
-        return [
-            template
-            for template in self.templates.values()
-            if template.complexity == complexity
-        ]
+        return [template for template in self.templates.values() if template.complexity == complexity]
 
     def search_templates(self, query: str) -> List[WorkflowTemplate]:
         """Search templates by name, description, or tags."""
@@ -141,9 +135,7 @@ class WorkflowTemplateManager:
         template = self.get_template(template_id)
         return template.variables if template else {}
 
-    def validate_template_variables(
-        self, template_id: str, variables: Dict[str, str]
-    ) -> Dict[str, Any]:
+    def validate_template_variables(self, template_id: str, variables: Dict[str, str]) -> Dict[str, Any]:
         """Validate provided variables against template requirements."""
         template = self.get_template(template_id)
         if not template:

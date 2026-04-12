@@ -174,9 +174,7 @@ class SecurityMonitor:
 
             # Process metrics
             processes = []
-            for proc in psutil.process_iter(
-                ["pid", "name", "username", "cpu_percent", "memory_percent"]
-            ):
+            for proc in psutil.process_iter(["pid", "name", "username", "cpu_percent", "memory_percent"]):
                 try:
                     proc_info = proc.info
                     if proc_info["username"] in ["sandbox", "sandbox-restricted"]:
@@ -372,10 +370,7 @@ class SecurityMonitor:
                 if os.path.exists(temp_dir):
                     for file_path in Path(temp_dir).glob("*"):
                         try:
-                            if (
-                                file_path.is_file()
-                                and file_path.stat().st_mtime < time.time() - 3600
-                            ):  # 1 hour old
+                            if file_path.is_file() and file_path.stat().st_mtime < time.time() - 3600:  # 1 hour old
                                 file_path.unlink()
                         except Exception:
                             continue
@@ -389,9 +384,7 @@ class SecurityMonitor:
         """Log metrics to file for analysis"""
         try:
             log_entry = {
-                "timestamp": datetime.fromtimestamp(
-                    metrics.get("timestamp", time.time())
-                ).isoformat(),
+                "timestamp": datetime.fromtimestamp(metrics.get("timestamp", time.time())).isoformat(),
                 "cpu_percent": metrics.get("cpu_percent"),
                 "memory_percent": metrics.get("memory_percent"),
                 "disk_percent": metrics.get("disk_percent"),
@@ -426,8 +419,7 @@ class SecurityMonitor:
             recent_alerts = [
                 alert
                 for alert in self.alert_history
-                if time.time() - alert.get("timestamp", 0) < 300
-                and alert.get("severity") == "high"
+                if time.time() - alert.get("timestamp", 0) < 300 and alert.get("severity") == "high"
             ]
 
             if len(recent_alerts) > 3:  # Too many recent critical alerts
@@ -464,9 +456,7 @@ def main():
         default="/sandbox/config/monitor.json",
         help="Configuration file path",
     )
-    parser.add_argument(
-        "--health-check", action="store_true", help="Perform health check and exit"
-    )
+    parser.add_argument("--health-check", action="store_true", help="Perform health check and exit")
     parser.add_argument("--status", action="store_true", help="Show status and exit")
 
     args = parser.parse_args()

@@ -13,6 +13,7 @@ import time
 from datetime import datetime
 
 import aiohttp
+
 from constants import ServiceURLs
 
 # Setup logger
@@ -92,24 +93,16 @@ class WorkflowDemo:
                 async with session.get(f"{self.base_url}/api/hello") as response:
                     if response.status == 200:
                         result = await response.json()
-                        logger.info(
-                            f"✅ Backend connected: {result.get('message', 'OK')}"
-                        )
+                        logger.info(f"✅ Backend connected: {result.get('message', 'OK')}")
 
                         # Test workflow endpoints
-                        async with session.get(
-                            f"{self.base_url}/api/workflow/workflows"
-                        ) as wf_response:
+                        async with session.get(f"{self.base_url}/api/workflow/workflows") as wf_response:
                             if wf_response.status == 200:
                                 logger.info("✅ Workflow API accessible")
                                 return True
                             else:
-                                logger.info(
-                                    f"❌ Workflow API not accessible: {wf_response.status}"
-                                )
-                                logger.info(
-                                    "   Please restart backend to load workflow endpoints"
-                                )
+                                logger.info(f"❌ Workflow API not accessible: {wf_response.status}")
+                                logger.info("   Please restart backend to load workflow endpoints")
                                 return False
 
                     else:
@@ -147,9 +140,7 @@ class WorkflowDemo:
 
                     if response.status == 200:
                         result = await response.json()
-                        await self.analyze_workflow_response(
-                            result, scenario, execution_time
-                        )
+                        await self.analyze_workflow_response(result, scenario, execution_time)
 
                     else:
                         error_text = await response.text()
@@ -304,9 +295,7 @@ class WorkflowDemo:
 
         for i in range(10):  # Check up to 10 times
             try:
-                async with session.get(
-                    f"{self.base_url}/api/workflow/workflow/{workflow_id}/status"
-                ) as response:
+                async with session.get(f"{self.base_url}/api/workflow/workflow/{workflow_id}/status") as response:
                     if response.status == 200:
                         status = await response.json()
 
@@ -315,9 +304,7 @@ class WorkflowDemo:
                         progress = status.get("progress", 0) * 100
                         workflow_status = status.get("status", "unknown")
 
-                        logger.info(
-                            f"   Step {current_step}/{total_steps} ({progress:.0f}%) - {workflow_status}"
-                        )
+                        logger.info(f"   Step {current_step}/{total_steps} ({progress:.0f}%) - {workflow_status}")
 
                         if workflow_status in ["completed", "failed", "cancelled"]:
                             logger.info(f"   🏁 Workflow {workflow_status}")
@@ -326,9 +313,7 @@ class WorkflowDemo:
                         # Check for pending approvals
                         if workflow_status == "waiting_approval":
                             logger.info("   👤 User approval required - workflow paused")
-                            logger.info(
-                                "   💡 In production, user would see approval dialog"
-                            )
+                            logger.info("   💡 In production, user would see approval dialog")
                             break
 
                     else:
@@ -352,9 +337,7 @@ async def main():
 
     if success:
         # Test a specific complex workflow in detail
-        await demo.test_specific_workflow(
-            "find tools that would require to do network scan"
-        )
+        await demo.test_specific_workflow("find tools that would require to do network scan")
 
         logger.info("\n🎯 Demo Complete - Key Takeaways:")
         logger.info("   • AutoBot now intelligently classifies requests")
@@ -363,9 +346,7 @@ async def main():
         logger.info("   • No more generic, unhelpful responses")
         logger.info("   • Full transparency with progress tracking")
         logger.info("   • Human oversight maintained through approvals")
-        logger.info(
-            "\n🚀 AutoBot has evolved from simple chat to intelligent orchestration!"
-        )
+        logger.info("\n🚀 AutoBot has evolved from simple chat to intelligent orchestration!")
 
     else:
         logger.info("\n❌ Demo failed - check backend status")

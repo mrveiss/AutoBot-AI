@@ -12,10 +12,10 @@ import logging
 from typing import List
 
 from .types import (
+    ModelCapabilityTier,
     ModelInfo,
     ModelPerformanceLevel,
     SystemResources,
-    ModelCapabilityTier,
     TaskRequest,
 )
 
@@ -29,9 +29,7 @@ class ModelSelector:
         """Initialize selector with minimum sample threshold."""
         self._min_samples = min_samples
 
-    def filter_by_complexity(
-        self, models: List[ModelInfo], complexity: ModelCapabilityTier
-    ) -> List[ModelInfo]:
+    def filter_by_complexity(self, models: List[ModelInfo], complexity: ModelCapabilityTier) -> List[ModelInfo]:
         """Filter models based on task complexity requirements."""
         filtered = [m for m in models if m.meets_complexity_requirement(complexity)]
 
@@ -41,21 +39,14 @@ class ModelSelector:
 
         return filtered if filtered else models
 
-    def filter_by_resources(
-        self, models: List[ModelInfo], resources: SystemResources
-    ) -> List[ModelInfo]:
+    def filter_by_resources(self, models: List[ModelInfo], resources: SystemResources) -> List[ModelInfo]:
         """Filter models based on available system resources."""
         return [m for m in models if m.fits_resource_constraints(resources)]
 
-    def rank_by_performance(
-        self, models: List[ModelInfo], task_request: TaskRequest
-    ) -> List[ModelInfo]:
+    def rank_by_performance(self, models: List[ModelInfo], task_request: TaskRequest) -> List[ModelInfo]:
         """Rank models by expected performance for the task."""
         # Let each model calculate its own score
-        scored_models = [
-            (model, model.calculate_score(task_request, self._min_samples))
-            for model in models
-        ]
+        scored_models = [(model, model.calculate_score(task_request, self._min_samples)) for model in models]
 
         # Sort by score (descending)
         scored_models.sort(key=lambda x: x[1], reverse=True)
@@ -77,9 +68,7 @@ class ModelClassifier:
                 return level
         return None
 
-    def classify_by_parameter_size(
-        self, parameter_size: str
-    ) -> ModelPerformanceLevel | None:
+    def classify_by_parameter_size(self, parameter_size: str) -> ModelPerformanceLevel | None:
         """Classify model by parameter size (Issue #315 - extracted helper)."""
         try:
             if "M" in parameter_size:
@@ -97,9 +86,7 @@ class ModelClassifier:
             logger.debug("Suppressed exception in try block", exc_info=True)
         return None
 
-    def classify_model_performance(
-        self, name: str, parameter_size: str
-    ) -> ModelPerformanceLevel:
+    def classify_model_performance(self, name: str, parameter_size: str) -> ModelPerformanceLevel:
         """Classify model performance level (Issue #315 - refactored)."""
         level = self.classify_by_explicit_name(name)
         if level:

@@ -36,9 +36,7 @@ from utils.hardware_metrics import (
 )
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -108,9 +106,7 @@ class Phase9MonitoringSystemTest:
 
             # Get detailed capabilities
             capabilities = get_gpu_capabilities()
-            logger.info(
-                f"   GPU Capabilities: {json.dumps(capabilities['capabilities'], indent=6)}"
-            )
+            logger.info(f"   GPU Capabilities: {json.dumps(capabilities['capabilities'], indent=6)}")
 
             self.test_results["hardware_detection"] = {
                 "gpu_available": gpu_available,
@@ -178,22 +174,14 @@ class Phase9MonitoringSystemTest:
             if gpu_available:
                 # Test capabilities detection
                 capabilities = gpu_optimizer.gpu_capabilities
-                logger.info(
-                    f"   Tensor Cores: {'✓' if capabilities.get('tensor_cores') else '✗'}"
-                )
-                logger.info(
-                    f"   Mixed Precision: {'✓' if capabilities.get('mixed_precision') else '✗'}"
-                )
+                logger.info(f"   Tensor Cores: {'✓' if capabilities.get('tensor_cores') else '✗'}")
+                logger.info(f"   Mixed Precision: {'✓' if capabilities.get('mixed_precision') else '✗'}")
                 logger.info(f"   Memory: {capabilities.get('memory_gb', 0)} GB")
 
                 # Test configuration
                 config = gpu_optimizer.get_optimization_config()
-                logger.info(
-                    f"   Mixed precision enabled: {config.mixed_precision_enabled}"
-                )
-                logger.info(
-                    f"   Tensor core optimization: {config.tensor_core_optimization}"
-                )
+                logger.info(f"   Mixed precision enabled: {config.mixed_precision_enabled}")
+                logger.info(f"   Tensor core optimization: {config.tensor_core_optimization}")
                 logger.info(f"   Auto batch sizing: {config.auto_batch_sizing}")
 
             self.test_results["gpu_capabilities"] = {
@@ -221,9 +209,7 @@ class Phase9MonitoringSystemTest:
             metrics = await collect_phase9_metrics()
             collection_successful = metrics.get("collection_successful", False)
 
-            logger.info(
-                f"   Metrics collection: {'✓' if collection_successful else '✗'}"
-            )
+            logger.info(f"   Metrics collection: {'✓' if collection_successful else '✗'}")
 
             if collection_successful:
                 # Check metric categories
@@ -240,22 +226,14 @@ class Phase9MonitoringSystemTest:
                 # Test individual metric collection
                 if gpu_metrics:
                     gpu_individual = await phase9_monitor.collect_gpu_metrics()
-                    logger.info(
-                        f"   Individual GPU collection: {'✓' if gpu_individual else '✗'}"
-                    )
+                    logger.info(f"   Individual GPU collection: {'✓' if gpu_individual else '✗'}")
 
                 if npu_metrics:
                     npu_individual = await phase9_monitor.collect_npu_metrics()
-                    logger.info(
-                        f"   Individual NPU collection: {'✓' if npu_individual else '✗'}"
-                    )
+                    logger.info(f"   Individual NPU collection: {'✓' if npu_individual else '✗'}")
 
-                system_individual = (
-                    await phase9_monitor.collect_system_performance_metrics()
-                )
-                logger.info(
-                    f"   Individual system collection: {'✓' if system_individual else '✗'}"
-                )
+                system_individual = await phase9_monitor.collect_system_performance_metrics()
+                logger.info(f"   Individual system collection: {'✓' if system_individual else '✗'}")
 
             self.test_results["metrics_collection"] = {
                 "collection_successful": collection_successful,
@@ -309,8 +287,7 @@ class Phase9MonitoringSystemTest:
                 "metrics_collected": gpu_buffer_size + system_buffer_size > 0,
                 "gpu_metrics_count": gpu_buffer_size,
                 "system_metrics_count": system_buffer_size,
-                "success": monitoring_active
-                and (gpu_buffer_size + system_buffer_size > 0),
+                "success": monitoring_active and (gpu_buffer_size + system_buffer_size > 0),
             }
 
             logger.info("   ✅ Real-time monitoring test passed")
@@ -338,9 +315,7 @@ class Phase9MonitoringSystemTest:
             has_trends = "trends" in dashboard
             has_alerts = "recent_alerts" in dashboard
 
-            logger.info(
-                f"   Dashboard structure: {'✓' if has_monitoring_status else '✗'}"
-            )
+            logger.info(f"   Dashboard structure: {'✓' if has_monitoring_status else '✗'}")
             logger.info(f"   Hardware info: {'✓' if has_hardware_info else '✗'}")
             logger.info(f"   GPU data: {'✓' if has_gpu_data else '✗'}")
             logger.info(f"   System data: {'✓' if has_system_data else '✗'}")
@@ -348,9 +323,7 @@ class Phase9MonitoringSystemTest:
             logger.info(f"   Alerts included: {'✓' if has_alerts else '✗'}")
 
             # Test dashboard data quality
-            dashboard_complete = all(
-                [has_monitoring_status, has_hardware_info, has_system_data]
-            )
+            dashboard_complete = all([has_monitoring_status, has_hardware_info, has_system_data])
 
             self.test_results["performance_dashboard"] = {
                 "dashboard_accessible": True,
@@ -407,9 +380,7 @@ class Phase9MonitoringSystemTest:
             await asyncio.sleep(5)
             new_alert_count = len(self.alerts_received)
 
-            logger.info(
-                f"   New alerts received: {new_alert_count - initial_alert_count}"
-            )
+            logger.info(f"   New alerts received: {new_alert_count - initial_alert_count}")
 
             self.test_results["alert_system"] = {
                 "callback_registered": True,
@@ -454,40 +425,26 @@ class Phase9MonitoringSystemTest:
             efficiency = await monitor_gpu_efficiency()
             efficiency_success = "overall_efficiency" in efficiency
 
-            logger.info(
-                f"   GPU efficiency monitoring: {'✓' if efficiency_success else '✗'}"
-            )
+            logger.info(f"   GPU efficiency monitoring: {'✓' if efficiency_success else '✗'}")
             if efficiency_success:
-                logger.info(
-                    f"   Overall efficiency: {efficiency['overall_efficiency']:.1f}%"
-                )
-                logger.info(
-                    f"   Efficiency grade: {efficiency.get('efficiency_grade', 'Unknown')}"
-                )
+                logger.info(f"   Overall efficiency: {efficiency['overall_efficiency']:.1f}%")
+                logger.info(f"   Efficiency grade: {efficiency.get('efficiency_grade', 'Unknown')}")
 
             # Test configuration updates
             config_update_success = update_gpu_config(
                 {"mixed_precision_enabled": True, "tensor_core_optimization": True}
             )
-            logger.info(
-                f"   Configuration update: {'✓' if config_update_success else '✗'}"
-            )
+            logger.info(f"   Configuration update: {'✓' if config_update_success else '✗'}")
 
             # Test optimization for multi-modal workloads
             logger.info("   Running multi-modal optimization...")
             optimization_result = await optimize_gpu_for_multimodal()
             optimization_success = optimization_result.success
 
-            logger.info(
-                f"   Multi-modal optimization: {'✓' if optimization_success else '✗'}"
-            )
+            logger.info(f"   Multi-modal optimization: {'✓' if optimization_success else '✗'}")
             if optimization_success:
-                logger.info(
-                    f"   Performance improvement: {optimization_result.performance_improvement:.1f}%"
-                )
-                logger.info(
-                    f"   Optimizations applied: {len(optimization_result.applied_optimizations)}"
-                )
+                logger.info(f"   Performance improvement: {optimization_result.performance_improvement:.1f}%")
+                logger.info(f"   Optimizations applied: {len(optimization_result.applied_optimizations)}")
 
             self.test_results["optimization_engine"] = {
                 "gpu_available": True,
@@ -552,9 +509,7 @@ class Phase9MonitoringSystemTest:
                 tests = benchmark_results["benchmark_tests"]
                 logger.info(f"   Benchmark tests completed: {len(tests)}")
 
-            benchmark_success = all(
-                [has_gpu_info, has_benchmark_tests, has_overall_score]
-            )
+            benchmark_success = all([has_gpu_info, has_benchmark_tests, has_overall_score])
 
             self.test_results["benchmark_suite"] = {
                 "gpu_available": True,
@@ -586,39 +541,27 @@ class Phase9MonitoringSystemTest:
             current_config = gpu_optimizer.get_optimization_config()
             config_accessible = current_config is not None
 
-            logger.info(
-                f"   GPU config accessible: {'✓' if config_accessible else '✗'}"
-            )
+            logger.info(f"   GPU config accessible: {'✓' if config_accessible else '✗'}")
 
             if config_accessible:
-                logger.info(
-                    f"   Mixed precision: {current_config.mixed_precision_enabled}"
-                )
-                logger.info(
-                    f"   Tensor cores: {current_config.tensor_core_optimization}"
-                )
+                logger.info(f"   Mixed precision: {current_config.mixed_precision_enabled}")
+                logger.info(f"   Tensor cores: {current_config.tensor_core_optimization}")
                 logger.info(f"   Auto batching: {current_config.auto_batch_sizing}")
 
             # Test performance baselines
             baselines = phase9_monitor.performance_baselines
             baselines_configured = len(baselines) > 0
 
-            logger.info(
-                f"   Performance baselines: {'✓' if baselines_configured else '✗'}"
-            )
+            logger.info(f"   Performance baselines: {'✓' if baselines_configured else '✗'}")
             if baselines_configured:
                 logger.info(f"   Baseline categories: {len(baselines)}")
 
             # Test configuration persistence
-            original_mixed_precision = (
-                current_config.mixed_precision_enabled if config_accessible else False
-            )
+            original_mixed_precision = current_config.mixed_precision_enabled if config_accessible else False
             if config_accessible:
                 # Toggle setting
                 new_value = not original_mixed_precision
-                update_success = update_gpu_config(
-                    {"mixed_precision_enabled": new_value}
-                )
+                update_success = update_gpu_config({"mixed_precision_enabled": new_value})
 
                 # Verify change
                 updated_config = gpu_optimizer.get_optimization_config()
@@ -627,18 +570,14 @@ class Phase9MonitoringSystemTest:
                 # Restore original
                 update_gpu_config({"mixed_precision_enabled": original_mixed_precision})
 
-                logger.info(
-                    f"   Config persistence: {'✓' if update_success and change_applied else '✗'}"
-                )
+                logger.info(f"   Config persistence: {'✓' if update_success and change_applied else '✗'}")
             else:
                 update_success = change_applied = False
 
             self.test_results["configuration_management"] = {
                 "gpu_config_accessible": config_accessible,
                 "baselines_configured": baselines_configured,
-                "config_updates_work": (
-                    update_success and change_applied if config_accessible else False
-                ),
+                "config_updates_work": (update_success and change_applied if config_accessible else False),
                 "baseline_count": len(baselines),
                 "success": config_accessible and baselines_configured,
             }
@@ -659,9 +598,7 @@ class Phase9MonitoringSystemTest:
 
         # Calculate overall results
         total_tests = len(self.test_results)
-        successful_tests = sum(
-            1 for result in self.test_results.values() if result.get("success", False)
-        )
+        successful_tests = sum(1 for result in self.test_results.values() if result.get("success", False))
         test_duration = time.time() - self.start_time
 
         # Generate report
@@ -672,15 +609,9 @@ class Phase9MonitoringSystemTest:
             "total_tests": total_tests,
             "successful_tests": successful_tests,
             "failed_tests": total_tests - successful_tests,
-            "success_rate": (
-                round((successful_tests / total_tests) * 100, 1)
-                if total_tests > 0
-                else 0
-            ),
+            "success_rate": (round((successful_tests / total_tests) * 100, 1) if total_tests > 0 else 0),
             "overall_status": (
-                "PASS"
-                if successful_tests == total_tests
-                else "PARTIAL" if successful_tests > 0 else "FAIL"
+                "PASS" if successful_tests == total_tests else "PARTIAL" if successful_tests > 0 else "FAIL"
             ),
             "test_results": self.test_results,
             "alerts_received": self.alerts_received,
@@ -716,24 +647,16 @@ class Phase9MonitoringSystemTest:
         # Hardware summary
         print("🔧 HARDWARE SUMMARY")  # noqa: print
         print("=" * 50)  # noqa: print
-        print(  # noqa: print
-            f"GPU Available: {'✓' if phase9_monitor.gpu_available else '✗'}"
-        )  # noqa: print
-        print(  # noqa: print
-            f"NPU Available: {'✓' if phase9_monitor.npu_available else '✗'}"
-        )  # noqa: print
-        print(  # noqa: print
-            f"Monitoring Active: {'✓' if phase9_monitor.monitoring_active else '✗'}"
-        )  # noqa: print
+        print(f"GPU Available: {'✓' if phase9_monitor.gpu_available else '✗'}")  # noqa: print  # noqa: print
+        print(f"NPU Available: {'✓' if phase9_monitor.npu_available else '✗'}")  # noqa: print  # noqa: print
+        print(f"Monitoring Active: {'✓' if phase9_monitor.monitoring_active else '✗'}")  # noqa: print  # noqa: print
         print()  # noqa: print
 
         # Recommendations
         print("💡 RECOMMENDATIONS")  # noqa: print
         print("=" * 50)  # noqa: print
         if report["overall_status"] == "PASS":
-            print(  # noqa: print
-                "✅ All tests passed! Phase 9 monitoring system is fully operational."
-            )  # noqa: print
+            print("✅ All tests passed! Phase 9 monitoring system is fully operational.")  # noqa: print  # noqa: print
             print("   • GPU/NPU monitoring is working correctly")  # noqa: print
             print("   • Performance optimization is functional")  # noqa: print
             print("   • Real-time dashboard is operational")  # noqa: print
@@ -742,9 +665,7 @@ class Phase9MonitoringSystemTest:
             print("⚠️  Some tests failed. Review the following:")  # noqa: print
             for test_name, result in self.test_results.items():
                 if not result.get("success", False):
-                    print(  # noqa: print
-                        f"   • Fix {test_name}: {result.get('error', 'Unknown error')}"
-                    )
+                    print(f"   • Fix {test_name}: {result.get('error', 'Unknown error')}")  # noqa: print
 
         # Save report
         report_file = f"phase9_monitoring_test_report_{int(time.time())}.json"

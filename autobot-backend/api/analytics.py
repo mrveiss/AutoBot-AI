@@ -40,13 +40,13 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import RedisDatabase
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
+
+# Import root cause analyzer for causal failure analysis
+from services.root_cause_analyzer import RootCauseAnalyzer
 from utils.background_task_manager import BackgroundTaskManager
 
 # Import existing monitoring infrastructure (extracted to monitoring_hardware.py - Issue #213)
 from .monitoring_hardware import hardware_monitor
-
-# Import root cause analyzer for causal failure analysis
-from services.root_cause_analyzer import RootCauseAnalyzer
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["analytics"])

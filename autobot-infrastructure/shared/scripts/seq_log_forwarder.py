@@ -128,9 +128,7 @@ class SeqLogForwarder:
 
             await asyncio.sleep(TimingConstants.SHORT_DELAY)
 
-    async def _process_log_file(
-        self, filepath: Path, source: str, file_positions: dict
-    ) -> None:
+    async def _process_log_file(self, filepath: Path, source: str, file_positions: dict) -> None:
         """Process a single log file for new content (Issue #315: extracted helper)."""
         filename = filepath.name
         if not filepath.exists():
@@ -200,9 +198,7 @@ class SeqLogForwarder:
                 log_data = json.loads(line)
                 message = log_data.get("message", line)
                 level = log_data.get("level", "Information")
-                properties = {
-                    k: v for k, v in log_data.items() if k not in ["message", "level"]
-                }
+                properties = {k: v for k, v in log_data.items() if k not in ["message", "level"]}
             else:
                 # Parse as text log
                 message = line
@@ -222,9 +218,7 @@ class SeqLogForwarder:
 
         except json.JSONDecodeError:
             # Send as plain text if JSON parsing fails
-            await self.send_log_to_seq(
-                line, "Information", source, {"ParseError": True}
-            )
+            await self.send_log_to_seq(line, "Information", source, {"ParseError": True})
         except Exception as e:
             logger.error(f"Error parsing log line: {e}")
 
@@ -251,9 +245,7 @@ class SeqLogForwarder:
             f.write(
                 f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} [Frontend] INFO: Vite development server started\n'
             )
-            f.write(
-                f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} [Frontend] INFO: Hot module replacement enabled\n'
-            )
+            f.write(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} [Frontend] INFO: Hot module replacement enabled\n')
             f.write(
                 f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} [Frontend] WARNING: Build took longer than expected\n'
             )
@@ -296,15 +288,9 @@ async def main() -> int:
         action="store_true",
         help="Tail log files and forward to Seq",
     )
-    parser.add_argument(
-        "--send-test-logs", action="store_true", help="Send test logs to Seq"
-    )
-    parser.add_argument(
-        "--check-connection", action="store_true", help="Check Seq connection"
-    )
-    parser.add_argument(
-        "--seq-url", default="http://localhost:5341", help="Seq server URL"
-    )
+    parser.add_argument("--send-test-logs", action="store_true", help="Send test logs to Seq")
+    parser.add_argument("--check-connection", action="store_true", help="Check Seq connection")
+    parser.add_argument("--seq-url", default="http://localhost:5341", help="Seq server URL")
     parser.add_argument("--api-key", help="Seq API key")
 
     args = parser.parse_args()

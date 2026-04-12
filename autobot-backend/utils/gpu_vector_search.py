@@ -157,19 +157,14 @@ class GPUVectorIndex:
                 use_gpu = self.config.use_gpu and FAISS_GPU_AVAILABLE and not is_wsl
 
                 if is_wsl and self.config.use_gpu:
-                    logger.info(
-                        "WSL environment detected - using CPU mode "
-                        "(GPU operations may hang in WSL)"
-                    )
+                    logger.info("WSL environment detected - using CPU mode " "(GPU operations may hang in WSL)")
 
                 # Try GPU initialization first (skip in WSL)
                 if use_gpu:
                     success = await self._initialize_gpu_index()
                     if success:
                         self.backend = SearchBackend.FAISS_GPU
-                        logger.info(
-                            f"✅ GPU Vector Index initialized on device {self.config.gpu_device}"
-                        )
+                        logger.info(f"✅ GPU Vector Index initialized on device {self.config.gpu_device}")
                         return True
 
                 # Fall back to CPU
@@ -203,13 +198,10 @@ class GPUVectorIndex:
             cpu_index = self._create_base_index()
 
             # Transfer to GPU
-            self.index = faiss.index_cpu_to_gpu(
-                self.gpu_resources, self.config.gpu_device, cpu_index
-            )
+            self.index = faiss.index_cpu_to_gpu(self.gpu_resources, self.config.gpu_device, cpu_index)
 
             logger.info(
-                f"✅ FAISS GPU index created: {self.config.index_type.value}, "
-                f"dim={self.config.embedding_dim}"
+                f"✅ FAISS GPU index created: {self.config.index_type.value}, " f"dim={self.config.embedding_dim}"
             )
             return True
 
@@ -222,8 +214,7 @@ class GPUVectorIndex:
         try:
             self.index = self._create_base_index()
             logger.info(
-                f"✅ FAISS CPU index created: {self.config.index_type.value}, "
-                f"dim={self.config.embedding_dim}"
+                f"✅ FAISS CPU index created: {self.config.index_type.value}, " f"dim={self.config.embedding_dim}"
             )
             return True
         except Exception as e:
@@ -261,9 +252,7 @@ class GPUVectorIndex:
             # Default to flat IP
             return faiss.IndexFlatIP(dim)
 
-    def _prepare_embeddings(
-        self, embeddings: np.ndarray, normalize: bool
-    ) -> np.ndarray:
+    def _prepare_embeddings(self, embeddings: np.ndarray, normalize: bool) -> np.ndarray:
         """
         Prepare embeddings for indexing by ensuring correct dtype and normalizing.
 
@@ -306,8 +295,7 @@ class GPUVectorIndex:
             self.is_trained = True
         else:
             logger.warning(
-                f"Not enough vectors to train IVF index "
-                f"(need {self.config.nlist}, have {len(embeddings)})"
+                f"Not enough vectors to train IVF index " f"(need {self.config.nlist}, have {len(embeddings)})"
             )
 
     def _update_id_mappings(self, doc_ids: List[str]) -> None:
@@ -361,9 +349,7 @@ class GPUVectorIndex:
 
             return len(embeddings)
 
-    def _prepare_query_vector(
-        self, query_embedding: np.ndarray, normalize: bool
-    ) -> np.ndarray:
+    def _prepare_query_vector(self, query_embedding: np.ndarray, normalize: bool) -> np.ndarray:
         """
         Prepare query vector for FAISS search.
 
@@ -387,9 +373,7 @@ class GPUVectorIndex:
 
         return query
 
-    def _convert_search_results(
-        self, distances: np.ndarray, indices: np.ndarray
-    ) -> List["SearchResult"]:
+    def _convert_search_results(self, distances: np.ndarray, indices: np.ndarray) -> List["SearchResult"]:
         """
         Convert FAISS search output to SearchResult objects.
 
@@ -477,9 +461,7 @@ class GPUVectorIndex:
 
         return results, metrics
 
-    def _prepare_batch_queries(
-        self, query_embeddings: np.ndarray, normalize: bool
-    ) -> np.ndarray:
+    def _prepare_batch_queries(self, query_embeddings: np.ndarray, normalize: bool) -> np.ndarray:
         """
         Prepare batch query vectors for FAISS search.
 
@@ -527,9 +509,7 @@ class GPUVectorIndex:
                 else:
                     score = 1.0 / (1.0 + float(dist))
 
-                results.append(
-                    SearchResult(doc_id=doc_id, score=score, distance=float(dist))
-                )
+                results.append(SearchResult(doc_id=doc_id, score=score, distance=float(dist)))
 
             all_results.append(results)
 
@@ -571,9 +551,7 @@ class GPUVectorIndex:
         distances, indices = await asyncio.to_thread(self.index.search, queries, top_k)
 
         # Issue #620: Use helper for result conversion
-        all_results = self._convert_batch_search_results(
-            distances, indices, len(queries)
-        )
+        all_results = self._convert_batch_search_results(distances, indices, len(queries))
 
         query_time = (time.perf_counter() - start_time) * 1000
 
@@ -603,10 +581,7 @@ class GPUVectorIndex:
                 removed += 1
 
         if removed > 0:
-            logger.info(
-                f"Marked {removed} vectors for removal. "
-                f"Rebuild index to reclaim space."
-            )
+            logger.info(f"Marked {removed} vectors for removal. " f"Rebuild index to reclaim space.")
 
         return removed
 
@@ -629,22 +604,16 @@ class GPUVectorIndex:
             # For GPU index, transfer to CPU first
             if self.backend == SearchBackend.FAISS_GPU:
                 cpu_index = faiss.index_gpu_to_cpu(self.index)
-                await asyncio.to_thread(
-                    faiss.write_index, cpu_index, str(save_dir / "index.faiss")
-                )
+                await asyncio.to_thread(faiss.write_index, cpu_index, str(save_dir / "index.faiss"))
             else:
-                await asyncio.to_thread(
-                    faiss.write_index, self.index, str(save_dir / "index.faiss")
-                )
+                await asyncio.to_thread(faiss.write_index, self.index, str(save_dir / "index.faiss"))
 
             # Save ID mappings
             import json
 
             # Issue #358 - avoid blocking
             id_map_path = save_dir / "id_map.json"
-            id_map_data = json.dumps(
-                {str(k): v for k, v in self.id_map.items()}, ensure_ascii=False
-            )
+            id_map_data = json.dumps({str(k): v for k, v in self.id_map.items()}, ensure_ascii=False)
 
             def _write_id_map():
                 with open(id_map_path, "w", encoding="utf-8") as f:
@@ -673,15 +642,11 @@ class GPUVectorIndex:
         Returns:
             The loaded FAISS index (GPU or CPU)
         """
-        cpu_index = await asyncio.to_thread(
-            faiss.read_index, str(load_dir / "index.faiss")
-        )
+        cpu_index = await asyncio.to_thread(faiss.read_index, str(load_dir / "index.faiss"))
 
         if self.config.use_gpu and FAISS_GPU_AVAILABLE:
             self.gpu_resources = faiss.StandardGpuResources()
-            self.index = faiss.index_cpu_to_gpu(
-                self.gpu_resources, self.config.gpu_device, cpu_index
-            )
+            self.index = faiss.index_cpu_to_gpu(self.gpu_resources, self.config.gpu_device, cpu_index)
             self.backend = SearchBackend.FAISS_GPU
         else:
             self.index = cpu_index
@@ -723,9 +688,7 @@ class GPUVectorIndex:
             load_dir = Path(load_path)
 
             # Issue #358 - avoid blocking
-            index_file_exists = await asyncio.to_thread(
-                (load_dir / "index.faiss").exists
-            )
+            index_file_exists = await asyncio.to_thread((load_dir / "index.faiss").exists)
             if not index_file_exists:
                 logger.warning("No index file found at %s", load_path)
                 return False
@@ -735,8 +698,7 @@ class GPUVectorIndex:
 
             self.is_trained = True
             logger.info(
-                f"✅ Index loaded from {load_path} "
-                f"({self.index.ntotal} vectors, backend={self.backend.value})"
+                f"✅ Index loaded from {load_path} " f"({self.index.ntotal} vectors, backend={self.backend.value})"
             )
             return True
 
@@ -878,17 +840,13 @@ class HybridVectorSearch(AsyncInitializable):
 
             # Enrich results with documents from ChromaDB
             if include_documents and self.chromadb is not None and results:
-                results = await self._enrich_from_chromadb(
-                    results, collection_name, metadata_filter
-                )
+                results = await self._enrich_from_chromadb(results, collection_name, metadata_filter)
 
             return results, metrics
 
         # Fallback to ChromaDB
         if self.chromadb is not None:
-            return await self._chromadb_search(
-                query_embedding, top_k, collection_name, metadata_filter
-            )
+            return await self._chromadb_search(query_embedding, top_k, collection_name, metadata_filter)
 
         # No backend available
         return [], SearchMetrics(
@@ -913,16 +871,8 @@ class HybridVectorSearch(AsyncInitializable):
         if chromadb_results["ids"]:
             for i, doc_id in enumerate(chromadb_results["ids"]):
                 doc_lookup[doc_id] = {
-                    "content": (
-                        chromadb_results["documents"][i]
-                        if chromadb_results["documents"]
-                        else None
-                    ),
-                    "metadata": (
-                        chromadb_results["metadatas"][i]
-                        if chromadb_results["metadatas"]
-                        else {}
-                    ),
+                    "content": (chromadb_results["documents"][i] if chromadb_results["documents"] else None),
+                    "metadata": (chromadb_results["metadatas"][i] if chromadb_results["metadatas"] else {}),
                 }
         return doc_lookup
 
@@ -937,9 +887,7 @@ class HybridVectorSearch(AsyncInitializable):
             collection = self.chromadb.get_collection(collection_name)
             doc_ids = [r.doc_id for r in results]
 
-            chromadb_results = collection.get(
-                ids=doc_ids, include=["documents", "metadatas"]
-            )
+            chromadb_results = collection.get(ids=doc_ids, include=["documents", "metadatas"])
             doc_lookup = self._build_doc_lookup(chromadb_results)
 
             enriched = []
@@ -962,9 +910,7 @@ class HybridVectorSearch(AsyncInitializable):
             logger.error("Failed to enrich from ChromaDB: %s", e)
             return results
 
-    def _convert_chromadb_results(
-        self, chromadb_results: Dict[str, Any]
-    ) -> List[SearchResult]:
+    def _convert_chromadb_results(self, chromadb_results: Dict[str, Any]) -> List[SearchResult]:
         """
         Convert ChromaDB query results to SearchResult objects.
 
@@ -987,16 +933,8 @@ class HybridVectorSearch(AsyncInitializable):
                     doc_id=doc_id,
                     score=score,
                     distance=distance,
-                    content=(
-                        chromadb_results["documents"][0][i]
-                        if chromadb_results["documents"]
-                        else None
-                    ),
-                    metadata=(
-                        chromadb_results["metadatas"][0][i]
-                        if chromadb_results["metadatas"]
-                        else {}
-                    ),
+                    content=(chromadb_results["documents"][0][i] if chromadb_results["documents"] else None),
+                    metadata=(chromadb_results["metadatas"][0][i] if chromadb_results["metadatas"] else {}),
                 )
             )
 
@@ -1058,9 +996,7 @@ class HybridVectorSearch(AsyncInitializable):
             logger.error("ChromaDB search failed: %s", e)
             return [], self._create_error_metrics()
 
-    def _matches_filter(
-        self, metadata: Dict[str, Any], filter_dict: Dict[str, Any]
-    ) -> bool:
+    def _matches_filter(self, metadata: Dict[str, Any], filter_dict: Dict[str, Any]) -> bool:
         """Check if metadata matches filter."""
         for key, value in filter_dict.items():
             if key not in metadata:
@@ -1093,9 +1029,7 @@ class HybridVectorSearch(AsyncInitializable):
             doc_ids = all_data["ids"]
 
             # Add to FAISS index
-            added = await self.gpu_index.add_vectors(
-                embeddings, doc_ids, normalize=True
-            )
+            added = await self.gpu_index.add_vectors(embeddings, doc_ids, normalize=True)
 
             logger.info("✅ Synced %s vectors from ChromaDB to FAISS index", added)
             return added
@@ -1149,9 +1083,7 @@ async def get_hybrid_vector_search(
     if _hybrid_search is None:
         async with _hybrid_search_lock:
             if _hybrid_search is None:
-                _hybrid_search = HybridVectorSearch(
-                    chromadb_client=chromadb_client, config=config
-                )
+                _hybrid_search = HybridVectorSearch(chromadb_client=chromadb_client, config=config)
 
     await _hybrid_search.initialize()
     return _hybrid_search

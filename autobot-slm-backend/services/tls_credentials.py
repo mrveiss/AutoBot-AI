@@ -54,9 +54,7 @@ class TLSCredentialService:
             # Extract SANs
             san_list = []
             try:
-                san_ext = cert.extensions.get_extension_for_oid(
-                    x509.oid.ExtensionOID.SUBJECT_ALTERNATIVE_NAME
-                )
+                san_ext = cert.extensions.get_extension_for_oid(x509.oid.ExtensionOID.SUBJECT_ALTERNATIVE_NAME)
                 for name in san_ext.value:
                     if isinstance(name, x509.DNSName):
                         san_list.append(f"DNS:{name.value}")
@@ -66,9 +64,7 @@ class TLSCredentialService:
                 pass
 
             # Calculate fingerprint
-            fingerprint = cert.fingerprint(
-                cert.signature_hash_algorithm or hashlib.sha256()
-            ).hex()
+            fingerprint = cert.fingerprint(cert.signature_hash_algorithm or hashlib.sha256()).hex()
 
             return TLSCertificateInfo(
                 common_name=cn,
@@ -142,9 +138,7 @@ class TLSCredentialService:
         )
         return credential
 
-    async def get_credential(
-        self, db: AsyncSession, credential_id: str
-    ) -> Optional[NodeCredential]:
+    async def get_credential(self, db: AsyncSession, credential_id: str) -> Optional[NodeCredential]:
         """Get a TLS credential by ID."""
         result = await db.execute(
             select(NodeCredential).where(
@@ -154,9 +148,7 @@ class TLSCredentialService:
         )
         return result.scalar_one_or_none()
 
-    async def get_node_credentials(
-        self, db: AsyncSession, node_id: str
-    ) -> List[NodeCredential]:
+    async def get_node_credentials(self, db: AsyncSession, node_id: str) -> List[NodeCredential]:
         """Get all TLS credentials for a node."""
         result = await db.execute(
             select(NodeCredential).where(
@@ -182,9 +174,7 @@ class TLSCredentialService:
             # Decrypt existing data
             existing = {}
             if credential.encrypted_data:
-                existing = json.loads(
-                    self.encryption.decrypt(credential.encrypted_data)
-                )
+                existing = json.loads(self.encryption.decrypt(credential.encrypted_data))
 
             # Update with new values
             if data.ca_cert:
@@ -227,9 +217,7 @@ class TLSCredentialService:
         logger.info("Deleted TLS credential %s", credential_id)
         return True
 
-    async def get_certificates(
-        self, db: AsyncSession, credential_id: str
-    ) -> Optional[Dict[str, str]]:
+    async def get_certificates(self, db: AsyncSession, credential_id: str) -> Optional[Dict[str, str]]:
         """Get decrypted certificates for deployment.
 
         Returns dict with ca_cert, server_cert, server_key.
@@ -246,9 +234,7 @@ class TLSCredentialService:
         decrypted = self.encryption.decrypt(credential.encrypted_data)
         return json.loads(decrypted)
 
-    async def get_all_tls_endpoints(
-        self, db: AsyncSession, active_only: bool = True
-    ) -> List[TLSEndpointResponse]:
+    async def get_all_tls_endpoints(self, db: AsyncSession, active_only: bool = True) -> List[TLSEndpointResponse]:
         """Get all TLS endpoints across the fleet."""
         query = (
             select(NodeCredential, Node)
@@ -285,9 +271,7 @@ class TLSCredentialService:
 
         return endpoints
 
-    async def get_expiring_certificates(
-        self, db: AsyncSession, days: int = 30
-    ) -> List[NodeCredential]:
+    async def get_expiring_certificates(self, db: AsyncSession, days: int = 30) -> List[NodeCredential]:
         """Get certificates expiring within the specified days."""
         threshold = datetime.utcnow() + timedelta(days=days)
         result = await db.execute(
@@ -407,9 +391,7 @@ class TLSCredentialService:
 
         return new_credential
 
-    async def renew_certificate(
-        self, db: AsyncSession, credential_id: str
-    ) -> Optional[NodeCredential]:
+    async def renew_certificate(self, db: AsyncSession, credential_id: str) -> Optional[NodeCredential]:
         """
         Renew a TLS certificate.
 
@@ -445,9 +427,7 @@ class TLSCredentialService:
         )
         return new_credential
 
-    async def rotate_certificate(
-        self, db: AsyncSession, credential_id: str
-    ) -> Optional[NodeCredential]:
+    async def rotate_certificate(self, db: AsyncSession, credential_id: str) -> Optional[NodeCredential]:
         """
         Rotate a TLS certificate with full key rotation.
 

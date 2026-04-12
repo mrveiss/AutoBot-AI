@@ -29,9 +29,7 @@ async def _display_duplicate_groups(command_duplicates):
             logger.info(f"   Potential lines saved: {group['estimated_lines_saved']}")
             logger.info("   Duplicate functions:")
             for func in group["functions"]:
-                logger.info(
-                    f"   - {func['file']}:{func['line_range']} - {func['name']}"
-                )
+                logger.info(f"   - {func['file']}:{func['line_range']} - {func['name']}")
             logger.info("")
 
 
@@ -61,9 +59,7 @@ async def _generate_migration_script_outline():
     logger.info("   # Before: await self._run_command(cmd)")
     logger.info("   # After:  result = await execute_shell_command(cmd)")
     logger.info("\n3. Handle return format differences:")
-    logger.info(
-        "   # Standardize to: result['stdout'], result['stderr'], result['status']"
-    )
+    logger.info("   # Standardize to: result['stdout'], result['stderr'], result['status']")
 
 
 async def analyze_command_execution_duplicates():
@@ -74,9 +70,7 @@ async def analyze_command_execution_duplicates():
     analyzer = CodeAnalyzer(use_npu=False)  # NPU not needed for this analysis
 
     # Run fresh analysis
-    results = await analyzer.analyze_codebase(
-        root_path=".", patterns=["src/**/*.py", "backend/**/*.py"]
-    )
+    results = await analyzer.analyze_codebase(root_path=".", patterns=["src/**/*.py", "backend/**/*.py"])
 
     # Filter for command execution related functions
     command_functions = [

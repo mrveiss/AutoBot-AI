@@ -75,9 +75,7 @@ async def check_circuit_breaker_state():
                 logger.info("   Circuit should transition to HALF_OPEN on next call")
             else:
                 remaining = recovery_timeout - time_since_failure
-                logger.info(
-                    f"   ⏳ Waiting for recovery timeout: {remaining:.1f}s remaining"
-                )
+                logger.info(f"   ⏳ Waiting for recovery timeout: {remaining:.1f}s remaining")
         elif state_info["state"] == "half_open":
             logger.warning("⚠️  CIRCUIT BREAKER IS HALF_OPEN - Testing recovery")
         else:

@@ -64,9 +64,7 @@ from utils.path_validation import contains_path_traversal
 # Issue #380: Pre-compiled regex patterns for validation
 # Issue #1733: ReDoS fix - removed '.' from domain character class to prevent
 # ambiguous backtracking between [a-zA-Z0-9.-]+ and \.[a-zA-Z]{2,}
-_EMAIL_RE = re.compile(
-    r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}$"
-)
+_EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}$")
 _UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
 # ============================================================================
@@ -74,9 +72,7 @@ _UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
 # ============================================================================
 
 
-def validate_non_empty_string(
-    value: Optional[str], field_name: str = "Value", strip: bool = True
-) -> str:
+def validate_non_empty_string(value: Optional[str], field_name: str = "Value", strip: bool = True) -> str:
     """
     Validate that string is not None, not empty, and not just whitespace.
 
@@ -200,9 +196,7 @@ def validate_string_pattern(
 # ============================================================================
 
 
-def sanitize_string(
-    value: str, strip: bool = True, lowercase: bool = False, uppercase: bool = False
-) -> str:
+def sanitize_string(value: str, strip: bool = True, lowercase: bool = False, uppercase: bool = False) -> str:
     """
     Sanitize string with common transformations.
 
@@ -236,9 +230,7 @@ def sanitize_string(
     return value
 
 
-def sanitize_alphanumeric(
-    value: str, allowed_chars: str = "_-.", strip: bool = True, lowercase: bool = False
-) -> str:
+def sanitize_alphanumeric(value: str, allowed_chars: str = "_-.", strip: bool = True, lowercase: bool = False) -> str:
     """
     Sanitize to alphanumeric with optional additional characters.
 
@@ -281,9 +273,7 @@ def sanitize_alphanumeric(
 # ============================================================================
 
 
-def validate_non_empty_collection(
-    value: Optional[Collection], field_name: str = "Collection"
-) -> Collection:
+def validate_non_empty_collection(value: Optional[Collection], field_name: str = "Collection") -> Collection:
     """
     Validate collection is not None or empty.
 
@@ -395,14 +385,10 @@ def validate_in_choices(
     if not case_sensitive and isinstance(value, str):
         choices_lower = {str(c).lower() for c in choices}
         if value.lower() not in choices_lower:
-            raise ValueError(
-                f"Invalid {field_name}. Must be one of: {', '.join(str(c) for c in sorted(choices))}"
-            )
+            raise ValueError(f"Invalid {field_name}. Must be one of: {', '.join(str(c) for c in sorted(choices))}")
     else:
         if value not in choices:
-            raise ValueError(
-                f"Invalid {field_name}. Must be one of: {', '.join(str(c) for c in sorted(choices))}"
-            )
+            raise ValueError(f"Invalid {field_name}. Must be one of: {', '.join(str(c) for c in sorted(choices))}")
 
     return value
 
@@ -412,9 +398,7 @@ def validate_in_choices(
 # ============================================================================
 
 
-def validate_file_extension(
-    filename: str, allowed_extensions: Set[str], field_name: str = "File"
-) -> str:
+def validate_file_extension(filename: str, allowed_extensions: Set[str], field_name: str = "File") -> str:
     """
     Validate file has allowed extension.
 
@@ -437,24 +421,18 @@ def validate_file_extension(
         ValueError: Invalid Document extension. Must be one of: .md, .txt
     """
     # Normalize extensions to have leading dot
-    normalized_extensions = {
-        ext if ext.startswith(".") else f".{ext}" for ext in allowed_extensions
-    }
+    normalized_extensions = {ext if ext.startswith(".") else f".{ext}" for ext in allowed_extensions}
 
     # Get file extension
     file_ext = Path(filename).suffix.lower()
 
     if file_ext not in normalized_extensions:
-        raise ValueError(
-            f"Invalid {field_name} extension. Must be one of: {', '.join(sorted(normalized_extensions))}"
-        )
+        raise ValueError(f"Invalid {field_name} extension. Must be one of: {', '.join(sorted(normalized_extensions))}")
 
     return filename
 
 
-def validate_filename_safe(
-    filename: str, field_name: str = "Filename", max_length: int = 255
-) -> str:
+def validate_filename_safe(filename: str, field_name: str = "Filename", max_length: int = 255) -> str:
     """
     Validate filename is safe (no path traversal, reasonable length).
 
@@ -564,9 +542,7 @@ def validate_email(value: str, field_name: str = "Email") -> str:
     return value
 
 
-def validate_url(
-    value: str, field_name: str = "URL", require_https: bool = False
-) -> str:
+def validate_url(value: str, field_name: str = "URL", require_https: bool = False) -> str:
     """
     Validate URL format.
 
@@ -682,9 +658,7 @@ def validate_username(
     validate_string_length(value, "Username", min_length, max_length)
 
     # Validate alphanumeric + special chars
-    value = sanitize_alphanumeric(
-        value, allowed_chars=allowed_special_chars, strip=False
-    )
+    value = sanitize_alphanumeric(value, allowed_chars=allowed_special_chars, strip=False)
 
     return value
 

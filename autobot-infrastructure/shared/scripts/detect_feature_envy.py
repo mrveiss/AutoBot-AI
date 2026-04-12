@@ -39,9 +39,7 @@ class FeatureEnvyVisitor(ast.NodeVisitor):
         self.candidates: List[FeatureEnvyCandidate] = []
         self.current_function: str = None
         self.current_function_line: int = 0
-        self.attribute_accesses: Dict[str, Dict[str, int]] = defaultdict(
-            lambda: defaultdict(int)
-        )
+        self.attribute_accesses: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
         self.unique_attrs: Dict[str, Set[str]] = defaultdict(set)
 
     def visit_FunctionDef(self, node: ast.FunctionDef):
@@ -113,9 +111,7 @@ def scan_file(file_path: str) -> List[FeatureEnvyCandidate]:
         return []
 
 
-def scan_directory(
-    root_dir: str, exclude_dirs: Set[str] = None
-) -> List[FeatureEnvyCandidate]:
+def scan_directory(root_dir: str, exclude_dirs: Set[str] = None) -> List[FeatureEnvyCandidate]:
     """Scan all Python files in directory."""
     if exclude_dirs is None:
         exclude_dirs = {
@@ -160,9 +156,7 @@ def main():
 
     # Aggregate and sort by total accesses
     by_object = aggregate_by_object(candidates)
-    sorted_objects = sorted(
-        by_object.items(), key=lambda x: sum(c.access_count for c in x[1]), reverse=True
-    )
+    sorted_objects = sorted(by_object.items(), key=lambda x: sum(c.access_count for c in x[1]), reverse=True)
 
     print(f"\nFound {len(candidates)} potential feature envy patterns\n")
     print("Top candidates by object (total accesses across all functions):\n")
@@ -179,15 +173,11 @@ def main():
             attrs_str = ", ".join(sorted(c.unique_attributes)[:5])
             if len(c.unique_attributes) > 5:
                 attrs_str += f"... (+{len(c.unique_attributes) - 5} more)"
-            print(
-                f"    - {rel_path}:{c.line_number} {c.function_name}() [{c.access_count}x]"
-            )
+            print(f"    - {rel_path}:{c.line_number} {c.function_name}() [{c.access_count}x]")
             print(f"      Attrs: {attrs_str}")
 
     print("\n" + "=" * 80)
-    print(
-        "To refactor: Add methods to the envied object that encapsulate attribute access"
-    )
+    print("To refactor: Add methods to the envied object that encapsulate attribute access")
     print("Pattern: obj.attr1, obj.attr2 -> obj.to_dict(), obj.get_computed_value()")
 
 

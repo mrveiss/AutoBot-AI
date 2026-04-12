@@ -38,9 +38,7 @@ _PROMPT_PATTERNS = [
 ]
 
 
-def safe_decode(
-    data: Union[bytes, str], encoding: str = "utf-8", errors: str = "replace"
-) -> str:
+def safe_decode(data: Union[bytes, str], encoding: str = "utf-8", errors: str = "replace") -> str:
     """
     Safely decode bytes to UTF-8 string.
 
@@ -63,9 +61,7 @@ def safe_decode(
     return data.decode(encoding, errors=errors)
 
 
-def safe_encode(
-    data: Union[bytes, str], encoding: str = "utf-8", errors: str = "replace"
-) -> bytes:
+def safe_encode(data: Union[bytes, str], encoding: str = "utf-8", errors: str = "replace") -> bytes:
     """
     Safely encode string to UTF-8 bytes.
 
@@ -171,9 +167,7 @@ async def async_write_utf8_file(file_path: Union[str, Path], content: str) -> No
         raise OSError(f"Failed to write file {file_path}: {e}") from e
 
 
-def run_command_utf8(
-    cmd: Union[str, List[str]], **kwargs
-) -> subprocess.CompletedProcess:
+def run_command_utf8(cmd: Union[str, List[str]], **kwargs) -> subprocess.CompletedProcess:
     """
     Run subprocess command with UTF-8 encoding.
 
@@ -281,9 +275,7 @@ def _has_command_output(lines: list) -> bool:
         if not _is_prompt_line(line_stripped) and len(line_stripped) > 10:
             non_prompt_lines.append(line_stripped)
 
-    return (
-        len(non_prompt_lines) > 0 and sum(len(line) for line in non_prompt_lines) > 20
-    )
+    return len(non_prompt_lines) > 0 and sum(len(line) for line in non_prompt_lines) > 20
 
 
 def is_terminal_prompt(text: str) -> bool:
@@ -338,11 +330,7 @@ def is_terminal_prompt(text: str) -> bool:
     # 1. It has box-drawing chars AND ends with prompt symbol, OR
     # 2. It matches a known prompt pattern, OR
     # 3. It's short and mostly symbols with a prompt ending
-    return (
-        (has_box_chars and ends_with_prompt)
-        or matches_pattern
-        or (is_short and mostly_symbols and ends_with_prompt)
-    )
+    return (has_box_chars and ends_with_prompt) or matches_pattern or (is_short and mostly_symbols and ends_with_prompt)
 
 
 def normalize_line_endings(text: str, target: str = "\n") -> str:

@@ -153,9 +153,7 @@ class WorkflowStateMachine:
             state.routing_table = routing_table
 
         await self._persist(state)
-        await self._log_transition(
-            state, from_phase="init", to_phase=state.current_step
-        )
+        await self._log_transition(state, from_phase="init", to_phase=state.current_step)
         logger.info(
             "State machine created for workflow %s (goal=%s)",
             workflow_id,

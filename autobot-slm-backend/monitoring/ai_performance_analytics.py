@@ -111,9 +111,7 @@ class LLMPerformanceMetrics:
 class AIPerformanceAnalytics:
     """AI/ML performance monitoring and analytics system."""
 
-    def __init__(
-        self, redis_host: str = NetworkConstants.REDIS_VM_IP, redis_port: int = 6379
-    ):
+    def __init__(self, redis_host: str = NetworkConstants.REDIS_VM_IP, redis_port: int = 6379):
         self.logger = logging.getLogger(__name__)
         self.redis_host = redis_host
         self.redis_port = redis_port
@@ -190,9 +188,7 @@ else:
                 inference_latency = await self._benchmark_npu_inference()
 
                 ops_per_sec = (
-                    1000.0 / inference_latency
-                    if inference_latency is not None and inference_latency > 0
-                    else None
+                    1000.0 / inference_latency if inference_latency is not None and inference_latency > 0 else None
                 )
 
                 return NPUMetrics(
@@ -219,9 +215,7 @@ else:
         Returns None when Intel NPU monitoring tools are unavailable.  Callers
         must handle None explicitly.  Ref: #2871.
         """
-        self.logger.debug(
-            "NPU utilization unavailable: Intel NPU monitoring tools not present (#2871)"
-        )
+        self.logger.debug("NPU utilization unavailable: Intel NPU monitoring tools not present (#2871)")
         return None
 
     async def _get_npu_memory(self) -> Tuple[Optional[float], Optional[float]]:
@@ -230,9 +224,7 @@ else:
         Returns (None, None) when Intel NPU monitoring tools are unavailable.
         Callers must handle None explicitly.  Ref: #2871.
         """
-        self.logger.debug(
-            "NPU memory unavailable: Intel NPU monitoring tools not present (#2871)"
-        )
+        self.logger.debug("NPU memory unavailable: Intel NPU monitoring tools not present (#2871)")
         return None, None
 
     async def _benchmark_npu_inference(self) -> Optional[float]:
@@ -243,9 +235,7 @@ else:
         actual inference, which is not available in the current environment.
         Callers must handle None explicitly.  Ref: #2871.
         """
-        self.logger.debug(
-            "NPU inference benchmark not performed: no model/benchmark_app available (#2871)"
-        )
+        self.logger.debug("NPU inference benchmark not performed: no model/benchmark_app available (#2871)")
         return None
 
     async def _run_pipeline_stages(self, start_time: float) -> tuple:
@@ -306,9 +296,7 @@ else:
             accuracy_score=None,
         )
 
-    async def monitor_multimodal_pipeline(
-        self, pipeline_type: str, input_data: Dict
-    ) -> MultiModalMetrics:
+    async def monitor_multimodal_pipeline(self, pipeline_type: str, input_data: Dict) -> MultiModalMetrics:
         """Monitor multi-modal AI pipeline performance."""
         start_time = time.time()
 
@@ -369,9 +357,7 @@ else:
             self.logger.debug("Suppressed exception in try block", exc_info=True)
         return None
 
-    async def _run_knowledge_search_stages(
-        self, query: str, start_time: float
-    ) -> tuple:
+    async def _run_knowledge_search_stages(self, query: str, start_time: float) -> tuple:
         """Time embedding, retrieval, and ranking stages for a knowledge search.
 
         Helper for monitor_knowledge_base_search. Ref: #1088.
@@ -416,9 +402,7 @@ else:
             cache_hit,
         )
 
-    def _build_zero_knowledge_metrics(
-        self, query: str, search_type: str
-    ) -> KnowledgeBaseMetrics:
+    def _build_zero_knowledge_metrics(self, query: str, search_type: str) -> KnowledgeBaseMetrics:
         """Build a zeroed-out KnowledgeBaseMetrics for error cases.
 
         Helper for monitor_knowledge_base_search. Ref: #1088.
@@ -439,9 +423,7 @@ else:
             total_vectors_searched=0,
         )
 
-    async def monitor_knowledge_base_search(
-        self, query: str, search_type: str = "semantic"
-    ) -> KnowledgeBaseMetrics:
+    async def monitor_knowledge_base_search(self, query: str, search_type: str = "semantic") -> KnowledgeBaseMetrics:
         """Monitor knowledge base search performance."""
         start_time = time.time()
 
@@ -477,9 +459,7 @@ else:
             self.logger.error(f"Error monitoring knowledge base search: {e}")
             return self._build_zero_knowledge_metrics(query, search_type)
 
-    async def _simulate_llm_processing(
-        self, request_data: Dict, start_time: float
-    ) -> tuple:
+    async def _simulate_llm_processing(self, request_data: Dict, start_time: float) -> tuple:
         """Simulate LLM processing and collect timing and resource metrics.
 
         Helper for monitor_llm_performance. Ref: #1088.
@@ -541,9 +521,7 @@ else:
             stream_mode=False,
         )
 
-    async def monitor_llm_performance(
-        self, request_data: Dict
-    ) -> LLMPerformanceMetrics:
+    async def monitor_llm_performance(self, request_data: Dict) -> LLMPerformanceMetrics:
         """Monitor LLM (Ollama) performance."""
         start_time = time.time()
 
@@ -588,15 +566,12 @@ else:
         """
         if not self.performance_history["npu"]:
             return None
-        npu_utils = [
-            m.utilization_percent for m in self.performance_history["npu"][-50:]
-        ]
+        npu_utils = [m.utilization_percent for m in self.performance_history["npu"][-50:]]
         return {
             "average_utilization": statistics.mean(npu_utils),
             "peak_utilization": max(npu_utils),
             "efficiency_score": min(
-                statistics.mean(npu_utils)
-                / self.performance_targets["npu_utilization"]["optimal"],
+                statistics.mean(npu_utils) / self.performance_targets["npu_utilization"]["optimal"],
                 1.0,
             ),
         }
@@ -610,15 +585,9 @@ else:
             return None
         mm_metrics = self.performance_history["multimodal"][-50:]
         return {
-            "average_processing_time": statistics.mean(
-                [m.processing_time_ms for m in mm_metrics]
-            ),
-            "throughput_trend": [
-                m.throughput_items_per_second for m in mm_metrics[-10:]
-            ],
-            "memory_efficiency": statistics.mean(
-                [m.memory_peak_mb for m in mm_metrics]
-            ),
+            "average_processing_time": statistics.mean([m.processing_time_ms for m in mm_metrics]),
+            "throughput_trend": [m.throughput_items_per_second for m in mm_metrics[-10:]],
+            "memory_efficiency": statistics.mean([m.memory_peak_mb for m in mm_metrics]),
         }
 
     def _compute_knowledge_trend(self) -> Optional[Dict[str, Any]]:
@@ -630,12 +599,8 @@ else:
             return None
         kb_metrics = self.performance_history["knowledge"][-50:]
         return {
-            "average_search_time": statistics.mean(
-                [m.search_time_ms for m in kb_metrics]
-            ),
-            "cache_hit_rate": statistics.mean(
-                [1 if m.cache_hit else 0 for m in kb_metrics]
-            ),
+            "average_search_time": statistics.mean([m.search_time_ms for m in kb_metrics]),
+            "cache_hit_rate": statistics.mean([1 if m.cache_hit else 0 for m in kb_metrics]),
             "relevance_trend": statistics.mean([m.relevance_score for m in kb_metrics]),
         }
 
@@ -648,13 +613,9 @@ else:
             return None
         llm_metrics = self.performance_history["llm"][-50:]
         return {
-            "average_tokens_per_second": statistics.mean(
-                [m.tokens_per_second for m in llm_metrics]
-            ),
+            "average_tokens_per_second": statistics.mean([m.tokens_per_second for m in llm_metrics]),
             "model_distribution": self._analyze_model_usage(llm_metrics),
-            "cache_effectiveness": statistics.mean(
-                [1 if m.cache_hit else 0 for m in llm_metrics]
-            ),
+            "cache_effectiveness": statistics.mean([1 if m.cache_hit else 0 for m in llm_metrics]),
         }
 
     async def analyze_performance_trends(self) -> Dict[str, Any]:
@@ -678,9 +639,7 @@ else:
             if llm_trend is not None:
                 trends["llm"] = llm_trend
 
-            trends["recommendations"] = (
-                await self._generate_performance_recommendations(trends)
-            )
+            trends["recommendations"] = await self._generate_performance_recommendations(trends)
 
             return trends
 
@@ -688,18 +647,14 @@ else:
             self.logger.error(f"Error analyzing performance trends: {e}")
             return {}
 
-    def _analyze_model_usage(
-        self, llm_metrics: List[LLMPerformanceMetrics]
-    ) -> Dict[str, int]:
+    def _analyze_model_usage(self, llm_metrics: List[LLMPerformanceMetrics]) -> Dict[str, int]:
         """Analyze LLM model usage distribution."""
         model_counts = {}
         for metric in llm_metrics:
             model_counts[metric.model_name] = model_counts.get(metric.model_name, 0) + 1
         return model_counts
 
-    async def _generate_performance_recommendations(
-        self, trends: Dict[str, Any]
-    ) -> List[str]:
+    async def _generate_performance_recommendations(self, trends: Dict[str, Any]) -> List[str]:
         """Generate performance optimization recommendations."""
         recommendations = []
 
@@ -707,9 +662,7 @@ else:
         if "npu" in trends:
             efficiency = trends["npu"].get("efficiency_score", 0)
             if efficiency < 0.6:
-                recommendations.append(
-                    "NPU underutilized - consider offloading more AI workloads to NPU"
-                )
+                recommendations.append("NPU underutilized - consider offloading more AI workloads to NPU")
             elif efficiency > 0.9:
                 recommendations.append("NPU highly utilized - monitor for bottlenecks")
 
@@ -717,9 +670,7 @@ else:
         if "multimodal" in trends:
             avg_time = trends["multimodal"].get("average_processing_time", 0)
             if avg_time > 500:  # 500ms threshold
-                recommendations.append(
-                    "Multi-modal processing time high - consider pipeline optimization"
-                )
+                recommendations.append("Multi-modal processing time high - consider pipeline optimization")
 
         # Knowledge base recommendations
         if "knowledge_base" in trends:
@@ -727,21 +678,15 @@ else:
             search_time = trends["knowledge_base"].get("average_search_time", 0)
 
             if cache_rate < 0.3:
-                recommendations.append(
-                    "Low knowledge base cache hit rate - consider cache optimization"
-                )
+                recommendations.append("Low knowledge base cache hit rate - consider cache optimization")
             if search_time > 300:  # 300ms threshold
-                recommendations.append(
-                    "Knowledge base search slow - consider index optimization"
-                )
+                recommendations.append("Knowledge base search slow - consider index optimization")
 
         # LLM recommendations
         if "llm" in trends:
             tokens_per_sec = trends["llm"].get("average_tokens_per_second", 0)
             if tokens_per_sec < 20:
-                recommendations.append(
-                    "LLM token generation slow - consider model optimization or hardware upgrade"
-                )
+                recommendations.append("LLM token generation slow - consider model optimization or hardware upgrade")
 
         return recommendations
 
@@ -773,15 +718,9 @@ else:
 
         # Store in local file
         try:
-            metrics_file = (
-                self.analytics_data_path
-                / f"ai_metrics_{datetime.now().strftime('%Y%m%d')}.jsonl"
-            )
+            metrics_file = self.analytics_data_path / f"ai_metrics_{datetime.now().strftime('%Y%m%d')}.jsonl"
             async with aiofiles.open(metrics_file, "a", encoding="utf-8") as f:
-                await f.write(
-                    json.dumps({"timestamp": timestamp, "data": metrics}, default=str)
-                    + "\n"
-                )
+                await f.write(json.dumps({"timestamp": timestamp, "data": metrics}, default=str) + "\n")
         except OSError as e:
             self.logger.error(f"Failed to write AI metrics to {metrics_file}: {e}")
         except Exception as e:
@@ -809,11 +748,7 @@ else:
                     "inference_performance": (
                         "excellent"
                         if npu_metrics.inference_latency_ms < 100
-                        else (
-                            "good"
-                            if npu_metrics.inference_latency_ms < 300
-                            else "needs_optimization"
-                        )
+                        else ("good" if npu_metrics.inference_latency_ms < 300 else "needs_optimization")
                     ),
                 }
 
@@ -832,18 +767,14 @@ else:
 
 
 # Integration hooks for AutoBot components
-async def monitor_multimodal_request(
-    pipeline_type: str, input_data: Dict
-) -> MultiModalMetrics:
+async def monitor_multimodal_request(pipeline_type: str, input_data: Dict) -> MultiModalMetrics:
     """Monitor a multi-modal AI request - to be called from AI processing components."""
     analytics = AIPerformanceAnalytics()
     await analytics.initialize_redis_connection()
     return await analytics.monitor_multimodal_pipeline(pipeline_type, input_data)
 
 
-async def monitor_knowledge_search(
-    query: str, search_type: str = "semantic"
-) -> KnowledgeBaseMetrics:
+async def monitor_knowledge_search(query: str, search_type: str = "semantic") -> KnowledgeBaseMetrics:
     """Monitor a knowledge base search - to be called from knowledge components."""
     analytics = AIPerformanceAnalytics()
     await analytics.initialize_redis_connection()
@@ -863,12 +794,8 @@ if __name__ == "__main__":
 
     async def main():
         parser = argparse.ArgumentParser(description="AutoBot AI Performance Analytics")
-        parser.add_argument(
-            "--test", action="store_true", help="Run test monitoring cycle"
-        )
-        parser.add_argument(
-            "--report", action="store_true", help="Generate AI performance report"
-        )
+        parser.add_argument("--test", action="store_true", help="Run test monitoring cycle")
+        parser.add_argument("--report", action="store_true", help="Generate AI performance report")
 
         args = parser.parse_args()
 
@@ -882,17 +809,11 @@ if __name__ == "__main__":
             npu_metrics = await analytics.collect_npu_metrics()
             if npu_metrics:
                 logger.info(f"NPU Utilization: {npu_metrics.utilization_percent:.1f}%")
-                logger.info(
-                    f"NPU Inference Latency: {npu_metrics.inference_latency_ms:.1f}ms"
-                )
+                logger.info(f"NPU Inference Latency: {npu_metrics.inference_latency_ms:.1f}ms")
 
             # Test multi-modal monitoring
-            mm_metrics = await analytics.monitor_multimodal_pipeline(
-                "text", {"size_mb": 1.0}
-            )
-            logger.info(
-                f"Multi-modal Processing Time: {mm_metrics.processing_time_ms:.1f}ms"
-            )
+            mm_metrics = await analytics.monitor_multimodal_pipeline("text", {"size_mb": 1.0})
+            logger.info(f"Multi-modal Processing Time: {mm_metrics.processing_time_ms:.1f}ms")
 
             # Test knowledge base monitoring
             kb_metrics = await analytics.monitor_knowledge_base_search("test query")

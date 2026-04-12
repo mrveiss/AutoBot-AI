@@ -31,7 +31,6 @@ from services.knowledge_grounding_models import (
     KBStatus,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -176,7 +175,9 @@ class TestContradictingVerification:
         assert result.confidence == 0.0
 
     @pytest.mark.asyncio
-    async def test_contradicts_skips_research_agent(self, claim_verifier, sample_contradicts_claim, mock_research_agent):
+    async def test_contradicts_skips_research_agent(
+        self, claim_verifier, sample_contradicts_claim, mock_research_agent
+    ):
         """CONTRADICTS verification should not call research agent."""
         await claim_verifier.verify(sample_contradicts_claim)
 
@@ -537,9 +538,7 @@ class TestCacheBehavior:
     """Tests for verification result caching."""
 
     @pytest.mark.asyncio
-    async def test_verified_claim_cached_in_memory(
-        self, claim_verifier, sample_claim, mock_knowledge_base
-    ):
+    async def test_verified_claim_cached_in_memory(self, claim_verifier, sample_claim, mock_knowledge_base):
         """Verified claims should be cached in memory."""
         sample_claim.kb_status = KBStatus.IN_KB
 
@@ -636,9 +635,7 @@ class TestBatchVerification:
         assert result == []
 
     @pytest.mark.asyncio
-    async def test_batch_verify_mixed_statuses(
-        self, claim_verifier, mock_knowledge_base, mock_research_agent
-    ):
+    async def test_batch_verify_mixed_statuses(self, claim_verifier, mock_knowledge_base, mock_research_agent):
         """Batch verify should handle claims with different KB statuses."""
         in_kb_claim = Claim("IN KB claim", ClaimType.FACTUAL, KBStatus.IN_KB, 0.9)
         unknown_claim = Claim("Unknown claim", ClaimType.FACTUAL, KBStatus.UNKNOWN, 0.5)
@@ -662,13 +659,9 @@ class TestBatchVerification:
         assert results[2].verified_as == VerificationStatus.CONFLICTING  # CONTRADICTS
 
     @pytest.mark.asyncio
-    async def test_batch_verify_preserves_order(
-        self, claim_verifier, mock_knowledge_base, mock_research_agent
-    ):
+    async def test_batch_verify_preserves_order(self, claim_verifier, mock_knowledge_base, mock_research_agent):
         """Batch verify should return results in same order as input."""
-        claims = [
-            Claim(f"Claim {i}", ClaimType.FACTUAL, KBStatus.IN_KB, 0.9) for i in range(5)
-        ]
+        claims = [Claim(f"Claim {i}", ClaimType.FACTUAL, KBStatus.IN_KB, 0.9) for i in range(5)]
 
         mock_knowledge_base.search.return_value = []
 
@@ -679,13 +672,9 @@ class TestBatchVerification:
             assert result.original.claim_text == f"Claim {i}"
 
     @pytest.mark.asyncio
-    async def test_batch_verify_parallelizes(
-        self, claim_verifier, mock_knowledge_base, mock_research_agent
-    ):
+    async def test_batch_verify_parallelizes(self, claim_verifier, mock_knowledge_base, mock_research_agent):
         """Batch verify should parallelize verification."""
-        claims = [
-            Claim(f"Claim {i}", ClaimType.FACTUAL, KBStatus.IN_KB, 0.9) for i in range(10)
-        ]
+        claims = [Claim(f"Claim {i}", ClaimType.FACTUAL, KBStatus.IN_KB, 0.9) for i in range(10)]
 
         mock_knowledge_base.search.return_value = []
 
@@ -697,9 +686,7 @@ class TestBatchVerification:
         assert elapsed < 5.0  # Should not take long for IN_KB (fast) claims
 
     @pytest.mark.asyncio
-    async def test_batch_verify_prioritizes_unknown(
-        self, claim_verifier, mock_knowledge_base, mock_research_agent
-    ):
+    async def test_batch_verify_prioritizes_unknown(self, claim_verifier, mock_knowledge_base, mock_research_agent):
         """Batch verify should prioritize UNKNOWN claims for research agent."""
         in_kb_claim = Claim("IN KB claim", ClaimType.FACTUAL, KBStatus.IN_KB, 0.9)
         unknown_claim = Claim("Unknown claim", ClaimType.FACTUAL, KBStatus.UNKNOWN, 0.5)
@@ -721,9 +708,7 @@ class TestBatchVerification:
         assert results[1].original.claim_text == "Unknown claim"
 
     @pytest.mark.asyncio
-    async def test_batch_verify_error_handling(
-        self, claim_verifier, mock_knowledge_base, mock_research_agent
-    ):
+    async def test_batch_verify_error_handling(self, claim_verifier, mock_knowledge_base, mock_research_agent):
         """Batch verify should handle errors gracefully."""
         claims = [
             Claim("Claim 1", ClaimType.FACTUAL, KBStatus.IN_KB, 0.9),
@@ -800,7 +785,11 @@ class TestErrorHandling:
         result = await claim_verifier.verify(sample_claim)
 
         # Should return UNVERIFIED or ERROR status, not crash
-        assert result.verified_as in (VerificationStatus.ERROR, VerificationStatus.UNVERIFIED, VerificationStatus.NOT_FOUND)
+        assert result.verified_as in (
+            VerificationStatus.ERROR,
+            VerificationStatus.UNVERIFIED,
+            VerificationStatus.NOT_FOUND,
+        )
 
     @pytest.mark.asyncio
     async def test_invalid_research_status_defaults_to_not_found(
@@ -822,9 +811,7 @@ class TestErrorHandling:
         assert result.verified_as == VerificationStatus.NOT_FOUND
 
     @pytest.mark.asyncio
-    async def test_none_research_agent_service_handled(
-        self, claim_verifier, sample_claim, mock_knowledge_base
-    ):
+    async def test_none_research_agent_service_handled(self, claim_verifier, sample_claim, mock_knowledge_base):
         """Should handle None research agent service gracefully."""
         verifier = ClaimVerifier(mock_knowledge_base, None)
         sample_claim.kb_status = KBStatus.UNKNOWN

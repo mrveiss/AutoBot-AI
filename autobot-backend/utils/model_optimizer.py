@@ -33,6 +33,7 @@ from config.manager import get_config_manager
 from utils.model_optimization import (
     CODE_COMPLEXITY_KEYWORDS,
     CODE_TASK_TYPES,
+    ModelCapabilityTier,
     ModelClassifier,
     ModelInfo,
     ModelPerformanceLevel,
@@ -40,7 +41,6 @@ from utils.model_optimization import (
     ModelSelector,
     SystemResourceAnalyzer,
     SystemResources,
-    ModelCapabilityTier,
     TaskRequest,
 )
 
@@ -89,9 +89,7 @@ class ModelOptimizer:
         self._redis_init_lock = asyncio.Lock()
 
         # Configuration
-        self._performance_threshold = config.get(
-            "llm.optimization.performance_threshold", 0.8
-        )
+        self._performance_threshold = config.get("llm.optimization.performance_threshold", 0.8)
         self._cache_ttl = config.get("llm.optimization.cache_ttl", 3600)  # 1 hour
         self._min_samples = config.get("llm.optimization.min_samples", 5)
 
@@ -180,9 +178,7 @@ class ModelOptimizer:
                             )
 
                     except Exception as e:
-                        self.logger.error(
-                            f"Failed to initialize Redis client for model optimization: {e}"
-                        )
+                        self.logger.error(f"Failed to initialize Redis client for model optimization: {e}")
                         self._redis_client = None
         return self._redis_client
 
@@ -190,9 +186,7 @@ class ModelOptimizer:
         """Refresh the list of available models from Ollama."""
         try:
             http_client = get_http_client()
-            async with await http_client.get(
-                f"{self._ollama_base_url}/api/tags"
-            ) as response:
+            async with await http_client.get(f"{self._ollama_base_url}/api/tags") as response:
                 if response.status == 200:
                     data = await response.json()
                     models = []
@@ -230,9 +224,7 @@ class ModelOptimizer:
                     return models
 
                 else:
-                    self.logger.error(
-                        "Failed to fetch models: HTTP %s", response.status
-                    )
+                    self.logger.error("Failed to fetch models: HTTP %s", response.status)
                     return []
 
         except Exception as e:
@@ -272,9 +264,7 @@ class ModelOptimizer:
         resources = self._resource_analyzer.get_current_resources()
         return resources.to_dict()
 
-    def _filter_suitable_models(
-        self, complexity: ModelCapabilityTier
-    ) -> Optional[List[ModelInfo]]:
+    def _filter_suitable_models(self, complexity: ModelCapabilityTier) -> Optional[List[ModelInfo]]:
         """Filter models by complexity and return suitable candidates. Issue #620.
 
         Args:
@@ -283,14 +273,10 @@ class ModelOptimizer:
         Returns:
             List of suitable models, or None to use first available model
         """
-        suitable_models = self._model_selector.filter_by_complexity(
-            list(self._models_cache.values()), complexity
-        )
+        suitable_models = self._model_selector.filter_by_complexity(list(self._models_cache.values()), complexity)
 
         if not suitable_models:
-            self.logger.warning(
-                f"No suitable models found for complexity: {complexity}"
-            )
+            self.logger.warning(f"No suitable models found for complexity: {complexity}")
             return None
 
         return suitable_models
@@ -307,14 +293,10 @@ class ModelOptimizer:
         Returns:
             List of models that pass resource filtering
         """
-        resource_filtered = self._model_selector.filter_by_resources(
-            suitable_models, resources
-        )
+        resource_filtered = self._model_selector.filter_by_resources(suitable_models, resources)
 
         if not resource_filtered:
-            self.logger.warning(
-                "No models pass resource filtering, using least resource-intensive"
-            )
+            self.logger.warning("No models pass resource filtering, using least resource-intensive")
             return sorted(suitable_models, key=lambda m: m.size_gb)[:1]
 
         return resource_filtered
@@ -366,12 +348,8 @@ class ModelOptimizer:
                 return list(self._models_cache.keys())[0]
 
             # Filter by resources and rank
-            resource_filtered = self._apply_resource_filtering(
-                suitable_models, resources
-            )
-            ranked_models = self._model_selector.rank_by_performance(
-                resource_filtered, task_request
-            )
+            resource_filtered = self._apply_resource_filtering(suitable_models, resources)
+            ranked_models = self._model_selector.rank_by_performance(resource_filtered, task_request)
 
             return self._select_and_log_model(ranked_models, complexity)
 
@@ -380,15 +358,11 @@ class ModelOptimizer:
             return list(self._models_cache.keys())[0] if self._models_cache else None
 
     # Backward compatibility methods
-    def _filter_models_by_complexity(
-        self, complexity: ModelCapabilityTier, models: List[ModelInfo]
-    ) -> List[ModelInfo]:
+    def _filter_models_by_complexity(self, complexity: ModelCapabilityTier, models: List[ModelInfo]) -> List[ModelInfo]:
         """Filter models based on task complexity requirements."""
         return self._model_selector.filter_by_complexity(models, complexity)
 
-    def _filter_models_by_resources(
-        self, models: List[ModelInfo], resources: Dict[str, float]
-    ) -> List[ModelInfo]:
+    def _filter_models_by_resources(self, models: List[ModelInfo], resources: Dict[str, float]) -> List[ModelInfo]:
         """Filter models based on available system resources (Issue #1966).
 
         Forwards gpu_vram_gb from the dict when present so VRAM-aware
@@ -402,23 +376,15 @@ class ModelOptimizer:
         )
         return self._model_selector.filter_by_resources(models, system_resources)
 
-    def _rank_models_by_performance(
-        self, models: List[ModelInfo], task_request: TaskRequest
-    ) -> List[ModelInfo]:
+    def _rank_models_by_performance(self, models: List[ModelInfo], task_request: TaskRequest) -> List[ModelInfo]:
         """Rank models by expected performance for the task."""
         return self._model_selector.rank_by_performance(models, task_request)
 
-    async def track_model_performance(
-        self, model_name: str, response_time: float, response_tokens: int, success: bool
-    ):
+    async def track_model_performance(self, model_name: str, response_time: float, response_tokens: int, success: bool):
         """Track model performance for future optimization."""
         try:
-            tokens_per_second = (
-                response_tokens / response_time if response_time > 0 else 0
-            )
-            await self._save_model_performance(
-                model_name, response_time, tokens_per_second, success
-            )
+            tokens_per_second = response_tokens / response_time if response_time > 0 else 0
+            await self._save_model_performance(model_name, response_time, tokens_per_second, success)
         except Exception as e:
             self.logger.error("Error tracking performance for %s: %s", model_name, e)
 
@@ -428,32 +394,18 @@ class ModelOptimizer:
             if not self._models_cache:
                 await self.refresh_available_models()
 
-            models_with_history = [
-                m for m in self._models_cache.values() if m.use_count > 0
-            ]
+            models_with_history = [m for m in self._models_cache.values() if m.use_count > 0]
 
             if not models_with_history:
                 return [self._build_no_history_suggestion()]
 
             suggestions = []
-            avg_success_rate = sum(m.success_rate for m in models_with_history) / len(
-                models_with_history
-            )
-            avg_response_time = sum(
-                m.avg_response_time for m in models_with_history
-            ) / len(models_with_history)
+            avg_success_rate = sum(m.success_rate for m in models_with_history) / len(models_with_history)
+            avg_response_time = sum(m.avg_response_time for m in models_with_history) / len(models_with_history)
 
-            suggestions.extend(
-                self._check_underperforming_models(
-                    models_with_history, avg_success_rate
-                )
-            )
-            suggestions.extend(
-                self._check_slow_models(models_with_history, avg_response_time)
-            )
-            suggestions.extend(
-                self._check_overused_lightweight_models(models_with_history)
-            )
+            suggestions.extend(self._check_underperforming_models(models_with_history, avg_success_rate))
+            suggestions.extend(self._check_slow_models(models_with_history, avg_response_time))
+            suggestions.extend(self._check_overused_lightweight_models(models_with_history))
             suggestions.extend(self._check_resource_optimization())
 
             return suggestions
@@ -470,9 +422,7 @@ class ModelOptimizer:
             "action": "Continue using the system to build performance profiles",
         }
 
-    def _check_underperforming_models(
-        self, models: List[ModelInfo], avg_success_rate: float
-    ) -> List[Dict[str, Any]]:
+    def _check_underperforming_models(self, models: List[ModelInfo], avg_success_rate: float) -> List[Dict[str, Any]]:
         """Check for underperforming models."""
         underperforming = [m for m in models if m.is_underperforming(avg_success_rate)]
         if not underperforming:
@@ -486,9 +436,7 @@ class ModelOptimizer:
             }
         ]
 
-    def _check_slow_models(
-        self, models: List[ModelInfo], avg_response_time: float
-    ) -> List[Dict[str, Any]]:
+    def _check_slow_models(self, models: List[ModelInfo], avg_response_time: float) -> List[Dict[str, Any]]:
         """Check for slow models."""
         slow_models = [m for m in models if m.is_slow(avg_response_time)]
         if not slow_models:
@@ -497,17 +445,12 @@ class ModelOptimizer:
             {
                 "type": "performance",
                 "message": f"Found {len(slow_models)} slow models",
-                "models": [
-                    {"name": m.name, "avg_time": f"{m.avg_response_time:.2f}s"}
-                    for m in slow_models
-                ],
+                "models": [{"name": m.name, "avg_time": f"{m.avg_response_time:.2f}s"} for m in slow_models],
                 "action": "Consider using faster alternatives for time-sensitive tasks",
             }
         ]
 
-    def _check_overused_lightweight_models(
-        self, models: List[ModelInfo]
-    ) -> List[Dict[str, Any]]:
+    def _check_overused_lightweight_models(self, models: List[ModelInfo]) -> List[Dict[str, Any]]:
         """Check for overused lightweight models."""
         lightweight_overused = [m for m in models if m.is_overused_lightweight()]
         if not lightweight_overused:
@@ -527,11 +470,7 @@ class ModelOptimizer:
         if not resources.allows_large_models():
             return []
 
-        large_models = [
-            m
-            for m in self._models_cache.values()
-            if m.performance_level == ModelPerformanceLevel.ADVANCED
-        ]
+        large_models = [m for m in self._models_cache.values() if m.performance_level == ModelPerformanceLevel.ADVANCED]
         if not large_models:
             return []
 

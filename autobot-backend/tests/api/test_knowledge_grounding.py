@@ -270,9 +270,7 @@ async def test_reconstruct_response_with_annotations(grounded_agent):
 
     original = "The system latency increased by 15% yesterday."
 
-    reconstructed = await grounded_agent._reconstruct_response(
-        original, [verified]
-    )
+    reconstructed = await grounded_agent._reconstruct_response(original, [verified])
 
     assert "Latency increased" in reconstructed
     assert "[KB source" in reconstructed or "Latency increased" in reconstructed
@@ -291,9 +289,7 @@ async def test_reconstruct_response_no_matches(grounded_agent):
 
     original = "The system latency increased."
 
-    reconstructed = await grounded_agent._reconstruct_response(
-        original, [verified]
-    )
+    reconstructed = await grounded_agent._reconstruct_response(original, [verified])
 
     assert reconstructed == original
 
@@ -329,9 +325,7 @@ async def test_trace_verification_chain_success(grounded_agent, sample_verified_
 
 
 @pytest.mark.asyncio
-async def test_trace_verification_chain_with_unverified(
-    grounded_agent, sample_verified_claim
-):
+async def test_trace_verification_chain_with_unverified(grounded_agent, sample_verified_claim):
     """Test tracing with both verified and unverified claims."""
     unverified = Claim(claim_text="Some unknown claim", confidence=0.5)
 
@@ -565,6 +559,7 @@ async def test_resolve_conflict_success(grounded_agent):
 async def test_api_ground_response_endpoint(mock_app):
     """Test POST /api/ground-response endpoint."""
     from fastapi.testclient import TestClient
+
     from main import app
 
     client = TestClient(app)
@@ -685,9 +680,7 @@ async def test_grounding_with_context_metadata(mock_app):
     agent = get_grounded_agent(mock_app)
 
     mock_llm = AsyncMock()
-    mock_llm.chat = AsyncMock(
-        return_value=MagicMock(content=json.dumps([]))
-    )
+    mock_llm.chat = AsyncMock(return_value=MagicMock(content=json.dumps([])))
     agent.llm_service = mock_llm
     agent.kb = None
 
@@ -714,9 +707,7 @@ async def test_grounding_empty_response(grounded_agent, mock_app):
     """Test grounding handles empty responses."""
     grounded_agent.app = mock_app
     grounded_agent.llm_service = AsyncMock()
-    grounded_agent.llm_service.chat = AsyncMock(
-        return_value=MagicMock(content=json.dumps([]))
-    )
+    grounded_agent.llm_service.chat = AsyncMock(return_value=MagicMock(content=json.dumps([])))
 
     result = await grounded_agent.respond_with_grounding(
         user_query="Q",
@@ -732,9 +723,7 @@ async def test_grounding_very_long_response(grounded_agent, mock_app):
     """Test grounding with very long response."""
     grounded_agent.app = mock_app
     grounded_agent.llm_service = AsyncMock()
-    grounded_agent.llm_service.chat = AsyncMock(
-        return_value=MagicMock(content=json.dumps([]))
-    )
+    grounded_agent.llm_service.chat = AsyncMock(return_value=MagicMock(content=json.dumps([])))
 
     long_response = "A" * 4000  # Very long response
 
@@ -790,9 +779,7 @@ async def test_grounding_performance(grounded_agent, mock_app):
     grounded_agent.app = mock_app
 
     mock_llm = AsyncMock()
-    mock_llm.chat = AsyncMock(
-        return_value=MagicMock(content=json.dumps([]))
-    )
+    mock_llm.chat = AsyncMock(return_value=MagicMock(content=json.dumps([])))
 
     mock_kb = AsyncMock()
     mock_kb.search = AsyncMock(return_value=[])

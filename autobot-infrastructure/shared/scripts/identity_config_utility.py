@@ -49,9 +49,7 @@ async def _add_identity_to_kb(kb, content: str, metadata: dict) -> bool:
         logger.info("Successfully added AutoBot identity using add_documents method")
         return True
 
-    logger.warning(
-        "Knowledge base doesn't have standard add methods, trying alternative approach..."
-    )
+    logger.warning("Knowledge base doesn't have standard add methods, trying alternative approach...")
 
     # Method 2: Try through vector store if available
     if hasattr(kb, "vector_store") and kb.vector_store:
@@ -106,9 +104,7 @@ async def main():
         kb = KnowledgeBase()
 
         # Check if AutoBot identity document exists
-        identity_file = (
-            project_root / "data" / "system_knowledge" / "autobot_identity.md"
-        )
+        identity_file = project_root / "data" / "system_knowledge" / "autobot_identity.md"
 
         if not identity_file.exists():
             logger.error("AutoBot identity file not found at %s", identity_file)

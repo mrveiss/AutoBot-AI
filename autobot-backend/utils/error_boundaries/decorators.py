@@ -125,9 +125,7 @@ def _create_async_boundary_wrapper(
     async def async_wrapper(*args, **kwargs):
         """Async wrapper that executes function with error boundary protection."""
         manager = get_error_boundary_manager()
-        context = ErrorContext(
-            component=comp_name, function=func_name, args=args, kwargs=kwargs
-        )
+        context = ErrorContext(component=comp_name, function=func_name, args=args, kwargs=kwargs)
 
         for attempt in range(max_retries + 1):
             done, result = await _handle_async_attempt(
@@ -171,9 +169,7 @@ def _create_sync_boundary_wrapper(
     def sync_wrapper(*args, **kwargs):
         """Sync wrapper that executes function with error boundary protection."""
         manager = get_error_boundary_manager()
-        context = ErrorContext(
-            component=comp_name, function=func_name, args=args, kwargs=kwargs
-        )
+        context = ErrorContext(component=comp_name, function=func_name, args=args, kwargs=kwargs)
 
         for attempt in range(max_retries + 1):
             done, result = _handle_sync_attempt(
@@ -217,13 +213,9 @@ def error_boundary(
         func_name = function or func.__name__
 
         if asyncio.iscoroutinefunction(func):
-            return _create_async_boundary_wrapper(
-                func, comp_name, func_name, recovery_strategy, max_retries
-            )
+            return _create_async_boundary_wrapper(func, comp_name, func_name, recovery_strategy, max_retries)
         else:
-            return _create_sync_boundary_wrapper(
-                func, comp_name, func_name, recovery_strategy, max_retries
-            )
+            return _create_sync_boundary_wrapper(func, comp_name, func_name, recovery_strategy, max_retries)
 
     return decorator
 
@@ -280,9 +272,7 @@ def _raise_or_return_error(error_response: APIErrorResponse):
         error_response.trace_id,
         error_response.code,
     )
-    raise HTTPException(
-        status_code=error_response.status_code, detail=error_response.to_dict()
-    )
+    raise HTTPException(status_code=error_response.status_code, detail=error_response.to_dict())
 
 
 def with_error_handling(
@@ -325,9 +315,7 @@ def with_error_handling(
                 except HTTPException:
                     raise  # Preserve intentional HTTP status codes
                 except Exception as e:
-                    error_response = _create_api_error_response(
-                        e, category, func_operation, error_code_prefix
-                    )
+                    error_response = _create_api_error_response(e, category, func_operation, error_code_prefix)
                     return _raise_or_return_error(error_response)
 
             return async_wrapper
@@ -341,9 +329,7 @@ def with_error_handling(
                 except HTTPException:
                     raise  # Preserve intentional HTTP status codes
                 except Exception as e:
-                    error_response = _create_api_error_response(
-                        e, category, func_operation, error_code_prefix
-                    )
+                    error_response = _create_api_error_response(e, category, func_operation, error_code_prefix)
                     return _raise_or_return_error(error_response)
 
             return sync_wrapper

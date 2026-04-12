@@ -33,9 +33,7 @@ async def test_research_disabled():
     try:
         logger.info("Testing unknown topic with research disabled...")
         result = await asyncio.wait_for(
-            workflow.process_message(
-                "tell me about quantum computing in 2024", "test-chat"
-            ),
+            workflow.process_message("tell me about quantum computing in 2024", "test-chat"),
             timeout=15.0,
         )
 

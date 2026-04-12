@@ -14,9 +14,7 @@ def check_redis_databases():
     for db in [0, 1, 2]:
         print(f"\n=== Checking Database {db} ===")
         try:
-            client = redis.Redis(
-                host="localhost", port=6379, db=db, decode_responses=True
-            )
+            client = redis.Redis(host="localhost", port=6379, db=db, decode_responses=True)
 
             # Try FT.INFO
             try:

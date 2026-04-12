@@ -49,9 +49,7 @@ SEMANTIC_ANALYSIS_AVAILABLE = False
 SemanticAnalysisMixin = None
 
 try:
-    from code_intelligence.analytics_infrastructure import (
-        SemanticAnalysisMixin as _SemanticAnalysisMixin,
-    )
+    from code_intelligence.analytics_infrastructure import SemanticAnalysisMixin as _SemanticAnalysisMixin
 
     SemanticAnalysisMixin = _SemanticAnalysisMixin
     SEMANTIC_ANALYSIS_AVAILABLE = True

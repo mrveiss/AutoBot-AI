@@ -42,12 +42,8 @@ print("=" * 70)
 
 print("\n📋 Next Steps to Deploy:")
 print("1. Install AlertManager: docker run -d -p 9093:9093 prom/alertmanager")
-print(
-    "2. Mount config: -v ./config/prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml"
-)
-print(
-    "3. Mount rules: -v ./config/prometheus/alertmanager_rules.yml:/etc/prometheus/alertmanager_rules.yml"
-)
+print("2. Mount config: -v ./config/prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml")
+print("3. Mount rules: -v ./config/prometheus/alertmanager_rules.yml:/etc/prometheus/alertmanager_rules.yml")
 print("4. Restart Prometheus to load AlertManager integration")
 print("5. Verify webhook: curl http://10.0.0.1:8001/api/webhook/alertmanager/health")
 

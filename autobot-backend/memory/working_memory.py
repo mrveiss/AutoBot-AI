@@ -16,7 +16,6 @@ import logging
 from typing import Any, List, Optional
 
 from autobot_shared.redis_client import get_async_redis_client
-
 from constants.ttl_constants import TTL_WORKING_MEMORY_DEFAULT
 
 logger = logging.getLogger(__name__)

@@ -128,16 +128,11 @@ async def track_terminal_activity(
     await db.commit()
     await db.refresh(activity)
 
-    logger.info(
-        f"Tracked terminal activity: user={user_id}, "
-        f"command={command[:50]}, secrets={len(secrets_used)}"
-    )
+    logger.info(f"Tracked terminal activity: user={user_id}, " f"command={command[:50]}, secrets={len(secrets_used)}")
 
     # Track secret usage
     for secret_id in secrets_used:
-        await _track_secret_usage(
-            db, secret_id, user_id, "terminal", activity.id, session_id
-        )
+        await _track_secret_usage(db, secret_id, user_id, "terminal", activity.id, session_id)
 
     return activity.id
 
@@ -186,10 +181,7 @@ async def track_file_activity(
     await db.commit()
     await db.refresh(activity)
 
-    logger.info(
-        f"Tracked file activity: user={user_id}, "
-        f"operation={operation}, path={path[:50]}"
-    )
+    logger.info(f"Tracked file activity: user={user_id}, " f"operation={operation}, path={path[:50]}")
 
     return activity.id
 
@@ -248,9 +240,7 @@ async def track_browser_activity(
 
     # Track secret usage
     for secret_id in secrets_used or []:
-        await _track_secret_usage(
-            db, secret_id, user_id, "browser", activity.id, session_id
-        )
+        await _track_secret_usage(db, secret_id, user_id, "browser", activity.id, session_id)
 
     return activity.id
 

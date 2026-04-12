@@ -65,12 +65,7 @@ for filename, title in dashboards:
 
 # Check Vue component
 vue_component = (
-    Path(__file__).parent.parent
-    / "autobot-vue"
-    / "src"
-    / "components"
-    / "monitoring"
-    / "GrafanaDashboard.vue"
+    Path(__file__).parent.parent / "autobot-vue" / "src" / "components" / "monitoring" / "GrafanaDashboard.vue"
 )
 print("\n✓ Vue Component Created:")
 if vue_component.exists():

@@ -70,9 +70,7 @@ def test_route_registration():
         api_router = APIRouter()
 
         # Add workflow router
-        api_router.include_router(
-            workflow_router, prefix="/workflow", tags=["workflow"]
-        )
+        api_router.include_router(workflow_router, prefix="/workflow", tags=["workflow"])
         app.include_router(api_router, prefix="/api")
 
         # Check routes

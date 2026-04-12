@@ -73,10 +73,7 @@ def check_endpoints_batch(endpoints: list) -> list:
     """Check multiple endpoints concurrently using ThreadPoolExecutor."""
     results = []
     with ThreadPoolExecutor(max_workers=min(len(endpoints), 10)) as executor:
-        future_to_endpoint = {
-            executor.submit(check_endpoint, url, name): (url, name)
-            for url, name in endpoints
-        }
+        future_to_endpoint = {executor.submit(check_endpoint, url, name): (url, name) for url, name in endpoints}
         for future in as_completed(future_to_endpoint):
             results.append(future.result())
     return results
@@ -122,8 +119,6 @@ except Exception as e:
     logger.error(f"   ❌ Cannot connect to Ollama: {e}")
 
 logger.info("\n💡 Diagnosis Summary:")
-logger.info(
-    "   - If all endpoints timeout, the backend is likely stuck during initialization"
-)
+logger.info("   - If all endpoints timeout, the backend is likely stuck during initialization")
 logger.error("   - Check the backend logs for LLM initialization errors")
 logger.info("   - Try restarting the backend with: pkill -f uvicorn && ./run_agent.sh")

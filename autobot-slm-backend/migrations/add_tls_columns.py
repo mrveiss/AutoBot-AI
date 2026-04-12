@@ -29,10 +29,7 @@ def migrate(db_url: str) -> None:
 
     # Check if node_credentials table exists
     if not table_exists(cursor, "node_credentials"):
-        logger.error(
-            "node_credentials table does not exist. "
-            "Run add_node_credentials_table.py first."
-        )
+        logger.error("node_credentials table does not exist. " "Run add_node_credentials_table.py first.")
         conn.close()
         return
 
@@ -47,9 +44,7 @@ def migrate(db_url: str) -> None:
         add_column_if_not_exists(cursor, "node_credentials", column_name, column_type)
 
     # Create index on tls_expires_at for expiring certificate queries
-    create_index_if_not_exists(
-        cursor, "idx_credentials_tls_expires", "node_credentials", "tls_expires_at"
-    )
+    create_index_if_not_exists(cursor, "idx_credentials_tls_expires", "node_credentials", "tls_expires_at")
 
     conn.commit()
     conn.close()

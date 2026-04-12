@@ -20,9 +20,7 @@ def _log_analysis_summary(results):
     logger.info("Analysis Summary:")
     logger.info("   - Total hardcoded values: %s", results["total_hardcoded_values"])
     logger.info("   - High priority issues: %s", results["high_priority_count"])
-    logger.info(
-        "   - Configuration recommendations: %s", results["recommendations_count"]
-    )
+    logger.info("   - Configuration recommendations: %s", results["recommendations_count"])
     logger.info("   - Files affected: %s", results["metrics"]["files_affected"])
     logger.info("   - Analysis time: %.2fs\n", results["analysis_time_seconds"])
 
@@ -37,9 +35,7 @@ def _log_high_priority_issues(results):
 
     Helper for analyze_environment_variables (#825).
     """
-    high_priority = [
-        item for item in results["hardcoded_details"] if item["severity"] == "high"
-    ]
+    high_priority = [item for item in results["hardcoded_details"] if item["severity"] == "high"]
     if high_priority:
         logger.info("High Priority Issues (Security/Infrastructure):")
         for item in high_priority[:10]:
@@ -137,14 +133,9 @@ def _format_config_line(env_var, default):
     Helper for generate_config_updates (#825).
     """
     if default.isdigit():
-        return (
-            f'        "{env_var.lower()}":' f' int(os.getenv("{env_var}", {default})),'
-        )
+        return f'        "{env_var.lower()}":' f' int(os.getenv("{env_var}", {default})),'
     if default.lower() in ["true", "false"]:
-        return (
-            f'        "{env_var.lower()}":'
-            f' os.getenv("{env_var}", "{default}").lower() == "true",'
-        )
+        return f'        "{env_var.lower()}":' f' os.getenv("{env_var}", "{default}").lower() == "true",'
     return f'        "{env_var.lower()}":' f' os.getenv("{env_var}", "{default}"),'
 
 

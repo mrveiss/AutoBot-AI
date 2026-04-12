@@ -30,9 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot_shared"))
 from autobot_shared.redis_client import get_redis_client
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -65,9 +63,7 @@ class OrphanedSessionCleaner:
     async def connect_redis(self) -> None:
         """Connect to Redis database"""
         try:
-            self.redis_client = await get_redis_client(
-                async_client=True, database="main"
-            )
+            self.redis_client = await get_redis_client(async_client=True, database="main")
             await self.redis_client.ping()
             logger.info("Connected to Redis successfully")
         except Exception as e:
@@ -157,9 +153,7 @@ class OrphanedSessionCleaner:
         """
         try:
             # Check created_at first, then lastModified
-            timestamp_str = session_data.get("created_at") or session_data.get(
-                "lastModified"
-            )
+            timestamp_str = session_data.get("created_at") or session_data.get("lastModified")
             if not timestamp_str:
                 return None
 
@@ -228,9 +222,7 @@ class OrphanedSessionCleaner:
             self.stats["no_owner"] += 1
             reasons.append("no owner")
 
-        is_orphaned = (not has_msgs and not has_acts) or (
-            not has_owner and not has_msgs
-        )
+        is_orphaned = (not has_msgs and not has_acts) or (not has_owner and not has_msgs)
 
         return {
             "is_orphaned": is_orphaned,
@@ -307,9 +299,7 @@ class OrphanedSessionCleaner:
             orphan_check = await self.is_orphaned(session_id)
 
             if orphan_check["is_orphaned"]:
-                logger.info(
-                    f"Found orphaned session {session_id}: " f"{orphan_check['reason']}"
-                )
+                logger.info(f"Found orphaned session {session_id}: " f"{orphan_check['reason']}")
                 await self.delete_session(session_id)
 
         # Save list of deleted sessions
@@ -327,9 +317,7 @@ class OrphanedSessionCleaner:
         logger.info(f"  No activities: {self.stats['no_activities']}")
         logger.info(f"  No owner: {self.stats['no_owner']}")
         logger.info(f"  Corrupt metadata: {self.stats['corrupt_metadata']}")
-        logger.info(
-            f"  Too recent (< {self.min_age_days} days): " f"{self.stats['too_recent']}"
-        )
+        logger.info(f"  Too recent (< {self.min_age_days} days): " f"{self.stats['too_recent']}")
         logger.info(f"  Deleted: {self.stats['deleted']}")
         logger.info(f"  Failed: {self.stats['failed']}")
         logger.info("=" * 60)
@@ -351,9 +339,7 @@ async def main():
     )
     args = parser.parse_args()
 
-    cleaner = OrphanedSessionCleaner(
-        dry_run=args.dry_run, min_age_days=args.min_age_days
-    )
+    cleaner = OrphanedSessionCleaner(dry_run=args.dry_run, min_age_days=args.min_age_days)
     await cleaner.run()
 
 

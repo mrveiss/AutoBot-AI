@@ -28,7 +28,8 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-from autobot_shared.ssot_config import DEFAULT_LLM_MODEL, config as _ssot_config
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+from autobot_shared.ssot_config import config as _ssot_config
 from rlm.evaluator import ResponseQualityEvaluator
 from rlm.types import RLMConfig
 

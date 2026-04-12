@@ -147,9 +147,7 @@ class CacheManager:
 
             if keys:
                 deleted_count = await self._redis_client.delete(*keys)
-                logger.info(
-                    f"Cache CLEAR: {deleted_count} keys deleted for pattern: {pattern}"
-                )
+                logger.info(f"Cache CLEAR: {deleted_count} keys deleted for pattern: {pattern}")
                 return deleted_count
             else:
                 logger.debug("Cache CLEAR: No keys found for pattern: %s", pattern)
@@ -208,9 +206,7 @@ def _extract_request_from_call(args, kwargs) -> Optional[Request]:
     return None
 
 
-def _resolve_cache_key(
-    cache_key: Optional[str], request: Optional[Request], func, kwargs
-) -> str:
+def _resolve_cache_key(cache_key: Optional[str], request: Optional[Request], func, kwargs) -> str:
     """Helper for cache_response. Ref: #1088.
 
     Derives the cache key from an explicit key, the request path+params,

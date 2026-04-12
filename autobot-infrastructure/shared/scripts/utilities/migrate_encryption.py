@@ -27,6 +27,7 @@ sys.path.insert(0, str(project_root))
 
 # Import AutoBot modules after path setup
 from chat_history_manager import ChatHistoryManager  # noqa: E402
+
 from config import config as global_config_manager  # noqa: E402
 from encryption_service import (  # noqa: E402
     get_encryption_service,
@@ -34,9 +35,7 @@ from encryption_service import (  # noqa: E402
 )
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -71,10 +70,7 @@ class ChatEncryptionMigrator:
         Returns:
             Path to backup file
         """
-        backup_dir = (
-            f"{os.path.dirname(file_path)}/backup_"
-            f"{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        )
+        backup_dir = f"{os.path.dirname(file_path)}/backup_" f"{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         os.makedirs(backup_dir, exist_ok=True)
 
         backup_path = f"{backup_dir}/{os.path.basename(file_path)}"
@@ -201,10 +197,7 @@ class ChatEncryptionMigrator:
         logger.error(f"Errors: {self.stats['errors']}")
 
         if self.stats["total_files"] > 0:
-            success_rate = (
-                (self.stats["migrated"] + self.stats["skipped"])
-                / self.stats["total_files"]
-            ) * 100
+            success_rate = ((self.stats["migrated"] + self.stats["skipped"]) / self.stats["total_files"]) * 100
             logger.info(f"Success rate: {success_rate:.1f}%")
 
         if self.dry_run:
@@ -217,17 +210,13 @@ class ChatEncryptionMigrator:
 
 def main():
     """Main function."""
-    parser = argparse.ArgumentParser(
-        description="Migrate chat history to encrypted format"
-    )
+    parser = argparse.ArgumentParser(description="Migrate chat history to encrypted format")
     parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Simulate migration without making changes",
     )
-    parser.add_argument(
-        "--no-backup", action="store_true", help="Skip creating backup files"
-    )
+    parser.add_argument("--no-backup", action="store_true", help="Skip creating backup files")
     parser.add_argument(
         "--force",
         action="store_true",
@@ -257,9 +246,7 @@ def main():
             sys.exit(1)
 
     # Initialize migrator
-    migrator = ChatEncryptionMigrator(
-        dry_run=args.dry_run, create_backup=not args.no_backup
-    )
+    migrator = ChatEncryptionMigrator(dry_run=args.dry_run, create_backup=not args.no_backup)
 
     # Perform migration
     logger.info("🔒 Starting chat history encryption migration...")

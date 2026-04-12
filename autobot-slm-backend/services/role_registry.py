@@ -38,9 +38,7 @@ _SLM_ROLES = [
         "health_check_port": 8000,
         "health_check_path": "/api/health",
         "post_sync_cmd": (
-            f"cd {_BASE_DIR}/autobot-slm-backend && "
-            "pip install -r requirements.txt && "
-            "alembic upgrade head"
+            f"cd {_BASE_DIR}/autobot-slm-backend && " "pip install -r requirements.txt && " "alembic upgrade head"
         ),
         "required": True,
         "degraded_without": [],
@@ -55,9 +53,7 @@ _SLM_ROLES = [
         "systemd_service": "nginx",
         "auto_restart": False,
         "health_check_port": 443,
-        "post_sync_cmd": (
-            f"cd {_BASE_DIR}/autobot-slm-frontend && npm install && npm run build"
-        ),
+        "post_sync_cmd": (f"cd {_BASE_DIR}/autobot-slm-frontend && npm install && npm run build"),
         "required": True,
         "degraded_without": [],
         "ansible_playbook": "deploy-slm-manager.yml",
@@ -105,9 +101,7 @@ _BACKEND_ROLES = [
         "health_check_port": 8443,
         "health_check_path": "/api/health",
         "post_sync_cmd": (
-            f"cd {_BASE_DIR}/autobot-backend && "
-            "pip install -r requirements.txt && "
-            "alembic upgrade head"
+            f"cd {_BASE_DIR}/autobot-backend && " "pip install -r requirements.txt && " "alembic upgrade head"
         ),
         "required": True,
         "degraded_without": [],
@@ -140,9 +134,7 @@ _FRONTEND_ROLES = [
         "systemd_service": "nginx",
         "auto_restart": False,
         "health_check_port": 443,
-        "post_sync_cmd": (
-            f"cd {_BASE_DIR}/autobot-frontend && npm install && npm run build"
-        ),
+        "post_sync_cmd": (f"cd {_BASE_DIR}/autobot-frontend && npm install && npm run build"),
         "required": True,
         "degraded_without": [],
         "ansible_playbook": "deploy-frontend.yml",
@@ -181,9 +173,7 @@ _AI_STACK_ROLES = [
         "auto_restart": True,
         "health_check_port": 8080,
         "health_check_path": "/health",
-        "post_sync_cmd": (
-            f"cd {_BASE_DIR}/autobot-ai-stack && pip install -r requirements.txt"
-        ),
+        "post_sync_cmd": (f"cd {_BASE_DIR}/autobot-ai-stack && pip install -r requirements.txt"),
         "required": True,
         "degraded_without": [],
         "ansible_playbook": "setup-ai-stack.yml",
@@ -218,13 +208,9 @@ _OPTIONAL_ROLES = [
         "auto_restart": True,
         "health_check_port": 8081,
         "health_check_path": "/health",
-        "post_sync_cmd": (
-            f"cd {_BASE_DIR}/autobot-npu-worker && pip install -r requirements.txt"
-        ),
+        "post_sync_cmd": (f"cd {_BASE_DIR}/autobot-npu-worker && pip install -r requirements.txt"),
         "required": False,
-        "degraded_without": [
-            "GPU inference offloading — backend falls back to local Ollama"
-        ],
+        "degraded_without": ["GPU inference offloading — backend falls back to local Ollama"],
         "ansible_playbook": "setup-npu-worker.yml",
     },
     {
@@ -237,9 +223,7 @@ _OPTIONAL_ROLES = [
         "auto_restart": True,
         "health_check_port": 8082,
         "health_check_path": "/health",
-        "post_sync_cmd": (
-            f"cd {_BASE_DIR}/autobot-tts-worker && pip install -r requirements.txt"
-        ),
+        "post_sync_cmd": (f"cd {_BASE_DIR}/autobot-tts-worker && pip install -r requirements.txt"),
         "required": False,
         "degraded_without": ["Voice synthesis — TTS features unavailable"],
         "ansible_playbook": "playbooks/deploy_role.yml",
@@ -270,9 +254,7 @@ _OPTIONAL_ROLES = [
         "health_check_port": 11434,
         "health_check_path": "/api/version",
         "required": False,
-        "degraded_without": [
-            "Local CPU inference — system falls back to cloud providers"
-        ],
+        "degraded_without": ["Local CPU inference — system falls back to cloud providers"],
         "ansible_playbook": "playbooks/deploy_role.yml",
     },
     {
@@ -286,9 +268,7 @@ _OPTIONAL_ROLES = [
         "health_check_port": 11434,
         "health_check_path": "/api/version",
         "required": False,
-        "degraded_without": [
-            "Large model GPU inference — falls back to CPU models or cloud providers"
-        ],
+        "degraded_without": ["Large model GPU inference — falls back to CPU models or cloud providers"],
         "ansible_playbook": "playbooks/deploy_role.yml",
     },
     {
@@ -348,13 +328,7 @@ _INFRA_ROLES = [
 ]
 
 DEFAULT_ROLES = (
-    _SLM_ROLES
-    + _BACKEND_ROLES
-    + _FRONTEND_ROLES
-    + _DATABASE_ROLES
-    + _AI_STACK_ROLES
-    + _OPTIONAL_ROLES
-    + _INFRA_ROLES
+    _SLM_ROLES + _BACKEND_ROLES + _FRONTEND_ROLES + _DATABASE_ROLES + _AI_STACK_ROLES + _OPTIONAL_ROLES + _INFRA_ROLES
 )
 
 # ---------------------------------------------------------------------------

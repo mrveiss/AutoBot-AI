@@ -30,13 +30,9 @@ def test_security_headers(file_path: str) -> bool:
         frame_options = "X-Frame-Options" in content
 
         print(f"🔍 Security Headers Check for {file_path}:")
-        print(
-            f"   ✅ Content Security Policy: {'Present' if csp_present else 'Missing'}"
-        )
+        print(f"   ✅ Content Security Policy: {'Present' if csp_present else 'Missing'}")
         print(f"   ✅ X-XSS-Protection: {'Present' if xss_protection else 'Missing'}")
-        print(
-            f"   ✅ X-Content-Type-Options: {'Present' if content_type_options else 'Missing'}"
-        )
+        print(f"   ✅ X-Content-Type-Options: {'Present' if content_type_options else 'Missing'}")
         print(f"   ✅ X-Frame-Options: {'Present' if frame_options else 'Missing'}")
 
         return all([csp_present, xss_protection, content_type_options, frame_options])
@@ -65,20 +61,12 @@ def test_runtime_protection(file_path: str) -> bool:
         safe_api = "AutoBotSecurity" in content
 
         print(f"🛡️  Runtime Protection Check for {file_path}:")
-        print(
-            f"   ✅ AutoBot Protection Script: {'Present' if autobot_protection else 'Missing'}"
-        )
-        print(
-            f"   ✅ innerHTML Monitoring: {'Present' if innerhtml_monitoring else 'Missing'}"
-        )
-        print(
-            f"   ✅ Security Event Logging: {'Present' if security_logging else 'Missing'}"
-        )
+        print(f"   ✅ AutoBot Protection Script: {'Present' if autobot_protection else 'Missing'}")
+        print(f"   ✅ innerHTML Monitoring: {'Present' if innerhtml_monitoring else 'Missing'}")
+        print(f"   ✅ Security Event Logging: {'Present' if security_logging else 'Missing'}")
         print(f"   ✅ Safe API Wrappers: {'Present' if safe_api else 'Missing'}")
 
-        return all(
-            [autobot_protection, innerhtml_monitoring, security_logging, safe_api]
-        )
+        return all([autobot_protection, innerhtml_monitoring, security_logging, safe_api])
 
     except Exception as e:
         print(f"❌ Error checking runtime protection: {e}")
@@ -193,9 +181,7 @@ def main():
         print("\n🎉 All security fixes verified successfully!")
         print("🛡️  The file is now protected against XSS attacks")
     else:
-        print(
-            f"\n⚠️  {total - passed} test(s) failed - security fixes may be incomplete"
-        )
+        print(f"\n⚠️  {total - passed} test(s) failed - security fixes may be incomplete")
         print("Failed tests:")
         for test_name, result in results:
             if not result:

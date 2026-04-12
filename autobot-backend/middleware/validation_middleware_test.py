@@ -25,7 +25,6 @@ from fastapi.testclient import TestClient
 
 from middleware.validation_middleware import ValidationMiddleware
 
-
 # ---------------------------------------------------------------------------
 # Test app fixture
 # ---------------------------------------------------------------------------

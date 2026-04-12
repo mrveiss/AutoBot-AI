@@ -23,9 +23,7 @@ class SkillPromoter:
     def __init__(self, skills_base_dir: Optional[str] = None) -> None:
         """Initialize with optional override for the builtin skills directory."""
         base = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
-        self.skills_dir = skills_base_dir or os.path.join(
-            base, "autobot-backend", "skills", "builtin"
-        )
+        self.skills_dir = skills_base_dir or os.path.join(base, "autobot-backend", "skills", "builtin")
 
     async def promote(
         self,
@@ -41,8 +39,7 @@ class SkillPromoter:
         """
         if not re.fullmatch(r"[a-z][a-z0-9-]{0,63}", name):
             raise ValueError(
-                f"Invalid skill name '{name}': must be 1-64 chars, lowercase letters,"
-                " digits, and hyphens only"
+                f"Invalid skill name '{name}': must be 1-64 chars, lowercase letters," " digits, and hyphens only"
             )
         dest = os.path.join(self.skills_dir, name)
         os.makedirs(dest, exist_ok=True)

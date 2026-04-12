@@ -17,10 +17,10 @@ from typing import Optional
 
 import pytest
 
+from chat_workflow.llm_handler import _emit_full_prompt_ready, _emit_system_prompt_ready
 from extensions.base import Extension, HookContext
 from extensions.hooks import HookPoint
 from extensions.manager import reset_extension_manager
-from chat_workflow.llm_handler import _emit_system_prompt_ready, _emit_full_prompt_ready
 
 
 class _SystemPromptWatcher(Extension):

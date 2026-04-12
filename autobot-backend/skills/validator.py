@@ -36,9 +36,7 @@ class ValidationResult:
 class SkillValidator:
     """Validates skill packages by checking syntax and optionally running the MCP server."""
 
-    async def validate(
-        self, skill_md: str, skill_py: Optional[str] = None
-    ) -> ValidationResult:
+    async def validate(self, skill_md: str, skill_py: Optional[str] = None) -> ValidationResult:
         """Run all validation checks and return a ValidationResult.
 
         Checks manifest, Python syntax, and MCP server startup (if skill_py provided).

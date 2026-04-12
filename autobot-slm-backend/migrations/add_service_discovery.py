@@ -65,15 +65,11 @@ def migrate(db_url: str) -> None:
     added = []
     if add_column_if_not_exists(cursor, "services", "port", "INTEGER"):
         added.append("port")
-    if add_column_if_not_exists(
-        cursor, "services", "protocol", "VARCHAR(10) DEFAULT 'http'"
-    ):
+    if add_column_if_not_exists(cursor, "services", "protocol", "VARCHAR(10) DEFAULT 'http'"):
         added.append("protocol")
     if add_column_if_not_exists(cursor, "services", "endpoint_path", "VARCHAR(256)"):
         added.append("endpoint_path")
-    if add_column_if_not_exists(
-        cursor, "services", "is_discoverable", "BOOLEAN DEFAULT TRUE"
-    ):
+    if add_column_if_not_exists(cursor, "services", "is_discoverable", "BOOLEAN DEFAULT TRUE"):
         added.append("is_discoverable")
 
     if added:
@@ -96,12 +92,8 @@ def migrate(db_url: str) -> None:
                 UNIQUE(node_id, config_key)
             )
         """)
-    create_index_if_not_exists(
-        cursor, "ix_node_configs_node_id", "node_configs", "node_id"
-    )
-    create_index_if_not_exists(
-        cursor, "ix_node_configs_key", "node_configs", "config_key"
-    )
+    create_index_if_not_exists(cursor, "ix_node_configs_node_id", "node_configs", "node_id")
+    create_index_if_not_exists(cursor, "ix_node_configs_key", "node_configs", "config_key")
 
     # 3. Create service_conflicts table
     logger.info("Creating service_conflicts table...")
@@ -117,12 +109,8 @@ def migrate(db_url: str) -> None:
                 UNIQUE(service_name_a, service_name_b)
             )
         """)
-    create_index_if_not_exists(
-        cursor, "ix_service_conflicts_a", "service_conflicts", "service_name_a"
-    )
-    create_index_if_not_exists(
-        cursor, "ix_service_conflicts_b", "service_conflicts", "service_name_b"
-    )
+    create_index_if_not_exists(cursor, "ix_service_conflicts_a", "service_conflicts", "service_name_a")
+    create_index_if_not_exists(cursor, "ix_service_conflicts_b", "service_conflicts", "service_name_b")
 
     # 4. Seed known conflicts
     logger.info("Seeding known service conflicts...")

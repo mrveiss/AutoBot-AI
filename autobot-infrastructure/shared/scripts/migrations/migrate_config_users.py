@@ -169,9 +169,7 @@ class ConfigUserMigrator:
         logger.info("Created organization with ID: %s", org.id)
         return org
 
-    async def _create_system_roles(
-        self, session, org: Organization
-    ) -> dict[str, uuid.UUID]:
+    async def _create_system_roles(self, session, org: Organization) -> dict[str, uuid.UUID]:
         """Create system roles from constants."""
         logger.info("Creating system roles...")
         role_ids = {}
@@ -242,9 +240,7 @@ class ConfigUserMigrator:
         # Log any unmapped roles
         for role_name in config_roles:
             if role_name.lower() not in mapping:
-                logger.warning(
-                    "Unknown config role '%s', will map to 'Member'", role_name
-                )
+                logger.warning("Unknown config role '%s', will map to 'Member'", role_name)
                 mapping[role_name.lower()] = "Member"
 
         return mapping
@@ -267,18 +263,14 @@ class ConfigUserMigrator:
         created_at = datetime.now(timezone.utc)
         if created_at_str:
             try:
-                created_at = datetime.fromisoformat(
-                    created_at_str.replace("Z", "+00:00")
-                )
+                created_at = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
             except ValueError:
                 pass
 
         # Determine if platform admin
         is_platform_admin = config_role.lower() == "admin"
 
-        logger.info(
-            "Migrating user: %s (role=%s, email=%s)", username, config_role, email
-        )
+        logger.info("Migrating user: %s (role=%s, email=%s)", username, config_role, email)
 
         user = User(
             id=uuid.uuid4(),
@@ -304,9 +296,7 @@ class ConfigUserMigrator:
 
         self.stats["users_migrated"] += 1
 
-    async def _assign_user_role(
-        self, session, user_id: uuid.UUID, role_name: str
-    ) -> None:
+    async def _assign_user_role(self, session, user_id: uuid.UUID, role_name: str) -> None:
         """Assign a role to a user by role name."""
         from sqlalchemy import select
 
@@ -341,9 +331,7 @@ class ConfigUserMigrator:
 
 
 async def main():
-    parser = argparse.ArgumentParser(
-        description="Migrate users from YAML config to PostgreSQL database"
-    )
+    parser = argparse.ArgumentParser(description="Migrate users from YAML config to PostgreSQL database")
     parser.add_argument(
         "--dry-run",
         action="store_true",

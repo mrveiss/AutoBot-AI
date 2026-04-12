@@ -71,9 +71,7 @@ def require_workflow_permission(action: str) -> Callable:
         if _is_admin(current_user):
             return True
 
-        workflow_id = request.path_params.get("workflow_id") or request.path_params.get(
-            "id"
-        )
+        workflow_id = request.path_params.get("workflow_id") or request.path_params.get("id")
         if not workflow_id:
             logger.warning("require_workflow_permission: workflow_id missing from path")
             raise HTTPException(

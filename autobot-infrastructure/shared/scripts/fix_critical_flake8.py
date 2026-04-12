@@ -52,9 +52,7 @@ def fix_file(filepath):
                 if line.strip() == "import asyncio" and i > 100:  # Skip first import
                     lines[i] = "# " + line  # Comment out duplicate import
                     modified = True
-                    print(
-                        f"Fixed F811 in {filepath}: commented duplicate asyncio import"
-                    )
+                    print(f"Fixed F811 in {filepath}: commented duplicate asyncio import")
 
         # Fix F841: unused variables in specific files
         if filepath_str.endswith("backend/api/advanced_workflow_orchestrator.py"):
@@ -69,17 +67,13 @@ def fix_file(filepath):
                     if not used:
                         lines[i] = line.replace("workflow =", "_ =")
                         modified = True
-                        print(
-                            f"Fixed F841 in {filepath}: renamed unused 'workflow' to '_'"
-                        )
+                        print(f"Fixed F841 in {filepath}: renamed unused 'workflow' to '_'")
 
                 if "complexity_mapping = {" in line:
                     # This variable is defined but not used
                     lines[i] = line.replace("complexity_mapping =", "_ =")
                     modified = True
-                    print(
-                        f"Fixed F841 in {filepath}: renamed unused 'complexity_mapping' to '_'"
-                    )
+                    print(f"Fixed F841 in {filepath}: renamed unused 'complexity_mapping' to '_'")
 
         if filepath_str.endswith("src/takeover_manager.py"):
             for i, line in enumerate(lines):

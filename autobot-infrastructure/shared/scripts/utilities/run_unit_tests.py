@@ -25,9 +25,7 @@ def _parse_pytest_output(output: str) -> dict:
         Dictionary with 'passed', 'failed', and 'status' keys.
     """
     output_lines = output.split("\n")
-    summary_line = [
-        line for line in output_lines if "passed" in line and "failed" in line
-    ]
+    summary_line = [line for line in output_lines if "passed" in line and "failed" in line]
 
     if summary_line:
         summary = summary_line[0]
@@ -92,9 +90,7 @@ def _print_test_summary(
     for test_file, result in results.items():
         status = result["status"]
         if "passed" in result and "failed" in result:
-            print(
-                f"{status} {os.path.basename(test_file):40} {result['passed']} passed, {result['failed']} failed"
-            )
+            print(f"{status} {os.path.basename(test_file):40} {result['passed']} passed, {result['failed']} failed")
         else:
             error = result.get("error", "Unknown issue")
             print(f"{status} {os.path.basename(test_file):40} {error}")
@@ -103,9 +99,7 @@ def _print_test_summary(
 
     if total_tests > 0:
         success_rate = (total_passed / total_tests) * 100
-        print(
-            f"📈 Overall Results: {total_passed}/{total_tests} tests passed ({success_rate:.1f}%)"
-        )
+        print(f"📈 Overall Results: {total_passed}/{total_tests} tests passed ({success_rate:.1f}%)")
 
         if total_failed == 0:
             print("🎉 All tests passed! Security implementation is solid.")
@@ -175,9 +169,7 @@ def run_tests():
                 print(f"   {parsed['status']} {passed} passed, {failed} failed")
 
             if result.returncode != 0 and failed == 0:
-                print(
-                    f"   ⚠️  Test execution had issues (return code: {result.returncode})"
-                )
+                print(f"   ⚠️  Test execution had issues (return code: {result.returncode})")
                 if result.stderr:
                     print(f"   Error: {result.stderr[:200]}...")
 

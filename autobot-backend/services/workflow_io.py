@@ -46,13 +46,9 @@ logger = logging.getLogger(__name__)
 # Field type enumeration
 # ---------------------------------------------------------------------------
 
-_URL_RE = re.compile(
-    r"^https?://" r"(?:[a-zA-Z0-9\-]+\.)+[a-zA-Z]{2,}" r"(?::\d+)?" r"(?:/[^\s]*)?$"
-)
+_URL_RE = re.compile(r"^https?://" r"(?:[a-zA-Z0-9\-]+\.)+[a-zA-Z]{2,}" r"(?::\d+)?" r"(?:/[^\s]*)?$")
 
-_IPV4_RE = re.compile(
-    r"^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}" r"(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$"
-)
+_IPV4_RE = re.compile(r"^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}" r"(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$")
 
 _IPV6_RE = re.compile(r"^[0-9a-fA-F:]+$")
 
@@ -121,9 +117,7 @@ class InputFieldSchema:
         try:
             return self._coerce_by_type(raw)
         except (ValueError, TypeError) as exc:
-            raise ValueError(
-                f"Field '{self.name}': cannot coerce {raw!r} to {self.field_type.value}: {exc}"
-            ) from exc
+            raise ValueError(f"Field '{self.name}': cannot coerce {raw!r} to {self.field_type.value}: {exc}") from exc
 
     def _coerce_by_type(self, raw: Any) -> Any:
         """Dispatch coercion by field_type (helper for coerce)."""
@@ -167,15 +161,11 @@ class InputFieldSchema:
 
         if self.field_type == FieldType.SELECT:
             if self.options and value not in self.options:
-                errors.append(
-                    f"Field '{self.name}': '{value}' is not one of {self.options}."
-                )
+                errors.append(f"Field '{self.name}': '{value}' is not one of {self.options}.")
 
         elif self.field_type == FieldType.IP_ADDRESS:
             if not _is_valid_ip(str(value)):
-                errors.append(
-                    f"Field '{self.name}': '{value}' is not a valid IP address."
-                )
+                errors.append(f"Field '{self.name}': '{value}' is not a valid IP address.")
 
         elif self.field_type == FieldType.URL:
             if not _URL_RE.match(str(value)):
@@ -202,13 +192,9 @@ class InputFieldSchema:
         if self.field_type not in (FieldType.INTEGER, FieldType.FLOAT):
             return errors
         if self.min_value is not None and value < self.min_value:
-            errors.append(
-                f"Field '{self.name}': {value} is below minimum {self.min_value}."
-            )
+            errors.append(f"Field '{self.name}': {value} is below minimum {self.min_value}.")
         if self.max_value is not None and value > self.max_value:
-            errors.append(
-                f"Field '{self.name}': {value} exceeds maximum {self.max_value}."
-            )
+            errors.append(f"Field '{self.name}': {value} exceeds maximum {self.max_value}.")
         return errors
 
     def _validate_length(self, value: Any) -> List[str]:
@@ -222,13 +208,9 @@ class InputFieldSchema:
             return errors
         str_value = str(value)
         if self.min_length is not None and len(str_value) < self.min_length:
-            errors.append(
-                f"Field '{self.name}': length {len(str_value)} is below minimum {self.min_length}."
-            )
+            errors.append(f"Field '{self.name}': length {len(str_value)} is below minimum {self.min_length}.")
         if self.max_length is not None and len(str_value) > self.max_length:
-            errors.append(
-                f"Field '{self.name}': length {len(str_value)} exceeds maximum {self.max_length}."
-            )
+            errors.append(f"Field '{self.name}': length {len(str_value)} exceeds maximum {self.max_length}.")
         return errors
 
     def _validate_pattern(self, value: Any) -> List[str]:
@@ -236,9 +218,7 @@ class InputFieldSchema:
         if self.field_type != FieldType.STRING or not self.pattern:
             return []
         if not re.match(self.pattern, str(value)):
-            return [
-                f"Field '{self.name}': '{value}' does not match pattern '{self.pattern}'."
-            ]
+            return [f"Field '{self.name}': '{value}' does not match pattern '{self.pattern}'."]
         return []
 
     # ------------------------------------------------------------------
@@ -516,9 +496,7 @@ class WorkflowOutputFormatter:
         success_rate = execution_context.get("success_rate", 0.0)
         step_results: Dict[str, Any] = execution_context.get("step_results", {})
 
-        rows = "\n".join(
-            _html_step_row(step_id, result) for step_id, result in step_results.items()
-        )
+        rows = "\n".join(_html_step_row(step_id, result) for step_id, result in step_results.items())
 
         return (
             f"<article>\n"
@@ -702,13 +680,7 @@ def _md_step_results(execution_context: Dict[str, Any], lines: List[str]) -> Non
 
 def _esc(text: str) -> str:
     """Escape HTML special characters."""
-    return (
-        str(text)
-        .replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-    )
+    return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
 
 def _html_step_row(step_id: str, result: Dict[str, Any]) -> str:
@@ -716,11 +688,4 @@ def _html_step_row(step_id: str, result: Dict[str, Any]) -> str:
     success = "yes" if result.get("success") else "no"
     agent = _esc(str(result.get("agent_id", "")))
     error = _esc(str(result.get("error", "")))
-    return (
-        f"<tr>"
-        f"<td>{_esc(step_id)}</td>"
-        f"<td>{success}</td>"
-        f"<td>{agent}</td>"
-        f"<td>{error}</td>"
-        f"</tr>"
-    )
+    return f"<tr>" f"<td>{_esc(step_id)}</td>" f"<td>{success}</td>" f"<td>{agent}</td>" f"<td>{error}</td>" f"</tr>"

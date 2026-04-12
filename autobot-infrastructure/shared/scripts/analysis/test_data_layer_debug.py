@@ -29,9 +29,7 @@ def test_redis_basic():
 
     try:
         # Test direct connection
-        client = redis.Redis(
-            host="localhost", port=6379, decode_responses=True, socket_timeout=2
-        )
+        client = redis.Redis(host="localhost", port=6379, decode_responses=True, socket_timeout=2)
         response = client.ping()
         logger.info("✅ Basic Redis connection: %s", response)
 
@@ -224,9 +222,7 @@ def test_backend_errors():
         db_info = manager.get_database_info()
         logger.info("\nDatabase mapping:")
         for name, config in db_info.items():
-            logger.info(
-                "  {name}: DB {config.get('db')} - %s", config.get("description")
-            )
+            logger.info("  {name}: DB {config.get('db')} - %s", config.get("description"))
 
     except Exception as e:
         logger.error("❌ Backend configuration test failed: %s", e)
@@ -239,18 +235,14 @@ async def test_async_redis():
 
     try:
         # Test async connection
-        redis_client = aioredis.from_url(
-            "redis://localhost:6379/0", decode_responses=True
-        )
+        redis_client = aioredis.from_url("redis://localhost:6379/0", decode_responses=True)
         result = await redis_client.ping()
         logger.info("✅ Async Redis ping: %s", result)
 
         # Test different databases async
         for db_num in [0, 1, 8]:
             try:
-                db_client = aioredis.from_url(
-                    f"redis://localhost:6379/{db_num}", decode_responses=True
-                )
+                db_client = aioredis.from_url(f"redis://localhost:6379/{db_num}", decode_responses=True)
                 key_count = await db_client.dbsize()
                 logger.info("✅ Async DB {db_num}: %s keys", key_count)
                 await db_client.close()

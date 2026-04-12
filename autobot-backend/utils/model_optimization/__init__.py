@@ -19,10 +19,10 @@ from .system_resources import SystemResourceAnalyzer
 from .types import (
     CODE_COMPLEXITY_KEYWORDS,
     CODE_TASK_TYPES,
+    ModelCapabilityTier,
     ModelInfo,
     ModelPerformanceLevel,
     SystemResources,
-    ModelCapabilityTier,
     TaskRequest,
     estimate_model_memory_gb,
 )

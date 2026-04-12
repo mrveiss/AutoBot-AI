@@ -36,12 +36,10 @@ class TestDistributedServiceDiscoveryLazyInit:
         """ConfigManager must NOT be imported by this module (#3947)."""
         import utils.distributed_service_discovery as mod
 
-        assert not hasattr(mod, "unified_config_manager"), (
-            "unified_config_manager was imported — ConfigManager dependency not removed"
-        )
-        assert not hasattr(mod, "ConfigManager"), (
-            "ConfigManager was imported — dependency not removed"
-        )
+        assert not hasattr(
+            mod, "unified_config_manager"
+        ), "unified_config_manager was imported — ConfigManager dependency not removed"
+        assert not hasattr(mod, "ConfigManager"), "ConfigManager was imported — dependency not removed"
 
     def test_not_initialized_at_construction(self):
         """__init__ must be I/O-free; is_initialized must be False after construction."""
@@ -85,9 +83,9 @@ class TestDistributedServiceDiscoveryLazyInit:
 
         await instance.initialize()
 
-        assert len(registry_called) == 1, (
-            "_initialize_service_registry must be called exactly once from _initialize_impl"
-        )
+        assert (
+            len(registry_called) == 1
+        ), "_initialize_service_registry must be called exactly once from _initialize_impl"
 
     @pytest.mark.asyncio
     async def test_idempotent_initialize(self):
@@ -185,9 +183,7 @@ class TestGetServiceDiscoverySingleton:
         )
 
         first = instances[0]
-        assert all(inst is first for inst in instances), (
-            "All concurrent calls must receive the same singleton instance"
-        )
+        assert all(inst is first for inst in instances), "All concurrent calls must receive the same singleton instance"
 
 
 class TestServiceRegistryContents:
@@ -214,9 +210,7 @@ class TestServiceRegistryContents:
         expected_services = {"redis", "backend", "frontend", "npu_worker", "ai_stack", "browser", "ollama"}
         registered = set(instance.services.keys())
 
-        assert expected_services == registered, (
-            f"Expected services {expected_services}, got {registered}"
-        )
+        assert expected_services == registered, f"Expected services {expected_services}, got {registered}"
 
     @pytest.mark.asyncio
     async def test_service_endpoints_have_host_and_port(self):
@@ -273,9 +267,9 @@ class TestGetServiceUrl:
         url = await get_service_url("backend")
 
         assert url, "get_service_url must return a non-empty string"
-        assert url.startswith("http://") or url.startswith("https://"), (
-            f"URL must start with http:// or https://, got: {url}"
-        )
+        assert url.startswith("http://") or url.startswith(
+            "https://"
+        ), f"URL must start with http:// or https://, got: {url}"
 
     @pytest.mark.asyncio
     async def test_returns_fallback_for_unknown_service(self):

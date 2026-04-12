@@ -37,9 +37,7 @@ def _validate_sql_identifier(name: str, label: str = "identifier") -> str:
         ValueError: If the name contains characters outside the allowed set.
     """
     if not _SQL_IDENTIFIER_RE.match(name):
-        raise ValueError(
-            f"Invalid SQL {label} '{name}': only letters, digits, and underscores allowed"
-        )
+        raise ValueError(f"Invalid SQL {label} '{name}': only letters, digits, and underscores allowed")
     return name
 
 
@@ -67,9 +65,7 @@ def _parse_key_value_file(file_obj) -> Dict[str, str]:
     return config
 
 
-def _try_delete_old_file(
-    file_path: Path, current_time: float, max_age_seconds: int
-) -> bool:
+def _try_delete_old_file(file_path: Path, current_time: float, max_age_seconds: int) -> bool:
     """Try to delete file if older than max age (Issue #315 - extracted)."""
     if not file_path.is_file():
         return False
@@ -90,9 +86,7 @@ class CommonUtils:
     """Common utility functions used across the codebase"""
 
     @staticmethod
-    def load_config(
-        config_path: Union[str, Path], default: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    def load_config(config_path: Union[str, Path], default: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Centralized configuration loading utility
 
@@ -152,9 +146,7 @@ class CommonUtils:
             return False
 
     @staticmethod
-    def init_logger(
-        name: str, level: str = "INFO", format_str: Optional[str] = None
-    ) -> logging.Logger:
+    def init_logger(name: str, level: str = "INFO", format_str: Optional[str] = None) -> logging.Logger:
         """
         Centralized logger initialization
 
@@ -212,9 +204,7 @@ class CommonUtils:
             return None
 
     @staticmethod
-    def execute_sql_safely(
-        conn: sqlite3.Connection, sql: str, params: Optional[tuple] = None
-    ) -> bool:
+    def execute_sql_safely(conn: sqlite3.Connection, sql: str, params: Optional[tuple] = None) -> bool:
         """
         Execute SQL with consistent error handling
 
@@ -260,9 +250,7 @@ class CommonUtils:
             return False
 
     @staticmethod
-    def safe_json_load(
-        file_path: Union[str, Path], default: Optional[Any] = None
-    ) -> Any:
+    def safe_json_load(file_path: Union[str, Path], default: Optional[Any] = None) -> Any:
         """
         Safely load JSON file with error handling
 
@@ -315,9 +303,7 @@ class CommonUtils:
             return False
 
     @staticmethod
-    def validate_file_path(
-        file_path: Union[str, Path], must_exist: bool = False
-    ) -> bool:
+    def validate_file_path(file_path: Union[str, Path], must_exist: bool = False) -> bool:
         """
         Validate file path
 
@@ -378,9 +364,7 @@ class CommonUtils:
 
         try:
             return sum(
-                1
-                for file_path in temp_dir.iterdir()
-                if _try_delete_old_file(file_path, current_time, max_age_seconds)
+                1 for file_path in temp_dir.iterdir() if _try_delete_old_file(file_path, current_time, max_age_seconds)
             )
         except Exception as e:
             logging.error(f"Failed to cleanup temp files in {temp_dir}: {e}")
@@ -391,9 +375,7 @@ class DatabaseUtils:
     """Database-specific utility functions"""
 
     @staticmethod
-    def create_table_if_not_exists(
-        conn: sqlite3.Connection, table_name: str, schema: str
-    ) -> bool:
+    def create_table_if_not_exists(conn: sqlite3.Connection, table_name: str, schema: str) -> bool:
         """
         Create table if it doesn't exist
 
@@ -470,11 +452,7 @@ class ConfigUtils:
         result = base.copy()
 
         for key, value in override.items():
-            if (
-                key in result
-                and isinstance(result[key], dict)
-                and isinstance(value, dict)
-            ):
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
                 result[key] = ConfigUtils.merge_configs(result[key], value)
             else:
                 result[key] = value
@@ -482,9 +460,7 @@ class ConfigUtils:
         return result
 
     @staticmethod
-    def get_nested_value(
-        config: Dict[str, Any], key_path: str, default: Any = None
-    ) -> Any:
+    def get_nested_value(config: Dict[str, Any], key_path: str, default: Any = None) -> Any:
         """
         Get nested configuration value using dot notation
 
@@ -612,9 +588,7 @@ class PathUtils:
             return str(Path(path).resolve())
 
     @staticmethod
-    def is_safe_path(
-        path: Union[str, Path], allowed_dirs: Optional[list] = None
-    ) -> bool:
+    def is_safe_path(path: Union[str, Path], allowed_dirs: Optional[list] = None) -> bool:
         """
         Check if path is safe (within allowed directories) (Issue #315 - refactored).
 

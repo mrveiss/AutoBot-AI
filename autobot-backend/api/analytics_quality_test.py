@@ -13,9 +13,10 @@ Tests the following functionality:
 
 import sys
 import types
-import pytest
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 def _make_shared_mock(return_path=None):
@@ -35,43 +36,43 @@ class TestGetGrade:
 
     def test_a_grade_for_high_score(self):
         """Score >= 90 should yield grade A."""
-        from api.analytics_quality import get_grade, QualityGrade
+        from api.analytics_quality import QualityGrade, get_grade
 
         assert get_grade(95.0) == QualityGrade.A
 
     def test_b_grade_for_mid_score(self):
         """Score >= 80 should yield grade B."""
-        from api.analytics_quality import get_grade, QualityGrade
+        from api.analytics_quality import QualityGrade, get_grade
 
         assert get_grade(85.0) == QualityGrade.B
 
     def test_c_grade(self):
         """Score >= 70 should yield grade C."""
-        from api.analytics_quality import get_grade, QualityGrade
+        from api.analytics_quality import QualityGrade, get_grade
 
         assert get_grade(75.0) == QualityGrade.C
 
     def test_d_grade(self):
         """Score >= 60 should yield grade D."""
-        from api.analytics_quality import get_grade, QualityGrade
+        from api.analytics_quality import QualityGrade, get_grade
 
         assert get_grade(65.0) == QualityGrade.D
 
     def test_f_grade_for_low_score(self):
         """Score < 60 should yield grade F."""
-        from api.analytics_quality import get_grade, QualityGrade
+        from api.analytics_quality import QualityGrade, get_grade
 
         assert get_grade(50.0) == QualityGrade.F
 
     def test_boundary_score_90(self):
         """Exactly 90 should yield A."""
-        from api.analytics_quality import get_grade, QualityGrade
+        from api.analytics_quality import QualityGrade, get_grade
 
         assert get_grade(90.0) == QualityGrade.A
 
     def test_boundary_score_just_below_90(self):
         """89.9 should yield B not A."""
-        from api.analytics_quality import get_grade, QualityGrade
+        from api.analytics_quality import QualityGrade, get_grade
 
         assert get_grade(89.9) == QualityGrade.B
 
@@ -81,7 +82,7 @@ class TestCalculateHealthScore:
 
     def test_returns_health_score_object(self):
         """Should return a HealthScore with overall, grade, and breakdown."""
-        from api.analytics_quality import calculate_health_score, HealthScore
+        from api.analytics_quality import HealthScore, calculate_health_score
 
         metrics = {
             "maintainability": 80.0,

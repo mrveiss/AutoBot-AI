@@ -246,9 +246,7 @@ async def test_reconstruct_response_with_annotation(grounded_agent):
     )
 
     original = "The latency increased by 15%."
-    reconstructed = await grounded_agent._reconstruct_response(
-        original, [verified]
-    )
+    reconstructed = await grounded_agent._reconstruct_response(original, [verified])
 
     assert "Latency increased" in reconstructed
     assert reconstructed != original or "[KB source" in reconstructed
@@ -266,9 +264,7 @@ async def test_reconstruct_response_no_match(grounded_agent):
     )
 
     original = "The system is fine."
-    reconstructed = await grounded_agent._reconstruct_response(
-        original, [verified]
-    )
+    reconstructed = await grounded_agent._reconstruct_response(original, [verified])
 
     assert reconstructed == original
 

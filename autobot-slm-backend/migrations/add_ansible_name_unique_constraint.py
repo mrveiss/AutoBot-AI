@@ -26,9 +26,7 @@ def migrate(db_url: str) -> None:
     index_name = "uq_nodes_ansible_name"
     if not index_exists(cursor, index_name):
         cursor.execute(
-            "CREATE UNIQUE INDEX uq_nodes_ansible_name"
-            " ON nodes (ansible_name)"
-            " WHERE ansible_name IS NOT NULL"
+            "CREATE UNIQUE INDEX uq_nodes_ansible_name" " ON nodes (ansible_name)" " WHERE ansible_name IS NOT NULL"
         )
         logger.info(
             "Migration: created unique index %s on nodes.ansible_name",

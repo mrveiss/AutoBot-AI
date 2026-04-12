@@ -57,9 +57,7 @@ async def test_documentation_browser_logic():
                 return f"docs/{parts[1]}"
             return "docs/root"
 
-        def _build_file_info(
-            item: Path, content: str, project_root: Path, category_prefix: str
-        ) -> dict:
+        def _build_file_info(item: Path, content: str, project_root: Path, category_prefix: str) -> dict:
             """Build file info dict for a single file (Issue #315: extracted helper)."""
             stat = item.stat()
             content_hash = hashlib.md5(content.encode("utf-8")).hexdigest()[:8]
@@ -87,9 +85,7 @@ async def test_documentation_browser_logic():
                 "word_count": len(content.split()) if content else 0,
             }
 
-        def _process_doc_file(
-            item: Path, project_root: Path, category_prefix: str
-        ) -> dict:
+        def _process_doc_file(item: Path, project_root: Path, category_prefix: str) -> dict:
             """Process a single documentation file (Issue #315: extracted helper)."""
             with open(item, "r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
@@ -109,26 +105,16 @@ async def test_documentation_browser_logic():
                 for item in dir_path.iterdir():
                     if item.is_file() and item.suffix.lower() in doc_extensions:
                         try:
-                            file_info = _process_doc_file(
-                                item, project_root, category_prefix
-                            )
+                            file_info = _process_doc_file(item, project_root, category_prefix)
                             files.append(file_info)
                             total_size += file_info["size_bytes"]
                             total_docs += 1
                         except Exception as e:
                             logger.warning(f"Error processing file {item}: {e}")
 
-                    elif (
-                        item.is_dir()
-                        and not item.name.startswith(".")
-                        and item.name != "__pycache__"
-                    ):
+                    elif item.is_dir() and not item.name.startswith(".") and item.name != "__pycache__":
                         # Recursively scan subdirectories
-                        subdir_category = (
-                            f"{category_prefix}/{item.name}"
-                            if category_prefix
-                            else item.name
-                        )
+                        subdir_category = f"{category_prefix}/{item.name}" if category_prefix else item.name
                         subdir_files = scan_directory(item, subdir_category)
                         files.extend(subdir_files)
 
@@ -179,9 +165,7 @@ async def test_documentation_browser_logic():
                     total_docs += 1
 
                     print(f"✅ {file_path} - {title}")
-                    print(
-                        f"   Size: {file_info['size_chars']} chars, {file_info['line_count']} lines"
-                    )
+                    print(f"   Size: {file_info['size_chars']} chars, {file_info['line_count']} lines")
 
                 except Exception as e:
                     print(f"❌ Error processing {file_path}: {e}")
@@ -231,11 +215,7 @@ async def test_documentation_browser_logic():
             if "AutoBot" in content:
                 print(f"✅ {test_file} contains AutoBot information")
                 # Find lines with AutoBot
-                lines_with_autobot = [
-                    i + 1
-                    for i, line in enumerate(content.split("\n"))
-                    if "AutoBot" in line
-                ]
+                lines_with_autobot = [i + 1 for i, line in enumerate(content.split("\n")) if "AutoBot" in line]
                 print(f"   AutoBot mentioned on lines: {lines_with_autobot[:10]}...")
             else:
                 print(f"❌ {test_file} does not contain AutoBot information")

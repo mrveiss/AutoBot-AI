@@ -307,9 +307,7 @@ def _alert_rule_to_model(rule: AlertRule) -> AlertRuleModel:
     )
 
 
-async def _calculate_slo_compliance(
-    db: AsyncSession, slo: SLODefinition
-) -> Optional[float]:
+async def _calculate_slo_compliance(db: AsyncSession, slo: SLODefinition) -> Optional[float]:
     """Calculate SLO compliance percentage. Helper for performance.py (Issue #752)."""
     cutoff = datetime.utcnow() - timedelta(days=slo.window_days)
     query = select(PerformanceTrace).where(PerformanceTrace.created_at >= cutoff)
@@ -337,9 +335,7 @@ async def _calculate_slo_compliance(
     return (compliant / len(traces)) * 100
 
 
-def _generate_prometheus_metrics(
-    traces: List[PerformanceTrace], slos: List[SLODefinition]
-) -> str:
+def _generate_prometheus_metrics(traces: List[PerformanceTrace], slos: List[SLODefinition]) -> str:
     """Generate Prometheus text format. Helper for performance.py (Issue #752)."""
     lines = []
     lines.append("# HELP autobot_trace_duration_ms Trace duration in milliseconds")
@@ -377,15 +373,11 @@ def _build_empty_overview() -> PerformanceOverviewResponse:
 
 async def _fetch_active_slos_count(db: AsyncSession) -> int:
     """Fetch count of active SLOs. Helper for performance.py (Issue #752)."""
-    result = await db.execute(
-        select(SLODefinition).where(SLODefinition.enabled.is_(True))
-    )
+    result = await db.execute(select(SLODefinition).where(SLODefinition.enabled.is_(True)))
     return len(result.scalars().all())
 
 
-async def _fetch_top_slow_traces(
-    db: AsyncSession, cutoff: datetime, limit: int
-) -> List[Dict[str, Any]]:
+async def _fetch_top_slow_traces(db: AsyncSession, cutoff: datetime, limit: int) -> List[Dict[str, Any]]:
     """Fetch top slow traces. Helper for performance.py (Issue #752)."""
     result = await db.execute(
         select(PerformanceTrace)
@@ -394,10 +386,7 @@ async def _fetch_top_slow_traces(
         .limit(limit)
     )
     traces = result.scalars().all()
-    return [
-        {"trace_id": t.trace_id, "name": t.name, "duration_ms": t.duration_ms}
-        for t in traces
-    ]
+    return [{"trace_id": t.trace_id, "name": t.name, "duration_ms": t.duration_ms} for t in traces]
 
 
 # =============================================================================
@@ -413,9 +402,7 @@ async def get_performance_overview(
 ) -> PerformanceOverviewResponse:
     """Get performance overview with aggregated metrics."""
     cutoff = datetime.utcnow() - timedelta(hours=hours)
-    result = await db.execute(
-        select(PerformanceTrace).where(PerformanceTrace.created_at >= cutoff)
-    )
+    result = await db.execute(select(PerformanceTrace).where(PerformanceTrace.created_at >= cutoff))
     traces = result.scalars().all()
 
     if not traces:
@@ -432,9 +419,7 @@ async def get_performance_overview(
         avg_latency_ms=sum(durations) / len(durations),
         p95_latency_ms=_calculate_percentile(durations, 95),
         p99_latency_ms=_calculate_percentile(durations, 99),
-        throughput_rpm=(
-            len(traces) / time_span_minutes if time_span_minutes > 0 else 0.0
-        ),
+        throughput_rpm=(len(traces) / time_span_minutes if time_span_minutes > 0 else 0.0),
         error_rate_percent=(errors / len(traces)) * 100,
         total_traces=len(traces),
         active_slos=active_slos,
@@ -462,9 +447,7 @@ async def get_traces(
     if node_id:
         query = query.where(PerformanceTrace.source_node_id == node_id)
 
-    count_result = await db.execute(
-        select(func.count(PerformanceTrace.id)).select_from(query.subquery())
-    )
+    count_result = await db.execute(select(func.count(PerformanceTrace.id)).select_from(query.subquery()))
     total = count_result.scalar() or 0
 
     query = query.order_by(desc(PerformanceTrace.created_at))
@@ -487,9 +470,7 @@ async def get_trace_detail(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> TraceDetailResponse:
     """Get detailed trace with all spans."""
-    trace_result = await db.execute(
-        select(PerformanceTrace).where(PerformanceTrace.trace_id == trace_id)
-    )
+    trace_result = await db.execute(select(PerformanceTrace).where(PerformanceTrace.trace_id == trace_id))
     trace = trace_result.scalar_one_or_none()
 
     if not trace:
@@ -498,14 +479,10 @@ async def get_trace_detail(
             detail=f"Trace {trace_id} not found",
         )
 
-    spans_result = await db.execute(
-        select(TraceSpan).where(TraceSpan.trace_id == trace_id)
-    )
+    spans_result = await db.execute(select(TraceSpan).where(TraceSpan.trace_id == trace_id))
     spans = spans_result.scalars().all()
 
-    return TraceDetailResponse(
-        trace=_trace_to_model(trace), spans=[_span_to_model(s) for s in spans]
-    )
+    return TraceDetailResponse(trace=_trace_to_model(trace), spans=[_span_to_model(s) for s in spans])
 
 
 @router.get("/slos", response_model=List[SLOModel])
@@ -560,9 +537,7 @@ async def delete_slo(
     _: Annotated[dict, Depends(get_current_user)],
 ):
     """Delete an SLO definition."""
-    result = await db.execute(
-        select(SLODefinition).where(SLODefinition.slo_id == slo_id)
-    )
+    result = await db.execute(select(SLODefinition).where(SLODefinition.slo_id == slo_id))
     slo = result.scalar_one_or_none()
 
     if not slo:
@@ -586,9 +561,7 @@ async def get_alert_rules(
     return [_alert_rule_to_model(r) for r in rules]
 
 
-@router.post(
-    "/alerts/rules", response_model=AlertRuleModel, status_code=status.HTTP_201_CREATED
-)
+@router.post("/alerts/rules", response_model=AlertRuleModel, status_code=status.HTTP_201_CREATED)
 async def create_alert_rule(
     request: AlertRuleCreateRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -649,9 +622,7 @@ async def update_alert_rule(
     if request.node_id is not None:
         rule.node_id = request.node_id
     if request.notification_channels is not None:
-        rule.notification_channels = _serialize_json_field(
-            request.notification_channels
-        )
+        rule.notification_channels = _serialize_json_field(request.notification_channels)
     if request.enabled is not None:
         rule.enabled = request.enabled
 
@@ -724,9 +695,7 @@ async def get_node_metrics(
         p95_latency_ms=_calculate_percentile(durations, 95),
         p99_latency_ms=_calculate_percentile(durations, 99),
         error_rate_percent=(errors / len(traces)) * 100,
-        throughput_rpm=(
-            len(traces) / time_span_minutes if time_span_minutes > 0 else 0.0
-        ),
+        throughput_rpm=(len(traces) / time_span_minutes if time_span_minutes > 0 else 0.0),
         total_traces=len(traces),
     )
 
@@ -737,9 +706,7 @@ async def get_prometheus_metrics(
 ) -> Response:
     """Export metrics in Prometheus text format."""
     cutoff = datetime.utcnow() - timedelta(hours=1)
-    traces_result = await db.execute(
-        select(PerformanceTrace).where(PerformanceTrace.created_at >= cutoff)
-    )
+    traces_result = await db.execute(select(PerformanceTrace).where(PerformanceTrace.created_at >= cutoff))
     traces = traces_result.scalars().all()
 
     slos_result = await db.execute(select(SLODefinition))

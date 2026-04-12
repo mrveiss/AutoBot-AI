@@ -22,9 +22,7 @@ from agents.development_speedup_agent import analyze_codebase, development_speed
 from agents.npu_code_search_agent import index_project, npu_code_search, search_codebase
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -57,9 +55,7 @@ async def test_npu_code_search():
             if result.get("skipped_files", 0) > 0:
                 logger.info(f"   ⏭️  Skipped {result['skipped_files']} non-code files")
         else:
-            logger.error(
-                f"   ❌ Indexing failed: {result.get('error', 'Unknown error')}"
-            )
+            logger.error(f"   ❌ Indexing failed: {result.get('error', 'Unknown error')}")
             return False
     except Exception as e:
         logger.error(f"   ❌ Indexing error: {e}")
@@ -92,9 +88,7 @@ async def test_npu_code_search():
     logger.info("\n3. Testing search capabilities...")
     for i, test in enumerate(search_tests, 1):
         try:
-            results = await search_codebase(
-                query=test["query"], search_type=test["type"], max_results=5
-            )
+            results = await search_codebase(query=test["query"], search_type=test["type"], max_results=5)
 
             stats = npu_code_search.get_search_stats()
             logger.info(f"   {i}. {test['name']}")
@@ -133,12 +127,8 @@ async def test_development_speedup():
         potential_savings = duplicates.get("potential_savings", {})
 
         logger.info(f"   🔍 Total duplicates found: {total_duplicates}")
-        print(
-            f"   💾 Potential line savings: {potential_savings.get('lines_of_code', 0)}"
-        )
-        print(
-            f"   📁 Files affected: {potential_savings.get('estimated_files_affected', 0)}"
-        )
+        print(f"   💾 Potential line savings: {potential_savings.get('lines_of_code', 0)}")
+        print(f"   📁 Files affected: {potential_savings.get('estimated_files_affected', 0)}")
 
         # Show examples
         code_duplicates = duplicates.get("code_block_duplicates", [])
@@ -167,9 +157,7 @@ async def test_development_speedup():
         # Show pattern examples
         pattern_list = patterns.get("patterns", [])
         for pattern in pattern_list[:3]:  # Show first 3 patterns
-            print(
-                f"   📊 {pattern['pattern_type']}: {pattern['total_occurrences']} occurrences"
-            )
+            print(f"   📊 {pattern['pattern_type']}: {pattern['total_occurrences']} occurrences")
             logger.info(f"      💡 Suggestion: {pattern['suggestion']}")
 
     except Exception as e:
@@ -178,9 +166,7 @@ async def test_development_speedup():
     # Test 3: Import analysis
     logger.info("\n3. Testing import analysis...")
     try:
-        imports = await development_speedup.analyze_imports_and_dependencies(
-            project_root
-        )
+        imports = await development_speedup.analyze_imports_and_dependencies(project_root)
 
         most_used = imports.get("most_used_modules", [])
         unused = imports.get("potential_unused_imports", [])
@@ -192,9 +178,7 @@ async def test_development_speedup():
         logger.info(f"   🗑️  Potentially unused imports: {len(unused)}")
         if unused:
             for unused_import in unused[:3]:  # Show first 3
-                print(
-                    f"      - {unused_import['file']}:{unused_import['line']} - {unused_import['import']}"
-                )
+                print(f"      - {unused_import['file']}:{unused_import['line']} - {unused_import['import']}")
 
     except Exception as e:
         logger.error(f"   ❌ Import analysis failed: {e}")
@@ -215,15 +199,9 @@ async def test_development_speedup():
             logger.info(f"      {i}. {rec}")
 
         # Show summary stats
-        duplicate_savings = (
-            analysis.get("duplicate_code", {})
-            .get("potential_savings", {})
-            .get("lines_of_code", 0)
-        )
+        duplicate_savings = analysis.get("duplicate_code", {}).get("potential_savings", {}).get("lines_of_code", 0)
         pattern_issues = analysis.get("code_patterns", {}).get("total_patterns", 0)
-        refactoring_ops = analysis.get("refactoring_opportunities", {}).get(
-            "total_opportunities", 0
-        )
+        refactoring_ops = analysis.get("refactoring_opportunities", {}).get("total_opportunities", 0)
 
         logger.info("\n   📊 Summary:")
         logger.info(f"      🔄 Duplicate code savings: {duplicate_savings} lines")
@@ -270,21 +248,15 @@ async def test_performance_comparison():
                 npu_used_count += 1
 
             logger.info(f"   {i}. Query: '{query}' ({search_type})")
-            logger.info(
-                f"      Results: {len(results)}, Time: {search_time*1000:.1f}ms"
-            )
-            print(
-                f"      NPU: {stats.npu_acceleration_used}, Cache: {stats.redis_cache_hit}"
-            )
+            logger.info(f"      Results: {len(results)}, Time: {search_time*1000:.1f}ms")
+            print(f"      NPU: {stats.npu_acceleration_used}, Cache: {stats.redis_cache_hit}")
 
         except Exception as e:
             logger.error(f"   ❌ Query {i} failed: {e}")
 
     logger.info("\n📊 Performance Summary:")
     logger.info(f"   ⏱️  Total search time: {total_time*1000:.1f}ms")
-    logger.info(
-        f"   🚀 NPU acceleration used: {npu_used_count}/{len(test_queries)} queries"
-    )
+    logger.info(f"   🚀 NPU acceleration used: {npu_used_count}/{len(test_queries)} queries")
     logger.info("   💾 Redis indexing: ✅ Active")
 
     return True
@@ -314,9 +286,7 @@ async def test_cache_performance():
     time1 = time.time() - start_time
     stats1 = npu_code_search.get_search_stats()
 
-    logger.info(
-        f"   1st search: {time1*1000:.1f}ms, Cache hit: {stats1.redis_cache_hit}"
-    )
+    logger.info(f"   1st search: {time1*1000:.1f}ms, Cache hit: {stats1.redis_cache_hit}")
 
     # Second search (should hit cache)
     start_time = time.time()
@@ -324,9 +294,7 @@ async def test_cache_performance():
     time2 = time.time() - start_time
     stats2 = npu_code_search.get_search_stats()
 
-    logger.info(
-        f"   2nd search: {time2*1000:.1f}ms, Cache hit: {stats2.redis_cache_hit}"
-    )
+    logger.info(f"   2nd search: {time2*1000:.1f}ms, Cache hit: {stats2.redis_cache_hit}")
 
     # Calculate speedup
     if time1 > 0 and time2 > 0:
@@ -381,9 +349,7 @@ async def main():
     logger.error(f"❌ Failed: {total_tests - success_count}/{total_tests}")
 
     if success_count == total_tests:
-        logger.info(
-            "\n🎉 All tests passed! NPU Worker and Redis Code Search are operational."
-        )
+        logger.info("\n🎉 All tests passed! NPU Worker and Redis Code Search are operational.")
         logger.info("\n📋 Capabilities verified:")
         logger.info("   ✅ NPU-accelerated semantic search")
         logger.info("   ✅ Redis-based code indexing")
@@ -395,9 +361,7 @@ async def main():
 
         logger.info("\n🚀 Ready for development acceleration!")
     else:
-        print(
-            f"\n⚠️  {total_tests - success_count} test suite(s) failed. Check logs above."
-        )
+        print(f"\n⚠️  {total_tests - success_count} test suite(s) failed. Check logs above.")
         return 1
 
     return 0

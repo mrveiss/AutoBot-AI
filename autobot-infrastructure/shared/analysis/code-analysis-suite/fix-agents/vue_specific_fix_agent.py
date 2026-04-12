@@ -25,9 +25,7 @@ logger = logging.getLogger(__name__)
 class VueSpecificFixAgent:
     """Agent to fix Vue.js specific issues in the codebase."""
 
-    def __init__(
-        self, project_root: str = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
-    ):
+    def __init__(self, project_root: str = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"):
         """Initialize the Vue fix agent."""
         self.project_root = Path(project_root)
         self.vue_dir = self.project_root / "autobot-vue" / "src"
@@ -35,9 +33,7 @@ class VueSpecificFixAgent:
         self.errors = []
 
         # Pattern matchers for Vue issues
-        self.vfor_index_key_pattern = re.compile(
-            r'v-for="[^"]*"\s+:key="(?:.*?index.*?)"', re.MULTILINE | re.DOTALL
-        )
+        self.vfor_index_key_pattern = re.compile(r'v-for="[^"]*"\s+:key="(?:.*?index.*?)"', re.MULTILINE | re.DOTALL)
 
         self.event_listener_patterns = {
             "addEventListener": re.compile(
@@ -177,9 +173,7 @@ class VueSpecificFixAgent:
                 )
 
             # Find removeEventListener calls
-            remove_match = self.event_listener_patterns["removeEventListener"].search(
-                line
-            )
+            remove_match = self.event_listener_patterns["removeEventListener"].search(line)
             if remove_match:
                 event_type = remove_match.group(1)
                 handler = remove_match.group(2).strip()
@@ -213,8 +207,7 @@ class VueSpecificFixAgent:
                         "handler": add_listener["handler"],
                         "issue_type": "missing_event_cleanup",
                         "suggested_cleanup": (
-                            f"removeEventListener('{add_listener['event']}', "
-                            f"{add_listener['handler']})"
+                            f"removeEventListener('{add_listener['event']}', " f"{add_listener['handler']})"
                         ),
                     }
                 )
@@ -265,9 +258,7 @@ class VueSpecificFixAgent:
                 "type": "vfor_key_fix",
                 "line": issue["line"],
                 "original": issue["content"],
-                "fixed": issue["content"].replace(
-                    f':key="{issue["current_key"]}"', f':key="{issue["suggested_key"]}"'
-                ),
+                "fixed": issue["content"].replace(f':key="{issue["current_key"]}"', f':key="{issue["suggested_key"]}"'),
                 "description": f'Replace index key with unique identifier: {issue["suggested_key"]}',
             }
             fixes.append(fix)
@@ -315,9 +306,7 @@ beforeDestroy() {{
                 # Replace the specific line
                 line_idx = fix["line"] - 1
                 if 0 <= line_idx < len(lines):
-                    lines[line_idx] = lines[line_idx].replace(
-                        fix["original"].strip(), fix["fixed"].strip()
-                    )
+                    lines[line_idx] = lines[line_idx].replace(fix["original"].strip(), fix["fixed"].strip())
                     if not lines[line_idx].endswith("\n"):
                         lines[line_idx] += "\n"
 
@@ -329,9 +318,7 @@ beforeDestroy() {{
             with open(file_path, "w", encoding="utf-8") as f:
                 f.writelines(lines)
 
-            self.fixes_applied.append(
-                {"file": str(file_path), "fix": fix, "status": "applied"}
-            )
+            self.fixes_applied.append({"file": str(file_path), "fix": fix, "status": "applied"})
 
             return True
 
@@ -375,9 +362,7 @@ beforeDestroy() {{
             # Add to Options API
             self.add_options_cleanup(lines, script_start, script_end, cleanup_code)
 
-    def add_composition_cleanup(
-        self, lines: List[str], script_start: int, script_end: int, cleanup_code: str
-    ):
+    def add_composition_cleanup(self, lines: List[str], script_start: int, script_end: int, cleanup_code: str):
         """Add cleanup code to Composition API setup function."""
         # Find the setup function return statement
         for i in range(script_end - 1, script_start, -1):
@@ -387,17 +372,14 @@ beforeDestroy() {{
                 cleanup_lines = [
                     " " * indent + "// Event listener cleanup\n",
                     " " * indent + "onBeforeUnmount(() => {\n",
-                    " " * indent
-                    + f'  {cleanup_code.split("beforeUnmount(() => {")[1].split("});")[0].strip()};\n',
+                    " " * indent + f'  {cleanup_code.split("beforeUnmount(() => {")[1].split("});")[0].strip()};\n',
                     " " * indent + "});\n",
                     "\n",
                 ]
                 lines[i:i] = cleanup_lines
                 break
 
-    def add_options_cleanup(
-        self, lines: List[str], script_start: int, script_end: int, cleanup_code: str
-    ):
+    def add_options_cleanup(self, lines: List[str], script_start: int, script_end: int, cleanup_code: str):
         """Add cleanup code to Options API beforeDestroy hook."""
         # Look for existing beforeDestroy or add new one
         for i in range(script_start, script_end):
@@ -411,8 +393,7 @@ beforeDestroy() {{
                 indent = len(lines[i]) - len(lines[i].lstrip())
                 cleanup_lines = [
                     " " * indent + "beforeDestroy() {\n",
-                    " " * indent
-                    + f'  {cleanup_code.split("beforeDestroy() {")[1].split("}")[0].strip()};\n',
+                    " " * indent + f'  {cleanup_code.split("beforeDestroy() {")[1].split("}")[0].strip()};\n',
                     " " * indent + "},\n",
                 ]
                 lines[i:i] = cleanup_lines
@@ -455,9 +436,7 @@ beforeDestroy() {{
 
                 # Count issues
                 for issue_type, issues in file_issues.items():
-                    if issue_type in results["issues_by_type"] and isinstance(
-                        issues, list
-                    ):
+                    if issue_type in results["issues_by_type"] and isinstance(issues, list):
                         count = len(issues)
                         results["issues_by_type"][issue_type] += count
                         results["total_issues"] += count
@@ -513,9 +492,7 @@ beforeDestroy() {{
 
         return fixes_summary
 
-    def generate_report(
-        self, analysis_results: Dict[str, Any], fixes_summary: Dict[str, Any]
-    ) -> str:
+    def generate_report(self, analysis_results: Dict[str, Any], fixes_summary: Dict[str, Any]) -> str:
         """Generate comprehensive Vue.js improvement report."""
         report = f"""
 # Vue.js Specific Fix Agent Report
@@ -556,10 +533,7 @@ Generated on: {analysis_results['timestamp']}
                 for issue in file_data["vfor_index_keys"]:
                     curr_key = issue["current_key"]
                     sugg_key = issue["suggested_key"]
-                    report += (
-                        f"- Line {issue['line']}: "
-                        f'Changed `:key="{curr_key}"` to `:key="{sugg_key}"`\n'
-                    )
+                    report += f"- Line {issue['line']}: " f'Changed `:key="{curr_key}"` to `:key="{sugg_key}"`\n'
 
         report += f"""
 ### Event Listener Cleanup ({fixes_summary['fixes_by_type'].get('event_cleanup_fix', 0)} fixes)
@@ -667,9 +641,7 @@ def main():
         print("=" * 60)
         print(f"Files Analyzed: {analysis_results['files_analyzed']}")
         print(f"Issues Found: {analysis_results['total_issues']}")
-        print(
-            f"Fixes Applied: {fixes_summary['successful_fixes']}/{fixes_summary['total_fixes']}"
-        )
+        print(f"Fixes Applied: {fixes_summary['successful_fixes']}/{fixes_summary['total_fixes']}")
         print(f"Files Modified: {len(fixes_summary['files_modified'])}")
         print(f"\nReports saved to: {results_dir}")
         print(f"- vue_analysis_results.json")
@@ -677,9 +649,7 @@ def main():
         print(f"- vue_improvement_report.md")
 
         if fixes_summary["failed_fixes"] > 0:
-            print(
-                f"\n⚠️  {fixes_summary['failed_fixes']} fixes failed - check error logs"
-            )
+            print(f"\n⚠️  {fixes_summary['failed_fixes']} fixes failed - check error logs")
         else:
             print(f"\n✅ All fixes applied successfully!")
 

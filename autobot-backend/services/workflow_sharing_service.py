@@ -143,9 +143,7 @@ class WorkflowSharingService:
 
         export_doc = await self._serializer.export_workflow(workflow_id)
         if export_doc is None:
-            logger.warning(
-                "share_workflow: workflow %s not found or not exportable", workflow_id
-            )
+            logger.warning("share_workflow: workflow %s not found or not exportable", workflow_id)
             return None
 
         share_id = str(uuid.uuid4())
@@ -160,9 +158,7 @@ class WorkflowSharingService:
 
         redis = await get_async_redis_client(database="workflows")
         if redis is None:
-            logger.error(
-                "share_workflow: Redis unavailable for workflow %s", workflow_id
-            )
+            logger.error("share_workflow: Redis unavailable for workflow %s", workflow_id)
             return None
 
         key = _share_key(share_id)
@@ -271,9 +267,7 @@ class WorkflowSharingService:
             if cursor == 0:
                 break
 
-        logger.debug(
-            "list_shared: found %s visible shares for user=%s", len(visible), user_id
-        )
+        logger.debug("list_shared: found %s visible shares for user=%s", len(visible), user_id)
         return visible
 
     # ------------------------------------------------------------------
@@ -351,9 +345,7 @@ class WorkflowSharingService:
             return True
         if user_id is None:
             return False
-        return (
-            record.get("owner_id") == user_id or record.get("target_user_id") == user_id
-        )
+        return record.get("owner_id") == user_id or record.get("target_user_id") == user_id
 
 
 def _strip_workflow_payload(record: Dict[str, Any]) -> Dict[str, Any]:

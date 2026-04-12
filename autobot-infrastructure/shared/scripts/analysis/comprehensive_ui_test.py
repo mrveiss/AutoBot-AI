@@ -93,9 +93,7 @@ class ComprehensiveUITester:
             "status": "unknown",
         }
 
-    async def _test_page_elements_by_type(
-        self, page_name: str, page_result: dict
-    ) -> None:
+    async def _test_page_elements_by_type(self, page_name: str, page_result: dict) -> None:
         """Test UI elements based on page type (Issue #315: extracted helper)."""
         page_testers = {
             "": self._test_dashboard_elements,
@@ -111,9 +109,7 @@ class ComprehensiveUITester:
         if tester:
             await tester(page_result)
 
-    async def _navigate_and_measure(
-        self, url: str, page_result: dict, page_name: str
-    ) -> None:
+    async def _navigate_and_measure(self, url: str, page_result: dict, page_name: str) -> None:
         """Navigate to page and measure load time (Issue #315: extracted helper)."""
         start_time = time.time()
         print(f"  📍 Navigating to {url}")
@@ -140,9 +136,7 @@ class ComprehensiveUITester:
             await self._collect_console_messages(page_result)
             await self._measure_page_performance(page_result)
 
-            page_result["status"] = (
-                "passed" if len(page_result["console_errors"]) == 0 else "warnings"
-            )
+            page_result["status"] = "passed" if len(page_result["console_errors"]) == 0 else "warnings"
             print(f"  ✅ Page test completed: {page_result['status']}")
 
         except Exception as e:
@@ -390,9 +384,7 @@ class ComprehensiveUITester:
                 print(f"        ✅ Changed selection in {description}")
 
             response_time = time.time() - start_time
-            element_result["response_time"] = round(
-                response_time * 1000, 2
-            )  # Convert to ms
+            element_result["response_time"] = round(response_time * 1000, 2)  # Convert to ms
             element_result["status"] = "passed"
 
             # Check for immediate console errors after action
@@ -419,9 +411,7 @@ class ComprehensiveUITester:
                 "HTTP 404: Not Found - Endpoint not found: /api/monitoring/services/status",
                 "WebSocket connection timeout after 15000ms",
             ]
-            element_result["console_errors"] = simulated_errors[
-                :1
-            ]  # Add one error for demo
+            element_result["console_errors"] = simulated_errors[:1]  # Add one error for demo
 
     async def _collect_console_messages(self, page_result):
         """Collect console messages from the page"""
@@ -502,12 +492,9 @@ class ComprehensiveUITester:
         # Calculate overall statistics
         total_errors = len(self.results.errors)
         total_warnings = len(self.results.warnings)
-        total_elements_tested = sum(
-            len(page["element_tests"]) for page in self.results.page_tests
-        )
+        total_elements_tested = sum(len(page["element_tests"]) for page in self.results.page_tests)
         successful_elements = sum(
-            sum(1 for test in page["element_tests"] if test["status"] == "passed")
-            for page in self.results.page_tests
+            sum(1 for test in page["element_tests"] if test["status"] == "passed") for page in self.results.page_tests
         )
 
         # Determine overall status
@@ -526,18 +513,17 @@ class ComprehensiveUITester:
                 "pages_tested": len(self.results.page_tests),
                 "elements_tested": total_elements_tested,
                 "successful_elements": successful_elements,
-                "success_rate": round(
-                    (successful_elements / max(total_elements_tested, 1)) * 100, 1
-                ),
+                "success_rate": round((successful_elements / max(total_elements_tested, 1)) * 100, 1),
                 "total_errors": total_errors,
                 "total_warnings": total_warnings,
-                "avg_load_time": round(
-                    sum(page["load_time"] for page in self.results.page_tests)
-                    / len(self.results.page_tests),
-                    3,
-                )
-                if self.results.page_tests
-                else 0,
+                "avg_load_time": (
+                    round(
+                        sum(page["load_time"] for page in self.results.page_tests) / len(self.results.page_tests),
+                        3,
+                    )
+                    if self.results.page_tests
+                    else 0
+                ),
             },
             "page_results": self.results.page_tests,
             "all_errors": self.results.errors,
@@ -638,16 +624,8 @@ class ComprehensiveUITester:
         if report.get("recommendations"):
             print(f"\n💡 RECOMMENDATIONS ({len(report['recommendations'])}):")
             for rec in report["recommendations"]:
-                priority_icon = (
-                    "🔴"
-                    if rec["priority"] == "high"
-                    else "🟡"
-                    if rec["priority"] == "medium"
-                    else "🟢"
-                )
-                print(
-                    f"  {priority_icon} {rec['recommendation']} ({rec['affected_count']} affected)"
-                )
+                priority_icon = "🔴" if rec["priority"] == "high" else "🟡" if rec["priority"] == "medium" else "🟢"
+                print(f"  {priority_icon} {rec['recommendation']} ({rec['affected_count']} affected)")
 
         print("\n" + "=" * 80)
 

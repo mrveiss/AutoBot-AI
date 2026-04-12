@@ -19,9 +19,7 @@ import re
 import sys
 
 # Add project root to path
-PROJECT_ROOT = os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, PROJECT_ROOT)
 
 logger = logging.getLogger(__name__)
@@ -47,9 +45,7 @@ def check_hardcoded_models(directory: str, extensions: list[str]) -> list[dict]:
     ]
 
     # Issue #506: Precompile and combine patterns - O(1) instead of O(p) per line
-    combined_pattern = re.compile(
-        "|".join(f"({p})" for p in hardcoded_patterns), re.IGNORECASE
-    )
+    combined_pattern = re.compile("|".join(f"({p})" for p in hardcoded_patterns), re.IGNORECASE)
 
     # Files/directories to skip
     skip_dirs = {"archives", "analysis", ".git", "__pycache__", "node_modules", ".venv"}
@@ -104,9 +100,7 @@ def verify_model_constants_usage():
         logger.info(f"  FALLBACK_MODEL: {FALLBACK_MODEL}")
         logger.info(f"  DEFAULT_OLLAMA_MODEL: {ModelConstants.DEFAULT_OLLAMA_MODEL}")
         logger.info(f"  DEFAULT_OPENAI_MODEL: {ModelConstants.DEFAULT_OPENAI_MODEL}")
-        logger.info(
-            f"  DEFAULT_ANTHROPIC_MODEL: {ModelConstants.DEFAULT_ANTHROPIC_MODEL}"
-        )
+        logger.info(f"  DEFAULT_ANTHROPIC_MODEL: {ModelConstants.DEFAULT_ANTHROPIC_MODEL}")
         logger.info("ModelConstants imported successfully")
         return True
     except ImportError as e:

@@ -21,9 +21,7 @@ from agents.web_researcher import ResearchType
 from security.secure_web_research import SecureWebResearch
 
 # Set up logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 # Security features summary (#825)

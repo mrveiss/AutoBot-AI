@@ -134,9 +134,7 @@ class TestCausalReasoningModule:
 
     def test_causal_reasoning_error_context(self):
         """Test error analysis context has cascading failure pattern."""
-        prompt = build_causal_reasoning_prompt(
-            context=CausalReasoningContext.ERROR_ANALYSIS, situation="Test error"
-        )
+        prompt = build_causal_reasoning_prompt(context=CausalReasoningContext.ERROR_ANALYSIS, situation="Test error")
 
         # Should include error cascade example
         assert "cascade" in prompt.lower() or "chain" in prompt.lower()
@@ -201,10 +199,7 @@ class TestCausalErrorAnalyzer:
 
             assert isinstance(analysis, CausalErrorAnalysis)
             assert analysis.confidence == 0.8
-            assert (
-                "root" in analysis.root_cause.lower()
-                or "n+1" in analysis.root_cause.lower()
-            )
+            assert "root" in analysis.root_cause.lower() or "n+1" in analysis.root_cause.lower()
             assert len(analysis.confounders_identified) > 0
 
     def test_build_analysis_context(self):
@@ -299,19 +294,14 @@ class TestCausalOutputValidation:
         assert "together" in correlational or "correlate" in correlational.lower()
 
         # Causal (good): "X causes Y by [mechanism]"
-        causal = (
-            "Increasing cache size REDUCES response time by eliminating "
-            "database queries that take 200ms"
-        )
+        causal = "Increasing cache size REDUCES response time by eliminating " "database queries that take 200ms"
         assert "REDUCES" in causal or "CAUSES" in causal
         assert "database queries" in causal
 
     def test_causal_chain_pattern(self):
         """Test causal chain A → B → C pattern."""
 
-        causal_chain = (
-            "Missing index → Full table scan → CPU bottleneck → " "Query timeout"
-        )
+        causal_chain = "Missing index → Full table scan → CPU bottleneck → " "Query timeout"
 
         parts = causal_chain.split("→")
         assert len(parts) == 4

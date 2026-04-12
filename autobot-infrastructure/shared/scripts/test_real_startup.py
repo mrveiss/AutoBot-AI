@@ -5,6 +5,7 @@
 """
 Test real AutoBot startup time without importing heavy libraries
 """
+
 import os
 import sys
 import time
@@ -43,12 +44,8 @@ def test_backend_import():
 
     total_time = time.time() - start_time
     print("\n🎯 SUMMARY:")
-    print(
-        f"Import time       : {import_duration:6.3f}s ({import_duration/total_time*100:4.1f}%)"
-    )
-    print(
-        f"App creation time : {app_duration:6.3f}s ({app_duration/total_time*100:4.1f}%)"
-    )
+    print(f"Import time       : {import_duration:6.3f}s ({import_duration/total_time*100:4.1f}%)")
+    print(f"App creation time : {app_duration:6.3f}s ({app_duration/total_time*100:4.1f}%)")
     print(f"Total time        : {total_time:6.3f}s")
 
     return import_duration, app_duration
@@ -71,9 +68,7 @@ def test_uvicorn_startup():
     # 2. Access app attributes (this should trigger lazy creation)
     access_start = time.time()
     app_type = type(main.app)  # This might trigger app creation
-    routes = (
-        len(main.app.routes) if hasattr(main.app, "routes") else 0
-    )  # This definitely will
+    routes = len(main.app.routes) if hasattr(main.app, "routes") else 0  # This definitely will
     access_time = time.time() - access_start
 
     total_time = time.time() - start_time

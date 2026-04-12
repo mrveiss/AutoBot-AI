@@ -39,9 +39,7 @@ def _find_documentation_files(project_root: Path) -> list:
 
     filtered_files = []
     for file_path in set(all_files):
-        should_exclude = any(
-            glob.fnmatch.fnmatch(file_path, exc) for exc in _EXCLUDE_PATTERNS
-        )
+        should_exclude = any(glob.fnmatch.fnmatch(file_path, exc) for exc in _EXCLUDE_PATTERNS)
         if not should_exclude and os.path.isfile(file_path):
             filtered_files.append(file_path)
 
@@ -118,9 +116,7 @@ async def populate_knowledge_base_chromadb():
                 "filename": os.path.basename(file_path),
             }
             logger.info("Adding: %s [%s]", rel_path, category)
-            result = await kb.add_file(
-                file_path=file_path, file_type="txt", metadata=metadata
-            )
+            result = await kb.add_file(file_path=file_path, file_type="txt", metadata=metadata)
             if result["status"] == "success":
                 success_count += 1
             else:

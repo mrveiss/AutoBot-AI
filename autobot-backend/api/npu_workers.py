@@ -36,7 +36,6 @@ import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 from fastapi.responses import JSONResponse
 
 from auth_middleware import check_admin_permission
@@ -52,6 +51,7 @@ from models.npu_models import (
     WorkerTestResult,
 )
 from services.npu_worker_manager import get_worker_manager
+from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 
 logger = logging.getLogger(__name__)
 

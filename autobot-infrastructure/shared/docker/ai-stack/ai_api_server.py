@@ -187,9 +187,7 @@ async def list_agents():
 async def process_agent_request(agent_type: str, request: Request):
     """Process a request for specific agent type"""
     if agent_type not in ai_server.agents:
-        raise HTTPException(
-            status_code=404, detail=f"Agent type '{agent_type}' not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Agent type '{agent_type}' not found")
 
     agent_request = None
     try:
@@ -220,11 +218,7 @@ async def process_agent_request(agent_type: str, request: Request):
         logger.error("Error processing request for %s: %s", agent_type, e)
         logger.error(traceback.format_exc())
 
-        req_id = (
-            getattr(agent_request, "request_id", "unknown")
-            if agent_request
-            else "unknown"
-        )
+        req_id = getattr(agent_request, "request_id", "unknown") if agent_request else "unknown"
         error_response = AgentResponse(
             request_id=req_id,
             agent_type=agent_type,
@@ -240,9 +234,7 @@ async def process_agent_request(agent_type: str, request: Request):
 async def agent_health(agent_type: str):
     """Get health status for specific agent"""
     if agent_type not in ai_server.agents:
-        raise HTTPException(
-            status_code=404, detail=f"Agent type '{agent_type}' not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Agent type '{agent_type}' not found")
 
     try:
         agent = ai_server.agents[agent_type]
@@ -273,9 +265,7 @@ async def agent_health(agent_type: str):
 async def agent_capabilities(agent_type: str):
     """Get capabilities for specific agent"""
     if agent_type not in ai_server.agents:
-        raise HTTPException(
-            status_code=404, detail=f"Agent type '{agent_type}' not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Agent type '{agent_type}' not found")
 
     try:
         agent = ai_server.agents[agent_type]
@@ -329,9 +319,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled exception: {exc}")
     logger.error(traceback.format_exc())
 
-    return JSONResponse(
-        status_code=500, content={"error": "Internal server error", "detail": str(exc)}
-    )
+    return JSONResponse(status_code=500, content={"error": "Internal server error", "detail": str(exc)})
 
 
 if __name__ == "__main__":

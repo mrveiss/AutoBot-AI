@@ -51,9 +51,7 @@ async def populate_directly():
         return False
 
     logger.info("✓ Knowledge base initialized successfully")
-    logger.info(
-        f"  Vector store type: {type(kb.vector_store).__name__ if kb.vector_store else 'In-memory'}"
-    )
+    logger.info(f"  Vector store type: {type(kb.vector_store).__name__ if kb.vector_store else 'In-memory'}")
     logger.info(f"  Embedding model: {kb.embedding_model_name}")
 
     # Find documentation files
@@ -67,9 +65,7 @@ async def populate_directly():
 
     # Remove duplicates and filter
     unique_files = list(set(all_files))
-    filtered_files = [
-        f for f in unique_files if os.path.isfile(f) and "node_modules" not in f
-    ]
+    filtered_files = [f for f in unique_files if os.path.isfile(f) and "node_modules" not in f]
 
     logger.info(f"Found {len(filtered_files)} documentation files")
 
@@ -103,9 +99,7 @@ async def populate_directly():
             logger.info(f"Adding: {rel_path} [{category}]")
 
             # Use add_file method directly
-            result = await kb.add_file(
-                file_path=file_path, file_type="txt", metadata=metadata
-            )
+            result = await kb.add_file(file_path=file_path, file_type="txt", metadata=metadata)
 
             if result["status"] == "success":
                 success_count += 1
@@ -125,8 +119,6 @@ if __name__ == "__main__":
     success = asyncio.run(populate_directly())
     if success:
         logger.info("\n🎉 Knowledge base populated successfully!")
-        print(
-            "You can now search for 'debian', 'installation', etc. in the AutoBot interface"
-        )
+        print("You can now search for 'debian', 'installation', etc. in the AutoBot interface")
     else:
         logger.error("\n💥 Knowledge base population failed!")

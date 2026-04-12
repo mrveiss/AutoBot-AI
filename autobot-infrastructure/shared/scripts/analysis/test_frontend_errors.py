@@ -10,8 +10,9 @@ import sys
 logger = logging.getLogger(__name__)
 
 
-from constants import ServiceURLs
 from playwright.async_api import async_playwright
+
+from constants import ServiceURLs
 
 
 async def capture_console_errors():
@@ -54,9 +55,7 @@ async def capture_console_errors():
         # Navigate to the page
         logger.info("Loading AutoBot frontend...")
         try:
-            response = await page.goto(
-                ServiceURLs.FRONTEND_LOCAL, wait_until="networkidle", timeout=30000
-            )
+            response = await page.goto(ServiceURLs.FRONTEND_LOCAL, wait_until="networkidle", timeout=30000)
             logger.info(f"Page loaded with status: {response.status}")
         except Exception as e:
             logger.error(f"Failed to load page: {e}")
@@ -66,8 +65,7 @@ async def capture_console_errors():
 
         # Try to get Vue DevTools info if available
         try:
-            vue_info = await page.evaluate(
-                """
+            vue_info = await page.evaluate("""
                 () => {
                     if (window.__VUE__) {
                         return 'Vue 3 detected';
@@ -76,8 +74,7 @@ async def capture_console_errors():
                     }
                     return 'Vue not detected';
                 }
-            """
-            )
+            """)
             logger.info(f"Vue status: {vue_info}")
         except Exception:
             logger.info("Could not check Vue status")
@@ -109,8 +106,7 @@ async def capture_console_errors():
 
         # Check for specific Vue components
         logger.info("\n=== CHECKING VUE COMPONENTS ===")
-        components_check = await page.evaluate(
-            """
+        components_check = await page.evaluate("""
             () => {
                 const checks = [];
 
@@ -132,8 +128,7 @@ async def capture_console_errors():
 
                 return checks;
             }
-        """
-        )
+        """)
 
         for check in components_check:
             logger.info(f"  {check}")

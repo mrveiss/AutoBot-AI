@@ -126,9 +126,7 @@ class NPUModelManager:
             "inference_count": 0,
         }
 
-    def _load_model_sync(
-        self, model_id: str, model_config: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _load_model_sync(self, model_id: str, model_config: Dict[str, Any]) -> Dict[str, Any]:
         """
         Load and compile a model synchronously (called from thread pool).
 
@@ -147,9 +145,7 @@ class NPUModelManager:
 
         return self._compile_model_for_device(model_id, model_path, model_config)
 
-    def _resolve_model_path(
-        self, model_id: str, model_config: Dict[str, Any]
-    ) -> Optional[Path]:
+    def _resolve_model_path(self, model_id: str, model_config: Dict[str, Any]) -> Optional[Path]:
         """
         Locate an OpenVINO IR (.xml) file for model_id.
 
@@ -175,9 +171,7 @@ class NPUModelManager:
 
         return None
 
-    def _make_stub_model_entry(
-        self, model_id: str, model_config: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _make_stub_model_entry(self, model_id: str, model_config: Dict[str, Any]) -> Dict[str, Any]:
         """
         Return a stub model entry used when OpenVINO is unavailable or the IR
         file is absent.  Inference will use the simulated path.
@@ -194,9 +188,7 @@ class NPUModelManager:
     # Async public API
     # ------------------------------------------------------------------
 
-    async def prefetch_model(
-        self, model_id: str, model_config: Dict[str, Any]
-    ) -> None:
+    async def prefetch_model(self, model_id: str, model_config: Dict[str, Any]) -> None:
         """
         Issue #1944: Start loading model_id in the background without waiting.
 
@@ -208,20 +200,14 @@ class NPUModelManager:
             logger.debug("prefetch_model: %s already loaded, skipping", model_id)
             return
         if model_id in self._prefetch_futures:
-            logger.debug(
-                "prefetch_model: %s already in-flight, skipping", model_id
-            )
+            logger.debug("prefetch_model: %s already in-flight, skipping", model_id)
             return
 
         logger.debug("Prefetching model %s in background", model_id)
-        future = self._executor.submit(
-            self._load_model_sync, model_id, model_config
-        )
+        future = self._executor.submit(self._load_model_sync, model_id, model_config)
         self._prefetch_futures[model_id] = future
 
-    async def load_model(
-        self, model_id: str, model_config: Dict[str, Any]
-    ) -> bool:
+    async def load_model(self, model_id: str, model_config: Dict[str, Any]) -> bool:
         """
         Load a model for NPU inference, using prefetch cache when available.
 
@@ -237,17 +223,13 @@ class NPUModelManager:
         try:
             entry = await self._resolve_model_entry(model_id, model_config)
             self.loaded_models[model_id] = entry
-            logger.info(
-                "Loaded model %s on device %s", model_id, entry["device"]
-            )
+            logger.info("Loaded model %s on device %s", model_id, entry["device"])
             return True
         except Exception as e:
             logger.error("Failed to load model %s: %s", model_id, e)
             return False
 
-    async def _await_prefetch_future(
-        self, model_id: str, future: "Future[Dict[str, Any]]"
-    ) -> Dict[str, Any]:
+    async def _await_prefetch_future(self, model_id: str, future: "Future[Dict[str, Any]]") -> Dict[str, Any]:
         """
         Await an in-flight prefetch Future without blocking the event loop.
 
@@ -259,7 +241,9 @@ class NPUModelManager:
             self._prefetch_hits += 1
             logger.debug(
                 "Prefetch HIT for %s (hits=%d misses=%d)",
-                model_id, self._prefetch_hits, self._prefetch_misses,
+                model_id,
+                self._prefetch_hits,
+                self._prefetch_misses,
             )
             return future.result()
 
@@ -270,13 +254,14 @@ class NPUModelManager:
         self._prefetch_hits += 1
         logger.debug(
             "Prefetch PARTIAL HIT for %s (waited %.1f ms, hits=%d misses=%d)",
-            model_id, wait_ms, self._prefetch_hits, self._prefetch_misses,
+            model_id,
+            wait_ms,
+            self._prefetch_hits,
+            self._prefetch_misses,
         )
         return entry
 
-    async def _resolve_model_entry(
-        self, model_id: str, model_config: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _resolve_model_entry(self, model_id: str, model_config: Dict[str, Any]) -> Dict[str, Any]:
         """
         Return a compiled model entry, honouring in-flight prefetch futures.
 
@@ -291,13 +276,14 @@ class NPUModelManager:
         self._prefetch_misses += 1
         t0 = time.monotonic()
         loop = asyncio.get_event_loop()
-        entry = await loop.run_in_executor(
-            self._executor, self._load_model_sync, model_id, model_config
-        )
+        entry = await loop.run_in_executor(self._executor, self._load_model_sync, model_id, model_config)
         load_ms = (time.monotonic() - t0) * 1000
         logger.debug(
             "Prefetch MISS for %s (load took %.1f ms, hits=%d misses=%d)",
-            model_id, load_ms, self._prefetch_hits, self._prefetch_misses,
+            model_id,
+            load_ms,
+            self._prefetch_hits,
+            self._prefetch_misses,
         )
         return entry
 
@@ -328,9 +314,7 @@ class NPUModelManager:
     # Inference
     # ------------------------------------------------------------------
 
-    async def inference(
-        self, model_id: str, input_text: str, **kwargs
-    ) -> Dict[str, Any]:
+    async def inference(self, model_id: str, input_text: str, **kwargs) -> Dict[str, Any]:
         """Run inference on the NPU, returning result with timing metrics.
 
         Issue #1944: Callers should invoke prefetch_model() for the *next*
@@ -347,9 +331,7 @@ class NPUModelManager:
         compiled = model_info.get("compiled_model")
         logger.debug("Running inference on %s for model %s", device, model_id)
         t0 = time.monotonic()
-        result = await self._run_inference_on_device(
-            compiled, device, input_text, model_info, **kwargs
-        )
+        result = await self._run_inference_on_device(compiled, device, input_text, model_info, **kwargs)
         return {
             "model_id": model_id,
             "device": device,
@@ -389,9 +371,7 @@ class NPUModelManager:
         await asyncio.sleep(simulated_ms / 1000)
         return f"NPU inference response for: {input_text[:50]}..."
 
-    def _infer_sync(
-        self, compiled: Any, input_text: str, kwargs: Dict[str, Any]
-    ) -> str:
+    def _infer_sync(self, compiled: Any, input_text: str, kwargs: Dict[str, Any]) -> str:
         """
         Run a single synchronous inference pass (called from thread pool).
 
@@ -407,9 +387,7 @@ class NPUModelManager:
             raise RuntimeError("numpy unavailable — OpenVINO import failed")
         try:
             infer_req = compiled.create_infer_request()
-            input_tensor = np.array(
-                [[ord(c) for c in input_text[:512]]], dtype=np.int64
-            )
+            input_tensor = np.array([[ord(c) for c in input_text[:512]]], dtype=np.int64)
             infer_req.infer({0: input_tensor})
             output = infer_req.get_output_tensor(0).data
             return str(output.flatten()[:20].tolist())
@@ -434,9 +412,7 @@ class NPUModelManager:
                 }
                 for model_id, info in self.loaded_models.items()
             },
-            "available_devices": (
-                self.core.available_devices if self.core else []
-            ),
+            "available_devices": (self.core.available_devices if self.core else []),
             "prefetch": self._get_prefetch_metrics(),
         }
 
@@ -449,9 +425,7 @@ class NPUModelManager:
             "misses": self._prefetch_misses,
             "hit_rate": hit_rate,
             "in_flight_prefetches": len(self._prefetch_futures),
-            "total_load_time_saved_ms": round(
-                self._total_load_time_saved_ms, 1
-            ),
+            "total_load_time_saved_ms": round(self._total_load_time_saved_ms, 1),
         }
 
     # ------------------------------------------------------------------

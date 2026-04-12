@@ -67,9 +67,7 @@ class TestWorkerNodeRefactored:
         registered_types = worker_node.task_executor.get_supported_task_types()
 
         for task_type in expected_task_types:
-            assert (
-                task_type in registered_types
-            ), f"Task type '{task_type}' not registered"
+            assert task_type in registered_types, f"Task type '{task_type}' not registered"
 
     @pytest.mark.asyncio
     async def test_permission_denied(self, worker_node):
@@ -107,9 +105,7 @@ class TestWorkerNodeRefactored:
     @pytest.mark.asyncio
     async def test_llm_chat_completion_success(self, worker_node):
         """Test successful LLM chat completion task"""
-        worker_node.llm_interface.chat_completion = AsyncMock(
-            return_value="Test response"
-        )
+        worker_node.llm_interface.chat_completion = AsyncMock(return_value="Test response")
 
         task_payload = {
             "type": "llm_chat_completion",
@@ -129,9 +125,7 @@ class TestWorkerNodeRefactored:
     @pytest.mark.asyncio
     async def test_kb_search_success(self, worker_node):
         """Test successful knowledge base search task"""
-        worker_node.knowledge_base.search = AsyncMock(
-            return_value=[{"content": "test result"}]
-        )
+        worker_node.knowledge_base.search = AsyncMock(return_value=[{"content": "test result"}])
 
         task_payload = {
             "type": "kb_search",
@@ -150,9 +144,7 @@ class TestWorkerNodeRefactored:
     @pytest.mark.asyncio
     async def test_system_query_info(self, worker_node):
         """Test system query info task"""
-        worker_node.system_integration.query_system_info = MagicMock(
-            return_value={"status": "success", "info": {}}
-        )
+        worker_node.system_integration.query_system_info = MagicMock(return_value={"status": "success", "info": {}})
 
         task_payload = {
             "type": "system_query_info",
@@ -214,9 +206,7 @@ class TestWorkerNodeRefactored:
         lines = [line for line in source.split("\n") if line.strip()]
 
         # Allow some buffer, but should be dramatically reduced
-        assert (
-            len(lines) < 100
-        ), f"execute_task method still too long: {len(lines)} lines"
+        assert len(lines) < 100, f"execute_task method still too long: {len(lines)} lines"
 
 
 if __name__ == "__main__":

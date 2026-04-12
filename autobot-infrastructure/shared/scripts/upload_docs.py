@@ -38,9 +38,7 @@ def upload_single_file(file_path: str, project_root: str, api_url: str) -> Uploa
                 timeout=15,
             )
             if resp.status_code == 200:
-                return UploadResult(
-                    file_path=file_path, rel_path=rel_path, success=True
-                )
+                return UploadResult(file_path=file_path, rel_path=rel_path, success=True)
             else:
                 return UploadResult(
                     file_path=file_path,
@@ -49,21 +47,14 @@ def upload_single_file(file_path: str, project_root: str, api_url: str) -> Uploa
                     error=resp.text,
                 )
     except Exception as e:
-        return UploadResult(
-            file_path=file_path, rel_path=rel_path, success=False, error=str(e)
-        )
+        return UploadResult(file_path=file_path, rel_path=rel_path, success=False, error=str(e))
 
 
-def upload_files_batch(
-    files: list, project_root: str, api_url: str, max_workers: int = 5
-) -> list:
+def upload_files_batch(files: list, project_root: str, api_url: str, max_workers: int = 5) -> list:
     """Upload multiple files concurrently using ThreadPoolExecutor."""
     results = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_file = {
-            executor.submit(upload_single_file, f, project_root, api_url): f
-            for f in files
-        }
+        future_to_file = {executor.submit(upload_single_file, f, project_root, api_url): f for f in files}
         for future in as_completed(future_to_file):
             results.append(future.result())
     return results
@@ -83,9 +74,7 @@ def upload_docs():
 
     # Remove duplicates and filter
     unique_files = list(set(doc_files))
-    filtered_files = [
-        f for f in unique_files if os.path.isfile(f) and "node_modules" not in f
-    ]
+    filtered_files = [f for f in unique_files if os.path.isfile(f) and "node_modules" not in f]
 
     print(f"Found {len(filtered_files)} documentation files")
 
@@ -129,9 +118,7 @@ def upload_docs():
                     query, resp = future.result()
                     if resp.status_code == 200:
                         results = resp.json()
-                        print(
-                            f"✓ Search test: found {len(results.get('results', []))} results for '{query}'"
-                        )
+                        print(f"✓ Search test: found {len(results.get('results', []))} results for '{query}'")
                     else:
                         print(f"❌ Search test failed for '{query}': {resp.text}")
 

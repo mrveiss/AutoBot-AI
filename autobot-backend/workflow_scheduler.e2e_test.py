@@ -10,7 +10,6 @@ from datetime import datetime, timedelta
 sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
 from tests.test_helpers import get_test_backend_url
-
 from workflow_scheduler import WorkflowPriority, WorkflowStatus, workflow_scheduler
 
 
@@ -74,9 +73,7 @@ async def test_workflow_scheduling():
         tags=["test", "natural_time"],
     )
 
-    print(  # noqa: print
-        f"✅ Scheduled workflow with natural time: {natural_workflow_id}"
-    )  # noqa: print
+    print(f"✅ Scheduled workflow with natural time: {natural_workflow_id}")  # noqa: print  # noqa: print
 
     return True
 
@@ -93,19 +90,13 @@ async def test_workflow_management():
     print(f"✅ Found {len(all_workflows)} scheduled workflows")  # noqa: print
 
     for workflow in all_workflows[:3]:  # Show first 3
-        print(  # noqa: print
-            f"  • {workflow.name}: {workflow.status.name} ({workflow.priority.name})"
-        )  # noqa: print
+        print(f"  • {workflow.name}: {workflow.status.name} ({workflow.priority.name})")  # noqa: print  # noqa: print
 
     # Test 2: Filter workflows by status
     print("\n📝 Test 2: Filter by Status...")  # noqa: print
 
-    scheduled_workflows = workflow_scheduler.list_scheduled_workflows(
-        status=WorkflowStatus.SCHEDULED
-    )
-    queued_workflows = workflow_scheduler.list_scheduled_workflows(
-        status=WorkflowStatus.QUEUED
-    )
+    scheduled_workflows = workflow_scheduler.list_scheduled_workflows(status=WorkflowStatus.SCHEDULED)
+    queued_workflows = workflow_scheduler.list_scheduled_workflows(status=WorkflowStatus.QUEUED)
 
     print(f"✅ Scheduled workflows: {len(scheduled_workflows)}")  # noqa: print
     print(f"✅ Queued workflows: {len(queued_workflows)}")  # noqa: print
@@ -162,16 +153,12 @@ async def test_workflow_rescheduling():
     print("\n📝 Test 2: Reschedule Workflow...")  # noqa: print
 
     new_time = datetime.now() + timedelta(hours=3)
-    reschedule_success = workflow_scheduler.reschedule_workflow(
-        test_workflow_id, new_time, WorkflowPriority.HIGH
-    )
+    reschedule_success = workflow_scheduler.reschedule_workflow(test_workflow_id, new_time, WorkflowPriority.HIGH)
 
     if reschedule_success:
         updated_workflow = workflow_scheduler.get_workflow(test_workflow_id)
         print("✅ Workflow rescheduled successfully")  # noqa: print
-        print(  # noqa: print
-            f"  New time: {updated_workflow.scheduled_time.isoformat()}"
-        )  # noqa: print
+        print(f"  New time: {updated_workflow.scheduled_time.isoformat()}")  # noqa: print  # noqa: print
         print(f"  New priority: {updated_workflow.priority.name}")  # noqa: print
     else:
         print("❌ Failed to reschedule workflow")  # noqa: print
@@ -222,9 +209,7 @@ async def test_queue_operations():
     # Test set max concurrent
     workflow_scheduler.queue.set_max_concurrent(5)
     updated_status = workflow_scheduler.queue.get_queue_status()
-    print(
-        f"✅ Max concurrent set to: {updated_status['max_concurrent']}"
-    )  # noqa: print
+    print(f"✅ Max concurrent set to: {updated_status['max_concurrent']}")  # noqa: print
 
     # Test 3: List queued and running workflows
     print("\n📝 Test 3: List Queue Contents...")  # noqa: print
@@ -275,9 +260,7 @@ async def test_scheduler_status():
             priority=priority,
             tags=["test", f"priority_{priority.name.lower()}"],
         )
-        print(  # noqa: print
-            f"  Scheduled {priority.name} priority workflow: {workflow_id[:8]}"
-        )  # noqa: print
+        print(f"  Scheduled {priority.name} priority workflow: {workflow_id[:8]}")  # noqa: print  # noqa: print
 
     print("✅ Priority distribution test completed")  # noqa: print
 
@@ -334,9 +317,7 @@ async def test_scheduler_api_integration():
         async with aiohttp.ClientSession() as session:
             for endpoint in endpoints_to_test:
                 try:
-                    async with session.get(
-                        get_test_backend_url() + endpoint
-                    ) as response:
+                    async with session.get(get_test_backend_url() + endpoint) as response:
                         if response.status == 200:
                             print(f"✅ {endpoint}: OK")  # noqa: print
                         else:
@@ -347,9 +328,7 @@ async def test_scheduler_api_integration():
         print("✅ API integration test completed")  # noqa: print
 
     except ImportError:
-        print(  # noqa: print
-            "⚠️  aiohttp not available - skipping API integration test"
-        )  # noqa: print
+        print("⚠️  aiohttp not available - skipping API integration test")  # noqa: print  # noqa: print
     except Exception as e:
         print(f"⚠️  API test failed: {e}")  # noqa: print
 

@@ -46,10 +46,7 @@ async def ensure_knowledge_base(req: Request, operation: str = "operation"):
     kb = await get_or_create_knowledge_base(req.app)
 
     if kb is None:
-        logger.error(
-            f"Knowledge base not available for {operation}. "
-            "Check logs for initialization errors."
-        )
+        logger.error(f"Knowledge base not available for {operation}. " "Check logs for initialization errors.")
         raise HTTPException(
             status_code=503,
             detail={

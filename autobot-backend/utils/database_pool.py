@@ -272,9 +272,7 @@ _connection_pools: Dict[str, SQLiteConnectionPool] = {}
 _pools_lock = threading.Lock()
 
 
-def get_connection_pool(
-    db_path: str, pool_size: int | None = None
-) -> SQLiteConnectionPool:
+def get_connection_pool(db_path: str, pool_size: int | None = None) -> SQLiteConnectionPool:
     """
     Get or create a connection pool for a database.
 
@@ -301,9 +299,7 @@ def get_connection_pool(
         # Create new pool
         pool = SQLiteConnectionPool(db_path, pool_size)
         _connection_pools[db_path] = pool
-        logger.info(
-            "Created connection pool for %s with size %s", db_path, pool.pool_size
-        )
+        logger.info("Created connection pool for %s with size %s", db_path, pool.pool_size)
         return pool
 
 
@@ -389,14 +385,12 @@ def optimize_knowledge_base_queries():
             ("docs",),
             {
                 "tags": (
-                    "SELECT * FROM tags WHERE entry_id IN "
-                    "(SELECT id FROM entries WHERE category = ?)",
+                    "SELECT * FROM tags WHERE entry_id IN " "(SELECT id FROM entries WHERE category = ?)",
                     ("docs",),
                     "entry_id",
                 ),
                 "metadata": (
-                    "SELECT * FROM metadata WHERE entry_id IN "
-                    "(SELECT id FROM entries WHERE category = ?)",
+                    "SELECT * FROM metadata WHERE entry_id IN " "(SELECT id FROM entries WHERE category = ?)",
                     ("docs",),
                     "entry_id",
                 ),

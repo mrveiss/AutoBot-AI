@@ -27,7 +27,6 @@ import re
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
-from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 
 from api.knowledge_models import (
     AssignFactToCategoryRequest,
@@ -39,6 +38,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.threshold_constants import QueryDefaults
 from knowledge_factory import get_or_create_knowledge_base
+from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 
 logger = logging.getLogger(__name__)
 

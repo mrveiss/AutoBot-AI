@@ -98,9 +98,7 @@ class HotReloadManager:
                 self.watched_paths.add(api_path)
 
             self.observer.start()
-            logger.info(
-                f"Hot reload manager started, watching {len(self.watched_paths)} paths"
-            )
+            logger.info(f"Hot reload manager started, watching {len(self.watched_paths)} paths")
 
         except Exception as e:
             logger.error("Failed to start hot reload manager: %s", e)
@@ -127,9 +125,7 @@ class HotReloadManager:
         except Exception as e:
             logger.error("Error stopping hot reload manager: %s", e)
 
-    def register_module(
-        self, module_name: str, callback: Optional[Callable] = None
-    ) -> None:
+    def register_module(self, module_name: str, callback: Optional[Callable] = None) -> None:
         """Register a module for hot reloading"""
         try:
             # Import the module initially
@@ -147,9 +143,7 @@ class HotReloadManager:
         except ImportError as e:
             logger.warning("Could not register module %s: %s", module_name, e)
 
-    def register_chat_workflow_modules(
-        self, callback: Optional[Callable] = None
-    ) -> None:
+    def register_chat_workflow_modules(self, callback: Optional[Callable] = None) -> None:
         """Register all chat workflow modules for hot reloading"""
         for module_name in self.chat_workflow_modules:
             self.register_module(module_name, callback)
@@ -164,11 +158,7 @@ class HotReloadManager:
                         del sys.modules[module_name]
 
                     # Clear any submodules
-                    submodules_to_clear = [
-                        name
-                        for name in sys.modules.keys()
-                        if name.startswith(module_name + ".")
-                    ]
+                    submodules_to_clear = [name for name in sys.modules.keys() if name.startswith(module_name + ".")]
                     for submodule in submodules_to_clear:
                         del sys.modules[submodule]
 
@@ -182,9 +172,7 @@ class HotReloadManager:
                     logger.info("Successfully reloaded module: %s", module_name)
                     return True
                 else:
-                    logger.warning(
-                        f"Module {module_name} not registered for hot reload"
-                    )
+                    logger.warning(f"Module {module_name} not registered for hot reload")
                     return False
 
             except Exception as e:
@@ -203,9 +191,7 @@ class HotReloadManager:
                 results[module_name] = success
 
         successful_reloads = sum(1 for success in results.values() if success)
-        logger.info(
-            f"Chat workflow reload complete: {successful_reloads}/{len(results)} modules reloaded"
-        )
+        logger.info(f"Chat workflow reload complete: {successful_reloads}/{len(results)} modules reloaded")
 
         return results
 
@@ -264,10 +250,7 @@ class HotReloadManager:
             "running": self.observer is not None and self.observer.is_alive(),
             "watched_modules": list(self.watched_modules.keys()),
             "watched_paths": [str(path) for path in self.watched_paths],
-            "callback_count": {
-                module: len(callbacks)
-                for module, callbacks in self.module_callbacks.items()
-            },
+            "callback_count": {module: len(callbacks) for module, callbacks in self.module_callbacks.items()},
         }
 
 

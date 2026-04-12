@@ -30,17 +30,13 @@ class OperationProgressTracker:
         self._progress_cache: Dict[str, OperationProgress] = {}
         self._subscribers: Dict[str, list] = {}
 
-    async def subscribe_to_progress(
-        self, operation_id: str, callback: Callable
-    ) -> None:
+    async def subscribe_to_progress(self, operation_id: str, callback: Callable) -> None:
         """Subscribe to progress updates for an operation."""
         if operation_id not in self._subscribers:
             self._subscribers[operation_id] = []
         self._subscribers[operation_id].append(callback)
 
-    async def unsubscribe_from_progress(
-        self, operation_id: str, callback: Callable
-    ) -> None:
+    async def unsubscribe_from_progress(self, operation_id: str, callback: Callable) -> None:
         """Unsubscribe from progress updates."""
         if operation_id in self._subscribers:
             try:
@@ -130,9 +126,7 @@ class OperationProgressTracker:
             await self.redis_client.publish(channel, json.dumps(progress_data))
 
             # Also publish to global operations channel
-            await self.redis_client.publish(
-                "operations:progress", json.dumps(progress_data)
-            )
+            await self.redis_client.publish("operations:progress", json.dumps(progress_data))
 
         except Exception as e:
             logger.warning("Failed to broadcast progress update: %s", e)

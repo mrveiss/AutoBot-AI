@@ -220,9 +220,7 @@ class TestPrometheusHelpers:
             return_value=mock_mgr,
         ):
             _record_cache_hit("llm_models")
-            mock_mgr.record_llm_response_cache_hit.assert_called_once_with(
-                endpoint="llm_models"
-            )
+            mock_mgr.record_llm_response_cache_hit.assert_called_once_with(endpoint="llm_models")
 
     def test_record_cache_miss_calls_metrics_manager(self):
         mock_mgr = MagicMock()
@@ -231,6 +229,4 @@ class TestPrometheusHelpers:
             return_value=mock_mgr,
         ):
             _record_cache_miss("llm_models")
-            mock_mgr.record_llm_response_cache_miss.assert_called_once_with(
-                endpoint="llm_models"
-            )
+            mock_mgr.record_llm_response_cache_miss.assert_called_once_with(endpoint="llm_models")

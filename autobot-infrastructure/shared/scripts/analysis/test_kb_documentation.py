@@ -38,16 +38,10 @@ def _process_single_query(kb, query: str, results_found: int) -> int:
         if results:
             results_found += len(results)
             for i, result in enumerate(results[:2], 1):
-                content_preview = (
-                    result["content"][:200] + "..."
-                    if len(result["content"]) > 200
-                    else result["content"]
-                )
+                content_preview = result["content"][:200] + "..." if len(result["content"]) > 200 else result["content"]
                 logger.info(f"Result {i}: {content_preview}")
                 logger.info(f"Score: {result.get('score', 'N/A')}")
-                logger.info(
-                    f"Source: {result.get('metadata', {}).get('source', 'Unknown')}"
-                )
+                logger.info(f"Source: {result.get('metadata', {}).get('source', 'Unknown')}")
         else:
             logger.warning(f"No results found for '{query}'")
 
@@ -117,9 +111,7 @@ async def test_documentation_search():
             logger.info("✅ Knowledge base documentation search is working")
             return True
         else:
-            logger.warning(
-                "⚠️ Knowledge base contains data but no documentation matches found"
-            )
+            logger.warning("⚠️ Knowledge base contains data but no documentation matches found")
             return False
 
     except Exception as e:

@@ -45,9 +45,7 @@ from utils.service_registry import DeploymentMode, get_service_registry
 class AutoBotDeployer:
     """Handles deployment automation for AutoBot across different modes."""
 
-    def __init__(
-        self, mode: str, config_file: Optional[str] = None, namespace: str = "autobot"
-    ):
+    def __init__(self, mode: str, config_file: Optional[str] = None, namespace: str = "autobot"):
         """Initialize deployer with mode, config, and service registry."""
         self.mode = DeploymentMode(mode)
         self.config_file = config_file
@@ -71,9 +69,7 @@ class AutoBotDeployer:
         """Print deployment step with status."""
         ScriptFormatter.print_step(step, status)
 
-    def run_command(
-        self, command: str, check: bool = True, cwd: Optional[Path] = None
-    ) -> subprocess.CompletedProcess:
+    def run_command(self, command: str, check: bool = True, cwd: Optional[Path] = None) -> subprocess.CompletedProcess:
         """Run shell command with error handling."""
         self.print_step(f"Running: {command}", "running")
         try:
@@ -199,9 +195,7 @@ class AutoBotDeployer:
             return False
 
         # Backend and frontend run on host
-        self.print_step(
-            "Backend and Frontend will run on host via run_agent.sh", "info"
-        )
+        self.print_step("Backend and Frontend will run on host via run_agent.sh", "info")
         self.print_step("Use './run_agent.sh' to start the full application", "success")
 
         return True
@@ -231,9 +225,7 @@ class AutoBotDeployer:
             self.config_file = self.project_root / "config/deployment/distributed.yml"
 
         if not os.path.exists(self.config_file):
-            self.print_step(
-                f"Distributed config file not found: {self.config_file}", "error"
-            )
+            self.print_step(f"Distributed config file not found: {self.config_file}", "error")
             return False
 
         with open(self.config_file, "r") as f:
@@ -241,9 +233,7 @@ class AutoBotDeployer:
 
         services = config.get("services", {})
 
-        self.print_step(
-            f"Loaded distributed configuration with {len(services)} services", "info"
-        )
+        self.print_step(f"Loaded distributed configuration with {len(services)} services", "info")
 
         # Deploy each service based on its host configuration
         for service_name, service_config in services.items():
@@ -328,9 +318,7 @@ spec:
             self.print_step("Kubernetes manifests created", "success")
 
         # Apply manifests
-        self.print_step(
-            f"Applying Kubernetes manifests to namespace: {self.namespace}", "info"
-        )
+        self.print_step(f"Applying Kubernetes manifests to namespace: {self.namespace}", "info")
         self.run_command(f"kubectl apply -f {k8s_dir}/")
 
         self.print_step("Kubernetes deployment applied", "success")
@@ -349,17 +337,12 @@ spec:
                 health_results = await self.service_registry.check_all_services_health()
 
                 for service, health in health_results.items():
-                    if (
-                        health.status.value == "healthy"
-                        and service not in healthy_services
-                    ):
+                    if health.status.value == "healthy" and service not in healthy_services:
                         self.print_step(f"{service} is healthy", "success")
                         healthy_services.add(service)
                     elif health.status.value != "healthy":
                         if time.time() - start_time > 60:  # Only show after 1 minute
-                            self.print_step(
-                                f"{service} is {health.status.value}", "warning"
-                            )
+                            self.print_step(f"{service} is {health.status.value}", "warning")
 
                 if len(healthy_services) == len(all_services):
                     self.print_step("All services are healthy!", "success")
@@ -466,9 +449,7 @@ spec:
             for compose_file in compose_files:
                 if os.path.exists(compose_file):
                     self.print_step(f"Stopping services from {compose_file}", "info")
-                    self.run_command(
-                        f"docker compose -f {compose_file} down", check=False
-                    )
+                    self.run_command(f"docker compose -f {compose_file} down", check=False)
 
         elif self.mode == DeploymentMode.KUBERNETES:
             self.print_step(
@@ -504,37 +485,25 @@ Examples:
 
     parser.add_argument("--config", help="Configuration file path")
 
-    parser.add_argument(
-        "--namespace", default="autobot", help="Kubernetes namespace (default: autobot)"
-    )
+    parser.add_argument("--namespace", default="autobot", help="Kubernetes namespace (default: autobot)")
 
-    parser.add_argument(
-        "--build", action="store_true", help="Build Docker images before deployment"
-    )
+    parser.add_argument("--build", action="store_true", help="Build Docker images before deployment")
 
-    parser.add_argument(
-        "--cleanup", action="store_true", help="Clean up existing deployment"
-    )
+    parser.add_argument("--cleanup", action="store_true", help="Clean up existing deployment")
 
-    parser.add_argument(
-        "--no-wait", action="store_true", help="Don't wait for services to be healthy"
-    )
+    parser.add_argument("--no-wait", action="store_true", help="Don't wait for services to be healthy")
 
     args = parser.parse_args()
 
     try:
-        deployer = AutoBotDeployer(
-            mode=args.mode, config_file=args.config, namespace=args.namespace
-        )
+        deployer = AutoBotDeployer(mode=args.mode, config_file=args.config, namespace=args.namespace)
 
         if args.cleanup:
             deployer.cleanup()
             return 0
 
         # Run deployment
-        success = asyncio.run(
-            deployer.deploy(build=args.build, wait_for_health=not args.no_wait)
-        )
+        success = asyncio.run(deployer.deploy(build=args.build, wait_for_health=not args.no_wait))
 
         return 0 if success else 1
 

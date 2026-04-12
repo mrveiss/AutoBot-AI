@@ -5,6 +5,7 @@
 """
 Detailed startup timing analysis to identify bottlenecks
 """
+
 import os
 import sys
 import time
@@ -105,22 +106,12 @@ def main():
 
     total_time = time.time() - total_start
     print("\n🎯 SUMMARY:")
-    print(
-        f"Basic imports     : {basic_total:6.3f}s ({basic_total/total_time*100:4.1f}%)"
-    )
-    print(
-        f"AutoBot imports   : {autobot_total:6.3f}s ({autobot_total/total_time*100:4.1f}%)"
-    )
-    print(
-        f"Backend imports   : {backend_total:6.3f}s ({backend_total/total_time*100:4.1f}%)"
-    )
-    print(
-        f"App creation      : {app_duration:6.3f}s ({app_duration/total_time*100:4.1f}%)"
-    )
+    print(f"Basic imports     : {basic_total:6.3f}s ({basic_total/total_time*100:4.1f}%)")
+    print(f"AutoBot imports   : {autobot_total:6.3f}s ({autobot_total/total_time*100:4.1f}%)")
+    print(f"Backend imports   : {backend_total:6.3f}s ({backend_total/total_time*100:4.1f}%)")
+    print(f"App creation      : {app_duration:6.3f}s ({app_duration/total_time*100:4.1f}%)")
     print(f"Total time        : {total_time:6.3f}s")
-    print(
-        f"\n💡 Remaining delay: {total_time - basic_total - autobot_total - backend_total - app_duration:.3f}s"
-    )
+    print(f"\n💡 Remaining delay: {total_time - basic_total - autobot_total - backend_total - app_duration:.3f}s")
 
 
 if __name__ == "__main__":

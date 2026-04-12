@@ -9,10 +9,9 @@ import signal
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 import requests
-import sys
-from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from tests.test_helpers import get_test_backend_url

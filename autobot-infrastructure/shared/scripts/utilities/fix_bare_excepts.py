@@ -123,9 +123,7 @@ def scan_directory(
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Find and fix bare except clauses in Python files"
-    )
+    parser = argparse.ArgumentParser(description="Find and fix bare except clauses in Python files")
     parser.add_argument(
         "directory",
         nargs="?",
@@ -142,9 +140,7 @@ def main():
         action="store_true",
         help="Show what would be fixed without making changes",
     )
-    parser.add_argument(
-        "--exclude", nargs="+", help="Additional directories to exclude"
-    )
+    parser.add_argument("--exclude", nargs="+", help="Additional directories to exclude")
 
     args = parser.parse_args()
 

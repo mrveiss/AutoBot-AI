@@ -89,10 +89,7 @@ def _analyze_databases(connections):
         keys = connections[db].keys("*")
         logger.info("  DB%s: %s keys", db, len(keys))
         if len(keys) <= 20:
-            key_examples = [
-                k.decode("utf-8", errors="ignore") if isinstance(k, bytes) else str(k)
-                for k in keys[:10]
-            ]
+            key_examples = [k.decode("utf-8", errors="ignore") if isinstance(k, bytes) else str(k) for k in keys[:10]]
             logger.info("    Examples: %s", key_examples)
 
 
@@ -104,9 +101,7 @@ def _backup_key(connections, key):
     Returns:
         Tuple of (data_type, data) or None on failure.
     """
-    key_str = (
-        key.decode("utf-8", errors="ignore") if isinstance(key, bytes) else str(key)
-    )
+    key_str = key.decode("utf-8", errors="ignore") if isinstance(key, bytes) else str(key)
     try:
         data_type = connections[0].type(key).decode("utf-8")
         type_handlers = {
@@ -210,18 +205,14 @@ def _restore_key_to_db(connections, key, data_type, data, target_db):
 
     Helper for main (#825).
     """
-    key_str = (
-        key.decode("utf-8", errors="ignore") if isinstance(key, bytes) else str(key)
-    )
+    key_str = key.decode("utf-8", errors="ignore") if isinstance(key, bytes) else str(key)
     try:
         restore_handlers = {
             "hash": lambda: connections[target_db].hset(key, mapping=data),
             "string": lambda: connections[target_db].set(key, data),
             "list": lambda: connections[target_db].rpush(key, *data) if data else None,
             "set": lambda: connections[target_db].sadd(key, *data) if data else None,
-            "stream": lambda: [
-                connections[target_db].xadd(key, entry[1]) for entry in data
-            ],
+            "stream": lambda: [connections[target_db].xadd(key, entry[1]) for entry in data],
         }
         handler = restore_handlers.get(data_type)
         if handler:
@@ -238,9 +229,7 @@ def _restore_backup_data(connections, backup_data):
     """
     logger.info("\nRestoring non-vector data to appropriate databases...")
     for key, (data_type, data) in backup_data.items():
-        key_str = (
-            key.decode("utf-8", errors="ignore") if isinstance(key, bytes) else str(key)
-        )
+        key_str = key.decode("utf-8", errors="ignore") if isinstance(key, bytes) else str(key)
         target_db = _determine_target_db(key_str)
         _restore_key_to_db(connections, key, data_type, data, target_db)
 

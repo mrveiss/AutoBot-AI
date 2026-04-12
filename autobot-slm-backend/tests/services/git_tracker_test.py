@@ -12,9 +12,7 @@ import pytest
 
 # Import git_tracker module directly without triggering services/__init__.py
 git_tracker_path = Path(__file__).parent.parent.parent / "services" / "git_tracker.py"
-spec = __import__("importlib.util").util.spec_from_file_location(
-    "git_tracker", git_tracker_path
-)
+spec = __import__("importlib.util").util.spec_from_file_location("git_tracker", git_tracker_path)
 git_tracker = __import__("importlib.util").util.module_from_spec(spec)
 spec.loader.exec_module(git_tracker)
 GitTracker = git_tracker.GitTracker
@@ -32,9 +30,7 @@ class TestGitTracker:
     @pytest.mark.asyncio
     async def test_get_local_commit_hash(self):
         """Test getting current commit hash from local repo."""
-        tracker = GitTracker(
-            repo_path="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
-        )
+        tracker = GitTracker(repo_path="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
         with patch("asyncio.create_subprocess_exec") as mock_exec:
             mock_process = AsyncMock()
@@ -48,9 +44,7 @@ class TestGitTracker:
     @pytest.mark.asyncio
     async def test_fetch_from_remote(self):
         """Test fetching updates from remote."""
-        tracker = GitTracker(
-            repo_path="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
-        )
+        tracker = GitTracker(repo_path="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
         with patch("asyncio.create_subprocess_exec") as mock_exec:
             mock_process = AsyncMock()
@@ -64,9 +58,7 @@ class TestGitTracker:
     @pytest.mark.asyncio
     async def test_get_remote_commit_hash(self):
         """Test getting latest commit hash from remote."""
-        tracker = GitTracker(
-            repo_path="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
-        )
+        tracker = GitTracker(repo_path="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
         with patch("asyncio.create_subprocess_exec") as mock_exec:
             mock_process = AsyncMock()
@@ -80,9 +72,7 @@ class TestGitTracker:
     @pytest.mark.asyncio
     async def test_check_for_updates_no_update(self):
         """Test check_for_updates when already up to date."""
-        tracker = GitTracker(
-            repo_path="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
-        )
+        tracker = GitTracker(repo_path="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
         with patch.object(tracker, "get_local_commit", return_value="abc123"):
             with patch.object(tracker, "fetch_remote", return_value=True):
@@ -96,9 +86,7 @@ class TestGitTracker:
     @pytest.mark.asyncio
     async def test_check_for_updates_update_available(self):
         """Test check_for_updates when update is available."""
-        tracker = GitTracker(
-            repo_path="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
-        )
+        tracker = GitTracker(repo_path="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
         with patch.object(tracker, "get_local_commit", return_value="abc123"):
             with patch.object(tracker, "fetch_remote", return_value=True):

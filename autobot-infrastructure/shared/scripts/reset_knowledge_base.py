@@ -30,9 +30,7 @@ async def reset_knowledge_base_index():
         logger.error("Redis client not available")
         return
 
-    index_name = global_config_manager.get_nested(
-        "memory.redis.index_name", "autobot_knowledge_index"
-    )
+    index_name = global_config_manager.get_nested("memory.redis.index_name", "autobot_knowledge_index")
 
     logger.info("Resetting knowledge base index: %s", index_name)
 
@@ -59,9 +57,7 @@ async def reset_knowledge_base_index():
 
         logger.info("")
         logger.info("Knowledge base index has been reset.")
-        logger.info(
-            "The index will be recreated with correct dimensions when you add documents."
-        )
+        logger.info("The index will be recreated with correct dimensions when you add documents.")
 
     except Exception as e:
         logger.error("Error resetting knowledge base: %s", e)

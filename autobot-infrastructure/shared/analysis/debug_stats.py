@@ -29,10 +29,7 @@ def _get_api_endpoint():
     port = backend_config.get("port")
 
     if not host or not port:
-        system_defaults = (
-            unified_config_manager.get_config_section("service_discovery_defaults")
-            or {}
-        )
+        system_defaults = unified_config_manager.get_config_section("service_discovery_defaults") or {}
         host = host or system_defaults.get("backend_host", "localhost")
         port = port or system_defaults.get("backend_port", 8001)
 
@@ -62,13 +59,9 @@ def _test_single_stats_endpoint(api_endpoint, path, label):
 
             total_docs = data.get("total_documents", 0)
             if total_docs is not None and total_docs > 1000:
-                logger.info(
-                    "✅ SUCCESS: Showing realistic stats " "(%s documents)", total_docs
-                )
+                logger.info("✅ SUCCESS: Showing realistic stats " "(%s documents)", total_docs)
             elif total_docs is not None:
-                logger.error(
-                    "❌ ISSUE: Still showing low stats " "(%s documents)", total_docs
-                )
+                logger.error("❌ ISSUE: Still showing low stats " "(%s documents)", total_docs)
         else:
             logger.error("❌ ERROR: Status %s", response.status_code)
             logger.info("Response: %s", response.text)

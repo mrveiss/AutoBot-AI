@@ -174,9 +174,7 @@ class WorkflowVersionStore:
         """
         redis = await get_async_redis_client(database="workflows")
         if redis is None:
-            logger.error(
-                "delete_version: Redis unavailable for workflow %s", workflow_id
-            )
+            logger.error("delete_version: Redis unavailable for workflow %s", workflow_id)
             return False
 
         deleted = await redis.delete(_version_key(workflow_id, version))
@@ -213,9 +211,7 @@ class WorkflowVersionStore:
         """
         redis = await get_async_redis_client(database="workflows")
         if redis is None:
-            logger.error(
-                "list_versions: Redis unavailable for workflow %s", workflow_id
-            )
+            logger.error("list_versions: Redis unavailable for workflow %s", workflow_id)
             return []
 
         # zrevrange returns members ordered by score descending (newest version first)
@@ -239,9 +235,7 @@ class WorkflowVersionStore:
 
         return summaries
 
-    async def get_version(
-        self, workflow_id: str, version: int
-    ) -> Optional[WorkflowVersion]:
+    async def get_version(self, workflow_id: str, version: int) -> Optional[WorkflowVersion]:
         """
         Retrieve the full snapshot for *workflow_id* at *version* (#2145).
 
@@ -268,9 +262,7 @@ class WorkflowVersionStore:
 
         return WorkflowVersion.from_dict(json.loads(raw))
 
-    async def restore_version(
-        self, workflow_id: str, version: int
-    ) -> Optional[Dict[str, Any]]:
+    async def restore_version(self, workflow_id: str, version: int) -> Optional[Dict[str, Any]]:
         """
         Return the data dict stored in *version* of *workflow_id* (#2145).
 
@@ -352,10 +344,7 @@ def _utc_now() -> str:
     """Return current UTC time as an ISO-8601 string with Z suffix."""
     # Use time.gmtime to avoid importing datetime for a one-liner
     t = time.gmtime()
-    return (
-        f"{t.tm_year:04d}-{t.tm_mon:02d}-{t.tm_mday:02d}T"
-        f"{t.tm_hour:02d}:{t.tm_min:02d}:{t.tm_sec:02d}Z"
-    )
+    return f"{t.tm_year:04d}-{t.tm_mon:02d}-{t.tm_mday:02d}T" f"{t.tm_hour:02d}:{t.tm_min:02d}:{t.tm_sec:02d}Z"
 
 
 def _summary(record: Dict[str, Any]) -> Dict[str, Any]:
@@ -417,8 +406,4 @@ def _changed_fields(
     Result maps field name → {from: old_value, to: new_value}.
     """
     all_keys = set(step_v1) | set(step_v2)
-    return {
-        k: {"from": step_v1.get(k), "to": step_v2.get(k)}
-        for k in all_keys
-        if step_v1.get(k) != step_v2.get(k)
-    }
+    return {k: {"from": step_v1.get(k), "to": step_v2.get(k)} for k in all_keys if step_v1.get(k) != step_v2.get(k)}

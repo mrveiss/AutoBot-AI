@@ -17,9 +17,7 @@ sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 from constants import ServiceURLs
 from constants.network_constants import NetworkConstants
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 # DB number from redis-databases.yaml SSOT (#2806): knowledge = 1
@@ -35,8 +33,7 @@ def _build_fix_llamaindex_recommendation(data_analysis, llamaindex_fixes):
         "recommendation": "FIX_LLAMAINDEX_INTEGRATION",
         "confidence": "HIGH",
         "rationale": [
-            "Preserves %s existing vectors"
-            % "{:,}".format(data_analysis.get("total_documents", 0)),
+            "Preserves %s existing vectors" % "{:,}".format(data_analysis.get("total_documents", 0)),
             "LlamaIndex can retrieve data successfully with field fixes",
             "Minimal code changes required",
             "Low risk - no data migration needed",
@@ -107,9 +104,7 @@ def _build_custom_redis_recommendation():
         "estimated_effort": "1-2 weeks",
         "risk_level": "MEDIUM-HIGH",
         "data_migration": "None - uses existing structure",
-        "compatibility_issues_resolved": [
-            "Direct Redis access bypasses library limitations"
-        ],
+        "compatibility_issues_resolved": ["Direct Redis access bypasses library limitations"],
     }
 
 
@@ -220,9 +215,7 @@ class AutoBotVectorStoreAnalysis:
         self.compatibility_issues = []
         self.recommendations = {}
 
-    def _analyze_field_value(
-        self, field: str, value: str, field_analysis: Dict
-    ) -> None:
+    def _analyze_field_value(self, field: str, value: str, field_analysis: Dict) -> None:
         """Analyze a single field value (Issue #315: extracted helper)."""
         if field == "vector":
             field_analysis[field]["data_type"] = "binary_vector"
@@ -231,13 +224,8 @@ class AutoBotVectorStoreAnalysis:
             field_analysis[field]["data_type"] = "json"
             try:
                 parsed = json.loads(value)
-                if (
-                    field == "_node_content"
-                    and len(field_analysis[field]["sample_values"]) == 0
-                ):
-                    field_analysis[field]["sample_values"].append(
-                        list(parsed.keys())[:5]
-                    )
+                if field == "_node_content" and len(field_analysis[field]["sample_values"]) == 0:
+                    field_analysis[field]["sample_values"].append(list(parsed.keys())[:5])
             except Exception:
                 field_analysis[field]["data_type"] = "string"
         else:
@@ -295,9 +283,7 @@ class AutoBotVectorStoreAnalysis:
                 "field_analysis": field_analysis,
                 "data_structure_type": "llamaindex_semantic_chunks",
                 "created_by": "AutoBot semantic chunker with LlamaIndex",
-                "compatibility_issues": self._identify_compatibility_issues(
-                    field_analysis
-                ),
+                "compatibility_issues": self._identify_compatibility_issues(field_analysis),
             }
 
             self.existing_data_analysis = analysis
@@ -317,15 +303,9 @@ class AutoBotVectorStoreAnalysis:
                         return {
                             "field_name": attrs[i + 1],
                             "type": attrs[i + 2] if i + 2 < len(attrs) else "unknown",
-                            "algorithm": (
-                                attrs[i + 3] if i + 3 < len(attrs) else "unknown"
-                            ),
-                            "data_type": (
-                                attrs[i + 4] if i + 4 < len(attrs) else "unknown"
-                            ),
-                            "dimensions": (
-                                attrs[i + 5] if i + 5 < len(attrs) else "unknown"
-                            ),
+                            "algorithm": (attrs[i + 3] if i + 3 < len(attrs) else "unknown"),
+                            "data_type": (attrs[i + 4] if i + 4 < len(attrs) else "unknown"),
+                            "dimensions": (attrs[i + 5] if i + 5 < len(attrs) else "unknown"),
                         }
         except Exception as e:
             logger.warning("Could not extract vector config: %s", e)
@@ -336,9 +316,7 @@ class AutoBotVectorStoreAnalysis:
         issues = []
 
         if "_node_content" in field_analysis and "text" in field_analysis:
-            issues.append(
-                "LLAMAINDEX_FIELD_MISMATCH: Both '_node_content' and 'text' exist"
-            )
+            issues.append("LLAMAINDEX_FIELD_MISMATCH: Both '_node_content' and 'text' exist")
         if "text" not in field_analysis:
             issues.append("LLAMAINDEX_MISSING_TEXT: No 'text' field found")
         if "_node_content" not in field_analysis:
@@ -394,10 +372,7 @@ class AutoBotVectorStoreAnalysis:
             except ImportError:
                 from langchain_community.embeddings import OllamaEmbeddings
 
-                logger.warning(
-                    "langchain-ollama not installed, using deprecated "
-                    "langchain_community fallback"
-                )
+                logger.warning("langchain-ollama not installed, using deprecated " "langchain_community fallback")
 
             embeddings = OllamaEmbeddings(
                 model="nomic-embed-text:latest",
@@ -486,9 +461,7 @@ class AutoBotVectorStoreAnalysis:
         )
         return recommendation
 
-    def _save_report(
-        self, data_analysis, llamaindex_result, langchain_result, recommendation
-    ):
+    def _save_report(self, data_analysis, llamaindex_result, langchain_result, recommendation):
         """Save analysis report to file.
 
         Helper for run_final_analysis (#825).
@@ -515,9 +488,7 @@ class AutoBotVectorStoreAnalysis:
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump(full_report, f, indent=2)
 
-    def _print_final_report(
-        self, data_analysis, llamaindex_result, langchain_result, recommendation
-    ):
+    def _print_final_report(self, data_analysis, llamaindex_result, langchain_result, recommendation):
         """Print the final comprehensive report"""
         logger.info("\n" + "=" * 90)
         logger.info("AUTOBOT REDIS VECTOR STORE - FINAL TECHNICAL ANALYSIS")
@@ -637,10 +608,7 @@ class AutoBotVectorStoreAnalysis:
             except ImportError:
                 from langchain_community.embeddings import OllamaEmbeddings
 
-                logger.warning(
-                    "langchain-ollama not installed, using deprecated "
-                    "langchain_community fallback"
-                )
+                logger.warning("langchain-ollama not installed, using deprecated " "langchain_community fallback")
                 fixes_attempted.append("Using langchain-community embeddings")
 
             embeddings = OllamaEmbeddings(

@@ -102,9 +102,7 @@ def fix_long_lines(filepath, max_length=88):
                     new_content = prefix
                     for arg in arg_list:
                         new_content += " " * (indent + 4) + arg + ",\n"
-                    new_content = (
-                        new_content.rstrip(",\n") + "\n" + " " * indent + ")" + suffix
-                    )
+                    new_content = new_content.rstrip(",\n") + "\n" + " " * indent + ")" + suffix
 
                     if line.endswith("\n") and not new_content.endswith("\n"):
                         new_content += "\n"

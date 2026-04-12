@@ -33,14 +33,8 @@ class NPUPerformanceMeasurement:
     """Comprehensive NPU performance measurement and analysis."""
 
     def __init__(self):
-        self.npu_worker_url = (
-            f"http://{NetworkConstants.NPU_WORKER_LINUX_VM_IP}"
-            f":{NetworkConstants.NPU_WORKER_PORT}"
-        )
-        self.backend_url = (
-            f"http://{NetworkConstants.LOCALHOST_IP}"
-            f":{NetworkConstants.BACKEND_PORT}"
-        )
+        self.npu_worker_url = f"http://{NetworkConstants.NPU_WORKER_LINUX_VM_IP}" f":{NetworkConstants.NPU_WORKER_PORT}"
+        self.backend_url = f"http://{NetworkConstants.LOCALHOST_IP}" f":{NetworkConstants.BACKEND_PORT}"
         self.results = {}
         self.test_queries = [
             "linux file management commands",
@@ -101,9 +95,7 @@ class NPUPerformanceMeasurement:
         results["api_endpoint_tests"] = await self._test_api_endpoints()
 
         logger.info("Step 5: Analyzing performance comparisons")
-        results["performance_comparison"] = await self._analyze_performance_comparison(
-            results
-        )
+        results["performance_comparison"] = await self._analyze_performance_comparison(results)
 
         logger.info("Step 6: Generating optimization recommendations")
         results["recommendations"] = await self._generate_recommendations(results)
@@ -120,9 +112,7 @@ class NPUPerformanceMeasurement:
             "cpu_count_logical": psutil.cpu_count(logical=True),
             "cpu_percent": psutil.cpu_percent(interval=1),
             "memory_total_gb": round(psutil.virtual_memory().total / (1024**3), 2),
-            "memory_available_gb": round(
-                psutil.virtual_memory().available / (1024**3), 2
-            ),
+            "memory_available_gb": round(psutil.virtual_memory().available / (1024**3), 2),
         }
 
     def _collect_gpu_info(self) -> Dict[str, Any]:
@@ -144,9 +134,7 @@ class NPUPerformanceMeasurement:
                     ),
                 }
                 torch.cuda.empty_cache()
-                gpu_info["gpu_memory_allocated_gb"] = round(
-                    torch.cuda.memory_allocated(0) / (1024**3), 2
-                )
+                gpu_info["gpu_memory_allocated_gb"] = round(torch.cuda.memory_allocated(0) / (1024**3), 2)
                 return gpu_info
             return {"gpu_available": False}
         except ImportError:
@@ -166,14 +154,10 @@ class NPUPerformanceMeasurement:
             baseline_results["cpu_info"] = self._collect_cpu_info()
             baseline_results["gpu_info"] = self._collect_gpu_info()
 
-            baseline_results["cpu_embedding_performance"] = (
-                await self._test_cpu_embedding_performance()
-            )
+            baseline_results["cpu_embedding_performance"] = await self._test_cpu_embedding_performance()
 
             if baseline_results["gpu_info"].get("gpu_available", False):
-                baseline_results["gpu_embedding_performance"] = (
-                    await self._test_gpu_embedding_performance()
-                )
+                baseline_results["gpu_embedding_performance"] = await self._test_gpu_embedding_performance()
 
         except Exception as e:
             logger.error("Hardware baseline measurement failed: %s", e)
@@ -209,9 +193,7 @@ class NPUPerformanceMeasurement:
                 [1, 5, 10, 25, 50],
             )
 
-            cpu_results["average_performance"] = self._compute_time_stats(
-                cpu_results["single_text_times"]
-            )
+            cpu_results["average_performance"] = self._compute_time_stats(cpu_results["single_text_times"])
 
             chunker._embedding_model = original_model
 
@@ -244,10 +226,7 @@ class NPUPerformanceMeasurement:
                 gpu_results["single_text_times"].append(elapsed)
 
             for batch_size in [1, 5, 10, 25, 50, 100]:
-                batch_texts = [
-                    f"Test sentence number {i} for GPU batch processing."
-                    for i in range(batch_size)
-                ]
+                batch_texts = [f"Test sentence number {i} for GPU batch processing." for i in range(batch_size)]
                 start_time = time.time()
                 await chunker._compute_sentence_embeddings_async(batch_texts)
                 elapsed = (time.time() - start_time) * 1000
@@ -256,9 +235,7 @@ class NPUPerformanceMeasurement:
                     "per_text_ms": elapsed / batch_size,
                 }
 
-            gpu_results["average_performance"] = self._compute_time_stats(
-                gpu_results["single_text_times"]
-            )
+            gpu_results["average_performance"] = self._compute_time_stats(gpu_results["single_text_times"])
 
         except Exception as e:
             logger.error("GPU embedding performance test failed: %s", e)
@@ -273,10 +250,7 @@ class NPUPerformanceMeasurement:
         """
         batch_times = {}
         for batch_size in batch_sizes:
-            batch_texts = [
-                f"Test sentence number {i} for batch processing."
-                for i in range(batch_size)
-            ]
+            batch_texts = [f"Test sentence number {i} for batch processing." for i in range(batch_size)]
             start_time = time.time()
             embed_fn(batch_texts)
             elapsed = (time.time() - start_time) * 1000
@@ -310,24 +284,14 @@ class NPUPerformanceMeasurement:
 
         try:
             start_time = time.time()
-            async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=10)
-            ) as session:
-                npu_results["connectivity"] = await self._check_npu_connectivity(
-                    session, start_time
-                )
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
+                npu_results["connectivity"] = await self._check_npu_connectivity(session, start_time)
                 if npu_results["connectivity"].get("npu_available"):
-                    npu_results["health_check"] = npu_results["connectivity"].pop(
-                        "_health_data", {}
-                    )
+                    npu_results["health_check"] = npu_results["connectivity"].pop("_health_data", {})
 
                 if npu_results["connectivity"]["success"]:
-                    npu_results["embedding_generation"] = (
-                        await self._test_npu_embedding_generation(session)
-                    )
-                    npu_results["semantic_search"] = (
-                        await self._test_npu_semantic_search(session)
-                    )
+                    npu_results["embedding_generation"] = await self._test_npu_embedding_generation(session)
+                    npu_results["semantic_search"] = await self._test_npu_semantic_search(session)
 
         except Exception as e:
             logger.error("NPU Worker direct test failed: %s", e)
@@ -439,9 +403,7 @@ class NPUPerformanceMeasurement:
                 "success": False,
             }
 
-    async def _test_npu_embedding_generation(
-        self, session: aiohttp.ClientSession
-    ) -> Dict[str, Any]:
+    async def _test_npu_embedding_generation(self, session: aiohttp.ClientSession) -> Dict[str, Any]:
         """Test NPU Worker embedding generation."""
         embedding_results = {
             "single_embeddings": [],
@@ -535,12 +497,8 @@ class NPUPerformanceMeasurement:
                             "query": query,
                             "total_time_ms": elapsed,
                             "npu_time_ms": search_result.get("processing_time_ms", 0),
-                            "documents_searched": search_result.get(
-                                "documents_searched", 0
-                            ),
-                            "results_returned": search_result.get(
-                                "results_returned", 0
-                            ),
+                            "documents_searched": search_result.get("documents_searched", 0),
+                            "results_returned": search_result.get("results_returned", 0),
                             "device_used": search_result.get("device", "unknown"),
                             "success": True,
                         }
@@ -556,9 +514,7 @@ class NPUPerformanceMeasurement:
 
         return results
 
-    async def _test_npu_semantic_search(
-        self, session: aiohttp.ClientSession
-    ) -> Dict[str, Any]:
+    async def _test_npu_semantic_search(self, session: aiohttp.ClientSession) -> Dict[str, Any]:
         """Test NPU Worker semantic search."""
         search_results = {"search_tests": [], "performance_metrics": {}}
 
@@ -584,28 +540,20 @@ class NPUPerformanceMeasurement:
                     embedding_result = await response.json()
                     doc_embeddings = embedding_result.get("embeddings", [])
 
-                    search_results["search_tests"] = (
-                        await self._run_semantic_search_queries(
-                            session,
-                            doc_embeddings,
-                            test_documents,
-                        )
+                    search_results["search_tests"] = await self._run_semantic_search_queries(
+                        session,
+                        doc_embeddings,
+                        test_documents,
                     )
 
-                    successful = [
-                        r for r in search_results["search_tests"] if r["success"]
-                    ]
+                    successful = [r for r in search_results["search_tests"] if r["success"]]
                     if successful:
                         times = [r["total_time_ms"] for r in successful]
                         search_results["performance_metrics"] = {
                             "avg_search_time_ms": np.mean(times),
                             "min_search_time_ms": np.min(times),
                             "max_search_time_ms": np.max(times),
-                            "success_rate": (
-                                len(successful)
-                                / len(search_results["search_tests"])
-                                * 100
-                            ),
+                            "success_rate": (len(successful) / len(search_results["search_tests"]) * 100),
                         }
 
         except Exception as e:
@@ -724,13 +672,11 @@ class NPUPerformanceMeasurement:
                     config,
                     queries,
                 )
-                engine_results["search_performance"][f"config_{i+1}"] = (
-                    self._summarize_config_results(config, config_results)
+                engine_results["search_performance"][f"config_{i+1}"] = self._summarize_config_results(
+                    config, config_results
                 )
 
-            engine_results["hardware_utilization"] = (
-                await search_engine.get_search_statistics()
-            )
+            engine_results["hardware_utilization"] = await search_engine.get_search_statistics()
 
         except Exception as e:
             logger.error("Semantic search engine test failed: %s", e)
@@ -813,9 +759,7 @@ class NPUPerformanceMeasurement:
         Helper for _test_api_endpoints (#825).
         """
         start_time = time.time()
-        async with session.get(
-            f"{self.backend_url}/api/search/hardware/status"
-        ) as response:
+        async with session.get(f"{self.backend_url}/api/search/hardware/status") as response:
             if response.status == 200:
                 return {
                     "success": True,
@@ -837,21 +781,15 @@ class NPUPerformanceMeasurement:
         }
 
         try:
-            async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=30)
-            ) as session:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
                 api_results["health_check"] = await self._test_api_health_check(session)
 
                 if api_results["health_check"]["success"]:
-                    api_results["semantic_search"] = (
-                        await self._test_api_semantic_search(
-                            session,
-                            self.test_queries[:3],
-                        )
+                    api_results["semantic_search"] = await self._test_api_semantic_search(
+                        session,
+                        self.test_queries[:3],
                     )
-                    api_results["hardware_status"] = (
-                        await self._test_api_hardware_status(session)
-                    )
+                    api_results["hardware_status"] = await self._test_api_hardware_status(session)
 
         except Exception as e:
             logger.error("API endpoint test failed: %s", e)
@@ -908,17 +846,11 @@ class NPUPerformanceMeasurement:
 
         return {
             "configuration_performance": config_times,
-            "best_configuration": min(
-                config_times.keys(), key=lambda k: config_times[k]
-            ),
-            "worst_configuration": max(
-                config_times.keys(), key=lambda k: config_times[k]
-            ),
+            "best_configuration": min(config_times.keys(), key=lambda k: config_times[k]),
+            "worst_configuration": max(config_times.keys(), key=lambda k: config_times[k]),
         }
 
-    async def _analyze_performance_comparison(
-        self, benchmark_results: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _analyze_performance_comparison(self, benchmark_results: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze performance comparisons between configurations."""
         comparison = {
             "device_performance": {},
@@ -932,15 +864,9 @@ class NPUPerformanceMeasurement:
             npu_worker = benchmark_results.get("npu_worker_tests", {})
             semantic_search = benchmark_results.get("semantic_search_tests", {})
 
-            cpu_perf = hardware_baseline.get("cpu_embedding_performance", {}).get(
-                "average_performance", {}
-            )
-            gpu_perf = hardware_baseline.get("gpu_embedding_performance", {}).get(
-                "average_performance", {}
-            )
-            npu_perf = npu_worker.get("embedding_generation", {}).get(
-                "performance_metrics", {}
-            )
+            cpu_perf = hardware_baseline.get("cpu_embedding_performance", {}).get("average_performance", {})
+            gpu_perf = hardware_baseline.get("gpu_embedding_performance", {}).get("average_performance", {})
+            npu_perf = npu_worker.get("embedding_generation", {}).get("performance_metrics", {})
 
             if cpu_perf and gpu_perf and npu_perf:
                 device_data = self._compute_device_comparison(
@@ -952,9 +878,7 @@ class NPUPerformanceMeasurement:
 
             search_performance = semantic_search.get("search_performance", {})
             if search_performance:
-                comparison["efficiency_metrics"] = self._compute_efficiency_metrics(
-                    search_performance
-                )
+                comparison["efficiency_metrics"] = self._compute_efficiency_metrics(search_performance)
 
             comparison["hardware_utilization"] = self._build_hardware_utilization(
                 hardware_baseline,
@@ -984,12 +908,8 @@ class NPUPerformanceMeasurement:
             "cpu_utilization_during_test": hardware_info.get("cpu_percent", 0),
             "gpu_available": gpu_info.get("gpu_available", False),
             "gpu_memory_total_gb": gpu_info.get("gpu_memory_total_gb", 0),
-            "npu_worker_available": npu_worker.get("connectivity", {}).get(
-                "success", False
-            ),
-            "npu_available": npu_worker.get("health_check", {}).get(
-                "npu_available", False
-            ),
+            "npu_worker_available": npu_worker.get("connectivity", {}).get("success", False),
+            "npu_available": npu_worker.get("health_check", {}).get("npu_available", False),
         }
 
     def _get_npu_availability_recs(
@@ -1010,11 +930,7 @@ class NPUPerformanceMeasurement:
                 " and NPU Worker service is started"
             ]
         if not npu_available:
-            return [
-                "NPU hardware not available"
-                " - install Intel NPU drivers and OpenVINO"
-                " for optimal performance"
-            ]
+            return ["NPU hardware not available" " - install Intel NPU drivers and OpenVINO" " for optimal performance"]
         return ["NPU Worker is operational" " - NPU acceleration is available"]
 
     def _get_speedup_recs(self, speedup: Dict) -> List[str]:
@@ -1028,20 +944,12 @@ class NPUPerformanceMeasurement:
 
         if npu_vs_cpu > 5:
             recs.append(
-                f"Excellent NPU performance: {npu_vs_cpu:.1f}x"
-                " faster than CPU - route lightweight tasks to NPU"
+                f"Excellent NPU performance: {npu_vs_cpu:.1f}x" " faster than CPU - route lightweight tasks to NPU"
             )
         elif npu_vs_cpu > 2:
-            recs.append(
-                f"Good NPU performance: {npu_vs_cpu:.1f}x"
-                " faster than CPU - optimize NPU utilization"
-            )
+            recs.append(f"Good NPU performance: {npu_vs_cpu:.1f}x" " faster than CPU - optimize NPU utilization")
         elif npu_vs_cpu < 1:
-            recs.append(
-                "NPU performance suboptimal"
-                " - check NPU optimization settings"
-                " and model quantization"
-            )
+            recs.append("NPU performance suboptimal" " - check NPU optimization settings" " and model quantization")
 
         if npu_vs_gpu > 1.5:
             recs.append(
@@ -1050,10 +958,7 @@ class NPUPerformanceMeasurement:
                 " - prioritize NPU for semantic search"
             )
         elif npu_vs_gpu < 0.7:
-            recs.append(
-                "GPU outperforms NPU for these tasks"
-                " - consider GPU-first routing strategy"
-            )
+            recs.append("GPU outperforms NPU for these tasks" " - consider GPU-first routing strategy")
 
         return recs
 
@@ -1070,24 +975,16 @@ class NPUPerformanceMeasurement:
         gpu_available = hardware_util.get("gpu_available", False)
 
         if cpu_cores >= 16:
-            recs.append(
-                f"High-core CPU detected ({cpu_cores} cores)"
-                " - optimize parallel processing and batch sizes"
-            )
+            recs.append(f"High-core CPU detected ({cpu_cores} cores)" " - optimize parallel processing and batch sizes")
 
         if gpu_available:
             gpu_memory = hardware_util.get("gpu_memory_total_gb", 0)
             if gpu_memory >= 8:
-                recs.append(
-                    f"High-memory GPU available ({gpu_memory}GB)"
-                    " - optimize for large batch processing"
-                )
+                recs.append(f"High-memory GPU available ({gpu_memory}GB)" " - optimize for large batch processing")
 
         return recs
 
-    async def _generate_recommendations(
-        self, benchmark_results: Dict[str, Any]
-    ) -> List[str]:
+    async def _generate_recommendations(self, benchmark_results: Dict[str, Any]) -> List[str]:
         """Generate optimization recommendations based on benchmarks."""
         recommendations = []
 
@@ -1110,26 +1007,18 @@ class NPUPerformanceMeasurement:
                 best_config = efficiency.get("best_configuration")
                 if best_config:
                     recommendations.append(
-                        f"Optimal configuration identified:"
-                        f" {best_config}"
-                        " - use this for production workloads"
+                        f"Optimal configuration identified:" f" {best_config}" " - use this for production workloads"
                     )
 
             if not recommendations:
                 recommendations.append(
-                    "System performance analysis incomplete"
-                    " - run full benchmark for detailed"
-                    " recommendations"
+                    "System performance analysis incomplete" " - run full benchmark for detailed" " recommendations"
                 )
 
             recommendations.append(
-                "Monitor hardware utilization during production"
-                " workloads for ongoing optimization"
+                "Monitor hardware utilization during production" " workloads for ongoing optimization"
             )
-            recommendations.append(
-                "Consider workload-specific optimization"
-                " (latency vs throughput vs quality)"
-            )
+            recommendations.append("Consider workload-specific optimization" " (latency vs throughput vs quality)")
 
         except Exception as e:
             logger.error("Recommendation generation failed: %s", e)

@@ -54,12 +54,8 @@ class ClaudeAPIBatchManager:
 
         # Core components
         self.batcher: Optional[IntelligentRequestBatcher] = None
-        self.rate_limiter = (
-            ConversationRateLimiter() if self.config.enable_rate_limiting else None
-        )
-        self.payload_optimizer = (
-            PayloadOptimizer() if self.config.enable_payload_optimization else None
-        )
+        self.rate_limiter = ConversationRateLimiter() if self.config.enable_rate_limiting else None
+        self.payload_optimizer = PayloadOptimizer() if self.config.enable_payload_optimization else None
 
         # Lock for thread-safe access to shared state
         self._lock = asyncio.Lock()
@@ -127,9 +123,7 @@ class ClaudeAPIBatchManager:
             Response string if successful, None if batching failed and fallback needed
         """
         try:
-            response = await self._process_with_batching(
-                content, priority, context_type, timeout, metadata
-            )
+            response = await self._process_with_batching(content, priority, context_type, timeout, metadata)
             await self._increment_metric("batched_requests")
             return response
         except Exception as e:
@@ -152,14 +146,8 @@ class ClaudeAPIBatchManager:
             Response string
         """
         # Try batching if appropriate
-        if (
-            self.config.enable_batching
-            and self.batcher
-            and self._should_batch_request(priority, context_type)
-        ):
-            response = await self._try_batched_request(
-                content, priority, context_type, timeout, metadata
-            )
+        if self.config.enable_batching and self.batcher and self._should_batch_request(priority, context_type):
+            response = await self._try_batched_request(content, priority, context_type, timeout, metadata)
             if response is not None:
                 return response
 
@@ -204,9 +192,7 @@ class ClaudeAPIBatchManager:
             return content
 
         await self._increment_metric("payload_optimizations")
-        logger.debug(
-            f"Payload optimized: {optimization_result.size_reduction}% reduction"
-        )
+        logger.debug(f"Payload optimized: {optimization_result.size_reduction}% reduction")
         return optimization_result.optimized_content
 
     async def submit_request(
@@ -262,9 +248,7 @@ class ClaudeAPIBatchManager:
 
         return self.rate_limiter.can_make_request()
 
-    def _should_batch_request(
-        self, priority: RequestPriority, context_type: str
-    ) -> bool:
+    def _should_batch_request(self, priority: RequestPriority, context_type: str) -> bool:
         """Determine if request should be batched"""
         # Critical requests should not be batched
         if priority == RequestPriority.CRITICAL:
@@ -333,9 +317,7 @@ class ClaudeAPIBatchManager:
                     current_avg * (total_requests - 1) + response_time
                 ) / total_requests
 
-    async def submit_multiple_requests(
-        self, requests: List[Dict[str, Any]], parallel: bool = True
-    ) -> List[str]:
+    async def submit_multiple_requests(self, requests: List[Dict[str, Any]], parallel: bool = True) -> List[str]:
         """Submit multiple requests efficiently"""
         if parallel:
             # Submit all requests in parallel
@@ -376,9 +358,7 @@ class ClaudeAPIBatchManager:
 
         batch_efficiency = 0.0
         if metrics_copy["total_requests"] > 0:
-            batched_ratio = (
-                metrics_copy["batched_requests"] / metrics_copy["total_requests"]
-            )
+            batched_ratio = metrics_copy["batched_requests"] / metrics_copy["total_requests"]
             batch_efficiency = batched_ratio * 100
 
         batcher_stats = {}
@@ -391,9 +371,7 @@ class ClaudeAPIBatchManager:
             "fallback_count": fallback,
             "is_running": running,
             "batcher_stats": batcher_stats,
-            "rate_limiter_stats": (
-                self.rate_limiter.get_usage_statistics() if self.rate_limiter else {}
-            ),
+            "rate_limiter_stats": (self.rate_limiter.get_usage_statistics() if self.rate_limiter else {}),
         }
 
     async def reset_metrics(self):
@@ -451,9 +429,7 @@ async def batch_claude_request(
     if manager is None:
         # Create temporary manager
         async with ClaudeAPIContextManager() as temp_manager:
-            return await temp_manager.submit_request(
-                content, priority, context_type, timeout
-            )
+            return await temp_manager.submit_request(content, priority, context_type, timeout)
     else:
         return await manager.submit_request(content, priority, context_type, timeout)
 
@@ -506,9 +482,7 @@ class AutoBotClaudeAPIAdapter(AsyncInitializable):
             timeout=TimingConstants.SHORT_TIMEOUT,
         )
 
-    async def process_code_analysis(
-        self, code: str, analysis_type: str = "general"
-    ) -> str:
+    async def process_code_analysis(self, code: str, analysis_type: str = "general") -> str:
         """Process code analysis with appropriate batching"""
         await self.ensure_initialized()
         return await self.manager.submit_request(

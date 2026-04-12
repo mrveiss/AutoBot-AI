@@ -29,10 +29,7 @@ _PROMQL_QUERY_SCHEMA = {
     "properties": {
         "query": {
             "type": "string",
-            "description": (
-                "PromQL query expression "
-                "(e.g., 'autobot_cpu_usage_percent', 'node_load1')"
-            ),
+            "description": ("PromQL query expression " "(e.g., 'autobot_cpu_usage_percent', 'node_load1')"),
         }
     },
     "required": ["query"],
@@ -152,9 +149,7 @@ async def prometheus_query(query: str) -> Optional[Dict]:
     try:
         async with aiohttp.ClientSession() as session:
             params = {"query": query}
-            async with session.get(
-                f"{PROMETHEUS_URL}/api/v1/query", params=params, timeout=10
-            ) as response:
+            async with session.get(f"{PROMETHEUS_URL}/api/v1/query", params=params, timeout=10) as response:
                 if response.status != 200:
                     return None
 
@@ -168,9 +163,7 @@ async def prometheus_query(query: str) -> Optional[Dict]:
         return None
 
 
-async def prometheus_query_range(
-    query: str, start: datetime, end: datetime, step: str
-) -> Optional[Dict]:
+async def prometheus_query_range(query: str, start: datetime, end: datetime, step: str) -> Optional[Dict]:
     """Execute range Prometheus query."""
     try:
         async with aiohttp.ClientSession() as session:
@@ -180,9 +173,7 @@ async def prometheus_query_range(
                 "end": end.isoformat() + "Z",
                 "step": step,
             }
-            async with session.get(
-                f"{PROMETHEUS_URL}/api/v1/query_range", params=params, timeout=30
-            ) as response:
+            async with session.get(f"{PROMETHEUS_URL}/api/v1/query_range", params=params, timeout=30) as response:
                 if response.status != 200:
                     return None
 
@@ -215,11 +206,7 @@ async def query_metric(query: str) -> List[TextContent]:
 
         results.append(f"{metric_name}{{{labels}}}: {value}")
 
-    return [
-        TextContent(
-            type="text", text=f"Query: {query}\n\nResults:\n" + "\n".join(results)
-        )
-    ]
+    return [TextContent(type="text", text=f"Query: {query}\n\nResults:\n" + "\n".join(results))]
 
 
 async def query_range(query: str, duration: str, step: str) -> List[TextContent]:
@@ -261,8 +248,7 @@ async def query_range(query: str, duration: str, step: str) -> List[TextContent]
     return [
         TextContent(
             type="text",
-            text=f"Query: {query}\nDuration: {duration}\nStep: {step}\n"
-            + "\n".join(results),
+            text=f"Query: {query}\nDuration: {duration}\nStep: {step}\n" + "\n".join(results),
         )
     ]
 
@@ -272,12 +258,8 @@ async def get_system_metrics() -> List[TextContent]:
 
     # Query all VMs
     load_data = await prometheus_query("node_load1")
-    cpu_data = await prometheus_query(
-        "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode='idle'}[5m])) * 100)"
-    )
-    memory_data = await prometheus_query(
-        "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100"
-    )
+    cpu_data = await prometheus_query("100 - (avg by (instance) (rate(node_cpu_seconds_total{mode='idle'}[5m])) * 100)")
+    memory_data = await prometheus_query("(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100")
 
     if not load_data or not load_data.get("result"):
         return [
@@ -357,8 +339,7 @@ async def get_vm_metrics(vm_ip: str) -> List[TextContent]:
     instance_filter = f'instance=~"{vm_ip}:.*"'
     load = await prometheus_query(f"node_load1{{{instance_filter}}}")
     cpu = await prometheus_query(
-        f"100 - (avg by (instance) "
-        f'(rate(node_cpu_seconds_total{{mode="idle",{instance_filter}}}[5m])) * 100)'
+        f"100 - (avg by (instance) " f'(rate(node_cpu_seconds_total{{mode="idle",{instance_filter}}}[5m])) * 100)'
     )
     memory = await prometheus_query(
         f"(1 - (node_memory_MemAvailable_bytes{{{instance_filter}}} / "
@@ -398,19 +379,13 @@ async def list_available_metrics(filter_pattern: str) -> List[TextContent]:
     # Query label values for __name__ (all metric names)
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{PROMETHEUS_URL}/api/v1/label/__name__/values", timeout=10
-            ) as response:
+            async with session.get(f"{PROMETHEUS_URL}/api/v1/label/__name__/values", timeout=10) as response:
                 if response.status != 200:
-                    return [
-                        TextContent(type="text", text="Failed to fetch metrics list")
-                    ]
+                    return [TextContent(type="text", text="Failed to fetch metrics list")]
 
                 data = await response.json()
                 if data.get("status") != "success":
-                    return [
-                        TextContent(type="text", text="Failed to fetch metrics list")
-                    ]
+                    return [TextContent(type="text", text="Failed to fetch metrics list")]
 
                 metrics = data.get("data", [])
 
@@ -421,11 +396,7 @@ async def list_available_metrics(filter_pattern: str) -> List[TextContent]:
                 # Categorize metrics
                 autobot_metrics = [m for m in metrics if m.startswith("autobot_")]
                 node_metrics = [m for m in metrics if m.startswith("node_")]
-                other_metrics = [
-                    m
-                    for m in metrics
-                    if not m.startswith("autobot_") and not m.startswith("node_")
-                ]
+                other_metrics = [m for m in metrics if not m.startswith("autobot_") and not m.startswith("node_")]
 
                 output = "Available Prometheus Metrics\n" + "=" * 50 + "\n\n"
 

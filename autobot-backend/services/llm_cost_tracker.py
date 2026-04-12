@@ -30,14 +30,14 @@ from constants.model_constants import (
     ANTHROPIC_CLAUDE_SONNET4,
     DEEPSEEK_R1_API,
     DEEPSEEK_V3,
+    GOOGLE_GEMINI15_PRO,
     GOOGLE_GEMINI20_FLASH,
     GOOGLE_GEMINI25_PRO,
-    GOOGLE_GEMINI15_PRO,
     MODEL_PRICING_PER_1M_TOKENS,
+    OPENAI_GPT4_TURBO,
+    OPENAI_GPT4O,
     OPENAI_GPT35_TURBO,
     OPENAI_GPT41,
-    OPENAI_GPT4O,
-    OPENAI_GPT4_TURBO,
     OPENAI_O1,
     OPENAI_O1_MINI,
     OPENAI_O3,
@@ -225,9 +225,7 @@ class LLMCostTracker:
     async def get_redis(self):
         """Get async Redis client"""
         if self._redis_client is None:
-            self._redis_client = get_redis_client(
-                async_client=True, database=RedisDatabase.ANALYTICS
-            )
+            self._redis_client = get_redis_client(async_client=True, database=RedisDatabase.ANALYTICS)
         return self._redis_client
 
     # Pattern-based pricing fallbacks for unknown models (#1961).
@@ -254,9 +252,7 @@ class LLMCostTracker:
         ("deepseek-r1", DEEPSEEK_R1_API),
     ]
 
-    def _estimate_pricing_by_pattern(
-        self, model_lower: str
-    ) -> Optional[Dict[str, float]]:
+    def _estimate_pricing_by_pattern(self, model_lower: str) -> Optional[Dict[str, float]]:
         """
         Return pricing estimate for an unknown model using name-pattern heuristics.
 
@@ -278,9 +274,7 @@ class LLMCostTracker:
                     return pricing
         return None
 
-    def calculate_cost(
-        self, model: str, input_tokens: int, output_tokens: int
-    ) -> float:
+    def calculate_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
         """
         Calculate cost for a given model and token counts.
 
@@ -363,15 +357,9 @@ class LLMCostTracker:
         metadata: Optional[Dict[str, Any]],
     ) -> tuple:
         """Helper for _extract_usage_params. Ref: #1088."""
-        if (
-            provider is None
-            or model is None
-            or input_tokens is None
-            or output_tokens is None
-        ):
+        if provider is None or model is None or input_tokens is None or output_tokens is None:
             raise ValueError(
-                "Either 'request' object or 'provider', 'model', "
-                "'input_tokens', 'output_tokens' are required"
+                "Either 'request' object or 'provider', 'model', " "'input_tokens', 'output_tokens' are required"
             )
         return (
             provider,
@@ -639,9 +627,7 @@ class LLMCostTracker:
                     session_key = f"{self.SESSION_TOTALS_KEY}:{record.session_id}"
                     await pipe.hincrbyfloat(session_key, "cost_usd", record.cost_usd)
                     await pipe.hincrby(session_key, "input_tokens", record.input_tokens)
-                    await pipe.hincrby(
-                        session_key, "output_tokens", record.output_tokens
-                    )
+                    await pipe.hincrby(session_key, "output_tokens", record.output_tokens)
                     await pipe.expire(session_key, TTL_30_DAYS)  # Keep 30 days
 
                 # Update per-agent totals if agent provided (#1401)
@@ -651,9 +637,7 @@ class LLMCostTracker:
                     await pipe.hincrby(agent_key, "input_tokens", record.input_tokens)
                     await pipe.hincrby(agent_key, "output_tokens", record.output_tokens)
                     await pipe.hincrby(agent_key, "call_count", 1)
-                    daily_agent_key = (
-                        f"{self.AGENT_TOTALS_KEY}:{record.agent_id}" f":daily:{today}"
-                    )
+                    daily_agent_key = f"{self.AGENT_TOTALS_KEY}:{record.agent_id}" f":daily:{today}"
                     await pipe.incrbyfloat(daily_agent_key, record.cost_usd)
                     await pipe.expire(daily_agent_key, TTL_90_DAYS)
 
@@ -667,9 +651,7 @@ class LLMCostTracker:
         """Check if any budget alerts should be triggered"""
         # Implementation for budget alerts - can be extended
 
-    async def _fetch_daily_costs(
-        self, redis, start_date: datetime, end_date: datetime
-    ) -> Dict[str, float]:
+    async def _fetch_daily_costs(self, redis, start_date: datetime, end_date: datetime) -> Dict[str, float]:
         """
         Fetch daily costs from Redis using pipeline (Issue #665: extracted helper).
 
@@ -732,20 +714,10 @@ class LLMCostTracker:
             model_name = key_str.split(":")[-1]
 
             model_costs[model_name] = {
-                "cost_usd": float(
-                    model_data.get(b"cost_usd", 0) or model_data.get("cost_usd", 0)
-                ),
-                "input_tokens": int(
-                    model_data.get(b"input_tokens", 0)
-                    or model_data.get("input_tokens", 0)
-                ),
-                "output_tokens": int(
-                    model_data.get(b"output_tokens", 0)
-                    or model_data.get("output_tokens", 0)
-                ),
-                "call_count": int(
-                    model_data.get(b"call_count", 0) or model_data.get("call_count", 0)
-                ),
+                "cost_usd": float(model_data.get(b"cost_usd", 0) or model_data.get("cost_usd", 0)),
+                "input_tokens": int(model_data.get(b"input_tokens", 0) or model_data.get("input_tokens", 0)),
+                "output_tokens": int(model_data.get(b"output_tokens", 0) or model_data.get("output_tokens", 0)),
+                "call_count": int(model_data.get(b"call_count", 0) or model_data.get("call_count", 0)),
             }
 
         return model_costs
@@ -817,12 +789,8 @@ class LLMCostTracker:
                 "session_id": session_id,
                 "found": True,
                 "cost_usd": float(data.get(b"cost_usd", 0) or data.get("cost_usd", 0)),
-                "input_tokens": int(
-                    data.get(b"input_tokens", 0) or data.get("input_tokens", 0)
-                ),
-                "output_tokens": int(
-                    data.get(b"output_tokens", 0) or data.get("output_tokens", 0)
-                ),
+                "input_tokens": int(data.get(b"input_tokens", 0) or data.get("input_tokens", 0)),
+                "output_tokens": int(data.get(b"output_tokens", 0) or data.get("output_tokens", 0)),
             }
 
         except Exception as e:
@@ -856,14 +824,10 @@ class LLMCostTracker:
             second_half = sorted_dates[len(sorted_dates) // 2 :]
 
             first_half_avg = sum(daily_costs[d] for d in first_half) / len(first_half)
-            second_half_avg = sum(daily_costs[d] for d in second_half) / len(
-                second_half
-            )
+            second_half_avg = sum(daily_costs[d] for d in second_half) / len(second_half)
 
             if first_half_avg > 0:
-                growth_rate = (
-                    (second_half_avg - first_half_avg) / first_half_avg
-                ) * 100
+                growth_rate = ((second_half_avg - first_half_avg) / first_half_avg) * 100
             else:
                 growth_rate = 0
         else:
@@ -873,11 +837,7 @@ class LLMCostTracker:
             "period_days": days,
             "total_cost_usd": summary.get("total_cost_usd", 0),
             "daily_costs": daily_costs,
-            "trend": (
-                "increasing"
-                if growth_rate > 5
-                else "decreasing" if growth_rate < -5 else "stable"
-            ),
+            "trend": ("increasing" if growth_rate > 5 else "decreasing" if growth_rate < -5 else "stable"),
             "growth_rate_percent": round(growth_rate, 2),
             "avg_daily_cost": summary.get("avg_daily_cost", 0),
         }
@@ -906,15 +866,9 @@ class LLMCostTracker:
                 "agent_id": agent_id,
                 "found": True,
                 "cost_usd": float(data.get(b"cost_usd", 0) or data.get("cost_usd", 0)),
-                "input_tokens": int(
-                    data.get(b"input_tokens", 0) or data.get("input_tokens", 0)
-                ),
-                "output_tokens": int(
-                    data.get(b"output_tokens", 0) or data.get("output_tokens", 0)
-                ),
-                "call_count": int(
-                    data.get(b"call_count", 0) or data.get("call_count", 0)
-                ),
+                "input_tokens": int(data.get(b"input_tokens", 0) or data.get("input_tokens", 0)),
+                "output_tokens": int(data.get(b"output_tokens", 0) or data.get("output_tokens", 0)),
+                "call_count": int(data.get(b"call_count", 0) or data.get("call_count", 0)),
             }
         except Exception as e:
             logger.error("Failed to get agent cost: %s", e)
@@ -926,9 +880,7 @@ class LLMCostTracker:
             redis = await self.get_redis()
             pattern = f"{self.AGENT_TOTALS_KEY}:*"
             agent_keys = [
-                k
-                for k in await redis.keys(pattern)
-                if b":daily:" not in (k if isinstance(k, bytes) else k.encode())
+                k for k in await redis.keys(pattern) if b":daily:" not in (k if isinstance(k, bytes) else k.encode())
             ]
 
             if not agent_keys:
@@ -948,19 +900,10 @@ class LLMCostTracker:
                 agents.append(
                     {
                         "agent_id": agent_id,
-                        "cost_usd": float(
-                            data.get(b"cost_usd", 0) or data.get("cost_usd", 0)
-                        ),
-                        "input_tokens": int(
-                            data.get(b"input_tokens", 0) or data.get("input_tokens", 0)
-                        ),
-                        "output_tokens": int(
-                            data.get(b"output_tokens", 0)
-                            or data.get("output_tokens", 0)
-                        ),
-                        "call_count": int(
-                            data.get(b"call_count", 0) or data.get("call_count", 0)
-                        ),
+                        "cost_usd": float(data.get(b"cost_usd", 0) or data.get("cost_usd", 0)),
+                        "input_tokens": int(data.get(b"input_tokens", 0) or data.get("input_tokens", 0)),
+                        "output_tokens": int(data.get(b"output_tokens", 0) or data.get("output_tokens", 0)),
+                        "call_count": int(data.get(b"call_count", 0) or data.get("call_count", 0)),
                     }
                 )
 
@@ -970,9 +913,7 @@ class LLMCostTracker:
             logger.error("Failed to get all agent costs: %s", e)
             return []
 
-    async def set_agent_budget(
-        self, agent_id: str, budget_monthly_usd: float
-    ) -> Dict[str, Any]:
+    async def set_agent_budget(self, agent_id: str, budget_monthly_usd: float) -> Dict[str, Any]:
         """Set monthly budget for an agent (#1401)."""
         try:
             redis = await self.get_redis()

@@ -45,9 +45,7 @@ class AutomatedTestingSuite:
 
     def __init__(self, project_root: str = None):
         """Initialize testing suite with project root and results containers."""
-        self.project_root = Path(
-            project_root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        )
+        self.project_root = Path(project_root or os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         self.results = {
             "summary": {},
             "unit_tests": [],
@@ -476,9 +474,7 @@ class AutomatedTestingSuite:
             validator = get_command_validator()
 
             # Test safe command
-            safe_result = validator.validate_command_request(
-                "show me system information"
-            )
+            safe_result = validator.validate_command_request("show me system information")
 
             # Test dangerous command
             danger_result = validator.validate_command_request("run rm -rf /")
@@ -598,11 +594,7 @@ class AutomatedTestingSuite:
                     message="No linting errors found",
                 )
             else:
-                error_count = (
-                    len(result.stdout.strip().split("\n"))
-                    if result.stdout.strip()
-                    else 0
-                )
+                error_count = len(result.stdout.strip().split("\n")) if result.stdout.strip() else 0
                 return TestResult(
                     name="Quality: Flake8 Compliance",
                     status="FAIL",
@@ -682,12 +674,7 @@ class AutomatedTestingSuite:
 
         # Compile summary
         all_results = (
-            unit_results
-            + integration_results
-            + api_results
-            + performance_results
-            + security_results
-            + quality_results
+            unit_results + integration_results + api_results + performance_results + security_results + quality_results
         )
 
         summary = {
@@ -711,11 +698,7 @@ class AutomatedTestingSuite:
         logger.info(f"⏭️  Skipped: {summary['skipped']}")
         logger.info(f"⏱️  Duration: {summary['total_duration']:.2f}s")
 
-        success_rate = (
-            (summary["passed"] / summary["total_tests"]) * 100
-            if summary["total_tests"] > 0
-            else 0
-        )
+        success_rate = (summary["passed"] / summary["total_tests"]) * 100 if summary["total_tests"] > 0 else 0
         logger.info(f"📈 Success rate: {success_rate:.1f}%")
 
         return self.results

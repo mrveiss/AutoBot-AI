@@ -10,15 +10,13 @@ Covers the two bugs fixed in #3880:
    ``memory.redis.enabled``.
 """
 
-import sys
 import os
+import sys
 from typing import Any, Dict
-
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config.validation import validate_startup_config
-
 
 # ---------------------------------------------------------------------------
 # Helpers

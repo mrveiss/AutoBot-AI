@@ -36,9 +36,7 @@ from typing import Dict, List, Tuple
 # Add AutoBot paths
 sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -221,9 +219,7 @@ class CICDIntegrationTester:
         ]
 
         # Create results directory
-        self.results_dir = Path(
-            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results"
-        )
+        self.results_dir = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results")
         self.results_dir.mkdir(exist_ok=True)
 
         self.pipeline_id = f"phase9_pipeline_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -251,14 +247,10 @@ class CICDIntegrationTester:
 
         # Check dependencies
         for dependency in stage.dependencies:
-            dependency_result = next(
-                (r for r in self.results if r.stage_name == dependency), None
-            )
+            dependency_result = next((r for r in self.results if r.stage_name == dependency), None)
 
             if not dependency_result or dependency_result.status == "FAIL":
-                logger.warning(
-                    f"⚠️ Dependency {dependency} failed, skipping {stage.name}"
-                )
+                logger.warning(f"⚠️ Dependency {dependency} failed, skipping {stage.name}")
                 return PipelineResult(
                     pipeline_id=self.pipeline_id,
                     stage_name=stage.name,
@@ -299,9 +291,7 @@ class CICDIntegrationTester:
                 logger.info(f"✅ Stage {stage.name} completed successfully")
             else:
                 status = "FAIL"
-                logger.error(
-                    f"❌ Stage {stage.name} failed with exit code {process.returncode}"
-                )
+                logger.error(f"❌ Stage {stage.name} failed with exit code {process.returncode}")
 
                 # Show error output
                 if process.stderr:
@@ -330,9 +320,7 @@ class CICDIntegrationTester:
             end_time = datetime.now()
             duration = (end_time - start_time).total_seconds()
 
-            logger.error(
-                f"⏰ Stage {stage.name} timed out after {stage.timeout} seconds"
-            )
+            logger.error(f"⏰ Stage {stage.name} timed out after {stage.timeout} seconds")
 
             return PipelineResult(
                 pipeline_id=self.pipeline_id,
@@ -378,23 +366,17 @@ class CICDIntegrationTester:
             logger.info(f"   Evaluating: {gate.name}")
 
             if gate.metric not in metrics:
-                logger.warning(
-                    f"   ⚠️ Metric {gate.metric} not available, skipping gate"
-                )
+                logger.warning(f"   ⚠️ Metric {gate.metric} not available, skipping gate")
                 continue
 
             metric_value = metrics[gate.metric]
 
             # Evaluate gate condition
-            gate_passed = self._evaluate_gate_condition(
-                metric_value, gate.threshold, gate.operator
-            )
+            gate_passed = self._evaluate_gate_condition(metric_value, gate.threshold, gate.operator)
 
             if gate_passed:
                 passed_gates.append(gate.name)
-                logger.info(
-                    f"   ✅ {gate.name}: {metric_value} {gate.operator} {gate.threshold}"
-                )
+                logger.info(f"   ✅ {gate.name}: {metric_value} {gate.operator} {gate.threshold}")
             else:
                 failed_gates.append(gate.name)
                 severity_emoji = "🚫" if gate.severity == "blocking" else "⚠️"
@@ -404,9 +386,7 @@ class CICDIntegrationTester:
 
         return passed_gates, failed_gates
 
-    def _evaluate_gate_condition(
-        self, value: float, threshold: float, operator: str
-    ) -> bool:
+    def _evaluate_gate_condition(self, value: float, threshold: float, operator: str) -> bool:
         """Evaluate quality gate condition"""
         if operator == ">=":
             return value >= threshold
@@ -451,17 +431,12 @@ class CICDIntegrationTester:
                     # Count critical failures
                     if "test_results" in data:
                         for test in data["test_results"]:
-                            if (
-                                test.get("status") == "FAIL"
-                                and test.get("severity") == "critical"
-                            ):
+                            if test.get("status") == "FAIL" and test.get("severity") == "critical":
                                 critical_failures += 1
 
                 # Extract coverage information
                 if "coverage" in data:
-                    metrics["test_coverage_percentage"] = data["coverage"].get(
-                        "percentage", 0
-                    )
+                    metrics["test_coverage_percentage"] = data["coverage"].get("percentage", 0)
 
                 # Extract performance metrics
                 if "performance_metrics" in data:
@@ -475,9 +450,7 @@ class CICDIntegrationTester:
         # Calculate derived metrics
         if total_tests > 0:
             metrics["integration_success_rate"] = (passed_tests / total_tests) * 100
-            metrics["distributed_system_success_rate"] = (
-                passed_tests / total_tests
-            ) * 100
+            metrics["distributed_system_success_rate"] = (passed_tests / total_tests) * 100
 
         metrics["critical_test_failures"] = critical_failures
         metrics["high_severity_vulnerabilities"] = 0  # Placeholder
@@ -485,9 +458,7 @@ class CICDIntegrationTester:
 
         return metrics
 
-    async def send_pipeline_notifications(
-        self, passed_gates: List[str], failed_gates: List[str]
-    ):
+    async def send_pipeline_notifications(self, passed_gates: List[str], failed_gates: List[str]):
         """Send pipeline notifications"""
         logger.info("📢 Sending Pipeline Notifications...")
 
@@ -522,9 +493,7 @@ class CICDIntegrationTester:
         }
 
         # Save notification to file (for CI/CD system pickup)
-        notification_file = (
-            self.results_dir / f"pipeline_notification_{self.pipeline_id}.json"
-        )
+        notification_file = self.results_dir / f"pipeline_notification_{self.pipeline_id}.json"
         with open(notification_file, "w") as f:
             json.dump(notification, f, indent=2)
 
@@ -532,12 +501,8 @@ class CICDIntegrationTester:
         status_emoji = {"SUCCESS": "✅", "WARNING": "⚠️", "FAILED": "❌"}
         logger.info(f"{status_emoji[pipeline_status]} Pipeline {pipeline_status}")
         logger.info(f"   Duration: {total_duration:.2f} seconds")
-        logger.info(
-            f"   Stages: {notification['stages_passed']}/{notification['stages_executed']} passed"
-        )
-        logger.info(
-            f"   Quality Gates: {len(passed_gates)}/{len(passed_gates) + len(failed_gates)} passed"
-        )
+        logger.info(f"   Stages: {notification['stages_passed']}/{notification['stages_executed']} passed")
+        logger.info(f"   Quality Gates: {len(passed_gates)}/{len(passed_gates) + len(failed_gates)} passed")
 
         if blocking_failures:
             logger.error(f"   Blocking Failures: {', '.join(blocking_failures)}")
@@ -558,12 +523,8 @@ class CICDIntegrationTester:
                 with open(os.getenv("GITHUB_OUTPUT"), "a") as f:
                     f.write(f"pipeline_status={notification['status']}\n")
                     f.write(f"pipeline_duration={notification['duration']:.2f}\n")
-                    f.write(
-                        f"quality_gates_passed={notification['quality_gates_passed']}\n"
-                    )
-                    f.write(
-                        f"quality_gates_failed={notification['quality_gates_failed']}\n"
-                    )
+                    f.write(f"quality_gates_passed={notification['quality_gates_passed']}\n")
+                    f.write(f"quality_gates_failed={notification['quality_gates_failed']}\n")
 
             # Create step summary
             if os.getenv("GITHUB_STEP_SUMMARY"):
@@ -623,12 +584,8 @@ class CICDIntegrationTester:
                 f.write(f"PIPELINE_DURATION={notification['duration']:.2f}\n")
                 f.write(f"STAGES_PASSED={notification['stages_passed']}\n")
                 f.write(f"STAGES_FAILED={notification['stages_failed']}\n")
-                f.write(
-                    f"QUALITY_GATES_PASSED={notification['quality_gates_passed']}\n"
-                )
-                f.write(
-                    f"QUALITY_GATES_FAILED={notification['quality_gates_failed']}\n"
-                )
+                f.write(f"QUALITY_GATES_PASSED={notification['quality_gates_passed']}\n")
+                f.write(f"QUALITY_GATES_FAILED={notification['quality_gates_failed']}\n")
 
         except Exception as e:
             logger.warning(f"Failed to send Jenkins notification: {e}")
@@ -649,9 +606,7 @@ class CICDIntegrationTester:
 
             # Check if required stage failed
             if stage.required and result.status == "FAIL":
-                logger.error(
-                    f"💥 Required stage {stage.name} failed, aborting pipeline"
-                )
+                logger.error(f"💥 Required stage {stage.name} failed, aborting pipeline")
                 pipeline_success = False
                 break
 
@@ -688,9 +643,7 @@ class CICDIntegrationTester:
         logger.info(f"Status: {'SUCCESS' if pipeline_success else 'FAILED'}")
         logger.info(f"Duration: {total_duration:.2f} seconds")
         logger.info(f"Stages: {stages_passed}/{stages_total} passed")
-        logger.info(
-            f"Quality Gates: {len(passed_gates)}/{len(passed_gates) + len(failed_gates)} passed"
-        )
+        logger.info(f"Quality Gates: {len(passed_gates)}/{len(passed_gates) + len(failed_gates)} passed")
         logger.info(f"Report: {report_file}")
 
         if blocking_failures:
@@ -736,12 +689,7 @@ class CICDIntegrationTester:
                         "description": gate.description,
                         "status": (
                             "PASS"
-                            if gate.name
-                            in (
-                                self.results[0].quality_gates_passed
-                                if self.results
-                                else []
-                            )
+                            if gate.name in (self.results[0].quality_gates_passed if self.results else [])
                             else "FAIL"
                         ),
                     }
@@ -752,12 +700,7 @@ class CICDIntegrationTester:
                         "SUCCESS"
                         if all(
                             gate.severity != "blocking"
-                            or gate.name
-                            in (
-                                self.results[0].quality_gates_passed
-                                if self.results
-                                else []
-                            )
+                            or gate.name in (self.results[0].quality_gates_passed if self.results else [])
                             for gate in self.quality_gates
                         )
                         else "FAILED"
@@ -765,18 +708,10 @@ class CICDIntegrationTester:
                     "stages_executed": len(self.results),
                     "stages_passed": sum(1 for r in self.results if r.status == "PASS"),
                     "stages_failed": sum(1 for r in self.results if r.status == "FAIL"),
-                    "stages_skipped": sum(
-                        1 for r in self.results if r.status == "SKIP"
-                    ),
-                    "quality_gates_passed": len(
-                        self.results[0].quality_gates_passed if self.results else []
-                    ),
-                    "quality_gates_failed": len(
-                        self.results[0].quality_gates_failed if self.results else []
-                    ),
-                    "total_artifacts": sum(
-                        len(r.artifacts_generated) for r in self.results
-                    ),
+                    "stages_skipped": sum(1 for r in self.results if r.status == "SKIP"),
+                    "quality_gates_passed": len(self.results[0].quality_gates_passed if self.results else []),
+                    "quality_gates_failed": len(self.results[0].quality_gates_failed if self.results else []),
+                    "total_artifacts": sum(len(r.artifacts_generated) for r in self.results),
                 },
                 "recommendations": self._generate_pipeline_recommendations(),
             }
@@ -788,18 +723,14 @@ class CICDIntegrationTester:
             json.dump(report, f, indent=2)
 
         # Create human-readable summary
-        summary_file = (
-            self.results_dir / f"cicd_pipeline_summary_{self.pipeline_id}.txt"
-        )
+        summary_file = self.results_dir / f"cicd_pipeline_summary_{self.pipeline_id}.txt"
         with open(summary_file, "w") as f:
             f.write("AutoBot Phase 9 CI/CD Pipeline Report\n")
             f.write("=" * 40 + "\n\n")
             f.write(f"Pipeline ID: {self.pipeline_id}\n")
             f.write(f"Environment: {self.ci_environment}\n")
             f.write(f"Duration: {total_duration:.2f} seconds\n")
-            f.write(
-                f"Status: {report['autobot_phase9_cicd_pipeline']['summary']['overall_status']}\n\n"
-            )
+            f.write(f"Status: {report['autobot_phase9_cicd_pipeline']['summary']['overall_status']}\n\n")
 
             f.write("Stage Results:\n")
             for result in self.results:
@@ -817,10 +748,7 @@ class CICDIntegrationTester:
             f.write("Quality Gates:\n")
             for gate in self.quality_gates:
                 status = (
-                    "PASS"
-                    if gate.name
-                    in (self.results[0].quality_gates_passed if self.results else [])
-                    else "FAIL"
+                    "PASS" if gate.name in (self.results[0].quality_gates_passed if self.results else []) else "FAIL"
                 )
                 status_icon = "✅" if status == "PASS" else "❌"
                 f.write(f"  {status_icon} {gate.name}: {status}\n")
@@ -844,75 +772,49 @@ class CICDIntegrationTester:
         skipped_stages = [r for r in self.results if r.status == "SKIP"]
 
         if failed_stages:
-            recommendations.append(
-                f"🚨 Fix {len(failed_stages)} failed stages before next deployment"
-            )
+            recommendations.append(f"🚨 Fix {len(failed_stages)} failed stages before next deployment")
 
         if skipped_stages:
-            recommendations.append(
-                f"⚠️ {len(skipped_stages)} stages were skipped due to dependencies"
-            )
+            recommendations.append(f"⚠️ {len(skipped_stages)} stages were skipped due to dependencies")
 
         # Analyze quality gate failures
         if self.results and self.results[0].quality_gates_failed:
             failed_gates = self.results[0].quality_gates_failed
             blocking_gates = [
-                gate.name
-                for gate in self.quality_gates
-                if gate.name in failed_gates and gate.severity == "blocking"
+                gate.name for gate in self.quality_gates if gate.name in failed_gates and gate.severity == "blocking"
             ]
 
             if blocking_gates:
-                recommendations.append(
-                    f"🚫 Address {len(blocking_gates)} blocking quality gate failures"
-                )
+                recommendations.append(f"🚫 Address {len(blocking_gates)} blocking quality gate failures")
 
             warning_gates = [
-                gate.name
-                for gate in self.quality_gates
-                if gate.name in failed_gates and gate.severity == "warning"
+                gate.name for gate in self.quality_gates if gate.name in failed_gates and gate.severity == "warning"
             ]
 
             if warning_gates:
-                recommendations.append(
-                    f"⚠️ Review {len(warning_gates)} quality gate warnings"
-                )
+                recommendations.append(f"⚠️ Review {len(warning_gates)} quality gate warnings")
 
         # Performance recommendations
-        slow_stages = [
-            r for r in self.results if r.duration > 600
-        ]  # Longer than 10 minutes
+        slow_stages = [r for r in self.results if r.duration > 600]  # Longer than 10 minutes
         if slow_stages:
-            recommendations.append(
-                f"⚡ Optimize {len(slow_stages)} slow stages for faster feedback"
-            )
+            recommendations.append(f"⚡ Optimize {len(slow_stages)} slow stages for faster feedback")
 
         # Success recommendations
         if all(r.status in ["PASS", "SKIP"] for r in self.results):
             if self.results and not self.results[0].quality_gates_failed:
-                recommendations.append(
-                    "✅ Pipeline excellent - ready for production deployment"
-                )
+                recommendations.append("✅ Pipeline excellent - ready for production deployment")
             else:
-                recommendations.append(
-                    "✅ All stages passed - address quality gate warnings"
-                )
+                recommendations.append("✅ All stages passed - address quality gate warnings")
 
         return recommendations
 
 
 async def main():
     """Main entry point for CI/CD integration testing"""
-    parser = argparse.ArgumentParser(
-        description="AutoBot Phase 9 CI/CD Integration Testing"
-    )
+    parser = argparse.ArgumentParser(description="AutoBot Phase 9 CI/CD Integration Testing")
     parser.add_argument("--pipeline", action="store_true", help="Execute full pipeline")
-    parser.add_argument(
-        "--quality-gates", action="store_true", help="Test quality gates only"
-    )
-    parser.add_argument(
-        "--notifications", action="store_true", help="Test notification systems"
-    )
+    parser.add_argument("--quality-gates", action="store_true", help="Test quality gates only")
+    parser.add_argument("--notifications", action="store_true", help="Test notification systems")
     parser.add_argument("--stage", type=str, help="Execute specific stage only")
 
     args = parser.parse_args()

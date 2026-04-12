@@ -48,9 +48,7 @@ def _handle_add_keywords(classifier: WorkflowClassifier) -> None:
     Helper for main (Issue #825).
     """
     category = safe_input("Enter category: ", default="test").strip()
-    keywords_input = safe_input(
-        "Enter keywords (comma-separated): ", default="test,example"
-    ).strip()
+    keywords_input = safe_input("Enter keywords (comma-separated): ", default="test,example").strip()
     if category and keywords_input:
         keywords = [kw.strip() for kw in keywords_input.split(",")]
         classifier.add_keywords(category, keywords)

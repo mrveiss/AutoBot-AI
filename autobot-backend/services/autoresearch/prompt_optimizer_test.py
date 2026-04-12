@@ -21,7 +21,6 @@ from services.autoresearch.prompt_optimizer import (
 )
 from services.autoresearch.scorers import ScorerResult
 
-
 # ---------------------------------------------------------------------------
 # Helper factory
 # ---------------------------------------------------------------------------

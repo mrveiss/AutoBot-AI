@@ -98,9 +98,7 @@ async def test_phase2_migration():
     logger.info("\n" + "=" * 70)
     logger.info("✅ All Phase 2 migration tests PASSED!")
     logger.info("=" * 70)
-    logger.info(
-        "\nAll migrated collectors are successfully dual-writing to Prometheus."
-    )
+    logger.info("\nAll migrated collectors are successfully dual-writing to Prometheus.")
     logger.info("Metrics endpoint: http://10.0.0.1:8001/api/monitoring/metrics\n")
 
     return True

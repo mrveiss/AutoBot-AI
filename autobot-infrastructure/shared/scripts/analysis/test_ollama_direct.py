@@ -35,9 +35,7 @@ async def test_ollama_direct():
                 # Test just reading JSON directly
                 response_json = await response.json()
                 print("   Response received!")
-                print(
-                    f"   Content: {response_json.get('message', {}).get('content', 'No content')}"
-                )
+                print(f"   Content: {response_json.get('message', {}).get('content', 'No content')}")
 
                 return response_json
 

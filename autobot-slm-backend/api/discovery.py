@@ -150,11 +150,7 @@ async def discover_all_services(
 
     Returns all discoverable services grouped by service name.
     """
-    query = (
-        select(Service, Node)
-        .join(Node, Service.node_id == Node.node_id)
-        .where(Service.is_discoverable.is_(True))
-    )
+    query = select(Service, Node).join(Node, Service.node_id == Node.node_id).where(Service.is_discoverable.is_(True))
 
     if healthy_only:
         query = query.where(Service.status == ServiceStatus.RUNNING.value)

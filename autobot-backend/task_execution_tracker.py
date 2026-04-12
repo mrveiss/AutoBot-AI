@@ -14,9 +14,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
-from enhanced_memory_manager_async import (
-    Priority,  # Import Priority for backward compatibility
-)
+from enhanced_memory_manager_async import Priority  # Import Priority for backward compatibility
 from enhanced_memory_manager_async import (
     AsyncEnhancedMemoryManager,
     ExecutionRecord,
@@ -110,9 +108,7 @@ class TaskExecutionTracker:
             "inputs": inputs,
         }
 
-    async def _finalize_task(
-        self, task_id: str, task_context: "TaskExecutionContext"
-    ) -> None:
+    async def _finalize_task(self, task_id: str, task_context: "TaskExecutionContext") -> None:
         """Complete task and execute callbacks.
 
         Args:
@@ -191,25 +187,19 @@ class TaskExecutionTracker:
             metadata=metadata,
         )
 
-    def add_task_callback(
-        self, task_id: str, callback: Callable, event_type: str = "completed"
-    ):
+    def add_task_callback(self, task_id: str, callback: Callable, event_type: str = "completed"):
         """Add callback to be executed when task reaches specific state"""
         if task_id not in self.task_callbacks:
             self.task_callbacks[task_id] = []
 
-        self.task_callbacks[task_id].append(
-            {"callback": callback, "event_type": event_type}
-        )
+        self.task_callbacks[task_id].append({"callback": callback, "event_type": event_type})
 
     async def _execute_task_callbacks(self, task_id: str, event_type: str):
         """Execute registered callbacks for task events"""
         if task_id not in self.task_callbacks:
             return
 
-        callbacks = [
-            cb for cb in self.task_callbacks[task_id] if cb["event_type"] == event_type
-        ]
+        callbacks = [cb for cb in self.task_callbacks[task_id] if cb["event_type"] == event_type]
 
         # Issue #370: Execute callbacks in parallel instead of sequentially
         async def run_callback(callback_info):
@@ -267,13 +257,9 @@ class TaskExecutionTracker:
             agent_counts[agent_type] = agent_counts.get(agent_type, 0) + 1
         return agent_counts
 
-    def add_markdown_reference(
-        self, task_id: str, markdown_file: str, ref_type: str = "documentation"
-    ):
+    def add_markdown_reference(self, task_id: str, markdown_file: str, ref_type: str = "documentation"):
         """Add markdown reference to a task"""
-        return self.memory_manager.add_markdown_reference(
-            task_id, markdown_file, ref_type
-        )
+        return self.memory_manager.add_markdown_reference(task_id, markdown_file, ref_type)
 
     def store_task_embedding(
         self,
@@ -290,9 +276,7 @@ class TaskExecutionTracker:
             embedding_vector=embedding_vector,
         )
 
-    def _aggregate_task_stats(
-        self, history: List[ExecutionRecord]
-    ) -> Dict[str, Dict[str, Any]]:
+    def _aggregate_task_stats(self, history: List[ExecutionRecord]) -> Dict[str, Dict[str, Any]]:
         """
         Aggregate task statistics by agent type in single pass.
 
@@ -302,9 +286,7 @@ class TaskExecutionTracker:
         Returns:
             Dictionary mapping agent type to aggregated stats. Issue #620.
         """
-        agent_stats = defaultdict(
-            lambda: {"total": 0, "successful": 0, "durations": [], "retries": []}
-        )
+        agent_stats = defaultdict(lambda: {"total": 0, "successful": 0, "durations": [], "retries": []})
 
         for task in history:
             agent = task.agent_type or "unknown"
@@ -319,9 +301,7 @@ class TaskExecutionTracker:
 
         return dict(agent_stats)
 
-    def _compute_agent_performance(
-        self, agent_stats: Dict[str, Dict[str, Any]]
-    ) -> Dict[str, Dict[str, Any]]:
+    def _compute_agent_performance(self, agent_stats: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
         """
         Compute performance metrics from aggregated agent statistics.
 
@@ -333,20 +313,12 @@ class TaskExecutionTracker:
         """
         return {
             agent: {
-                "success_rate_percent": round(
-                    (data["successful"] / data["total"]) * 100, 2
-                ),
+                "success_rate_percent": round((data["successful"] / data["total"]) * 100, 2),
                 "total_tasks": data["total"],
                 "avg_duration_seconds": (
-                    round(sum(data["durations"]) / len(data["durations"]), 2)
-                    if data["durations"]
-                    else None
+                    round(sum(data["durations"]) / len(data["durations"]), 2) if data["durations"] else None
                 ),
-                "avg_retry_count": (
-                    round(sum(data["retries"]) / len(data["retries"]), 2)
-                    if data["retries"]
-                    else 0
-                ),
+                "avg_retry_count": (round(sum(data["retries"]) / len(data["retries"]), 2) if data["retries"] else 0),
             }
             for agent, data in agent_stats.items()
         }
@@ -393,9 +365,7 @@ class TaskExecutionTracker:
         actual_task_id = self.memory_manager.create_task_record(
             task_name=task_type.value,
             description=description,
-            priority=(
-                priority if isinstance(priority, TaskPriority) else TaskPriority.MEDIUM
-            ),
+            priority=(priority if isinstance(priority, TaskPriority) else TaskPriority.MEDIUM),
             agent_type=None,
             inputs=context,
             metadata={"task_id": task_id, "task_type": task_type.value},
@@ -409,9 +379,7 @@ class TaskExecutionTracker:
             self._task_id_mapping = {}
         self._task_id_mapping[task_id] = actual_task_id
 
-        logger.info(
-            f"Started task: {task_id} (type: {task_type.value}, priority: {priority})"
-        )
+        logger.info(f"Started task: {task_id} (type: {task_type.value}, priority: {priority})")
 
     def complete_task(self, task_id: str, result: Any):
         """
@@ -494,21 +462,13 @@ class TaskExecutionContext:
             metadata=self.metadata.copy(),
         )
 
-    def add_markdown_reference(
-        self, markdown_file: str, ref_type: str = "documentation"
-    ):
+    def add_markdown_reference(self, markdown_file: str, ref_type: str = "documentation"):
         """Add markdown file reference to current task"""
-        return self.tracker.add_markdown_reference(
-            self.task_id, markdown_file, ref_type
-        )
+        return self.tracker.add_markdown_reference(self.task_id, markdown_file, ref_type)
 
-    def store_embedding(
-        self, content: str, embedding_model: str, embedding_vector: List[float]
-    ):
+    def store_embedding(self, content: str, embedding_model: str, embedding_vector: List[float]):
         """Store embedding related to current task"""
-        return self.tracker.store_task_embedding(
-            self.task_id, content, embedding_model, embedding_vector
-        )
+        return self.tracker.store_task_embedding(self.task_id, content, embedding_model, embedding_vector)
 
 
 # Global instance for easy access across the application

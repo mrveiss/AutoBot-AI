@@ -215,9 +215,7 @@ class TestErrorCatalog:
 
         for error_code in catalog._catalog.keys():
             error = catalog.get_error(error_code)
-            assert (
-                error.category.value in valid_categories
-            ), f"{error_code} has invalid category"
+            assert error.category.value in valid_categories, f"{error_code} has invalid category"
 
 
 if __name__ == "__main__":

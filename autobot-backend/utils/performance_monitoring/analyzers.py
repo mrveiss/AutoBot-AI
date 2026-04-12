@@ -101,8 +101,7 @@ class AlertAnalyzer:
                     "category": "cpu",
                     "severity": "warning",
                     "message": (
-                        f"High CPU load: {system['cpu_load_1m']:.1f} "
-                        f"on {system['cpu_cores_logical']}-core system"
+                        f"High CPU load: {system['cpu_load_1m']:.1f} " f"on {system['cpu_cores_logical']}-core system"
                     ),
                     "recommendation": "Check for CPU-intensive processes",
                     "timestamp": time.time(),
@@ -241,9 +240,7 @@ class RecommendationGenerator:
             )
         return recommendations
 
-    def generate_all(
-        self, gpu_metrics=None, npu_metrics=None, system_metrics=None
-    ) -> List[Dict[str, Any]]:
+    def generate_all(self, gpu_metrics=None, npu_metrics=None, system_metrics=None) -> List[Dict[str, Any]]:
         """Generate all optimization recommendations."""
         recommendations = []
         recommendations.extend(self.get_gpu_recommendations(gpu_metrics))

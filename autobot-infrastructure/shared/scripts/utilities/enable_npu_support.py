@@ -16,9 +16,7 @@ import sys
 from pathlib import Path
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -77,9 +75,7 @@ def install_intel_npu_drivers():
             kernel_info = f.read()
             if "WSL" in kernel_info or "Microsoft" in kernel_info:
                 logger.warning("⚠️ Running on WSL - NPU drivers may not be available")
-                logger.warning(
-                    "   NPU support typically requires native Linux or Windows"
-                )
+                logger.warning("   NPU support typically requires native Linux or Windows")
                 return False
     except FileNotFoundError:
         pass
@@ -147,9 +143,7 @@ def configure_ollama_npu():
             f.write("\n")
 
         logger.info("✅ NPU configuration written to %s", config_file)
-        logger.info(
-            "   Source this file before running AutoBot: source npu_env_config.sh"
-        )
+        logger.info("   Source this file before running AutoBot: source npu_env_config.sh")
 
         return True
 
@@ -216,9 +210,7 @@ def main():
     logger.info("\n" + "=" * 50)
     logger.info("📊 NPU Configuration Summary:")
     logger.info("   CPU NPU Support: %s", "✅ Yes" if cpu_supports_npu else "❌ No")
-    logger.info(
-        f"   OpenVINO NPU: {'✅ Available' if openvino_npu_available else '❌ Not Available'}"
-    )
+    logger.info(f"   OpenVINO NPU: {'✅ Available' if openvino_npu_available else '❌ Not Available'}")
     if npu_devices:
         logger.info("   NPU Devices: %s", ", ".join(npu_devices))
 

@@ -73,9 +73,7 @@ def raise_catalog_error(
     raise HTTPException(status_code=status_code, detail=detail)
 
 
-def raise_catalog_error_simple(
-    error_code: str, additional_context: Optional[str] = None
-) -> None:
+def raise_catalog_error_simple(error_code: str, additional_context: Optional[str] = None) -> None:
     """
     Raise HTTPException with simple string detail (backward compatible)
 
@@ -193,30 +191,22 @@ def catalog_error_response(
 # Convenience functions for common error categories
 
 
-def raise_auth_error(
-    error_code: str = "AUTH_0002", context: Optional[str] = None
-) -> None:
+def raise_auth_error(error_code: str = "AUTH_0002", context: Optional[str] = None) -> None:
     """Raise authentication error"""
     raise_catalog_error_simple(error_code, context)
 
 
-def raise_validation_error(
-    error_code: str = "API_0001", context: Optional[str] = None
-) -> None:
+def raise_validation_error(error_code: str = "API_0001", context: Optional[str] = None) -> None:
     """Raise validation error"""
     raise_catalog_error_simple(error_code, context)
 
 
-def raise_server_error(
-    error_code: str = "API_0003", context: Optional[str] = None
-) -> None:
+def raise_server_error(error_code: str = "API_0003", context: Optional[str] = None) -> None:
     """Raise internal server error"""
     raise_catalog_error_simple(error_code, context)
 
 
-def raise_service_unavailable(
-    error_code: str = "API_0005", context: Optional[str] = None
-) -> None:
+def raise_service_unavailable(error_code: str = "API_0005", context: Optional[str] = None) -> None:
     """Raise service unavailable error"""
     raise_catalog_error_simple(error_code, context)
 
@@ -349,10 +339,7 @@ def migrate_http_exception(
         additional_context: Additional context
     """
     # Log migration suggestion
-    logger.debug(
-        f"Migrating HTTPException: {original_status_code} - {original_detail} "
-        f"-> {suggested_error_code}"
-    )
+    logger.debug(f"Migrating HTTPException: {original_status_code} - {original_detail} " f"-> {suggested_error_code}")
 
     # Use catalog error
     raise_catalog_error_simple(suggested_error_code, additional_context)

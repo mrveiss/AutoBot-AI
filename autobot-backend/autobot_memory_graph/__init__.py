@@ -41,6 +41,8 @@ from .core import (  # noqa: F401 - re-exports for package API
     config,
 )
 from .entities import EntityOperationsMixin
+from .property_graph import PropertyGraph  # noqa: F401  # Issue #3230
+from .property_graph_mixin import PropertyGraphMixin  # noqa: F401  # Issue #3230
 from .queries import QueryOperationsMixin
 from .relations import RelationOperationsMixin
 from .secrets import SecretManagementMixin
@@ -52,8 +54,6 @@ from .semantic_search import (  # noqa: F401
     ensure_indexes,
 )
 from .user_session import UserSessionMixin
-from .property_graph import PropertyGraph  # noqa: F401  # Issue #3230
-from .property_graph_mixin import PropertyGraphMixin  # noqa: F401  # Issue #3230
 
 
 class AutoBotMemoryGraph(

@@ -113,10 +113,7 @@ def edit_knowledge(category: str, filename: str):
         return False
 
     logger.info(f"📝 Opening {runtime_file} for editing...")
-    logger.info(
-        "💡 After editing, run 'python manage_system_knowledge.py reload' "
-        "to apply changes"
-    )
+    logger.info("💡 After editing, run 'python manage_system_knowledge.py reload' " "to apply changes")
 
     # Try to open with system editor
     import os
@@ -148,9 +145,7 @@ def _validate_tools_category(yaml_file: Path, data: dict, errors: list) -> None:
             errors.append(f"{yaml_file}: Tool {i} missing 'name'")
 
 
-def _validate_yaml_file(
-    yaml_file: Path, category_name: str, runtime_dir: Path, errors: list, warnings: list
-) -> bool:
+def _validate_yaml_file(yaml_file: Path, category_name: str, runtime_dir: Path, errors: list, warnings: list) -> bool:
     """Validate single YAML file (Issue #315: extracted helper)."""
     try:
         with open(yaml_file, "r") as f:
@@ -200,9 +195,7 @@ def validate_knowledge():
         if not category_dir.is_dir() or category_dir.name == "__pycache__":
             continue
         for yaml_file in category_dir.glob("*.yaml"):
-            _validate_yaml_file(
-                yaml_file, category_dir.name, runtime_dir, errors, warnings
-            )
+            _validate_yaml_file(yaml_file, category_dir.name, runtime_dir, errors, warnings)
 
     # Report results
     if errors:
@@ -345,10 +338,7 @@ def create_template(category: str, name: str):
         yaml.dump(template, f, default_flow_style=False, indent=2)
 
     logger.info("Created template: %s", template_file)
-    logger.info(
-        "Edit the template and run "
-        "'python manage_system_knowledge.py reload' to apply"
-    )
+    logger.info("Edit the template and run " "'python manage_system_knowledge.py reload' to apply")
     return True
 
 

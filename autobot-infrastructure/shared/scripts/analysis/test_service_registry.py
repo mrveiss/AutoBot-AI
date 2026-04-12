@@ -10,7 +10,6 @@ Validates deployment mode detection and service URL resolution
 import logging
 import os
 import sys
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -60,11 +59,7 @@ async def test_service_registry():
         health_results = await registry.check_all_services_health()
         for service, health in health_results.items():
             status_emoji = (
-                "✅"
-                if health.status.value == "healthy"
-                else "⚠️"
-                if health.status.value == "unknown"
-                else "❌"
+                "✅" if health.status.value == "healthy" else "⚠️" if health.status.value == "unknown" else "❌"
             )
             logger.info(f"{status_emoji} {service:15} → {health.status.value}")
             if hasattr(health, "response_time") and health.response_time > 0:

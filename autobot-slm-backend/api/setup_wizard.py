@@ -187,7 +187,6 @@ def _build_infra_vars(
     return infra_vars
 
 
-
 def _build_host_entries(
     db_nodes: list,
     local_ips: set,
@@ -406,14 +405,10 @@ async def _fetch_inventory_data(
             return None
 
         local_ips = get_local_ips()
-        hosts, node_id_to_hostname, node_id_to_ip = _build_host_entries(
-            db_nodes, local_ips
-        )
+        hosts, node_id_to_hostname, node_id_to_ip = _build_host_entries(db_nodes, local_ips)
 
         # Include active + inactive + not_installed roles for provisioning (#2747)
-        nr_query = select(NodeRole).where(
-            NodeRole.status.in_(["active", "inactive", "not_installed"])
-        )
+        nr_query = select(NodeRole).where(NodeRole.status.in_(["active", "inactive", "not_installed"]))
         if node_ids:
             nr_query = nr_query.where(NodeRole.node_id.in_(node_ids))
         all_node_roles = (await session.execute(nr_query)).scalars().all()
@@ -428,9 +423,7 @@ async def _fetch_inventory_data(
             NodeRole.role_name.in_(["ai-stack", "autobot-ai-stack"]),
         )
         fleet_ai_stack = (await session.execute(fleet_ai_q)).scalars().all()
-        injected_ai_stack = _inject_co_located_ai_stack(
-            hosts, db_nodes, fleet_has_ai_stack=len(fleet_ai_stack) > 0
-        )
+        injected_ai_stack = _inject_co_located_ai_stack(hosts, db_nodes, fleet_has_ai_stack=len(fleet_ai_stack) > 0)
 
         # Fetch ALL active roles for infra var derivation (#1431)
         if node_ids:
@@ -479,9 +472,7 @@ async def _generate_dynamic_inventory(
         local_ips,
         injected_ai_stack,
     ) = result
-    children, ansible_groups = _build_inventory_children(
-        hosts, all_node_roles, node_id_to_hostname
-    )
+    children, ansible_groups = _build_inventory_children(hosts, all_node_roles, node_id_to_hostname)
     infra_vars = _build_infra_vars(all_active, all_ip_map, local_ips)
     # For co-located ai-stack (injected, no dedicated AI stack VM), _build_infra_vars
     # never sees the injected role because it reads from DB node_roles, not the
@@ -513,9 +504,7 @@ async def _generate_dynamic_inventory(
     return Path(path)
 
 
-async def _ssh_check_host(
-    hostname: str, ip: str, user: str, key: str
-) -> tuple[str, bool]:
+async def _ssh_check_host(hostname: str, ip: str, user: str, key: str) -> tuple[str, bool]:
     """Run a single SSH connectivity probe and return (hostname, reachable).
 
     Uses BatchMode=yes so the process never prompts for a password (#2897).
@@ -577,11 +566,7 @@ async def _check_node_reachability(inventory_path: Path) -> dict[str, bool]:
             continue
         ip = host_vars.get("ansible_host", hostname)
         user = host_vars.get("ansible_user", default_user)
-        key = str(
-            Path(
-                host_vars.get("ansible_ssh_private_key_file", default_key)
-            ).expanduser()
-        )
+        key = str(Path(host_vars.get("ansible_ssh_private_key_file", default_key)).expanduser())
         tasks.append(_ssh_check_host(hostname, ip, user, key))
 
     results: dict[str, bool] = {h: True for h in local_hosts}
@@ -592,11 +577,7 @@ async def _check_node_reachability(inventory_path: Path) -> dict[str, bool]:
     for hostname, reachable in results.items():
         if not reachable:
             host_vars = hosts.get(hostname, {})
-            ip = (
-                host_vars.get("ansible_host", hostname)
-                if isinstance(host_vars, dict)
-                else hostname
-            )
+            ip = host_vars.get("ansible_host", hostname) if isinstance(host_vars, dict) else hostname
             logger.warning(
                 "Node %s (%s) is unreachable -- skipping (not enrolled?)",
                 hostname,
@@ -623,9 +604,7 @@ async def _activate_provisioned_roles(
 
     try:
         async with db_service.session() as session:
-            query = select(NodeRole).where(
-                NodeRole.status.in_(["inactive", "not_installed"])
-            )
+            query = select(NodeRole).where(NodeRole.status.in_(["inactive", "not_installed"]))
             if node_ids:
                 query = query.where(NodeRole.node_id.in_(node_ids))
             roles = (await session.execute(query)).scalars().all()
@@ -705,9 +684,7 @@ async def _create_wizard_deployments(
                 q = q.where(Node.node_id.in_(node_ids))
             db_nodes = (await session.execute(q)).scalars().all()
 
-            nr_q = select(NodeRole).where(
-                NodeRole.status.in_(["active", "inactive", "not_installed"])
-            )
+            nr_q = select(NodeRole).where(NodeRole.status.in_(["active", "inactive", "not_installed"]))
             if node_ids:
                 nr_q = nr_q.where(NodeRole.node_id.in_(node_ids))
             node_roles = (await session.execute(nr_q)).scalars().all()
@@ -763,20 +740,12 @@ async def _complete_wizard_deployments(
     try:
         async with db_service.session() as session:
             for node_id, dep_id in node_to_deployment.items():
-                result = await session.execute(
-                    select(Deployment).where(Deployment.deployment_id == dep_id)
-                )
+                result = await session.execute(select(Deployment).where(Deployment.deployment_id == dep_id))
                 dep = result.scalar_one_or_none()
                 if not dep:
                     continue
-                node_succeeded = success and (
-                    reachable_nodes is None or node_id in reachable_nodes
-                )
-                dep.status = (
-                    DeploymentStatus.COMPLETED.value
-                    if node_succeeded
-                    else DeploymentStatus.FAILED.value
-                )
+                node_succeeded = success and (reachable_nodes is None or node_id in reachable_nodes)
+                dep.status = DeploymentStatus.COMPLETED.value if node_succeeded else DeploymentStatus.FAILED.value
                 dep.completed_at = datetime.utcnow()
                 dep.playbook_output = output
                 if not node_succeeded:
@@ -813,18 +782,11 @@ async def _run_provisioning_task(
             _provision_state["error"] = "No nodes found for provisioning"
             _provision_state["finished_at"] = time.time()
             _write_provision_log("ERROR: No nodes found for provisioning")
-            await ws_manager.send_provision_status(
-                "failed", "", 0, error="No nodes found for provisioning"
-            )
-            await ws_manager.send_provision_log(
-                "error", "No nodes found for provisioning"
-            )
+            await ws_manager.send_provision_status("failed", "", 0, error="No nodes found for provisioning")
+            await ws_manager.send_provision_log("error", "No nodes found for provisioning")
             return
 
-        _write_provision_log(
-            f"Inventory: {temp_inventory_path}\n"
-            f"{temp_inventory_path.read_text(encoding='utf-8')}"
-        )
+        _write_provision_log(f"Inventory: {temp_inventory_path}\n" f"{temp_inventory_path.read_text(encoding='utf-8')}")
 
         # Create Deployment records before running the playbook (#3032)
         node_to_deployment = await _create_wizard_deployments(node_ids)
@@ -839,41 +801,25 @@ async def _run_provisioning_task(
             inv_hosts = raw_inv.get("all", {}).get("hosts", {})
             for hostname in unreachable:
                 host_vars = inv_hosts.get(hostname, {})
-                ip = (
-                    host_vars.get("ansible_host", hostname)
-                    if isinstance(host_vars, dict)
-                    else hostname
-                )
-                msg = (
-                    f"Node {hostname} ({ip}) is unreachable"
-                    " -- skipping (not enrolled?)"
-                )
+                ip = host_vars.get("ansible_host", hostname) if isinstance(host_vars, dict) else hostname
+                msg = f"Node {hostname} ({ip}) is unreachable" " -- skipping (not enrolled?)"
                 _write_provision_log(f"WARNING: {msg}")
                 await ws_manager.send_provision_log("warning", msg)
 
         if not reachable:
             _provision_state["status"] = "failed"
-            _provision_state["error"] = (
-                "All nodes are unreachable"
-                " -- ensure nodes are enrolled before provisioning"
-            )
+            _provision_state["error"] = "All nodes are unreachable" " -- ensure nodes are enrolled before provisioning"
             _provision_state["finished_at"] = time.time()
             _write_provision_log("ERROR: All nodes are unreachable")
             await ws_manager.send_provision_status(
                 "failed",
                 "",
                 0,
-                error=(
-                    "All nodes are unreachable"
-                    " -- ensure nodes are enrolled before provisioning"
-                ),
+                error=("All nodes are unreachable" " -- ensure nodes are enrolled before provisioning"),
             )
             await ws_manager.send_provision_log(
                 "error",
-                (
-                    "All nodes are unreachable"
-                    " -- ensure nodes are enrolled before provisioning"
-                ),
+                ("All nodes are unreachable" " -- ensure nodes are enrolled before provisioning"),
             )
             await _complete_wizard_deployments(
                 node_to_deployment,
@@ -909,9 +855,7 @@ async def _run_provisioning_task(
                 elif "error" in msg.lower() or "failed" in msg.lower():
                     log_type = "error"
                 await ws_manager.send_provision_log(log_type, msg)
-                elapsed = time.time() - (
-                    _provision_state.get("started_at") or time.time()
-                )
+                elapsed = time.time() - (_provision_state.get("started_at") or time.time())
                 await ws_manager.send_provision_status("running", stage, elapsed)
 
         # Issue #3079: Pass stored secrets as Ansible extra_vars (#3778)
@@ -931,11 +875,7 @@ async def _run_provisioning_task(
             node_to_deployment,
             success=bool(result.get("success")),
             output=result.get("output", ""),
-            error=(
-                None
-                if result.get("success")
-                else f"Ansible exited with code {result.get('returncode', -1)}"
-            ),
+            error=(None if result.get("success") else f"Ansible exited with code {result.get('returncode', -1)}"),
             reachable_nodes=None,
         )
 
@@ -946,17 +886,11 @@ async def _run_provisioning_task(
         elapsed = time.time() - (_provision_state.get("started_at") or time.time())
         if result.get("success"):
             await ws_manager.send_provision_status("completed", "complete", elapsed)
-            await ws_manager.send_provision_log(
-                "success", "Fleet provisioning completed successfully"
-            )
+            await ws_manager.send_provision_log("success", "Fleet provisioning completed successfully")
         else:
             rc = result.get("returncode", -1)
-            await ws_manager.send_provision_status(
-                "failed", "", elapsed, error=f"Ansible exited with code {rc}"
-            )
-            await ws_manager.send_provision_log(
-                "error", f"Provisioning failed (exit code {rc})"
-            )
+            await ws_manager.send_provision_status("failed", "", elapsed, error=f"Ansible exited with code {rc}")
+            await ws_manager.send_provision_log("error", f"Provisioning failed (exit code {rc})")
     except Exception as exc:
         _provision_state["status"] = "failed"
         _provision_state["error"] = str(exc)
@@ -964,12 +898,8 @@ async def _run_provisioning_task(
         logger.exception("Fleet provisioning error: %s", exc)
         elapsed = time.time() - (_provision_state.get("started_at") or time.time())
         # Sanitize -- Ansible exceptions may contain credentials (#2754)
-        await ws_manager.send_provision_status(
-            "failed", "", elapsed, error="internal error"
-        )
-        await ws_manager.send_provision_log(
-            "error", "Provisioning error: internal error (see server logs)"
-        )
+        await ws_manager.send_provision_status("failed", "", elapsed, error="internal error")
+        await ws_manager.send_provision_log("error", "Provisioning error: internal error (see server logs)")
         await _complete_wizard_deployments(
             node_to_deployment,
             success=False,
@@ -999,9 +929,7 @@ async def get_wizard_status(
 
     current_index = WIZARD_STEPS.index(current_step)
     completed_steps_raw = await _get_setting("setup_wizard_completed_steps", "")
-    completed_steps = (
-        set(completed_steps_raw.split(",")) if completed_steps_raw else set()
-    )
+    completed_steps = set(completed_steps_raw.split(",")) if completed_steps_raw else set()
 
     steps = []
     for i, step_name in enumerate(WIZARD_STEPS):
@@ -1137,9 +1065,7 @@ async def get_provision_status(
     }
 
     if _provision_state["started_at"]:
-        elapsed = (
-            _provision_state.get("finished_at") or time.time()
-        ) - _provision_state["started_at"]
+        elapsed = (_provision_state.get("finished_at") or time.time()) - _provision_state["started_at"]
         result["elapsed_seconds"] = round(elapsed, 1)
 
     return result
@@ -1158,18 +1084,12 @@ async def validate_fleet(
         node_count_result = await session.execute(select(func.count(Node.id)))
         total_nodes = node_count_result.scalar() or 0
 
-        online_result = await session.execute(
-            select(func.count(Node.id)).where(Node.status == "online")
-        )
+        online_result = await session.execute(select(func.count(Node.id)).where(Node.status == "online"))
         online_nodes = online_result.scalar() or 0
 
         # Only check roles that are actually assigned to nodes (#2747)
         # Roles not yet assigned via wizard are not "missing"
-        assigned_roles = (
-            (await session.execute(select(NodeRole.role_name).distinct()))
-            .scalars()
-            .all()
-        )
+        assigned_roles = (await session.execute(select(NodeRole.role_name).distinct())).scalars().all()
         missing_roles = []
         for role_name in assigned_roles:
             active = await session.execute(

@@ -116,9 +116,7 @@ class DuplicateDetector:
                         declarations.append(
                             {
                                 "name": name,
-                                "type": pattern_group.split("_")[-1][
-                                    :-1
-                                ],  # function/class
+                                "type": pattern_group.split("_")[-1][:-1],  # function/class
                                 "file": str(file_path.relative_to(self.root_path)),
                                 "line": i + 1,
                                 "definition": line.strip(),
@@ -147,9 +145,7 @@ class DuplicateDetector:
                 declaration_names[decl["name"]].append(decl)
 
         # Find duplicates
-        duplicates = {
-            name: decls for name, decls in declaration_names.items() if len(decls) > 1
-        }
+        duplicates = {name: decls for name, decls in declaration_names.items() if len(decls) > 1}
 
         return {
             "total_declarations": len(all_declarations),
@@ -176,9 +172,7 @@ class DuplicateDetector:
 
         # Top duplicate declarations
         logger.info("TOP DUPLICATE DECLARATIONS:")
-        duplicates_by_count = sorted(
-            analysis["duplicates"].items(), key=lambda x: len(x[1]), reverse=True
-        )
+        duplicates_by_count = sorted(analysis["duplicates"].items(), key=lambda x: len(x[1]), reverse=True)
 
         for i, (name, decls) in enumerate(duplicates_by_count[:10]):
             logger.info("%2d. '%s' - %d occurrences", i + 1, name, len(decls))
@@ -198,12 +192,8 @@ class DuplicateDetector:
         # Potential refactoring opportunities
         logger.info("REFACTORING OPPORTUNITIES:")
 
-        high_priority = [
-            (name, decls) for name, decls in duplicates_by_count if len(decls) >= 5
-        ]
-        medium_priority = [
-            (name, decls) for name, decls in duplicates_by_count if 3 <= len(decls) < 5
-        ]
+        high_priority = [(name, decls) for name, decls in duplicates_by_count if len(decls) >= 5]
+        medium_priority = [(name, decls) for name, decls in duplicates_by_count if 3 <= len(decls) < 5]
 
         logger.info("HIGH PRIORITY (5+ duplicates): %d items", len(high_priority))
         for name, decls in high_priority[:5]:
@@ -253,21 +243,14 @@ class DuplicateDetector:
         common_names = [
             name
             for name, decls in duplicates_by_count[:20]
-            if any(
-                word in name.lower()
-                for word in ["init", "setup", "config", "handler", "process"]
-            )
+            if any(word in name.lower() for word in ["init", "setup", "config", "handler", "process"])
         ]
         if common_names:
             logger.info("  PATTERN: Common initialization patterns found:")
             for name in common_names[:3]:
                 logger.info("     '%s' - Consider standardization", name)
 
-        test_duplicates = [
-            name
-            for name, decls in duplicates_by_count
-            if "test" in name.lower() and len(decls) > 2
-        ]
+        test_duplicates = [name for name, decls in duplicates_by_count if "test" in name.lower() and len(decls) > 2]
         if test_duplicates:
             logger.info(
                 "  TESTING: %d test function patterns could be unified",
@@ -300,12 +283,8 @@ def main():
         "duplicate_names": analysis["duplicate_names"],
         "duplicates": {name: decls for name, decls in analysis["duplicates"].items()},
         "summary_stats": {
-            "duplication_rate": analysis["duplicate_names"]
-            / analysis["unique_names"]
-            * 100,
-            "top_duplicates": sorted(
-                analysis["duplicates"].items(), key=lambda x: len(x[1]), reverse=True
-            )[:20],
+            "duplication_rate": analysis["duplicate_names"] / analysis["unique_names"] * 100,
+            "top_duplicates": sorted(analysis["duplicates"].items(), key=lambda x: len(x[1]), reverse=True)[:20],
         },
     }
 

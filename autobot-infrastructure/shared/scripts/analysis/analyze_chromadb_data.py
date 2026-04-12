@@ -5,6 +5,7 @@
 """
 Analyze ChromaDB data contents to determine where the 13,383 vectors actually are
 """
+
 import sqlite3
 from pathlib import Path
 
@@ -30,9 +31,7 @@ def analyze_chromadb(db_path):
             print(f"  {coll_id}: {name} (topic: {topic})")
 
             # Count embeddings per collection
-            cursor.execute(
-                "SELECT COUNT(*) FROM embeddings WHERE collection_id = ?", (coll_id,)
-            )
+            cursor.execute("SELECT COUNT(*) FROM embeddings WHERE collection_id = ?", (coll_id,))
             coll_count = cursor.fetchone()[0]
             print(f"    Embeddings: {coll_count:,}")
 
@@ -53,13 +52,11 @@ def analyze_chromadb(db_path):
                 print(f"      {embedding_id}: {key} = {value}")
 
         # Check segments (vector storage)
-        cursor.execute(
-            """
+        cursor.execute("""
             SELECT s.id, s.type, s.scope, sm.key, sm.string_value
             FROM segments s
             LEFT JOIN segment_metadata sm ON s.id = sm.segment_id
-        """
-        )
+        """)
         segments = cursor.fetchall()
         print(f"Segments ({len(segments)}):")
         for seg_id, seg_type, scope, key, value in segments:
@@ -91,9 +88,7 @@ def analyze_hnsw_data():
             if file.name == "data_level0.bin":
                 # Assuming 768-dimensional float32 vectors (768 * 4 bytes = 3072 bytes per vector)
                 # Plus some HNSW overhead
-                estimated_vectors = int(
-                    size_mb * 1024 * 1024 / 3200
-                )  # ~3200 bytes per vector with overhead
+                estimated_vectors = int(size_mb * 1024 * 1024 / 3200)  # ~3200 bytes per vector with overhead
                 print(f"  Estimated vectors in HNSW index: ~{estimated_vectors:,}")
 
 

@@ -95,9 +95,7 @@ async def create_team(
         return TeamResponse.model_validate(team)
     except Exception as e:
         logger.error("Failed to create AutoBot team: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Internal server error"
-        ) from e
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Internal server error") from e
 
 
 @router.get("", response_model=TeamListResponse)
@@ -109,15 +107,11 @@ async def list_teams(
     db: AsyncSession = Depends(get_autobot_db),
 ) -> TeamListResponse:
     """List AutoBot teams with pagination and search."""
-    logger.info(
-        "Listing AutoBot teams (skip=%d, limit=%d, search=%s)", skip, limit, search
-    )
+    logger.info("Listing AutoBot teams (skip=%d, limit=%d, search=%s)", skip, limit, search)
     context = TenantContext(is_platform_admin=True)
     team_service = TeamService(db, context)
 
-    teams, total = await team_service.list_teams(
-        limit=limit, offset=skip, search=search
-    )
+    teams, total = await team_service.list_teams(limit=limit, offset=skip, search=search)
     return TeamListResponse(
         teams=[TeamResponse.model_validate(team) for team in teams],
         total=total,
@@ -138,9 +132,7 @@ async def get_team(
 
     team = await team_service.get_team(team_id)
     if not team:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Team not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
     return TeamResponse.model_validate(team)
 
 
@@ -165,9 +157,7 @@ async def update_team(
         return TeamResponse.model_validate(team)
     except Exception as e:
         logger.error("Failed to update AutoBot team: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error"
-        ) from e
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error") from e
 
 
 @router.delete("/{team_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -185,9 +175,7 @@ async def delete_team(
         await team_service.delete_team(team_id)
     except Exception as e:
         logger.error("Failed to delete AutoBot team: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error"
-        ) from e
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error") from e
 
 
 @router.post("/{team_id}/members", status_code=status.HTTP_201_CREATED)
@@ -211,9 +199,7 @@ async def add_team_member(
         return {"message": "Member added successfully"}
     except Exception as e:
         logger.error("Failed to add team member: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Internal server error"
-        ) from e
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Internal server error") from e
 
 
 @router.delete("/{team_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -232,6 +218,4 @@ async def remove_team_member(
         await team_service.remove_member(team_id=team_id, user_id=user_id)
     except Exception as e:
         logger.error("Failed to remove team member: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error"
-        ) from e
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error") from e

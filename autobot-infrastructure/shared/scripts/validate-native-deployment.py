@@ -67,9 +67,7 @@ class DeploymentValidator:
         self.services = _build_service_definitions()
         self.results: Dict[str, Dict] = {}
 
-    async def check_http_service(
-        self, service: ServiceCheck
-    ) -> Tuple[ServiceStatus, str]:
+    async def check_http_service(self, service: ServiceCheck) -> Tuple[ServiceStatus, str]:
         """Check HTTP-based service health."""
         url = f"http://{service.host}:{service.port}{service.endpoint or ''}"
 
@@ -228,9 +226,7 @@ class DeploymentValidator:
         logger.info("Results saved to: %s", filename)
 
 
-def _log_service_result(
-    name: str, status: ServiceStatus, message: str, response_time: float
-):
+def _log_service_result(name: str, status: ServiceStatus, message: str, response_time: float):
     """Log a single service check result at appropriate level."""
     time_str = f"({response_time:.0f}ms)"
     if status == ServiceStatus.HEALTHY:
@@ -292,9 +288,7 @@ def _test_redis_connectivity() -> Dict:
         }
 
 
-async def _test_http_connectivity(
-    name: str, host: str, port: int, endpoint: str
-) -> Dict:
+async def _test_http_connectivity(name: str, host: str, port: int, endpoint: str) -> Dict:
     """Test HTTP service connectivity from backend perspective (#1228)."""
     try:
         url = f"http://{host}:{port}{endpoint}"

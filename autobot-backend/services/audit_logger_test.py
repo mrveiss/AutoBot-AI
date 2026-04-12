@@ -49,9 +49,9 @@ if "models" not in sys.modules:
     sys.modules["models"] = _models_stub
     sys.modules["models.task_context"] = _models_stub.task_context
 elif "models.task_context" not in sys.modules:
-    from unittest.mock import MagicMock as _MM
     from dataclasses import dataclass as _dc
     from datetime import datetime as _dt2
+    from unittest.mock import MagicMock as _MM
 
     @_dc
     class _AuditQueryContext2:
@@ -70,7 +70,6 @@ from services.audit_logger import (  # noqa: E402
     close_audit_logger,
     get_audit_logger,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

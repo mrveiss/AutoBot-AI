@@ -67,9 +67,7 @@ async def list_maintenance_windows(
         query = query.where(MaintenanceWindow.status.in_(["scheduled", "active"]))
 
     # Get total count with same filters
-    total = await _count_maintenance_windows(
-        db, node_id, status_filter, include_completed
-    )
+    total = await _count_maintenance_windows(db, node_id, status_filter, include_completed)
 
     # Apply pagination and ordering
     query = query.order_by(MaintenanceWindow.start_time.asc())
@@ -151,9 +149,7 @@ async def get_maintenance_window(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> MaintenanceWindowResponse:
     """Get a specific maintenance window."""
-    result = await db.execute(
-        select(MaintenanceWindow).where(MaintenanceWindow.window_id == window_id)
-    )
+    result = await db.execute(select(MaintenanceWindow).where(MaintenanceWindow.window_id == window_id))
     window = result.scalar_one_or_none()
 
     if not window:
@@ -165,9 +161,7 @@ async def get_maintenance_window(
     return MaintenanceWindowResponse.model_validate(window)
 
 
-@router.post(
-    "", response_model=MaintenanceWindowResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("", response_model=MaintenanceWindowResponse, status_code=status.HTTP_201_CREATED)
 async def create_maintenance_window(
     window_data: MaintenanceWindowCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -183,9 +177,7 @@ async def create_maintenance_window(
 
     # Validate node exists if specified
     if window_data.node_id:
-        node_result = await db.execute(
-            select(Node).where(Node.node_id == window_data.node_id)
-        )
+        node_result = await db.execute(select(Node).where(Node.node_id == window_data.node_id))
         if not node_result.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -217,9 +209,7 @@ async def create_maintenance_window(
 
     # If window is active and applies to a specific node, set node to maintenance status
     if initial_status == "active" and window_data.node_id:
-        await _set_node_maintenance_status(
-            db, window_data.node_id, True, window.window_id
-        )
+        await _set_node_maintenance_status(db, window_data.node_id, True, window.window_id)
 
     await db.commit()
     await db.refresh(window)
@@ -243,9 +233,7 @@ async def update_maintenance_window(
     _: Annotated[dict, Depends(require_admin)],
 ) -> MaintenanceWindowResponse:
     """Update a maintenance window (admin only)."""
-    result = await db.execute(
-        select(MaintenanceWindow).where(MaintenanceWindow.window_id == window_id)
-    )
+    result = await db.execute(select(MaintenanceWindow).where(MaintenanceWindow.window_id == window_id))
     window = result.scalar_one_or_none()
 
     if not window:
@@ -274,13 +262,9 @@ async def update_maintenance_window(
         # Handle status transitions
         if old_status != window_data.status:
             if window_data.status == "active" and window.node_id:
-                await _set_node_maintenance_status(
-                    db, window.node_id, True, window.window_id
-                )
+                await _set_node_maintenance_status(db, window.node_id, True, window.window_id)
             elif window_data.status in ["completed", "cancelled"] and window.node_id:
-                await _set_node_maintenance_status(
-                    db, window.node_id, False, window.window_id
-                )
+                await _set_node_maintenance_status(db, window.node_id, False, window.window_id)
 
     # Validate time range
     if window.end_time <= window.start_time:
@@ -303,9 +287,7 @@ async def delete_maintenance_window(
     _: Annotated[dict, Depends(require_admin)],
 ) -> None:
     """Delete a maintenance window (admin only)."""
-    result = await db.execute(
-        select(MaintenanceWindow).where(MaintenanceWindow.window_id == window_id)
-    )
+    result = await db.execute(select(MaintenanceWindow).where(MaintenanceWindow.window_id == window_id))
     window = result.scalar_one_or_none()
 
     if not window:
@@ -331,9 +313,7 @@ async def activate_maintenance_window(
     _: Annotated[dict, Depends(require_admin)],
 ) -> MaintenanceWindowResponse:
     """Manually activate a scheduled maintenance window (admin only)."""
-    result = await db.execute(
-        select(MaintenanceWindow).where(MaintenanceWindow.window_id == window_id)
-    )
+    result = await db.execute(select(MaintenanceWindow).where(MaintenanceWindow.window_id == window_id))
     window = result.scalar_one_or_none()
 
     if not window:
@@ -368,9 +348,7 @@ async def complete_maintenance_window(
     _: Annotated[dict, Depends(require_admin)],
 ) -> MaintenanceWindowResponse:
     """Manually complete an active maintenance window (admin only)."""
-    result = await db.execute(
-        select(MaintenanceWindow).where(MaintenanceWindow.window_id == window_id)
-    )
+    result = await db.execute(select(MaintenanceWindow).where(MaintenanceWindow.window_id == window_id))
     window = result.scalar_one_or_none()
 
     if not window:
@@ -432,9 +410,7 @@ async def _set_node_maintenance_status(
         logger.info("Node %s entered maintenance mode", node_id)
     else:
         # Restore previous status
-        pre_maintenance_status = (node.extra_data or {}).get(
-            "pre_maintenance_status", NodeStatus.ONLINE.value
-        )
+        pre_maintenance_status = (node.extra_data or {}).get("pre_maintenance_status", NodeStatus.ONLINE.value)
         node.status = pre_maintenance_status
 
         # Clear maintenance data

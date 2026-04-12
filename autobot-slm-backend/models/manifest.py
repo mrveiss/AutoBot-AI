@@ -60,12 +60,8 @@ class ManifestDeploy(BaseModel):
     """Deployment configuration."""
 
     source: str = Field(description="Repo dir to sync (e.g. autobot-backend/)")
-    destination: str = Field(
-        description="Target path on node (e.g. /opt/autobot/autobot-backend/)"
-    )
-    shared: bool = Field(
-        default=True, description="Also deploy autobot_shared/ to node"
-    )
+    destination: str = Field(description="Target path on node (e.g. /opt/autobot/autobot-backend/)")
+    shared: bool = Field(default=True, description="Also deploy autobot_shared/ to node")
     infrastructure: bool = Field(
         default=True,
         description="Also deploy autobot-infrastructure/autobot-<role>/ to node",
@@ -84,18 +80,10 @@ class ManifestService(BaseModel):
     system_service: Optional[str] = Field(
         default=None, description="Underlying system service (e.g. nginx, postgresql)"
     )
-    start_order: int = Field(
-        default=1, description="Start order (lower = starts first)"
-    )
-    exec_start: Optional[str] = Field(
-        default=None, description="Override ExecStart command"
-    )
-    user: Optional[str] = Field(
-        default=None, description="Override service user (default: autobot-<role>)"
-    )
-    environment_file: Optional[str] = Field(
-        default=None, description="Override environment file path"
-    )
+    start_order: int = Field(default=1, description="Start order (lower = starts first)")
+    exec_start: Optional[str] = Field(default=None, description="Override ExecStart command")
+    user: Optional[str] = Field(default=None, description="Override service user (default: autobot-<role>)")
+    environment_file: Optional[str] = Field(default=None, description="Override environment file path")
 
 
 class ManifestPort(BaseModel):
@@ -103,21 +91,15 @@ class ManifestPort(BaseModel):
 
     port: int
     protocol: ProtocolType = ProtocolType.HTTPS
-    public: bool = Field(
-        default=False, description="Exposed through firewall to external traffic"
-    )
-    loopback_only: bool = Field(
-        default=False, description="Bind 127.0.0.1 only (no external access)"
-    )
+    public: bool = Field(default=False, description="Exposed through firewall to external traffic")
+    loopback_only: bool = Field(default=False, description="Bind 127.0.0.1 only (no external access)")
     description: Optional[str] = None
 
 
 class ManifestHealth(BaseModel):
     """Health check configuration."""
 
-    endpoint: str = Field(
-        description="Full health URL (e.g. https://localhost:8443/api/health)"
-    )
+    endpoint: str = Field(description="Full health URL (e.g. https://localhost:8443/api/health)")
     interval: str = Field(default="30s")
     timeout: str = Field(default="10s")
     retries: int = Field(default=3)
@@ -141,9 +123,7 @@ class ManifestTLS(BaseModel):
     """TLS certificate configuration."""
 
     auto_rotate: bool = Field(default=True)
-    rotate_days_before: int = Field(
-        default=14, description="Rotate cert N days before expiry"
-    )
+    rotate_days_before: int = Field(default=14, description="Rotate cert N days before expiry")
     reload_command: str = Field(default="systemctl reload nginx")
 
 
@@ -192,12 +172,8 @@ class RoleManifest(BaseModel):
     deploy: ManifestDeploy
 
     # System requirements
-    system_dependencies: List[str] = Field(
-        default_factory=list, description="apt packages required on the node"
-    )
-    python_version: Optional[str] = Field(
-        default=None, description="Required Python version (e.g. 3.10)"
-    )
+    system_dependencies: List[str] = Field(default_factory=list, description="apt packages required on the node")
+    python_version: Optional[str] = Field(default=None, description="Required Python version (e.g. 3.10)")
 
     # Services
     services: List[ManifestService] = Field(default_factory=list)

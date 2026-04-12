@@ -20,9 +20,7 @@ sys.path.insert(0, project_root)
 from utils.redis_database_manager import RedisDatabase
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
 class RedisMigrator:
@@ -45,13 +43,9 @@ class RedisMigrator:
                 # Test connection
                 client.ping()
                 self.connections[db_enum.name] = client
-                logger.info(
-                    "Connected to Redis database %s (%s)", db_enum.value, db_enum.name
-                )
+                logger.info("Connected to Redis database %s (%s)", db_enum.value, db_enum.name)
             except Exception as e:
-                logger.error(
-                    "Failed to connect to Redis database %s: %s", db_enum.value, e
-                )
+                logger.error("Failed to connect to Redis database %s: %s", db_enum.value, e)
 
         self.source_db = self.connections.get("MAIN")  # Database 0
 
@@ -191,9 +185,7 @@ class RedisMigrator:
         if not keys:
             return True
 
-        logger.info(
-            "Cleaning up %s %s keys from source database", len(keys), description
-        )
+        logger.info("Cleaning up %s %s keys from source database", len(keys), description)
 
         try:
             self.source_db.delete(*keys)
@@ -248,9 +240,7 @@ class RedisMigrator:
                 client = self.connections[db_name]
                 key_count = client.dbsize()
                 results[f"db_{db_enum.value}_{db_name}"] = key_count
-                logger.info(
-                    "Database %s (%s): %s keys", db_enum.value, db_name, key_count
-                )
+                logger.info("Database %s (%s): %s keys", db_enum.value, db_name, key_count)
 
         return results
 

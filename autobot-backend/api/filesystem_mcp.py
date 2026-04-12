@@ -61,12 +61,12 @@ async def _get_file_lock(filepath: str) -> asyncio.Lock:
 
 
 from fastapi import APIRouter, Depends, HTTPException
-from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_path
+from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["filesystem_mcp", "mcp"])

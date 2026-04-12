@@ -83,9 +83,7 @@ class ExperimentTracker:
         logger.info("Experiment logged: %s -> %s", name, result)
         return record
 
-    async def list_experiments(
-        self, area: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+    async def list_experiments(self, area: Optional[str] = None) -> List[Dict[str, Any]]:
         """List all experiments, optionally filtered by area."""
         redis_client = await get_async_redis_client(database="analytics")
         if not redis_client:

@@ -247,10 +247,7 @@ class TopicRetrievalCache(AsyncInitializable):
         topic_id = str(uuid.uuid4())
         redis_key = f"{_REDIS_KEY_PREFIX}{topic_id}"
 
-        payload = [
-            {"content": c.content, "metadata": c.metadata, "score": c.score}
-            for c in chunks
-        ]
+        payload = [{"content": c.content, "metadata": c.metadata, "score": c.score} for c in chunks]
         if not await self._store_chunks(redis_key, payload):
             return False
 
@@ -332,9 +329,7 @@ class TopicRetrievalCache(AsyncInitializable):
             results = await self._collection.get(limit=excess, include=["metadatas"])
             if results and results.get("ids"):
                 ids_to_delete = results["ids"]
-                client = await get_redis_client(
-                    async_client=True, database=_REDIS_DATABASE
-                )
+                client = await get_redis_client(async_client=True, database=_REDIS_DATABASE)
                 if client:
                     for meta in results.get("metadatas", []):
                         rkey = meta.get("redis_key", "")

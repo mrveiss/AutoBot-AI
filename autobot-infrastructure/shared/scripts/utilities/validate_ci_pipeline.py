@@ -30,9 +30,7 @@ def validate_workflow():
 
         # Check required top-level keys (handle YAML parsing quirk with 'on')
         required_keys = ["name", "jobs"]
-        trigger_key = (
-            "on" if "on" in workflow else True
-        )  # YAML parses 'on:' as True sometimes
+        trigger_key = "on" if "on" in workflow else True  # YAML parses 'on:' as True sometimes
 
         for key in required_keys:
             if key in workflow:
@@ -63,9 +61,7 @@ def validate_workflow():
                 job_config = jobs[job_name]
                 if "runs-on" in job_config:
                     steps_count = len(job_config.get("steps", []))
-                    print(
-                        f"✅ {job_name}: {steps_count} steps, runs on {job_config['runs-on']}"
-                    )
+                    print(f"✅ {job_name}: {steps_count} steps, runs on {job_config['runs-on']}")
                 else:
                     print(f"❌ {job_name}: Missing 'runs-on' configuration")
             else:
@@ -73,11 +69,7 @@ def validate_workflow():
 
         # Check triggers (handle YAML parsing quirk)
         triggers = workflow.get("on", workflow.get(True, {}))
-        if (
-            isinstance(triggers, dict)
-            and "push" in triggers
-            and "pull_request" in triggers
-        ):
+        if isinstance(triggers, dict) and "push" in triggers and "pull_request" in triggers:
             push_branches = triggers["push"].get("branches", [])
             pr_branches = triggers["pull_request"].get("branches", [])
             print(f"✅ Triggers: push to {push_branches}, PRs to {pr_branches}")

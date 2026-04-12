@@ -73,16 +73,10 @@ def remove_unused_imports(file_path: str, max_removals: int = 10) -> bool:
                         # Remove just this import
                         parts = line.split("import")[1]
                         imports = [imp.strip() for imp in parts.split(",")]
-                        remaining_imports = [
-                            imp for imp in imports if imp != unused_import
-                        ]
+                        remaining_imports = [imp for imp in imports if imp != unused_import]
 
                         if remaining_imports:
-                            line = (
-                                line.split("import")[0]
-                                + "import "
-                                + ", ".join(remaining_imports)
-                            )
+                            line = line.split("import")[0] + "import " + ", ".join(remaining_imports)
                         else:
                             should_remove = True
                     else:

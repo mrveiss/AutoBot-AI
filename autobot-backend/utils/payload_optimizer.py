@@ -98,9 +98,7 @@ class PayloadOptimizer:
         self.compression_count = 0
         self.chunking_count = 0
 
-        logger.info(
-            "PayloadOptimizer initialized: max=%s, chunk=%s", max_size, chunk_size
-        )
+        logger.info("PayloadOptimizer initialized: max=%s, chunk=%s", max_size, chunk_size)
 
     def optimize_payload(self, payload: Any, context: str = "") -> OptimizationResult:
         """
@@ -163,8 +161,7 @@ class PayloadOptimizer:
                 optimized_size=total_chunked_size,
                 chunks=chunks,
                 optimization_type="todo_chunking",
-                savings_percent=((original_size - total_chunked_size) / original_size)
-                * 100,
+                savings_percent=((original_size - total_chunked_size) / original_size) * 100,
                 needs_chunking=True,
             )
 
@@ -184,9 +181,7 @@ class PayloadOptimizer:
             needs_chunking=False,
         )
 
-    def optimize_file_read_request(
-        self, file_paths: List[str], max_files_per_chunk: int = 3
-    ) -> List[List[str]]:
+    def optimize_file_read_request(self, file_paths: List[str], max_files_per_chunk: int = 3) -> List[List[str]]:
         """
         Optimize file reading requests to prevent large payloads.
         Chunks file lists to manageable sizes.
@@ -217,9 +212,7 @@ class PayloadOptimizer:
             logger.warning("Failed to calculate payload size: %s", e)
             return 0
 
-    def _compress_payload(
-        self, payload: Any, original_size: int, context: str
-    ) -> OptimizationResult:
+    def _compress_payload(self, payload: Any, original_size: int, context: str) -> OptimizationResult:
         """Apply compression techniques to reduce payload size"""
         if isinstance(payload, str):
             compressed = self._compress_text(payload)
@@ -248,9 +241,7 @@ class PayloadOptimizer:
             needs_chunking=False,
         )
 
-    def _chunk_payload(
-        self, payload: Any, original_size: int, context: str
-    ) -> OptimizationResult:
+    def _chunk_payload(self, payload: Any, original_size: int, context: str) -> OptimizationResult:
         """Split large payload into manageable chunks"""
         if isinstance(payload, str):
             chunks = self._chunk_text(payload)
@@ -270,9 +261,7 @@ class PayloadOptimizer:
             self.total_optimizations += 1
             self.chunking_count += 1
 
-        logger.info(
-            f"Split payload into {len(chunks)} chunks, {savings:.1f}% size reduction"
-        )
+        logger.info(f"Split payload into {len(chunks)} chunks, {savings:.1f}% size reduction")
 
         return OptimizationResult(
             original_size=original_size,

@@ -63,9 +63,7 @@ class SessionTakeoverTestSuite:
         for test_method in test_methods:
             try:
                 await test_method()
-                self.test_results.append(
-                    {"test": test_method.__name__, "status": "PASSED", "error": None}
-                )
+                self.test_results.append({"test": test_method.__name__, "status": "PASSED", "error": None})
             except Exception as e:
                 logger.error(f"❌ {test_method.__name__} FAILED: {e}")
                 self.test_results.append(
@@ -121,16 +119,12 @@ class SessionTakeoverTestSuite:
         )
 
         assert workflow_id is not None, "Workflow creation failed"
-        assert (
-            workflow_id in self.workflow_manager.active_workflows
-        ), "Workflow not found in active list"
+        assert workflow_id in self.workflow_manager.active_workflows, "Workflow not found in active list"
 
         workflow = self.workflow_manager.active_workflows[workflow_id]
         assert workflow.name == "Test System Update Workflow", "Workflow name mismatch"
         assert len(workflow.steps) == 3, "Incorrect number of steps"
-        assert (
-            workflow.automation_mode == AutomationMode.SEMI_AUTOMATIC
-        ), "Automation mode mismatch"
+        assert workflow.automation_mode == AutomationMode.SEMI_AUTOMATIC, "Automation mode mismatch"
 
         logger.info("✅ Workflow created successfully with ID: {workflow_id}")
 
@@ -169,19 +163,13 @@ class SessionTakeoverTestSuite:
         await self.workflow_manager.start_workflow_execution(workflow_id)
 
         workflow = self.workflow_manager.active_workflows[workflow_id]
-        assert (
-            workflow.current_step_index == 0
-        ), "Workflow should be waiting at first step"
-        assert (
-            workflow.steps[0].status.value == "waiting_approval"
-        ), "First step should be waiting for approval"
+        assert workflow.current_step_index == 0, "Workflow should be waiting at first step"
+        assert workflow.steps[0].status.value == "waiting_approval", "First step should be waiting for approval"
 
         # Simulate user approving first step
         from api.workflow_automation import WorkflowControlRequest
 
-        control_request = WorkflowControlRequest(
-            workflow_id=workflow_id, action="approve_step", step_id="confirm_1"
-        )
+        control_request = WorkflowControlRequest(workflow_id=workflow_id, action="approve_step", step_id="confirm_1")
 
         await self.workflow_manager.handle_workflow_control(control_request)
 
@@ -226,16 +214,12 @@ class SessionTakeoverTestSuite:
         assert workflow.is_paused is True, "Workflow should be paused"
 
         # Record manual intervention
-        assert (
-            len(workflow.user_interventions) > 0
-        ), "User intervention should be recorded"
+        assert len(workflow.user_interventions) > 0, "User intervention should be recorded"
         intervention = workflow.user_interventions[-1]
         assert intervention["action"] == "pause", "Pause action should be recorded"
 
         # Resume workflow
-        resume_request = WorkflowControlRequest(
-            workflow_id=workflow_id, action="resume"
-        )
+        resume_request = WorkflowControlRequest(workflow_id=workflow_id, action="resume")
 
         await self.workflow_manager.handle_workflow_control(resume_request)
 
@@ -313,16 +297,12 @@ class SessionTakeoverTestSuite:
         assert result is True, "Pause should succeed"
 
         # Test resume
-        resume_request = WorkflowControlRequest(
-            workflow_id=workflow_id, action="resume"
-        )
+        resume_request = WorkflowControlRequest(workflow_id=workflow_id, action="resume")
         result = await self.workflow_manager.handle_workflow_control(resume_request)
         assert result is True, "Resume should succeed"
 
         workflow = self.workflow_manager.active_workflows[workflow_id]
-        assert (
-            len(workflow.user_interventions) == 2
-        ), "Should have 2 interventions (pause + resume)"
+        assert len(workflow.user_interventions) == 2, "Should have 2 interventions (pause + resume)"
 
         logger.info("✅ Pause/Resume functionality working correctly")
 
@@ -343,22 +323,14 @@ class SessionTakeoverTestSuite:
         ]
 
         for message in test_messages:
-            workflow_id = await self.workflow_manager.create_workflow_from_chat_request(
-                message, self.test_session_id
-            )
+            workflow_id = await self.workflow_manager.create_workflow_from_chat_request(message, self.test_session_id)
 
             if workflow_id:
                 workflow = self.workflow_manager.active_workflows[workflow_id]
-                assert (
-                    len(workflow.steps) > 0
-                ), f"Workflow should have steps for: {message}"
-                logger.info(
-                    f"✅ Created workflow for: '{message}' with {len(workflow.steps)} steps"
-                )
+                assert len(workflow.steps) > 0, f"Workflow should have steps for: {message}"
+                logger.info(f"✅ Created workflow for: '{message}' with {len(workflow.steps)} steps")
             else:
-                logger.info(
-                    f"⚠️ No workflow created for: '{message}' (expected for some messages)"
-                )
+                logger.info(f"⚠️ No workflow created for: '{message}' (expected for some messages)")
 
         logger.info("✅ Chat integration working correctly")
 
@@ -479,12 +451,8 @@ class SessionTakeoverTestSuite:
         # Create workflow with dependencies
         steps = [
             WorkflowStep("dep_1", "echo 'Base step'", "Base step", dependencies=[]),
-            WorkflowStep(
-                "dep_2", "echo 'Depends on 1'", "Dependent step", dependencies=["dep_1"]
-            ),
-            WorkflowStep(
-                "dep_3", "echo 'Depends on 2'", "Final step", dependencies=["dep_2"]
-            ),
+            WorkflowStep("dep_2", "echo 'Depends on 1'", "Dependent step", dependencies=["dep_1"]),
+            WorkflowStep("dep_3", "echo 'Depends on 2'", "Final step", dependencies=["dep_2"]),
         ]
 
         workflow_id = await self.workflow_manager.create_automated_workflow(
@@ -525,13 +493,9 @@ class SessionTakeoverTestSuite:
             # Try to control non-existent workflow
             from api.workflow_automation import WorkflowControlRequest
 
-            invalid_request = WorkflowControlRequest(
-                workflow_id="non_existent_workflow", action="pause"
-            )
+            invalid_request = WorkflowControlRequest(workflow_id="non_existent_workflow", action="pause")
 
-            result = await self.workflow_manager.handle_workflow_control(
-                invalid_request
-            )
+            result = await self.workflow_manager.handle_workflow_control(invalid_request)
             assert result is False, "Invalid workflow control should return False"
 
         except Exception as e:
@@ -566,11 +530,7 @@ class SessionTakeoverTestSuite:
         logger.info(f"📊 TOTAL TESTS: {total}")
         logger.info(f"✅ PASSED: {passed}")
         logger.info(f"❌ FAILED: {failed}")
-        logger.info(
-            f"📈 SUCCESS RATE: {(passed/total)*100:.1f}%"
-            if total > 0
-            else "No tests run"
-        )
+        logger.info(f"📈 SUCCESS RATE: {(passed/total)*100:.1f}%" if total > 0 else "No tests run")
 
         logger.info("\n📋 DETAILED RESULTS:")
         for result in self.test_results:
@@ -600,23 +560,15 @@ class SessionTakeoverTestSuite:
         ]
 
         for i, feature in enumerate(features):
-            test_result = (
-                self.test_results[i]
-                if i < len(self.test_results)
-                else {"status": "UNKNOWN"}
-            )
+            test_result = self.test_results[i] if i < len(self.test_results) else {"status": "UNKNOWN"}
             status_icon = (
-                "✅"
-                if test_result["status"] == "PASSED"
-                else "❌" if test_result["status"] == "FAILED" else "❓"
+                "✅" if test_result["status"] == "PASSED" else "❌" if test_result["status"] == "FAILED" else "❓"
             )
             logger.info(f"   {status_icon} {feature}")
 
         logger.info("\n🚀 SYSTEM STATUS:")
         if passed == total and total > 0:
-            logger.info(
-                "   🎉 ALL TESTS PASSED - Session Takeover System is FULLY FUNCTIONAL!"
-            )
+            logger.info("   🎉 ALL TESTS PASSED - Session Takeover System is FULLY FUNCTIONAL!")
         elif passed > failed:
             logger.info("   ⚠️ MOSTLY FUNCTIONAL - Some issues need attention")
         else:
@@ -686,12 +638,8 @@ async def run_demo_workflow():
     )
 
     logger.info(f"✅ Demo workflow created with ID: {workflow_id}")
-    logger.info(
-        "📋 Workflow includes 5 steps with confirmation points for system modifications"
-    )
-    logger.info(
-        "🎯 This demonstrates the complete session takeover system capabilities"
-    )
+    logger.info("📋 Workflow includes 5 steps with confirmation points for system modifications")
+    logger.info("🎯 This demonstrates the complete session takeover system capabilities")
 
     # Get workflow status
     status = demo_manager.get_workflow_status(workflow_id)

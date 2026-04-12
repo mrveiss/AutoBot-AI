@@ -33,9 +33,7 @@ def migrate(db_url: str) -> None:
     conn.commit()
     conn.close()
 
-    logger.info(
-        "Migration complete: added required, degraded_without, ansible_playbook"
-    )
+    logger.info("Migration complete: added required, degraded_without, ansible_playbook")
 
 
 if __name__ == "__main__":

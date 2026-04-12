@@ -138,9 +138,7 @@ async def load_model(request: ModelLoadRequest):
     if success:
         return {"status": "success", "model_id": request.model_id}
     else:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to load model {request.model_id}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to load model {request.model_id}")
 
 
 @app.delete("/models/{model_id}")

@@ -77,7 +77,7 @@ class TestAIDocumentModel:
 class TestCreateDocument:
     @pytest.mark.asyncio
     async def test_creates_document(self, mock_redis):
-        from api.documents import create_document, CreateDocumentRequest
+        from api.documents import CreateDocumentRequest, create_document
 
         body = CreateDocumentRequest(title="New Doc", content="Some AI text")
         with patch("api.documents.get_async_redis_client", AsyncMock(return_value=mock_redis)):
@@ -89,7 +89,7 @@ class TestCreateDocument:
 
     @pytest.mark.asyncio
     async def test_creates_with_source_facts(self, mock_redis):
-        from api.documents import create_document, CreateDocumentRequest
+        from api.documents import CreateDocumentRequest, create_document
 
         body = CreateDocumentRequest(title="Grounded", source_facts=["fact-1", "fact-2"])
         with patch("api.documents.get_async_redis_client", AsyncMock(return_value=mock_redis)):
@@ -113,6 +113,7 @@ class TestGetDocument:
     @pytest.mark.asyncio
     async def test_raises_404_when_missing(self, mock_redis):
         from fastapi import HTTPException
+
         from api.documents import get_document
 
         mock_redis.get = AsyncMock(return_value=None)
@@ -125,6 +126,7 @@ class TestGetDocument:
     @pytest.mark.asyncio
     async def test_raises_403_for_wrong_owner(self, mock_redis):
         from fastapi import HTTPException
+
         from api.documents import get_document
 
         doc = _make_doc(user_id="user-abc")
@@ -139,7 +141,7 @@ class TestGetDocument:
 class TestUpdateDocument:
     @pytest.mark.asyncio
     async def test_updates_title_and_content(self, mock_redis):
-        from api.documents import update_document, UpdateDocumentRequest
+        from api.documents import UpdateDocumentRequest, update_document
 
         doc = _make_doc()
         mock_redis.get = AsyncMock(return_value=doc.model_dump_json())
@@ -152,7 +154,7 @@ class TestUpdateDocument:
 
     @pytest.mark.asyncio
     async def test_partial_update_leaves_other_fields(self, mock_redis):
-        from api.documents import update_document, UpdateDocumentRequest
+        from api.documents import UpdateDocumentRequest, update_document
 
         doc = _make_doc(content="original content")
         mock_redis.get = AsyncMock(return_value=doc.model_dump_json())
@@ -181,6 +183,7 @@ class TestDeleteDocument:
     @pytest.mark.asyncio
     async def test_raises_404_when_missing(self, mock_redis):
         from fastapi import HTTPException
+
         from api.documents import delete_document
 
         mock_redis.get = AsyncMock(return_value=None)

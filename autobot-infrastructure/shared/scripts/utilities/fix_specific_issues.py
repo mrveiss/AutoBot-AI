@@ -68,9 +68,7 @@ def fix_syntax_errors():
                 content = f.read()
 
             # Fix the problematic string with quotes
-            content = content.replace(
-                '""SKIP" to avoid spam."', '"SKIP to avoid spam."'
-            )
+            content = content.replace('""SKIP" to avoid spam."', '"SKIP to avoid spam."')
 
             with open(file_path, "w") as f:
                 f.write(content)
@@ -92,9 +90,7 @@ def fix_undefined_names():
 
             # Add Optional import if missing
             if "from typing import" in content and "Optional" not in content:
-                content = content.replace(
-                    "from typing import", "from typing import Optional,"
-                )
+                content = content.replace("from typing import", "from typing import Optional,")
             elif "typing import" not in content:
                 # Add typing import at the top
                 lines = content.split("\n")

@@ -69,9 +69,7 @@ class SkillGapDetector:
                 )
         return None
 
-    def analyze_failed_tool_call(
-        self, tool_name: str, args: Dict[str, Any]
-    ) -> Optional[GapResult]:
+    def analyze_failed_tool_call(self, tool_name: str, args: Dict[str, Any]) -> Optional[GapResult]:
         """Detect gap when a requested tool doesn't exist in available_tools."""
         if tool_name in self.available_tools:
             return None

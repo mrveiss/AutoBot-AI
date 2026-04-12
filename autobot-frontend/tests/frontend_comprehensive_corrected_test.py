@@ -111,11 +111,7 @@ class AutoBotComprehensiveFrontendTester:
                                     message="Endpoint working, returned JSON data",
                                     details={
                                         "status": resp.status,
-                                        "keys": (
-                                            list(data.keys())
-                                            if isinstance(data, dict)
-                                            else "list_data"
-                                        ),
+                                        "keys": (list(data.keys()) if isinstance(data, dict) else "list_data"),
                                     },
                                     response_time=response_time,
                                 )
@@ -152,9 +148,7 @@ class AutoBotComprehensiveFrontendTester:
     async def test_websocket_connections(self) -> TestResult:
         """Test WebSocket connectivity for real-time features"""
         try:
-            ws_url = (
-                self.backend_base.replace("http://", "ws://") + "/api/websocket/chat"
-            )
+            ws_url = self.backend_base.replace("http://", "ws://") + "/api/websocket/chat"
 
             start_time = time.time()
             async with websockets.connect(ws_url, timeout=10) as websocket:
@@ -216,13 +210,7 @@ class AutoBotComprehensiveFrontendTester:
                             name="Chat Interface Component",
                             success=True,
                             message="Chat API accessible for UI component",
-                            details={
-                                "chat_count": (
-                                    len(data)
-                                    if isinstance(data, list)
-                                    else "dict_response"
-                                )
-                            },
+                            details={"chat_count": (len(data) if isinstance(data, list) else "dict_response")},
                         )
                     )
                 else:
@@ -244,9 +232,7 @@ class AutoBotComprehensiveFrontendTester:
 
         # System monitor component
         try:
-            async with self.session.get(
-                f"{self.backend_base}/api/monitoring/services"
-            ) as resp:
+            async with self.session.get(f"{self.backend_base}/api/monitoring/services") as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     results.append(
@@ -277,9 +263,7 @@ class AutoBotComprehensiveFrontendTester:
         # Knowledge base interface
         try:
             # Test categories
-            async with self.session.get(
-                f"{self.backend_base}/api/knowledge_base/categories"
-            ) as resp:
+            async with self.session.get(f"{self.backend_base}/api/knowledge_base/categories") as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     results.append(
@@ -313,9 +297,7 @@ class AutoBotComprehensiveFrontendTester:
         """Test terminal integration components"""
         try:
             # Check if terminal endpoint exists
-            async with self.session.get(
-                f"{self.backend_base}/api/terminal/status"
-            ) as resp:
+            async with self.session.get(f"{self.backend_base}/api/terminal/status") as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     return TestResult(
@@ -351,9 +333,7 @@ class AutoBotComprehensiveFrontendTester:
         """Test desktop viewer (VNC) integration"""
         try:
             # Check VNC/desktop status
-            async with self.session.get(
-                f"{self.backend_base}/api/desktop/status"
-            ) as resp:
+            async with self.session.get(f"{self.backend_base}/api/desktop/status") as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     return TestResult(
@@ -371,18 +351,14 @@ class AutoBotComprehensiveFrontendTester:
         except Exception:
             # Desktop might be handled by infrastructure
             try:
-                async with self.session.get(
-                    f"{self.backend_base}/api/infrastructure/status"
-                ) as resp:
+                async with self.session.get(f"{self.backend_base}/api/infrastructure/status") as resp:
                     if resp.status == 200:
                         data = await resp.json()
                         return TestResult(
                             name="Desktop Viewer Component",
                             success=True,
                             message="Desktop integration via infrastructure API",
-                            details={
-                                "infrastructure_status": data.get("status", "unknown")
-                            },
+                            details={"infrastructure_status": data.get("status", "unknown")},
                         )
                     else:
                         return TestResult(
@@ -403,9 +379,7 @@ class AutoBotComprehensiveFrontendTester:
 
         # Test stats display
         try:
-            async with self.session.get(
-                f"{self.backend_base}/api/knowledge_base/stats/basic"
-            ) as resp:
+            async with self.session.get(f"{self.backend_base}/api/knowledge_base/stats/basic") as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     total_docs = data.get("total_documents", 0)
@@ -439,9 +413,7 @@ class AutoBotComprehensiveFrontendTester:
         # Test search functionality
         try:
             search_payload = {"query": "AutoBot configuration"}
-            async with self.session.post(
-                f"{self.backend_base}/api/knowledge_base/search", json=search_payload
-            ) as resp:
+            async with self.session.post(f"{self.backend_base}/api/knowledge_base/search", json=search_payload) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     results_count = len(data.get("results", []))
@@ -472,9 +444,7 @@ class AutoBotComprehensiveFrontendTester:
 
         # Test categories
         try:
-            async with self.session.get(
-                f"{self.backend_base}/api/knowledge_base/categories"
-            ) as resp:
+            async with self.session.get(f"{self.backend_base}/api/knowledge_base/categories") as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     results.append(
@@ -511,9 +481,7 @@ class AutoBotComprehensiveFrontendTester:
         # Test chat creation
         try:
             chat_data = {"title": "Frontend Test Chat", "chat_type": "general"}
-            async with self.session.post(
-                f"{self.backend_base}/api/chat/chats/new", json=chat_data
-            ) as resp:
+            async with self.session.post(f"{self.backend_base}/api/chat/chats/new", json=chat_data) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     chat_id = data.get("id") or data.get("chat_id")
@@ -535,9 +503,7 @@ class AutoBotComprehensiveFrontendTester:
                                 "message_type": "user",
                             }
                             timeout = aiohttp.ClientTimeout(total=30)
-                            async with aiohttp.ClientSession(
-                                timeout=timeout
-                            ) as msg_session:
+                            async with aiohttp.ClientSession(timeout=timeout) as msg_session:
                                 async with msg_session.post(
                                     f"{self.backend_base}/api/chat/chats/{chat_id}/message",
                                     json=message_data,
@@ -594,13 +560,7 @@ class AutoBotComprehensiveFrontendTester:
                             name="Chat: List/History Function",
                             success=True,
                             message="Chat list accessible",
-                            details={
-                                "chat_count": (
-                                    len(data)
-                                    if isinstance(data, list)
-                                    else "dict_response"
-                                )
-                            },
+                            details={"chat_count": (len(data) if isinstance(data, list) else "dict_response")},
                         )
                     )
                 else:
@@ -644,9 +604,7 @@ class AutoBotComprehensiveFrontendTester:
             responses = await asyncio.gather(*tasks, return_exceptions=True)
             total_time = time.time() - start_time
 
-            successful_requests = sum(
-                1 for r in responses if hasattr(r, "status") and r.status == 200
-            )
+            successful_requests = sum(1 for r in responses if hasattr(r, "status") and r.status == 200)
 
             results.append(
                 TestResult(
@@ -708,9 +666,7 @@ class AutoBotComprehensiveFrontendTester:
 
         # Test invalid endpoints
         try:
-            async with self.session.get(
-                f"{self.backend_base}/api/nonexistent/endpoint"
-            ) as resp:
+            async with self.session.get(f"{self.backend_base}/api/nonexistent/endpoint") as resp:
                 results.append(
                     TestResult(
                         name="Error Handling: Invalid Endpoint",
@@ -818,18 +774,14 @@ class AutoBotComprehensiveFrontendTester:
 
         # Calculate performance metrics
         response_times = [r.response_time for r in self.results if r.response_time]
-        avg_response_time = (
-            sum(response_times) / len(response_times) if response_times else 0
-        )
+        avg_response_time = sum(response_times) / len(response_times) if response_times else 0
         max_response_time = max(response_times) if response_times else 0
         min_response_time = min(response_times) if response_times else 0
 
         # Categorize results
         categories = {
             "Frontend Health": [r for r in self.results if "Frontend" in r.name],
-            "API Connectivity": [
-                r for r in self.results if "API Connectivity" in r.name
-            ],
+            "API Connectivity": [r for r in self.results if "API Connectivity" in r.name],
             "WebSocket": [r for r in self.results if "WebSocket" in r.name],
             "UI Components": [r for r in self.results if "Component" in r.name],
             "Knowledge Base": [r for r in self.results if "KB Interface" in r.name],
@@ -850,13 +802,8 @@ class AutoBotComprehensiveFrontendTester:
                 "max_response_time": max_response_time,
                 "min_response_time": min_response_time,
             },
-            "categories": {
-                cat: len([r for r in results if r.success])
-                for cat, results in categories.items()
-            },
-            "category_totals": {
-                cat: len(results) for cat, results in categories.items()
-            },
+            "categories": {cat: len([r for r in results if r.success]) for cat, results in categories.items()},
+            "category_totals": {cat: len(results) for cat, results in categories.items()},
             "results": self.results,
             "recommendations": self.generate_recommendations(),
         }
@@ -875,57 +822,35 @@ class AutoBotComprehensiveFrontendTester:
             )
 
         if any("WebSocket" in r.name for r in failed_tests):
-            recommendations.append(
-                "🟡 WebSocket connectivity issues - real-time features may be limited"
-            )
+            recommendations.append("🟡 WebSocket connectivity issues - real-time features may be limited")
 
         if any("API Connectivity" in r.name for r in failed_tests):
-            recommendations.append(
-                "🟠 Backend API connectivity issues - check backend service at port 8001"
-            )
+            recommendations.append("🟠 Backend API connectivity issues - check backend service at port 8001")
 
-        if any(
-            "Knowledge Base" in r.name or "KB Interface" in r.name for r in failed_tests
-        ):
+        if any("Knowledge Base" in r.name or "KB Interface" in r.name for r in failed_tests):
             recommendations.append(
                 "📚 Knowledge Base interface issues - check vector database and search functionality"
             )
 
         if any("Chat" in r.name for r in failed_tests):
-            recommendations.append(
-                "💬 Chat system issues - check LLM integration and chat workflow"
-            )
+            recommendations.append("💬 Chat system issues - check LLM integration and chat workflow")
 
         if any("Performance" in r.name for r in failed_tests):
-            recommendations.append(
-                "⚡ Performance issues detected - optimize API response times"
-            )
+            recommendations.append("⚡ Performance issues detected - optimize API response times")
 
         # Overall system assessment
-        success_rate = (
-            sum(1 for r in self.results if r.success) / len(self.results)
-        ) * 100
+        success_rate = (sum(1 for r in self.results if r.success) / len(self.results)) * 100
 
         if success_rate >= 95:
-            recommendations.append(
-                "✅ EXCELLENT: AutoBot frontend is fully operational with outstanding performance"
-            )
+            recommendations.append("✅ EXCELLENT: AutoBot frontend is fully operational with outstanding performance")
         elif success_rate >= 85:
-            recommendations.append(
-                "🟢 VERY GOOD: AutoBot frontend is working well with minor issues to address"
-            )
+            recommendations.append("🟢 VERY GOOD: AutoBot frontend is working well with minor issues to address")
         elif success_rate >= 75:
-            recommendations.append(
-                "🟡 GOOD: AutoBot frontend is largely functional with some improvements needed"
-            )
+            recommendations.append("🟡 GOOD: AutoBot frontend is largely functional with some improvements needed")
         elif success_rate >= 60:
-            recommendations.append(
-                "🟠 NEEDS IMPROVEMENT: AutoBot frontend has significant issues requiring attention"
-            )
+            recommendations.append("🟠 NEEDS IMPROVEMENT: AutoBot frontend has significant issues requiring attention")
         else:
-            recommendations.append(
-                "🔴 CRITICAL: AutoBot frontend has major issues requiring immediate attention"
-            )
+            recommendations.append("🔴 CRITICAL: AutoBot frontend has major issues requiring immediate attention")
 
         return recommendations
 
@@ -955,9 +880,7 @@ class AutoBotComprehensiveFrontendTester:
             status_color = "❌"
             status = "CRITICAL"
 
-        print(
-            f"\n{status_color} OVERALL STATUS: {status} ({success_rate:.1f}% success rate)"
-        )
+        print(f"\n{status_color} OVERALL STATUS: {status} ({success_rate:.1f}% success rate)")
         print(f"📊 Test Results: {summary['passed']}/{summary['total_tests']} passed")
 
         if summary["avg_response_time"] > 0:
@@ -972,14 +895,8 @@ class AutoBotComprehensiveFrontendTester:
             total = report["category_totals"][category]
             if total > 0:
                 cat_success_rate = (passed / total) * 100
-                status_icon = (
-                    "✅"
-                    if cat_success_rate == 100
-                    else "⚠️" if cat_success_rate >= 50 else "❌"
-                )
-                print(
-                    f"{status_icon} {category}: {passed}/{total} ({cat_success_rate:.0f}%)"
-                )
+                status_icon = "✅" if cat_success_rate == 100 else "⚠️" if cat_success_rate >= 50 else "❌"
+                print(f"{status_icon} {category}: {passed}/{total} ({cat_success_rate:.0f}%)")
 
         # Detailed results
         print("\n📝 DETAILED TEST RESULTS:")
@@ -1015,9 +932,7 @@ class AutoBotComprehensiveFrontendTester:
                 print(f"\n📂 {current_category}:")
 
             status_icon = "✅" if result.success else "❌"
-            response_info = (
-                f" ({result.response_time:.3f}s)" if result.response_time else ""
-            )
+            response_info = f" ({result.response_time:.3f}s)" if result.response_time else ""
             print(f"  {status_icon} {result.name}{response_info}")
             print(f"      {result.message}")
 

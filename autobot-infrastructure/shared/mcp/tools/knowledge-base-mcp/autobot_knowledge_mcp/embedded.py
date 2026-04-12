@@ -446,8 +446,7 @@ class EmbeddedKnowledgeClient:
         # Use LLM if available
         if hasattr(kb, "llm") and kb.llm:
             prompt = (
-                f"Summarize the following information about '{topic}' "
-                f"in {max_length} tokens or less:\n\n{combined}"
+                f"Summarize the following information about '{topic}' " f"in {max_length} tokens or less:\n\n{combined}"
             )
             try:
                 summary = await kb.llm.generate(prompt, max_tokens=max_length)

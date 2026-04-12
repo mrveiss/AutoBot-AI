@@ -19,7 +19,6 @@ import pytest
 
 from knowledge.suggestions import SuggestionsMixin
 
-
 # ---------------------------------------------------------------------------
 # Minimal concrete subclass so we can instantiate SuggestionsMixin
 # ---------------------------------------------------------------------------

@@ -166,9 +166,7 @@ class FrontendDebugger:
                 headers=dict(request.headers),
             )
             self.network_requests.append(request_info)
-            self._log(
-                f"REQUEST: {request.method} {request.resource_type} {request.url}"
-            )
+            self._log(f"REQUEST: {request.method} {request.resource_type} {request.url}")
 
         def handle_response(response):
             """Handle network response events and capture response status."""
@@ -232,9 +230,7 @@ class FrontendDebugger:
                 args=self._get_browser_args(),
             )
 
-            context = browser.new_context(
-                viewport={"width": self.viewport_width, "height": self.viewport_height}
-            )
+            context = browser.new_context(viewport={"width": self.viewport_width, "height": self.viewport_height})
 
             page = context.new_page()
             self._setup_event_handlers(page)
@@ -247,9 +243,7 @@ class FrontendDebugger:
                 # Navigate to page
                 wait_until = "networkidle" if self.headless else "load"
                 response = page.goto(url, wait_until=wait_until, timeout=timeout)
-                self._log(
-                    f"Navigation response: {response.status if response else 'No response'}"
-                )
+                self._log(f"Navigation response: {response.status if response else 'No response'}")
 
                 # Wait for additional loading
                 if wait_after_load > 0:
@@ -270,9 +264,7 @@ class FrontendDebugger:
                     self._log("\n" + "=" * 80)
                     self._log("BROWSER READY FOR MANUAL INSPECTION")
                     self._log("=" * 80)
-                    self._log(
-                        f"Browser will stay open for {manual_inspection_time} seconds..."
-                    )
+                    self._log(f"Browser will stay open for {manual_inspection_time} seconds...")
                     time.sleep(manual_inspection_time)
 
                 result.analysis_complete = True
@@ -331,9 +323,7 @@ class FrontendDebugger:
                 if len(app_content) < 500:
                     self._log(f"#app content:\n{app_content}")
                 else:
-                    self._log(
-                        f"#app content (first 500 chars):\n{app_content[:500]}..."
-                    )
+                    self._log(f"#app content (first 500 chars):\n{app_content[:500]}...")
             else:
                 self._log("WARNING: #app element is empty!")
                 state["app_empty"] = True
@@ -347,8 +337,7 @@ class FrontendDebugger:
         self._log("=" * 80)
 
         try:
-            vue_check = page.evaluate(
-                """
+            vue_check = page.evaluate("""
                 () => {
                     return {
                         vue_available: typeof Vue !== 'undefined',
@@ -359,8 +348,7 @@ class FrontendDebugger:
                         vite_hmr: !!window.__vite__
                     };
                 }
-            """
-            )
+            """)
             state["vue_checks"] = vue_check
             for check, result in vue_check.items():
                 self._log(f"{check}: {result}")
@@ -384,12 +372,8 @@ class FrontendDebugger:
                 self._log(f"  Script {i+1}: {src} (type: {script_type})")
             else:
                 content = script.inner_text()
-                content_preview = (
-                    content[:100].replace("\n", " ") if content else "empty"
-                )
-                self._log(
-                    f"  Script {i+1}: inline ({len(content)} chars) - {content_preview}..."
-                )
+                content_preview = content[:100].replace("\n", " ") if content else "empty"
+                self._log(f"  Script {i+1}: inline ({len(content)} chars) - {content_preview}...")
 
         # Network summary
         self._print_network_summary()
@@ -399,8 +383,7 @@ class FrontendDebugger:
 
         # Final page state
         try:
-            final_state = page.evaluate(
-                """
+            final_state = page.evaluate("""
                 () => {
                     return {
                         ready_state: document.readyState,
@@ -413,8 +396,7 @@ class FrontendDebugger:
                         visible_text: document.body.innerText.length
                     };
                 }
-            """
-            )
+            """)
             state["final_state"] = final_state
             self._log("\n" + "=" * 80)
             self._log("FINAL PAGE STATE")
@@ -433,9 +415,7 @@ class FrontendDebugger:
         self._log("=" * 80)
 
         js_requests = [r for r in self.network_requests if r.resource_type == "script"]
-        css_requests = [
-            r for r in self.network_requests if r.resource_type == "stylesheet"
-        ]
+        css_requests = [r for r in self.network_requests if r.resource_type == "stylesheet"]
         api_requests = [r for r in self.network_requests if "/api/" in r.url]
         failed_responses = [r for r in self.network_responses if not r.ok]
 
@@ -510,9 +490,7 @@ class FrontendDebugger:
         # Check for failed network requests
         for resp in self.network_responses:
             if not resp.ok:
-                severity = (
-                    IssueSeverity.CRITICAL if resp.status >= 500 else IssueSeverity.HIGH
-                )
+                severity = IssueSeverity.CRITICAL if resp.status >= 500 else IssueSeverity.HIGH
 
                 issues.append(
                     FrontendIssue(

@@ -75,14 +75,10 @@ def migrate(db_url: str) -> None:
     cursor = conn.cursor()
 
     # Add column if it doesn't exist
-    added = add_column_if_not_exists(
-        cursor, "services", "category", "VARCHAR(20) DEFAULT 'system'"
-    )
+    added = add_column_if_not_exists(cursor, "services", "category", "VARCHAR(20) DEFAULT 'system'")
 
     if not added:
-        logger.info(
-            "Column 'category' already exists. Updating existing NULL values..."
-        )
+        logger.info("Column 'category' already exists. Updating existing NULL values...")
 
     # Get all services and update categories
     logger.info("Auto-categorizing existing services...")

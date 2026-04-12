@@ -56,9 +56,7 @@ class MCPProcessManager:
         if name in self._processes:
             await self.stop(name)
 
-        tmp = tempfile.NamedTemporaryFile(
-            mode="w", suffix=".py", delete=False, encoding="utf-8"
-        )
+        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8")
         tmp.write(skill_py)
         tmp.close()
 

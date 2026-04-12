@@ -63,9 +63,7 @@ class FunctionTracer:
 
                 # Log the call
                 with open(self.output_file, "a") as f:
-                    f.write(
-                        f"{indent}→ {func_name}() [{Path(filename).name}:{lineno}] @{timestamp:.6f}\n"
-                    )
+                    f.write(f"{indent}→ {func_name}() [{Path(filename).name}:{lineno}] @{timestamp:.6f}\n")
 
                 # Print to console for real-time monitoring
                 if len(self.call_stack) <= 5:  # Only show top-level calls

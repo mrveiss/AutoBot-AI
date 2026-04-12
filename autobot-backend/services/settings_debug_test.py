@@ -13,10 +13,9 @@ import requests
 # Add the project root to Python path
 sys.path.insert(0, os.getcwd())
 
-from tests.test_helpers import get_test_backend_url
-
 from config import global_config_manager
 from services.config_service import ConfigService
+from tests.test_helpers import get_test_backend_url
 
 
 async def test_config_service():

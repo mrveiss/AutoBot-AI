@@ -15,6 +15,7 @@ from typing import Any, Dict
 
 import aiohttp
 import requests
+
 from constants.network_constants import NetworkConstants, ServiceURLs
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -37,9 +38,7 @@ class BackendDiagnostic:
             logger.info("🔌 Testing socket connection...")
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.settimeout(3)
-            result = s.connect_ex(
-                (NetworkConstants.LOCALHOST_NAME, NetworkConstants.BACKEND_PORT)
-            )
+            result = s.connect_ex((NetworkConstants.LOCALHOST_NAME, NetworkConstants.BACKEND_PORT))
             s.close()
 
             if result == 0:
@@ -101,9 +100,7 @@ class BackendDiagnostic:
                     status = response.status
                     content_length = len(await response.text())
 
-                    logger.info(
-                        f"✅ Async request: Status {status}, {content_length} bytes in {elapsed:.3f}s"
-                    )
+                    logger.info(f"✅ Async request: Status {status}, {content_length} bytes in {elapsed:.3f}s")
                     return True
 
         except asyncio.TimeoutError:
@@ -128,9 +125,7 @@ class BackendDiagnostic:
             )
 
             elapsed = time.time() - start_time
-            logger.info(
-                f"✅ Sync request: Status {response.status_code} in {elapsed:.3f}s"
-            )
+            logger.info(f"✅ Sync request: Status {response.status_code} in {elapsed:.3f}s")
             return True
 
         except requests.exceptions.Timeout:
@@ -154,9 +149,7 @@ class BackendDiagnostic:
                 async with aiohttp.ClientSession(timeout=timeout) as session:
                     async with session.get(f"{self.base_url}{endpoint}") as response:
                         elapsed = time.time() - start_time
-                        logger.info(
-                            f"✅ {endpoint}: Status {response.status} in {elapsed:.3f}s"
-                        )
+                        logger.info(f"✅ {endpoint}: Status {response.status} in {elapsed:.3f}s")
                         return endpoint, True
             except Exception as e:
                 elapsed = time.time() - start_time
@@ -207,9 +200,7 @@ class BackendDiagnostic:
         working_endpoints = sum(1 for success in endpoint_results.values() if success)
         total_endpoints = len(endpoint_results)
 
-        logger.info(
-            f"\n🎯 Endpoint Tests: {working_endpoints}/{total_endpoints} working"
-        )
+        logger.info(f"\n🎯 Endpoint Tests: {working_endpoints}/{total_endpoints} working")
         for endpoint, success in endpoint_results.items():
             status = "✅ PASS" if success else "❌ FAIL"
             logger.info("   %s: %s", endpoint, status)
@@ -218,22 +209,16 @@ class BackendDiagnostic:
         logger.info("\n🔍 DIAGNOSIS:")
         if socket_ok and not (async_ok or sync_ok):
             logger.info("🔧 Issue appears to be in HTTP/application layer")
-            logger.info(
-                "💡 Possible causes: FastAPI middleware, blocking startup, or request handling"
-            )
+            logger.info("💡 Possible causes: FastAPI middleware, blocking startup, or request handling")
         elif not socket_ok:
             logger.info("🔧 Issue appears to be at network/socket level")
             logger.info("💡 Possible causes: Port binding, firewall, or process issues")
         elif working_endpoints == 0:
             logger.info("🔧 All endpoints failing - likely application-wide issue")
-            logger.info(
-                "💡 Possible causes: Database locks, initialization blocks, or dependency issues"
-            )
+            logger.info("💡 Possible causes: Database locks, initialization blocks, or dependency issues")
         elif working_endpoints < total_endpoints:
             logger.info("🔧 Partial endpoint failure - specific route issues")
-            logger.info(
-                "💡 Possible causes: Middleware on specific routes or dependency timeouts"
-            )
+            logger.info("💡 Possible causes: Middleware on specific routes or dependency timeouts")
         else:
             logger.info("🎉 All tests passing - timeout issue may be intermittent")
 

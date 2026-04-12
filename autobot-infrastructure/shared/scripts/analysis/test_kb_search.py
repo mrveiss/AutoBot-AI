@@ -53,9 +53,7 @@ async def test_kb_search():
 
                 for i, result in enumerate(results):
                     content_preview = (
-                        result["content"][:100] + "..."
-                        if len(result["content"]) > 100
-                        else result["content"]
+                        result["content"][:100] + "..." if len(result["content"]) > 100 else result["content"]
                     )
                     logger.info(f"  Result {i+1}: {content_preview}")
                     logger.info(f"    Metadata: {result.get('metadata', {})}")

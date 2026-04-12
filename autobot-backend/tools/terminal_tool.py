@@ -121,9 +121,7 @@ class TerminalTool:
         )
         return create_result.session_id
 
-    async def _recreate_inactive_session(
-        self, conversation_id: str, old_session_id: str
-    ) -> str:
+    async def _recreate_inactive_session(self, conversation_id: str, old_session_id: str) -> str:
         """Recreate an inactive session. Returns new session_id."""
         from services.command_approval_manager import AgentRole
 
@@ -142,9 +140,7 @@ class TerminalTool:
             f"Session auto-recreated: conversation={conversation_id}, "
             f"agent_session={recreate_result.session_id}, pty_session={recreate_result.pty_session_id}"
         )
-        await self._restore_terminal_history(
-            conversation_id, recreate_result.session_id
-        )
+        await self._restore_terminal_history(conversation_id, recreate_result.session_id)
         return recreate_result.session_id
 
     async def _ensure_active_session(self, conversation_id: str) -> str:
@@ -240,9 +236,7 @@ class TerminalTool:
             }
 
         try:
-            session_info = await self.agent_terminal_service.get_session_info(
-                session_id
-            )
+            session_info = await self.agent_terminal_service.get_session_info(session_id)
 
             if not session_info:
                 return {
@@ -307,11 +301,7 @@ class TerminalTool:
                 return error
 
             # Find user's active terminal session (user_id "default", not agent sessions)
-            user_sessions = [
-                s
-                for s in sessions
-                if s.get("is_active") and s.get("user_id") == "default"
-            ]
+            user_sessions = [s for s in sessions if s.get("is_active") and s.get("user_id") == "default"]
 
             if not user_sessions:
                 return {
@@ -321,9 +311,7 @@ class TerminalTool:
                 }
 
             user_session_id = user_sessions[0]["session_id"]
-            history_data, error = await self._fetch_session_history(
-                backend_url, user_session_id
-            )
+            history_data, error = await self._fetch_session_history(backend_url, user_session_id)
             if error:
                 return error
 
@@ -368,9 +356,7 @@ class TerminalTool:
                 # Remove from active sessions
                 del self.active_sessions[conversation_id]
 
-                logger.info(
-                    f"Closed terminal session for conversation {conversation_id}"
-                )
+                logger.info(f"Closed terminal session for conversation {conversation_id}")
 
                 return {
                     "status": "success",
@@ -396,9 +382,7 @@ class TerminalTool:
         from constants.network_constants import NetworkConstants
 
         # CRITICAL: Use /api/agent-terminal/sessions (not /api/terminal/sessions)
-        backend_url = (
-            f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
-        )
+        backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
 
         http_client = get_http_client()
         async with await http_client.get(
@@ -411,9 +395,7 @@ class TerminalTool:
                 return data.get("sessions", [])
         return []
 
-    async def _restore_session_mapping_from_db(
-        self, conversation_id: str
-    ) -> Optional[str]:
+    async def _restore_session_mapping_from_db(self, conversation_id: str) -> Optional[str]:
         """Restore session ID from database when active_sessions dict is empty (Issue #281 refactor)."""
         try:
             sessions = await self._query_agent_terminal_sessions(conversation_id)
@@ -440,9 +422,7 @@ class TerminalTool:
 
         from constants.network_constants import NetworkConstants
 
-        backend_url = (
-            f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
-        )
+        backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
 
         http_client = get_http_client()
         async with await http_client.get(
@@ -450,9 +430,7 @@ class TerminalTool:
             timeout=aiohttp.ClientTimeout(total=10.0),
         ) as response:
             if response.status != 200:
-                logger.warning(
-                    "Failed to fetch chat history for restoration: %s", response.status
-                )
+                logger.warning("Failed to fetch chat history for restoration: %s", response.status)
                 return []
 
             data = await response.json()
@@ -462,13 +440,10 @@ class TerminalTool:
         return [
             msg
             for msg in messages
-            if msg.get("metadata", {}).get("type") == "command"
-            or "command" in msg.get("content", "").lower()[:50]
+            if msg.get("metadata", {}).get("type") == "command" or "command" in msg.get("content", "").lower()[:50]
         ]
 
-    def _build_restoration_header(
-        self, conversation_id: str, command_count: int
-    ) -> str:
+    def _build_restoration_header(self, conversation_id: str, command_count: int) -> str:
         """Build the restoration header string for terminal display."""
         return (
             "\033[1;36m"  # Cyan bold
@@ -498,9 +473,7 @@ class TerminalTool:
             history_entry = f"\033[90m[{timestamp}]\033[0m {content}\n"
             self.agent_terminal_service._write_to_pty(session, history_entry)
 
-    async def _restore_terminal_history(
-        self, conversation_id: str, session_id: str
-    ) -> None:
+    async def _restore_terminal_history(self, conversation_id: str, session_id: str) -> None:
         """Restore command history to terminal for persistent log (Issue #281 refactor)."""
         try:
             command_messages = await self._fetch_command_messages(conversation_id)
@@ -512,14 +485,10 @@ class TerminalTool:
             # Issue #321: Use delegation method to reduce message chains
             session = self.get_session(session_id)
             if session and session.pty_session_id:
-                header = self._build_restoration_header(
-                    conversation_id, len(command_messages)
-                )
+                header = self._build_restoration_header(conversation_id, len(command_messages))
                 self.agent_terminal_service._write_to_pty(session, header)
                 self._write_history_to_pty(session, command_messages)
-                self.agent_terminal_service._write_to_pty(
-                    session, self._build_restoration_footer()
-                )
+                self.agent_terminal_service._write_to_pty(session, self._build_restoration_footer())
 
             logger.info(
                 "Restored %s command entries to terminal %s",

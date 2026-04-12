@@ -53,18 +53,10 @@ class SkillManifest(BaseModel):
     description: str = Field(..., description="Human-readable description")
     author: str = Field("mrveiss", description="Skill author")
     category: str = Field("general", description="Skill category for grouping")
-    dependencies: List[str] = Field(
-        default_factory=list, description="Names of required skills"
-    )
-    config: Dict[str, SkillConfigField] = Field(
-        default_factory=dict, description="Configuration schema"
-    )
-    tools: List[str] = Field(
-        default_factory=list, description="Tool names this skill provides"
-    )
-    triggers: List[str] = Field(
-        default_factory=list, description="Events this skill responds to"
-    )
+    dependencies: List[str] = Field(default_factory=list, description="Names of required skills")
+    config: Dict[str, SkillConfigField] = Field(default_factory=dict, description="Configuration schema")
+    tools: List[str] = Field(default_factory=list, description="Tool names this skill provides")
+    triggers: List[str] = Field(default_factory=list, description="Events this skill responds to")
     tags: List[str] = Field(default_factory=list, description="Searchable tags")
 
 
@@ -129,9 +121,7 @@ class BaseSkill(ABC):
             value = config.get(field_name)
             if value is not None and field_schema.choices:
                 if value not in field_schema.choices:
-                    errors.append(
-                        f"{field_name}: '{value}' not in {field_schema.choices}"
-                    )
+                    errors.append(f"{field_name}: '{value}' not in {field_schema.choices}")
         return errors
 
     @property

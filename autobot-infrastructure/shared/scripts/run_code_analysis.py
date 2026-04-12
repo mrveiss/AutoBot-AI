@@ -21,13 +21,7 @@ sys.path.insert(0, str(project_root))
 
 def run_code_quality_analysis(target_path: str) -> Dict[str, Any]:
     """Run code quality analysis"""
-    script_path = (
-        project_root
-        / "tools"
-        / "code-analysis-suite"
-        / "scripts"
-        / "analyze_code_quality.py"
-    )
+    script_path = project_root / "tools" / "code-analysis-suite" / "scripts" / "analyze_code_quality.py"
 
     if not script_path.exists():
         return {"error": f"Script not found: {script_path}"}
@@ -66,13 +60,7 @@ def run_code_quality_analysis(target_path: str) -> Dict[str, Any]:
 
 def run_duplicate_analysis(target_path: str) -> Dict[str, Any]:
     """Run duplicate code analysis"""
-    script_path = (
-        project_root
-        / "tools"
-        / "code-analysis-suite"
-        / "scripts"
-        / "analyze_duplicates.py"
-    )
+    script_path = project_root / "tools" / "code-analysis-suite" / "scripts" / "analyze_duplicates.py"
 
     if not script_path.exists():
         return {"error": f"Script not found: {script_path}"}
@@ -104,23 +92,11 @@ def run_duplicate_analysis(target_path: str) -> Dict[str, Any]:
 
 def run_performance_analysis(target_path: str) -> Dict[str, Any]:
     """Run performance analysis"""
-    script_path = (
-        project_root
-        / "tools"
-        / "code-analysis-suite"
-        / "scripts"
-        / "analyze_performance_simple.py"
-    )
+    script_path = project_root / "tools" / "code-analysis-suite" / "scripts" / "analyze_performance_simple.py"
 
     if not script_path.exists():
         # Fallback to regular performance script
-        script_path = (
-            project_root
-            / "tools"
-            / "code-analysis-suite"
-            / "scripts"
-            / "analyze_performance.py"
-        )
+        script_path = project_root / "tools" / "code-analysis-suite" / "scripts" / "analyze_performance.py"
 
     if not script_path.exists():
         return {"error": f"Script not found: {script_path}"}
@@ -151,13 +127,7 @@ def run_performance_analysis(target_path: str) -> Dict[str, Any]:
 
 def run_architecture_analysis(target_path: str) -> Dict[str, Any]:
     """Run architecture analysis"""
-    script_path = (
-        project_root
-        / "tools"
-        / "code-analysis-suite"
-        / "scripts"
-        / "analyze_architecture.py"
-    )
+    script_path = project_root / "tools" / "code-analysis-suite" / "scripts" / "analyze_architecture.py"
 
     if not script_path.exists():
         return {"error": f"Script not found: {script_path}"}
@@ -214,13 +184,8 @@ def run_full_analysis(target_path: str, analysis_type: str = "full") -> Dict[str
     if analysis_type in ["full", "communication_chains", "architecture"]:
         results["architecture"] = run_architecture_analysis(target_path)
         # Extract communication patterns
-        if (
-            "architecture" in results
-            and "communication_patterns" in results["architecture"]
-        ):
-            results["communication_patterns"] = results["architecture"][
-                "communication_patterns"
-            ]
+        if "architecture" in results and "communication_patterns" in results["architecture"]:
+            results["communication_patterns"] = results["architecture"]["communication_patterns"]
 
     # Calculate overall metrics
     if "code_quality" in results and not results["code_quality"].get("error"):

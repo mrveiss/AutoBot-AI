@@ -29,9 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot_shared"))
 from autobot_shared.redis_client import get_redis_client
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -59,9 +57,7 @@ class ActivityBackfiller:
     async def connect_redis(self) -> None:
         """Connect to Redis database"""
         try:
-            self.redis_client = await get_redis_client(
-                async_client=True, database="main"
-            )
+            self.redis_client = await get_redis_client(async_client=True, database="main")
             await self.redis_client.ping()
             logger.info("Connected to Redis successfully")
         except Exception as e:
@@ -108,9 +104,7 @@ class ActivityBackfiller:
             logger.debug(f"Could not get session owner for {session_id}: {e}")
             return None
 
-    async def backfill_message_user_ids(
-        self, session_id: str, session_owner: str
-    ) -> int:
+    async def backfill_message_user_ids(self, session_id: str, session_owner: str) -> int:
         """Backfill user_id for messages in a session.
 
         Args:
@@ -149,10 +143,7 @@ class ActivityBackfiller:
                         user_id = self._infer_message_user_id(message, session_owner)
 
                         if not user_id:
-                            logger.debug(
-                                f"Could not infer user_id for message "
-                                f"in {session_id}"
-                            )
+                            logger.debug(f"Could not infer user_id for message " f"in {session_id}")
                             self.stats["messages_failed"] += 1
                             continue
 
@@ -161,24 +152,17 @@ class ActivityBackfiller:
                         message["backfilled_at"] = datetime.utcnow().isoformat()
 
                         if self.dry_run:
-                            logger.debug(
-                                f"[DRY RUN] Would update message in "
-                                f"{session_id} with user_id: {user_id}"
-                            )
+                            logger.debug(f"[DRY RUN] Would update message in " f"{session_id} with user_id: {user_id}")
                             updated_count += 1
                             continue
 
                         # Update in Redis
                         list_idx = start + idx
-                        await self.redis_client.lset(
-                            messages_key, list_idx, json.dumps(message)
-                        )
+                        await self.redis_client.lset(messages_key, list_idx, json.dumps(message))
                         updated_count += 1
 
                     except Exception as e:
-                        logger.warning(
-                            f"Failed to process message in {session_id}: {e}"
-                        )
+                        logger.warning(f"Failed to process message in {session_id}: {e}")
                         self.stats["messages_failed"] += 1
 
             self.stats["messages_updated"] += updated_count
@@ -188,9 +172,7 @@ class ActivityBackfiller:
             logger.error(f"Failed to backfill messages for {session_id}: {e}")
             return 0
 
-    def _infer_message_user_id(
-        self, message: Dict, session_owner: str
-    ) -> Optional[str]:
+    def _infer_message_user_id(self, message: Dict, session_owner: str) -> Optional[str]:
         """Infer user_id from message data.
 
         Args:
@@ -222,9 +204,7 @@ class ActivityBackfiller:
         # Default to session owner for unattributed user messages
         return session_owner
 
-    async def backfill_session_activities(
-        self, session_id: str, session_owner: str
-    ) -> int:
+    async def backfill_session_activities(self, session_id: str, session_owner: str) -> int:
         """Backfill user_id for activities in a session.
 
         Args:
@@ -265,17 +245,14 @@ class ActivityBackfiller:
                     # Use session owner as user_id
                     if self.dry_run:
                         logger.debug(
-                            f"[DRY RUN] Would update activity "
-                            f"{activity_key} with user_id: {session_owner}"
+                            f"[DRY RUN] Would update activity " f"{activity_key} with user_id: {session_owner}"
                         )
                         updated_count += 1
                         continue
 
                     # Update activity
                     await self.redis_client.hset(activity_key, "user_id", session_owner)
-                    await self.redis_client.hset(
-                        activity_key, "backfilled_at", datetime.utcnow().isoformat()
-                    )
+                    await self.redis_client.hset(activity_key, "backfilled_at", datetime.utcnow().isoformat())
                     updated_count += 1
 
                 except Exception as e:
@@ -313,15 +290,10 @@ class ActivityBackfiller:
             msg_count = await self.backfill_message_user_ids(session_id, session_owner)
 
             # Backfill activities
-            act_count = await self.backfill_session_activities(
-                session_id, session_owner
-            )
+            act_count = await self.backfill_session_activities(session_id, session_owner)
 
             if msg_count > 0 or act_count > 0:
-                logger.info(
-                    f"Session {session_id}: updated {msg_count} messages, "
-                    f"{act_count} activities"
-                )
+                logger.info(f"Session {session_id}: updated {msg_count} messages, " f"{act_count} activities")
 
         # Print statistics
         logger.info("\n" + "=" * 60)
@@ -338,12 +310,8 @@ class ActivityBackfiller:
 
 async def main():
     """Main entry point"""
-    parser = argparse.ArgumentParser(
-        description="Backfill user_id for messages and activities"
-    )
-    parser.add_argument(
-        "--dry-run", action="store_true", help="Report changes without applying them"
-    )
+    parser = argparse.ArgumentParser(description="Backfill user_id for messages and activities")
+    parser.add_argument("--dry-run", action="store_true", help="Report changes without applying them")
     args = parser.parse_args()
 
     backfiller = ActivityBackfiller(dry_run=args.dry_run)

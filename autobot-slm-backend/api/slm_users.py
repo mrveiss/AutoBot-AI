@@ -17,11 +17,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from services.auth import require_admin
 from user_management.database import get_slm_session
 from user_management.schemas.user import (
+    PasswordChange,
     UserCreate,
     UserListResponse,
     UserResponse,
     UserUpdate,
-    PasswordChange,
 )
 from user_management.services import TenantContext, UserService
 from user_management.services.user_service import UserNotFoundError
@@ -58,9 +58,7 @@ async def create_slm_user(
         return UserResponse.model_validate(user)
     except Exception as e:
         logger.error("Failed to create SLM user: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Internal server error"
-        ) from e
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Internal server error") from e
 
 
 @router.get("", response_model=UserListResponse)
@@ -76,9 +74,7 @@ async def list_slm_users(
     context = TenantContext(is_platform_admin=True)
     user_service = UserService(db, context)
 
-    users, total = await user_service.list_users(
-        limit=limit, offset=skip, search=search
-    )
+    users, total = await user_service.list_users(limit=limit, offset=skip, search=search)
     return UserListResponse(
         users=[UserResponse.model_validate(user) for user in users],
         total=total,
@@ -99,9 +95,7 @@ async def get_slm_user(
 
     user = await user_service.get_user(user_id)
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return UserResponse.model_validate(user)
 
 
@@ -130,9 +124,7 @@ async def update_slm_user(
         return UserResponse.model_validate(user)
     except Exception as e:
         logger.error("Failed to update SLM user: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error"
-        ) from e
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error") from e
 
 
 @router.post("/{user_id}/change-password", status_code=status.HTTP_200_OK)
@@ -174,6 +166,4 @@ async def delete_slm_user(
         await user_service.delete_user(user_id)
     except Exception as e:
         logger.error("Failed to delete SLM user: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error"
-        ) from e
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error") from e

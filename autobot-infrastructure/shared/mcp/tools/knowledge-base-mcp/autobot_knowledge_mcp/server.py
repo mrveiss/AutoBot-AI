@@ -58,9 +58,7 @@ class SearchRequest(BaseModel):
 
     query: str = Field(..., description="Search query text")
     top_k: int = Field(5, description="Number of results to return", ge=1, le=50)
-    threshold: float = Field(
-        0.0, description="Minimum similarity threshold", ge=0.0, le=1.0
-    )
+    threshold: float = Field(0.0, description="Minimum similarity threshold", ge=0.0, le=1.0)
 
 
 class AddDocumentRequest(BaseModel):
@@ -68,9 +66,7 @@ class AddDocumentRequest(BaseModel):
 
     content: str = Field(..., description="Document content to add")
     source: str = Field("mcp-client", description="Source identifier")
-    metadata: dict[str, Any] = Field(
-        default_factory=dict, description="Optional metadata"
-    )
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Optional metadata")
 
 
 class SummarizeRequest(BaseModel):
@@ -135,9 +131,7 @@ class KnowledgeBaseMCPServer:
                     )
                 ]
 
-    async def _dispatch_tool_call(
-        self, name: str, arguments: dict[str, Any]
-    ) -> list[TextContent]:
+    async def _dispatch_tool_call(self, name: str, arguments: dict[str, Any]) -> list[TextContent]:
         """Dispatch tool call to appropriate handler. Helper for _setup_handlers (Issue #665)."""
         handlers = {
             "search_knowledge": self._search_knowledge,
@@ -309,9 +303,7 @@ class KnowledgeBaseMCPServer:
             json={
                 "query": request.query,
                 "top_k": request.top_k,
-                "filters": (
-                    {"threshold": request.threshold} if request.threshold > 0 else None
-                ),
+                "filters": ({"threshold": request.threshold} if request.threshold > 0 else None),
             },
         )
         response.raise_for_status()
@@ -340,9 +332,7 @@ class KnowledgeBaseMCPServer:
             content = result.get("content", "")[:500]
             score = result.get("score", 0)
             source = result.get("source", "unknown")
-            formatted.append(
-                f"\n---\n**Result {i}** (score: {score:.3f}, source: {source})\n{content}"
-            )
+            formatted.append(f"\n---\n**Result {i}** (score: {score:.3f}, source: {source})\n{content}")
 
         return [TextContent(type="text", text="".join(formatted))]
 

@@ -89,12 +89,7 @@ class E501Fixer:
             return [line]
 
         # Find split point
-        target = (
-            self.max_length
-            - len(leading_space)
-            - len(logger_call)
-            - (3 if is_fstring else 2)
-        )
+        target = self.max_length - len(leading_space) - len(logger_call) - (3 if is_fstring else 2)
         split_pos = self.find_split_point(content, target)
 
         if split_pos == -1 or split_pos < 20:
@@ -139,12 +134,7 @@ class E501Fixer:
             return [line]
 
         # Find split point
-        target = (
-            self.max_length
-            - len(leading_space)
-            - len(assignment)
-            - (3 if is_fstring else 2)
-        )
+        target = self.max_length - len(leading_space) - len(assignment) - (3 if is_fstring else 2)
         split_pos = self.find_split_point(content, target)
 
         if split_pos == -1 or split_pos < 20:

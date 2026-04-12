@@ -73,8 +73,7 @@ async def _test_sample_document(kb):
 
     test_file = "/tmp/test_kb_doc.md"
     with open(test_file, "w") as f:
-        f.write(
-            """
+        f.write("""
 # AutoBot Documentation Test
 
 AutoBot is an autonomous AI agent platform designed for enterprise use.
@@ -88,8 +87,7 @@ AutoBot is an autonomous AI agent platform designed for enterprise use.
 
 ## Installation
 To install AutoBot, follow the setup guide in the README.
-"""
-        )
+""")
 
     result = await kb.add_file(
         file_path=test_file,

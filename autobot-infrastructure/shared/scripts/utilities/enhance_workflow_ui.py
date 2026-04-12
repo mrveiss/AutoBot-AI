@@ -794,12 +794,8 @@ def main():
 
     print("\n📋 Usage Instructions:")
     print("1. Import components in your main App.vue:")
-    print(
-        "   import WorkflowNotifications from './components/WorkflowNotifications.vue'"
-    )
-    print(
-        "   import WorkflowProgressWidget from './components/WorkflowProgressWidget.vue'"
-    )
+    print("   import WorkflowNotifications from './components/WorkflowNotifications.vue'")
+    print("   import WorkflowProgressWidget from './components/WorkflowProgressWidget.vue'")
     print("")
     print("2. Add to template:")
     print("   <WorkflowNotifications :workflow-id='activeWorkflowId' />")

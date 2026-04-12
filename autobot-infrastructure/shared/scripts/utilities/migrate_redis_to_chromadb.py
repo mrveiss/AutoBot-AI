@@ -46,9 +46,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from knowledge_base import KnowledgeBase
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level tuple for JSON-serializable types
@@ -161,9 +159,7 @@ class RedisToChromaDBMigration:
         """
         try:
             # Query Redis index information
-            index_info = self.redis_kb.redis_client.execute_command(
-                "FT.INFO", "llama_index"
-            )
+            index_info = self.redis_kb.redis_client.execute_command("FT.INFO", "llama_index")
 
             # Parse dimension from index info
             for i, item in enumerate(index_info):
@@ -184,9 +180,7 @@ class RedisToChromaDBMigration:
         """Get total number of vectors in Redis using FT.INFO"""
         try:
             # Query Redis index info directly for accurate count
-            index_info = self.redis_kb.redis_client.execute_command(
-                "FT.INFO", "llama_index"
-            )
+            index_info = self.redis_kb.redis_client.execute_command("FT.INFO", "llama_index")
 
             # Parse num_docs from index info
             for i, item in enumerate(index_info):
@@ -201,9 +195,7 @@ class RedisToChromaDBMigration:
             logger.error("Failed to get Redis vector count: %s", e)
             return 0
 
-    def _decode_field_value(
-        self, field_name: str, field_value, field_dict: Dict
-    ) -> bool:
+    def _decode_field_value(self, field_name: str, field_value, field_dict: Dict) -> bool:
         """Decode and store field value (Issue #315: extracted helper)."""
         if isinstance(field_name, bytes):
             field_name = field_name.decode()
@@ -246,9 +238,7 @@ class RedisToChromaDBMigration:
                 metadata[key] = str(value)
         return metadata
 
-    def _process_single_document(
-        self, doc_key, doc_fields: Dict
-    ) -> Optional[Tuple[str, List[float], str, Dict]]:
+    def _process_single_document(self, doc_key, doc_fields: Dict) -> Optional[Tuple[str, List[float], str, Dict]]:
         """Process single Redis document (Issue #315: extracted helper)."""
         if isinstance(doc_key, bytes):
             doc_key = doc_key.decode()
@@ -389,9 +379,7 @@ class RedisToChromaDBMigration:
                 logger.warning("No vector IDs found in Redis for verification")
                 logger.info("Verifying by comparing total counts instead...")
                 chroma_count = self.chroma_collection.count()
-                logger.info(
-                    "ChromaDB count: %s, Expected: %s", chroma_count, self.total_vectors
-                )
+                logger.info("ChromaDB count: %s, Expected: %s", chroma_count, self.total_vectors)
                 return chroma_count == self.total_vectors
 
             sample_ids = np.random.choice(all_ids, sample_size, replace=False)
@@ -404,9 +392,7 @@ class RedisToChromaDBMigration:
                     continue
 
                 # Get from ChromaDB
-                chroma_result = self.chroma_collection.get(
-                    ids=[doc_id], include=["embeddings"]
-                )
+                chroma_result = self.chroma_collection.get(ids=[doc_id], include=["embeddings"])
 
                 if not chroma_result["embeddings"]:
                     logger.warning("Doc %s not found in ChromaDB", doc_id)
@@ -419,9 +405,7 @@ class RedisToChromaDBMigration:
                     matches += 1
 
             accuracy = matches / sample_size * 100
-            logger.info(
-                "Verification: %s/%s matches (%.1f%%)", matches, sample_size, accuracy
-            )
+            logger.info("Verification: %s/%s matches (%.1f%%)", matches, sample_size, accuracy)
 
             return accuracy > 95  # Require >95% match
 
@@ -446,25 +430,19 @@ class RedisToChromaDBMigration:
         logger.info("\nBatch %s: SCAN cursor=%s", batch_num, cursor)
 
         # Export from Redis using SCAN
-        cursor, ids, embeddings, documents, metadatas = await self.export_vectors_batch(
-            cursor, self.batch_size
-        )
+        cursor, ids, embeddings, documents, metadatas = await self.export_vectors_batch(cursor, self.batch_size)
 
         if not ids:
             logger.warning("No vectors exported in batch %s", batch_num)
             return cursor, 0, time.time() - batch_start
 
         # Import to ChromaDB
-        imported_count = await self.import_vectors_batch(
-            ids, embeddings, documents, metadatas
-        )
+        imported_count = await self.import_vectors_batch(ids, embeddings, documents, metadatas)
 
         batch_time = time.time() - batch_start
         return cursor, imported_count, batch_time
 
-    def _log_batch_progress(
-        self, batch_num: int, imported_count: int, batch_time: float
-    ):
+    def _log_batch_progress(self, batch_num: int, imported_count: int, batch_time: float):
         """
         Log batch migration progress.
 
@@ -477,11 +455,7 @@ class RedisToChromaDBMigration:
         """
         self.migrated_vectors += imported_count
 
-        progress = (
-            (self.migrated_vectors / self.total_vectors) * 100
-            if self.total_vectors > 0
-            else 0
-        )
+        progress = (self.migrated_vectors / self.total_vectors) * 100 if self.total_vectors > 0 else 0
 
         logger.info(
             f"✅ Batch {batch_num} complete: {imported_count} vectors "
@@ -515,9 +489,7 @@ class RedisToChromaDBMigration:
         while True:
             batch_num += 1
 
-            cursor, imported_count, batch_time = await self._migrate_single_batch(
-                batch_num, cursor
-            )
+            cursor, imported_count, batch_time = await self._migrate_single_batch(batch_num, cursor)
 
             if imported_count > 0:
                 self._log_batch_progress(batch_num, imported_count, batch_time)
@@ -566,21 +538,13 @@ async def main():
     """Main entry point"""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Migrate vectors from Redis to ChromaDB"
-    )
-    parser.add_argument(
-        "--dry-run", action="store_true", help="Test without making changes"
-    )
-    parser.add_argument(
-        "--batch-size", type=int, default=1000, help="Vectors per batch"
-    )
+    parser = argparse.ArgumentParser(description="Migrate vectors from Redis to ChromaDB")
+    parser.add_argument("--dry-run", action="store_true", help="Test without making changes")
+    parser.add_argument("--batch-size", type=int, default=1000, help="Vectors per batch")
     parser.add_argument("--verify", action="store_true", help="Verify after migration")
     args = parser.parse_args()
 
-    migration = RedisToChromaDBMigration(
-        batch_size=args.batch_size, dry_run=args.dry_run
-    )
+    migration = RedisToChromaDBMigration(batch_size=args.batch_size, dry_run=args.dry_run)
 
     try:
         await migration.initialize()

@@ -43,24 +43,16 @@ class UserCreate(BaseModel):
         max_length=128,
         description="Password (8-128 characters, optional for SSO users)",
     )
-    display_name: Optional[str] = Field(
-        None, max_length=255, description="Display name"
-    )
-    org_id: Optional[uuid.UUID] = Field(
-        None, description="Organization ID (uses current context if not provided)"
-    )
-    role_ids: Optional[List[uuid.UUID]] = Field(
-        None, description="List of role IDs to assign"
-    )
+    display_name: Optional[str] = Field(None, max_length=255, description="Display name")
+    org_id: Optional[uuid.UUID] = Field(None, description="Organization ID (uses current context if not provided)")
+    role_ids: Optional[List[uuid.UUID]] = Field(None, description="List of role IDs to assign")
 
     @field_validator("username")
     @classmethod
     def validate_username(cls, v: str) -> str:
         """Validate username format."""
         if not re.match(r"^[a-zA-Z0-9_]+$", v):
-            raise ValueError(
-                "Username must contain only letters, numbers, and underscores"
-            )
+            raise ValueError("Username must contain only letters, numbers, and underscores")
         return v.lower()
 
     @field_validator("password")
@@ -84,12 +76,8 @@ class UserUpdate(BaseModel):
     """Request model for updating a user."""
 
     email: Optional[EmailStr] = Field(None, description="New email address")
-    username: Optional[str] = Field(
-        None, min_length=3, max_length=100, description="New username"
-    )
-    display_name: Optional[str] = Field(
-        None, max_length=255, description="Display name"
-    )
+    username: Optional[str] = Field(None, min_length=3, max_length=100, description="New username")
+    display_name: Optional[str] = Field(None, max_length=255, description="Display name")
     bio: Optional[str] = Field(None, max_length=500, description="User bio")
     avatar_url: Optional[str] = Field(None, max_length=500, description="Avatar URL")
     preferences: Optional[dict] = Field(None, description="User preferences")
@@ -101,9 +89,7 @@ class UserUpdate(BaseModel):
         if v is None:
             return v
         if not re.match(r"^[a-zA-Z0-9_]+$", v):
-            raise ValueError(
-                "Username must contain only letters, numbers, and underscores"
-            )
+            raise ValueError("Username must contain only letters, numbers, and underscores")
         return v.lower()
 
 
@@ -143,21 +129,15 @@ class UserListResponse(BaseModel):
 class UserLogin(BaseModel):
     """Request model for user login."""
 
-    username_or_email: str = Field(
-        ..., min_length=3, description="Username or email address"
-    )
+    username_or_email: str = Field(..., min_length=3, description="Username or email address")
     password: str = Field(..., min_length=1, description="Password")
 
 
 class PasswordChange(BaseModel):
     """Request model for changing password."""
 
-    current_password: Optional[str] = Field(
-        None, description="Current password (required unless admin reset)"
-    )
-    new_password: str = Field(
-        ..., min_length=8, max_length=128, description="New password"
-    )
+    current_password: Optional[str] = Field(None, description="Current password (required unless admin reset)")
+    new_password: str = Field(..., min_length=8, max_length=128, description="New password")
 
     @field_validator("new_password")
     @classmethod

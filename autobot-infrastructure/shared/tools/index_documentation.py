@@ -395,9 +395,7 @@ def _process_h2_sections(
             )
 
         # Process H3 subsections
-        _process_h3_subsections(
-            h3_splits, section_name, file_path, doc_type, category, doc_title, chunks
-        )
+        _process_h3_subsections(h3_splits, section_name, file_path, doc_type, category, doc_title, chunks)
 
 
 def chunk_markdown(content: str, file_path: str) -> List[Dict[str, Any]]:
@@ -442,9 +440,7 @@ def chunk_markdown(content: str, file_path: str) -> List[Dict[str, Any]]:
 
     # If no chunks created (no headers), chunk by paragraphs
     if not chunks and content.strip():
-        _chunk_large_content(
-            content, "Content", None, file_path, doc_type, category, doc_title, chunks
-        )
+        _chunk_large_content(content, "Content", None, file_path, doc_type, category, doc_title, chunks)
 
     return chunks
 
@@ -538,18 +534,14 @@ class ChromaDBIndexer:
         )
 
         # Initialize embedding model
-        self.embed_model = OllamaEmbedding(
-            model_name="nomic-embed-text", base_url="http://127.0.0.1:11434"
-        )
+        self.embed_model = OllamaEmbedding(model_name="nomic-embed-text", base_url="http://127.0.0.1:11434")
 
         logger.info(
             f"ChromaDB indexer initialized: collection='{self.collection_name}', "
             f"existing vectors={self.collection.count()}"
         )
 
-    def add_document(
-        self, content: str, metadata: Dict[str, Any], doc_id: str
-    ) -> Dict[str, Any]:
+    def add_document(self, content: str, metadata: Dict[str, Any], doc_id: str) -> Dict[str, Any]:
         """Add a document to ChromaDB."""
         try:
             # Generate embedding
@@ -606,9 +598,7 @@ def _index_chunks(indexer, chunks, rel_path, file_tags, tier, priority_map, dry_
     """
     indexed_count = 0
     for i, chunk in enumerate(chunks):
-        chunk_id = hashlib.md5(
-            f"{rel_path}:{chunk['section']}:{i}".encode()
-        ).hexdigest()[:12]
+        chunk_id = hashlib.md5(f"{rel_path}:{chunk['section']}:{i}".encode()).hexdigest()[:12]
 
         metadata = {
             "source": "autobot_documentation",
@@ -633,21 +623,15 @@ def _index_chunks(indexer, chunks, rel_path, file_tags, tier, priority_map, dry_
             )
             indexed_count += 1
         else:
-            result = indexer.add_document(
-                content=chunk["content"], metadata=metadata, doc_id=chunk_id
-            )
+            result = indexer.add_document(content=chunk["content"], metadata=metadata, doc_id=chunk_id)
             if result.get("status") == "success":
                 indexed_count += 1
             else:
-                logger.warning(
-                    f"  Failed to index chunk {i+1}: {result.get('message')}"
-                )
+                logger.warning(f"  Failed to index chunk {i+1}: {result.get('message')}")
     return indexed_count
 
 
-def index_file_sync(
-    indexer: ChromaDBIndexer, file_path: str, tier: int, dry_run: bool = False
-) -> Dict[str, Any]:
+def index_file_sync(indexer: ChromaDBIndexer, file_path: str, tier: int, dry_run: bool = False) -> Dict[str, Any]:
     """
     Index a single documentation file (synchronous version).
 
@@ -680,9 +664,7 @@ def index_file_sync(
 
         priority_map = {1: "critical", 2: "high", 3: "medium"}
 
-        indexed_count = _index_chunks(
-            indexer, chunks, rel_path, file_tags, tier, priority_map, dry_run
-        )
+        indexed_count = _index_chunks(indexer, chunks, rel_path, file_tags, tier, priority_map, dry_run)
 
         return {
             "status": "success" if not dry_run else "dry_run",
@@ -797,9 +779,7 @@ def _discover_index_files(file: Optional[str], tier: Optional[int]) -> list:
         return discover_files(PROJECT_ROOT, tier)
 
 
-def _handle_incremental_mode(
-    files: list, file: Optional[str], start_time: float, dry_run: bool
-):
+def _handle_incremental_mode(files: list, file: Optional[str], start_time: float, dry_run: bool):
     """Handle incremental indexing mode.
 
     Helper for index_documentation (Issue #825).
@@ -1011,9 +991,7 @@ Examples:
         """,
     )
 
-    parser.add_argument(
-        "--full", action="store_true", help="Index all documentation (Tiers 1-3)"
-    )
+    parser.add_argument("--full", action="store_true", help="Index all documentation (Tiers 1-3)")
     parser.add_argument(
         "--tier",
         type=int,
@@ -1047,9 +1025,7 @@ Examples:
         default=5,
         help="Number of search results to return (default: 5)",
     )
-    parser.add_argument(
-        "--verbose", "-v", action="store_true", help="Enable verbose logging"
-    )
+    parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose logging")
 
     return parser
 
@@ -1079,9 +1055,7 @@ def main():
 
     if not any([args.full, args.tier, args.file]):
         parser.print_help()
-        logger.info(
-            "\nError: Must specify --full, --tier, --file, --incremental, --search, or --stats"
-        )
+        logger.info("\nError: Must specify --full, --tier, --file, --incremental, --search, or --stats")
         sys.exit(1)
 
     # Run indexing

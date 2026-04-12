@@ -181,9 +181,7 @@ def test_invalid_email_rejected():
 
 def test_invalid_slack_url_rejected():
     with pytest.raises(ValidationError, match="https://hooks.slack.com/"):
-        NotificationConfigRequest(
-            slack_webhook_url="https://discord.com/api/webhooks/xyz"
-        )
+        NotificationConfigRequest(slack_webhook_url="https://discord.com/api/webhooks/xyz")
 
 
 def test_non_https_webhook_rejected():

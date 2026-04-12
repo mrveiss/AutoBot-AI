@@ -20,11 +20,7 @@ class ConsoleLogCleaner:
 
     def __init__(self, project_root: str, backup_dir: str = None):
         self.project_root = Path(project_root)
-        self.backup_dir = (
-            Path(backup_dir)
-            if backup_dir
-            else self.project_root / ".console-cleanup-backups"
-        )
+        self.backup_dir = Path(backup_dir) if backup_dir else self.project_root / ".console-cleanup-backups"
         self.report = {
             "timestamp": datetime.now().isoformat(),
             "files_processed": 0,
@@ -85,9 +81,7 @@ class ConsoleLogCleaner:
             return False
 
         # Skip test files
-        if any(
-            pattern in file_path.name.lower() for pattern in ["test", "spec", "mock"]
-        ):
+        if any(pattern in file_path.name.lower() for pattern in ["test", "spec", "mock"]):
             return False
 
         # Skip minified files
@@ -122,11 +116,7 @@ class ConsoleLogCleaner:
 
             # Skip if line is in comments
             stripped = line.strip()
-            if (
-                stripped.startswith("//")
-                or stripped.startswith("*")
-                or stripped.startswith("/*")
-            ):
+            if stripped.startswith("//") or stripped.startswith("*") or stripped.startswith("/*"):
                 continue
 
             # Find console.log occurrences in this line
@@ -168,9 +158,7 @@ class ConsoleLogCleaner:
                 else:
                     # Multiline statement - use simpler approach for now
                     # Look for the end of the statement in subsequent lines
-                    multiline_match = self.find_multiline_console_log(
-                        content, start_pos
-                    )
+                    multiline_match = self.find_multiline_console_log(content, start_pos)
                     if multiline_match:
                         console_logs.append(multiline_match)
 
@@ -197,9 +185,7 @@ class ConsoleLogCleaner:
 
         return single_quotes % 2 == 1 or double_quotes % 2 == 1
 
-    def find_multiline_console_log(
-        self, content: str, start_pos: int
-    ) -> Tuple[int, int, str]:
+    def find_multiline_console_log(self, content: str, start_pos: int) -> Tuple[int, int, str]:
         """Find multiline console.log statement."""
         # Simple approach: look for next semicolon or end of block
         search_pos = start_pos
@@ -226,9 +212,7 @@ class ConsoleLogCleaner:
                             end_pos += 1
                         return (start_pos, end_pos, content[start_pos:end_pos])
             else:
-                if char == string_char and (
-                    search_pos == 0 or content[search_pos - 1] != "\\"
-                ):
+                if char == string_char and (search_pos == 0 or content[search_pos - 1] != "\\"):
                     in_string = False
                     string_char = None
 
@@ -294,14 +278,10 @@ class ConsoleLogCleaner:
             line_content = content[line_start:line_end].strip()
 
             # If the line only contains the console.log, remove the entire line
-            if line_content == match.strip() or line_content == match.strip().rstrip(
-                ";"
-            ):
+            if line_content == match.strip() or line_content == match.strip().rstrip(";"):
                 # Remove entire line including newline
                 if line_end < len(content):
-                    modified_content = (
-                        modified_content[:line_start] + modified_content[line_end + 1 :]
-                    )
+                    modified_content = modified_content[:line_start] + modified_content[line_end + 1 :]
                 else:
                     # Last line, just remove from line start
                     modified_content = modified_content[:line_start].rstrip() + "\n"
@@ -316,9 +296,7 @@ class ConsoleLogCleaner:
             if len(log_content) > 50:
                 log_content = log_content[:50] + "..."
 
-            removed_details.append(
-                {"line": content[:start].count("\n") + 1, "content": log_content}
-            )
+            removed_details.append({"line": content[:start].count("\n") + 1, "content": log_content})
 
         # Store details for report
         if removed_count > 0:
@@ -340,9 +318,7 @@ class ConsoleLogCleaner:
                 original_content = f.read()
 
             # Remove console.logs
-            modified_content, removed_count = self.remove_console_logs(
-                original_content, file_path
-            )
+            modified_content, removed_count = self.remove_console_logs(original_content, file_path)
 
             # If content changed, write back
             if removed_count > 0:
@@ -359,9 +335,7 @@ class ConsoleLogCleaner:
             return False
 
         except Exception as e:
-            self.report["errors"].append(
-                {"file": str(file_path.relative_to(self.project_root)), "error": str(e)}
-            )
+            self.report["errors"].append({"file": str(file_path.relative_to(self.project_root)), "error": str(e)})
             return False
 
     def clean_project(self, target_dir: str = None) -> Dict:
@@ -417,20 +391,14 @@ Generated: {self.report['timestamp']}
 """
 
         # Add details for each modified file
-        for detail in sorted(
-            self.report["details"], key=lambda x: x["removed_count"], reverse=True
-        ):
+        for detail in sorted(self.report["details"], key=lambda x: x["removed_count"], reverse=True):
             report_content += f"\n### {detail['file']}\n"
-            report_content += (
-                f"- Removed {detail['removed_count']} console.log statements\n"
-            )
+            report_content += f"- Removed {detail['removed_count']} console.log statements\n"
             report_content += "- Locations:\n"
             for log in detail["removed_logs"][:5]:  # Show first 5
                 report_content += f"  - Line {log['line']}: `{log['content']}`\n"
             if len(detail["removed_logs"]) > 5:
-                report_content += (
-                    f"  - ... and {len(detail['removed_logs']) - 5} more\n"
-                )
+                report_content += f"  - ... and {len(detail['removed_logs']) - 5} more\n"
 
         # Add errors if any
         if self.report["errors"]:
@@ -471,15 +439,9 @@ All modified files have been backed up to: `{}`
 
 def main():
     """Main entry point for the console.log cleanup tool."""
-    parser = argparse.ArgumentParser(
-        description="Remove console.log statements from JavaScript/TypeScript/Vue files"
-    )
-    parser.add_argument(
-        "project_path", help="Path to the project root or specific directory to clean"
-    )
-    parser.add_argument(
-        "--target-dir", help="Specific directory to clean (e.g., src/)", default=None
-    )
+    parser = argparse.ArgumentParser(description="Remove console.log statements from JavaScript/TypeScript/Vue files")
+    parser.add_argument("project_path", help="Path to the project root or specific directory to clean")
+    parser.add_argument("--target-dir", help="Specific directory to clean (e.g., src/)", default=None)
     parser.add_argument("--backup-dir", help="Directory to store backups", default=None)
     parser.add_argument("--report", help="Path for the cleanup report", default=None)
     parser.add_argument(

@@ -83,9 +83,7 @@ class CriticalEnvAnalyzer:
         path_str = str(file_path)
         return any(pattern in path_str for pattern in skip_patterns)
 
-    def _find_pattern_in_file(
-        self, file_path: Path, pattern: str, category: str
-    ) -> List[Dict[str, Any]]:
+    def _find_pattern_in_file(self, file_path: Path, pattern: str, category: str) -> List[Dict[str, Any]]:
         """Find pattern matches in a file"""
         matches = []
 
@@ -192,9 +190,7 @@ async def main():
     # Show results by category
     for category, matches in results.items():
         if matches:
-            print(
-                f"🏷️  **{category.replace('_', ' ').title()} ({len(matches)} found):**"
-            )
+            print(f"🏷️  **{category.replace('_', ' ').title()} ({len(matches)} found):**")
 
             # Group by suggested environment variable
             by_env_var = {}
@@ -207,9 +203,7 @@ async def main():
             for env_var, env_matches in by_env_var.items():
                 print(f"   → {env_var}:")
                 for match in env_matches[:5]:  # Show first 5
-                    print(
-                        f"     • {match['file']}:{match['line']} = '{match['value']}'"
-                    )
+                    print(f"     • {match['file']}:{match['line']} = '{match['value']}'")
                     print(f"       Context: {match['context']}")
                 if len(env_matches) > 5:
                     print(f"     ... and {len(env_matches) - 5} more")
@@ -262,9 +256,7 @@ async def main():
                         "title": "Database Path Configuration",
                         "file": match["file"],
                         "before": match["context"],
-                        "after": match["context"].replace(
-                            f'"{match["value"]}"', 'config.get("database.path")'
-                        ),
+                        "after": match["context"].replace(f'"{match["value"]}"', 'config.get("database.path")'),
                         "env_var": "AUTOBOT_DATABASE_PATH=data/knowledge_base.db",
                     }
                 )
@@ -278,9 +270,7 @@ async def main():
                         "title": "Backend Port Configuration",
                         "file": match["file"],
                         "before": match["context"],
-                        "after": match["context"].replace(
-                            match["value"], 'config.get("backend.port")'
-                        ),
+                        "after": match["context"].replace(match["value"], 'config.get("backend.port")'),
                         "env_var": "AUTOBOT_BACKEND_PORT=8001",
                     }
                 )

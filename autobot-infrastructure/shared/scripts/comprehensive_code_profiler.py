@@ -34,9 +34,7 @@ class CodebaseProfiler:
 
     def __init__(self, project_root: str = None):
         """Initialize profiler with project root and results containers."""
-        self.project_root = Path(
-            project_root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        )
+        self.project_root = Path(project_root or os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         self.results = {
             "static_analysis": {},
             "runtime_profiling": {},
@@ -58,9 +56,7 @@ class CodebaseProfiler:
         ]
         return any(skip in str(py_file) for skip in skip_patterns)
 
-    def _process_function_node(
-        self, node: ast.FunctionDef, py_file: Path, patterns: Dict[str, Any]
-    ) -> None:
+    def _process_function_node(self, node: ast.FunctionDef, py_file: Path, patterns: Dict[str, Any]) -> None:
         """Process a function definition node (Issue #315: extracted helper)."""
         patterns["function_definitions"][node.name] += 1
         patterns["duplicate_functions"][node.name].append(str(py_file))
@@ -76,9 +72,7 @@ class CodebaseProfiler:
                 }
             )
 
-    def _process_ast_node(
-        self, node: ast.AST, py_file: Path, patterns: Dict[str, Any]
-    ) -> None:
+    def _process_ast_node(self, node: ast.AST, py_file: Path, patterns: Dict[str, Any]) -> None:
         """Process a single AST node (Issue #315: extracted helper)."""
         if isinstance(node, ast.FunctionDef):
             self._process_function_node(node, py_file, patterns)
@@ -119,11 +113,7 @@ class CodebaseProfiler:
             "duplicate_functions": defaultdict(list),
         }
 
-        python_files = [
-            py_file
-            for py_file in self.project_root.rglob("*.py")
-            if not self._should_skip_path(py_file)
-        ]
+        python_files = [py_file for py_file in self.project_root.rglob("*.py") if not self._should_skip_path(py_file)]
 
         print(f"Found {len(python_files)} Python files to analyze")
 
@@ -136,11 +126,7 @@ class CodebaseProfiler:
             self._analyze_single_file(py_file, patterns)
 
         # Find truly duplicate functions (same name in multiple files)
-        actual_duplicates = {
-            name: files
-            for name, files in patterns["duplicate_functions"].items()
-            if len(files) > 1
-        }
+        actual_duplicates = {name: files for name, files in patterns["duplicate_functions"].items() if len(files) > 1}
         patterns["duplicate_functions"] = actual_duplicates
 
         self.results["static_analysis"] = patterns
@@ -220,9 +206,7 @@ class CodebaseProfiler:
                             "name": name,
                             "args": len(inspect.signature(obj).parameters),
                             "docstring": bool(obj.__doc__),
-                            "file": inspect.getfile(obj)
-                            if hasattr(obj, "__file__")
-                            else None,
+                            "file": inspect.getfile(obj) if hasattr(obj, "__file__") else None,
                         }
                     )
         except Exception as e:
@@ -236,9 +220,7 @@ class CodebaseProfiler:
 
         try:
             stats_list = stats.get_stats_profile().func_profiles
-            sorted_stats = sorted(
-                stats_list.items(), key=lambda x: x[1].cumtime, reverse=True
-            )[:limit]
+            sorted_stats = sorted(stats_list.items(), key=lambda x: x[1].cumtime, reverse=True)[:limit]
 
             for (file, line, func), profile in sorted_stats:
                 top_functions.append(
@@ -306,18 +288,14 @@ class CodebaseProfiler:
         if "import_statements" in self.results["static_analysis"]:
             hotspots["frequently_imported"] = [
                 {"module": module, "count": count}
-                for module, count in self.results["static_analysis"][
-                    "import_statements"
-                ].most_common(10)
+                for module, count in self.results["static_analysis"]["import_statements"].most_common(10)
             ]
 
         # Duplicate functions
         if "duplicate_functions" in self.results["static_analysis"]:
             hotspots["duplicate_code"] = [
                 {"function": name, "files": files, "count": len(files)}
-                for name, files in self.results["static_analysis"][
-                    "duplicate_functions"
-                ].items()
+                for name, files in self.results["static_analysis"]["duplicate_functions"].items()
             ]
 
         self.results["performance_hotspots"] = hotspots
@@ -356,11 +334,7 @@ class CodebaseProfiler:
         # Based on runtime profiling
         slow_imports = []
         for module, data in self.results["runtime_profiling"].items():
-            if (
-                isinstance(data, dict)
-                and "import_time" in data
-                and data["import_time"] > 1.0
-            ):
+            if isinstance(data, dict) and "import_time" in data and data["import_time"] > 1.0:
                 slow_imports.append(f"{module} ({data['import_time']:.2f}s)")
 
         if slow_imports:
@@ -402,9 +376,7 @@ class CodebaseProfiler:
         print(f"🔧 Functions found: {len(static.get('function_definitions', {}))}")
         print(f"📦 Classes found: {len(static.get('class_definitions', {}))}")
         print(f"📥 Import statements: {len(static.get('import_statements', {}))}")
-        print(
-            f"🔄 Duplicate functions: {len(self.results['performance_hotspots'].get('duplicate_code', []))}"
-        )
+        print(f"🔄 Duplicate functions: {len(self.results['performance_hotspots'].get('duplicate_code', []))}")
         print(
             f"🔥 High complexity functions: {len(self.results['performance_hotspots'].get('high_complexity_functions', []))}"
         )
@@ -445,9 +417,7 @@ def main():
     if hotspots:
         print("\n🔥 TOP COMPLEXITY HOTSPOTS:")
         for spot in hotspots:
-            print(
-                f"  • {spot['function']} in {spot['file']} (complexity: {spot['complexity']})"
-            )
+            print(f"  • {spot['function']} in {spot['file']} (complexity: {spot['complexity']})")
 
 
 if __name__ == "__main__":

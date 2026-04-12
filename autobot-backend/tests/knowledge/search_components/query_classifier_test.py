@@ -72,9 +72,7 @@ def classifier() -> QueryClassifier:
         ),
     ],
 )
-def test_classify_parametrized(
-    classifier: QueryClassifier, query: str, expected: QueryComplexity
-) -> None:
+def test_classify_parametrized(classifier: QueryClassifier, query: str, expected: QueryComplexity) -> None:
     """Each query maps to the expected complexity tier."""
     result = classifier.classify(query)
     assert result == expected, f"Query {query!r}: expected {expected}, got {result}"

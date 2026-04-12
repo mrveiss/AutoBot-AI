@@ -10,7 +10,6 @@ import asyncio
 import logging
 import os
 import sys
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -73,8 +72,7 @@ def _create_test_document() -> str:
     """
     test_file = "/tmp/test_kb_doc.md"
     with open(test_file, "w") as f:
-        f.write(
-            """
+        f.write("""
 # AutoBot Documentation Test
 
 AutoBot is an autonomous AI agent platform designed for enterprise use.
@@ -88,8 +86,7 @@ AutoBot is an autonomous AI agent platform designed for enterprise use.
 
 ## Installation
 To install AutoBot, follow the setup guide in the README.
-"""
-        )
+""")
     return test_file
 
 
@@ -122,9 +119,7 @@ async def _test_knowledge_base(kb, r) -> bool:
         logger.info(f"   Indexes: {indexes}")
 
         if indexes:
-            idx_name = (
-                indexes[0].decode() if isinstance(indexes[0], bytes) else indexes[0]
-            )
+            idx_name = indexes[0].decode() if isinstance(indexes[0], bytes) else indexes[0]
             info = r.execute_command("FT.INFO", idx_name)
             attrs_idx = info.index(b"attributes")
             attrs = info[attrs_idx + 1]

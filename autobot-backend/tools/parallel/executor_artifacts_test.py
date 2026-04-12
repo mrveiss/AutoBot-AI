@@ -3,15 +3,16 @@
 # Author: mrveiss
 """Tests for artifact capture in ParallelToolExecutor (Issue #4094)"""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
 
 from events.types import ArtifactType, build_artifact
 from tools.parallel.executor import (
-    ParallelToolExecutor,
-    _ArtifactCapture,
     _FILE_MODIFYING_TOOLS,
     _TEST_RUNNER_TOOLS,
+    ParallelToolExecutor,
+    _ArtifactCapture,
 )
 from tools.parallel.types import ToolCall
 

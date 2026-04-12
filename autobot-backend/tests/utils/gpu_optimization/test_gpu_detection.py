@@ -91,42 +91,32 @@ class TestCheckNvidiaGpu:
 class TestCheckAmdGpu:
     """Tests for _check_amd_gpu detection."""
 
-    @patch(
-        "utils.gpu_optimization.gpu_detection._check_sysfs_vendor", return_value=False
-    )
+    @patch("utils.gpu_optimization.gpu_detection._check_sysfs_vendor", return_value=False)
     @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
     def test_detected_via_rocm_smi(self, mock_run, _mock_sysfs):
         mock_run.return_value = MagicMock(returncode=0, stdout="GPU[0]")
         assert _check_amd_gpu() is True
 
-    @patch(
-        "utils.gpu_optimization.gpu_detection._check_sysfs_vendor", return_value=False
-    )
+    @patch("utils.gpu_optimization.gpu_detection._check_sysfs_vendor", return_value=False)
     @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
     def test_rocm_smi_failure_falls_back_to_sysfs(self, mock_run, mock_sysfs):
         mock_run.return_value = MagicMock(returncode=1, stdout="")
         assert _check_amd_gpu() is False
         mock_sysfs.assert_called_once_with("0x1002")
 
-    @patch(
-        "utils.gpu_optimization.gpu_detection._check_sysfs_vendor", return_value=True
-    )
+    @patch("utils.gpu_optimization.gpu_detection._check_sysfs_vendor", return_value=True)
     @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
     def test_sysfs_fallback_detects_amd(self, mock_run, _mock_sysfs):
         mock_run.side_effect = FileNotFoundError
         assert _check_amd_gpu() is True
 
-    @patch(
-        "utils.gpu_optimization.gpu_detection._check_sysfs_vendor", return_value=False
-    )
+    @patch("utils.gpu_optimization.gpu_detection._check_sysfs_vendor", return_value=False)
     @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
     def test_rocm_smi_timeout(self, mock_run, _mock_sysfs):
         mock_run.side_effect = subprocess.TimeoutExpired(cmd="rocm-smi", timeout=5)
         assert _check_amd_gpu() is False
 
-    @patch(
-        "utils.gpu_optimization.gpu_detection._check_sysfs_vendor", return_value=False
-    )
+    @patch("utils.gpu_optimization.gpu_detection._check_sysfs_vendor", return_value=False)
     @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
     def test_rocm_smi_unexpected_error(self, mock_run, _mock_sysfs):
         mock_run.side_effect = OSError("unexpected")
@@ -139,16 +129,12 @@ class TestCheckAmdGpu:
 class TestCheckIntelGpu:
     """Tests for _check_intel_gpu detection."""
 
-    @patch(
-        "utils.gpu_optimization.gpu_detection._check_sysfs_vendor", return_value=True
-    )
+    @patch("utils.gpu_optimization.gpu_detection._check_sysfs_vendor", return_value=True)
     def test_detected_via_sysfs(self, mock_sysfs):
         assert _check_intel_gpu() is True
         mock_sysfs.assert_called_once_with("0x8086")
 
-    @patch(
-        "utils.gpu_optimization.gpu_detection._check_sysfs_vendor", return_value=False
-    )
+    @patch("utils.gpu_optimization.gpu_detection._check_sysfs_vendor", return_value=False)
     def test_not_detected(self, _mock_sysfs):
         assert _check_intel_gpu() is False
 
@@ -175,9 +161,7 @@ class TestCheckSysfsVendor:
         vendor_file.exists.return_value = True
         vendor_file.read_text.return_value = "0x1002\n"
         card.__truediv__ = lambda self, key: (
-            MagicMock(__truediv__=lambda s, k: vendor_file)
-            if key == "device"
-            else vendor_file
+            MagicMock(__truediv__=lambda s, k: vendor_file) if key == "device" else vendor_file
         )
         mock_drm.iterdir.return_value = [card]
         mock_path_cls.return_value = mock_drm
@@ -192,9 +176,7 @@ class TestCheckSysfsVendor:
         vendor_file.exists.return_value = True
         vendor_file.read_text.return_value = "0x10de\n"
         card.__truediv__ = lambda self, key: (
-            MagicMock(__truediv__=lambda s, k: vendor_file)
-            if key == "device"
-            else vendor_file
+            MagicMock(__truediv__=lambda s, k: vendor_file) if key == "device" else vendor_file
         )
         mock_drm.iterdir.return_value = [card]
         mock_path_cls.return_value = mock_drm
@@ -324,9 +306,7 @@ class TestDetectVendor:
 class TestResetDetectionState:
     """Tests for _reset_detection_state."""
 
-    @patch(
-        "utils.gpu_optimization.gpu_detection._check_nvidia_gpu", return_value="A100"
-    )
+    @patch("utils.gpu_optimization.gpu_detection._check_nvidia_gpu", return_value="A100")
     def test_clears_cache_and_name(self, _mock):
         import utils.gpu_optimization.gpu_detection as mod
 
@@ -570,9 +550,7 @@ class TestDetectDetailedCapabilities:
                 raise ImportError("mocked: pynvml not installed")
             return real_import(name, *args, **kwargs)
 
-        with patch.dict("sys.modules", {"pynvml": None}), patch(
-            "builtins.__import__", side_effect=_block_pynvml
-        ):
+        with patch.dict("sys.modules", {"pynvml": None}), patch("builtins.__import__", side_effect=_block_pynvml):
             caps = GPUCapabilities(vendor="nvidia")
             result = _detect_detailed_capabilities(caps)
             assert result.compute_capability is None
@@ -627,9 +605,7 @@ class TestCheckAppleGpu:
         assert _check_apple_gpu() is None
 
     @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    @patch(
-        "utils.gpu_optimization.gpu_detection.platform.system", return_value="Darwin"
-    )
+    @patch("utils.gpu_optimization.gpu_detection.platform.system", return_value="Darwin")
     def test_detects_apple_m2(self, _mock_sys, mock_run):
         mock_run.return_value = MagicMock(
             returncode=0,
@@ -645,39 +621,28 @@ class TestCheckAppleGpu:
         assert result["metal_supported"] is True
 
     @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    @patch(
-        "utils.gpu_optimization.gpu_detection.platform.system", return_value="Darwin"
-    )
+    @patch("utils.gpu_optimization.gpu_detection.platform.system", return_value="Darwin")
     def test_returns_none_for_non_apple_gpu_on_mac(self, _mock_sys, mock_run):
         mock_run.return_value = MagicMock(
             returncode=0,
-            stdout='{"SPDisplaysDataType": [{"sppci_vendor": "NVIDIA",'
-            '"sppci_model": "GeForce GTX 1080"}]}',
+            stdout='{"SPDisplaysDataType": [{"sppci_vendor": "NVIDIA",' '"sppci_model": "GeForce GTX 1080"}]}',
         )
         assert _check_apple_gpu() is None
 
     @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    @patch(
-        "utils.gpu_optimization.gpu_detection.platform.system", return_value="Darwin"
-    )
+    @patch("utils.gpu_optimization.gpu_detection.platform.system", return_value="Darwin")
     def test_returns_none_when_system_profiler_fails(self, _mock_sys, mock_run):
         mock_run.return_value = MagicMock(returncode=1, stdout="")
         assert _check_apple_gpu() is None
 
     @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    @patch(
-        "utils.gpu_optimization.gpu_detection.platform.system", return_value="Darwin"
-    )
+    @patch("utils.gpu_optimization.gpu_detection.platform.system", return_value="Darwin")
     def test_returns_none_on_timeout(self, _mock_sys, mock_run):
-        mock_run.side_effect = subprocess.TimeoutExpired(
-            cmd="system_profiler", timeout=10
-        )
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd="system_profiler", timeout=10)
         assert _check_apple_gpu() is None
 
     @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    @patch(
-        "utils.gpu_optimization.gpu_detection.platform.system", return_value="Darwin"
-    )
+    @patch("utils.gpu_optimization.gpu_detection.platform.system", return_value="Darwin")
     def test_handles_missing_cores_field(self, _mock_sys, mock_run):
         mock_run.return_value = MagicMock(
             returncode=0,

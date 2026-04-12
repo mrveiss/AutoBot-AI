@@ -210,21 +210,13 @@ async def incremental_sync():
         logger.info(f"🧩 Chunks processed: {metrics.total_chunks_processed}")
         logger.info(f"⏱️  Total time: {metrics.total_processing_time:.3f}s")
         logger.info(f"⚡ Performance: {metrics.avg_chunks_per_second:.1f} chunks/sec")
-        logger.error(
-            f"🎮 GPU acceleration: {'✅' if metrics.gpu_acceleration_used else '❌'}"
-        )
+        logger.error(f"🎮 GPU acceleration: {'✅' if metrics.gpu_acceleration_used else '❌'}")
 
         # Calculate improvement estimate
         if metrics.total_chunks_processed > 0:
-            estimated_full_sync_time = (
-                metrics.total_chunks_processed * 0.5
-            )  # Conservative estimate
-            improvement_factor = estimated_full_sync_time / max(
-                metrics.total_processing_time, 0.1
-            )
-            logger.info(
-                f"📈 Estimated improvement: {improvement_factor:.1f}x faster than full sync"
-            )
+            estimated_full_sync_time = metrics.total_chunks_processed * 0.5  # Conservative estimate
+            improvement_factor = estimated_full_sync_time / max(metrics.total_processing_time, 0.1)
+            logger.info(f"📈 Estimated improvement: {improvement_factor:.1f}x faster than full sync")
 
             if improvement_factor >= 10:
                 logger.info("🎯 TARGET ACHIEVED: 10-50x performance improvement!")
@@ -273,9 +265,7 @@ if __name__ == "__main__":
         action="store_true",
         help="Force full sync (legacy method)",
     )
-    parser.add_argument(
-        "--test", "-t", action="store_true", help="Test search functionality after sync"
-    )
+    parser.add_argument("--test", "-t", action="store_true", help="Test search functionality after sync")
 
     args = parser.parse_args()
 

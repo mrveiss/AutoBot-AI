@@ -47,9 +47,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 from knowledge_base import KnowledgeBase
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -158,9 +156,7 @@ def extract_title_from_markdown(content: str, file_path: Path) -> str:
     return file_path.stem.replace("_", " ").replace("-", " ").title()
 
 
-def chunk_markdown_by_sections(
-    content: str, max_chunk_size: int = 2000
-) -> List[Tuple[str, str]]:
+def chunk_markdown_by_sections(content: str, max_chunk_size: int = 2000) -> List[Tuple[str, str]]:
     """
     Chunk markdown document by section headers for optimal search granularity.
 
@@ -194,9 +190,7 @@ def chunk_markdown_by_sections(
                 if len(current_content) > max_chunk_size:
                     for j in range(0, len(current_content), max_chunk_size):
                         chunk = current_content[j : j + max_chunk_size]
-                        chunk_title = (
-                            f"{current_section} (Part {j // max_chunk_size + 1})"
-                        )
+                        chunk_title = f"{current_section} (Part {j // max_chunk_size + 1})"
                         chunks.append((chunk_title, chunk))
                 else:
                     chunks.append((current_section, current_content))
@@ -223,9 +217,7 @@ def generate_content_hash(content: str) -> str:
     return hashlib.sha256(content.encode()).hexdigest()
 
 
-def _check_already_indexed(
-    kb, content_hash: str, file_path: Path, title: str
-) -> Optional[Dict[str, Any]]:
+def _check_already_indexed(kb, content_hash: str, file_path: Path, title: str) -> Optional[Dict[str, Any]]:
     """
     Check if document is already indexed in Redis.
 
@@ -282,16 +274,12 @@ async def _index_document_chunks(
         if result["status"] == "success":
             indexed_chunks.append(result["fact_id"])
         else:
-            logger.error(
-                "Failed to index chunk: %s", result.get("message", "Unknown error")
-            )
+            logger.error("Failed to index chunk: %s", result.get("message", "Unknown error"))
 
     return indexed_chunks
 
 
-def _store_document_hash(
-    kb, content_hash: str, file_path: Path, title: str, chunks_count: int
-) -> None:
+def _store_document_hash(kb, content_hash: str, file_path: Path, title: str, chunks_count: int) -> None:
     """
     Store document hash in Redis to prevent duplicate indexing.
 
@@ -311,9 +299,7 @@ def _store_document_hash(
     )
 
 
-async def index_document(
-    kb: KnowledgeBase, file_path: Path, category: str, reindex: bool = False
-) -> Dict[str, Any]:
+async def index_document(kb: KnowledgeBase, file_path: Path, category: str, reindex: bool = False) -> Dict[str, Any]:
     """
     Index a single markdown document into the knowledge base.
 
@@ -349,9 +335,7 @@ async def index_document(
         chunks = chunk_markdown_by_sections(content)
         logger.info("Processing %s: %s chunks", file_path.name, len(chunks))
 
-        indexed_chunks = await _index_document_chunks(
-            kb, chunks, title, category, file_path, content_hash
-        )
+        indexed_chunks = await _index_document_chunks(kb, chunks, title, category, file_path, content_hash)
 
         # Store document hash to prevent duplicate indexing
         _store_document_hash(kb, content_hash, file_path, title, len(indexed_chunks))
@@ -370,9 +354,7 @@ async def index_document(
         return {"status": "error", "file": str(file_path), "error": str(e)}
 
 
-async def discover_documentation_files(
-    docs_dir: Path, category_filter: Optional[str] = None
-) -> List[Tuple[Path, str]]:
+async def discover_documentation_files(docs_dir: Path, category_filter: Optional[str] = None) -> List[Tuple[Path, str]]:
     """
     Discover all markdown documentation files.
 
@@ -430,9 +412,7 @@ async def _handle_dry_run(discovered_files: List[Tuple]) -> Dict[str, Any]:
     }
 
 
-async def _index_files(
-    kb, discovered_files: List[Tuple], reindex: bool
-) -> Dict[str, Any]:
+async def _index_files(kb, discovered_files: List[Tuple], reindex: bool) -> Dict[str, Any]:
     """
     Index discovered documentation files.
 
@@ -539,16 +519,10 @@ async def main():
     """Main entry point"""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Index AutoBot documentation into knowledge base"
-    )
-    parser.add_argument(
-        "--reindex", action="store_true", help="Force reindex all documentation"
-    )
+    parser = argparse.ArgumentParser(description="Index AutoBot documentation into knowledge base")
+    parser.add_argument("--reindex", action="store_true", help="Force reindex all documentation")
     parser.add_argument("--category", type=str, help="Only index specific category")
-    parser.add_argument(
-        "--dry-run", action="store_true", help="Preview without actually indexing"
-    )
+    parser.add_argument("--dry-run", action="store_true", help="Preview without actually indexing")
 
     args = parser.parse_args()
 
@@ -558,11 +532,7 @@ async def main():
         )
 
         # Write results to file
-        results_file = (
-            PROJECT_ROOT
-            / "logs"
-            / f"doc_indexing_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        )
+        results_file = PROJECT_ROOT / "logs" / f"doc_indexing_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         results_file.parent.mkdir(exist_ok=True)
 
         with open(results_file, "w") as f:

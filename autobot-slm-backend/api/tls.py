@@ -286,16 +286,10 @@ async def list_tls_endpoints(
 ) -> TLSEndpointsResponse:
     """List all TLS endpoints across the fleet."""
     service = get_tls_credential_service()
-    endpoints = await service.get_all_tls_endpoints(
-        db, active_only=not include_inactive
-    )
+    endpoints = await service.get_all_tls_endpoints(db, active_only=not include_inactive)
 
     # Count certificates expiring within 30 days
-    expiring_soon = sum(
-        1
-        for e in endpoints
-        if e.days_until_expiry is not None and e.days_until_expiry <= 30
-    )
+    expiring_soon = sum(1 for e in endpoints if e.days_until_expiry is not None and e.days_until_expiry <= 30)
 
     return TLSEndpointsResponse(
         endpoints=endpoints,
@@ -374,9 +368,7 @@ async def _fetch_credential_and_node_for_renew(service, db, credential_id: str):
     return credential, node
 
 
-async def _renew_and_deploy_certificate(
-    service, db, credential_id: str, node, deploy: bool
-):
+async def _renew_and_deploy_certificate(service, db, credential_id: str, node, deploy: bool):
     """Helper for renew_tls_certificate. Ref: #1088."""
     new_credential = await service.renew_certificate(db, credential_id)
     if not new_credential:
@@ -408,9 +400,7 @@ async def renew_tls_certificate(
     If deploy=true, the new certificate will be deployed to the node via Ansible.
     """
     service = get_tls_credential_service()
-    credential, node = await _fetch_credential_and_node_for_renew(
-        service, db, credential_id
-    )
+    credential, node = await _fetch_credential_and_node_for_renew(service, db, credential_id)
 
     try:
         new_credential, deployment_result = await _renew_and_deploy_certificate(
@@ -429,17 +419,9 @@ async def renew_tls_certificate(
             "message": "Certificate renewed successfully",
             "old_credential_id": credential_id,
             "new_credential_id": new_credential.credential_id,
-            "expires_at": (
-                new_credential.tls_expires_at.isoformat()
-                if new_credential.tls_expires_at
-                else None
-            ),
-            "deployed": (
-                deployment_result.get("success", False) if deployment_result else False
-            ),
-            "deployment_message": (
-                deployment_result.get("message") if deployment_result else None
-            ),
+            "expires_at": (new_credential.tls_expires_at.isoformat() if new_credential.tls_expires_at else None),
+            "deployed": (deployment_result.get("success", False) if deployment_result else False),
+            "deployment_message": (deployment_result.get("message") if deployment_result else None),
         }
 
     except Exception as e:
@@ -497,9 +479,7 @@ async def _handle_certificate_deployment(
     return deployment_result
 
 
-def _build_rotation_response(
-    credential_id: str, new_credential, deployment_result, deactivate_old: bool
-):
+def _build_rotation_response(credential_id: str, new_credential, deployment_result, deactivate_old: bool):
     """Build the response dictionary for certificate rotation.
 
     Helper for rotate_tls_certificate (Issue #665).
@@ -508,23 +488,11 @@ def _build_rotation_response(
         "success": True,
         "message": "Certificate rotated successfully",
         "old_credential_id": credential_id,
-        "old_deactivated": (
-            deactivate_old and deployment_result.get("success", False)
-            if deployment_result
-            else False
-        ),
+        "old_deactivated": (deactivate_old and deployment_result.get("success", False) if deployment_result else False),
         "new_credential_id": new_credential.credential_id,
-        "expires_at": (
-            new_credential.tls_expires_at.isoformat()
-            if new_credential.tls_expires_at
-            else None
-        ),
-        "deployed": (
-            deployment_result.get("success", False) if deployment_result else False
-        ),
-        "deployment_message": (
-            deployment_result.get("message") if deployment_result else None
-        ),
+        "expires_at": (new_credential.tls_expires_at.isoformat() if new_credential.tls_expires_at else None),
+        "deployed": (deployment_result.get("success", False) if deployment_result else False),
+        "deployment_message": (deployment_result.get("message") if deployment_result else None),
     }
 
 
@@ -536,9 +504,7 @@ async def rotate_tls_certificate(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
     deploy: bool = Query(True, description="Deploy new cert to node immediately"),
-    deactivate_old: bool = Query(
-        True, description="Deactivate old cert after successful deployment"
-    ),
+    deactivate_old: bool = Query(True, description="Deactivate old cert after successful deployment"),
 ):
     """
     Rotate a TLS certificate (full key rotation).
@@ -573,9 +539,7 @@ async def rotate_tls_certificate(
             node.hostname,
         )
 
-        return _build_rotation_response(
-            credential_id, new_credential, deployment_result, deactivate_old
-        )
+        return _build_rotation_response(credential_id, new_credential, deployment_result, deactivate_old)
 
     except Exception as e:
         logger.error("Failed to rotate TLS certificate %s: %s", credential_id, e)
@@ -618,11 +582,7 @@ async def _renew_single_certificate(db, service, cred, deploy: bool):
                 "new_credential_id": new_cred.credential_id,
                 "node_id": cred.node_id,
                 "success": True,
-                "deployed": (
-                    deployment_result.get("success", False)
-                    if deployment_result
-                    else False
-                ),
+                "deployed": (deployment_result.get("success", False) if deployment_result else False),
             }
         else:
             return {
@@ -656,8 +616,7 @@ def _build_renewal_response(renewed: int, failed: int, results: list) -> dict:
     """
     return {
         "success": failed == 0,
-        "message": f"Renewed {renewed} certificate(s)"
-        + (f", {failed} failed" if failed else ""),
+        "message": f"Renewed {renewed} certificate(s)" + (f", {failed} failed" if failed else ""),
         "renewed": renewed,
         "failed": failed,
         "results": results,
@@ -670,9 +629,7 @@ def _build_renewal_response(renewed: int, failed: int, results: list) -> dict:
 async def bulk_renew_expiring_certificates(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    days: int = Query(
-        30, ge=1, le=365, description="Renew certs expiring within N days"
-    ),
+    days: int = Query(30, ge=1, le=365, description="Renew certs expiring within N days"),
     deploy: bool = Query(False, description="Deploy renewed certs immediately"),
 ):
     """
@@ -767,9 +724,7 @@ def _get_tls_ansible_paths() -> dict:
     }
 
 
-async def _run_ansible_playbook_async(
-    cmd: List[str], cwd: str, timeout: float, stdout_limit: int = 2000
-) -> dict:
+async def _run_ansible_playbook_async(cmd: List[str], cwd: str, timeout: float, stdout_limit: int = 2000) -> dict:
     """
     Execute an ansible playbook asynchronously and return the result.
 
@@ -803,9 +758,7 @@ async def _run_ansible_playbook_async(
     }
 
 
-def _build_enable_tls_response(
-    success: bool, returncode: int, services: List[str], results: dict
-) -> dict:
+def _build_enable_tls_response(success: bool, returncode: int, services: List[str], results: dict) -> dict:
     """
     Build the final response dict for TLS enablement.
 
@@ -820,11 +773,7 @@ def _build_enable_tls_response(
     Returns:
         Response dict with success, message, services, and results.
     """
-    message = (
-        "TLS enabled successfully"
-        if success
-        else f"TLS enablement failed with code {returncode}"
-    )
+    message = "TLS enabled successfully" if success else f"TLS enablement failed with code {returncode}"
 
     logger.info(
         "TLS enablement for %s: %s (code %d)",
@@ -872,9 +821,7 @@ async def _deploy_certificates_if_needed(
         "--limit",
         limit_hosts,
     ]
-    result = await _run_ansible_playbook_async(
-        deploy_cmd, paths["ansible_dir"], timeout=300.0
-    )
+    result = await _run_ansible_playbook_async(deploy_cmd, paths["ansible_dir"], timeout=300.0)
     if not result["success"]:
         logger.warning(
             "Certificate deployment had issues: %s",
@@ -883,9 +830,7 @@ async def _deploy_certificates_if_needed(
     return result
 
 
-async def _run_enable_tls_playbook(
-    ansible_path: str, paths: dict, services: List[str]
-) -> dict:
+async def _run_enable_tls_playbook(ansible_path: str, paths: dict, services: List[str]) -> dict:
     """
     Execute the enable-tls Ansible playbook.
 
@@ -908,9 +853,7 @@ async def _run_enable_tls_playbook(
         "--limit",
         limit_hosts,
     ]
-    return await _run_ansible_playbook_async(
-        enable_cmd, paths["ansible_dir"], timeout=600.0, stdout_limit=3000
-    )
+    return await _run_ansible_playbook_async(enable_cmd, paths["ansible_dir"], timeout=600.0, stdout_limit=3000)
 
 
 @tls_router.post(
@@ -923,9 +866,7 @@ async def enable_tls_on_services(
         ["frontend", "backend", "redis"],
         description="Services to enable TLS for",
     ),
-    deploy_certs_first: bool = Query(
-        True, description="Deploy certificates before enabling TLS"
-    ),
+    deploy_certs_first: bool = Query(True, description="Deploy certificates before enabling TLS"),
 ):
     """
     Enable TLS/HTTPS on AutoBot services.
@@ -950,9 +891,7 @@ async def enable_tls_on_services(
         )
 
         # Step 2: Run enable-tls playbook
-        results["enable_tls"] = await _run_enable_tls_playbook(
-            ansible_path, paths, services
-        )
+        results["enable_tls"] = await _run_enable_tls_playbook(ansible_path, paths, services)
 
         return _build_enable_tls_response(
             results["enable_tls"]["success"],
@@ -1000,9 +939,7 @@ def _write_cert_files(tmpdir: str, certs: dict) -> tuple:
     return cert_path, key_path, chain_path
 
 
-async def _execute_cert_deployment(
-    node, cert_path: str, key_path: str, chain_path
-) -> dict:
+async def _execute_cert_deployment(node, cert_path: str, key_path: str, chain_path) -> dict:
     """Execute the Ansible playbook to deploy cert files to a node.
 
     Helper for _deploy_certificate_to_node. Ref: #1088.

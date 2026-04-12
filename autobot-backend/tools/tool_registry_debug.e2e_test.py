@@ -19,9 +19,7 @@ def test_orchestrator_initialization():
     orchestrator = Orchestrator()
 
     # Check tool registry
-    print(  # noqa: print
-        f"Tool registry exists: {hasattr(orchestrator, 'tool_registry')}"
-    )  # noqa: print
+    print(f"Tool registry exists: {hasattr(orchestrator, 'tool_registry')}")  # noqa: print  # noqa: print
     print(f"Tool registry value: {orchestrator.tool_registry}")  # noqa: print
 
     if orchestrator.tool_registry:
@@ -33,9 +31,7 @@ def test_orchestrator_initialization():
         try:
             # List available tools
             available_tools = orchestrator.available_tools
-            print(  # noqa: print
-                f"Available tools: {list(available_tools.keys())[:5]}..."
-            )  # noqa: print
+            print(f"Available tools: {list(available_tools.keys())[:5]}...")  # noqa: print  # noqa: print
 
         except Exception as e:
             print(f"Error testing tool execution: {e}")  # noqa: print
@@ -46,18 +42,10 @@ def test_orchestrator_initialization():
         )
 
         # Check dependencies
-        print(  # noqa: print
-            f"Local worker exists: {hasattr(orchestrator, 'local_worker')}"
-        )  # noqa: print
-        print(  # noqa: print
-            f"Local worker value: {getattr(orchestrator, 'local_worker', None)}"
-        )  # noqa: print
-        print(  # noqa: print
-            f"Knowledge base exists: {hasattr(orchestrator, 'knowledge_base')}"
-        )  # noqa: print
-        print(  # noqa: print
-            f"Knowledge base value: {getattr(orchestrator, 'knowledge_base', None)}"
-        )  # noqa: print
+        print(f"Local worker exists: {hasattr(orchestrator, 'local_worker')}")  # noqa: print  # noqa: print
+        print(f"Local worker value: {getattr(orchestrator, 'local_worker', None)}")  # noqa: print  # noqa: print
+        print(f"Knowledge base exists: {hasattr(orchestrator, 'knowledge_base')}")  # noqa: print  # noqa: print
+        print(f"Knowledge base value: {getattr(orchestrator, 'knowledge_base', None)}")  # noqa: print  # noqa: print
 
 
 def test_workflow_execution():

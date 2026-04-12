@@ -20,8 +20,9 @@ sys.path.insert(0, str(project_root))
 
 from unittest.mock import Mock
 
-from auth_middleware import AuthenticationMiddleware
 from fastapi import Request
+
+from auth_middleware import AuthenticationMiddleware
 
 
 class SecurityTester:
@@ -161,9 +162,7 @@ class SecurityTester:
         headers = {"Authorization": f"Bearer {token}"}
         request = self.create_mock_request(headers=headers)
 
-        has_permission, user_data = self.auth_middleware.check_file_permissions(
-            request, "delete"
-        )
+        has_permission, user_data = self.auth_middleware.check_file_permissions(request, "delete")
         if has_permission and user_data.get("role") == "admin":
             logger.info("  ✅ Admin has delete permission")
             self.passed += 1
@@ -181,9 +180,7 @@ class SecurityTester:
         headers = {"Authorization": f"Bearer {token}"}
         request = self.create_mock_request(headers=headers)
 
-        has_permission, user_data = self.auth_middleware.check_file_permissions(
-            request, "delete"
-        )
+        has_permission, user_data = self.auth_middleware.check_file_permissions(request, "delete")
         if not has_permission and user_data.get("role") == "readonly":
             logger.info("  ✅ Readonly role correctly denied delete permission")
             self.passed += 1
@@ -239,9 +236,7 @@ class SecurityTester:
             logger.info("🎉 All security tests passed! System is secure.")
             return True
         else:
-            logger.error(
-                f"⚠️  {self.failed} security tests failed. Review implementation."
-            )
+            logger.error(f"⚠️  {self.failed} security tests failed. Review implementation.")
             return False
 
 

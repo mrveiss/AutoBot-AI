@@ -10,10 +10,10 @@ import pytest
 
 from integrations.base import IntegrationConfig
 from integrations.slack_integration import (
-    SlackChannelMapping,
-    SlackNotificationIntegration,
     _APPROVAL_THREAD_KEY_PREFIX,
     _CHANNEL_MAPPING_KEY_PREFIX,
+    SlackChannelMapping,
+    SlackNotificationIntegration,
 )
 
 

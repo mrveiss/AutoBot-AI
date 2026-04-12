@@ -8,10 +8,9 @@ import sys
 
 sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
-from tests.test_helpers import get_test_backend_url
-
 from metrics.system_monitor import system_monitor
 from metrics.workflow_metrics import workflow_metrics
+from tests.test_helpers import get_test_backend_url
 
 
 async def test_workflow_metrics():

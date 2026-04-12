@@ -34,9 +34,7 @@ sys.path.insert(0, str(project_root))
 from autobot_memory_graph import AutoBotMemoryGraph
 from chat_history import ChatHistoryManager
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -143,9 +141,7 @@ class SessionMigrator:
 
         if self.dry_run:
             logger.info("[DRY RUN] Would add owner to session %s", session_id)
-            logger.info(
-                "[DRY RUN] Would create memory graph entity for session %s", session_id
-            )
+            logger.info("[DRY RUN] Would create memory graph entity for session %s", session_id)
             self.stats["migrated"] += 1
             return
 
@@ -154,9 +150,7 @@ class SessionMigrator:
             if self.memory_graph:
                 metadata = {
                     "session_id": session_id,
-                    "name": session.get("name")
-                    or session.get("title")
-                    or "Unnamed Session",
+                    "name": session.get("name") or session.get("title") or "Unnamed Session",
                     "owner_id": default_owner_id,
                     "mode": "single_user",
                     "migrated": True,
@@ -230,9 +224,7 @@ class SessionMigrator:
 
 async def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(
-        description="Migrate sessions to Issue #608 user-centric structure"
-    )
+    parser = argparse.ArgumentParser(description="Migrate sessions to Issue #608 user-centric structure")
     parser.add_argument(
         "--dry-run",
         action="store_true",

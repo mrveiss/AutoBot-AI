@@ -58,16 +58,12 @@ def fstring_logging_corrector(content: str) -> tuple[str, int]:
                 fixes += 1
             else:
                 # No variables to extract, just remove the f
-                new_line = line.replace(
-                    f"{match.group(1)}(f{quote}", f"{match.group(1)}({quote}"
-                )
+                new_line = line.replace(f"{match.group(1)}(f{quote}", f"{match.group(1)}({quote}")
                 result_lines.append(new_line)
                 fixes += 1
         else:
             # Check for multi-line f-string logging
-            multiline_start = re.search(
-                r"(logger\.(debug|info|warning|error|exception|critical))\(\s*$", line
-            )
+            multiline_start = re.search(r"(logger\.(debug|info|warning|error|exception|critical))\(\s*$", line)
             if multiline_start:
                 # Collect all lines of the multi-line statement
                 block_lines = [line]
@@ -171,9 +167,7 @@ def fix_multiline_fstring_logging(block: str) -> tuple[str, int]:
     # Find all f-strings and extract their content
 
     # Pattern to find logger call
-    logger_match = re.search(
-        r"(logger\.(debug|info|warning|error|exception|critical))\(", block
-    )
+    logger_match = re.search(r"(logger\.(debug|info|warning|error|exception|critical))\(", block)
     if not logger_match:
         return block, 0
 
@@ -211,9 +205,7 @@ def fix_multiline_fstring_logging(block: str) -> tuple[str, int]:
     if all_args:
         args_str = ", ".join(all_args)
         if trailing_args:
-            new_block = (
-                f'{indent}{prefix}("{combined_format}", {args_str}{trailing_args})'
-            )
+            new_block = f'{indent}{prefix}("{combined_format}", {args_str}{trailing_args})'
         else:
             new_block = f'{indent}{prefix}("{combined_format}", {args_str})'
     else:
@@ -258,9 +250,7 @@ def process_directory(directory: Path, dry_run: bool = False) -> int:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Fix f-string logging to lazy evaluation"
-    )
+    parser = argparse.ArgumentParser(description="Fix f-string logging to lazy evaluation")
     parser.add_argument("--directory", "-d", type=str, help="Directory to process")
     parser.add_argument("--file", "-f", type=str, help="Single file to process")
     parser.add_argument(

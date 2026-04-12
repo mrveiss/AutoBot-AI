@@ -7,13 +7,14 @@ Fact Extractor Tests - Unit tests for fact extraction cognifier.
 Issue #3395: RAG optimization — semantic chunking, fact extraction, entity resolution.
 """
 
-import pytest
 from uuid import uuid4
 
+import pytest
+
+from knowledge.pipeline.base import PipelineContext
 from knowledge.pipeline.cognifiers.fact_extractor import FactExtractor
 from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.models.fact import AtomicFact
-from knowledge.pipeline.base import PipelineContext
 
 
 @pytest.fixture

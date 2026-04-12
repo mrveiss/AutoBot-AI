@@ -11,7 +11,6 @@ from fastapi.testclient import TestClient
 
 from api.settings import HardwarePriorityRequest, router
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

@@ -57,9 +57,7 @@ def test_discover_tools_some_missing(mock_shutil_which, mock_subprocess_getoutpu
     assert "curl" not in found_tools  # Example of a missing tool
 
 
-def test_discover_tools_version_unavailable(
-    mock_shutil_which, mock_subprocess_getoutput
-):
+def test_discover_tools_version_unavailable(mock_shutil_which, mock_subprocess_getoutput):
     """
     Test case where a tool is found but its version cannot be retrieved.
     """
@@ -91,9 +89,7 @@ def test_discover_tools_subprocess_error(mock_shutil_which, mock_subprocess_geto
         assert found_tools[tool]["version"] == "available"
 
 
-def test_discover_tools_empty_essential_tools(
-    mock_shutil_which, mock_subprocess_getoutput
-):
+def test_discover_tools_empty_essential_tools(mock_shutil_which, mock_subprocess_getoutput):
     """
     Test case with an empty ESSENTIAL_TOOLS list.
     """

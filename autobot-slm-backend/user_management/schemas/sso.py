@@ -20,18 +20,12 @@ class SSOProviderCreate(BaseModel):
     provider_type: str = Field(..., description="SSO provider type")
     name: str = Field(..., min_length=1, max_length=255, description="Provider name")
     config: dict[str, Any] = Field(..., description="Provider configuration")
-    org_id: Optional[uuid.UUID] = Field(
-        None, description="Organization ID (null for global)"
-    )
+    org_id: Optional[uuid.UUID] = Field(None, description="Organization ID (null for global)")
     is_active: bool = Field(True, description="Whether provider is active")
-    is_social: bool = Field(
-        False, description="Whether this is a social login provider"
-    )
+    is_social: bool = Field(False, description="Whether this is a social login provider")
     allow_user_creation: bool = Field(True, description="Allow JIT user provisioning")
     default_role: str = Field("user", description="Default role for new users")
-    group_mapping: dict[str, str] = Field(
-        default_factory=dict, description="Group to role mapping"
-    )
+    group_mapping: dict[str, str] = Field(default_factory=dict, description="Group to role mapping")
 
 
 class SSOProviderUpdate(BaseModel):

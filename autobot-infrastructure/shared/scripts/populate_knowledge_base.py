@@ -57,11 +57,7 @@ async def _add_documentation_to_kb_block_8():
     Helper for add_documentation_to_kb (Issue #825).
     """
     unique_files = set(all_files)
-    filtered_files = [
-        fp
-        for fp in unique_files
-        if os.path.isfile(fp) and not should_exclude_file(fp, exclude_patterns)
-    ]
+    filtered_files = [fp for fp in unique_files if os.path.isfile(fp) and not should_exclude_file(fp, exclude_patterns)]
 
 
 async def _add_documentation_to_kb_block_1():
@@ -157,9 +153,7 @@ async def _add_documentation_to_kb_block_7():
         results = await kb.search(query, n_results=2)
         logger.info(f"\nSearch for '{query}': {len(results)} results")
         if results:
-            logger.info(
-                f"  First result: {results[0].get('metadata', {}).get('relative_path', 'Unknown')}"
-            )
+            logger.info(f"  First result: {results[0].get('metadata', {}).get('relative_path', 'Unknown')}")
 
 
 async def add_documentation_to_kb():
@@ -191,9 +185,7 @@ async def add_documentation_to_kb():
 
     await _add_documentation_to_kb_block_8()
 
-    logger.info(
-        f"Found {len(filtered_files)} documentation files to add to knowledge base"
-    )
+    logger.info(f"Found {len(filtered_files)} documentation files to add to knowledge base")
 
     await _add_documentation_to_kb_block_1()
 

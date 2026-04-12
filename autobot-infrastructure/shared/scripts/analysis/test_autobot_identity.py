@@ -40,11 +40,7 @@ async def test_autobot_identity():
             logger.info(f"Results: {len(results)}")
 
             for i, result in enumerate(results):
-                content_preview = (
-                    result["content"][:150] + "..."
-                    if len(result["content"]) > 150
-                    else result["content"]
-                )
+                content_preview = result["content"][:150] + "..." if len(result["content"]) > 150 else result["content"]
                 logger.info(f"Result {i+1}: {content_preview}")
                 logger.info(f"Score: {result.get('score', 'N/A')}")
 

@@ -135,9 +135,7 @@ class FunctionLengthVisitor(ast.NodeVisitor):
         first_stmt = node.body[0]
 
         # Check if first statement is a docstring
-        if isinstance(first_stmt, ast.Expr) and isinstance(
-            first_stmt.value, ast.Constant
-        ):
+        if isinstance(first_stmt, ast.Expr) and isinstance(first_stmt.value, ast.Constant):
             if isinstance(first_stmt.value.value, str):
                 return getattr(first_stmt, "end_lineno", first_stmt.lineno)
 

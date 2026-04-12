@@ -37,9 +37,7 @@ from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 # Setup logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -235,9 +233,7 @@ class AgentOptimizer:
             optimized_body = body
 
             # Strip code blocks
-            optimized_body, blocks_removed = self._strip_code_blocks_from_content(
-                optimized_body
-            )
+            optimized_body, blocks_removed = self._strip_code_blocks_from_content(optimized_body)
             self.stats["code_blocks_removed"] += blocks_removed
 
             # Strip verbose sections (if enabled)
@@ -256,9 +252,7 @@ class AgentOptimizer:
 
             # Calculate savings
             savings_bytes = original_size - optimized_size
-            savings_percent = (
-                (savings_bytes / original_size * 100) if original_size > 0 else 0
-            )
+            savings_percent = (savings_bytes / original_size * 100) if original_size > 0 else 0
 
             logger.info(
                 f"Optimized {file_path.name}: "
@@ -316,12 +310,8 @@ class AgentOptimizer:
 
         # Calculate final statistics
         if self.stats["total_original_size"] > 0:
-            total_savings = (
-                self.stats["total_original_size"] - self.stats["total_optimized_size"]
-            )
-            total_savings_percent = (
-                total_savings / self.stats["total_original_size"]
-            ) * 100
+            total_savings = self.stats["total_original_size"] - self.stats["total_optimized_size"]
+            total_savings_percent = (total_savings / self.stats["total_original_size"]) * 100
             self.stats["total_savings_bytes"] = total_savings
             self.stats["total_savings_percent"] = total_savings_percent
 
@@ -477,18 +467,14 @@ def restore_agents(tag_name: Optional[str] = None) -> None:
             tags = [t for t in result.stdout.strip().split("\n") if t]
             if not tags:
                 logger.error("❌ No backup tags found")
-                logger.info(
-                    "Available tags should match pattern: agents-pre-optimization-*"
-                )
+                logger.info("Available tags should match pattern: agents-pre-optimization-*")
                 sys.exit(1)
             tag_name = tags[0]
 
         logger.info("Restoring from tag: %s", tag_name)
 
         # Restore files from tag
-        subprocess.run(
-            ["git", "restore", ".claude/agents/", f"--source={tag_name}"], check=True
-        )
+        subprocess.run(["git", "restore", ".claude/agents/", f"--source={tag_name}"], check=True)
 
         logger.info("✅ Agents restored from backup")
         logger.info("Restored from tag: %s", tag_name)
@@ -540,9 +526,7 @@ def list_backup_tags() -> None:
 
 def main():
     """Main entry point for the optimization tool."""
-    parser = argparse.ArgumentParser(
-        description="Optimize agent files in-place with git-based backup"
-    )
+    parser = argparse.ArgumentParser(description="Optimize agent files in-place with git-based backup")
     parser.add_argument(
         "--force",
         action="store_true",
@@ -560,9 +544,7 @@ def main():
         metavar="TAG",
         help="Restore agents from backup tag (most recent if not specified)",
     )
-    parser.add_argument(
-        "--list-backups", action="store_true", help="List all available backup tags"
-    )
+    parser.add_argument("--list-backups", action="store_true", help="List all available backup tags")
     parser.add_argument(
         "--strip-verbose",
         action="store_true",
@@ -581,15 +563,11 @@ def main():
     current_dir = Path.cwd()
     project_root = current_dir
 
-    while (
-        not (project_root / ".claude").exists() and project_root != project_root.parent
-    ):
+    while not (project_root / ".claude").exists() and project_root != project_root.parent:
         project_root = project_root.parent
 
     if not (project_root / ".claude").exists():
-        logger.error(
-            "Could not find .claude directory. Run this script from AutoBot project root."
-        )
+        logger.error("Could not find .claude directory. Run this script from AutoBot project root.")
         sys.exit(1)
 
     # Resolve agent directory relative to project root
@@ -642,9 +620,7 @@ def main():
     if stats["files_updated"] > 0:
         commit_optimization(stats)
         logger.info("✅ Optimization complete and committed!")
-        logger.info(
-            "To restore from backup: python %s --restore %s", __file__, backup_tag
-        )
+        logger.info("To restore from backup: python %s --restore %s", __file__, backup_tag)
     else:
         logger.info("No files needed optimization (all up to date)")
 

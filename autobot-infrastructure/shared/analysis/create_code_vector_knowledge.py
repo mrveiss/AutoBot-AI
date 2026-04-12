@@ -73,9 +73,7 @@ class CodeVectorKnowledgeCreator:
 
             for i in range(0, len(vector_keys), batch_size):
                 batch = vector_keys[i : i + batch_size]
-                logger.info(
-                    f"📄 Processing batch {i//batch_size + 1}/{(len(vector_keys)-1)//batch_size + 1}"
-                )
+                logger.info(f"📄 Processing batch {i//batch_size + 1}/{(len(vector_keys)-1)//batch_size + 1}")
 
                 # Get vector data for batch
                 pipe = analytics_redis.pipeline()
@@ -90,21 +88,15 @@ class CodeVectorKnowledgeCreator:
                             # Decode vector data
                             vector_info = {
                                 "id": key.decode("utf-8"),
-                                "text": data.get(b"text", b"").decode(
-                                    "utf-8", errors="ignore"
-                                ),
-                                "doc_id": data.get(b"doc_id", b"").decode(
-                                    "utf-8", errors="ignore"
-                                ),
+                                "text": data.get(b"text", b"").decode("utf-8", errors="ignore"),
+                                "doc_id": data.get(b"doc_id", b"").decode("utf-8", errors="ignore"),
                                 "metadata": {},
                             }
 
                             # Parse metadata if available
                             if b"metadata" in data:
                                 try:
-                                    metadata_str = data[b"metadata"].decode(
-                                        "utf-8", errors="ignore"
-                                    )
+                                    metadata_str = data[b"metadata"].decode("utf-8", errors="ignore")
                                     vector_info["metadata"] = json.loads(metadata_str)
                                 except (json.JSONDecodeError, UnicodeDecodeError):
                                     pass
@@ -115,28 +107,21 @@ class CodeVectorKnowledgeCreator:
                             vector_info["metadata"]["type"] = "code_index"
 
                             # Only add vectors with meaningful text content
-                            if (
-                                vector_info["text"].strip()
-                                and len(vector_info["text"]) > 10
-                            ):
+                            if vector_info["text"].strip() and len(vector_info["text"]) > 10:
                                 vectors.append(vector_info)
 
                         except Exception as e:
                             logger.warning(f"⚠️ Failed to process vector {key}: {e}")
                             continue
 
-            logger.info(
-                f"✅ Successfully processed {len(vectors)} code analytics vectors"
-            )
+            logger.info(f"✅ Successfully processed {len(vectors)} code analytics vectors")
             return vectors
 
         except Exception as e:
             logger.error(f"❌ Failed to get code analytics vectors: {e}")
             return []
 
-    async def create_vector_knowledge_entries(
-        self, vectors: List[Dict[str, Any]]
-    ) -> int:
+    async def create_vector_knowledge_entries(self, vectors: List[Dict[str, Any]]) -> int:
         """Create knowledge base entries from code vectors"""
         try:
             logger.info("🔄 Creating vector knowledge entries...")
@@ -147,9 +132,7 @@ class CodeVectorKnowledgeCreator:
 
             for i in range(0, len(vectors), batch_size):
                 batch = vectors[i : i + batch_size]
-                logger.info(
-                    f"📝 Creating entries batch {i//batch_size + 1}/{(len(vectors)-1)//batch_size + 1}"
-                )
+                logger.info(f"📝 Creating entries batch {i//batch_size + 1}/{(len(vectors)-1)//batch_size + 1}")
 
                 for vector in batch:
                     try:
@@ -169,9 +152,7 @@ Database: {vector['metadata'].get('database', 'analytics_db8')}
                         search_terms = [
                             "code analytics",
                             "code index",
-                            vector.get("doc_id", "").split("/")[-1]
-                            if vector.get("doc_id")
-                            else "",
+                            vector.get("doc_id", "").split("/")[-1] if vector.get("doc_id") else "",
                             "autobot code",
                         ]
 
@@ -187,9 +168,7 @@ Database: {vector['metadata'].get('database', 'analytics_db8')}
 
                         # Use the knowledge base's document storage
                         # This will automatically create searchable vectors
-                        result = await self.store_code_document(
-                            entry_text, doc_metadata
-                        )
+                        result = await self.store_code_document(entry_text, doc_metadata)
 
                         if result:
                             created_count += 1
@@ -199,9 +178,7 @@ Database: {vector['metadata'].get('database', 'analytics_db8')}
                             await asyncio.sleep(1)  # Brief pause every 25 entries
 
                     except Exception as e:
-                        logger.warning(
-                            f"⚠️ Failed to create entry for vector {vector['id']}: {e}"
-                        )
+                        logger.warning(f"⚠️ Failed to create entry for vector {vector['id']}: {e}")
                         continue
 
                 # Pause between batches
@@ -223,9 +200,7 @@ Database: {vector['metadata'].get('database', 'analytics_db8')}
                 return True
             else:
                 # Fallback: store directly in Redis with proper format
-                doc_id = (
-                    f"code_analytics_{metadata.get('original_vector_id', 'unknown')}"
-                )
+                doc_id = f"code_analytics_{metadata.get('original_vector_id', 'unknown')}"
 
                 # Store in knowledge database using canonical pattern
                 kb_redis = get_redis_client(database="knowledge", async_client=False)
@@ -323,16 +298,12 @@ Database: {vector['metadata'].get('database', 'analytics_db8')}
                             for i, result in enumerate(results[:1]):  # Show 1 example
                                 if isinstance(result, dict):
                                     text = result.get("text", "")[:100]
-                                    source = result.get("metadata", {}).get(
-                                        "source", "Unknown"
-                                    )
+                                    source = result.get("metadata", {}).get("source", "Unknown")
                                 else:
                                     text = str(result)[:100]
                                     source = "Unknown"
 
-                                logger.info(
-                                    f"  📄 Result {i+1}: {text}... (Source: {source})"
-                                )
+                                logger.info(f"  📄 Result {i+1}: {text}... (Source: {source})")
 
                     except Exception as e:
                         logger.warning(f"⚠️ Search failed for '{term}': {e}")
@@ -405,18 +376,10 @@ async def main():
         logger.info("📊 Statistics:")
         logger.info(f"  - Source vectors processed: {len(vectors)}")
         logger.info(f"  - Knowledge entries created: {created_count}")
-        logger.error(
-            f"  - Search index: {'✅ Created' if index_created else '❌ Failed'}"
-        )
-        print(
-            f"  - Search functionality: {'✅ Working' if search_works else '❌ Issues'}"
-        )
-        print(
-            "\n💡 The code analytics are now searchable through the main knowledge base!"
-        )
-        print(
-            "   You can search for terms like: 'code analytics', 'function', 'python', etc."
-        )
+        logger.error(f"  - Search index: {'✅ Created' if index_created else '❌ Failed'}")
+        print(f"  - Search functionality: {'✅ Working' if search_works else '❌ Issues'}")
+        print("\n💡 The code analytics are now searchable through the main knowledge base!")
+        print("   You can search for terms like: 'code analytics', 'function', 'python', etc.")
 
     except Exception as e:
         logger.error(f"❌ Error: {e}")

@@ -133,12 +133,6 @@ async def cleanup_after_test():
 # Test markers for selective execution
 def pytest_configure(config):
     """Configure pytest with custom settings."""
-    config.addinivalue_line(
-        "markers", "requires_redis: mark test as requiring Redis connection"
-    )
-    config.addinivalue_line(
-        "markers", "requires_backend: mark test as requiring backend API"
-    )
-    config.addinivalue_line(
-        "markers", "requires_vms: mark test as requiring distributed VMs"
-    )
+    config.addinivalue_line("markers", "requires_redis: mark test as requiring Redis connection")
+    config.addinivalue_line("markers", "requires_backend: mark test as requiring backend API")
+    config.addinivalue_line("markers", "requires_vms: mark test as requiring distributed VMs")

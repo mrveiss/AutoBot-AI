@@ -30,7 +30,6 @@ from typing import Any, Dict, List, Optional, Tuple
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_7_DAYS
-
 from services.knowledge_grounding_models import (
     Claim,
     ClaimType,

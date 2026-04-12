@@ -34,9 +34,7 @@ def scan_file_for_secrets(file_path):
         for line_num, line in enumerate(content.split("\n"), 1):
             for pattern, description in patterns:
                 if re.search(pattern, line, re.IGNORECASE):
-                    findings.append(
-                        {"type": description, "line": line_num, "content": line.strip()}
-                    )
+                    findings.append({"type": description, "line": line_num, "content": line.strip()})
 
         return findings
     except Exception:
@@ -90,9 +88,7 @@ def main():
             r"AUTOBOT_REDIS_PASSWORD=[A-Za-z0-9+/=]{20,}",
         ]
 
-        secure_found = sum(
-            1 for pattern in secure_patterns if re.search(pattern, content)
-        )
+        secure_found = sum(1 for pattern in secure_patterns if re.search(pattern, content))
         if secure_found >= 2:
             print("  ✅ Contains secure generated passwords")
             fixes_verified += 1

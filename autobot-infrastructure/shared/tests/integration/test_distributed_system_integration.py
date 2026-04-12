@@ -87,9 +87,7 @@ class DistributedSystemTester:
             ("main", "browser"),
         ]
 
-    async def test_service_health(
-        self, service_name: str, timeout: int = 10
-    ) -> ServiceResult:
+    async def test_service_health(self, service_name: str, timeout: int = 10) -> ServiceResult:
         """Test individual service health"""
         service = self.services[service_name]
         start_time = time.time()
@@ -108,9 +106,7 @@ class DistributedSystemTester:
                 if service_name == "frontend":
                     url = f"http://{service['host']}:{service['port']}/"
 
-                async with aiohttp.ClientSession(
-                    timeout=aiohttp.ClientTimeout(total=timeout)
-                ) as session:
+                async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as session:
                     async with session.get(url) as response:
                         response_time = time.time() - start_time
 
@@ -200,9 +196,7 @@ class DistributedSystemTester:
 
         try:
             url = f"http://{service['host']}:{service['port']}/vnc.html"
-            async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=5)
-            ) as session:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
                 async with session.get(url) as response:
                     response_time = time.time() - start_time
 
@@ -227,9 +221,7 @@ class DistributedSystemTester:
                 error=str(e),
             )
 
-    async def test_service_communication(
-        self, source: str, target: str
-    ) -> Tuple[bool, str, float]:
+    async def test_service_communication(self, source: str, target: str) -> Tuple[bool, str, float]:
         """Test communication between two services"""
         start_time = time.time()
 
@@ -302,10 +294,7 @@ class DistributedSystemTester:
                     if response.status == 200:
                         data = await response.json()
                         # Check if Redis is reported as healthy
-                        if (
-                            "redis" in str(data).lower()
-                            and "healthy" in str(data).lower()
-                        ):
+                        if "redis" in str(data).lower() and "healthy" in str(data).lower():
                             return (
                                 True,
                                 "Backend-Redis communication healthy",
@@ -382,9 +371,7 @@ class DistributedSystemTester:
             response_time = time.time() - start_time
             return False, f"Backend-AI Stack communication failed: {e}", response_time
 
-    async def _test_generic_http_communication(
-        self, source: str, target: str
-    ) -> Tuple[bool, str, float]:
+    async def _test_generic_http_communication(self, source: str, target: str) -> Tuple[bool, str, float]:
         """Test generic HTTP communication between services"""
         start_time = time.time()
 
@@ -413,9 +400,7 @@ class DistributedSystemTester:
             response_time = time.time() - start_time
             return False, f"{source}-{target} communication failed: {e}", response_time
 
-    async def test_network_partition_simulation(
-        self, partition_type: str
-    ) -> NetworkPartitionResult:
+    async def test_network_partition_simulation(self, partition_type: str) -> NetworkPartitionResult:
         """Simulate network partition and test system resilience"""
         print(f"🌐 Simulating network partition: {partition_type}")
 
@@ -560,18 +545,12 @@ class DistributedSystemTester:
 
             if health_result.status == "healthy":
                 healthy_services += 1
-                print(
-                    f"    ✅ {service_name} healthy ({health_result.response_time:.3f}s)"
-                )
+                print(f"    ✅ {service_name} healthy ({health_result.response_time:.3f}s)")
             else:
-                print(
-                    f"    ❌ {service_name} {health_result.status}: {health_result.error}"
-                )
+                print(f"    ❌ {service_name} {health_result.status}: {health_result.error}")
 
         service_health_rate = (healthy_services / total_services) * 100
-        print(
-            f"\n📊 Service Health Rate: {service_health_rate:.1f}% ({healthy_services}/{total_services})"
-        )
+        print(f"\n📊 Service Health Rate: {service_health_rate:.1f}% ({healthy_services}/{total_services})")
 
         # 2. Test critical communication paths
         print("\n🔗 Testing Critical Communication Paths")
@@ -582,9 +561,7 @@ class DistributedSystemTester:
 
         for source, target in self.critical_paths:
             print(f"  Testing {source} -> {target}...")
-            success, message, response_time = await self.test_service_communication(
-                source, target
-            )
+            success, message, response_time = await self.test_service_communication(source, target)
 
             results["communication_tests"][f"{source}_to_{target}"] = {
                 "success": success,
@@ -599,9 +576,7 @@ class DistributedSystemTester:
                 print(f"    ❌ {message}")
 
         communication_success_rate = (successful_paths / total_paths) * 100
-        print(
-            f"\n📊 Communication Success Rate: {communication_success_rate:.1f}% ({successful_paths}/{total_paths})"
-        )
+        print(f"\n📊 Communication Success Rate: {communication_success_rate:.1f}% ({successful_paths}/{total_paths})")
 
         # 3. Test network partition scenarios
         print("\n🌐 Testing Network Partition Scenarios")
@@ -626,12 +601,8 @@ class DistributedSystemTester:
             }
 
             print(f"    Recovery time: {partition_result.recovery_time:.1f}s")
-            print(
-                f"    Data consistency: {'✅' if partition_result.data_consistency else '❌'}"
-            )
-            print(
-                f"    Error handling: {'✅' if partition_result.error_handling else '❌'}"
-            )
+            print(f"    Data consistency: {'✅' if partition_result.data_consistency else '❌'}")
+            print(f"    Error handling: {'✅' if partition_result.error_handling else '❌'}")
 
         # Calculate overall health score
         health_score = (service_health_rate + communication_success_rate) / 2
@@ -649,16 +620,10 @@ class DistributedSystemTester:
         print("\n" + "=" * 80)
         print("📋 DISTRIBUTED SYSTEM TEST SUMMARY")
         print("=" * 80)
-        print(
-            f"🏥 Service Health: {service_health_rate:.1f}% ({healthy_services}/{total_services})"
-        )
-        print(
-            f"🔗 Communication: {communication_success_rate:.1f}% ({successful_paths}/{total_paths})"
-        )
+        print(f"🏥 Service Health: {service_health_rate:.1f}% ({healthy_services}/{total_services})")
+        print(f"🔗 Communication: {communication_success_rate:.1f}% ({successful_paths}/{total_paths})")
         print(f"🌐 Partition Tests: {len(partition_results)} scenarios tested")
-        print(
-            f"🎯 Overall Health: {results['overall_health'].upper()} ({health_score:.1f}%)"
-        )
+        print(f"🎯 Overall Health: {results['overall_health'].upper()} ({health_score:.1f}%)")
 
         return results
 
@@ -680,9 +645,7 @@ async def test_all_services_healthy():
     health_rate = (healthy_count / total_count) * 100
 
     # Allow for some services to be down in test environment
-    assert (
-        health_rate >= 60
-    ), f"Only {health_rate:.1f}% of services healthy, expected at least 60%"
+    assert health_rate >= 60, f"Only {health_rate:.1f}% of services healthy, expected at least 60%"
 
 
 @pytest.mark.asyncio
@@ -694,18 +657,14 @@ async def test_critical_communication_paths():
     total_paths = len(tester.critical_paths)
 
     for source, target in tester.critical_paths:
-        success, message, response_time = await tester.test_service_communication(
-            source, target
-        )
+        success, message, response_time = await tester.test_service_communication(source, target)
         if success:
             successful_paths += 1
 
     success_rate = (successful_paths / total_paths) * 100
 
     # Require at least 50% of communication paths to work
-    assert (
-        success_rate >= 50
-    ), f"Only {success_rate:.1f}% of communication paths working, expected at least 50%"
+    assert success_rate >= 50, f"Only {success_rate:.1f}% of communication paths working, expected at least 50%"
 
 
 @pytest.mark.asyncio
@@ -738,7 +697,9 @@ def main():
 
         # Save results
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        results_file = f"${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results/distributed_system_test_{timestamp}.json"
+        results_file = (
+            f"${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results/distributed_system_test_{timestamp}.json"
+        )
 
         with open(results_file, "w") as f:
             json.dump(results, f, indent=2)

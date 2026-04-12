@@ -66,9 +66,7 @@ class MemoryOptimizationApplier:
                     }
                 )
 
-                logger.info(
-                    f"📦 Backed up {log_file.name} ({size_mb:.1f}MB) -> {backup_file.name}"
-                )
+                logger.info(f"📦 Backed up {log_file.name} ({size_mb:.1f}MB) -> {backup_file.name}")
 
         self.optimizations_applied.append(
             {
@@ -103,9 +101,7 @@ class MemoryOptimizationApplier:
                 with open(log_file, "w", encoding="utf-8") as f:
                     f.writelines(truncated_lines)
 
-                logger.info(
-                    f"✂️  Truncated {log_file.name}: {len(lines)} -> {len(truncated_lines)} lines"
-                )
+                logger.info(f"✂️  Truncated {log_file.name}: {len(lines)} -> {len(truncated_lines)} lines")
 
         except Exception as e:
             logger.warning("Failed to truncate %s: %s", log_file, e)
@@ -213,9 +209,7 @@ class MemoryOptimizationApplier:
         data_dir = self.project_root / "data"
         if data_dir.exists():
             for data_file in data_dir.rglob("*"):
-                if (
-                    data_file.is_file() and data_file.stat().st_size > 5 * 1024 * 1024
-                ):  # >5MB
+                if data_file.is_file() and data_file.stat().st_size > 5 * 1024 * 1024:  # >5MB
                     size_mb = data_file.stat().st_size / (1024**2)
                     result = self._analyze_single_data_file(data_file, size_mb)
                     if result:
@@ -331,9 +325,7 @@ class MemoryOptimizationApplier:
             "optimizations_applied": self.optimizations_applied,
             "summary": {
                 "total_optimizations": len(self.optimizations_applied),
-                "categories": list(
-                    set(opt["type"] for opt in self.optimizations_applied)
-                ),
+                "categories": list(set(opt["type"] for opt in self.optimizations_applied)),
             },
             "recommendations": [
                 "Monitor memory usage regularly using the memory profiler",
@@ -461,9 +453,7 @@ class MemoryOptimizationApplier:
             logger.info("\n" + "=" * 60)
             logger.info("🎯 MEMORY OPTIMIZATION SUMMARY")
             logger.info("=" * 60)
-            logger.info(
-                f"📊 Total optimizations applied: {len(self.optimizations_applied)}"
-            )
+            logger.info(f"📊 Total optimizations applied: {len(self.optimizations_applied)}")
 
             for opt in self.optimizations_applied:
                 logger.info("✓ %s", opt["description"])

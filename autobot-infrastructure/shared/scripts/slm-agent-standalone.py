@@ -205,9 +205,7 @@ class SLMAgent:
             response = requests.post(url, json=payload, timeout=10, verify=_VERIFY_TLS)
             response.raise_for_status()
 
-            logger.debug(
-                "Heartbeat sent: %d services discovered", len(discovered_services)
-            )
+            logger.debug("Heartbeat sent: %d services discovered", len(discovered_services))
             return True
         except Exception as e:
             logger.error("Heartbeat failed: %s", e)

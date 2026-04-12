@@ -130,9 +130,7 @@ class DocumentExtractor:
                         if text and text.strip():
                             pages.append(text)
                     except Exception as e:
-                        logger.warning(
-                            f"Failed to extract page {page_num} from {file_path.name}: {e}"
-                        )
+                        logger.warning(f"Failed to extract page {page_num} from {file_path.name}: {e}")
                         continue
 
                 return "\n\n".join(pages)
@@ -190,9 +188,7 @@ class DocumentExtractor:
         return await asyncio.to_thread(extract_sync)
 
     @staticmethod
-    async def extract_from_text(
-        file_path: Union[str, Path], encoding: str = "utf-8"
-    ) -> str:
+    async def extract_from_text(file_path: Union[str, Path], encoding: str = "utf-8") -> str:
         """
         Extract text from plain text file with proper UTF-8 encoding
 
@@ -220,9 +216,7 @@ class DocumentExtractor:
             async with aiofiles.open(file_path, "r", encoding=encoding) as f:
                 return await f.read()
         except UnicodeDecodeError as e:
-            logger.error(
-                "Encoding error reading %s with %s: %s", file_path, encoding, e
-            )
+            logger.error("Encoding error reading %s with %s: %s", file_path, encoding, e)
             raise
         except OSError as e:
             logger.error("Failed to read text file %s: %s", file_path, e)
@@ -365,10 +359,7 @@ class DocumentExtractor:
         # Build result dict (exclude failures)
         extracted_texts = {fp: text for fp, text in results if text is not None}
 
-        logger.info(
-            f"Successfully extracted {len(extracted_texts)}/{len(all_files)} files "
-            f"from {directory_path}"
-        )
+        logger.info(f"Successfully extracted {len(extracted_texts)}/{len(all_files)} files " f"from {directory_path}")
 
         return extracted_texts
 

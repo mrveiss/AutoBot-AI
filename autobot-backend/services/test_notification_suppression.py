@@ -4,8 +4,8 @@ import unittest
 from datetime import datetime, timedelta, timezone
 
 from notification_suppression import (
-    NotificationReason,
     NotificationFilter,
+    NotificationReason,
     NotificationSuppressionConfig,
     NotificationSuppressionManager,
 )

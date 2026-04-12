@@ -19,9 +19,7 @@ from constants import ServiceURLs
 sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -74,9 +72,7 @@ def _build_sample_doc(key, doc_data):
     }
 
 
-def _configure_llamaindex(
-    ollama_base_url, embedding_model, llm_model, redis_host, redis_port, redis_db
-):
+def _configure_llamaindex(ollama_base_url, embedding_model, llm_model, redis_host, redis_port, redis_db):
     """Configure LlamaIndex LLM, embeddings, and vector store connection.
 
     Helper for test_llamaindex_with_existing_data (#825).
@@ -200,9 +196,7 @@ class RedisVectorStoreAnalyzer:
             sample_keys = list(
                 client.scan_iter(match="llama_index/vector*", count=3),
             )
-            sample_docs = [
-                _build_sample_doc(key, client.hgetall(key)) for key in sample_keys
-            ]
+            sample_docs = [_build_sample_doc(key, client.hgetall(key)) for key in sample_keys]
 
             analysis = {
                 "total_documents": info_dict.get("num_docs", 0),
@@ -250,9 +244,7 @@ class RedisVectorStoreAnalyzer:
             test_query = "kubernetes deployment configuration"
             response = await asyncio.to_thread(query_engine.query, test_query)
 
-            result_count = (
-                len(response.source_nodes) if hasattr(response, "source_nodes") else 0
-            )
+            result_count = len(response.source_nodes) if hasattr(response, "source_nodes") else 0
 
             logger.info("LlamaIndex successful: %s results", result_count)
             return True, result_count, _assess_result_quality(result_count)
@@ -437,9 +429,7 @@ class RedisVectorStoreAnalyzer:
             "langchain_migration": langchain_migration,
             "hybrid_approach": hybrid_approach,
             "existing_data_size": analysis.get("total_documents", 0),
-            "existing_data_quality": (
-                "HIGH" if analysis.get("total_documents", 0) > 10000 else "MEDIUM"
-            ),
+            "existing_data_quality": ("HIGH" if analysis.get("total_documents", 0) > 10000 else "MEDIUM"),
         }
 
     async def run_comprehensive_analysis(self):
@@ -571,9 +561,7 @@ class RedisVectorStoreAnalyzer:
         """
         logger.info("\nEXISTING DATA ANALYSIS:")
         logger.info("  Total Documents: %s", data_analysis.get("total_documents", 0))
-        logger.info(
-            "  Vector Dimensions: %s", data_analysis.get("vector_dimension", "unknown")
-        )
+        logger.info("  Vector Dimensions: %s", data_analysis.get("vector_dimension", "unknown"))
         logger.info("  Index Size: %s MB", data_analysis.get("index_size_mb", 0))
         logger.info("  Algorithm: %s", data_analysis.get("vector_algorithm", "unknown"))
 
@@ -667,9 +655,7 @@ async def main():
 
     from pathlib import Path
 
-    output_file = Path(
-        "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/reports/redis_vector_recommendation.json"
-    )
+    output_file = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/reports/redis_vector_recommendation.json")
     output_file.parent.mkdir(parents=True, exist_ok=True)
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(recommendation, f, indent=2)

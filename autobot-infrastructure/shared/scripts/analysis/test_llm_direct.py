@@ -34,9 +34,7 @@ async def test_llm_direct():
         logger.info("   Waiting for response...")
 
         # Get response with 15 second timeout to see if it's faster than 30s
-        response = await asyncio.wait_for(
-            get_robust_llm_response(prompt, context={"test": True}), timeout=15.0
-        )
+        response = await asyncio.wait_for(get_robust_llm_response(prompt, context={"test": True}), timeout=15.0)
 
         elapsed = time.time() - start_time
 
@@ -117,9 +115,7 @@ async def test_kb_search():
 
         # Test KB search with timeout
         result = await asyncio.wait_for(
-            kb_librarian.search_knowledge_base(
-                query="hello", max_results=5, threshold=0.1
-            ),
+            kb_librarian.search_knowledge_base(query="hello", max_results=5, threshold=0.1),
             timeout=8.0,
         )
 

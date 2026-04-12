@@ -154,18 +154,14 @@ class BackupManager:
                 self.print_step(f"Docker volume {volume_name} backed up", "success")
                 return True
             else:
-                self.print_step(
-                    f"Failed to backup volume {volume_name}: {result.stderr}", "error"
-                )
+                self.print_step(f"Failed to backup volume {volume_name}: {result.stderr}", "error")
                 return False
 
         except Exception as e:
             self.print_step(f"Error backing up volume {volume_name}: {e}", "error")
             return False
 
-    def create_backup_metadata(
-        self, backup_id: str, backup_type: str, paths: Dict[str, Path]
-    ) -> Dict[str, Any]:
+    def create_backup_metadata(self, backup_id: str, backup_type: str, paths: Dict[str, Path]) -> Dict[str, Any]:
         """Create backup metadata."""
         deployment_info = self.service_registry.get_deployment_info()
 
@@ -186,9 +182,7 @@ class BackupManager:
                     }
                     total_size += size
                 elif path.is_dir():
-                    dir_size = sum(
-                        f.stat().st_size for f in path.rglob("*") if f.is_file()
-                    )
+                    dir_size = sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
                     file_count = len(list(path.rglob("*")))
                     file_info[category] = {
                         "path": str(path),
@@ -232,18 +226,14 @@ class BackupManager:
                     self.print_step(f"Backing up {category}: {source_path}", "running")
 
                     if source_path.is_dir():
-                        shutil.copytree(
-                            source_path, dest_path, ignore_dangling_symlinks=True
-                        )
+                        shutil.copytree(source_path, dest_path, ignore_dangling_symlinks=True)
                     else:
                         shutil.copy2(source_path, dest_path)
 
                     backed_up_paths[category] = source_path
                     self.print_step(f"Backed up {category}", "success")
                 else:
-                    self.print_step(
-                        f"Skipping {category} (not found): {source_path}", "warning"
-                    )
+                    self.print_step(f"Skipping {category} (not found): {source_path}", "warning")
 
             # Backup critical files
             critical_files_path = backup_path / "critical_files"
@@ -260,9 +250,7 @@ class BackupManager:
             # Backup Docker volumes
             docker_volumes = self.get_docker_volumes()
             if docker_volumes:
-                self.print_step(
-                    f"Found {len(docker_volumes)} Docker volumes to backup", "info"
-                )
+                self.print_step(f"Found {len(docker_volumes)} Docker volumes to backup", "info")
                 for volume in docker_volumes:
                     self.backup_docker_volume(volume, backup_path)
 
@@ -275,9 +263,7 @@ class BackupManager:
 
             # Create compressed archive
             archive_path = self.backup_dir / f"autobot_full_backup_{backup_id}.tar.gz"
-            self.print_step(
-                f"Creating compressed archive: {archive_path.name}", "running"
-            )
+            self.print_step(f"Creating compressed archive: {archive_path.name}", "running")
 
             with tarfile.open(archive_path, "w:gz") as tar:
                 tar.add(backup_path, arcname=f"autobot_backup_{backup_id}")
@@ -353,9 +339,7 @@ class BackupManager:
                 else:
                     # For directories, check modification time
                     current_mtime = source_path.stat().st_mtime
-                    base_time = datetime.fromisoformat(
-                        base_metadata["timestamp"]
-                    ).timestamp()
+                    base_time = datetime.fromisoformat(base_metadata["timestamp"]).timestamp()
 
                     if current_mtime > base_time:
                         changed_paths[category] = source_path
@@ -367,9 +351,7 @@ class BackupManager:
 
         return changed_paths
 
-    def _backup_changed_paths(
-        self, changed_paths: Dict[str, Path], backup_path: Path
-    ) -> None:
+    def _backup_changed_paths(self, changed_paths: Dict[str, Path], backup_path: Path) -> None:
         """
         Copy changed paths to backup directory.
 
@@ -408,9 +390,7 @@ class BackupManager:
             json.dump(metadata, f, indent=2)
 
         # Create archive
-        archive_path = (
-            self.backup_dir / f"autobot_incremental_backup_{backup_id}.tar.gz"
-        )
+        archive_path = self.backup_dir / f"autobot_incremental_backup_{backup_id}.tar.gz"
 
         with tarfile.open(archive_path, "w:gz") as tar:
             tar.add(backup_path, arcname=f"autobot_incremental_{backup_id}")
@@ -441,9 +421,7 @@ class BackupManager:
         # Find base backup for comparison
         base_backup_id = self._find_base_backup_id(base_backup_id)
         if not base_backup_id:
-            self.print_step(
-                "No base backup found, creating full backup instead", "warning"
-            )
+            self.print_step("No base backup found, creating full backup instead", "warning")
             return self.create_full_backup()
 
         self.print_step(f"Using base backup: {base_backup_id}", "info")
@@ -451,9 +429,7 @@ class BackupManager:
         try:
             base_metadata = self.get_backup_metadata(base_backup_id)
             if not base_metadata:
-                self.print_step(
-                    "Base backup metadata not found, creating full backup", "warning"
-                )
+                self.print_step("Base backup metadata not found, creating full backup", "warning")
                 return self.create_full_backup()
 
             # Detect changed paths
@@ -466,9 +442,7 @@ class BackupManager:
 
             # Backup changed paths and create archive
             self._backup_changed_paths(changed_paths, backup_path)
-            return self._create_incremental_archive(
-                backup_id, backup_path, base_backup_id, changed_paths
-            )
+            return self._create_incremental_archive(backup_id, backup_path, base_backup_id, changed_paths)
 
         except Exception as e:
             self.print_step(f"Incremental backup failed: {e}", "error")
@@ -580,9 +554,7 @@ class BackupManager:
             self.print_step(f"Created: {metadata['timestamp']}", "info")
             self.print_step(f"Deployment mode: {metadata['deployment_mode']}", "info")
 
-    def _restore_backup_items(
-        self, backup_content_path: Path, target_path: Path
-    ) -> int:
+    def _restore_backup_items(self, backup_content_path: Path, target_path: Path) -> int:
         """Restore backup items to target.
 
         Helper for restore_backup (Issue #825).
@@ -609,9 +581,7 @@ class BackupManager:
 
         return restored_items
 
-    def restore_backup(
-        self, backup_id: str, target_dir: Optional[str] = None, dry_run: bool = False
-    ) -> bool:
+    def restore_backup(self, backup_id: str, target_dir: Optional[str] = None, dry_run: bool = False) -> bool:
         """Restore backup to target directory."""
         if not target_dir:
             target_dir = self.project_root
@@ -644,22 +614,16 @@ class BackupManager:
 
                 backup_content_path = extracted_dirs[0]
 
-                restored_items = self._restore_backup_items(
-                    backup_content_path, target_path
-                )
+                restored_items = self._restore_backup_items(backup_content_path, target_path)
 
                 shutil.rmtree(temp_extract_path)
 
-                self.print_step(
-                    f"Restore completed: {restored_items} items restored", "success"
-                )
+                self.print_step(f"Restore completed: {restored_items} items restored", "success")
             else:
                 with tarfile.open(archive_path, "r:gz") as tar:
                     self.print_step("Files that would be restored:", "info")
                     for member in tar.getmembers():
-                        if member.isfile() and not member.name.endswith(
-                            "backup_metadata.json"
-                        ):
+                        if member.isfile() and not member.name.endswith("backup_metadata.json"):
                             self.print_step(f"  - {member.name}", "info")
 
             return True
@@ -777,9 +741,7 @@ def _handle_restore_command(backup_manager, args) -> int:
         logger.error("❌ --backup-id required for restore")
         return 1
 
-    success = backup_manager.restore_backup(
-        args.backup_id, args.target_dir, args.dry_run
-    )
+    success = backup_manager.restore_backup(args.backup_id, args.target_dir, args.dry_run)
     return 0 if success else 1
 
 
@@ -793,9 +755,7 @@ def _handle_list_command(backup_manager, args) -> int:
 
     logger.info("\n📋 Available Backups:")
     logger.info("=" * 80)
-    logger.info(
-        f"{'Backup ID':<20} {'Type':<12} {'Date':<20} {'Size (MB)':<10} {'Mode':<15}"
-    )
+    logger.info(f"{'Backup ID':<20} {'Type':<12} {'Date':<20} {'Size (MB)':<10} {'Mode':<15}")
     logger.info("-" * 80)
 
     for backup_id, info in sorted(backups.items(), reverse=True):
@@ -846,9 +806,7 @@ Examples:
     parser.add_argument("--cleanup", action="store_true", help="Cleanup old backups")
     parser.add_argument("--verify", action="store_true", help="Verify backup")
 
-    parser.add_argument(
-        "--type", choices=["full", "incremental"], default="full", help="Backup type"
-    )
+    parser.add_argument("--type", choices=["full", "incremental"], default="full", help="Backup type")
     parser.add_argument("--backup-id", help="Backup ID for restore/verify")
     parser.add_argument("--target-dir", help="Target directory for restore")
     parser.add_argument("--days", type=int, default=30, help="Days for cleanup")

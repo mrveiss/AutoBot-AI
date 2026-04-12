@@ -157,13 +157,9 @@ class MTLSMigration:
                     return False
 
                 # Persist config using CONFIG REWRITE (ACL file not configured)
-                save_result = await conn.run(
-                    f"redis-cli --no-auth-warning -a {escaped_pass} CONFIG REWRITE"
-                )
+                save_result = await conn.run(f"redis-cli --no-auth-warning -a {escaped_pass} CONFIG REWRITE")
                 if save_result.returncode != 0:
-                    logger.warning(
-                        "CONFIG REWRITE failed - user may not persist after restart"
-                    )
+                    logger.warning("CONFIG REWRITE failed - user may not persist after restart")
 
                 logger.info(f"Admin user '{admin_user}' created successfully")
 
@@ -176,12 +172,8 @@ class MTLSMigration:
             logger.info(f"\nCredentials saved to: {self.ADMIN_CREDS_FILE}")
             logger.info("This file is NOT in app config - keep it secure!")
             logger.info("\nTo use admin user for recovery:")
-            logger.info(
-                f"  redis-cli -h {redis_ip} -p 6379 --user {admin_user} --pass <password>"
-            )
-            logger.info(
-                f"  redis-cli -h {redis_ip} -p 6380 --tls --user {admin_user} --pass <password>"
-            )
+            logger.info(f"  redis-cli -h {redis_ip} -p 6379 --user {admin_user} --pass <password>")
+            logger.info(f"  redis-cli -h {redis_ip} -p 6380 --tls --user {admin_user} --pass <password>")
 
             return True
 
@@ -217,10 +209,7 @@ class MTLSMigration:
                 logger.error(f"Certificate invalid: {name}")
                 all_valid = False
             elif status.needs_renewal:
-                logger.warning(
-                    f"Certificate needs renewal: {name} "
-                    f"(expires in {status.days_until_expiry} days)"
-                )
+                logger.warning(f"Certificate needs renewal: {name} " f"(expires in {status.days_until_expiry} days)")
             else:
                 logger.info(f"Certificate OK: {name}")
 
@@ -286,9 +275,7 @@ class MTLSMigration:
         # Step 4: Restart Redis if needed
         if result.restart_required:
             logger.info("\nRestarting Redis service...")
-            if not await self.configurator.restart_service(
-                "redis", "redis-stack-server"
-            ):
+            if not await self.configurator.restart_service("redis", "redis-stack-server"):
                 logger.error("Redis restart failed")
                 return False
             logger.info("Redis restarted successfully")
@@ -407,9 +394,7 @@ class MTLSMigration:
         plain_conns = await self._check_plain_port_connections()
         if plain_conns > 0:
             logger.warning(f"  {plain_conns} active connections on port 6379")
-            logger.warning(
-                "  Cannot proceed to disable password auth until 0 connections"
-            )
+            logger.warning("  Cannot proceed to disable password auth until 0 connections")
         else:
             logger.info("  No connections on plain port 6379 - ready for cutover")
 
@@ -419,9 +404,7 @@ class MTLSMigration:
         if all_passed and plain_conns == 0:
             logger.info("All checks PASSED - Ready for Phase 6 (disable password auth)")
             logger.info("\nTo complete mTLS migration, run:")
-            logger.info(
-                "  python scripts/security/mtls-migrate.py --phase disable-password"
-            )
+            logger.info("  python scripts/security/mtls-migrate.py --phase disable-password")
         elif all_passed:
             logger.info("Certificate checks PASSED")
             logger.info(f"WARNING: {plain_conns} connections still on plain port")
@@ -447,9 +430,7 @@ class MTLSMigration:
                 connect_timeout=10,
             ) as conn:
                 # Count connections on plain port using ss
-                result = await conn.run(
-                    "ss -tn state established '( sport = :6379 )' | wc -l"
-                )
+                result = await conn.run("ss -tn state established '( sport = :6379 )' | wc -l")
                 # Subtract 1 for header line
                 count = max(0, int(result.stdout.strip()) - 1)
                 return count
@@ -537,8 +518,7 @@ class MTLSMigration:
                     check=True,
                 )
                 await conn.run(
-                    f"sudo sed -i 's/^tls-auth-clients optional$/tls-auth-clients yes/' "
-                    f"{config_path}",
+                    f"sudo sed -i 's/^tls-auth-clients optional$/tls-auth-clients yes/' " f"{config_path}",
                     check=True,
                 )
                 await conn.run(
@@ -561,17 +541,11 @@ class MTLSMigration:
                 logger.info("Plain port 6379 is disabled")
                 logger.info("Password auth removed for default user")
                 logger.info("")
-                logger.info(
-                    "RECOVERY: Admin user 'autobot_admin' still works with password:"
-                )
-                logger.info(
-                    f"  redis-cli -h {redis_ip} -p 6380 --tls --user autobot_admin --pass <password>"
-                )
+                logger.info("RECOVERY: Admin user 'autobot_admin' still works with password:")
+                logger.info(f"  redis-cli -h {redis_ip} -p 6380 --tls --user autobot_admin --pass <password>")
                 logger.info("  Credentials: certs/.redis-admin-credentials")
                 logger.info("")
-                logger.info(
-                    "To rollback: python scripts/security/mtls-migrate.py --rollback redis-full"
-                )
+                logger.info("To rollback: python scripts/security/mtls-migrate.py --rollback redis-full")
 
                 return True
 
@@ -662,9 +636,7 @@ class MTLSMigration:
                 connect_timeout=10,
             ) as conn:
                 # Check if backup exists
-                check = await conn.run(
-                    "test -f /etc/redis-stack.conf.pre-mtls-final && echo 'exists'"
-                )
+                check = await conn.run("test -f /etc/redis-stack.conf.pre-mtls-final && echo 'exists'")
                 if "exists" in check.stdout:
                     await conn.run(
                         "sudo cp /etc/redis-stack.conf.pre-mtls-final /etc/redis-stack.conf",
@@ -673,12 +645,9 @@ class MTLSMigration:
                     logger.info("Restored from pre-mTLS-final backup")
                 else:
                     # Fallback: re-enable plain port
+                    await conn.run("sudo sed -i 's/^port 0$/port 6379/' /etc/redis-stack.conf")
                     await conn.run(
-                        "sudo sed -i 's/^port 0$/port 6379/' /etc/redis-stack.conf"
-                    )
-                    await conn.run(
-                        "sudo sed -i 's/^tls-auth-clients yes$/tls-auth-clients optional/' "
-                        "/etc/redis-stack.conf"
+                        "sudo sed -i 's/^tls-auth-clients yes$/tls-auth-clients optional/' " "/etc/redis-stack.conf"
                     )
                     logger.info("Re-enabled plain port 6379")
 
@@ -710,8 +679,7 @@ class MTLSMigration:
             ) as conn:
                 # Remove TLS config lines
                 await conn.run(
-                    "sudo sed -i '/# TLS Configuration/,/tls-auth-clients/d' "
-                    "/etc/redis-stack.conf",
+                    "sudo sed -i '/# TLS Configuration/,/tls-auth-clients/d' " "/etc/redis-stack.conf",
                     check=True,
                 )
                 logger.info("TLS configuration removed from Redis")
@@ -788,9 +756,7 @@ Examples:
     return parser
 
 
-async def _handle_phase_execution(
-    migration: "MTLSMigration", phase: str, force: bool = False
-) -> bool:
+async def _handle_phase_execution(migration: "MTLSMigration", phase: str, force: bool = False) -> bool:
     """Execute the specified migration phase.
 
     Helper for main (Issue #825).

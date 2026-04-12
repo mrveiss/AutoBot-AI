@@ -34,9 +34,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 from knowledge_base import KnowledgeBase
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -65,9 +63,7 @@ def _process_fact_result(fact_id: str, result: Dict[str, Any]) -> tuple:
         return (0, 1, 0, error_entry)
 
 
-async def _process_batch(
-    kb: KnowledgeBase, batch: List[str], counters: Dict[str, int], errors: List[Dict]
-) -> None:
+async def _process_batch(kb: KnowledgeBase, batch: List[str], counters: Dict[str, int], errors: List[Dict]) -> None:
     """
     Process a single batch of facts.
 
@@ -82,9 +78,7 @@ async def _process_batch(
     for fact_id in batch:
         try:
             result = await kb.vectorize_existing_fact(fact_id)
-            success_d, error_d, skipped_d, error_entry = _process_fact_result(
-                fact_id, result
-            )
+            success_d, error_d, skipped_d, error_entry = _process_fact_result(fact_id, result)
             counters["success_count"] += success_d
             counters["error_count"] += error_d
             counters["skipped_count"] += skipped_d
@@ -129,9 +123,7 @@ async def get_documentation_fact_ids(kb: KnowledgeBase) -> List[str]:
     return doc_fact_ids
 
 
-async def vectorize_facts_batch(
-    kb: KnowledgeBase, fact_ids: List[str], batch_size: int = 50
-) -> Dict[str, Any]:
+async def vectorize_facts_batch(kb: KnowledgeBase, fact_ids: List[str], batch_size: int = 50) -> Dict[str, Any]:
     """
     Vectorize facts in batches with progress tracking.
 
@@ -157,9 +149,7 @@ async def vectorize_facts_batch(
         batch_num = (i // batch_size) + 1
         total_batches = (total + batch_size - 1) // batch_size
 
-        logger.info(
-            "Processing batch %d/%d (%d facts)...", batch_num, total_batches, len(batch)
-        )
+        logger.info("Processing batch %d/%d (%d facts)...", batch_num, total_batches, len(batch))
 
         await _process_batch(kb, batch, counters, errors)
 
@@ -186,18 +176,14 @@ async def vectorize_facts_batch(
 
 
 async def main():
-    parser = argparse.ArgumentParser(
-        description="Vectorize existing documentation facts"
-    )
+    parser = argparse.ArgumentParser(description="Vectorize existing documentation facts")
     parser.add_argument(
         "--batch-size",
         type=int,
         default=50,
         help="Batch size for processing (default: 50)",
     )
-    parser.add_argument(
-        "--dry-run", action="store_true", help="Count facts without vectorizing"
-    )
+    parser.add_argument("--dry-run", action="store_true", help="Count facts without vectorizing")
     parser.add_argument(
         "--limit",
         type=int,

@@ -64,9 +64,7 @@ def _determine_log_level(message: str) -> str:
     return "Information"
 
 
-def _process_docker_log_line(
-    log_line: bytes, container, send_callback, running_flag
-) -> None:
+def _process_docker_log_line(log_line: bytes, container, send_callback, running_flag) -> None:
     """Process single Docker log line (Issue #315 - extracted)."""
     if not running_flag():
         return
@@ -138,9 +136,7 @@ def _monitor_log_files(log_aggregator, running_flag) -> None:
     logger.warning("No backend log files found")
 
 
-def _process_tail_log_line(
-    line: str, source_name: str, file_path: str, send_callback, running_flag
-) -> bool:
+def _process_tail_log_line(line: str, source_name: str, file_path: str, send_callback, running_flag) -> bool:
     """Process tail log line and return True to continue (Issue #315 - extracted)."""
     if not running_flag():
         return False
@@ -209,18 +205,14 @@ class ComprehensiveLogAggregator:
                 "User-Agent": "AutoBot-LogAggregator/1.0",
             }
 
-            async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=5)
-            ) as session:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
                 async with session.post(
                     f"{self.seq_url}/api/events/raw",
                     headers=headers,
                     data=json.dumps(log_entry) + "\n",
                 ) as response:
                     if response.status not in [200, 201]:
-                        logger.error(
-                            "Seq error %s: %s", response.status, await response.text()
-                        )
+                        logger.error("Seq error %s: %s", response.status, await response.text())
 
         except Exception as e:
             logger.error("Failed to send to Seq: %s", e)
@@ -238,17 +230,14 @@ class ComprehensiveLogAggregator:
                 container_info = {
                     "id": container.id[:12],
                     "name": container.name,
-                    "image": container.image.tags[0]
-                    if container.image.tags
-                    else "unknown",
+                    "image": container.image.tags[0] if container.image.tags else "unknown",
                     "status": container.status,
                     "labels": container.labels,
                 }
 
                 # Include AutoBot-related containers
                 if any(
-                    keyword in container.name.lower()
-                    for keyword in ["autobot", "redis", "seq", "npu", "worker"]
+                    keyword in container.name.lower() for keyword in ["autobot", "redis", "seq", "npu", "worker"]
                 ) or any(
                     keyword in str(container.image.tags).lower()
                     for keyword in ["autobot", "redis", "seq", "python", "node"]
@@ -277,9 +266,7 @@ class ComprehensiveLogAggregator:
             # Stream logs in a separate thread to avoid blocking
             def stream_logs():
                 try:
-                    for log_line in container.logs(
-                        stream=True, follow=True, timestamps=True
-                    ):
+                    for log_line in container.logs(stream=True, follow=True, timestamps=True):
                         # Use extracted helper function to process log line
                         def send_callback(*args, **kwargs):
                             """Forward log arguments to Seq sender in event loop."""
@@ -313,9 +300,7 @@ class ComprehensiveLogAggregator:
             """Monitor backend process logs via journalctl or log files."""
             try:
                 # Find the backend process
-                result = subprocess.run(
-                    ["pgrep", "-", "python.*main.py"], capture_output=True, text=True
-                )
+                result = subprocess.run(["pgrep", "-", "python.*main.py"], capture_output=True, text=True)
 
                 if result.returncode != 0:
                     logger.warning("Backend process not found")
@@ -353,9 +338,7 @@ class ComprehensiveLogAggregator:
             )
 
         for line in iter(proc.stdout.readline, ""):
-            if not _process_journalctl_line(
-                line, pid, send_callback, lambda: self.running
-            ):
+            if not _process_journalctl_line(line, pid, send_callback, lambda: self.running):
                 proc.terminate()
                 break
 
@@ -377,9 +360,7 @@ class ComprehensiveLogAggregator:
                 )
 
             for line in iter(proc.stdout.readline, ""):
-                if not _process_tail_log_line(
-                    line, source_name, file_path, send_callback, lambda: self.running
-                ):
+                if not _process_tail_log_line(line, source_name, file_path, send_callback, lambda: self.running):
                     proc.terminate()
                     break
 
@@ -412,9 +393,7 @@ class ComprehensiveLogAggregator:
                         proc.terminate()
                         break
 
-                    if line.strip() and (
-                        "autobot" in line.lower() or "python" in line.lower()
-                    ):
+                    if line.strip() and ("autobot" in line.lower() or "python" in line.lower()):
                         asyncio.run_coroutine_threadsafe(
                             self.send_to_seq(
                                 line.strip(),
@@ -521,18 +500,10 @@ async def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="AutoBot Comprehensive Log Aggregator")
-    parser.add_argument(
-        "--seq-url", default="http://localhost:5341", help="Seq server URL"
-    )
-    parser.add_argument(
-        "--start-all", action="store_true", help="Start monitoring all log sources"
-    )
-    parser.add_argument(
-        "--test-logs", action="store_true", help="Send test logs to Seq"
-    )
-    parser.add_argument(
-        "--list-containers", action="store_true", help="List Docker containers"
-    )
+    parser.add_argument("--seq-url", default="http://localhost:5341", help="Seq server URL")
+    parser.add_argument("--start-all", action="store_true", help="Start monitoring all log sources")
+    parser.add_argument("--test-logs", action="store_true", help="Send test logs to Seq")
+    parser.add_argument("--list-containers", action="store_true", help="List Docker containers")
 
     args = parser.parse_args()
 
@@ -557,9 +528,7 @@ async def main():
     if args.start_all:
         await aggregator.start_all_monitoring()
     else:
-        logger.info(
-            "Use --start-all to begin monitoring or --test-logs to test connectivity"
-        )
+        logger.info("Use --start-all to begin monitoring or --test-logs to test connectivity")
 
 
 if __name__ == "__main__":

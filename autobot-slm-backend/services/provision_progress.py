@@ -157,19 +157,12 @@ class TaskProgressTracker:
                 await asyncio.sleep(self._heartbeat_interval)
                 elapsed_str = format_elapsed(self.elapsed_seconds)
                 if hint:
-                    msg = (
-                        f"Still running... (elapsed: {elapsed_str})"
-                        f" [{self._task_name} — est. {hint}]"
-                    )
+                    msg = f"Still running... (elapsed: {elapsed_str})" f" [{self._task_name} — est. {hint}]"
                 else:
                     msg = f"Still running... (elapsed: {elapsed_str})"
                 try:
-                    await self._progress_callback(
-                        {"stage": "heartbeat", "message": msg}
-                    )
+                    await self._progress_callback({"stage": "heartbeat", "message": msg})
                 except Exception as exc:
-                    logger.debug(
-                        "TaskProgressTracker: progress_callback error: %s", exc
-                    )
+                    logger.debug("TaskProgressTracker: progress_callback error: %s", exc)
         except asyncio.CancelledError:
             pass

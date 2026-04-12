@@ -33,9 +33,7 @@ async def test_awareness_system():
         context = await awareness.get_system_context(include_detailed=False)
         logger.info(f"System: {context['system_identity']['name']}")
         logger.info(f"Current Phase: {context['system_identity']['current_phase']}")
-        logger.info(
-            f"System Maturity: {context['system_identity']['system_maturity']}%"
-        )
+        logger.info(f"System Maturity: {context['system_identity']['system_maturity']}%")
         logger.info(f"Active Capabilities: {context['current_capabilities']['count']}")
 
         logger.info("\nCapability Categories:")
@@ -61,9 +59,7 @@ async def test_awareness_system():
 
         for prompt in test_prompts:
             logger.info(f"\nOriginal: {prompt}")
-            enhanced = await awareness.inject_awareness_context(
-                prompt, context_level="basic"
-            )
+            enhanced = await awareness.inject_awareness_context(prompt, context_level="basic")
             # Show just the injected context part (first few lines)
             context_lines = enhanced.split("\n")[:8]
             logger.info("Enhanced with context:")
@@ -82,15 +78,11 @@ async def test_awareness_system():
         for query in test_queries:
             logger.info(f"\nQuery: {query}")
             analysis = await awareness.get_phase_aware_response(query)
-            print(
-                f"Relevant Capabilities: {len(analysis['context']['relevant_capabilities'])}"
-            )
+            print(f"Relevant Capabilities: {len(analysis['context']['relevant_capabilities'])}")
             if analysis["recommendations"]:
                 logger.info("Recommendations:")
                 for rec in analysis["recommendations"]:
-                    print(
-                        f"  - {rec['type']}: {rec.get('suggestion', rec.get('next_action', 'See details'))}"
-                    )
+                    print(f"  - {rec['type']}: {rec.get('suggestion', rec.get('next_action', 'See details'))}")
 
         logger.info("\n5. System Metrics")
         logger.info("-" * 50)
@@ -99,9 +91,7 @@ async def test_awareness_system():
 
         logger.info(f"Maturity Score: {metrics['maturity_score']}%")
         logger.info(f"Validation Score: {metrics['validation_score']}%")
-        print(
-            f"Auto-progression: {'Enabled' if operational['auto_progression_enabled'] else 'Disabled'}"
-        )
+        print(f"Auto-progression: {'Enabled' if operational['auto_progression_enabled'] else 'Disabled'}")
         logger.info(f"Milestones Achieved: {operational['milestones_achieved']}")
 
         logger.info("\n6. System Prompt Generation")
@@ -111,9 +101,7 @@ async def test_awareness_system():
         logger.info(system_prompt)
 
         logger.info("\n✅ LLM Self-Awareness System Test Complete!")
-        print(
-            f"System is operating at {context['system_identity']['system_maturity']}% maturity"
-        )
+        print(f"System is operating at {context['system_identity']['system_maturity']}% maturity")
 
         # Export awareness data for inspection
         export_path = await awareness.export_awareness_data()
@@ -147,9 +135,7 @@ async def test_api_integration():
                     async with session.get(endpoint) as response:
                         if response.status == 200:
                             data = await response.json()
-                            logger.info(
-                                f"✅ {endpoint}: {data.get('status', 'unknown')}"
-                            )
+                            logger.info(f"✅ {endpoint}: {data.get('status', 'unknown')}")
                         else:
                             logger.warning(f"⚠️ {endpoint}: HTTP {response.status}")
                 except Exception as e:

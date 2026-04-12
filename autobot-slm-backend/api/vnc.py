@@ -96,9 +96,7 @@ async def list_node_vnc_credentials(
             detail="Node not found",
         )
 
-    credentials = await vnc_credential_service.get_node_credentials(
-        db, node_id, active_only=not include_inactive
-    )
+    credentials = await vnc_credential_service.get_node_credentials(db, node_id, active_only=not include_inactive)
 
     return VNCCredentialListResponse(
         credentials=[vnc_credential_service.to_response(c, node) for c in credentials],
@@ -193,9 +191,7 @@ async def get_vnc_connection_info(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> VNCConnectionInfo:
     """Get VNC connection info with a short-lived token for password retrieval."""
-    connection_info = await vnc_credential_service.get_connection_info(
-        db, credential_id, generate_token=True
-    )
+    connection_info = await vnc_credential_service.get_connection_info(db, credential_id, generate_token=True)
     if not connection_info:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -234,9 +230,7 @@ async def list_vnc_endpoints(
     include_inactive: bool = Query(False),
 ) -> VNCEndpointsResponse:
     """List all VNC endpoints across the fleet."""
-    endpoints = await vnc_credential_service.get_all_vnc_endpoints(
-        db, active_only=not include_inactive
-    )
+    endpoints = await vnc_credential_service.get_all_vnc_endpoints(db, active_only=not include_inactive)
 
     return VNCEndpointsResponse(
         endpoints=endpoints,

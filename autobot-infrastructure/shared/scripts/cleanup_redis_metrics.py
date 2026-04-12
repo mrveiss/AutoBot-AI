@@ -134,9 +134,7 @@ async def _scan_all_patterns(redis_client, kb_redis_client, results: dict) -> li
     return all_keys
 
 
-async def _delete_keys(
-    all_keys: list, redis_client, kb_redis_client, results: dict
-) -> int:
+async def _delete_keys(all_keys: list, redis_client, kb_redis_client, results: dict) -> int:
     """
     Delete all collected keys from Redis.
 
@@ -264,9 +262,7 @@ async def cleanup_redis_metrics(dry_run: bool = True, force: bool = False) -> di
 
 async def main():
     """Entry point for Redis legacy metrics cleanup CLI."""
-    parser = argparse.ArgumentParser(
-        description="Clean up legacy metric keys from Redis (Phase 5)"
-    )
+    parser = argparse.ArgumentParser(description="Clean up legacy metric keys from Redis (Phase 5)")
     parser.add_argument(
         "--dry-run",
         action="store_true",

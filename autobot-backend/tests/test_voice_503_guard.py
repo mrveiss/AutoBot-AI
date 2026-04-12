@@ -58,9 +58,7 @@ class TestVoice503Guard:
         """POST /api/voice/speak must return 503 (not 500/AttributeError)."""
         app = _make_app(with_voice_interface=False)
         client = TestClient(app, raise_server_exceptions=False)
-        response = client.post(
-            "/api/voice/speak", data={"text": "hello", "user_role": "user"}
-        )
+        response = client.post("/api/voice/speak", data={"text": "hello", "user_role": "user"})
         assert response.status_code == 503
         body = response.json()
         assert "message" in body
@@ -81,7 +79,5 @@ class TestVoice503Guard:
         """Confirm AttributeError is not raised for /speak either."""
         app = _make_app(with_voice_interface=False)
         client = TestClient(app, raise_server_exceptions=True)
-        response = client.post(
-            "/api/voice/speak", data={"text": "hello", "user_role": "user"}
-        )
+        response = client.post("/api/voice/speak", data={"text": "hello", "user_role": "user"})
         assert response.status_code == 503

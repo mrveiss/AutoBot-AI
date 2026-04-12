@@ -39,9 +39,7 @@ class AutoBotPortAuditor:
         """Get all listening ports with process info"""
         try:
             # Using netstat to get listening ports
-            result = subprocess.run(
-                ["netstat", "-tlnp"], capture_output=True, text=True, check=True
-            )
+            result = subprocess.run(["netstat", "-tlnp"], capture_output=True, text=True, check=True)
 
             ports = []
             for line in result.stdout.split("\n"):
@@ -176,9 +174,7 @@ class AutoBotPortAuditor:
             else:
                 # Unexpected application port
                 print(f"🚨 Port {port:5d} - UNEXPECTED SERVICE ({process_info})")
-                self.security_violations.append(
-                    f"Unexpected port {port} running {process_info}"
-                )
+                self.security_violations.append(f"Unexpected port {port} running {process_info}")
 
         print()
 
@@ -199,14 +195,10 @@ class AutoBotPortAuditor:
                     for port_str in external_ports:
                         port = int(port_str)
                         if port in self.expected_ports:
-                            print(
-                                f"✅ {container} - Port {port} ({self.expected_ports[port]})"
-                            )
+                            print(f"✅ {container} - Port {port} ({self.expected_ports[port]})")
                         else:
                             print(f"🚨 {container} - UNEXPECTED PORT {port}")
-                            self.security_violations.append(
-                                f"Container {container} exposes unexpected port {port}"
-                            )
+                            self.security_violations.append(f"Container {container} exposes unexpected port {port}")
         print()
 
         # Check for missing expected services
@@ -225,9 +217,7 @@ class AutoBotPortAuditor:
                 print(f"✅ {service} - Running on port {port}")
             else:
                 print(f"⚠️  {service} - NOT RUNNING on port {port}")
-                self.warnings.append(
-                    f"Expected service {service} not found on port {port}"
-                )
+                self.warnings.append(f"Expected service {service} not found on port {port}")
 
         print()
         self._print_summary()

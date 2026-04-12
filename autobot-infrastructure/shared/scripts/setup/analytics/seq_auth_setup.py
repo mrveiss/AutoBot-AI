@@ -62,9 +62,7 @@ def create_seq_api_key(
                 "AppliedPermissions": ["Ingest", "Read", "Setup", "Write"],
             }
 
-            response = session.post(
-                f"{seq_url}/api/apikeys", json=api_key_data
-            )
+            response = session.post(f"{seq_url}/api/apikeys", json=api_key_data)
             if response.status_code in [200, 201]:
                 api_key_info = response.json()
                 token = api_key_info.get("Token")
@@ -124,11 +122,18 @@ def _run_seqcli_password_reset(seq_container: str, new_password: str) -> bool:
     import subprocess
 
     reset_command = [
-        "docker", "exec", seq_container,
-        "seqcli", "user", "update",
-        "-n", "admin",
-        "-p", new_password,
-        "-s", "http://localhost",
+        "docker",
+        "exec",
+        seq_container,
+        "seqcli",
+        "user",
+        "update",
+        "-n",
+        "admin",
+        "-p",
+        new_password,
+        "-s",
+        "http://localhost",
     ]
     logger.info("Resetting admin password...")
     result = subprocess.run(reset_command, capture_output=True, text=True)
@@ -246,7 +251,10 @@ def verify_seq_logs(seq_url=None):
                     source = event.get("Source", "Unknown")
                     logger.info(
                         "   [%s] %s: %s... (from %s)",
-                        timestamp[:19], level, message[:80], source,
+                        timestamp[:19],
+                        level,
+                        message[:80],
+                        source,
                     )
 
             return event_count > 0
@@ -274,11 +282,7 @@ def main():
         logger.error("Authentication failed!")
         logger.info("This often happens after Docker container restart.")
 
-        reset_choice = (
-            input("\nWould you like to reset the Seq admin password? (y/N): ")
-            .strip()
-            .lower()
-        )
+        reset_choice = input("\nWould you like to reset the Seq admin password? (y/N): ").strip().lower()
 
         if reset_choice in ["y", "yes"]:
             if reset_seq_admin_password(seq_url):
@@ -329,9 +333,7 @@ Environment Variables:
         """,
     )
 
-    parser.add_argument(
-        "--reset-password", action="store_true", help="Reset Seq admin password"
-    )
+    parser.add_argument("--reset-password", action="store_true", help="Reset Seq admin password")
 
     parser.add_argument("--seq-url", help="Seq server URL")
 

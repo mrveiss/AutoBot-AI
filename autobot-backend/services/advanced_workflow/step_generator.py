@@ -11,7 +11,8 @@ import logging
 from typing import List, Optional
 
 from autobot_types import TaskComplexity
-from orchestrator import EnhancedOrchestrator, get_orchestrator_sync as get_orchestrator
+from orchestrator import EnhancedOrchestrator
+from orchestrator import get_orchestrator_sync as get_orchestrator
 from type_defs.common import Metadata
 
 from .models import SmartWorkflowStep, WorkflowIntent

@@ -17,12 +17,13 @@ from typing import List, Optional
 
 from constants.model_constants import (
     GROQ_GEMMA2_9B,
+    GROQ_LLAMA3_8B,
+    GROQ_LLAMA3_70B,
     GROQ_LLAMA31_8B,
     GROQ_LLAMA33_70B,
-    GROQ_LLAMA3_70B,
-    GROQ_LLAMA3_8B,
     GROQ_MIXTRAL_8X7B,
 )
+
 from ..models import LLMRequest, LLMResponse
 from .base import (
     AdapterBase,

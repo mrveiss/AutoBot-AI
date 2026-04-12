@@ -24,9 +24,7 @@ sys.path.insert(0, str(project_root))
 
 from constants.network_constants import NetworkConstants
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 # DB number from redis-databases.yaml SSOT (#2806): analytics = 11
@@ -79,9 +77,7 @@ class CodebaseChromaDBMigration:
             # Create or get the code collection
             self.code_collection = self.chroma_client.get_or_create_collection(
                 name="autobot_code",
-                metadata={
-                    "description": "Codebase analytics: functions, classes, duplicates"
-                },
+                metadata={"description": "Codebase analytics: functions, classes, duplicates"},
             )
 
             logger.info(
@@ -99,9 +95,7 @@ class CodebaseChromaDBMigration:
             logger.info("📦 Migrating functions...")
 
             # Get all function keys
-            function_keys = list(
-                self.redis_client.scan_iter(match="codebase:functions:*")
-            )
+            function_keys = list(self.redis_client.scan_iter(match="codebase:functions:*"))
             logger.info("Found %s functions", len(function_keys))
 
             # Prepare batch data
@@ -148,9 +142,7 @@ Docstring: {function_data.get('docstring', 'No documentation')}
 
             # Add batch to ChromaDB
             if batch_ids:
-                self.code_collection.add(
-                    ids=batch_ids, documents=batch_documents, metadatas=batch_metadatas
-                )
+                self.code_collection.add(ids=batch_ids, documents=batch_documents, metadatas=batch_metadatas)
                 self.migration_stats["functions"] = len(batch_ids)
                 logger.info("✅ Migrated %s functions to ChromaDB", len(batch_ids))
 
@@ -207,9 +199,7 @@ Docstring: {class_data.get('docstring', 'No documentation')}
                     self.migration_stats["errors"] += 1
 
             if batch_ids:
-                self.code_collection.add(
-                    ids=batch_ids, documents=batch_documents, metadatas=batch_metadatas
-                )
+                self.code_collection.add(ids=batch_ids, documents=batch_documents, metadatas=batch_metadatas)
                 self.migration_stats["classes"] = len(batch_ids)
                 logger.info("✅ Migrated %s classes to ChromaDB", len(batch_ids))
 
@@ -266,9 +256,7 @@ Suggestion: {problem.get('suggestion', 'No suggestion')}
                     self.migration_stats["errors"] += 1
 
             if batch_ids:
-                self.code_collection.add(
-                    ids=batch_ids, documents=batch_documents, metadatas=batch_metadatas
-                )
+                self.code_collection.add(ids=batch_ids, documents=batch_documents, metadatas=batch_metadatas)
                 self.migration_stats["problems"] = len(batch_ids)
                 logger.info("✅ Migrated %s problems to ChromaDB", len(batch_ids))
 

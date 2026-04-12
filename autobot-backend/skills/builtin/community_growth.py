@@ -104,10 +104,7 @@ class CommunityGrowthSkill(BaseSkill):
         return SkillManifest(
             name="community-growth",
             version="1.0.0",
-            description=(
-                "Autonomous community outreach across Reddit, Twitter, Discord, "
-                "and GitHub"
-            ),
+            description=("Autonomous community outreach across Reddit, Twitter, Discord, " "and GitHub"),
             author="mrveiss",
             category="automation",
             dependencies=[],
@@ -197,9 +194,7 @@ class CommunityGrowthSkill(BaseSkill):
                                 "url": f"https://reddit.com{post.permalink}",
                                 "subreddit": sub_name,
                                 "score": post.score,
-                                "body_snippet": (
-                                    post.selftext[:200] if post.selftext else ""
-                                ),
+                                "body_snippet": (post.selftext[:200] if post.selftext else ""),
                             }
                         )
             return results
@@ -230,9 +225,7 @@ class CommunityGrowthSkill(BaseSkill):
             return f"https://reddit.com{comment.permalink}"
 
         try:
-            comment_url = await asyncio.get_running_loop().run_in_executor(
-                None, _sync_reply
-            )
+            comment_url = await asyncio.get_running_loop().run_in_executor(None, _sync_reply)
             return {"success": True, "comment_url": comment_url}
         except Exception as exc:
             logger.exception("reddit_reply failed for post %s", post_id)
@@ -265,9 +258,7 @@ class CommunityGrowthSkill(BaseSkill):
             return f"https://reddit.com{post.permalink}"
 
         try:
-            post_url = await asyncio.get_running_loop().run_in_executor(
-                None, _sync_post
-            )
+            post_url = await asyncio.get_running_loop().run_in_executor(None, _sync_post)
             return {"success": True, "post_url": post_url}
         except Exception as exc:
             logger.exception("reddit_post failed to r/%s", subreddit)
@@ -299,9 +290,7 @@ class CommunityGrowthSkill(BaseSkill):
             "Content-Type": "application/json",
         }
         async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url, headers=headers, json={"text": content}
-            ) as resp:
+            async with session.post(url, headers=headers, json={"text": content}) as resp:
                 data = await resp.json()
                 if resp.status == 201:
                     tweet_id = data.get("data", {}).get("id", "")
@@ -354,9 +343,7 @@ class CommunityGrowthSkill(BaseSkill):
 
         url = f"https://api.github.com/repos/{repo}/releases"
         async with aiohttp.ClientSession() as session:
-            async with session.get(
-                url, headers=headers, params={"per_page": limit}
-            ) as resp:
+            async with session.get(url, headers=headers, params={"per_page": limit}) as resp:
                 if resp.status != 200:
                     text = await resp.text()
                     return {
@@ -396,8 +383,7 @@ class CommunityGrowthSkill(BaseSkill):
             "tweet": "Write a tweet under 280 characters. Be engaging and use hashtags.",
             "discord": "Write a friendly Discord message with key highlights.",
             "all_channels": (
-                "Draft three separate messages: one Reddit post, one tweet "
-                "(≤280 chars), and one Discord message."
+                "Draft three separate messages: one Reddit post, one tweet " "(≤280 chars), and one Discord message."
             ),
         }
         hint = format_hints.get(fmt, "")

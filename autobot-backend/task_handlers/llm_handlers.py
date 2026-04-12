@@ -27,9 +27,7 @@ class LLMChatCompletionHandler(TaskHandler):
         messages = ctx.require_payload_value("messages")
         llm_kwargs = ctx.get_payload_value("kwargs", {})
 
-        response = await ctx.worker.llm_interface.chat_completion(
-            model_name, messages, **llm_kwargs
-        )
+        response = await ctx.worker.llm_interface.chat_completion(model_name, messages, **llm_kwargs)
 
         if response:
             result = task_success(

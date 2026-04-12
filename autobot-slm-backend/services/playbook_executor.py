@@ -59,9 +59,7 @@ class PlaybookExecutor:
             if os.path.isfile(path) and os.access(path, os.X_OK):
                 return path
 
-        raise FileNotFoundError(
-            "ansible-playbook not found. Install: apt install ansible"
-        )
+        raise FileNotFoundError("ansible-playbook not found. Install: apt install ansible")
 
     def _parse_play1_task(self, task_name: str) -> Optional[Dict[str, str]]:
         """
@@ -278,9 +276,7 @@ class PlaybookExecutor:
                             try:
                                 await progress_callback(progress)
                             except Exception as e:
-                                logger.debug(
-                                    "Progress callback error: %s", e, exc_info=False
-                                )
+                                logger.debug("Progress callback error: %s", e, exc_info=False)
             finally:
                 await _stop_current_tracker()
 
@@ -313,9 +309,7 @@ class PlaybookExecutor:
         code_source_dir = self.ansible_dir.parent.parent
         git_dir = code_source_dir / ".git"
         if not git_dir.exists():
-            logger.debug(
-                "_update_code_source: no .git at %s — skipping", code_source_dir
-            )
+            logger.debug("_update_code_source: no .git at %s — skipping", code_source_dir)
             return
 
         branch = os.getenv("AUTOBOT_GIT_BRANCH", "Dev_new_gui")
@@ -340,14 +334,10 @@ class PlaybookExecutor:
 
         try:
             if await _run_git("checkout", "--", ".") != 0:
-                logger.warning(
-                    "_update_code_source: git checkout -- . failed; continuing"
-                )
+                logger.warning("_update_code_source: git checkout -- . failed; continuing")
 
             if await _run_git("fetch", "origin") != 0:
-                logger.warning(
-                    "_update_code_source: git fetch origin failed; continuing"
-                )
+                logger.warning("_update_code_source: git fetch origin failed; continuing")
                 return
 
             if await _run_git("reset", "--hard", f"origin/{branch}") != 0:
@@ -376,9 +366,7 @@ class PlaybookExecutor:
                 branch,
             )
         except Exception as exc:
-            logger.warning(
-                "_update_code_source: unexpected error — %s; continuing", exc
-            )
+            logger.warning("_update_code_source: unexpected error — %s; continuing", exc)
 
     def _build_ansible_env(self) -> Dict[str, str]:
         """
@@ -478,9 +466,7 @@ class PlaybookExecutor:
             if success:
                 logger.info(f"Playbook {playbook_name} completed successfully")
             else:
-                logger.error(
-                    f"Playbook {playbook_name} failed with code {proc_result['returncode']}"
-                )
+                logger.error(f"Playbook {playbook_name} failed with code {proc_result['returncode']}")
             return {
                 "success": success,
                 "output": proc_result["output"],

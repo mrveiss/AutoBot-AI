@@ -35,9 +35,7 @@ def debug_redis_vector_fields():
 
         # Get a sample document to see actual fields
         logger.info("\nGetting sample documents...")
-        search_result = client.execute_command(
-            "FT.SEARCH", "llama_index", "*", "LIMIT", "0", "3"  # Match all
-        )
+        search_result = client.execute_command("FT.SEARCH", "llama_index", "*", "LIMIT", "0", "3")  # Match all
 
         logger.info("Search returned %s total documents", search_result[0])
 

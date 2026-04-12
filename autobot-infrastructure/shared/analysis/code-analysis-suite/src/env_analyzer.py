@@ -113,9 +113,7 @@ class EnvironmentAnalyzer:
 
         logger.info("Environment Analyzer initialized")
 
-    async def analyze_codebase(
-        self, root_path: str = ".", patterns: List[str] = None
-    ) -> Dict[str, Any]:
+    async def analyze_codebase(self, root_path: str = ".", patterns: List[str] = None) -> Dict[str, Any]:
         """Analyze entire codebase for hardcoded values"""
 
         start_time = time.time()
@@ -144,17 +142,11 @@ class EnvironmentAnalyzer:
         results = {
             "total_hardcoded_values": len(hardcoded_values),
             "categories": {cat: len(vals) for cat, vals in categorized.items()},
-            "high_priority_count": len(
-                [v for v in hardcoded_values if v.severity == "high"]
-            ),
+            "high_priority_count": len([v for v in hardcoded_values if v.severity == "high"]),
             "recommendations_count": len(recommendations),
             "analysis_time_seconds": analysis_time,
-            "hardcoded_details": [
-                self._serialize_hardcoded_value(v) for v in hardcoded_values
-            ],
-            "configuration_recommendations": [
-                self._serialize_recommendation(r) for r in recommendations
-            ],
+            "hardcoded_details": [self._serialize_hardcoded_value(v) for v in hardcoded_values],
+            "configuration_recommendations": [self._serialize_recommendation(r) for r in recommendations],
             "metrics": metrics,
         }
 
@@ -164,9 +156,7 @@ class EnvironmentAnalyzer:
         logger.info(f"Environment analysis complete in {analysis_time:.2f}s")
         return results
 
-    async def _scan_for_hardcoded_values(
-        self, root_path: str, patterns: List[str]
-    ) -> List[HardcodedValue]:
+    async def _scan_for_hardcoded_values(self, root_path: str, patterns: List[str]) -> List[HardcodedValue]:
         """Scan files for hardcoded values"""
 
         hardcoded_values = []
@@ -176,9 +166,7 @@ class EnvironmentAnalyzer:
             for file_path in root.glob(pattern):
                 if file_path.is_file() and not self._should_skip_file(file_path):
                     try:
-                        values = await self._scan_file_for_hardcoded_values(
-                            str(file_path)
-                        )
+                        values = await self._scan_file_for_hardcoded_values(str(file_path))
                         hardcoded_values.extend(values)
                     except Exception as e:
                         logger.warning(f"Failed to scan {file_path}: {e}")
@@ -270,9 +258,7 @@ class EnvironmentAnalyzer:
 
         return False
 
-    async def _scan_file_for_hardcoded_values(
-        self, file_path: str
-    ) -> List[HardcodedValue]:
+    async def _scan_file_for_hardcoded_values(self, file_path: str) -> List[HardcodedValue]:
         """Scan a single file for hardcoded values"""
 
         hardcoded_values = []
@@ -285,17 +271,13 @@ class EnvironmentAnalyzer:
             # Parse AST for better context
             try:
                 tree = ast.parse(content, filename=file_path)
-                hardcoded_values.extend(
-                    await self._scan_ast_for_hardcoded_values(file_path, tree, lines)
-                )
+                hardcoded_values.extend(await self._scan_ast_for_hardcoded_values(file_path, tree, lines))
             except SyntaxError:
                 # Fallback to regex scanning for non-Python files or syntax errors
                 pass
 
             # Regex-based scanning
-            hardcoded_values.extend(
-                await self._regex_scan_file(file_path, content, lines)
-            )
+            hardcoded_values.extend(await self._regex_scan_file(file_path, content, lines))
 
         except Exception as e:
             logger.error(f"Error scanning {file_path}: {e}")
@@ -326,41 +308,27 @@ class EnvironmentAnalyzer:
             if isinstance(node, ast.Str):
                 value = node.s
                 if self._is_potentially_configurable(value):
-                    hardcoded_values.append(
-                        self._create_hardcoded_value(
-                            file_path, node.lineno, None, value, lines
-                        )
-                    )
+                    hardcoded_values.append(self._create_hardcoded_value(file_path, node.lineno, None, value, lines))
 
             # Numeric constants that might be configurable
             elif isinstance(node, ast.Num):
                 value = str(node.n)
                 if self._is_numeric_config_candidate(value):
-                    hardcoded_values.append(
-                        self._create_hardcoded_value(
-                            file_path, node.lineno, None, value, lines
-                        )
-                    )
+                    hardcoded_values.append(self._create_hardcoded_value(file_path, node.lineno, None, value, lines))
 
             # Assignment nodes to get variable names
             elif isinstance(node, ast.Assign):
                 for target in node.targets:
-                    if isinstance(target, ast.Name) and isinstance(
-                        node.value, (ast.Str, ast.Num)
-                    ):
+                    if isinstance(target, ast.Name) and isinstance(node.value, (ast.Str, ast.Num)):
                         var_name = target.id
                         if isinstance(node.value, ast.Str):
                             value = node.value.s
                         else:
                             value = str(node.value.n)
 
-                        if self._is_potentially_configurable(
-                            value
-                        ) or self._is_numeric_config_candidate(value):
+                        if self._is_potentially_configurable(value) or self._is_numeric_config_candidate(value):
                             hardcoded_values.append(
-                                self._create_hardcoded_value(
-                                    file_path, node.lineno, var_name, value, lines
-                                )
+                                self._create_hardcoded_value(file_path, node.lineno, var_name, value, lines)
                             )
 
         return hardcoded_values
@@ -385,8 +353,7 @@ class EnvironmentAnalyzer:
                 if node.body and isinstance(node.body[0], ast.Expr):
                     expr_value = node.body[0].value
                     is_docstring = isinstance(expr_value, ast.Str) or (
-                        isinstance(expr_value, ast.Constant)
-                        and isinstance(expr_value.value, str)
+                        isinstance(expr_value, ast.Constant) and isinstance(expr_value.value, str)
                     )
                     if is_docstring:
                         doc_node = node.body[0]
@@ -425,9 +392,7 @@ class EnvironmentAnalyzer:
 
         return False
 
-    async def _regex_scan_file(
-        self, file_path: str, content: str, lines: List[str]
-    ) -> List[HardcodedValue]:
+    async def _regex_scan_file(self, file_path: str, content: str, lines: List[str]) -> List[HardcodedValue]:
         """Issue #632: Scan file with line-level filtering (aligned with shell script)"""
 
         hardcoded_values = []
@@ -456,22 +421,13 @@ class EnvironmentAnalyzer:
                     value = match.group(1) if match.groups() else match.group(0)
 
                     # Skip empty values or docstring content
-                    if (
-                        not value
-                        or "\n" in value
-                        or value.startswith(("    ", "\t", '"""', "'''"))
-                    ):
+                    if not value or "\n" in value or value.startswith(("    ", "\t", '"""', "'''")):
                         continue
 
                     # Skip if already found by AST scanning
-                    if not any(
-                        hv.line_number == line_num and hv.value == value
-                        for hv in hardcoded_values
-                    ):
+                    if not any(hv.line_number == line_num and hv.value == value for hv in hardcoded_values):
                         hardcoded_values.append(
-                            self._create_hardcoded_value(
-                                file_path, line_num, None, value, lines, category
-                            )
+                            self._create_hardcoded_value(file_path, line_num, None, value, lines, category)
                         )
 
         return hardcoded_values
@@ -574,9 +530,7 @@ class EnvironmentAnalyzer:
                 return False
 
         # Skip code/documentation
-        if "\n" in value or value.startswith(
-            ("    ", "\t", "#", "//", "/*", '"""', "'''")
-        ):
+        if "\n" in value or value.startswith(("    ", "\t", "#", "//", "/*", '"""', "'''")):
             return False
 
         # Skip very long strings
@@ -594,15 +548,11 @@ class EnvironmentAnalyzer:
             value in ["localhost", "127.0.0.1", "0.0.0.0"],
             _is_private_ip(value),  # RFC 1918 / loopback
             # Security (HIGH priority)
-            value.startswith(
-                ("sk-", "pk_", "rk_", "api_", "API_", "Bearer ", "token_")
-            ),
+            value.startswith(("sk-", "pk_", "rk_", "api_", "API_", "Bearer ", "token_")),
             # File paths (MEDIUM priority - must be config files)
             (
                 value.startswith("/")
-                and value.endswith(
-                    (".log", ".db", ".json", ".yaml", ".yml", ".conf", ".cfg", ".ini")
-                )
+                and value.endswith((".log", ".db", ".json", ".yaml", ".yml", ".conf", ".cfg", ".ini"))
                 and "/" in value[1:]
             ),
         ]
@@ -637,9 +587,7 @@ class EnvironmentAnalyzer:
         except ValueError:
             return False
 
-    def _classify_value(
-        self, value: str, category: Optional[str], context: str
-    ) -> Tuple[str, str]:
+    def _classify_value(self, value: str, category: Optional[str], context: str) -> Tuple[str, str]:
         """Issue #632: Classify value and severity (aligned with shell script)"""
 
         if value is None:
@@ -692,10 +640,7 @@ class EnvironmentAnalyzer:
         # MEDIUM severity: URLs and hostnames
         if value.startswith(("http://", "https://", "ws://", "wss://")):
             # Check for example domains
-            if any(
-                d in value.lower()
-                for d in ["example.com", "example.org", "example.net"]
-            ):
+            if any(d in value.lower() for d in ["example.com", "example.org", "example.net"]):
                 return "url", "low"
             return "url", "medium"
 
@@ -706,16 +651,12 @@ class EnvironmentAnalyzer:
         if value.startswith("/") or value.startswith("./"):
             return "path", "low"
 
-        if value.endswith(
-            (".log", ".db", ".json", ".yaml", ".yml", ".conf", ".cfg", ".ini")
-        ):
+        if value.endswith((".log", ".db", ".json", ".yaml", ".yml", ".conf", ".cfg", ".ini")):
             return "config_file", "low"
 
         return category or "string", "low"
 
-    def _suggest_env_var_name(
-        self, var_name: Optional[str], value: str, value_type: str, file_path: str
-    ) -> str:
+    def _suggest_env_var_name(self, var_name: Optional[str], value: str, value_type: str, file_path: str) -> str:
         """Suggest an environment variable name"""
 
         # Use existing variable name as base if available
@@ -745,15 +686,9 @@ class EnvironmentAnalyzer:
         suggestion = re.sub(r"_+", "_", suggestion)
         suggestion = suggestion.strip("_")
 
-        return (
-            f"AUTOBOT_{suggestion}"
-            if not suggestion.startswith("AUTOBOT_")
-            else suggestion
-        )
+        return f"AUTOBOT_{suggestion}" if not suggestion.startswith("AUTOBOT_") else suggestion
 
-    async def _categorize_values(
-        self, hardcoded_values: List[HardcodedValue]
-    ) -> Dict[str, List[HardcodedValue]]:
+    async def _categorize_values(self, hardcoded_values: List[HardcodedValue]) -> Dict[str, List[HardcodedValue]]:
         """Categorize hardcoded values by type"""
 
         categories = {}
@@ -781,9 +716,7 @@ class EnvironmentAnalyzer:
 
             # Create recommendations
             for env_var_name, group_values in env_var_groups.items():
-                if (
-                    len(group_values) >= 1
-                ):  # Only recommend if used in multiple places or high severity
+                if len(group_values) >= 1:  # Only recommend if used in multiple places or high severity
                     most_common_value = max(
                         set(v.value for v in group_values),
                         key=lambda x: sum(1 for v in group_values if v.value == x),
@@ -899,9 +832,7 @@ class EnvironmentAnalyzer:
                 # Clear all analysis keys
                 cursor = 0
                 while True:
-                    cursor, keys = await self.redis_client.scan(
-                        cursor, match="env_analysis:*", count=100
-                    )
+                    cursor, keys = await self.redis_client.scan(cursor, match="env_analysis:*", count=100)
                     if keys:
                         await self.redis_client.delete(*keys)
                     if cursor == 0:
@@ -928,9 +859,7 @@ async def main():
     analyzer = EnvironmentAnalyzer()
 
     # Analyze the codebase
-    results = await analyzer.analyze_codebase(
-        root_path=".", patterns=["src/**/*.py", "backend/**/*.py"]
-    )
+    results = await analyzer.analyze_codebase(root_path=".", patterns=["src/**/*.py", "backend/**/*.py"])
 
     # Print summary
     logger.info("\n=== Environment Variable Analysis Results ===")

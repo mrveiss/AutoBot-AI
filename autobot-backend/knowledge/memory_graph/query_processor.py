@@ -28,7 +28,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from autobot_shared.redis_client import get_redis_client
-
 from knowledge.memory_graph.hybrid_scorer import HybridScorer, SearchResult
 
 logger = logging.getLogger(__name__)

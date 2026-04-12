@@ -224,12 +224,8 @@ class MemoryGraphInitializer:
             # Check if index already exists
             try:
                 self.redis_client.ft(self.entity_index).info()
-                logger.warning(
-                    "Index %s already exists, dropping...", self.entity_index
-                )
-                self.redis_client.ft(self.entity_index).dropindex(
-                    delete_documents=False
-                )
+                logger.warning("Index %s already exists, dropping...", self.entity_index)
+                self.redis_client.ft(self.entity_index).dropindex(delete_documents=False)
                 logger.info("Dropped existing index %s", self.entity_index)
             except redis.ResponseError:
                 # Index doesn't exist, that's fine
@@ -262,17 +258,11 @@ class MemoryGraphInitializer:
             )
 
             # Create index on JSON documents with memory:graph:entity: prefix
-            definition = IndexDefinition(
-                prefix=[self.entity_prefix], index_type=IndexType.JSON
-            )
+            definition = IndexDefinition(prefix=[self.entity_prefix], index_type=IndexType.JSON)
 
-            self.redis_client.ft(self.entity_index).create_index(
-                schema, definition=definition
-            )
+            self.redis_client.ft(self.entity_index).create_index(schema, definition=definition)
 
-            logger.info(
-                "Created entity index with vector search support (768 dimensions)"
-            )
+            logger.info("Created entity index with vector search support (768 dimensions)")
             return True
 
         except redis.ResponseError as e:
@@ -301,12 +291,8 @@ class MemoryGraphInitializer:
             # Check if index already exists
             try:
                 self.redis_client.ft(self.fulltext_index).info()
-                logger.warning(
-                    "Index %s already exists, dropping...", self.fulltext_index
-                )
-                self.redis_client.ft(self.fulltext_index).dropindex(
-                    delete_documents=False
-                )
+                logger.warning("Index %s already exists, dropping...", self.fulltext_index)
+                self.redis_client.ft(self.fulltext_index).dropindex(delete_documents=False)
                 logger.info("Dropped existing index %s", self.fulltext_index)
             except redis.ResponseError:
                 # Index doesn't exist, that's fine
@@ -319,13 +305,9 @@ class MemoryGraphInitializer:
             )
 
             # Create index on JSON documents with memory:graph:entity: prefix
-            definition = IndexDefinition(
-                prefix=[self.entity_prefix], index_type=IndexType.JSON
-            )
+            definition = IndexDefinition(prefix=[self.entity_prefix], index_type=IndexType.JSON)
 
-            self.redis_client.ft(self.fulltext_index).create_index(
-                schema, definition=definition
-            )
+            self.redis_client.ft(self.fulltext_index).create_index(schema, definition=definition)
 
             logger.info("Created full-text index with phonetic matching")
             return True
@@ -499,9 +481,7 @@ class MemoryGraphInitializer:
             },
         }
 
-    def _conversation_to_entity(
-        self, transcript_path: Path
-    ) -> Optional[Dict[str, Any]]:
+    def _conversation_to_entity(self, transcript_path: Path) -> Optional[Dict[str, Any]]:
         """Convert conversation transcript to memory graph entity
 
         Args:
@@ -529,9 +509,7 @@ class MemoryGraphInitializer:
             logger.error("Failed to convert %s: %s", transcript_path.name, e)
             return None
 
-    def _extract_conversation_relations(
-        self, entities: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    def _extract_conversation_relations(self, entities: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Extract relations between conversations based on shared topics
 
         Args:
@@ -563,9 +541,7 @@ class MemoryGraphInitializer:
                             "from": entity_a["id"],
                             "to": entity_b["id"],
                             "type": "relates_to",
-                            "created_at": max(
-                                entity_a["created_at"], entity_b["created_at"]
-                            ),
+                            "created_at": max(entity_a["created_at"], entity_b["created_at"]),
                             "metadata": {
                                 "strength": strength,
                                 "shared_topics": list(topics_a & topics_b),
@@ -601,9 +577,7 @@ class MemoryGraphInitializer:
                 out_key = f"{self.relation_out_prefix}{rel['from']}"
 
                 # Initialize if doesn't exist
-                pipeline.json().set(
-                    out_key, "$", {"entity_id": rel["from"], "relations": []}, nx=True
-                )
+                pipeline.json().set(out_key, "$", {"entity_id": rel["from"], "relations": []}, nx=True)
 
                 # Append relation
                 pipeline.json().arrappend(out_key, "$.relations", rel)
@@ -612,9 +586,7 @@ class MemoryGraphInitializer:
                 in_key = f"{self.relation_in_prefix}{rel['to']}"
 
                 # Initialize if doesn't exist
-                pipeline.json().set(
-                    in_key, "$", {"entity_id": rel["to"], "relations": []}, nx=True
-                )
+                pipeline.json().set(in_key, "$", {"entity_id": rel["to"], "relations": []}, nx=True)
 
                 # Append reverse relation
                 reverse_rel = {
@@ -663,9 +635,7 @@ class MemoryGraphInitializer:
             try:
                 info = self.redis_client.ft(self.entity_index).info()
                 validation_results["entity_index"] = True
-                validation_results["details"]["entity_index"] = self._parse_index_info(
-                    info
-                )
+                validation_results["details"]["entity_index"] = self._parse_index_info(info)
                 logger.info("✓ Entity index validated: %s", self.entity_index)
             except redis.ResponseError as e:
                 logger.error("✗ Entity index validation failed: %s", e)
@@ -675,9 +645,7 @@ class MemoryGraphInitializer:
             try:
                 info = self.redis_client.ft(self.fulltext_index).info()
                 validation_results["fulltext_index"] = True
-                validation_results["details"]["fulltext_index"] = (
-                    self._parse_index_info(info)
-                )
+                validation_results["details"]["fulltext_index"] = self._parse_index_info(info)
                 logger.info("✓ Full-text index validated: %s", self.fulltext_index)
             except redis.ResponseError as e:
                 logger.error("✗ Full-text index validation failed: %s", e)
@@ -688,16 +656,10 @@ class MemoryGraphInitializer:
                 query = Query("*").return_fields("id", "name", "type").paging(0, 1)
                 results = self.redis_client.ft(self.entity_index).search(query)
                 validation_results["vector_search"] = True
-                validation_results["details"][
-                    "vector_search"
-                ] = f"Search functional, {results.total} documents"
-                logger.info(
-                    "✓ Vector search validated: %s documents indexed", results.total
-                )
+                validation_results["details"]["vector_search"] = f"Search functional, {results.total} documents"
+                logger.info("✓ Vector search validated: %s documents indexed", results.total)
             except Exception as e:
-                logger.warning(
-                    "Vector search validation failed (may be no documents yet): %s", e
-                )
+                logger.warning("Vector search validation failed (may be no documents yet): %s", e)
                 validation_results["details"]["vector_search"] = str(e)
 
             return validation_results
@@ -791,9 +753,7 @@ class MemoryGraphInitializer:
             benchmarks["status"] = "success"
             benchmarks["target_performance_ms"] = 50
             benchmarks["meets_target"] = all(
-                v is not None and v < 50
-                for k, v in benchmarks.items()
-                if k.endswith("_ms")
+                v is not None and v < 50 for k, v in benchmarks.items() if k.endswith("_ms")
             )
 
             if benchmarks["meets_target"]:
@@ -829,9 +789,7 @@ class MemoryGraphInitializer:
             Entity ID or None
         """
         try:
-            for key in self.redis_client.scan_iter(
-                match=f"{self.entity_prefix}*", count=1
-            ):
+            for key in self.redis_client.scan_iter(match=f"{self.entity_prefix}*", count=1):
                 if isinstance(key, bytes):
                     key = key.decode()
                 return key.replace(self.entity_prefix, "")
@@ -877,9 +835,7 @@ def _create_memory_graph_argument_parser() -> argparse.ArgumentParser:
 
     Helper for main (Issue #825).
     """
-    parser = argparse.ArgumentParser(
-        description="Initialize Redis Memory Graph infrastructure for AutoBot"
-    )
+    parser = argparse.ArgumentParser(description="Initialize Redis Memory Graph infrastructure for AutoBot")
     parser.add_argument(
         "--migrate",
         action="store_true",
@@ -890,9 +846,7 @@ def _create_memory_graph_argument_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Validate index creation and functionality",
     )
-    parser.add_argument(
-        "--benchmark", action="store_true", help="Run performance benchmarks"
-    )
+    parser.add_argument("--benchmark", action="store_true", help="Run performance benchmarks")
     parser.add_argument(
         "--rollback",
         action="store_true",
@@ -920,9 +874,7 @@ def _execute_memory_graph_phases(initializer: MemoryGraphInitializer, args) -> b
         logger.info("PHASE 3: Conversation Migration")
         logger.info("=" * 80)
 
-        transcript_dir = Path(
-            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/data/conversation_transcripts"
-        )
+        transcript_dir = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/data/conversation_transcripts")
         migration_stats = initializer.migrate_conversations(transcript_dir)
         logger.info("\nMigration Results:")
         logger.info(json.dumps(migration_stats, indent=2))

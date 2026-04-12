@@ -38,9 +38,7 @@ logger = logging.getLogger(__name__)
 
 
 # Issue #618: Helper to run blocking sqlite3 queries in async context
-async def async_sqlite_query(
-    db_path: str, query: str, params: tuple = ()
-) -> List[Tuple[Any, ...]]:
+async def async_sqlite_query(db_path: str, query: str, params: tuple = ()) -> List[Tuple[Any, ...]]:
     """Execute sqlite3 query without blocking the event loop.
 
     Args:
@@ -138,9 +136,7 @@ class TestFreshVMDeployment:
         logger.info("=== Test 2.1: Fresh VM0 deployment ===")
 
         # Verify database doesn't exist initially (fresh deployment)
-        assert not shared_db_path[
-            "db_path"
-        ].exists(), "Database should not exist on fresh deployment"
+        assert not shared_db_path["db_path"].exists(), "Database should not exist on fresh deployment"
         logger.info("✓ Fresh deployment confirmed (no existing database)")
 
         # Create ConversationFileManager instance (simulating backend startup on VM0)
@@ -156,9 +152,7 @@ class TestFreshVMDeployment:
         logger.info("✓ Database initialized during backend startup")
 
         # Verify database was created
-        assert shared_db_path[
-            "db_path"
-        ].exists(), "Database should be created after initialization"
+        assert shared_db_path["db_path"].exists(), "Database should be created after initialization"
 
         # Verify schema is complete (Issue #618: use async sqlite helper)
         db_path_str = str(shared_db_path["db_path"])
@@ -173,9 +167,7 @@ class TestFreshVMDeployment:
             "schema_migrations",
         }
 
-        rows = await async_sqlite_query(
-            db_path_str, "SELECT name FROM sqlite_master WHERE type='table'"
-        )
+        rows = await async_sqlite_query(db_path_str, "SELECT name FROM sqlite_master WHERE type='table'")
         actual_tables = {row[0] for row in rows}
 
         missing_tables = expected_tables - actual_tables
@@ -553,9 +545,7 @@ class TestConcurrentVMInitialization:
         exceptions = [r for r in results if isinstance(r, Exception)]
         if exceptions:
             logger.error(f"Exceptions during initialization: {exceptions}")
-            raise AssertionError(
-                f"Concurrent initialization had {len(exceptions)} failures: {exceptions}"
-            )
+            raise AssertionError(f"Concurrent initialization had {len(exceptions)} failures: {exceptions}")
 
         logger.info("✓ All 6 VMs initialized successfully without errors")
 
@@ -563,19 +553,13 @@ class TestConcurrentVMInitialization:
         db_path_str = str(shared_db_path["db_path"])
 
         # Critical check: Schema version should be recorded ONLY ONCE
-        rows = await async_sqlite_query(
-            db_path_str, "SELECT COUNT(*) FROM schema_migrations WHERE version = '001'"
-        )
+        rows = await async_sqlite_query(db_path_str, "SELECT COUNT(*) FROM schema_migrations WHERE version = '001'")
         migration_count = rows[0][0]
-        assert (
-            migration_count == 1
-        ), f"Schema version should be recorded once, found {migration_count} records"
+        assert migration_count == 1, f"Schema version should be recorded once, found {migration_count} records"
         logger.info("✓ Schema version recorded exactly once (no race condition)")
 
         # Verify all tables exist (no corruption)
-        rows = await async_sqlite_query(
-            db_path_str, "SELECT COUNT(*) FROM sqlite_master WHERE type='table'"
-        )
+        rows = await async_sqlite_query(db_path_str, "SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
         table_count = rows[0][0]
         assert table_count == 6, f"Should have 6 tables, found {table_count}"
         logger.info("✓ All tables exist (no corruption during concurrent init)")
@@ -589,9 +573,7 @@ class TestConcurrentVMInitialization:
         # Verify all VM managers can query schema version correctly
         for vm_name, manager in managers.items():
             version = await manager.get_schema_version()
-            assert (
-                version == "001"
-            ), f"{vm_name} should report version '001', got '{version}'"
+            assert version == "001", f"{vm_name} should report version '001', got '{version}'"
 
         logger.info("✓ All VMs report correct schema version")
 
@@ -623,9 +605,7 @@ class TestConcurrentVMInitialization:
         # Verify all files are recorded correctly
         any_manager = list(managers.values())[0]
         session_files = await any_manager.get_session_files(test_session)
-        assert len(session_files) == len(
-            managers
-        ), f"Should have {len(managers)} files, found {len(session_files)}"
+        assert len(session_files) == len(managers), f"Should have {len(managers)} files, found {len(session_files)}"
         logger.info(f"✓ All {len(session_files)} files recorded correctly")
 
         # Cleanup
@@ -667,9 +647,7 @@ class TestDatabaseRecovery:
         logger.info("✓ Database initialized normally")
 
         # Simulate corruption: Drop a critical table (Issue #618: use async sqlite helper)
-        await async_sqlite_execute(
-            str(shared_db_path["db_path"]), "DROP TABLE conversation_files"
-        )
+        await async_sqlite_execute(str(shared_db_path["db_path"]), "DROP TABLE conversation_files")
         logger.info("✓ Simulated corruption (dropped conversation_files table)")
 
         # Create new manager instance and attempt recovery
@@ -695,9 +673,7 @@ class TestDatabaseRecovery:
         logger.info("✓ Corrupted table recreated")
 
         # Verify table structure is correct
-        rows = await async_sqlite_query(
-            db_path_str, "PRAGMA table_info(conversation_files)"
-        )
+        rows = await async_sqlite_query(db_path_str, "PRAGMA table_info(conversation_files)")
         columns = {row[1] for row in rows}
 
         expected_columns = {
@@ -715,9 +691,7 @@ class TestDatabaseRecovery:
             "deleted_at",
         }
 
-        assert expected_columns.issubset(
-            columns
-        ), f"Missing columns: {expected_columns - columns}"
+        assert expected_columns.issubset(columns), f"Missing columns: {expected_columns - columns}"
         logger.info("✓ Table structure correct after recovery")
 
         # Verify system can operate normally after recovery

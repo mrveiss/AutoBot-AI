@@ -96,9 +96,7 @@ class TestingCoverageAnalyzer:
 
         logger.info("Testing Coverage Analyzer initialized")
 
-    async def analyze_testing_coverage(
-        self, root_path: str = ".", patterns: List[str] = None
-    ) -> Dict[str, Any]:
+    async def analyze_testing_coverage(self, root_path: str = ".", patterns: List[str] = None) -> Dict[str, Any]:
         """Analyze testing coverage and identify gaps"""
 
         start_time = time.time()
@@ -124,9 +122,7 @@ class TestingCoverageAnalyzer:
         coverage_gaps = await self._analyze_coverage_gaps(all_functions, test_functions)
 
         # Calculate testing metrics
-        metrics = self._calculate_testing_metrics(
-            all_functions, test_functions, coverage_gaps
-        )
+        metrics = self._calculate_testing_metrics(all_functions, test_functions, coverage_gaps)
 
         # Generate test recommendations
         recommendations = await self._generate_test_recommendations(coverage_gaps)
@@ -140,9 +136,7 @@ class TestingCoverageAnalyzer:
             "test_coverage_percentage": metrics.test_coverage_percentage,
             "analysis_time_seconds": analysis_time,
             "functions": [self._serialize_function(f) for f in all_functions],
-            "test_functions": [
-                self._serialize_test_function(t) for t in test_functions
-            ],
+            "test_functions": [self._serialize_test_function(t) for t in test_functions],
             "coverage_gaps": [self._serialize_coverage_gap(g) for g in coverage_gaps],
             "recommendations": recommendations,
             "metrics": {
@@ -162,9 +156,7 @@ class TestingCoverageAnalyzer:
         logger.info(f"Testing coverage analysis complete in {analysis_time:.2f}s")
         return results
 
-    async def _discover_all_functions(
-        self, root_path: str, patterns: List[str]
-    ) -> List[CodeFunction]:
+    async def _discover_all_functions(self, root_path: str, patterns: List[str]) -> List[CodeFunction]:
         """Discover all functions in the codebase"""
 
         functions = []
@@ -172,26 +164,16 @@ class TestingCoverageAnalyzer:
 
         for pattern in patterns:
             for file_path in root.glob(pattern):
-                if (
-                    file_path.is_file()
-                    and not self._should_skip_file(file_path)
-                    and not self._is_test_file(file_path)
-                ):
+                if file_path.is_file() and not self._should_skip_file(file_path) and not self._is_test_file(file_path):
                     try:
-                        file_functions = await self._extract_functions_from_file(
-                            str(file_path)
-                        )
+                        file_functions = await self._extract_functions_from_file(str(file_path))
                         functions.extend(file_functions)
                     except Exception as e:
-                        logger.warning(
-                            f"Failed to extract functions from {file_path}: {e}"
-                        )
+                        logger.warning(f"Failed to extract functions from {file_path}: {e}")
 
         return functions
 
-    async def _discover_test_functions(
-        self, root_path: str, patterns: List[str]
-    ) -> List[TestFunction]:
+    async def _discover_test_functions(self, root_path: str, patterns: List[str]) -> List[TestFunction]:
         """Discover all test functions"""
 
         test_functions = []
@@ -201,14 +183,10 @@ class TestingCoverageAnalyzer:
             for file_path in root.glob(pattern):
                 if file_path.is_file() and self._is_test_file(file_path):
                     try:
-                        file_tests = await self._extract_test_functions_from_file(
-                            str(file_path)
-                        )
+                        file_tests = await self._extract_test_functions_from_file(str(file_path))
                         test_functions.extend(file_tests)
                     except Exception as e:
-                        logger.warning(
-                            f"Failed to extract test functions from {file_path}: {e}"
-                        )
+                        logger.warning(f"Failed to extract test functions from {file_path}: {e}")
 
         return test_functions
 
@@ -258,9 +236,7 @@ class TestingCoverageAnalyzer:
 
         return functions
 
-    def _analyze_function(
-        self, node: ast.AST, file_path: str, content: str
-    ) -> Optional[CodeFunction]:
+    def _analyze_function(self, node: ast.AST, file_path: str, content: str) -> Optional[CodeFunction]:
         """Analyze a function node"""
 
         try:
@@ -274,11 +250,7 @@ class TestingCoverageAnalyzer:
             # Extract return type
             return_type = None
             if hasattr(node, "returns") and node.returns:
-                return_type = (
-                    ast.unparse(node.returns)
-                    if hasattr(ast, "unparse")
-                    else str(node.returns)
-                )
+                return_type = ast.unparse(node.returns) if hasattr(ast, "unparse") else str(node.returns)
 
             # Check if function is async
             is_async = isinstance(node, ast.AsyncFunctionDef)
@@ -381,9 +353,7 @@ class TestingCoverageAnalyzer:
 
         return False
 
-    async def _extract_test_functions_from_file(
-        self, file_path: str
-    ) -> List[TestFunction]:
+    async def _extract_test_functions_from_file(self, file_path: str) -> List[TestFunction]:
         """Extract test functions from a test file"""
 
         test_functions = []
@@ -397,9 +367,7 @@ class TestingCoverageAnalyzer:
             for node in ast.walk(tree):
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     if self._is_test_function(node.name):
-                        test_func = self._analyze_test_function(
-                            node, file_path, content
-                        )
+                        test_func = self._analyze_test_function(node, file_path, content)
                         if test_func:
                             test_functions.append(test_func)
 
@@ -413,13 +381,9 @@ class TestingCoverageAnalyzer:
 
     def _is_test_function(self, function_name: str) -> bool:
         """Check if function name indicates it's a test"""
-        return any(
-            re.search(pattern, function_name) for pattern in self.test_function_patterns
-        )
+        return any(re.search(pattern, function_name) for pattern in self.test_function_patterns)
 
-    def _analyze_test_function(
-        self, node: ast.AST, file_path: str, content: str
-    ) -> Optional[TestFunction]:
+    def _analyze_test_function(self, node: ast.AST, file_path: str, content: str) -> Optional[TestFunction]:
         """Analyze a test function"""
 
         try:
@@ -483,15 +447,9 @@ class TestingCoverageAnalyzer:
         # Check function content for indicators
         function_content = ast.unparse(node) if hasattr(ast, "unparse") else str(node)
 
-        if any(
-            indicator in function_content.lower()
-            for indicator in ["database", "db", "api", "request"]
-        ):
+        if any(indicator in function_content.lower() for indicator in ["database", "db", "api", "request"]):
             return "integration"
-        elif any(
-            indicator in function_content.lower()
-            for indicator in ["selenium", "playwright", "browser"]
-        ):
+        elif any(indicator in function_content.lower() for indicator in ["selenium", "playwright", "browser"]):
             return "e2e"
         else:
             return "unit"
@@ -503,10 +461,7 @@ class TestingCoverageAnalyzer:
                 return True
             elif isinstance(child, ast.Call):
                 call_str = ast.unparse(child) if hasattr(ast, "unparse") else str(child)
-                if any(
-                    assert_pattern in call_str
-                    for assert_pattern in ["assert", "expect", "should"]
-                ):
+                if any(assert_pattern in call_str for assert_pattern in ["assert", "expect", "should"]):
                     return True
 
         return False
@@ -550,9 +505,7 @@ class TestingCoverageAnalyzer:
             "fail",
         ]
 
-        return any(
-            indicator in function_content.lower() for indicator in edge_case_indicators
-        )
+        return any(indicator in function_content.lower() for indicator in edge_case_indicators)
 
     async def __analyze_coverage_gaps_block_2(self):
         """Create coverage gaps.
@@ -567,9 +520,7 @@ class TestingCoverageAnalyzer:
                     severity="critical",
                     description=f"{len(critical_untested)} critical functions lack tests",
                     affected_functions=critical_untested,
-                    suggested_tests=self._suggest_tests_for_functions(
-                        critical_untested
-                    ),
+                    suggested_tests=self._suggest_tests_for_functions(critical_untested),
                     priority_score=100,
                 )
             )
@@ -586,9 +537,7 @@ class TestingCoverageAnalyzer:
                     severity="high",
                     description=f"{len(high_priority_untested)} high-priority functions lack tests",
                     affected_functions=high_priority_untested,
-                    suggested_tests=self._suggest_tests_for_functions(
-                        high_priority_untested
-                    ),
+                    suggested_tests=self._suggest_tests_for_functions(high_priority_untested),
                     priority_score=80,
                 )
             )
@@ -609,9 +558,7 @@ class TestingCoverageAnalyzer:
                         "functions with external dependencies"
                     ),
                     affected_functions=functions_needing_integration_tests,
-                    suggested_tests=self._suggest_integration_tests(
-                        functions_needing_integration_tests
-                    ),
+                    suggested_tests=self._suggest_integration_tests(functions_needing_integration_tests),
                     priority_score=75,
                 )
             )
@@ -653,12 +600,8 @@ class TestingCoverageAnalyzer:
                 untested_functions.append(func)
 
         # Categorize untested functions by severity
-        critical_untested = [
-            f for f in untested_functions if self._is_critical_function(f)
-        ]
-        high_priority_untested = [
-            f for f in untested_functions if self._is_high_priority_function(f)
-        ]
+        critical_untested = [f for f in untested_functions if self._is_critical_function(f)]
+        high_priority_untested = [f for f in untested_functions if self._is_high_priority_function(f)]
 
         await self.__analyze_coverage_gaps_block_2()
 
@@ -666,9 +609,7 @@ class TestingCoverageAnalyzer:
 
         # Check for missing integration tests
         functions_needing_integration_tests = [
-            f
-            for f in functions
-            if (f.calls_external_apis or f.has_database_operations) and f.is_public
+            f for f in functions if (f.calls_external_apis or f.has_database_operations) and f.is_public
         ]
 
         integration_tests = [t for t in tests if t.test_type == "integration"]
@@ -732,14 +673,10 @@ class TestingCoverageAnalyzer:
         db_functions = [f for f in functions if f.has_database_operations]
 
         if api_functions:
-            suggestions.append(
-                "test_api_integration: Integration tests for API calls with real/test endpoints"
-            )
+            suggestions.append("test_api_integration: Integration tests for API calls with real/test endpoints")
 
         if db_functions:
-            suggestions.append(
-                "test_database_integration: Integration tests with test database"
-            )
+            suggestions.append("test_database_integration: Integration tests with test database")
 
         suggestions.append("test_end_to_end_workflow: Full workflow integration test")
 
@@ -750,17 +687,11 @@ class TestingCoverageAnalyzer:
         suggestions = []
 
         for func in functions[:3]:  # Limit to first 3
-            suggestions.append(
-                f"test_{func.name}_with_empty_input: Test with empty/null inputs"
-            )
-            suggestions.append(
-                f"test_{func.name}_with_invalid_input: Test with invalid inputs"
-            )
+            suggestions.append(f"test_{func.name}_with_empty_input: Test with empty/null inputs")
+            suggestions.append(f"test_{func.name}_with_invalid_input: Test with invalid inputs")
 
             if func.complexity > 8:
-                suggestions.append(
-                    f"test_{func.name}_boundary_conditions: Test boundary conditions"
-                )
+                suggestions.append(f"test_{func.name}_boundary_conditions: Test boundary conditions")
 
         return suggestions
 
@@ -779,14 +710,10 @@ class TestingCoverageAnalyzer:
                 tested_function_names.add(test.target_function)
 
         public_functions = [f for f in functions if f.is_public]
-        tested_functions = len(
-            [f for f in public_functions if f.name in tested_function_names]
-        )
+        tested_functions = len([f for f in public_functions if f.name in tested_function_names])
         untested_functions = len(public_functions) - tested_functions
 
-        test_coverage_percentage = (
-            (tested_functions / len(public_functions) * 100) if public_functions else 0
-        )
+        test_coverage_percentage = (tested_functions / len(public_functions) * 100) if public_functions else 0
 
         # Count critical untested functions
         critical_untested = 0
@@ -814,9 +741,7 @@ class TestingCoverageAnalyzer:
             missing_edge_case_tests=missing_edge_case_tests,
         )
 
-    async def _generate_test_recommendations(
-        self, gaps: List[CoverageGap]
-    ) -> List[str]:
+    async def _generate_test_recommendations(self, gaps: List[CoverageGap]) -> List[str]:
         """Generate test improvement recommendations"""
 
         recommendations = []
@@ -831,26 +756,18 @@ class TestingCoverageAnalyzer:
                 )
 
             elif gap.gap_type == "missing_integration_tests":
-                recommendations.append(
-                    f"Add integration tests for functions with external dependencies"
-                )
+                recommendations.append(f"Add integration tests for functions with external dependencies")
 
             elif gap.gap_type == "missing_edge_case_tests":
-                recommendations.append(
-                    f"Add edge case and boundary condition tests for complex functions"
-                )
+                recommendations.append(f"Add edge case and boundary condition tests for complex functions")
 
             else:
                 recommendations.append(f"Address {gap.gap_type}: {gap.description}")
 
         # Add general recommendations
         recommendations.append("Set up automated test coverage reporting")
-        recommendations.append(
-            "Implement test-driven development (TDD) for new features"
-        )
-        recommendations.append(
-            "Add continuous integration (CI) to run tests on commits"
-        )
+        recommendations.append("Implement test-driven development (TDD) for new features")
+        recommendations.append("Add continuous integration (CI) to run tests on commits")
 
         return recommendations
 
@@ -919,9 +836,7 @@ class TestingCoverageAnalyzer:
             try:
                 cursor = 0
                 while True:
-                    cursor, keys = await self.redis_client.scan(
-                        cursor, match="testing_analysis:*", count=100
-                    )
+                    cursor, keys = await self.redis_client.scan(cursor, match="testing_analysis:*", count=100)
                     if keys:
                         await self.redis_client.delete(*keys)
                     if cursor == 0:
@@ -953,9 +868,7 @@ async def main():
     logger.info(f"\n=== Detailed Metrics ===")
     logger.info(f"Tested functions: {metrics['tested_functions']}")
     logger.info(f"Untested functions: {metrics['untested_functions']}")
-    logger.error(
-        f"Critical untested functions: {metrics['critical_untested_functions']}"
-    )
+    logger.error(f"Critical untested functions: {metrics['critical_untested_functions']}")
     logger.info(f"Missing integration tests: {metrics['missing_integration_tests']}")
     logger.info(f"Missing edge case tests: {metrics['missing_edge_case_tests']}")
 

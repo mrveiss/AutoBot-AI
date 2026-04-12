@@ -65,9 +65,7 @@ def _find_vector_dimension_in_index(index_info: List) -> Optional[int]:
     return None
 
 
-def _verify_redis_vector_dimension(
-    redis_client: Any, expected_dimension: int
-) -> Tuple[bool, Optional[str]]:
+def _verify_redis_vector_dimension(redis_client: Any, expected_dimension: int) -> Tuple[bool, Optional[str]]:
     """Verify Redis vector schema dimension (Issue #338 - extracted helper)."""
     if not redis_client:
         return True, None  # Skip if no client
@@ -101,9 +99,7 @@ def _verify_embedding_dimension(expected_dimension: int) -> Tuple[bool, Optional
         if not hasattr(kb, "embed_model"):
             return True, None
 
-        test_embedding = kb.embed_model.get_text_embedding(
-            "test dimension verification"
-        )
+        test_embedding = kb.embed_model.get_text_embedding("test dimension verification")
         actual_dim = len(test_embedding)
 
         if actual_dim != expected_dimension:
@@ -168,17 +164,13 @@ class KnowledgeConsistencyVerifier:
                         )
                         return False
             except Exception as e:
-                logger.warning(
-                    "Could not instantiate KnowledgeBase for verification: %s", e
-                )
+                logger.warning("Could not instantiate KnowledgeBase for verification: %s", e)
 
             logger.info("✅ EMBEDDING MODEL CONSISTENCY: VERIFIED")
             return True
 
         except Exception as e:
-            self.critical_errors.append(
-                f"CRITICAL FAILURE: Could not verify embedding consistency: {e}"
-            )
+            self.critical_errors.append(f"CRITICAL FAILURE: Could not verify embedding consistency: {e}")
             return False
 
     def verify_vector_dimensions(self) -> bool:
@@ -190,9 +182,7 @@ class KnowledgeConsistencyVerifier:
             expected_dimension = 768  # Dimension for nomic-embed-text
 
             # 1. Check Redis vector schema using helper
-            redis_ok, redis_error = _verify_redis_vector_dimension(
-                self.redis_client, expected_dimension
-            )
+            redis_ok, redis_error = _verify_redis_vector_dimension(self.redis_client, expected_dimension)
             if not redis_ok:
                 self.critical_errors.append(f"CRITICAL: {redis_error}")
                 return False
@@ -207,9 +197,7 @@ class KnowledgeConsistencyVerifier:
             return True
 
         except Exception as e:
-            self.critical_errors.append(
-                f"CRITICAL FAILURE: Could not verify vector dimensions: {e}"
-            )
+            self.critical_errors.append(f"CRITICAL FAILURE: Could not verify vector dimensions: {e}")
             return False
 
     def verify_retrieval_accuracy(self) -> bool:
@@ -222,16 +210,12 @@ class KnowledgeConsistencyVerifier:
 
             # This would require actually storing and retrieving - skip for now
             # but log that this check should be implemented
-            logger.info(
-                "📝 NOTE: Retrieval accuracy test requires implementation with test documents"
-            )
+            logger.info("📝 NOTE: Retrieval accuracy test requires implementation with test documents")
             logger.info("✅ RETRIEVAL ACCURACY: STRUCTURE VERIFIED")
             return True
 
         except Exception as e:
-            self.critical_errors.append(
-                f"CRITICAL FAILURE: Could not verify retrieval accuracy: {e}"
-            )
+            self.critical_errors.append(f"CRITICAL FAILURE: Could not verify retrieval accuracy: {e}")
             return False
 
     def enforce_configuration_locks(self) -> bool:
@@ -257,9 +241,7 @@ class KnowledgeConsistencyVerifier:
             return True
 
         except Exception as e:
-            self.critical_errors.append(
-                f"CRITICAL FAILURE: Could not enforce configuration locks: {e}"
-            )
+            self.critical_errors.append(f"CRITICAL FAILURE: Could not enforce configuration locks: {e}")
             return False
 
     def generate_consistency_report(self) -> Dict:
@@ -268,9 +250,7 @@ class KnowledgeConsistencyVerifier:
             "timestamp": datetime.now().isoformat(),
             "critical_errors": self.critical_errors,
             "warnings": self.warnings,
-            "status": "CRITICAL_FAILURE"
-            if self.critical_errors
-            else "VERIFIED_CONSISTENT",
+            "status": "CRITICAL_FAILURE" if self.critical_errors else "VERIFIED_CONSISTENT",
             "embedding_model": "nomic-embed-text:latest",
             "vector_dimension": 768,
             "consistency_measures": [

@@ -35,9 +35,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from knowledge_base import KnowledgeBase
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -154,9 +152,7 @@ class DocumentationSyncManager:
             except Exception as e:
                 logger.error("Failed to remove fact %s: %s", fact_id, e)
 
-        logger.info(
-            "Removed %s/%s chunks for %s", removed_count, len(fact_ids), file_path
-        )
+        logger.info("Removed %s/%s chunks for %s", removed_count, len(fact_ids), file_path)
         return removed_count
 
     async def index_document(self, file_path: str) -> Dict:
@@ -229,9 +225,7 @@ class DocumentationSyncManager:
 
         return chunks
 
-    async def _apply_sync_changes(
-        self, added, modified, deleted, previous_state: Dict
-    ) -> Dict:
+    async def _apply_sync_changes(self, added, modified, deleted, previous_state: Dict) -> Dict:
         """
         Apply detected changes to knowledge base.
 
@@ -292,9 +286,7 @@ class DocumentationSyncManager:
         # Detect changes
         added, modified, deleted = self.detect_changes(current_files, previous_state)
 
-        logger.info(
-            "Changes detected: +%s ~%s -%s", len(added), len(modified), len(deleted)
-        )
+        logger.info("Changes detected: +%s ~%s -%s", len(added), len(modified), len(deleted))
 
         if dry_run:
             logger.info("[DRY RUN] No changes will be applied")
@@ -307,9 +299,7 @@ class DocumentationSyncManager:
             return
 
         # Apply changes
-        new_state = await self._apply_sync_changes(
-            added, modified, deleted, previous_state
-        )
+        new_state = await self._apply_sync_changes(added, modified, deleted, previous_state)
 
         # Save new state
         self.save_sync_state(new_state)
@@ -323,12 +313,8 @@ async def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Sync documentation to knowledge base")
-    parser.add_argument(
-        "--dry-run", action="store_true", help="Preview changes without applying"
-    )
-    parser.add_argument(
-        "--watch", action="store_true", help="Watch for changes continuously"
-    )
+    parser.add_argument("--dry-run", action="store_true", help="Preview changes without applying")
+    parser.add_argument("--watch", action="store_true", help="Watch for changes continuously")
     args = parser.parse_args()
 
     docs_dir = PROJECT_ROOT / "docs"

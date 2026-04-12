@@ -27,14 +27,11 @@ from typing import Dict, List, Optional
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot-user-backend"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot_shared"))
 
+from autobot_shared.redis_client import get_redis_client
 from encryption_service import encrypt_data, is_encryption_enabled
 
-from autobot_shared.redis_client import get_redis_client
-
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -63,14 +60,10 @@ class SecretsMigrator:
     async def connect_redis(self) -> None:
         """Connect to Redis database"""
         try:
-            self.redis_client = await get_redis_client(
-                async_client=True, database="main"
-            )
+            self.redis_client = await get_redis_client(async_client=True, database="main")
             await self.redis_client.ping()
             logger.info("Connected to Redis successfully")
-            logger.info(
-                "Encryption enabled: %s", self.encryption_enabled
-            )
+            logger.info("Encryption enabled: %s", self.encryption_enabled)
         except Exception as e:
             logger.error("Failed to connect to Redis: %s", e)
             raise
@@ -115,14 +108,10 @@ class SecretsMigrator:
 
             return decoded
         except Exception as e:
-            logger.error(
-                "Failed to get secret %s...: %s", secret_id[:8], e
-            )
+            logger.error("Failed to get secret %s...: %s", secret_id[:8], e)
             return None
 
-    async def infer_secret_owner(
-        self, secret_id: str, secret_data: Dict
-    ) -> Optional[str]:
+    async def infer_secret_owner(self, secret_id: str, secret_data: Dict) -> Optional[str]:
         """Infer the owner of a secret from metadata.
 
         Args:
@@ -147,9 +136,7 @@ class SecretsMigrator:
 
             # Check for chat_session_id - get owner from session
             if metadata.get("chat_session_id"):
-                session_owner = await self._get_session_owner(
-                    metadata["chat_session_id"]
-                )
+                session_owner = await self._get_session_owner(metadata["chat_session_id"])
                 if session_owner:
                     return session_owner
 
@@ -205,20 +192,14 @@ class SecretsMigrator:
 
             # Check if already has owner
             if secret_data.get("owner_id"):
-                logger.debug(
-                    "Secret %s... already has owner", secret_id[:8]
-                )
+                logger.debug("Secret %s... already has owner", secret_id[:8])
                 self.stats["skipped"] += 1
                 return True
 
             # Infer owner
-            owner_id = await self.infer_secret_owner(
-                secret_id, secret_data
-            )
+            owner_id = await self.infer_secret_owner(secret_id, secret_data)
             if not owner_id:
-                logger.warning(
-                    "Could not infer owner for %s...", secret_id[:8]
-                )
+                logger.warning("Could not infer owner for %s...", secret_id[:8])
                 self.stats["missing_owner"] += 1
                 owner_id = "admin"  # Default fallback
 
@@ -238,23 +219,19 @@ class SecretsMigrator:
 
             # Generate rollback SQL
             self.rollback_sql.append(
-                f"-- Rollback secret {secret_id}\n"
-                f"-- Remove owner: {owner_id}, scope: {scope}\n"
+                f"-- Rollback secret {secret_id}\n" f"-- Remove owner: {owner_id}, scope: {scope}\n"
             )
 
             if self.dry_run:
                 logger.info(
-                    "[DRY RUN] Would migrate secret %s... "
-                    "with owner: [REDACTED], scope: %s",
+                    "[DRY RUN] Would migrate secret %s... " "with owner: [REDACTED], scope: %s",
                     secret_id[:8],
                     scope,
                 )
                 self.stats["migrated"] += 1
                 return True
 
-            await self._apply_secret_migration(
-                secret_id, owner_id, scope, value, secret_data
-            )
+            await self._apply_secret_migration(secret_id, owner_id, scope, value, secret_data)
             self.stats["migrated"] += 1
             return True
 
@@ -295,17 +272,14 @@ class SecretsMigrator:
 
         metadata["owner"] = owner_id
         metadata["migrated_at"] = datetime.utcnow().isoformat()
-        await self.redis_client.hset(
-            key, "metadata", json.dumps(metadata)
-        )
+        await self.redis_client.hset(key, "metadata", json.dumps(metadata))
 
         # Register in user's secrets index
         user_secrets_key = f"user:secrets:{owner_id}"
         await self.redis_client.sadd(user_secrets_key, secret_id)
 
         logger.info(
-            "Migrated secret %s... "
-            "with owner: [REDACTED], scope: %s",
+            "Migrated secret %s... " "with owner: [REDACTED], scope: %s",
             secret_id[:8],
             scope,
         )
@@ -357,37 +331,25 @@ class SecretsMigrator:
         # Print statistics
         logger.info("\n" + "=" * 60)
         logger.info("Migration Statistics:")
-        logger.info(
-            "  Total secrets: %s", self.stats["total_secrets"]
-        )
-        logger.info(
-            "  Migrated: %s", self.stats["migrated"]
-        )
+        logger.info("  Total secrets: %s", self.stats["total_secrets"])
+        logger.info("  Migrated: %s", self.stats["migrated"])
         logger.info(
             "  Skipped (already had owner): %s",
             self.stats["skipped"],
         )
-        logger.info(
-            "  Encrypted: %s", self.stats["encrypted"]
-        )
+        logger.info("  Encrypted: %s", self.stats["encrypted"])
         logger.info(
             "  Missing owner (defaulted): %s",
             self.stats["missing_owner"],
         )
-        logger.info(
-            "  Failed: %s", self.stats["failed"]
-        )
+        logger.info("  Failed: %s", self.stats["failed"])
         logger.info("=" * 60)
 
 
 async def main():
     """Main entry point"""
-    parser = argparse.ArgumentParser(
-        description="Migrate secrets to add ownership and encryption"
-    )
-    parser.add_argument(
-        "--dry-run", action="store_true", help="Report changes without applying them"
-    )
+    parser = argparse.ArgumentParser(description="Migrate secrets to add ownership and encryption")
+    parser.add_argument("--dry-run", action="store_true", help="Report changes without applying them")
     args = parser.parse_args()
 
     migrator = SecretsMigrator(dry_run=args.dry_run)

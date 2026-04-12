@@ -79,9 +79,7 @@ class TestSuccessResponse:
 
     def test_success_response_with_additional_fields(self):
         """Test success response with extra fields"""
-        response = success_response(
-            data={"item": "test"}, workflow_id="abc123", execution_time=1.5
-        )
+        response = success_response(data={"item": "test"}, workflow_id="abc123", execution_time=1.5)
 
         content = json.loads(response.body.decode())
 
@@ -140,9 +138,7 @@ class TestPaginatedResponse:
     def test_pagination_with_message(self):
         """Test pagination with message"""
         items = [{"id": 1}]
-        response = paginated_response(
-            items=items, total=1, page=1, page_size=20, message="Workflows retrieved"
-        )
+        response = paginated_response(items=items, total=1, page=1, page_size=20, message="Workflows retrieved")
 
         content = json.loads(response.body.decode())
 
@@ -173,9 +169,7 @@ class TestErrorResponse:
 
     def test_error_response_with_error_code(self):
         """Test error response with error code"""
-        response = error_response(
-            message="Resource not found", error_code="RESOURCE_404"
-        )
+        response = error_response(message="Resource not found", error_code="RESOURCE_404")
 
         content = json.loads(response.body.decode())
 
@@ -302,9 +296,7 @@ class TestInternalErrorHelper:
     def test_internal_error_with_details(self):
         """Test internal_error with error details"""
         details = {"component": "database", "error_type": "connection_timeout"}
-        response = internal_error(
-            "Database connection failed", error_code="DB_ERROR", details=details
-        )
+        response = internal_error("Database connection failed", error_code="DB_ERROR", details=details)
 
         content = json.loads(response.body.decode())
 
@@ -330,9 +322,7 @@ class TestConflictHelper:
     def test_conflict_with_details(self):
         """Test conflict with details"""
         details = {"workflow_id": "abc123"}
-        response = conflict(
-            "Workflow already exists", error_code="WORKFLOW_EXISTS", details=details
-        )
+        response = conflict("Workflow already exists", error_code="WORKFLOW_EXISTS", details=details)
 
         content = json.loads(response.body.decode())
 

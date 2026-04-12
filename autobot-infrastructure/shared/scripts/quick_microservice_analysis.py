@@ -286,10 +286,7 @@ def quick_microservice_analysis():
     python_files = [
         f
         for f in python_files
-        if not any(
-            exclude in str(f)
-            for exclude in ["__pycache__", ".pyc", "node_modules", ".git"]
-        )
+        if not any(exclude in str(f) for exclude in ["__pycache__", ".pyc", "node_modules", ".git"])
     ]
 
     # Count LOC using helper (Issue #315: reduced nesting)
@@ -298,9 +295,7 @@ def quick_microservice_analysis():
     analysis["codebase_metrics"] = {
         "python_files_analyzed": min(200, len(python_files)),
         "total_python_files": len(python_files),
-        "estimated_total_loc": int(
-            total_loc * (len(python_files) / min(200, len(python_files)))
-        ),
+        "estimated_total_loc": int(total_loc * (len(python_files) / min(200, len(python_files)))),
         "microservice_readiness_score": 0,
     }
 
@@ -356,28 +351,18 @@ def quick_microservice_analysis():
     logger.info("🗺️ Assessing migration feasibility...")
 
     estimated_loc = analysis["codebase_metrics"]["estimated_total_loc"]
-    readiness_score = _calculate_readiness_score(
-        total_endpoints, agent_files, estimated_loc, api_files, project_root
-    )
+    readiness_score = _calculate_readiness_score(total_endpoints, agent_files, estimated_loc, api_files, project_root)
     analysis["codebase_metrics"]["microservice_readiness_score"] = readiness_score
 
     phases = _generate_migration_phases(recommendations)
 
     analysis["migration_assessment"] = {
         "readiness_score": readiness_score,
-        "readiness_level": (
-            "high"
-            if readiness_score >= 7
-            else "medium" if readiness_score >= 4 else "low"
-        ),
+        "readiness_level": ("high" if readiness_score >= 7 else "medium" if readiness_score >= 4 else "low"),
         "total_services": len(recommendations),
         "migration_phases": phases,
-        "estimated_total_duration_weeks": sum(
-            phase["duration_weeks"] for phase in phases
-        ),
-        "recommendation": _get_migration_recommendation(
-            readiness_score, len(recommendations)
-        ),
+        "estimated_total_duration_weeks": sum(phase["duration_weeks"] for phase in phases),
+        "recommendation": _get_migration_recommendation(readiness_score, len(recommendations)),
     }
 
     # Save report
@@ -454,9 +439,7 @@ def _print_summary(analysis):
     print("\n🎯 SERVICE RECOMMENDATIONS:")
     print(f"  • Total Recommended Services: {migration['total_services']}")
     print(f"  • Migration Phases: {len(migration['migration_phases'])}")
-    print(
-        f"  • Estimated Duration: {migration['estimated_total_duration_weeks']} weeks"
-    )
+    print(f"  • Estimated Duration: {migration['estimated_total_duration_weeks']} weeks")
 
     print("\n⚡ ASSESSMENT:")
     print(f"  • Readiness Level: {migration['readiness_level'].upper()}")

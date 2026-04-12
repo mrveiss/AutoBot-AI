@@ -37,7 +37,6 @@ from knowledge.connectors.audio_connector import (
 from knowledge.connectors.models import ConnectorConfig
 from knowledge.pipeline.config import get_audio_pipeline_config
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

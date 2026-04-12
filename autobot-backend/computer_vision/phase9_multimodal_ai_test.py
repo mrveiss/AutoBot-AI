@@ -18,8 +18,6 @@ from PIL import Image
 sys.path.append(str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from tests.test_helpers import get_test_backend_url  # noqa: E402
-
 from computer_vision_system import computer_vision_system  # noqa: E402
 from context_aware_decision_system import (  # noqa: E402
     DecisionType,
@@ -32,6 +30,7 @@ from multimodal_processor import (  # noqa: E402
     ProcessingIntent,
     multimodal_processor,
 )
+from tests.test_helpers import get_test_backend_url  # noqa: E402
 from voice_processing_system import AudioInput, voice_processing_system  # noqa: E402
 
 

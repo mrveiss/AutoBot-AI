@@ -138,26 +138,20 @@ class SkillResearcherSkill(BaseSkill):
         sources = []
         for label, prompt in _build_queries(capability):
             try:
-                response = await llm.chat_completion(
-                    [{"role": "user", "content": prompt}], llm_type="task"
-                )
+                response = await llm.chat_completion([{"role": "user", "content": prompt}], llm_type="task")
                 sources.append({"angle": label, "content": response.content.strip()})
             except Exception as exc:
                 self.logger.warning("Research query '%s' failed: %s", label, exc)
         return sources
 
-    async def _synthesize(
-        self, capability: str, sources: List[Dict[str, str]]
-    ) -> Dict[str, Any]:
+    async def _synthesize(self, capability: str, sources: List[Dict[str, str]]) -> Dict[str, Any]:
         """Synthesise gathered sources into structured findings."""
         if not sources:
             return _empty_findings()
         prompt = _build_synthesis_prompt(capability, sources)
         llm = LLMInterface()
         try:
-            response = await llm.chat_completion(
-                [{"role": "user", "content": prompt}], llm_type="task"
-            )
+            response = await llm.chat_completion([{"role": "user", "content": prompt}], llm_type="task")
             return _parse_synthesis(response.content)
         except Exception as exc:
             self.logger.warning("Synthesis failed: %s", exc)

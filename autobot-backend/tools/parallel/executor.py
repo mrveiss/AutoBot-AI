@@ -35,22 +35,26 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 # Tools that mutate files — artifact capture is enabled for these
-_FILE_MODIFYING_TOOLS: frozenset[str] = frozenset({
-    "edit_file",
-    "write_file",
-    "create_file",
-    "delete_file",
-    "move_file",
-    "rename_file",
-})
+_FILE_MODIFYING_TOOLS: frozenset[str] = frozenset(
+    {
+        "edit_file",
+        "write_file",
+        "create_file",
+        "delete_file",
+        "move_file",
+        "rename_file",
+    }
+)
 
 # Tools that produce test output
-_TEST_RUNNER_TOOLS: frozenset[str] = frozenset({
-    "run_tests",
-    "execute_tests",
-    "pytest",
-    "run_pytest",
-})
+_TEST_RUNNER_TOOLS: frozenset[str] = frozenset(
+    {
+        "run_tests",
+        "execute_tests",
+        "pytest",
+        "run_pytest",
+    }
+)
 
 
 @dataclass
@@ -102,11 +106,7 @@ class ExecutionGraph:
 
         Issue #670: Uses TaskStatus enum for status comparisons.
         """
-        completed = {
-            call_id
-            for call_id, call in self.calls.items()
-            if call.status == TaskStatus.COMPLETED.value
-        }
+        completed = {call_id for call_id, call in self.calls.items() if call.status == TaskStatus.COMPLETED.value}
 
         ready = []
         for call_id, call in self.calls.items():
@@ -137,9 +137,7 @@ class ExecutionGraph:
 
     def get_completed_calls(self) -> list[ToolCall]:
         """Get all completed calls"""
-        return [
-            c for c in self.calls.values() if c.status == TaskStatus.COMPLETED.value
-        ]
+        return [c for c in self.calls.values() if c.status == TaskStatus.COMPLETED.value]
 
 
 # =============================================================================
@@ -194,9 +192,7 @@ class ParallelToolExecutor:
             metrics.sequential_calls += 1
 
         semaphore = asyncio.Semaphore(self.config.max_parallel_calls)
-        tasks = [
-            self._execute_with_semaphore(call, task_id, semaphore) for call in group
-        ]
+        tasks = [self._execute_with_semaphore(call, task_id, semaphore) for call in group]
 
         try:
             group_results = await asyncio.wait_for(
@@ -237,9 +233,7 @@ class ParallelToolExecutor:
                 call.result = result
                 results[call.call_id] = result
 
-    def _log_execution_metrics(
-        self, metrics: ExecutionMetrics, tool_calls: list[ToolCall], start_time: float
-    ) -> None:
+    def _log_execution_metrics(self, metrics: ExecutionMetrics, tool_calls: list[ToolCall], start_time: float) -> None:
         """Calculate and log execution metrics."""
         total_time = (time.monotonic() - start_time) * 1000
         metrics.parallel_time_ms = total_time
@@ -249,8 +243,7 @@ class ParallelToolExecutor:
 
         if self.config.collect_metrics:
             logger.info(
-                "Parallel execution complete: %.1fms (sequential would be %.1fms, "
-                "speedup: %.2fx)",
+                "Parallel execution complete: %.1fms (sequential would be %.1fms, " "speedup: %.2fx)",
                 metrics.parallel_time_ms,
                 metrics.sequential_time_ms,
                 metrics.speedup_factor,
@@ -315,9 +308,7 @@ class ParallelToolExecutor:
         async with semaphore:
             return await self._execute_single(call, task_id)
 
-    async def _publish_action_event(
-        self, call: ToolCall, task_id: Optional[str]
-    ) -> Optional[Any]:
+    async def _publish_action_event(self, call: ToolCall, task_id: Optional[str]) -> Optional[Any]:
         """Publish ACTION event to event stream. Issue #620."""
         if not self.event_stream:
             return None
@@ -334,9 +325,7 @@ class ParallelToolExecutor:
         await self.event_stream.publish(action_event)
         return action_event
 
-    async def _execute_tool_with_timeout(
-        self, call: ToolCall
-    ) -> tuple[Any, bool, Optional[str]]:
+    async def _execute_tool_with_timeout(self, call: ToolCall) -> tuple[Any, bool, Optional[str]]:
         """Execute tool dispatch with timeout handling. Issue #620."""
         try:
             result = await asyncio.wait_for(
@@ -371,8 +360,10 @@ class ParallelToolExecutor:
 
         # --- file changes ---
         if call.tool_name in _FILE_MODIFYING_TOOLS and capture.filepath:
-            change_type = "deleted" if call.tool_name == "delete_file" else (
-                "created" if call.tool_name == "create_file" else "modified"
+            change_type = (
+                "deleted"
+                if call.tool_name == "delete_file"
+                else ("created" if call.tool_name == "create_file" else "modified")
             )
             artifacts.append(
                 build_artifact(
@@ -390,9 +381,7 @@ class ParallelToolExecutor:
                 modified = result.get("content") or result.get("after")
                 if original is not None and modified is not None:
                     try:
-                        diff_str = DiffGenerator.generate_diff(
-                            original, modified, filename=capture.filepath
-                        )
+                        diff_str = DiffGenerator.generate_diff(original, modified, filename=capture.filepath)
                         artifacts.append(
                             build_artifact(
                                 ArtifactType.CODE_DIFF,

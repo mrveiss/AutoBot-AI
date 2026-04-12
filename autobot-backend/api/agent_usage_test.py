@@ -20,7 +20,6 @@ import pytest
 
 from services.agent_analytics import AgentAnalytics, TaskStatus, track_agent_usage
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -397,6 +396,7 @@ async def test_usage_endpoint_returns_structure():
         return_value=mock_analytics_instance,
     ):
         from fastapi import FastAPI
+
         from api.agent_config import router
 
         app = FastAPI()
@@ -444,6 +444,7 @@ async def test_usage_endpoint_outcome_filter():
         return_value=mock_analytics_instance,
     ):
         from fastapi import FastAPI
+
         from api.agent_config import router
 
         app = FastAPI()

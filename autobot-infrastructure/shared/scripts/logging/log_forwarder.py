@@ -131,22 +131,11 @@ class LogEntry:
                     "stream": {
                         "source": self.source,
                         "level": self.level,
-                        **{
-                            k: str(v)
-                            for k, v in self.properties.items()
-                            if isinstance(v, (str, int, float, bool))
-                        },
+                        **{k: str(v) for k, v in self.properties.items() if isinstance(v, (str, int, float, bool))},
                     },
                     "values": [
                         [
-                            str(
-                                int(
-                                    datetime.fromisoformat(
-                                        self.timestamp.replace("Z", "+00:00")
-                                    ).timestamp()
-                                    * 1e9
-                                )
-                            ),
+                            str(int(datetime.fromisoformat(self.timestamp.replace("Z", "+00:00")).timestamp() * 1e9)),
                             self.message,
                         ]
                     ],
@@ -269,9 +258,7 @@ class DestinationConfig:
         data = self.to_dict()
         # Mask sensitive fields
         if data.get("api_key"):
-            data["api_key"] = (
-                "****" + data["api_key"][-4:] if len(data["api_key"]) > 4 else "****"
-            )
+            data["api_key"] = "****" + data["api_key"][-4:] if len(data["api_key"]) > 4 else "****"
         if data.get("password"):
             data["password"] = "****"
         return data
@@ -437,9 +424,7 @@ class ElasticsearchDestination(LogDestination):
             auth = None
             if self.config.username and self.config.password:
                 auth = (self.config.username, self.config.password)
-            response = requests.get(
-                f"{self.config.url.rstrip('/')}/_cluster/health", auth=auth, timeout=5
-            )
+            response = requests.get(f"{self.config.url.rstrip('/')}/_cluster/health", auth=auth, timeout=5)
             self._healthy = response.status_code == 200
             return self._healthy
         except Exception as e:
@@ -466,22 +451,13 @@ class LokiDestination(LogDestination):
             # Create stream key from labels
             stream_key = (entry.source, entry.level)
             # Convert timestamp to nanoseconds
-            ts_ns = str(
-                int(
-                    datetime.fromisoformat(
-                        entry.timestamp.replace("Z", "+00:00")
-                    ).timestamp()
-                    * 1e9
-                )
-            )
+            ts_ns = str(int(datetime.fromisoformat(entry.timestamp.replace("Z", "+00:00")).timestamp() * 1e9))
             streams_dict[stream_key].append([ts_ns, entry.message])
 
         # Build Loki payload with all streams
         streams = []
         for (source, level), values in streams_dict.items():
-            streams.append(
-                {"stream": {"source": source, "level": level}, "values": values}
-            )
+            streams.append({"stream": {"source": source, "level": level}, "values": values})
 
         return {"streams": streams}
 
@@ -494,9 +470,7 @@ class LokiDestination(LogDestination):
             if self.config.username and self.config.password:
                 import base64
 
-                credentials = base64.b64encode(
-                    f"{self.config.username}:{self.config.password}".encode()
-                ).decode()
+                credentials = base64.b64encode(f"{self.config.username}:{self.config.password}".encode()).decode()
                 headers["Authorization"] = f"Basic {credentials}"
 
             # Batch all entries into a single Loki push request
@@ -555,9 +529,7 @@ class WebhookDestination(LogDestination):
                 "timestamp": datetime.utcnow().isoformat() + "Z",
             }
 
-            response = requests.post(
-                self.config.url, headers=headers, json=payload, timeout=10
-            )
+            response = requests.post(self.config.url, headers=headers, json=payload, timeout=10)
 
             if response.status_code in [200, 201, 202, 204]:
                 self._sent_count += len(entries)
@@ -663,9 +635,7 @@ class SyslogDestination(LogDestination):
             # Find project root by looking for known markers
             project_root = Path(__file__).resolve().parent
             while project_root != project_root.parent:
-                if (project_root / "pyproject.toml").exists() or (
-                    project_root / "setup.py"
-                ).exists():
+                if (project_root / "pyproject.toml").exists() or (project_root / "setup.py").exists():
                     break
                 project_root = project_root.parent
             project_dirs = [
@@ -677,9 +647,7 @@ class SyslogDestination(LogDestination):
             # Check if path is within allowed directories
             for allowed in all_allowed:
                 try:
-                    if allowed.exists() and str(resolved).startswith(
-                        str(allowed.resolve())
-                    ):
+                    if allowed.exists() and str(resolved).startswith(str(allowed.resolve())):
                         return True
                 except (OSError, PermissionError):
                     continue
@@ -702,24 +670,16 @@ class SyslogDestination(LogDestination):
         # Load CA certificate if provided (with path validation)
         if self.config.ssl_ca_cert:
             if not self._validate_cert_path(self.config.ssl_ca_cert):
-                raise ValueError(
-                    f"Invalid CA certificate path: {self.config.ssl_ca_cert}"
-                )
+                raise ValueError(f"Invalid CA certificate path: {self.config.ssl_ca_cert}")
             context.load_verify_locations(self.config.ssl_ca_cert)
 
         # Load client certificate for mutual TLS if provided (with path validation)
         if self.config.ssl_client_cert and self.config.ssl_client_key:
             if not self._validate_cert_path(self.config.ssl_client_cert):
-                raise ValueError(
-                    f"Invalid client certificate path: {self.config.ssl_client_cert}"
-                )
+                raise ValueError(f"Invalid client certificate path: {self.config.ssl_client_cert}")
             if not self._validate_cert_path(self.config.ssl_client_key):
-                raise ValueError(
-                    f"Invalid client key path: {self.config.ssl_client_key}"
-                )
-            context.load_cert_chain(
-                certfile=self.config.ssl_client_cert, keyfile=self.config.ssl_client_key
-            )
+                raise ValueError(f"Invalid client key path: {self.config.ssl_client_key}")
+            context.load_cert_chain(certfile=self.config.ssl_client_cert, keyfile=self.config.ssl_client_key)
 
         return context
 
@@ -735,9 +695,7 @@ class SyslogDestination(LogDestination):
         finally:
             sock.close()
 
-    def _send_tcp(
-        self, entries: List[LogEntry], host: str, port: int, use_tls: bool = False
-    ) -> bool:
+    def _send_tcp(self, entries: List[LogEntry], host: str, port: int, use_tls: bool = False) -> bool:
         """Send logs via TCP, optionally with TLS."""
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(10.0)
@@ -827,9 +785,7 @@ class SyslogDestination(LogDestination):
                 if protocol == SyslogProtocol.TCP_TLS:
                     context = self._create_ssl_context()
                     # Always pass server_hostname for proper TLS
-                    sock = context.wrap_socket(
-                        sock, server_hostname=host
-                    )
+                    sock = context.wrap_socket(sock, server_hostname=host)
 
                 sock.connect((host, port))
                 self._healthy = True
@@ -866,9 +822,7 @@ class LogForwarder:
 
     def __init__(self, config_path: Optional[str] = None):
         self.project_root = Path(__file__).parent.parent.parent
-        self.config_path = config_path or str(
-            self.project_root / "config" / "log_forwarding.json"
-        )
+        self.config_path = config_path or str(self.project_root / "config" / "log_forwarding.json")
         self.destinations: Dict[str, LogDestination] = {}
         self.log_queue: Queue = Queue(maxsize=10000)
         self.running = False
@@ -908,9 +862,7 @@ class LogForwarder:
                 for dest_config in config.get("destinations", []):
                     dest = create_destination(DestinationConfig.from_dict(dest_config))
                     self.destinations[dest.config.name] = dest
-                    self.logger.info(
-                        f"Loaded destination: {dest.config.name} ({dest.config.type.value})"
-                    )
+                    self.logger.info(f"Loaded destination: {dest.config.name} ({dest.config.type.value})")
 
             except Exception as e:
                 self.logger.error(f"Failed to load config: {e}")
@@ -921,9 +873,7 @@ class LogForwarder:
         """Save current configuration."""
         config = {
             "auto_start": self.auto_start,  # Issue #553: Persist auto_start setting
-            "destinations": [
-                dest.config.to_dict() for dest in self.destinations.values()
-            ],
+            "destinations": [dest.config.to_dict() for dest in self.destinations.values()],
         }
 
         Path(self.config_path).parent.mkdir(parents=True, exist_ok=True)
@@ -1020,9 +970,7 @@ class LogForwarder:
 
                 # Add to batch for each enabled destination that applies to this host
                 for name, dest in self.destinations.items():
-                    if dest.config.enabled and dest.config.applies_to_host(
-                        self.hostname
-                    ):
+                    if dest.config.enabled and dest.config.applies_to_host(self.hostname):
                         batch[name].append(entry)
 
                 self.log_queue.task_done()
@@ -1039,26 +987,19 @@ class LogForwarder:
                     continue
 
                 should_send = len(batch[name]) >= dest.config.batch_size or (
-                    batch[name]
-                    and current_time - last_send_time >= dest.config.batch_timeout
+                    batch[name] and current_time - last_send_time >= dest.config.batch_timeout
                 )
 
                 if should_send and batch[name]:
                     success = dest.send(batch[name])
                     if not success:
-                        self.logger.warning(
-                            f"Failed to send to {name}: {dest._last_error}"
-                        )
+                        self.logger.warning(f"Failed to send to {name}: {dest._last_error}")
                     batch[name] = []
                     last_send_time = current_time
 
         # Send remaining logs
         for name, dest in self.destinations.items():
-            if (
-                batch[name]
-                and dest.config.enabled
-                and dest.config.applies_to_host(self.hostname)
-            ):
+            if batch[name] and dest.config.enabled and dest.config.applies_to_host(self.hostname):
                 dest.send(batch[name])
 
     def _docker_log_streamer(self, container):
@@ -1088,10 +1029,7 @@ class LogForwarder:
                     # Determine log level
                     level = "Information"
                     message_lower = message.lower()
-                    if any(
-                        kw in message_lower
-                        for kw in ["error", "exception", "failed", "fatal"]
-                    ):
+                    if any(kw in message_lower for kw in ["error", "exception", "failed", "fatal"]):
                         level = "Error"
                     elif any(kw in message_lower for kw in ["warning", "warn"]):
                         level = "Warning"
@@ -1105,17 +1043,13 @@ class LogForwarder:
                         properties={
                             "ContainerID": container.id[:12],
                             "ContainerName": container.name,
-                            "Image": container.image.tags[0]
-                            if container.image.tags
-                            else "unknown",
+                            "Image": container.image.tags[0] if container.image.tags else "unknown",
                             "LogType": "DockerContainer",
                         },
                     )
 
                 except Exception as e:
-                    self.logger.debug(
-                        f"Error processing log from {container.name}: {e}"
-                    )
+                    self.logger.debug(f"Error processing log from {container.name}: {e}")
 
         except Exception as e:
             self.logger.error(f"Error streaming logs from {container.name}: {e}")
@@ -1130,8 +1064,7 @@ class LogForwarder:
             for container in self.docker_client.containers.list():
                 name = container.name.lower()
                 is_autobot = name.startswith("autobot") or any(
-                    kw in name
-                    for kw in ["redis", "seq", "playwright", "npu", "ai-stack"]
+                    kw in name for kw in ["redis", "seq", "playwright", "npu", "ai-stack"]
                 )
                 if is_autobot:
                     containers.append(container)
@@ -1171,14 +1104,8 @@ class LogForwarder:
                         try:
                             data = json.loads(line)
                             message = data.get("message", line)
-                            level = data.get(
-                                "level", data.get("levelname", "Information")
-                            )
-                            properties = {
-                                k: v
-                                for k, v in data.items()
-                                if k not in ["message", "level", "levelname"]
-                            }
+                            level = data.get("level", data.get("levelname", "Information"))
+                            properties = {k: v for k, v in data.items() if k not in ["message", "level", "levelname"]}
                         except json.JSONDecodeError:
                             pass
                     else:
@@ -1190,9 +1117,7 @@ class LogForwarder:
                         elif "DEBUG" in line.upper():
                             level = "Debug"
 
-                    self.queue_log(
-                        message, level=level, source=source, properties=properties
-                    )
+                    self.queue_log(message, level=level, source=source, properties=properties)
 
         except Exception as e:
             self.logger.error(f"Error monitoring {log_path}: {e}")
@@ -1217,9 +1142,7 @@ class LogForwarder:
         # Start Docker container monitoring
         containers = self._get_autobot_containers()
         for container in containers:
-            thread = threading.Thread(
-                target=self._docker_log_streamer, args=(container,), daemon=True
-            )
+            thread = threading.Thread(target=self._docker_log_streamer, args=(container,), daemon=True)
             thread.start()
             self.threads.append(thread)
 
@@ -1232,9 +1155,7 @@ class LogForwarder:
         ]
 
         for log_path, source in log_files:
-            thread = threading.Thread(
-                target=self._file_log_monitor, args=(log_path, source), daemon=True
-            )
+            thread = threading.Thread(target=self._file_log_monitor, args=(log_path, source), daemon=True)
             thread.start()
             self.threads.append(thread)
 
@@ -1249,9 +1170,7 @@ class LogForwarder:
             },
         )
 
-        self.logger.info(
-            f"Log forwarding active with {len(self.destinations)} destination(s)"
-        )
+        self.logger.info(f"Log forwarding active with {len(self.destinations)} destination(s)")
         self.logger.info("Press Ctrl+C to stop")
 
         try:
@@ -1276,63 +1195,76 @@ class LogForwarder:
 
 def _build_argument_parser() -> argparse.ArgumentParser:
     """Build CLI argument parser for log forwarder. See main()."""
-    parser = argparse.ArgumentParser(
-        description="AutoBot Log Forwarding Service"
-    )
+    parser = argparse.ArgumentParser(description="AutoBot Log Forwarding Service")
+    parser.add_argument("--start", action="store_true", help="Start the log forwarder")
+    parser.add_argument("--config", type=str, help="Path to configuration file")
     parser.add_argument(
-        "--start", action="store_true", help="Start the log forwarder"
-    )
-    parser.add_argument(
-        "--config", type=str, help="Path to configuration file"
-    )
-    parser.add_argument(
-        "--test-destinations", action="store_true",
+        "--test-destinations",
+        action="store_true",
         help="Test all destinations",
     )
     parser.add_argument(
-        "--add-seq", type=str, metavar="URL",
+        "--add-seq",
+        type=str,
+        metavar="URL",
         help="Add Seq destination",
     )
     parser.add_argument(
-        "--add-elasticsearch", type=str, metavar="URL",
+        "--add-elasticsearch",
+        type=str,
+        metavar="URL",
         help="Add Elasticsearch destination",
     )
     parser.add_argument(
-        "--add-loki", type=str, metavar="URL",
+        "--add-loki",
+        type=str,
+        metavar="URL",
         help="Add Loki destination",
     )
     parser.add_argument(
-        "--add-syslog", type=str, metavar="HOST:PORT",
+        "--add-syslog",
+        type=str,
+        metavar="HOST:PORT",
         help="Add Syslog destination (e.g., 192.168.168.49:514)",
     )
     parser.add_argument(
-        "--syslog-protocol", type=str,
-        choices=["udp", "tcp", "tcp_tls"], default="udp",
+        "--syslog-protocol",
+        type=str,
+        choices=["udp", "tcp", "tcp_tls"],
+        default="udp",
         help="Syslog protocol: udp (default), tcp, or tcp_tls",
     )
     parser.add_argument(
-        "--syslog-name", type=str, default="syslog-default",
+        "--syslog-name",
+        type=str,
+        default="syslog-default",
         help="Name for syslog destination",
     )
     parser.add_argument(
-        "--ssl-verify", action="store_true",
+        "--ssl-verify",
+        action="store_true",
         help="Verify SSL certificates (for tcp_tls)",
     )
     parser.add_argument(
-        "--ssl-ca-cert", type=str,
+        "--ssl-ca-cert",
+        type=str,
         help="Path to CA certificate for SSL verification",
     )
     parser.add_argument(
-        "--scope", type=str, choices=["global", "per_host"],
+        "--scope",
+        type=str,
+        choices=["global", "per_host"],
         default="global",
         help="Destination scope: global (all hosts) or per_host",
     )
     parser.add_argument(
-        "--target-hosts", type=str,
+        "--target-hosts",
+        type=str,
         help="Comma-separated list of target hosts (for per_host scope)",
     )
     parser.add_argument(
-        "--list", action="store_true",
+        "--list",
+        action="store_true",
         help="List configured destinations",
     )
     return parser
@@ -1344,7 +1276,8 @@ def _handle_add_destinations(args, forwarder: "LogForwarder") -> bool:
 
     if args.add_seq:
         cfg = DestinationConfig(
-            name="seq-default", type=DestinationType.SEQ,
+            name="seq-default",
+            type=DestinationType.SEQ,
             url=args.add_seq,
         )
         forwarder.add_destination(cfg)
@@ -1363,7 +1296,8 @@ def _handle_add_destinations(args, forwarder: "LogForwarder") -> bool:
 
     if args.add_loki:
         cfg = DestinationConfig(
-            name="loki-default", type=DestinationType.LOKI,
+            name="loki-default",
+            type=DestinationType.LOKI,
             url=args.add_loki,
         )
         forwarder.add_destination(cfg)
@@ -1374,23 +1308,21 @@ def _handle_add_destinations(args, forwarder: "LogForwarder") -> bool:
         scope = DestinationScope(args.scope)
         target_hosts = []
         if args.target_hosts:
-            target_hosts = [
-                h.strip() for h in args.target_hosts.split(",")
-            ]
+            target_hosts = [h.strip() for h in args.target_hosts.split(",")]
         cfg = DestinationConfig(
-            name=args.syslog_name, type=DestinationType.SYSLOG,
+            name=args.syslog_name,
+            type=DestinationType.SYSLOG,
             url=args.add_syslog,
             syslog_protocol=SyslogProtocol(args.syslog_protocol),
-            ssl_verify=args.ssl_verify, ssl_ca_cert=args.ssl_ca_cert,
-            scope=scope, target_hosts=target_hosts,
+            ssl_verify=args.ssl_verify,
+            ssl_ca_cert=args.ssl_ca_cert,
+            scope=scope,
+            target_hosts=target_hosts,
         )
         forwarder.add_destination(cfg)
         proto = f" ({args.syslog_protocol})"
         sc = f" [scope: {args.scope}]"
-        hosts = (
-            f" [hosts: {args.target_hosts}]"
-            if args.target_hosts else ""
-        )
+        hosts = f" [hosts: {args.target_hosts}]" if args.target_hosts else ""
         print(f"Added Syslog destination: {args.add_syslog}{proto}{sc}{hosts}")
         added = True
 
@@ -1404,16 +1336,10 @@ def _handle_list_destinations(forwarder: "LogForwarder") -> None:
         status = "enabled" if dest.config.enabled else "disabled"
         scope = dest.config.scope.value
         url = dest.config.url or dest.config.file_path
-        line = (
-            f"  - {dest.config.name} ({dest.config.type.value}): "
-            f"{url} [{status}] [scope: {scope}]"
-        )
+        line = f"  - {dest.config.name} ({dest.config.type.value}): " f"{url} [{status}] [scope: {scope}]"
         if dest.config.type == DestinationType.SYSLOG:
             line += f" [protocol: {dest.config.syslog_protocol.value}]"
-        if (
-            dest.config.scope == DestinationScope.PER_HOST
-            and dest.config.target_hosts
-        ):
+        if dest.config.scope == DestinationScope.PER_HOST and dest.config.target_hosts:
             line += f" [hosts: {', '.join(dest.config.target_hosts)}]"
         print(line)
 
@@ -1446,9 +1372,14 @@ def main():
     if args.start:
         forwarder.start()
 
-    has_action = any([
-        args.start, added, args.list, args.test_destinations,
-    ])
+    has_action = any(
+        [
+            args.start,
+            added,
+            args.list,
+            args.test_destinations,
+        ]
+    )
     if not has_action:
         parser.print_help()
 

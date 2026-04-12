@@ -123,9 +123,7 @@ _SERVICE_DEFINITIONS = {
         service_type=AutoBotServiceType.NPU_WORKER,
         default_host_env="AUTOBOT_NPU_WORKER_HOST",
         default_port_env="AUTOBOT_NPU_WORKER_PORT",
-        default_host=os.environ.get(
-            "AUTOBOT_NPU_WORKER_HOST", ""  # noqa: ssot-fallback
-        ),
+        default_host=os.environ.get("AUTOBOT_NPU_WORKER_HOST", ""),  # noqa: ssot-fallback
         default_port=8081,
         systemd_service="autobot-npu-worker",
         start_command=(
@@ -163,13 +161,10 @@ _SERVICE_DEFINITIONS = {
         service_type=AutoBotServiceType.BROWSER,
         default_host_env="AUTOBOT_BROWSER_SERVICE_HOST",
         default_port_env="AUTOBOT_BROWSER_SERVICE_PORT",
-        default_host=os.environ.get(
-            "AUTOBOT_BROWSER_SERVICE_HOST", ""  # noqa: ssot-fallback
-        ),
+        default_host=os.environ.get("AUTOBOT_BROWSER_SERVICE_HOST", ""),  # noqa: ssot-fallback
         default_port=3000,
         start_command=(
-            "cd /opt/autobot/autobot-browser-worker && "
-            "nohup node playwright-server.js > /tmp/browser.log 2>&1 &"
+            "cd /opt/autobot/autobot-browser-worker && " "nohup node playwright-server.js > /tmp/browser.log 2>&1 &"
         ),
         stop_command="pkill -f 'playwright-server'",
         health_check_path="/health",
@@ -329,9 +324,7 @@ class ServiceOrchestrator:
         if not service_def:
             return False, f"Unknown service: {service_name}"
 
-        target_host, node, error = await self._resolve_target_node(
-            db, service_name, node_id
-        )
+        target_host, node, error = await self._resolve_target_node(db, service_name, node_id)
         if error:
             return False, error
 
@@ -366,9 +359,7 @@ class ServiceOrchestrator:
 
         # Update service record if we have a node
         if success and node:
-            await self._update_service_record(
-                db, node.node_id, service_name, ServiceStatus.RUNNING.value
-            )
+            await self._update_service_record(db, node.node_id, service_name, ServiceStatus.RUNNING.value)
 
         return success, message
 
@@ -423,9 +414,7 @@ class ServiceOrchestrator:
 
         # Update service record if we have a node
         if success and node:
-            await self._update_service_record(
-                db, node.node_id, service_name, ServiceStatus.STOPPED.value
-            )
+            await self._update_service_record(db, node.node_id, service_name, ServiceStatus.STOPPED.value)
 
         return success, message
 
@@ -475,15 +464,11 @@ class ServiceOrchestrator:
             # Stop then start
             await self.stop_service(db, service_name, node_id)
             await asyncio.sleep(1)
-            success, message = await self.start_service(
-                db, service_name, node_id, force=True
-            )
+            success, message = await self.start_service(db, service_name, node_id, force=True)
 
         # Update service record if we have a node
         if success and node:
-            await self._update_service_record(
-                db, node.node_id, service_name, ServiceStatus.RUNNING.value
-            )
+            await self._update_service_record(db, node.node_id, service_name, ServiceStatus.RUNNING.value)
 
         return success, message
 
@@ -528,24 +513,15 @@ class ServiceOrchestrator:
         )
 
         # Stop on source
-        stop_success, stop_msg = await self.stop_service(
-            db, service_name, source_node_id
-        )
+        stop_success, stop_msg = await self.stop_service(db, service_name, source_node_id)
         if not stop_success:
-            logger.warning(
-                "Failed to stop on source (may not be running): %s", stop_msg
-            )
+            logger.warning("Failed to stop on source (may not be running): %s", stop_msg)
 
         # Start on target
-        start_success, start_msg = await self.start_service(
-            db, service_name, target_node_id, force=True
-        )
+        start_success, start_msg = await self.start_service(db, service_name, target_node_id, force=True)
 
         if start_success:
-            return True, (
-                f"Service {service_name} migrated from "
-                f"{source_node.hostname} to {target_node.hostname}"
-            )
+            return True, (f"Service {service_name} migrated from " f"{source_node.hostname} to {target_node.hostname}")
         else:
             # Try to restart on source if target failed
             logger.error("Migration failed, attempting to restart on source")
@@ -685,16 +661,12 @@ class ServiceOrchestrator:
         result = await db.execute(select(Node).where(Node.node_id == node_id))
         return result.scalar_one_or_none()
 
-    async def _find_node_by_ip(
-        self, db: AsyncSession, ip_address: str
-    ) -> Optional[Node]:
+    async def _find_node_by_ip(self, db: AsyncSession, ip_address: str) -> Optional[Node]:
         """Find node by IP address."""
         result = await db.execute(select(Node).where(Node.ip_address == ip_address))
         return result.scalar_one_or_none()
 
-    async def _update_service_record(
-        self, db: AsyncSession, node_id: str, service_name: str, status: str
-    ) -> None:
+    async def _update_service_record(self, db: AsyncSession, node_id: str, service_name: str, status: str) -> None:
         """Update or create service record in database."""
         result = await db.execute(
             select(Service).where(
@@ -718,16 +690,12 @@ class ServiceOrchestrator:
 
         await db.commit()
 
-    async def _run_ssh_command(
-        self, host: str, command: str, requires_sudo: bool = False
-    ) -> Tuple[bool, str]:
+    async def _run_ssh_command(self, host: str, command: str, requires_sudo: bool = False) -> Tuple[bool, str]:
         """Run a command on a remote host via SSH."""
         async with self._ssh_semaphore:
             return await self._execute_ssh(host, command, requires_sudo)
 
-    async def _execute_ssh(
-        self, host: str, command: str, requires_sudo: bool = False
-    ) -> Tuple[bool, str]:
+    async def _execute_ssh(self, host: str, command: str, requires_sudo: bool = False) -> Tuple[bool, str]:
         """Execute SSH subprocess (#788: split from _run_ssh_command)."""
         ssh_cmd = [
             "/usr/bin/ssh",

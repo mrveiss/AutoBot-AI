@@ -65,25 +65,17 @@ async def test_change_password_invalidates_sessions(user_service, sample_user):
     current_token = "current.jwt.token"
 
     # Mock get_user to return sample_user
-    with patch.object(
-        user_service, "get_user", new_callable=AsyncMock
-    ) as mock_get_user:
+    with patch.object(user_service, "get_user", new_callable=AsyncMock) as mock_get_user:
         mock_get_user.return_value = sample_user
 
         # Mock _audit_log
-        with patch.object(
-            user_service, "_audit_log", new_callable=AsyncMock
-        ) as mock_audit:
+        with patch.object(user_service, "_audit_log", new_callable=AsyncMock) as mock_audit:
             mock_audit.return_value = None
 
             # Mock SessionService
-            with patch(
-                "src.user_management.services.user_service.SessionService"
-            ) as MockSession:
+            with patch("src.user_management.services.user_service.SessionService") as MockSession:
                 mock_session_service = MockSession.return_value
-                mock_session_service.invalidate_user_sessions = AsyncMock(
-                    return_value=2
-                )
+                mock_session_service.invalidate_user_sessions = AsyncMock(return_value=2)
 
                 success = await user_service.change_password(
                     user_id=sample_user.id,
@@ -99,30 +91,20 @@ async def test_change_password_invalidates_sessions(user_service, sample_user):
 
 
 @pytest.mark.asyncio
-async def test_change_password_without_token_invalidates_all_sessions(
-    user_service, sample_user
-):
+async def test_change_password_without_token_invalidates_all_sessions(user_service, sample_user):
     """Changing password without token invalidates all sessions. Issue #635."""
     # Mock get_user to return sample_user
-    with patch.object(
-        user_service, "get_user", new_callable=AsyncMock
-    ) as mock_get_user:
+    with patch.object(user_service, "get_user", new_callable=AsyncMock) as mock_get_user:
         mock_get_user.return_value = sample_user
 
         # Mock _audit_log
-        with patch.object(
-            user_service, "_audit_log", new_callable=AsyncMock
-        ) as mock_audit:
+        with patch.object(user_service, "_audit_log", new_callable=AsyncMock) as mock_audit:
             mock_audit.return_value = None
 
             # Mock SessionService
-            with patch(
-                "src.user_management.services.user_service.SessionService"
-            ) as MockSession:
+            with patch("src.user_management.services.user_service.SessionService") as MockSession:
                 mock_session_service = MockSession.return_value
-                mock_session_service.invalidate_user_sessions = AsyncMock(
-                    return_value=3
-                )
+                mock_session_service.invalidate_user_sessions = AsyncMock(return_value=3)
 
                 success = await user_service.change_password(
                     user_id=sample_user.id,
@@ -131,17 +113,13 @@ async def test_change_password_without_token_invalidates_all_sessions(
                 )
 
     assert success is True
-    mock_session_service.invalidate_user_sessions.assert_called_once_with(
-        user_id=sample_user.id, except_token=None
-    )
+    mock_session_service.invalidate_user_sessions.assert_called_once_with(user_id=sample_user.id, except_token=None)
 
 
 @pytest.mark.asyncio
 async def test_change_password_user_not_found(user_service):
     """Changing password for non-existent user raises UserNotFoundError."""
-    with patch.object(
-        user_service, "get_user", new_callable=AsyncMock
-    ) as mock_get_user:
+    with patch.object(user_service, "get_user", new_callable=AsyncMock) as mock_get_user:
         mock_get_user.return_value = None
 
         with pytest.raises(UserNotFoundError):
@@ -155,9 +133,7 @@ async def test_change_password_user_not_found(user_service):
 @pytest.mark.asyncio
 async def test_change_password_wrong_current_password(user_service, sample_user):
     """Changing password with wrong current password raises InvalidCredentialsError."""
-    with patch.object(
-        user_service, "get_user", new_callable=AsyncMock
-    ) as mock_get_user:
+    with patch.object(user_service, "get_user", new_callable=AsyncMock) as mock_get_user:
         mock_get_user.return_value = sample_user
 
         with pytest.raises(InvalidCredentialsError):

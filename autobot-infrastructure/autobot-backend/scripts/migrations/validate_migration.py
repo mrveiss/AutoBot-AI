@@ -31,9 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot_shared"))
 from autobot_shared.redis_client import get_redis_client
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -80,9 +78,7 @@ class MigrationValidator:
     async def connect_redis(self) -> None:
         """Connect to Redis database"""
         try:
-            self.redis_client = await get_redis_client(
-                async_client=True, database="main"
-            )
+            self.redis_client = await get_redis_client(async_client=True, database="main")
             await self.redis_client.ping()
             logger.info("Connected to Redis successfully")
         except Exception as e:
@@ -192,26 +188,38 @@ class MigrationValidator:
             secret_data = await self.redis_client.hgetall(key)
 
             if not secret_data:
-                self.issues.append({
-                    "type": "secret", "id": secret_id,
-                    "severity": "error", "issue": "Secret data is empty",
-                })
+                self.issues.append(
+                    {
+                        "type": "secret",
+                        "id": secret_id,
+                        "severity": "error",
+                        "issue": "Secret data is empty",
+                    }
+                )
                 return
 
             decoded = {
-                (k.decode("utf-8") if isinstance(k, bytes) else k): (
-                    v.decode("utf-8") if isinstance(v, bytes) else v
-                )
+                (k.decode("utf-8") if isinstance(k, bytes) else k): (v.decode("utf-8") if isinstance(v, bytes) else v)
                 for k, v in secret_data.items()
             }
 
             self._check_secret_field(
-                secret_id, decoded, "owner_id", "with_owner",
-                "without_owner", "Missing owner_id", "error",
+                secret_id,
+                decoded,
+                "owner_id",
+                "with_owner",
+                "without_owner",
+                "Missing owner_id",
+                "error",
             )
             self._check_secret_field(
-                secret_id, decoded, "scope", "with_scope",
-                "without_scope", "Missing scope", "error",
+                secret_id,
+                decoded,
+                "scope",
+                "with_scope",
+                "without_scope",
+                "Missing scope",
+                "error",
             )
 
             value = decoded.get("value", "")
@@ -219,28 +227,41 @@ class MigrationValidator:
                 self.stats["secrets"]["encrypted"] += 1
             else:
                 self.stats["secrets"]["unencrypted"] += 1
-                self.issues.append({
-                    "type": "secret", "id": secret_id,
-                    "severity": "warning",
-                    "issue": "Value may not be encrypted",
-                })
+                self.issues.append(
+                    {
+                        "type": "secret",
+                        "id": secret_id,
+                        "severity": "warning",
+                        "issue": "Value may not be encrypted",
+                    }
+                )
 
             if self.verbose and decoded.get("owner_id"):
                 logger.info(
                     "Secret %s...: owner=[REDACTED], scope=%s",
-                    secret_id[:8], decoded.get("scope"),
+                    secret_id[:8],
+                    decoded.get("scope"),
                 )
         except Exception as e:
             logger.error("Error validating secret %s...: %s", secret_id[:8], e)
-            self.issues.append({
-                "type": "secret", "id": secret_id,
-                "severity": "error",
-                "issue": f"Validation error: {e}",
-            })
+            self.issues.append(
+                {
+                    "type": "secret",
+                    "id": secret_id,
+                    "severity": "error",
+                    "issue": f"Validation error: {e}",
+                }
+            )
 
     def _check_secret_field(
-        self, secret_id, decoded, field, present_key,
-        absent_key, issue_msg, severity,
+        self,
+        secret_id,
+        decoded,
+        field,
+        present_key,
+        absent_key,
+        issue_msg,
+        severity,
     ):
         """Check a secret field and update stats/issues.
 
@@ -250,10 +271,14 @@ class MigrationValidator:
             self.stats["secrets"][present_key] += 1
         else:
             self.stats["secrets"][absent_key] += 1
-            self.issues.append({
-                "type": "secret", "id": secret_id,
-                "severity": severity, "issue": issue_msg,
-            })
+            self.issues.append(
+                {
+                    "type": "secret",
+                    "id": secret_id,
+                    "severity": severity,
+                    "issue": issue_msg,
+                }
+            )
 
     def _appears_encrypted(self, value: str) -> bool:
         """Check if a value appears to be encrypted.
@@ -345,11 +370,7 @@ class MigrationValidator:
                     self.stats["activities"]["with_user_id"] += 1
                 else:
                     self.stats["activities"]["without_user_id"] += 1
-                    activity_id = (
-                        activity_key.decode("utf-8")
-                        if isinstance(activity_key, bytes)
-                        else activity_key
-                    )
+                    activity_id = activity_key.decode("utf-8") if isinstance(activity_key, bytes) else activity_key
                     self.issues.append(
                         {
                             "type": "activity",
@@ -424,9 +445,7 @@ class MigrationValidator:
             ("Without owner", "without_owner"),
             ("With created_at", "with_created_at"),
         ]:
-            report.append(
-                self._format_stat_with_pct(label, s[key], s["total"])
-            )
+            report.append(self._format_stat_with_pct(label, s[key], s["total"]))
         report.append(f"  Empty sessions: {s['empty']}")
         report.append("")
 
@@ -441,9 +460,7 @@ class MigrationValidator:
             ("With scope", "with_scope"),
             ("Encrypted", "encrypted"),
         ]:
-            report.append(
-                self._format_stat_with_pct(label, s[key], s["total"])
-            )
+            report.append(self._format_stat_with_pct(label, s[key], s["total"]))
         report.append("")
 
     def _report_messages_section(self, report: list) -> None:
@@ -451,14 +468,8 @@ class MigrationValidator:
         s = self.stats["messages"]
         report.append("MESSAGES:")
         report.append(f"  Total: {s['total']}")
-        report.append(
-            self._format_stat_with_pct(
-                "With user_id", s["with_user_id"], s["total"]
-            )
-        )
-        report.append(
-            f"  Without user_id: {s['without_user_id']}"
-        )
+        report.append(self._format_stat_with_pct("With user_id", s["with_user_id"], s["total"]))
+        report.append(f"  Without user_id: {s['without_user_id']}")
         report.append("")
 
     def _report_activities_section(self, report: list) -> None:
@@ -466,14 +477,8 @@ class MigrationValidator:
         s = self.stats["activities"]
         report.append("ACTIVITIES:")
         report.append(f"  Total: {s['total']}")
-        report.append(
-            self._format_stat_with_pct(
-                "With user_id", s["with_user_id"], s["total"]
-            )
-        )
-        report.append(
-            f"  Without user_id: {s['without_user_id']}"
-        )
+        report.append(self._format_stat_with_pct("With user_id", s["with_user_id"], s["total"]))
+        report.append(f"  Without user_id: {s['without_user_id']}")
         report.append("")
 
     def _report_indices_section(self, report: list) -> None:
@@ -492,9 +497,7 @@ class MigrationValidator:
     def _report_issues_section(self, report: list) -> None:
         """Append issues summary to report. See generate_report()."""
         if not self.issues:
-            report.append(
-                "NO ISSUES FOUND - Migration completed successfully!"
-            )
+            report.append("NO ISSUES FOUND - Migration completed successfully!")
             return
         errors = [i for i in self.issues if i["severity"] == "error"]
         warnings = [i for i in self.issues if i["severity"] == "warning"]
@@ -505,10 +508,7 @@ class MigrationValidator:
         report.append("")
         report.append("First 20 issues:")
         for issue in self.issues[:20]:
-            report.append(
-                f"  [{issue['severity'].upper()}] {issue['type']} "
-                f"{issue['id']}: {issue['issue']}"
-            )
+            report.append(f"  [{issue['severity'].upper()}] {issue['type']} " f"{issue['id']}: {issue['issue']}")
         if len(self.issues) > 20:
             remaining = len(self.issues) - 20
             report.append(f"  ... and {remaining} more issues")
@@ -552,12 +552,8 @@ class MigrationValidator:
         # Save issues to JSON
         if self.issues:
             issues_file = Path("/tmp/migration_issues.json")
-            issues_file.write_text(
-                json.dumps(self.issues, indent=2)
-            )
-            logger.info(
-                "Issues details saved to: %s", issues_file
-            )
+            issues_file.write_text(json.dumps(self.issues, indent=2))
+            logger.info("Issues details saved to: %s", issues_file)
 
         # Exit with error code if issues found
         if any(i["severity"] == "error" for i in self.issues):

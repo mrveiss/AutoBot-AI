@@ -77,9 +77,7 @@ class BranchMetricsCollector:
         divergence = BranchDivergence(branch=branch)
 
         # Commits ahead
-        ahead_out, ahead_code = await self._run_git_cmd(
-            "rev-list", "--count", f"{self.base_branch}..{branch}"
-        )
+        ahead_out, ahead_code = await self._run_git_cmd("rev-list", "--count", f"{self.base_branch}..{branch}")
         if ahead_code == 0 and ahead_out:
             try:
                 divergence.ahead = int(ahead_out)
@@ -87,9 +85,7 @@ class BranchMetricsCollector:
                 logger.warning("Failed to parse ahead count: %s", ahead_out)
 
         # Commits behind
-        behind_out, behind_code = await self._run_git_cmd(
-            "rev-list", "--count", f"{branch}..{self.base_branch}"
-        )
+        behind_out, behind_code = await self._run_git_cmd("rev-list", "--count", f"{branch}..{self.base_branch}")
         if behind_code == 0 and behind_out:
             try:
                 divergence.behind = int(behind_out)
@@ -101,9 +97,7 @@ class BranchMetricsCollector:
 
     async def get_branch_last_activity(self, branch: str) -> Optional[datetime]:
         """Get last commit timestamp on branch."""
-        timestamp_out, code = await self._run_git_cmd(
-            "log", "-1", "--format=%ai", branch
-        )
+        timestamp_out, code = await self._run_git_cmd("log", "-1", "--format=%ai", branch)
 
         if code == 0 and timestamp_out:
             try:
@@ -115,16 +109,10 @@ class BranchMetricsCollector:
 
     async def get_all_branches(self) -> List[str]:
         """Get all remote branches."""
-        branches_out, code = await self._run_git_cmd(
-            "branch", "-r", "--format=%(refname:short)"
-        )
+        branches_out, code = await self._run_git_cmd("branch", "-r", "--format=%(refname:short)")
 
         if code == 0 and branches_out:
-            branches = [
-                b.replace("origin/", "")
-                for b in branches_out.split("\n")
-                if b.strip() and "HEAD" not in b
-            ]
+            branches = [b.replace("origin/", "") for b in branches_out.split("\n") if b.strip() and "HEAD" not in b]
             return branches
 
         return []
@@ -153,9 +141,7 @@ class BranchMetricsCollector:
             health_score=health_score,
         )
 
-    def _calculate_health_score(
-        self, divergence: BranchDivergence, days_since_activity: int
-    ) -> float:
+    def _calculate_health_score(self, divergence: BranchDivergence, days_since_activity: int) -> float:
         """Calculate health score (0-100), higher is better."""
         score = 100.0
 
@@ -172,9 +158,7 @@ class BranchMetricsCollector:
     async def analyze_all_branches(self) -> List[BranchMetrics]:
         """Analyze all branches and return sorted by health."""
         all_branches = await self.get_all_branches()
-        branches_to_check = [
-            b for b in all_branches if b != self.base_branch and "HEAD" not in b
-        ]
+        branches_to_check = [b for b in all_branches if b != self.base_branch and "HEAD" not in b]
 
         metrics = []
         for branch in branches_to_check:

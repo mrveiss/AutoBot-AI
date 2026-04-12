@@ -348,36 +348,24 @@ class PhaseValidator:
             total_weighted_score += weighted_score
             total_weight += phase_weight
 
-            logger.info(
-                f"✅ {phase_name}: {phase_result['completion_percentage']:.1f}% complete"
-            )
+            logger.info(f"✅ {phase_name}: {phase_result['completion_percentage']:.1f}% complete")
 
         # Calculate overall system maturity
-        overall_completion = (
-            (total_weighted_score / total_weight) * 100 if total_weight > 0 else 0
-        )
+        overall_completion = (total_weighted_score / total_weight) * 100 if total_weight > 0 else 0
 
         validation_results["overall_assessment"] = {
             "system_maturity_score": round(overall_completion, 2),
             "development_stage": self._determine_development_stage(overall_completion),
             "ready_for_production": overall_completion >= 85,
-            "critical_phases_complete": self._check_critical_phases(
-                validation_results["phases"]
-            ),
+            "critical_phases_complete": self._check_critical_phases(validation_results["phases"]),
             "total_phases_evaluated": len(PhaseValidationCriteria.PHASE_CRITERIA),
             "phases_fully_complete": len(
-                [
-                    p
-                    for p in validation_results["phases"].values()
-                    if p["completion_percentage"] >= 95
-                ]
+                [p for p in validation_results["phases"].values() if p["completion_percentage"] >= 95]
             ),
         }
 
         # Generate recommendations
-        validation_results["recommendations"] = self._generate_recommendations(
-            validation_results["phases"]
-        )
+        validation_results["recommendations"] = self._generate_recommendations(validation_results["phases"])
 
         self.validation_results = validation_results
         return validation_results
@@ -393,9 +381,7 @@ class PhaseValidator:
         else:
             return "incomplete"
 
-    async def _validate_phase_features(
-        self, criteria: Dict[str, Any], results: Dict[str, Any]
-    ) -> tuple:
+    async def _validate_phase_features(self, criteria: Dict[str, Any], results: Dict[str, Any]) -> tuple:
         """Validate all feature types in criteria (Issue #665: extracted helper)."""
         feature_types = [
             "security_features",
@@ -413,16 +399,10 @@ class PhaseValidator:
 
         for feature_type in feature_types:
             if feature_type in criteria:
-                feature_results = await self._validate_features(
-                    feature_type, criteria[feature_type]
-                )
-                results["validations"]["features"]["passed"] += feature_results[
-                    "passed"
-                ]
+                feature_results = await self._validate_features(feature_type, criteria[feature_type])
+                results["validations"]["features"]["passed"] += feature_results["passed"]
                 results["validations"]["features"]["total"] += feature_results["total"]
-                results["validations"]["features"]["details"].extend(
-                    feature_results["details"]
-                )
+                results["validations"]["features"]["details"].extend(feature_results["details"])
                 total_checks += feature_results["total"]
                 passed_checks += feature_results["passed"]
 
@@ -452,9 +432,7 @@ class PhaseValidator:
             "recommendations": [],
         }
 
-    async def _validate_phase(
-        self, phase_name: str, criteria: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _validate_phase(self, phase_name: str, criteria: Dict[str, Any]) -> Dict[str, Any]:
         """Validate a specific development phase."""
         results = self._empty_phase_result(phase_name)
         total_checks = 0
@@ -487,12 +465,8 @@ class PhaseValidator:
         passed_checks += fp
 
         if total_checks > 0:
-            results["completion_percentage"] = round(
-                (passed_checks / total_checks) * 100, 2
-            )
-        results["status"] = self._determine_phase_status(
-            results["completion_percentage"]
-        )
+            results["completion_percentage"] = round((passed_checks / total_checks) * 100, 2)
+        results["status"] = self._determine_phase_status(results["completion_percentage"])
         return results
 
     def _validate_files(self, files: List[str]) -> Dict[str, Any]:
@@ -541,9 +515,7 @@ class PhaseValidator:
         """Validate API endpoints are accessible"""
         results = {"passed": 0, "total": len(endpoints), "details": []}
 
-        async with aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=5)
-        ) as session:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
             for endpoint in endpoints:
                 # Determine full URL
                 if endpoint.startswith("http"):
@@ -678,18 +650,14 @@ class PhaseValidator:
             # Basic feature validation - could be enhanced per feature type
             validated = await self._validate_single_feature(feature_type, feature)
 
-            results["details"].append(
-                {"feature": feature, "implemented": validated, "type": feature_type}
-            )
+            results["details"].append({"feature": feature, "implemented": validated, "type": feature_type})
 
             if validated:
                 results["passed"] += 1
 
         return results
 
-    async def _validate_performance_metrics(
-        self, metrics: Dict[str, int]
-    ) -> Dict[str, Any]:
+    async def _validate_performance_metrics(self, metrics: Dict[str, int]) -> Dict[str, Any]:
         """Validate performance metrics meet criteria"""
         results = {"passed": 0, "total": len(metrics), "details": []}
 
@@ -703,9 +671,7 @@ class PhaseValidator:
             try:
                 timeout = aiohttp.ClientTimeout(total=5)
                 async with aiohttp.ClientSession(timeout=timeout) as session:
-                    async with session.get(
-                        f"{self.backend_url}/api/system/health"
-                    ) as response:
+                    async with session.get(f"{self.backend_url}/api/system/health") as response:
                         await response.text()  # Consume response
                 api_response_time = (time.time() - start_time) * 1000  # ms
             except Exception:
@@ -745,43 +711,27 @@ class PhaseValidator:
         """
         root = self.project_root
         return {
-            "dependency_scanning": lambda: (
-                root / ".github/workflows/security.yml"
-            ).exists(),
+            "dependency_scanning": lambda: (root / ".github/workflows/security.yml").exists(),
             "sast_analysis": lambda: (root / ".bandit").exists(),
             "container_security": lambda: any((root / "scripts").glob("*security*")),
             "system_metrics": lambda: (root / "scripts/monitoring_system.py").exists(),
             "health_checks": lambda: self._check_endpoint_sync("/api/system/health"),
-            "performance_dashboard": lambda: (
-                root / "scripts/performance_dashboard.py"
-            ).exists(),
+            "performance_dashboard": lambda: (root / "scripts/performance_dashboard.py").exists(),
             "chat_interface": lambda: (root / "autobot-vue/src/components").exists(),
-            "terminal_interface": lambda: any(
-                (root / "autobot-vue/src/components").glob("*Terminal*")
-            ),
-            "settings_panel": lambda: any(
-                (root / "autobot-vue/src/components").glob("*Settings*")
-            ),
+            "terminal_interface": lambda: any((root / "autobot-vue/src/components").glob("*Terminal*")),
+            "settings_panel": lambda: any((root / "autobot-vue/src/components").glob("*Settings*")),
             "multimodal_ai": lambda: (root / "src/agents").exists(),
             "code_search": lambda: any((root / "src/agents").glob("*code_search*")),
             "advanced_research": lambda: any((root / "src/agents").glob("*research*")),
             "self_awareness": lambda: (root / "src/llm_self_awareness.py").exists(),
-            "phase_progression": lambda: (
-                root / "src/phase_progression_manager.py"
-            ).exists(),
+            "phase_progression": lambda: (root / "src/phase_progression_manager.py").exists(),
             "unit_testing": lambda: (root / "tests").exists(),
-            "integration_testing": lambda: (
-                root / "scripts/automated_testing_procedure.py"
-            ).exists(),
-            "performance_testing": lambda: (
-                root / "scripts/comprehensive_code_profiler.py"
-            ).exists(),
+            "integration_testing": lambda: (root / "scripts/automated_testing_procedure.py").exists(),
+            "performance_testing": lambda: (root / "scripts/comprehensive_code_profiler.py").exists(),
             "code_quality_checks": lambda: any((root / "scripts").glob("*profile*")),
             "task_planning": lambda: any((root / "src").glob("*orchestrat*")),
             "agent_coordination": lambda: (root / "src/orchestrator.py").exists(),
-            "workflow_management": lambda: (
-                root / "backend/api/orchestration.py"
-            ).exists(),
+            "workflow_management": lambda: (root / "backend/api/orchestration.py").exists(),
         }
 
     async def _validate_single_feature(self, feature_type: str, feature: str) -> bool:
@@ -843,37 +793,22 @@ class PhaseValidator:
 
             if completion < 50:
                 recommendations.append(
-                    f"🔴 CRITICAL: {phase_name} needs significant work "
-                    f"({completion:.1f}% complete)"
+                    f"🔴 CRITICAL: {phase_name} needs significant work " f"({completion:.1f}% complete)"
                 )
             elif completion < 75:
-                recommendations.append(
-                    f"🟡 MEDIUM: {phase_name} requires attention "
-                    f"({completion:.1f}% complete)"
-                )
+                recommendations.append(f"🟡 MEDIUM: {phase_name} requires attention " f"({completion:.1f}% complete)")
             elif completion < 95:
-                recommendations.append(
-                    f"🟢 LOW: {phase_name} nearly complete ({completion:.1f}% complete)"
-                )
+                recommendations.append(f"🟢 LOW: {phase_name} nearly complete ({completion:.1f}% complete)")
 
         # Performance recommendations
-        overall_completion = sum(
-            p["completion_percentage"] for p in phases.values()
-        ) / len(phases)
+        overall_completion = sum(p["completion_percentage"] for p in phases.values()) / len(phases)
 
         if overall_completion < 70:
-            recommendations.append(
-                "🎯 Focus on completing critical infrastructure phases first"
-            )
+            recommendations.append("🎯 Focus on completing critical infrastructure phases first")
         elif overall_completion < 85:
-            recommendations.append(
-                "🚀 System approaching production readiness - "
-                "focus on final optimizations"
-            )
+            recommendations.append("🚀 System approaching production readiness - " "focus on final optimizations")
         else:
-            recommendations.append(
-                "✅ System is production-ready - consider advanced features and scaling"
-            )
+            recommendations.append("✅ System is production-ready - consider advanced features and scaling")
 
         return recommendations
 
@@ -881,9 +816,7 @@ class PhaseValidator:
         """Save validation report to file"""
         if not output_path:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_path = (
-                self.project_root / "reports" / f"phase_validation_{timestamp}.json"
-            )
+            output_path = self.project_root / "reports" / f"phase_validation_{timestamp}.json"
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -917,8 +850,7 @@ def _output_json_results(results: Dict[str, Any], output_file: str = None):
         )
 
     output["recommendations"] = [
-        {"title": rec, "action": "Review and implement"}
-        for rec in results.get("recommendations", [])
+        {"title": rec, "action": "Review and implement"} for rec in results.get("recommendations", [])
     ]
 
     if output_file:

@@ -62,9 +62,7 @@ class AutoBotFunctionalityTest:
             logger.info("🔧 Testing Backend FastAPI API...")
 
             # Test health endpoint
-            response = requests.get(
-                f"{self.services['backend']}/api/system/health", timeout=10
-            )
+            response = requests.get(f"{self.services['backend']}/api/system/health", timeout=10)
 
             if response.status_code == 200:
                 data = response.json()
@@ -72,9 +70,7 @@ class AutoBotFunctionalityTest:
                 logger.info(f"📋 Backend status: {data.get('status', 'unknown')}")
                 return True
             else:
-                logger.error(
-                    f"❌ Backend: Health endpoint returned {response.status_code}"
-                )
+                logger.error(f"❌ Backend: Health endpoint returned {response.status_code}")
                 return False
 
         except requests.exceptions.ConnectionError:
@@ -211,13 +207,9 @@ class AutoBotFunctionalityTest:
 
             if result.returncode == 0:
                 container_lines = result.stdout.strip().split("\n")[1:]  # Skip header
-                autobot_containers = [
-                    line for line in container_lines if "autobot" in line.lower()
-                ]
+                autobot_containers = [line for line in container_lines if "autobot" in line.lower()]
 
-                logger.info(
-                    f"✅ Docker: {len(autobot_containers)} AutoBot containers found"
-                )
+                logger.info(f"✅ Docker: {len(autobot_containers)} AutoBot containers found")
 
                 healthy_containers = 0
                 for container_line in autobot_containers:
@@ -248,24 +240,12 @@ class AutoBotFunctionalityTest:
             # Check if key processes are running
             import subprocess
 
-            result = subprocess.run(
-                ["ps", "aux"], capture_output=True, text=True, timeout=5
-            )
+            result = subprocess.run(["ps", "aux"], capture_output=True, text=True, timeout=5)
 
             processes = result.stdout
-            node_processes = len(
-                [
-                    line
-                    for line in processes.split("\n")
-                    if "node" in line and "vite" in line
-                ]
-            )
+            node_processes = len([line for line in processes.split("\n") if "node" in line and "vite" in line])
             python_processes = len(
-                [
-                    line
-                    for line in processes.split("\n")
-                    if "python" in line and "autobot" in line.lower()
-                ]
+                [line for line in processes.split("\n") if "python" in line and "autobot" in line.lower()]
             )
 
             logger.info(f"📋 Node.js processes (frontend): {node_processes}")
@@ -340,9 +320,7 @@ class AutoBotFunctionalityTest:
         critical_total = len(critical_tests)
 
         logger.info(f"📈 Overall Score: {passed}/{total} tests passed")
-        logger.info(
-            f"🎯 Critical Systems: {critical_passed}/{critical_total} operational"
-        )
+        logger.info(f"🎯 Critical Systems: {critical_passed}/{critical_total} operational")
 
         logger.info("\n🔍 Detailed Results:")
         for test_name, result in results.items():
@@ -350,9 +328,7 @@ class AutoBotFunctionalityTest:
             criticality = (
                 "🔴 CRITICAL"
                 if test_name in critical_tests
-                else "🟡 OPTIONAL"
-                if test_name in optional_tests
-                else "🟢 STANDARD"
+                else "🟡 OPTIONAL" if test_name in optional_tests else "🟢 STANDARD"
             )
             logger.info(f"  {status} - {test_name} ({criticality})")
 

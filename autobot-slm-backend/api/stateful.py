@@ -100,9 +100,7 @@ async def get_backup(
     return BackupResponse.model_validate(backup)
 
 
-@router.post(
-    "/backups", response_model=BackupResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("/backups", response_model=BackupResponse, status_code=status.HTTP_201_CREATED)
 async def create_backup(
     request: BackupCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -198,9 +196,7 @@ async def list_replications(
     query = query.order_by(Replication.created_at.desc())
 
     # Get total count
-    count_result = await db.execute(
-        select(Replication.id).where(query.whereclause or True)
-    )
+    count_result = await db.execute(select(Replication.id).where(query.whereclause or True))
     total = len(count_result.all())
 
     # Apply pagination
@@ -221,9 +217,7 @@ async def get_replication(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> ReplicationResponse:
     """Get a replication by ID."""
-    result = await db.execute(
-        select(Replication).where(Replication.replication_id == replication_id)
-    )
+    result = await db.execute(select(Replication).where(Replication.replication_id == replication_id))
     replication = result.scalar_one_or_none()
 
     if not replication:
@@ -237,18 +231,14 @@ async def get_replication(
 
 async def _fetch_replication_nodes(db, request: ReplicationCreate):
     """Helper for start_replication. Ref: #1088."""
-    source_result = await db.execute(
-        select(Node).where(Node.node_id == request.source_node_id)
-    )
+    source_result = await db.execute(select(Node).where(Node.node_id == request.source_node_id))
     source_node = source_result.scalar_one_or_none()
     if not source_node:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Source node not found",
         )
-    target_result = await db.execute(
-        select(Node).where(Node.node_id == request.target_node_id)
-    )
+    target_result = await db.execute(select(Node).where(Node.node_id == request.target_node_id))
     target_node = target_result.scalar_one_or_none()
     if not target_node:
         raise HTTPException(
@@ -309,9 +299,7 @@ async def start_replication(
 
     # Start async replication job using the ReplicationService (Issue #726 Phase 4)
     asyncio.create_task(
-        replication_service.setup_replication(
-            db, replication_id, source_node, target_node, request.service_type
-        )
+        replication_service.setup_replication(db, replication_id, source_node, target_node, request.service_type)
     )
 
     logger.info(
@@ -380,14 +368,10 @@ async def stop_replication(
 
 async def _fetch_replication_nodes_for_sync(db: AsyncSession, replication):
     """Helper for verify_replication_sync. Ref: #1088."""
-    source_result = await db.execute(
-        select(Node).where(Node.node_id == replication.source_node_id)
-    )
+    source_result = await db.execute(select(Node).where(Node.node_id == replication.source_node_id))
     source_node = source_result.scalar_one_or_none()
 
-    target_result = await db.execute(
-        select(Node).where(Node.node_id == replication.target_node_id)
-    )
+    target_result = await db.execute(select(Node).where(Node.node_id == replication.target_node_id))
     target_node = target_result.scalar_one_or_none()
 
     if not source_node or not target_node:
@@ -416,9 +400,7 @@ async def _run_replication_verify(source_node, target_node) -> dict:
     )
 
 
-@router.post(
-    "/replications/{replication_id}/verify-sync", response_model=DataVerifyResponse
-)
+@router.post("/replications/{replication_id}/verify-sync", response_model=DataVerifyResponse)
 async def verify_replication_sync(
     replication_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -431,9 +413,7 @@ async def verify_replication_sync(
     - Replication lag in bytes
     - Master link status
     """
-    result = await db.execute(
-        select(Replication).where(Replication.replication_id == replication_id)
-    )
+    result = await db.execute(select(Replication).where(Replication.replication_id == replication_id))
     replication = result.scalar_one_or_none()
 
     if not replication:
@@ -516,9 +496,7 @@ async def _run_backup(backup_id: str, host: str, service_type: str) -> None:
     from services.backup import backup_service
     from services.database import db_service
 
-    logger.info(
-        "Running backup %s for host %s (service: %s)", backup_id, host, service_type
-    )
+    logger.info("Running backup %s for host %s (service: %s)", backup_id, host, service_type)
 
     async with db_service.session() as db:
         # Get the backup record
@@ -529,9 +507,7 @@ async def _run_backup(backup_id: str, host: str, service_type: str) -> None:
             return
 
         # Get the node for full connection details
-        node_result = await db.execute(
-            select(Node).where(Node.node_id == backup.node_id)
-        )
+        node_result = await db.execute(select(Node).where(Node.node_id == backup.node_id))
         node = node_result.scalar_one_or_none()
         if not node:
             logger.error("Node %s not found for backup %s", backup.node_id, backup_id)
@@ -543,9 +519,7 @@ async def _run_backup(backup_id: str, host: str, service_type: str) -> None:
 
         # Execute backup using the dedicated service
         if service_type == "redis":
-            success, message = await backup_service.execute_redis_backup(
-                db, backup_id, node
-            )
+            success, message = await backup_service.execute_redis_backup(db, backup_id, node)
             if not success:
                 logger.error("Backup %s failed: %s", backup_id, message)
         else:
@@ -562,9 +536,7 @@ async def _run_restore(job_id: str, backup_id: str, node_id: str) -> None:
     from services.backup import backup_service
     from services.database import db_service
 
-    logger.info(
-        "Running restore %s from backup %s to node %s", job_id, backup_id, node_id
-    )
+    logger.info("Running restore %s from backup %s to node %s", job_id, backup_id, node_id)
 
     async with db_service.session() as db:
         # Get the target node
@@ -650,9 +622,7 @@ async def _verify_redis(host: str) -> dict:
 
     try:
         returncode, stdout, stderr = await _run_redis_ssh_check(host)
-        is_healthy, checks, details = _build_redis_checks_from_result(
-            returncode, stdout, stderr
-        )
+        is_healthy, checks, details = _build_redis_checks_from_result(returncode, stdout, stderr)
     except asyncio.TimeoutError:
         is_healthy = False
         checks.append(

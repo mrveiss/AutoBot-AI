@@ -26,12 +26,12 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
+from pydantic import BaseModel, Field
 
 from api.knowledge_models import SearchRequest
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.threshold_constants import QueryDefaults
-from pydantic import BaseModel, Field
 from services.grounded_agent import (
     Claim,
     ConflictResolution,

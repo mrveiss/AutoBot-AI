@@ -228,9 +228,7 @@ class AlertManager:
         if not recent_calls:
             return None
 
-        error_rate = sum(1 for call in recent_calls if not call.success) / len(
-            recent_calls
-        )
+        error_rate = sum(1 for call in recent_calls if not call.success) / len(recent_calls)
         if error_rate > 0.1:
             return self._create_alert(
                 "critical",
@@ -275,9 +273,7 @@ class AlertManager:
 
         return filtered_alerts
 
-    def _create_alert(
-        self, level: str, message: str, metrics: Dict[str, Any], recommendation: str
-    ) -> UsageAlert:
+    def _create_alert(self, level: str, message: str, metrics: Dict[str, Any], recommendation: str) -> UsageAlert:
         """Create a new usage alert"""
         return UsageAlert(
             timestamp=time.time(),
@@ -443,14 +439,8 @@ class ClaudeAPIMonitor:
             "monitoring_uptime": uptime,
             "total_calls": self.usage_tracker.total_calls,
             "calls_per_hour": self.usage_tracker.total_calls / max(uptime / 3600, 1),
-            "average_payload_size": (
-                self.usage_tracker.total_payload_size
-                / max(self.usage_tracker.total_calls, 1)
-            ),
-            "average_response_time": (
-                self.usage_tracker.total_response_time
-                / max(self.usage_tracker.total_calls, 1)
-            ),
+            "average_payload_size": (self.usage_tracker.total_payload_size / max(self.usage_tracker.total_calls, 1)),
+            "average_response_time": (self.usage_tracker.total_response_time / max(self.usage_tracker.total_calls, 1)),
         }
 
         # Current usage
@@ -484,9 +474,7 @@ class ClaudeAPIMonitor:
             "error_patterns": dict(self.usage_tracker.error_patterns),
         }
 
-    def _check_rate_limit_recommendation(
-        self, stats: Dict[str, Any]
-    ) -> Optional[Dict[str, str]]:
+    def _check_rate_limit_recommendation(self, stats: Dict[str, Any]) -> Optional[Dict[str, str]]:
         """Check if rate limit recommendation is needed. Issue #620."""
         if stats["risk_prediction"]["risk_score"] > 70:
             return {
@@ -497,9 +485,7 @@ class ClaudeAPIMonitor:
             }
         return None
 
-    def _check_payload_size_recommendation(
-        self, stats: Dict[str, Any]
-    ) -> Optional[Dict[str, str]]:
+    def _check_payload_size_recommendation(self, stats: Dict[str, Any]) -> Optional[Dict[str, str]]:
         """Check if payload size recommendation is needed. Issue #620."""
         if stats["payload_analysis"]["average"] > self.payload_warning_size:
             return {
@@ -510,9 +496,7 @@ class ClaudeAPIMonitor:
             }
         return None
 
-    def _get_tool_usage_recommendations(
-        self, stats: Dict[str, Any]
-    ) -> List[Dict[str, str]]:
+    def _get_tool_usage_recommendations(self, stats: Dict[str, Any]) -> List[Dict[str, str]]:
         """Get recommendations for tools with large payloads. Issue #620."""
         recommendations = []
         for tool_name, tool_stats in stats["tool_usage"].items():
@@ -532,9 +516,7 @@ class ClaudeAPIMonitor:
         recent_calls = self.usage_tracker.get_recent_calls(60)
         if not recent_calls:
             return None
-        error_rate = sum(1 for call in recent_calls if not call.success) / len(
-            recent_calls
-        )
+        error_rate = sum(1 for call in recent_calls if not call.success) / len(recent_calls)
         if error_rate > 0.05:  # More than 5% errors
             return {
                 "type": "error_rate",
@@ -585,9 +567,7 @@ class ClaudeAPIMonitor:
         }
         log_level = level_map.get(alert.level, logging.INFO)
 
-        logger.log(
-            log_level, f"Claude API Alert [{alert.level.upper()}]: {alert.message}"
-        )
+        logger.log(log_level, f"Claude API Alert [{alert.level.upper()}]: {alert.message}")
         logger.log(log_level, f"Recommendation: {alert.recommendation}")
 
     def enable_monitoring(self):

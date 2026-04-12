@@ -14,9 +14,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import numpy as np
-from config import config
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+
+from config import config
 from utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -74,9 +75,7 @@ class CodeAnalyzer:
 
         logger.info(f"Code Analyzer initialized (NPU: {self.use_npu})")
 
-    async def analyze_codebase(
-        self, root_path: str = ".", patterns: List[str] = None
-    ) -> Dict[str, Any]:
+    async def analyze_codebase(self, root_path: str = ".", patterns: List[str] = None) -> Dict[str, Any]:
         """Analyze entire codebase for duplicates and refactoring opportunities"""
 
         start_time = time.time()
@@ -100,9 +99,7 @@ class CodeAnalyzer:
 
         # Step 4: Analyze patterns and suggest refactoring
         logger.info("Analyzing patterns and generating suggestions")
-        refactoring_suggestions = await self._generate_refactoring_suggestions(
-            duplicate_groups
-        )
+        refactoring_suggestions = await self._generate_refactoring_suggestions(duplicate_groups)
 
         # Step 5: Calculate metrics
         metrics = self._calculate_metrics(functions, duplicate_groups)
@@ -113,14 +110,10 @@ class CodeAnalyzer:
             "total_functions": len(functions),
             "duplicate_groups": len(duplicate_groups),
             "total_duplicates": sum(len(g.functions) for g in duplicate_groups),
-            "lines_that_could_be_saved": sum(
-                g.estimated_lines_saved for g in duplicate_groups
-            ),
+            "lines_that_could_be_saved": sum(g.estimated_lines_saved for g in duplicate_groups),
             "analysis_time_seconds": analysis_time,
             "used_npu": self.use_npu,
-            "duplicate_details": [
-                self._serialize_duplicate_group(g) for g in duplicate_groups
-            ],
+            "duplicate_details": [self._serialize_duplicate_group(g) for g in duplicate_groups],
             "refactoring_suggestions": refactoring_suggestions,
             "metrics": metrics,
         }
@@ -131,9 +124,7 @@ class CodeAnalyzer:
         logger.info(f"Analysis complete in {analysis_time:.2f}s")
         return results
 
-    async def _extract_all_functions(
-        self, root_path: str, patterns: List[str]
-    ) -> List[CodeFunction]:
+    async def _extract_all_functions(self, root_path: str, patterns: List[str]) -> List[CodeFunction]:
         """Extract all functions from Python files"""
 
         functions = []
@@ -143,9 +134,7 @@ class CodeAnalyzer:
             for file_path in root.glob(pattern):
                 if file_path.is_file():
                     try:
-                        functions.extend(
-                            await self._extract_functions_from_file(str(file_path))
-                        )
+                        functions.extend(await self._extract_functions_from_file(str(file_path)))
                     except Exception as e:
                         logger.warning(f"Failed to parse {file_path}: {e}")
 
@@ -175,9 +164,7 @@ class CodeAnalyzer:
             logger.error(f"Error extracting functions from {file_path}: {e}")
             return []
 
-    def _extract_function_info(
-        self, node: ast.AST, source: str, file_path: str
-    ) -> Optional[CodeFunction]:
+    def _extract_function_info(self, node: ast.AST, source: str, file_path: str) -> Optional[CodeFunction]:
         """Extract detailed information about a function"""
 
         try:
@@ -302,9 +289,7 @@ class CodeAnalyzer:
         # For now, fallback to regular embeddings
         return self.vectorizer.fit_transform(texts).toarray()
 
-    async def _find_duplicates(
-        self, functions: List[CodeFunction]
-    ) -> List[DuplicateGroup]:
+    async def _find_duplicates(self, functions: List[CodeFunction]) -> List[DuplicateGroup]:
         """Find duplicate and similar functions using embeddings"""
 
         duplicate_groups = []
@@ -324,46 +309,34 @@ class CodeAnalyzer:
                         functions=group,
                         similarity_score=1.0,
                         refactoring_suggestion="Extract to shared utility function",
-                        estimated_lines_saved=sum(
-                            f.end_line - f.start_line for f in group[1:]
-                        ),
+                        estimated_lines_saved=sum(f.end_line - f.start_line for f in group[1:]),
                     )
                 )
                 processed.update(f"{f.file_path}:{f.name}" for f in group)
 
         # Second pass: Find similar functions by embedding similarity
         if any(f.embedding is not None for f in functions):
-            embeddings = np.array(
-                [f.embedding for f in functions if f.embedding is not None]
-            )
+            embeddings = np.array([f.embedding for f in functions if f.embedding is not None])
             similarities = cosine_similarity(embeddings)
 
             for i in range(len(functions)):
                 if f"{functions[i].file_path}:{functions[i].name}" in processed:
                     continue
 
-                similar_indices = np.where(similarities[i] > self.similarity_threshold)[
-                    0
-                ]
+                similar_indices = np.where(similarities[i] > self.similarity_threshold)[0]
                 if len(similar_indices) > 1:
                     similar_funcs = [functions[j] for j in similar_indices]
 
                     # Skip if already processed
-                    if any(
-                        f"{f.file_path}:{f.name}" in processed for f in similar_funcs
-                    ):
+                    if any(f"{f.file_path}:{f.name}" in processed for f in similar_funcs):
                         continue
 
                     duplicate_groups.append(
                         DuplicateGroup(
                             functions=similar_funcs,
-                            similarity_score=float(
-                                np.mean(similarities[i][similar_indices])
-                            ),
+                            similarity_score=float(np.mean(similarities[i][similar_indices])),
                             refactoring_suggestion="Consider extracting common logic",
-                            estimated_lines_saved=self._estimate_lines_saved(
-                                similar_funcs
-                            ),
+                            estimated_lines_saved=self._estimate_lines_saved(similar_funcs),
                         )
                     )
                     processed.update(f"{f.file_path}:{f.name}" for f in similar_funcs)
@@ -384,9 +357,7 @@ class CodeAnalyzer:
 
         return max(0, total_lines - max_lines - replacement_lines)
 
-    async def _generate_refactoring_suggestions(
-        self, duplicate_groups: List[DuplicateGroup]
-    ) -> List[Dict[str, Any]]:
+    async def _generate_refactoring_suggestions(self, duplicate_groups: List[DuplicateGroup]) -> List[Dict[str, Any]]:
         """Generate specific refactoring suggestions"""
 
         suggestions = []
@@ -449,9 +420,7 @@ from utils.{module_name}_utils import {func.name}
         # Compare complexity
         complexities = [f.complexity for f in functions]
         if max(complexities) - min(complexities) > 2:
-            differences.append(
-                f"Varying complexity: {min(complexities)}-{max(complexities)}"
-            )
+            differences.append(f"Varying complexity: {min(complexities)}-{max(complexities)}")
 
         # Compare called functions
         all_calls = set()
@@ -474,21 +443,14 @@ from utils.{module_name}_utils import {func.name}
         """Calculate code quality metrics"""
 
         total_lines = sum(f.end_line - f.start_line for f in functions)
-        duplicate_lines = sum(
-            sum(f.end_line - f.start_line for f in g.functions[1:])
-            for g in duplicate_groups
-        )
+        duplicate_lines = sum(sum(f.end_line - f.start_line for f in g.functions[1:]) for g in duplicate_groups)
 
         metrics = {
             "total_lines_of_code": total_lines,
             "duplicate_lines": duplicate_lines,
-            "duplication_percentage": (duplicate_lines / total_lines * 100)
-            if total_lines > 0
-            else 0,
+            "duplication_percentage": (duplicate_lines / total_lines * 100) if total_lines > 0 else 0,
             "average_function_length": total_lines / len(functions) if functions else 0,
-            "average_complexity": sum(f.complexity for f in functions) / len(functions)
-            if functions
-            else 0,
+            "average_complexity": sum(f.complexity for f in functions) / len(functions) if functions else 0,
             "functions_by_complexity": {
                 "low": len([f for f in functions if f.complexity <= 5]),
                 "medium": len([f for f in functions if 5 < f.complexity <= 10]),
@@ -573,9 +535,7 @@ from utils.{module_name}_utils import {func.name}
                 # Clear all analysis keys
                 cursor = 0
                 while True:
-                    cursor, keys = await self.redis_client.scan(
-                        cursor, match="code_analysis:*", count=100
-                    )
+                    cursor, keys = await self.redis_client.scan(cursor, match="code_analysis:*", count=100)
                     if keys:
                         await self.redis_client.delete(*keys)
                     if cursor == 0:
@@ -602,9 +562,7 @@ async def main():
     analyzer = CodeAnalyzer(use_npu=True)
 
     # Analyze the codebase
-    results = await analyzer.analyze_codebase(
-        root_path=".", patterns=["src/**/*.py", "backend/**/*.py"]
-    )
+    results = await analyzer.analyze_codebase(root_path=".", patterns=["src/**/*.py", "backend/**/*.py"])
 
     # Print summary
     logger.info(f"\n=== Code Analysis Results ===")

@@ -47,9 +47,7 @@ class SystemMetricsCollector:
     def __init__(self):
         """Initialize system metrics collector with Prometheus integration."""
         self.logger = logging.getLogger(__name__)
-        self._collection_interval = config.get(
-            "monitoring.metrics.collection_interval", 5
-        )
+        self._collection_interval = config.get("monitoring.metrics.collection_interval", 5)
         self._is_collecting = False
         self._auth_error_logged = False  # Track if auth error was already logged
 
@@ -276,9 +274,7 @@ class SystemMetricsCollector:
             # itself during initialization creates circular deadlock.
             # Backend health is implicit: if metrics are being collected, backend is running.
             "redis": None,  # Special handling for Redis
-            "ollama": (
-                f"{ssot_config.ollama_url}/api/tags"
-            ),
+            "ollama": (f"{ssot_config.ollama_url}/api/tags"),
         }
 
     async def _check_single_service(
@@ -311,9 +307,7 @@ class SystemMetricsCollector:
             if service_name == "redis":
                 health_value = await self._check_redis_health()
             else:
-                health_value, response_time_ms = await self._check_http_service_health(
-                    http_client, url, timeout
-                )
+                health_value, response_time_ms = await self._check_http_service_health(http_client, url, timeout)
                 metrics[f"{service_name}_response_time"] = SystemMetric(
                     timestamp=timestamp,
                     name=f"{service_name}_response_time",
@@ -325,9 +319,7 @@ class SystemMetricsCollector:
             self.logger.warning("Health check failed for %s: %s", service_name, e)
             error_msg = str(e)
 
-        metrics[f"{service_name}_health"] = self._create_health_metric(
-            service_name, health_value, timestamp, error_msg
-        )
+        metrics[f"{service_name}_health"] = self._create_health_metric(service_name, health_value, timestamp, error_msg)
 
         response_time_sec = response_time_ms / 1000 if response_time_ms else None
         self._update_prometheus_health(service_name, health_value, response_time_sec)
@@ -345,9 +337,7 @@ class SystemMetricsCollector:
         http_client = get_http_client()
 
         for service_name, url in services.items():
-            await self._check_single_service(
-                service_name, url, http_client, timeout, timestamp, metrics
-            )
+            await self._check_single_service(service_name, url, http_client, timeout, timestamp, metrics)
 
         return metrics
 
@@ -465,9 +455,7 @@ class SystemMetricsCollector:
             kb_redis_client = await self._get_kb_redis_client()
 
             if not kb_redis_client:
-                self.logger.debug(
-                    "Knowledge base Redis client not available, skipping KB metrics"
-                )
+                self.logger.debug("Knowledge base Redis client not available, skipping KB metrics")
                 return metrics
 
             # Issue #620: Use helpers for metric collection
@@ -538,9 +526,7 @@ class SystemMetricsCollector:
                     "value": overall_health * 100,
                     "unit": "percent",
                     "status": (
-                        "healthy"
-                        if overall_health > 0.8
-                        else "degraded" if overall_health > 0.5 else "critical"
+                        "healthy" if overall_health > 0.8 else "degraded" if overall_health > 0.5 else "critical"
                     ),
                 }
 
@@ -557,9 +543,7 @@ class SystemMetricsCollector:
             return
 
         self._is_collecting = True
-        self.logger.info(
-            f"Starting metrics collection (interval: {self._collection_interval}s)"
-        )
+        self.logger.info(f"Starting metrics collection (interval: {self._collection_interval}s)")
 
         while self._is_collecting:
             try:
@@ -568,9 +552,7 @@ class SystemMetricsCollector:
                 metrics = await self.collect_all_metrics()
 
                 if metrics:
-                    self.logger.debug(
-                        "Collected %s metrics (pushed to Prometheus)", len(metrics)
-                    )
+                    self.logger.debug("Collected %s metrics (pushed to Prometheus)", len(metrics))
 
                 # Wait for next collection
                 await asyncio.sleep(self._collection_interval)

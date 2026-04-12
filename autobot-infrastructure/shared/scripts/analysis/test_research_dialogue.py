@@ -30,9 +30,7 @@ async def test_research_dialogue():
     try:
         logger.info("1. Testing unknown topic (should ask for research)...")
         result = await asyncio.wait_for(
-            process_chat_message(
-                "tell me about quantum computing in 2024", "test-chat"
-            ),
+            process_chat_message("tell me about quantum computing in 2024", "test-chat"),
             timeout=15.0,
         )
 
@@ -46,9 +44,7 @@ async def test_research_dialogue():
     # Test 2: "Yes" response
     try:
         logger.info("2. Testing 'yes' response...")
-        result = await asyncio.wait_for(
-            process_chat_message("yes", "test-chat"), timeout=10.0
-        )
+        result = await asyncio.wait_for(process_chat_message("yes", "test-chat"), timeout=10.0)
 
         logger.info("✅ Response: %s", result.response)
         logger.info("   Knowledge Status: %s\n", result.knowledge_status.value)
@@ -59,9 +55,7 @@ async def test_research_dialogue():
     # Test 3: "No" response
     try:
         logger.info("3. Testing 'no' response...")
-        result = await asyncio.wait_for(
-            process_chat_message("no", "test-chat"), timeout=10.0
-        )
+        result = await asyncio.wait_for(process_chat_message("no", "test-chat"), timeout=10.0)
 
         logger.info("✅ Response: %s", result.response)
         logger.info("   Knowledge Status: %s\n", result.knowledge_status.value)

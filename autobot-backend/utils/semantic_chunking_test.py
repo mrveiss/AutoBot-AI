@@ -45,15 +45,12 @@ class TestSemanticChunking:
 
         for i, chunk in enumerate(chunks):
             print(  # noqa: print
-                f"  Chunk {i+1}: {len(chunk.content)} chars, "
-                f"coherence: {chunk.semantic_score:.3f}"
+                f"  Chunk {i+1}: {len(chunk.content)} chars, " f"coherence: {chunk.semantic_score:.3f}"
             )
             print(f"    Preview: {chunk.content[:100]}...")  # noqa: print
 
         assert len(chunks) > 1, "Should create multiple chunks"
-        assert all(
-            isinstance(chunk, SemanticChunk) for chunk in chunks
-        ), "All chunks should be SemanticChunk instances"
+        assert all(isinstance(chunk, SemanticChunk) for chunk in chunks), "All chunks should be SemanticChunk instances"
 
         return chunks
 
@@ -67,9 +64,7 @@ class TestSemanticChunking:
 
         print(f"✓ Small text created {len(chunks)} chunk(s)")  # noqa: print
         assert len(chunks) == 1, "Small text should create only one chunk"
-        assert (
-            chunks[0].content.strip() == small_text.strip()
-        ), "Content should be preserved"
+        assert chunks[0].content.strip() == small_text.strip(), "Content should be preserved"
 
         return chunks
 
@@ -79,10 +74,7 @@ class TestSemanticChunking:
 
         # Create text that will definitely exceed max_chunk_size (500)
         large_text = " ".join(
-            [
-                f"This is sentence number {i}. It contains information about topic {i}."
-                for i in range(1, 100)
-            ]
+            [f"This is sentence number {i}. It contains information about topic {i}." for i in range(1, 100)]
         )
 
         chunks = await self.chunker.chunk_text(large_text)
@@ -112,9 +104,7 @@ class TestSemanticChunking:
 
         documents = await self.chunker.chunk_document(test_content, metadata)
 
-        print(
-            f"✓ Created {len(documents)} LlamaIndex-compatible documents"
-        )  # noqa: print
+        print(f"✓ Created {len(documents)} LlamaIndex-compatible documents")  # noqa: print
 
         for doc in documents:
             assert "text" in doc, "Document should have text field"
@@ -166,9 +156,7 @@ class TestSemanticChunking:
         # Test with special characters
         special_text = "Text with émojis 🚀 and spëcial characters: @#$%^&*()!"
         special_chunks = await self.chunker.chunk_text(special_text)
-        print(
-            f"✓ Special characters handled: {len(special_chunks)} chunks"
-        )  # noqa: print
+        print(f"✓ Special characters handled: {len(special_chunks)} chunks")  # noqa: print
 
         return True
 
@@ -207,13 +195,9 @@ class TestSemanticChunking:
             print("=" * 60)  # noqa: print
             print("Summary:")  # noqa: print
             print(f"  - Basic chunking: {len(basic_chunks)} chunks")  # noqa: print
-            print(
-                f"  - Document compatibility: {len(documents)} documents"
-            )  # noqa: print
+            print(f"  - Document compatibility: {len(documents)} documents")  # noqa: print
             print(f"  - Average coherence: {coherence:.3f}")  # noqa: print
-            print(
-                f"  - Error handling: {'✓' if error_handling else '✗'}"
-            )  # noqa: print
+            print(f"  - Error handling: {'✓' if error_handling else '✗'}")  # noqa: print
 
             return True
 
@@ -231,9 +215,7 @@ async def main():
     success = await tester.run_all_tests()
 
     if success:
-        print(
-            "\n🎉 Semantic chunking implementation is working correctly!"
-        )  # noqa: print
+        print("\n🎉 Semantic chunking implementation is working correctly!")  # noqa: print
         return 0
     else:
         print("\n💥 Semantic chunking tests failed!")  # noqa: print

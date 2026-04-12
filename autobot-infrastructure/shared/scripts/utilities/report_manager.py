@@ -138,9 +138,7 @@ class ReportManager:
                                 "name": file_path.name,
                                 "path": str(file_path),
                                 "size": stat.st_size,
-                                "modified": datetime.fromtimestamp(
-                                    stat.st_mtime
-                                ).isoformat(),
+                                "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
                                 "type": report_type,
                             }
                         )
@@ -171,9 +169,7 @@ class ReportManager:
         if not type_dir.exists():
             return None
 
-        reports = sorted(
-            type_dir.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True
-        )
+        reports = sorted(type_dir.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True)
 
         return [str(report) for report in reports[:2]]
 
@@ -194,10 +190,7 @@ class ReportManager:
 
         for pattern in report_patterns:
             for file_path in root_path.glob(pattern):
-                if (
-                    file_path.is_file()
-                    and file_path.parent.absolute() == root_path.absolute()
-                ):
+                if file_path.is_file() and file_path.parent.absolute() == root_path.absolute():
                     try:
                         new_path = self.add_report(str(file_path))
                         moved_files.append((str(file_path), new_path))

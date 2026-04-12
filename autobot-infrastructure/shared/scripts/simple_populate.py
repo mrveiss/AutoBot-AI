@@ -69,9 +69,7 @@ def add_docs_batch(files: list, project_root: str, max_workers: int = 5) -> list
     """Add multiple documents concurrently."""
     results = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_file = {
-            executor.submit(add_single_doc, f, project_root): f for f in files
-        }
+        future_to_file = {executor.submit(add_single_doc, f, project_root): f for f in files}
         for future in as_completed(future_to_file):
             results.append(future.result())
     return results
@@ -101,9 +99,7 @@ def main():
 
     # Remove duplicates and filter
     unique_files = list(set(doc_files))
-    filtered_files = [
-        f for f in unique_files if os.path.isfile(f) and "node_modules" not in f
-    ]
+    filtered_files = [f for f in unique_files if os.path.isfile(f) and "node_modules" not in f]
 
     print(f"Found {len(filtered_files)} documentation files")
 
@@ -133,9 +129,7 @@ def main():
             )
             if test_resp.status_code == 200:
                 search_results = test_resp.json()
-                print(
-                    f"✓ Search test: found {len(search_results.get('results', []))} results"
-                )
+                print(f"✓ Search test: found {len(search_results.get('results', []))} results")
             else:
                 print(f"❌ Search test failed: {test_resp.text}")
 

@@ -26,9 +26,7 @@ async def test_chat():
 
     try:
         logger.info("Testing chat workflow...")
-        result = await asyncio.wait_for(
-            process_chat_message("hello", "test-chat"), timeout=10.0
-        )
+        result = await asyncio.wait_for(process_chat_message("hello", "test-chat"), timeout=10.0)
 
         logger.info("✅ Success! Response: %s...", result.response[:100])
         logger.info("   Knowledge Status: %s", result.knowledge_status.value)

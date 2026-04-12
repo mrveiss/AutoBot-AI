@@ -77,9 +77,7 @@ def test_npu_worker_compatibility():
     """Test NPU worker Python compatibility"""
     try:
         # Test if we can import our NPU model manager
-        sys.path.insert(
-            0, str(Path(__file__).parent.parent.parent / "docker" / "npu-worker")
-        )
+        sys.path.insert(0, str(Path(__file__).parent.parent.parent / "docker" / "npu-worker"))
 
         try:
             from npu_model_manager import NPUModelManager
@@ -93,9 +91,7 @@ def test_npu_worker_compatibility():
                 logger.info(f"📋 NPU available: {manager.npu_available}")
                 return True
             except Exception as e:
-                logger.warning(
-                    f"⚠️ NPU model manager initialization failed (expected without hardware): {e}"
-                )
+                logger.warning(f"⚠️ NPU model manager initialization failed (expected without hardware): {e}")
                 return False
 
         except ImportError as e:
@@ -113,12 +109,7 @@ def test_docker_npu_container():
         logger.info("🔨 Testing Docker NPU container build...")
 
         # Check if docker-compose file exists
-        compose_file = (
-            Path(__file__).parent.parent.parent
-            / "docker"
-            / "compose"
-            / "docker-compose.hybrid.yml"
-        )
+        compose_file = Path(__file__).parent.parent.parent / "docker" / "compose" / "docker-compose.hybrid.yml"
         if not compose_file.exists():
             logger.error("❌ Docker compose file not found")
             return False

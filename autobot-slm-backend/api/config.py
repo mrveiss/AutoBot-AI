@@ -49,9 +49,7 @@ def _cast_config_value(value: Optional[str], value_type: str):
     return value
 
 
-async def _get_config_with_fallback(
-    db: AsyncSession, node_id: str, key: str
-) -> Optional[NodeConfig]:
+async def _get_config_with_fallback(db: AsyncSession, node_id: str, key: str) -> Optional[NodeConfig]:
     """Get config for node, falling back to global default."""
     result = await db.execute(
         select(NodeConfig).where(

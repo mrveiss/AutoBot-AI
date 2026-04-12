@@ -77,9 +77,7 @@ def upload_docs_batch(files: list, project_root: str, max_workers: int = 5) -> l
     """Upload multiple documents concurrently."""
     results = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_file = {
-            executor.submit(upload_single_doc, f, project_root): f for f in files
-        }
+        future_to_file = {executor.submit(upload_single_doc, f, project_root): f for f in files}
         for future in as_completed(future_to_file):
             results.append(future.result())
     return results
@@ -123,9 +121,7 @@ def upload_docs_as_searchable_facts():
         files = glob.glob(os.path.join(project_root, pattern), recursive=True)
         doc_files.extend(files)
 
-    filtered_files = [
-        f for f in set(doc_files) if os.path.isfile(f) and "node_modules" not in f
-    ]
+    filtered_files = [f for f in set(doc_files) if os.path.isfile(f) and "node_modules" not in f]
 
     print(f"Found {len(filtered_files)} documentation files")
     print(f"Uploading {len(filtered_files)} documents concurrently...")

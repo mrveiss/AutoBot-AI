@@ -21,10 +21,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agent_loop.loop import AgentLoop, SENSITIVE_TOOLS
+from agent_loop.loop import SENSITIVE_TOOLS, AgentLoop
 from agent_loop.types import AgentLoopConfig, LoopState, TaskContext
 from events.types import EventType
-
 
 # ---------------------------------------------------------------------------
 # Helpers

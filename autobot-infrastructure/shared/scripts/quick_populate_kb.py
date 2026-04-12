@@ -25,8 +25,7 @@ def _get_test_documents() -> list:
         {
             "title": "AutoBot Overview",
             "content": (
-                "AutoBot is an autonomous Linux administration platform"
-                " that helps manage and automate system tasks."
+                "AutoBot is an autonomous Linux administration platform" " that helps manage and automate system tasks."
             ),
             "source": "README.md",
             "category": "documentation/root",
@@ -94,9 +93,7 @@ async def _wait_for_kb_initialization(kb) -> bool:
         return False
 
     if kb.vector_store is None:
-        logger.info(
-            "❌ Vector store failed to initialize, but continuing with Redis operations"
-        )
+        logger.info("❌ Vector store failed to initialize, but continuing with Redis operations")
 
     return True
 
@@ -141,13 +138,9 @@ async def _add_documents_to_kb(kb, documents: list) -> None:
                         msg,
                     )
             except Exception as e:
-                logger.error(
-                    f"❌ Exception adding to vector store: {doc['title']} - {e}"
-                )
+                logger.error(f"❌ Exception adding to vector store: {doc['title']} - {e}")
         else:
-            logger.info(
-                f"⚠️ Vector store not available, skipping vector indexing for: {doc['title']}"
-            )
+            logger.info(f"⚠️ Vector store not available, skipping vector indexing for: {doc['title']}")
 
         logger.info(f"Added: {doc['title']}")
 
@@ -166,9 +159,7 @@ async def _verify_and_test_kb(kb) -> None:
             logger.info(f"Test search for 'AutoBot' returned {len(results)} results")
 
             if results:
-                logger.info(
-                    f"Sample result: {results[0].get('text', 'No text')[:100]}..."
-                )
+                logger.info(f"Sample result: {results[0].get('text', 'No text')[:100]}...")
         except Exception as e:
             logger.error(f"❌ Search test failed: {e}")
     else:

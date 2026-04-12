@@ -43,6 +43,7 @@ sys.modules.setdefault("api", _api_mod)
 # Helper
 # ---------------------------------------------------------------------------
 
+
 def _stub(name: str) -> MagicMock:
     """Return (or create) a MagicMock stub for *name* in sys.modules."""
     if name not in sys.modules:

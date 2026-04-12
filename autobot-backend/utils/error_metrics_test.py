@@ -119,11 +119,7 @@ class TestErrorMetrics:
 
     def test_component_filtering(self, collector):
         """Test filtering errors by component"""
-        asyncio.run(
-            self._populate_errors_multi_component(
-                collector, component1="comp_a", component2="comp_b"
-            )
-        )
+        asyncio.run(self._populate_errors_multi_component(collector, component1="comp_a", component2="comp_b"))
 
         comp_a_stats = collector.get_stats(component="comp_a")
         comp_b_stats = collector.get_stats(component="comp_b")
@@ -226,9 +222,7 @@ class TestErrorMetrics:
 
         # Manually set old timestamp
         if collector._metrics:
-            collector._metrics[0].timestamp = time.time() - (
-                collector._retention_seconds + 100
-            )
+            collector._metrics[0].timestamp = time.time() - (collector._retention_seconds + 100)
 
         # Cleanup
         removed = await collector.cleanup_old_metrics()
@@ -293,9 +287,7 @@ class TestErrorMetrics:
                 message=f"Test error {i}",
             )
 
-    async def _populate_errors_multi_component(
-        self, collector, component1="comp_a", component2="comp_b"
-    ):
+    async def _populate_errors_multi_component(self, collector, component1="comp_a", component2="comp_b"):
         """Populate collector with errors from multiple components"""
         for i in range(5):
             await collector.record_error(
@@ -334,9 +326,7 @@ class TestErrorMetrics:
 
     async def _populate_errors_with_varying_counts(self, collector):
         """Populate collector with errors with varying counts"""
-        error_counts = [
-            (f"ERR_{i:03d}", count) for i, count in enumerate([10, 5, 3, 1])
-        ]
+        error_counts = [(f"ERR_{i:03d}", count) for i, count in enumerate([10, 5, 3, 1])]
 
         for error_code, count in error_counts:
             for i in range(count):

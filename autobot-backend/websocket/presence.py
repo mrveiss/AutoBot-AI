@@ -30,9 +30,7 @@ class PresenceManager:
     def __init__(self):
         """Initialize presence manager."""
         # session_id -> {user_id -> set of WebSocket connections}
-        self._sessions: Dict[str, Dict[str, Set[WebSocket]]] = defaultdict(
-            lambda: defaultdict(set)
-        )
+        self._sessions: Dict[str, Dict[str, Set[WebSocket]]] = defaultdict(lambda: defaultdict(set))
 
         # WebSocket -> (session_id, user_id) for cleanup
         self._connection_map: Dict[WebSocket, tuple] = {}
@@ -40,9 +38,7 @@ class PresenceManager:
         # Lock for thread-safe operations
         self._lock = asyncio.Lock()
 
-    async def connect(
-        self, session_id: str, user_id: str, websocket: WebSocket
-    ) -> None:
+    async def connect(self, session_id: str, user_id: str, websocket: WebSocket) -> None:
         """
         Register user connection to session.
 
@@ -95,10 +91,7 @@ class PresenceManager:
                     if not self._sessions[session_id][user_id]:
                         del self._sessions[session_id][user_id]
 
-                        logger.info(
-                            f"User {user_id} fully disconnected "
-                            f"from session {session_id}"
-                        )
+                        logger.info(f"User {user_id} fully disconnected " f"from session {session_id}")
 
                         # Broadcast leave event
                         await self._broadcast_event(
@@ -245,9 +238,7 @@ async def _handle_presence_message(
     Returns True to continue the loop, False to break out.
     """
     if message.get("type") == "ping":
-        await websocket.send_json(
-            {"type": "pong", "timestamp": datetime.utcnow().isoformat()}
-        )
+        await websocket.send_json({"type": "pong", "timestamp": datetime.utcnow().isoformat()})
         return True
     if message.get("type") == "broadcast":
         payload = message.get("payload", {})
@@ -263,22 +254,16 @@ async def _handle_presence_message(
     return True
 
 
-async def _presence_message_loop(
-    websocket: WebSocket, session_id: str, user_id: str
-) -> None:
+async def _presence_message_loop(websocket: WebSocket, session_id: str, user_id: str) -> None:
     """Helper for presence_websocket_handler. Run the receive-dispatch loop. Ref: #1088."""
     while True:
         try:
             data = await websocket.receive_text()
             message = json.loads(data)
-            if not await _handle_presence_message(
-                websocket, session_id, user_id, message
-            ):
+            if not await _handle_presence_message(websocket, session_id, user_id, message):
                 break
         except WebSocketDisconnect:
-            logger.info(
-                f"WebSocket disconnected for user {user_id} in session {session_id}"
-            )
+            logger.info(f"WebSocket disconnected for user {user_id} in session {session_id}")
             break
         except json.JSONDecodeError as e:
             logger.warning(f"Invalid JSON from client: {e}")

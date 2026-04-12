@@ -27,11 +27,17 @@ class SecurityValidator:
         Returns the full argv list ready for subprocess.run.
         """
         base_cmd = [
-            "rg", pattern, str(self.project_root),
-            "--type", "py",
-            "--type", "js",
-            "--type", "ts",
-            "--type", "sh",
+            "rg",
+            pattern,
+            str(self.project_root),
+            "--type",
+            "py",
+            "--type",
+            "js",
+            "--type",
+            "ts",
+            "--type",
+            "sh",
             "--ignore-case",
             "--line-number",
         ]
@@ -71,8 +77,14 @@ class SecurityValidator:
             (r'sshpass\s+-p\s+["\'][^"\']+["\']', "SSH hardcoded password"),
         ]
         excluded_paths = [
-            "reports/", "archives/", "docs/", "node_modules/",
-            ".git/", "tests/results/", "reports/finished/", ".claude/",
+            "reports/",
+            "archives/",
+            "docs/",
+            "node_modules/",
+            ".git/",
+            "tests/results/",
+            "reports/finished/",
+            ".claude/",
         ]
 
         findings = []
@@ -107,18 +119,12 @@ class SecurityValidator:
                 if re.search(r'password=["\']autobot123["\']', content):
                     print(f"  ❌ {file_path}: Still contains hardcoded Redis password")
                     all_fixed = False
-                    self.vulnerabilities_found.append(
-                        f"Hardcoded Redis password in {file_path}"
-                    )
+                    self.vulnerabilities_found.append(f"Hardcoded Redis password in {file_path}")
 
                 # Check for environment variable usage
                 elif "os.environ.get(" in content and "REDIS_PASSWORD" in content:
-                    print(
-                        f"  ✅ {file_path}: Uses environment variables for Redis password"
-                    )
-                    self.fixes_verified.append(
-                        f"Redis password fix verified in {file_path}"
-                    )
+                    print(f"  ✅ {file_path}: Uses environment variables for Redis password")
+                    self.fixes_verified.append(f"Redis password fix verified in {file_path}")
                 else:
                     print(f"  ⚠️  {file_path}: No Redis password handling found")
 
@@ -136,17 +142,13 @@ class SecurityValidator:
             # Check for hardcoded VNC passwords
             if re.search(r'password:\s*["\']autobot["\']', content):
                 print("  ❌ Frontend store: Still contains hardcoded VNC password")
-                self.vulnerabilities_found.append(
-                    "Hardcoded VNC password in frontend store"
-                )
+                self.vulnerabilities_found.append("Hardcoded VNC password in frontend store")
                 return False
 
             # Check for environment variable usage
             elif "import.meta.env.VITE_DESKTOP_VNC_PASSWORD" in content:
                 print("  ✅ Frontend store: Uses environment variables for VNC password")
-                self.fixes_verified.append(
-                    "VNC password fix verified in frontend store"
-                )
+                self.fixes_verified.append("VNC password fix verified in frontend store")
                 return True
             else:
                 print("  ⚠️  Frontend store: No VNC password handling found")
@@ -159,9 +161,7 @@ class SecurityValidator:
         """Validate test credential security"""
         print("🔍 Validating test credential fixes...")
 
-        test_file = (
-            self.project_root / "scripts/utilities/test-authentication-security.py"
-        )
+        test_file = self.project_root / "scripts/utilities/test-authentication-security.py"
 
         if test_file.exists():
             content = test_file.read_text()
@@ -169,9 +169,7 @@ class SecurityValidator:
             # Check for hardcoded test passwords
             if re.search(r'password\s*=\s*["\']test\d+["\']', content):
                 print("  ❌ Test file: Still contains hardcoded test passwords")
-                self.vulnerabilities_found.append(
-                    "Hardcoded test password in security test"
-                )
+                self.vulnerabilities_found.append("Hardcoded test password in security test")
                 return False
 
             # Check for secure random generation
@@ -229,11 +227,7 @@ class SecurityValidator:
 
         if pre_commit_file.exists():
             content = pre_commit_file.read_text()
-            if (
-                "secret" in content.lower()
-                or "truffleHog" in content
-                or "detect-secrets" in content
-            ):
+            if "secret" in content.lower() or "truffleHog" in content or "detect-secrets" in content:
                 print("  ✅ Pre-commit hooks include secrets scanning")
                 self.fixes_verified.append("Secrets scanning in pre-commit hooks")
                 return True
@@ -241,11 +235,7 @@ class SecurityValidator:
         if github_workflows.exists():
             for workflow_file in github_workflows.glob("*.yml"):
                 content = workflow_file.read_text()
-                if (
-                    "secret" in content.lower()
-                    or "truffleHog" in content
-                    or "detect-secrets" in content
-                ):
+                if "secret" in content.lower() or "truffleHog" in content or "detect-secrets" in content:
                     print("  ✅ GitHub workflows include secrets scanning")
                     self.fixes_verified.append("Secrets scanning in GitHub workflows")
                     return True
@@ -269,17 +259,10 @@ class SecurityValidator:
         for vuln in self.vulnerabilities_found:
             print(f"  • {vuln}")
 
-        print(  # noqa: T201
-            f"\nHardcoded Secrets Found: {len(remaining_secrets)}"
-        )
+        print(f"\nHardcoded Secrets Found: {len(remaining_secrets)}")  # noqa: T201
         for secret in remaining_secrets:
-            print(  # noqa: T201
-                f"  {secret['type']} in "
-                f"{secret['file']}:{secret['line']}"
-            )
-            print(  # noqa: T201
-                f"    [REDACTED - line {secret.get('line', '?')}]"
-            )
+            print(f"  {secret['type']} in " f"{secret['file']}:{secret['line']}")  # noqa: T201
+            print(f"    [REDACTED - line {secret.get('line', '?')}]")  # noqa: T201
 
         # Overall assessment
         total_issues = len(self.vulnerabilities_found) + len(remaining_secrets)

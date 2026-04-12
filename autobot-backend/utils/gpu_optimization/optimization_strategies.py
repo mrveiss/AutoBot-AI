@@ -37,20 +37,15 @@ def _get_memory_utilization_recommendations(
     recommendations = []
 
     if memory_util > 90:
-        recommendations.append(
-            "GPU memory usage is very high (>90%). " "Consider reducing batch sizes."
-        )
+        recommendations.append("GPU memory usage is very high (>90%). " "Consider reducing batch sizes.")
     elif memory_util < 30:
         recommendations.append(
-            "GPU memory usage is low (<30%). "
-            "Consider increasing batch sizes for better utilization."
+            "GPU memory usage is low (<30%). " "Consider increasing batch sizes for better utilization."
         )
 
     if memory_util > 95 and not memory_limit_mb:
         recommended_limit = int(memory_total_mb * 0.9)
-        recommendations.append(
-            f"Consider setting memory limit to {recommended_limit}MB " "to prevent OOM"
-        )
+        recommendations.append(f"Consider setting memory limit to {recommended_limit}MB " "to prevent OOM")
 
     return recommendations
 
@@ -150,15 +145,9 @@ def _get_memory_based_recommendations(
     memory_gb = capabilities.memory_gb
 
     if memory_gb >= 12:
-        recommendations.append(
-            "High memory GPU detected. "
-            "Consider increasing batch sizes for better throughput."
-        )
+        recommendations.append("High memory GPU detected. " "Consider increasing batch sizes for better throughput.")
     elif memory_gb <= 8:
-        recommendations.append(
-            "Limited memory GPU detected. "
-            "Consider smaller batch sizes to prevent OOM."
-        )
+        recommendations.append("Limited memory GPU detected. " "Consider smaller batch sizes to prevent OOM.")
 
     return recommendations
 
@@ -207,18 +196,12 @@ async def enable_mixed_precision(
         if config.mixed_precision_enabled:
             optimizations.append("Mixed precision (FP16) enabled")
             optimizations.append("Automatic loss scaling enabled")
-            recommendations.append(
-                "Mixed precision can provide 1.5-2x speed improvement"
-            )
+            recommendations.append("Mixed precision can provide 1.5-2x speed improvement")
 
         # Check for Tensor Cores
         if capabilities.tensor_cores:
-            optimizations.append(
-                "Tensor Core acceleration optimized for mixed precision"
-            )
-            recommendations.append(
-                "Tensor Cores provide optimal performance with mixed precision"
-            )
+            optimizations.append("Tensor Core acceleration optimized for mixed precision")
+            recommendations.append("Tensor Cores provide optimal performance with mixed precision")
 
         return {
             "success": len(optimizations) > 0,
@@ -257,12 +240,8 @@ async def optimize_tensor_cores(
             optimizations.append("Matrix dimensions aligned for Tensor Core efficiency")
 
         # Recommendations for Tensor Core efficiency
-        recommendations.append(
-            "Use batch sizes divisible by 8 for optimal Tensor Core utilization"
-        )
-        recommendations.append(
-            "Ensure input dimensions are multiples of 16 for best performance"
-        )
+        recommendations.append("Use batch sizes divisible by 8 for optimal Tensor Core utilization")
+        recommendations.append("Ensure input dimensions are multiples of 16 for best performance")
 
         # Check compute capability for optimal Tensor Core features
         compute_cap = capabilities.compute_capability
@@ -306,13 +285,9 @@ async def optimize_model_compilation(
         # CUDA graphs for repetitive workloads
         if config.cuda_graphs_enabled:
             optimizations.append("CUDA graphs enabled for repetitive inference")
-            recommendations.append(
-                "CUDA graphs can reduce kernel launch overhead by up to 5x"
-            )
+            recommendations.append("CUDA graphs can reduce kernel launch overhead by up to 5x")
         else:
-            recommendations.append(
-                "Consider enabling CUDA graphs for repetitive workloads"
-            )
+            recommendations.append("Consider enabling CUDA graphs for repetitive workloads")
 
         return {
             "success": len(optimizations) > 0,

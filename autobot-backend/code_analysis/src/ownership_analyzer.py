@@ -29,7 +29,7 @@ if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
 try:
-    from autobot_shared.redis_client import get_redis_client, get_async_redis_client
+    from autobot_shared.redis_client import get_async_redis_client, get_redis_client
     from constants.ttl_constants import TTL_1_HOUR
 
     _REDIS_AVAILABLE = True
@@ -166,7 +166,7 @@ class OwnershipAnalyzer:
     async def _ensure_redis(self):
         """Lazy-init async Redis client on first use (#2725)."""
         if self.redis_client is None:
-            from autobot_shared.redis_client import get_redis_client, get_async_redis_client
+            from autobot_shared.redis_client import get_async_redis_client, get_redis_client
 
             self.redis_client = await get_async_redis_client()
 

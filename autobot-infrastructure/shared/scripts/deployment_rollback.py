@@ -40,10 +40,9 @@ logger = logging.getLogger(__name__)
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from constants.threshold_constants import TimingConstants
+from scripts.backup_manager import BackupManager
 from utils.script_utils import ScriptFormatter
 from utils.service_registry import ServiceStatus, get_service_registry
-
-from scripts.backup_manager import BackupManager
 
 
 class RollbackStrategy:
@@ -112,9 +111,7 @@ class RollbackManager:
                     file_config = yaml.safe_load(f) or {}
                 default_config.update(file_config)
             except Exception as e:
-                self.print_step(
-                    f"Warning: Could not load rollback config: {e}", "warning"
-                )
+                self.print_step(f"Warning: Could not load rollback config: {e}", "warning")
 
         return default_config
 
@@ -216,9 +213,7 @@ class RollbackManager:
 
                 parts = line.split("|")
                 if len(parts) >= 3:
-                    versions.append(
-                        {"tag": parts[0], "date": parts[1], "commit": parts[2]}
-                    )
+                    versions.append({"tag": parts[0], "date": parts[1], "commit": parts[2]})
 
             return versions[:10]  # Return last 10 versions
 
@@ -236,11 +231,7 @@ class RollbackManager:
             try:
                 health_results = await self.service_registry.check_all_services_health()
 
-                healthy_count = sum(
-                    1
-                    for h in health_results.values()
-                    if h.status == ServiceStatus.HEALTHY
-                )
+                healthy_count = sum(1 for h in health_results.values() if h.status == ServiceStatus.HEALTHY)
                 total_count = len(health_results)
 
                 self.print_step(
@@ -255,9 +246,7 @@ class RollbackManager:
                 # Show unhealthy services
                 for service, health in health_results.items():
                     if health.status != ServiceStatus.HEALTHY:
-                        self.print_step(
-                            f"  {service}: {health.status.value}", "warning"
-                        )
+                        self.print_step(f"  {service}: {health.status.value}", "warning")
 
                 await asyncio.sleep(check_interval)
 
@@ -283,9 +272,7 @@ class RollbackManager:
                 }
             )
 
-    def _add_strategy_steps(
-        self, plan: Dict, strategy: str, target_version: str
-    ) -> None:
+    def _add_strategy_steps(self, plan: Dict, strategy: str, target_version: str) -> None:
         """Add strategy-specific rollback steps.
 
         Helper for create_rollback_plan (Issue #825).
@@ -371,9 +358,7 @@ class RollbackManager:
             ]
         )
 
-    def create_rollback_plan(
-        self, target_version: str, strategy: str = RollbackStrategy.IMMEDIATE
-    ) -> Dict[str, Any]:
+    def create_rollback_plan(self, target_version: str, strategy: str = RollbackStrategy.IMMEDIATE) -> Dict[str, Any]:
         """Create detailed rollback plan."""
         current_info = self.get_current_deployment_info()
 
@@ -402,9 +387,7 @@ class RollbackManager:
         }
         return estimates.get(strategy, "unknown")
 
-    async def _execute_step(
-        self, step: dict, target_version: str, rollback_id: str
-    ) -> tuple[bool, bool]:
+    async def _execute_step(self, step: dict, target_version: str, rollback_id: str) -> tuple[bool, bool]:
         """Execute a single rollback step (Issue #315: extracted helper).
 
         Returns: (success, should_continue) tuple
@@ -431,47 +414,31 @@ class RollbackManager:
                 self.print_step(f"Non-critical step failed: {step_name}", "warning")
         return True, True
 
-    async def _handle_backup_step(
-        self, step: dict, target_version: str, rollback_id: str
-    ) -> bool:
+    async def _handle_backup_step(self, step: dict, target_version: str, rollback_id: str) -> bool:
         """Handle backup creation step (Issue #315: extracted helper)."""
         backup_id = self.backup_manager.create_full_backup()
         return backup_id is not None
 
-    async def _handle_health_step(
-        self, step: dict, target_version: str, rollback_id: str
-    ) -> bool:
+    async def _handle_health_step(self, step: dict, target_version: str, rollback_id: str) -> bool:
         """Handle health verification step (Issue #315: extracted helper)."""
-        return await self.verify_services_health(
-            self.rollback_config["health_check_timeout"]
-        )
+        return await self.verify_services_health(self.rollback_config["health_check_timeout"])
 
-    async def _handle_restore_step(
-        self, step: dict, target_version: str, rollback_id: str
-    ) -> bool:
+    async def _handle_restore_step(self, step: dict, target_version: str, rollback_id: str) -> bool:
         """Handle version restore step (Issue #315: extracted helper)."""
         return await self._restore_version(target_version)
 
-    async def _handle_stop_step(
-        self, step: dict, target_version: str, rollback_id: str
-    ) -> bool:
+    async def _handle_stop_step(self, step: dict, target_version: str, rollback_id: str) -> bool:
         """Handle stop services step (Issue #315: extracted helper)."""
         return self._stop_services()
 
-    async def _handle_start_step(
-        self, step: dict, target_version: str, rollback_id: str
-    ) -> bool:
+    async def _handle_start_step(self, step: dict, target_version: str, rollback_id: str) -> bool:
         """Handle start services step (Issue #315: extracted helper)."""
         return self._start_services()
 
-    async def _handle_update_step(
-        self, step: dict, target_version: str, rollback_id: str
-    ) -> bool:
+    async def _handle_update_step(self, step: dict, target_version: str, rollback_id: str) -> bool:
         """Handle deployment info update step (Issue #315: extracted helper)."""
         # Issue #666: Wrap blocking I/O in asyncio.to_thread
-        await asyncio.to_thread(
-            self._update_deployment_info, target_version, rollback_id
-        )
+        await asyncio.to_thread(self._update_deployment_info, target_version, rollback_id)
         return True
 
     async def execute_rollback(
@@ -515,22 +482,16 @@ class RollbackManager:
             start_time = time.time()
 
             for i, step in enumerate(plan["steps"], 1):
-                self.print_step(
-                    f"Step {i}/{len(plan['steps'])}: {step['description']}", "running"
-                )
+                self.print_step(f"Step {i}/{len(plan['steps'])}: {step['description']}", "running")
 
-                success, should_continue = await self._execute_step(
-                    step, target_version, rollback_id
-                )
+                success, should_continue = await self._execute_step(step, target_version, rollback_id)
                 if not should_continue:
                     return False
 
                 self.print_step(f"Step {i} completed", "success")
 
             duration = time.time() - start_time
-            self.print_step(
-                f"Rollback completed successfully in {duration:.1f}s", "success"
-            )
+            self.print_step(f"Rollback completed successfully in {duration:.1f}s", "success")
 
             # Log rollback success - Issue #666: Wrap blocking I/O
             await asyncio.to_thread(
@@ -577,9 +538,7 @@ class RollbackManager:
             git_tags = [v["tag"] for v in git_versions]
 
             if target_version in git_tags:
-                self.print_step(
-                    f"Restoring from git version: {target_version}", "running"
-                )
+                self.print_step(f"Restoring from git version: {target_version}", "running")
                 # Issue #479: Use async subprocess
                 process = await asyncio.create_subprocess_exec(
                     "git",
@@ -643,9 +602,7 @@ class RollbackManager:
                     )
                 else:
                     # Local processes - try to find and stop
-                    subprocess.run(
-                        ["pkill", "-f", service], capture_output=True, check=False
-                    )
+                    subprocess.run(["pkill", "-f", service], capture_output=True, check=False)
 
             return True
 
@@ -755,9 +712,7 @@ class RollbackManager:
                     self.print_step("Rollback recovery successful", "success")
                     return True
 
-            self.print_step(
-                "Automatic recovery failed - manual intervention required", "error"
-            )
+            self.print_step("Automatic recovery failed - manual intervention required", "error")
             return False
 
         except Exception as e:
@@ -785,9 +740,7 @@ Examples:
 
     parser.add_argument("--rollback", action="store_true", help="Execute rollback")
     parser.add_argument("--plan", action="store_true", help="Create rollback plan")
-    parser.add_argument(
-        "--list-versions", action="store_true", help="List available versions"
-    )
+    parser.add_argument("--list-versions", action="store_true", help="List available versions")
     parser.add_argument("--backup-id", help="Backup ID to restore")
     parser.add_argument("--version", help="Version to rollback to")
     parser.add_argument("--target-version", help="Target version for planning")
@@ -803,9 +756,7 @@ Examples:
     )
     parser.add_argument("--dry-run", action="store_true", help="Dry run mode")
     parser.add_argument("--backup-dir", default="backups", help="Backup directory")
-    parser.add_argument(
-        "--rollback-dir", default="rollbacks", help="Rollback directory"
-    )
+    parser.add_argument("--rollback-dir", default="rollbacks", help="Rollback directory")
     return parser
 
 
@@ -822,9 +773,7 @@ def _handle_list_versions(rollback_manager):
 
     logger.info("\n📋 Available Versions for Rollback:")
     logger.info("=" * 80)
-    logger.info(
-        f"{'Version':<20} {'Type':<10} {'Date':<20} {'Method':<20} {'Size':<10}"
-    )
+    logger.info(f"{'Version':<20} {'Type':<10} {'Date':<20} {'Method':<20} {'Size':<10}")
     logger.info("-" * 80)
 
     for version in versions:
@@ -865,9 +814,7 @@ def _handle_plan(rollback_manager, args):
 
     for i, step in enumerate(plan["steps"], 1):
         critical = "⚠️ CRITICAL" if step["critical"] else ""
-        logger.info(
-            f"  {i}. {step['description']} ({step['estimated_time']}) {critical}"
-        )
+        logger.info(f"  {i}. {step['description']} ({step['estimated_time']}) {critical}")
     return 0
 
 
@@ -892,9 +839,7 @@ async def main():
             if not target_version:
                 logger.error("❌ --backup-id or --version required for rollback")
                 return 1
-            success = await rollback_manager.execute_rollback(
-                target_version, args.strategy, args.dry_run
-            )
+            success = await rollback_manager.execute_rollback(target_version, args.strategy, args.dry_run)
             return 0 if success else 1
 
     except KeyboardInterrupt:

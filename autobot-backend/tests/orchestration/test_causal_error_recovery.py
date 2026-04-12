@@ -85,14 +85,10 @@ class TestCausalErrorRecovery:
         )
 
     @pytest.mark.asyncio
-    async def test_timeout_error_recovery_recommendation(
-        self, recovery_system, sample_timeout_analysis
-    ):
+    async def test_timeout_error_recovery_recommendation(self, recovery_system, sample_timeout_analysis):
         """Test that timeout errors recommend retry with backoff."""
         error = TimeoutError("Connection timeout")
-        plan = await recovery_system.recommend_recovery(
-            error, sample_timeout_analysis, {}
-        )
+        plan = await recovery_system.recommend_recovery(error, sample_timeout_analysis, {})
 
         assert plan.error_type == "TimeoutError"
         assert plan.root_cause == "Network latency"
@@ -108,24 +104,17 @@ class TestCausalErrorRecovery:
         assert plan.confidence > 0.7
 
     @pytest.mark.asyncio
-    async def test_resource_exhaustion_recovery_recommendation(
-        self, recovery_system, sample_resource_analysis
-    ):
+    async def test_resource_exhaustion_recovery_recommendation(self, recovery_system, sample_resource_analysis):
         """Test that resource exhaustion recommends wait or scale."""
         error = RuntimeError("Connection pool exhausted")
-        plan = await recovery_system.recommend_recovery(
-            error, sample_resource_analysis, {}
-        )
+        plan = await recovery_system.recommend_recovery(error, sample_resource_analysis, {})
 
         assert plan.root_cause == "Connection pool exhaustion"
         assert len(plan.recommended_actions) > 0
 
         # Should recommend wait or scale
         actions = [a.action for a in plan.recommended_actions]
-        assert (
-            RecoveryAction.WAIT_FOR_DEPENDENCY in actions
-            or RecoveryAction.SCALE_RESOURCES in actions
-        )
+        assert RecoveryAction.WAIT_FOR_DEPENDENCY in actions or RecoveryAction.SCALE_RESOURCES in actions
 
     @pytest.mark.asyncio
     async def test_permission_error_recovery_escalates(self, recovery_system):
@@ -181,9 +170,7 @@ class TestCausalErrorRecovery:
         error = TimeoutError("Request timeout")
 
         leaf_plan = await recovery_system.recommend_recovery(error, leaf_analysis, {})
-        downstream_plan = await recovery_system.recommend_recovery(
-            error, downstream_analysis, {}
-        )
+        downstream_plan = await recovery_system.recommend_recovery(error, downstream_analysis, {})
 
         assert leaf_plan.is_leaf_error is True
         assert downstream_plan.is_leaf_error is False
@@ -319,18 +306,14 @@ class TestFailurePatternDetector:
         causal_chain = "Connection failed → Retry needed"
 
         # Learn pattern
-        pattern = await detector.learn_pattern(
-            causal_chain, "ConnectionError", successful_action="retry_with_backoff"
-        )
+        pattern = await detector.learn_pattern(causal_chain, "ConnectionError", successful_action="retry_with_backoff")
 
         # Occurrence 1: success
         assert pattern.occurrence_count >= 1
         assert "retry_with_backoff" in pattern.successful_resolutions
 
         # Learn again with success
-        pattern = await detector.learn_pattern(
-            causal_chain, "ConnectionError", successful_action="retry_with_backoff"
-        )
+        pattern = await detector.learn_pattern(causal_chain, "ConnectionError", successful_action="retry_with_backoff")
 
         # Success rate should improve
         assert pattern.resolution_success_rate >= 0.5
@@ -346,9 +329,7 @@ class TestFailurePatternDetector:
 
         # Multiple successes
         for _ in range(5):
-            p = await detector.learn_pattern(
-                causal_chain, "TimeoutError", successful_action="retry_with_backoff"
-            )
+            p = await detector.learn_pattern(causal_chain, "TimeoutError", successful_action="retry_with_backoff")
 
         final_confidence = p.confidence
 
@@ -436,9 +417,7 @@ class TestCausalErrorRecoveryIntegration:
         )
 
         # Get recovery plan
-        plan = await recovery_sys.recommend_recovery(
-            error, causal_analysis, {"step_id": "step_1"}
-        )
+        plan = await recovery_sys.recommend_recovery(error, causal_analysis, {"step_id": "step_1"})
 
         # Verify plan
         assert plan.error_type == "TimeoutError"
@@ -448,10 +427,7 @@ class TestCausalErrorRecoveryIntegration:
 
         # Recommended action should be retry-related
         top_action = plan.recommended_actions[0]
-        assert (
-            "retry" in top_action.action.value.lower()
-            or "wait" in top_action.action.value.lower()
-        )
+        assert "retry" in top_action.action.value.lower() or "wait" in top_action.action.value.lower()
 
     @pytest.mark.asyncio
     async def test_pattern_feedback_improves_confidence(self):
@@ -476,12 +452,8 @@ class TestCausalErrorRecoveryIntegration:
         confidence1 = plan1.confidence
 
         # Learn and record success
-        await detector.learn_pattern(
-            causal_chain, "RuntimeError", successful_action="wait_for_dependency"
-        )
-        await recovery_sys.record_recovery_attempt(
-            plan1, RecoveryAction.WAIT_FOR_DEPENDENCY, success=True
-        )
+        await detector.learn_pattern(causal_chain, "RuntimeError", successful_action="wait_for_dependency")
+        await recovery_sys.record_recovery_attempt(plan1, RecoveryAction.WAIT_FOR_DEPENDENCY, success=True)
 
         # Second encounter: should be known pattern now, higher confidence
         is_known = await detector.detect_pattern(causal_chain, "RuntimeError")

@@ -176,9 +176,7 @@ class PerformanceMonitor:
             self.logger.error(f"❌ Failed to connect to Redis for metrics: {e}")
             self.redis_client = None
 
-    async def collect_system_metrics(
-        self, hostname: str = "localhost"
-    ) -> SystemMetrics:
+    async def collect_system_metrics(self, hostname: str = "localhost") -> SystemMetrics:
         """Collect comprehensive system performance metrics."""
         try:
             # CPU and memory metrics
@@ -269,8 +267,7 @@ class PerformanceMonitor:
                     # available in this environment.  Return None so dashboards can
                     # display "unavailable" rather than a misleading 0%.  Ref: #2871.
                     self.logger.debug(
-                        "Intel NPU detected but utilization monitoring tools absent; "
-                        "returning None (#2871)"
+                        "Intel NPU detected but utilization monitoring tools absent; " "returning None (#2871)"
                     )
                     return None
             except asyncio.TimeoutError:
@@ -280,9 +277,7 @@ class PerformanceMonitor:
             self.logger.debug("Suppressed exception in try block", exc_info=True)
         return None
 
-    async def test_service_performance(
-        self, service_name: str, endpoint: str
-    ) -> ServiceMetrics:
+    async def test_service_performance(self, service_name: str, endpoint: str) -> ServiceMetrics:
         """Test individual service performance and health."""
         start_time = time.time()
 
@@ -313,9 +308,7 @@ class PerformanceMonitor:
                             response_time=response_time,
                             status_code=response.status,
                             is_healthy=is_healthy,
-                            error_message=(
-                                None if is_healthy else f"HTTP {response.status}"
-                            ),
+                            error_message=(None if is_healthy else f"HTTP {response.status}"),
                         )
         except Exception as e:
             response_time = time.time() - start_time
@@ -328,9 +321,7 @@ class PerformanceMonitor:
                 error_message=str(e),
             )
 
-    def _test_single_redis_db(
-        self, db_num: int, db_name: str, start_time: float
-    ) -> DatabaseMetrics:
+    def _test_single_redis_db(self, db_num: int, db_name: str, start_time: float) -> DatabaseMetrics:
         """Probe one Redis database and return its DatabaseMetrics.
 
         Helper for test_database_performance. Ref: #1088.
@@ -401,9 +392,7 @@ class PerformanceMonitor:
             for db_num in redis_dbs:
                 start_time = time.time()
                 db_name = db_map.get(db_num, "main")
-                db_metrics.append(
-                    self._test_single_redis_db(db_num, db_name, start_time)
-                )
+                db_metrics.append(self._test_single_redis_db(db_num, db_name, start_time))
         except Exception as e:
             self.logger.error(f"Error in database performance testing: {e}")
 
@@ -503,9 +492,7 @@ class PerformanceMonitor:
                     inter_vm_metrics.append(self._create_failed_vm_metric(vm_name))
 
             except Exception as e:
-                self.logger.error(
-                    f"Error testing communication to {vm_name} ({vm_ip}): {e}"
-                )
+                self.logger.error(f"Error testing communication to {vm_name} ({vm_ip}): {e}")
 
         return inter_vm_metrics
 
@@ -518,40 +505,28 @@ class PerformanceMonitor:
             sys_metrics = metrics["system"]
 
             if sys_metrics.cpu_percent > ALERT_THRESHOLDS["cpu_percent"]:
-                alerts.append(
-                    f"HIGH CPU: {sys_metrics.cpu_percent:.1f}% > {ALERT_THRESHOLDS['cpu_percent']}%"
-                )
+                alerts.append(f"HIGH CPU: {sys_metrics.cpu_percent:.1f}% > {ALERT_THRESHOLDS['cpu_percent']}%")
 
             if sys_metrics.memory_percent > ALERT_THRESHOLDS["memory_percent"]:
-                alerts.append(
-                    f"HIGH MEMORY: {sys_metrics.memory_percent:.1f}% > {ALERT_THRESHOLDS['memory_percent']}%"
-                )
+                alerts.append(f"HIGH MEMORY: {sys_metrics.memory_percent:.1f}% > {ALERT_THRESHOLDS['memory_percent']}%")
 
             if sys_metrics.disk_percent > ALERT_THRESHOLDS["disk_percent"]:
-                alerts.append(
-                    f"HIGH DISK: {sys_metrics.disk_percent:.1f}% > {ALERT_THRESHOLDS['disk_percent']}%"
-                )
+                alerts.append(f"HIGH DISK: {sys_metrics.disk_percent:.1f}% > {ALERT_THRESHOLDS['disk_percent']}%")
 
         # Service performance alerts
         if "services" in metrics:
             for service_metric in metrics["services"]:
                 if not service_metric.is_healthy:
-                    alerts.append(
-                        f"SERVICE DOWN: {service_metric.service_name} - {service_metric.error_message}"
-                    )
+                    alerts.append(f"SERVICE DOWN: {service_metric.service_name} - {service_metric.error_message}")
 
                 if service_metric.response_time > ALERT_THRESHOLDS["api_response_time"]:
-                    alerts.append(
-                        f"SLOW RESPONSE: {service_metric.service_name} - {service_metric.response_time:.2f}s"
-                    )
+                    alerts.append(f"SLOW RESPONSE: {service_metric.service_name} - {service_metric.response_time:.2f}s")
 
         # Database performance alerts
         if "databases" in metrics:
             for db_metric in metrics["databases"]:
                 if db_metric.error_count > 0:
-                    alerts.append(
-                        f"DB ERROR: {db_metric.database_type} has {db_metric.error_count} errors"
-                    )
+                    alerts.append(f"DB ERROR: {db_metric.database_type} has {db_metric.error_count} errors")
 
                 if db_metric.connection_time > ALERT_THRESHOLDS["db_query_time"]:
                     alerts.append(
@@ -601,15 +576,9 @@ class PerformanceMonitor:
 
         # Store in local file
         try:
-            metrics_file = (
-                self.performance_data_path
-                / f"metrics_{datetime.now().strftime('%Y%m%d')}.jsonl"
-            )
+            metrics_file = self.performance_data_path / f"metrics_{datetime.now().strftime('%Y%m%d')}.jsonl"
             async with aiofiles.open(metrics_file, "a", encoding="utf-8") as f:
-                await f.write(
-                    json.dumps({"timestamp": timestamp, "data": metrics}, default=str)
-                    + "\n"
-                )
+                await f.write(json.dumps({"timestamp": timestamp, "data": metrics}, default=str) + "\n")
         except OSError as e:
             self.logger.error(f"Failed to write metrics to file {metrics_file}: {e}")
         except Exception as e:
@@ -624,9 +593,7 @@ class PerformanceMonitor:
             # Test all services
             service_metrics = []
             for service_name, endpoint in SERVICE_ENDPOINTS.items():
-                service_metric = await self.test_service_performance(
-                    service_name, endpoint
-                )
+                service_metric = await self.test_service_performance(service_name, endpoint)
                 service_metrics.append(service_metric)
 
             # Test database performance
@@ -665,9 +632,7 @@ class PerformanceMonitor:
 
     async def start_continuous_monitoring(self, interval: int = MONITORING_INTERVAL):
         """Start continuous performance monitoring."""
-        self.logger.info(
-            f"🚀 Starting AutoBot Performance Monitoring (interval: {interval}s)"
-        )
+        self.logger.info(f"🚀 Starting AutoBot Performance Monitoring (interval: {interval}s)")
         self.monitoring_active = True
 
         # Initialize Redis connection
@@ -696,13 +661,9 @@ class PerformanceMonitor:
                             self.logger.warning(f"🚨 ALERT: {alert}")
 
                     # Log service status
-                    healthy_services = sum(
-                        1 for s in metrics.get("services", []) if s.is_healthy
-                    )
+                    healthy_services = sum(1 for s in metrics.get("services", []) if s.is_healthy)
                     total_services = len(metrics.get("services", []))
-                    self.logger.info(
-                        f"🔧 Services: {healthy_services}/{total_services} healthy"
-                    )
+                    self.logger.info(f"🔧 Services: {healthy_services}/{total_services} healthy")
 
                 except Exception as e:
                     self.logger.error(f"Error in monitoring cycle: {e}")
@@ -752,9 +713,7 @@ def _print_report_sections(metrics: dict) -> None:
         logger.info("\n🔧 Service Status:")
         for service in services:
             status = "✅ UP" if service.is_healthy else "❌ DOWN"
-            logger.info(
-                f"   {service.service_name}: {status} ({service.response_time:.3f}s)"
-            )
+            logger.info(f"   {service.service_name}: {status} ({service.response_time:.3f}s)")
 
     databases = metrics.get("databases", [])
     if databases:
@@ -762,9 +721,7 @@ def _print_report_sections(metrics: dict) -> None:
         for db in databases:
             conn = db.connection_time
             ops = db.operations_per_second
-            logger.info(
-                f"   {db.database_type}: {conn:.3f}s connection, {ops:.1f} ops/s"
-            )
+            logger.info(f"   {db.database_type}: {conn:.3f}s connection, {ops:.1f} ops/s")
 
     inter_vm = metrics.get("inter_vm", [])
     if inter_vm:
@@ -772,9 +729,7 @@ def _print_report_sections(metrics: dict) -> None:
         for vm in inter_vm:
             lat = vm.latency_ms
             loss = vm.packet_loss_percent
-            logger.info(
-                f"   {vm.source_vm} → {vm.target_vm}: {lat:.1f}ms latency, {loss:.1f}% loss"
-            )
+            logger.info(f"   {vm.source_vm} → {vm.target_vm}: {lat:.1f}ms latency, {loss:.1f}% loss")
 
     alerts = metrics.get("alerts", [])
     if alerts:
@@ -808,13 +763,9 @@ async def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="AutoBot Performance Monitor")
-    parser.add_argument(
-        "--interval", type=int, default=30, help="Monitoring interval in seconds"
-    )
+    parser.add_argument("--interval", type=int, default=30, help="Monitoring interval in seconds")
     parser.add_argument("--once", action="store_true", help="Run once and exit")
-    parser.add_argument(
-        "--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"]
-    )
+    parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
 
     args = parser.parse_args()
 

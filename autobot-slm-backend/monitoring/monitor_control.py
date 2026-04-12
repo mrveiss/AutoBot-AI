@@ -36,20 +36,14 @@ async def _handle_status_command(monitor_control: "MonitorControl", args) -> Non
 
     monitoring = status["monitoring"]
     logger.info(f"Monitoring Running: {'Yes' if monitoring['running'] else 'No'}")
-    logger.info(
-        f"Dashboard: {'Enabled' if monitoring['dashboard_enabled'] else 'Disabled'}"
-    )
+    logger.info(f"Dashboard: {'Enabled' if monitoring['dashboard_enabled'] else 'Disabled'}")
     if monitoring["dashboard_enabled"]:
         logger.info(f"Dashboard Port: {monitoring['dashboard_port']}")
-    logger.info(
-        f"Auto-Optimization: {'Enabled' if monitoring['optimization_enabled'] else 'Disabled'}"
-    )
+    logger.info(f"Auto-Optimization: {'Enabled' if monitoring['optimization_enabled'] else 'Disabled'}")
 
     health = status["system_health"]
     logger.info(f"\nSystem Health Score: {health['overall_score']}/100")
-    logger.info(
-        f"Healthy Services: {health['healthy_services']}/{health['total_services']}"
-    )
+    logger.info(f"Healthy Services: {health['healthy_services']}/{health['total_services']}")
     logger.info(f"Active Alerts: {health['active_alerts']}")
 
     perf = status["performance_metrics"]
@@ -70,25 +64,19 @@ async def _handle_status_command(monitor_control: "MonitorControl", args) -> Non
 
 async def _handle_benchmark_command(monitor_control: "MonitorControl", args) -> None:
     """Handle --benchmark command (Issue #339 - extracted handler)."""
-    results = await monitor_control.run_single_benchmark(
-        test_type=args.benchmark, duration=args.benchmark_duration
-    )
+    results = await monitor_control.run_single_benchmark(test_type=args.benchmark, duration=args.benchmark_duration)
 
     logger.info(f"\n📈 {args.benchmark.title()} Benchmark Complete")
 
     if args.benchmark == "comprehensive":
         summary = results["summary"]
-        logger.info(
-            f"Overall Score: {summary['overall_system_score']:.1f}/100 (Grade: {summary['performance_grade']})"
-        )
+        logger.info(f"Overall Score: {summary['overall_system_score']:.1f}/100 (Grade: {summary['performance_grade']})")
         logger.info(f"Total Tests: {summary['total_tests']}")
     else:
         logger.info("Results saved to logs/benchmarks/")
 
 
-async def _handle_optimize_once_command(
-    monitor_control: "MonitorControl", args
-) -> None:
+async def _handle_optimize_once_command(monitor_control: "MonitorControl", args) -> None:
     """Handle --optimize-once command (Issue #339 - extracted handler)."""
     logger.info("Running single optimization cycle...")
     await monitor_control.optimizer.run_optimization_cycle()
@@ -104,9 +92,7 @@ async def _run_with_interrupt_handler(monitor_control: "MonitorControl", coro) -
         await monitor_control.stop_all() if hasattr(coro, "__self__") else await coro
 
 
-async def _handle_dashboard_only_command(
-    monitor_control: "MonitorControl", args
-) -> None:
+async def _handle_dashboard_only_command(monitor_control: "MonitorControl", args) -> None:
     """Handle --dashboard-only command (Issue #339 - extracted handler)."""
     logger.info("Starting performance dashboard only...")
     await monitor_control.start_dashboard()
@@ -270,12 +256,8 @@ class MonitorControl:
             await asyncio.sleep(2)
 
             if self.dashboard_process.returncode is None:
-                self.logger.info(
-                    f"📊 Performance dashboard started on port {self.config.dashboard_port}"
-                )
-                self.logger.info(
-                    f"   Access at: http://localhost:{self.config.dashboard_port}"
-                )
+                self.logger.info(f"📊 Performance dashboard started on port {self.config.dashboard_port}")
+                self.logger.info(f"   Access at: http://localhost:{self.config.dashboard_port}")
             else:
                 self.logger.error("Dashboard failed to start")
 
@@ -334,9 +316,7 @@ class MonitorControl:
                             f"Services: {healthy_services}/{total_services} healthy ({health_percentage:.1f}%)"
                         )
                     else:
-                        self.logger.info(
-                            f"Services: {healthy_services}/{total_services} healthy"
-                        )
+                        self.logger.info(f"Services: {healthy_services}/{total_services} healthy")
 
             except Exception as e:
                 self.logger.error(f"Error in monitoring cycle: {e}")
@@ -367,9 +347,7 @@ class MonitorControl:
             self.logger.info("Benchmarking set to manual mode")
             return
 
-        self.logger.info(
-            f"📈 Starting benchmark scheduler (schedule: {self.config.benchmark_schedule})"
-        )
+        self.logger.info(f"📈 Starting benchmark scheduler (schedule: {self.config.benchmark_schedule})")
 
         # Calculate interval based on schedule
         if self.config.benchmark_schedule == "daily":
@@ -377,9 +355,7 @@ class MonitorControl:
         elif self.config.benchmark_schedule == "weekly":
             interval = 7 * 24 * 60 * 60  # 7 days
         else:
-            self.logger.error(
-                f"Unknown benchmark schedule: {self.config.benchmark_schedule}"
-            )
+            self.logger.error(f"Unknown benchmark schedule: {self.config.benchmark_schedule}")
             return
 
         while self.running:
@@ -393,9 +369,7 @@ class MonitorControl:
             # Wait for next benchmark
             await asyncio.sleep(interval)
 
-    async def run_single_benchmark(
-        self, test_type: str = "comprehensive", duration: int = 60
-    ) -> Dict[str, Any]:
+    async def run_single_benchmark(self, test_type: str = "comprehensive", duration: int = 60) -> Dict[str, Any]:
         """Run a single benchmark test."""
         self.logger.info(f"🚀 Running {test_type} benchmark")
 
@@ -403,19 +377,13 @@ class MonitorControl:
             if test_type == "comprehensive":
                 return await self.benchmark.run_comprehensive_benchmark()
             elif test_type == "api":
-                results = await self.benchmark.run_api_benchmark(
-                    duration_seconds=duration
-                )
+                results = await self.benchmark.run_api_benchmark(duration_seconds=duration)
                 return {"api_results": [result.__dict__ for result in results]}
             elif test_type == "database":
-                results = await self.benchmark.run_database_benchmark(
-                    duration_seconds=duration
-                )
+                results = await self.benchmark.run_database_benchmark(duration_seconds=duration)
                 return {"database_results": [result.__dict__ for result in results]}
             elif test_type == "network":
-                results = await self.benchmark.run_network_benchmark(
-                    duration_seconds=duration
-                )
+                results = await self.benchmark.run_network_benchmark(duration_seconds=duration)
                 return {"network_results": [result.__dict__ for result in results]}
             elif test_type == "system":
                 result = await self.benchmark.run_system_benchmark()
@@ -443,38 +411,26 @@ class MonitorControl:
                     "optimization_enabled": self.config.auto_optimization_enabled,
                     "optimization_interval": self.config.optimization_interval,
                     "dashboard_enabled": self.config.dashboard_enabled,
-                    "dashboard_port": (
-                        self.config.dashboard_port
-                        if self.config.dashboard_enabled
-                        else None
-                    ),
+                    "dashboard_port": (self.config.dashboard_port if self.config.dashboard_enabled else None),
                 },
                 "system_health": {
                     "overall_score": self._calculate_health_score(metrics),
                     "active_alerts": len(metrics.get("alerts", [])),
-                    "healthy_services": sum(
-                        1 for s in metrics.get("services", []) if s.is_healthy
-                    ),
+                    "healthy_services": sum(1 for s in metrics.get("services", []) if s.is_healthy),
                     "total_services": len(metrics.get("services", [])),
                 },
                 "performance_metrics": {
                     "cpu_percent": metrics.get("system", {}).get("cpu_percent", 0),
-                    "memory_percent": metrics.get("system", {}).get(
-                        "memory_percent", 0
-                    ),
+                    "memory_percent": metrics.get("system", {}).get("memory_percent", 0),
                     "disk_percent": metrics.get("system", {}).get("disk_percent", 0),
                     "gpu_utilization": metrics.get("system", {}).get("gpu_utilization"),
                     "npu_utilization": metrics.get("system", {}).get("npu_utilization"),
                 },
                 "recommendations": {
                     "total_count": len(recommendations),
-                    "critical": len(
-                        [r for r in recommendations if r.severity == "critical"]
-                    ),
+                    "critical": len([r for r in recommendations if r.severity == "critical"]),
                     "high": len([r for r in recommendations if r.severity == "high"]),
-                    "auto_applicable": len(
-                        [r for r in recommendations if r.auto_applicable]
-                    ),
+                    "auto_applicable": len([r for r in recommendations if r.auto_applicable]),
                 },
             }
 
@@ -509,9 +465,7 @@ class MonitorControl:
 
                 # Memory usage penalty
                 if sys_metrics.memory_percent > memory_threshold:
-                    score -= min(
-                        20, (sys_metrics.memory_percent - memory_threshold) / 1.5
-                    )
+                    score -= min(20, (sys_metrics.memory_percent - memory_threshold) / 1.5)
 
                 # Disk usage penalty
                 if sys_metrics.disk_percent > disk_threshold:
@@ -526,9 +480,7 @@ class MonitorControl:
 
             # Deduct points for alerts
             alerts = metrics.get("alerts", [])
-            critical_alerts = sum(
-                1 for alert in alerts if "DOWN" in alert or "ERROR" in alert
-            )
+            critical_alerts = sum(1 for alert in alerts if "DOWN" in alert or "ERROR" in alert)
             warning_alerts = len(alerts) - critical_alerts
 
             score -= critical_alerts * 15  # 15 points per critical alert
@@ -581,41 +533,25 @@ class MonitorControl:
     def _log_monitored_vms(self):
         """Log monitored VM addresses and paths. Helper for _print_startup_summary."""
         logger.info("\n🎯 Monitoring AutoBot distributed system:")
-        logger.info(
-            f"   • Main (WSL): {NetworkConstants.MAIN_MACHINE_IP} - Backend API"
-        )
-        logger.info(
-            f"   • Frontend VM: {NetworkConstants.FRONTEND_VM_IP} - Web Interface"
-        )
-        logger.info(
-            f"   • NPU Worker VM: {NetworkConstants.NPU_WORKER_VM_IP} - AI Acceleration"
-        )
+        logger.info(f"   • Main (WSL): {NetworkConstants.MAIN_MACHINE_IP} - Backend API")
+        logger.info(f"   • Frontend VM: {NetworkConstants.FRONTEND_VM_IP} - Web Interface")
+        logger.info(f"   • NPU Worker VM: {NetworkConstants.NPU_WORKER_VM_IP} - AI Acceleration")
         logger.info(f"   • Redis VM: {NetworkConstants.REDIS_VM_IP} - Data Layer")
-        logger.info(
-            f"   • AI Stack VM: {NetworkConstants.AI_STACK_VM_IP} - AI Processing"
-        )
-        logger.info(
-            f"   • Browser VM: {NetworkConstants.BROWSER_VM_IP} - Web Automation"
-        )
+        logger.info(f"   • AI Stack VM: {NetworkConstants.AI_STACK_VM_IP} - AI Processing")
+        logger.info(f"   • Browser VM: {NetworkConstants.BROWSER_VM_IP} - Web Automation")
         _base = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
         logger.info("\n💾 Logs: %s/logs/", _base)
         logger.info("📊 Results: %s/logs/benchmarks/", _base)
 
     def _log_startup_config(self) -> None:
         """Helper for _print_startup_summary. Ref: #1088."""
-        logger.info(
-            f"📊 Dashboard: {'Enabled' if self.config.dashboard_enabled else 'Disabled'}"
-        )
+        logger.info(f"📊 Dashboard: {'Enabled' if self.config.dashboard_enabled else 'Disabled'}")
         if self.config.dashboard_enabled:
             logger.info(f"   URL: http://localhost:{self.config.dashboard_port}")
         logger.info(f"🔍 Monitoring: Every {self.config.monitoring_interval}s")
-        logger.info(
-            f"🔧 Optimization: {'Enabled' if self.config.auto_optimization_enabled else 'Disabled'}"
-        )
+        logger.info(f"🔧 Optimization: {'Enabled' if self.config.auto_optimization_enabled else 'Disabled'}")
         if self.config.auto_optimization_enabled:
-            logger.info(
-                f"   Cycle: Every {self.config.optimization_interval//60} minutes"
-            )
+            logger.info(f"   Cycle: Every {self.config.optimization_interval//60} minutes")
         logger.info(f"📈 Benchmarks: {self.config.benchmark_schedule}")
 
     def _log_startup_health(self, status: Dict[str, Any]) -> None:
@@ -631,13 +567,9 @@ class MonitorControl:
             logger.info(f"   GPU: {perf['gpu_utilization']:.1f}%")
 
         services = status["system_health"]
-        logger.info(
-            f"   Services: {services['healthy_services']}/{services['total_services']} healthy"
-        )
+        logger.info(f"   Services: {services['healthy_services']}/{services['total_services']} healthy")
         if status["system_health"]["active_alerts"] > 0:
-            logger.info(
-                f"   🚨 Active Alerts: {status['system_health']['active_alerts']}"
-            )
+            logger.info(f"   🚨 Active Alerts: {status['system_health']['active_alerts']}")
 
         recs = status["recommendations"]
         if recs["total_count"] > 0:
@@ -675,29 +607,17 @@ def _create_argument_parser():
 
     parser = argparse.ArgumentParser(description="AutoBot Monitor Control System")
 
-    parser.add_argument(
-        "--start", action="store_true", help="Start all monitoring components"
-    )
-    parser.add_argument(
-        "--stop", action="store_true", help="Stop all monitoring components"
-    )
-    parser.add_argument(
-        "--status", action="store_true", help="Show current monitoring status"
-    )
-    parser.add_argument(
-        "--restart", action="store_true", help="Restart all monitoring components"
-    )
-    parser.add_argument(
-        "--dashboard-only", action="store_true", help="Start only the dashboard"
-    )
+    parser.add_argument("--start", action="store_true", help="Start all monitoring components")
+    parser.add_argument("--stop", action="store_true", help="Stop all monitoring components")
+    parser.add_argument("--status", action="store_true", help="Show current monitoring status")
+    parser.add_argument("--restart", action="store_true", help="Restart all monitoring components")
+    parser.add_argument("--dashboard-only", action="store_true", help="Start only the dashboard")
     parser.add_argument(
         "--monitor-only",
         action="store_true",
         help="Start only monitoring (no optimization)",
     )
-    parser.add_argument(
-        "--optimize-once", action="store_true", help="Run single optimization cycle"
-    )
+    parser.add_argument("--optimize-once", action="store_true", help="Run single optimization cycle")
     parser.add_argument(
         "--benchmark",
         choices=["comprehensive", "api", "database", "network", "system"],
@@ -710,9 +630,7 @@ def _create_argument_parser():
         help="Benchmark duration in seconds",
     )
     parser.add_argument("--config", help="Configuration file path")
-    parser.add_argument(
-        "--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"]
-    )
+    parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
 
     return parser
 

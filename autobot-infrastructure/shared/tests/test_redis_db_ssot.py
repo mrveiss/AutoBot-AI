@@ -48,8 +48,7 @@ class TestRedisDatabaseSSOT:
 
         for name, db_num in yaml_mapping.items():
             assert name in DATABASE_MAPPING, (
-                f"'{name}' present in redis-databases.yaml but missing "
-                f"from DATABASE_MAPPING"
+                f"'{name}' present in redis-databases.yaml but missing " f"from DATABASE_MAPPING"
             )
             assert DATABASE_MAPPING[name] == db_num, (
                 f"'{name}' is DB {DATABASE_MAPPING[name]} in "
@@ -66,8 +65,7 @@ class TestRedisDatabaseSSOT:
         allowed = set(yaml_mapping.keys()) | set(_ALIASES.keys())
         for name in DATABASE_MAPPING:
             assert name in allowed, (
-                f"'{name}' in DATABASE_MAPPING is not in "
-                f"redis-databases.yaml and not a declared alias"
+                f"'{name}' in DATABASE_MAPPING is not in " f"redis-databases.yaml and not a declared alias"
             )
 
     def test_redis_database_enum_values_match_yaml(self, yaml_mapping):

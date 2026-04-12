@@ -25,12 +25,8 @@ INSTALLATION_KEYWORDS = {"install", "setup", "configure"}
 # Issue #380: Module-level frozensets to avoid repeated list creation in classify_complexity
 _SECURITY_NETWORK_KEYWORDS = frozenset({"scan", "security", "vulnerabilities"})
 _NETWORK_KEYWORDS = frozenset({"network", "port", "firewall"})
-_COMPLEX_KEYWORDS = frozenset(
-    {"install", "setup", "configure", "guide", "tutorial", "how to"}
-)
-_RESEARCH_KEYWORDS = frozenset(
-    {"find", "search", "tools", "best", "recommend", "compare"}
-)
+_COMPLEX_KEYWORDS = frozenset({"install", "setup", "configure", "guide", "tutorial", "how to"})
+_RESEARCH_KEYWORDS = frozenset({"find", "search", "tools", "best", "recommend", "compare"})
 
 # Issue #281: Default classification keywords extracted from _initialize_default_rules
 DEFAULT_CLASSIFICATION_KEYWORDS = {
@@ -125,15 +121,11 @@ class WorkflowClassifier:
         Reduced from 98 to ~15 lines (85% reduction).
         """
         if not self.redis_client.exists(self.keywords_key):
-            self.redis_client.set(
-                self.keywords_key, json.dumps(DEFAULT_CLASSIFICATION_KEYWORDS)
-            )
+            self.redis_client.set(self.keywords_key, json.dumps(DEFAULT_CLASSIFICATION_KEYWORDS))
             logger.info("Initialized default classification keywords")
 
         if not self.redis_client.exists(self.rules_key):
-            self.redis_client.set(
-                self.rules_key, json.dumps(DEFAULT_CLASSIFICATION_RULES)
-            )
+            self.redis_client.set(self.rules_key, json.dumps(DEFAULT_CLASSIFICATION_RULES))
             logger.info("Initialized default classification rules")
 
     def get_keywords(self, category: str) -> List[str]:
@@ -170,9 +162,7 @@ class WorkflowClassifier:
         except Exception as e:
             logger.error("Error adding keywords: %s", e)
 
-    def _count_keyword_matches(
-        self, keywords: Dict[str, List[str]], message_lower: str
-    ) -> Dict[str, Any]:
+    def _count_keyword_matches(self, keywords: Dict[str, List[str]], message_lower: str) -> Dict[str, Any]:
         """Count keyword matches for classification. Issue #620.
 
         Args:
@@ -185,13 +175,9 @@ class WorkflowClassifier:
         keyword_counts = {}
         for category, keyword_list in keywords.items():
             if category in CRITICAL_CATEGORIES:
-                keyword_counts[f"any_{category}"] = any(
-                    kw in message_lower for kw in keyword_list
-                )
+                keyword_counts[f"any_{category}"] = any(kw in message_lower for kw in keyword_list)
             else:
-                keyword_counts[category] = sum(
-                    1 for kw in keyword_list if kw in message_lower
-                )
+                keyword_counts[category] = sum(1 for kw in keyword_list if kw in message_lower)
         keyword_counts["has_tools"] = "tools" in message_lower
         return keyword_counts
 
@@ -207,9 +193,7 @@ class WorkflowClassifier:
         Returns:
             TaskComplexity if a rule matches, None otherwise
         """
-        sorted_rules = sorted(
-            rules.items(), key=lambda x: x[1].get("priority", 0), reverse=True
-        )
+        sorted_rules = sorted(rules.items(), key=lambda x: x[1].get("priority", 0), reverse=True)
         for rule_name, rule_config in sorted_rules:
             condition = rule_config.get("condition", "")
             complexity = rule_config.get("complexity", "simple")
@@ -287,10 +271,7 @@ class WorkflowClassifier:
                 # Convert to appropriate type for evaluation
                 if isinstance(value, str) and value.isdigit():
                     eval_context[var_name] = int(value)
-                elif (
-                    isinstance(value, str)
-                    and value.lower() in StringParsingConstants.BOOL_STRING_VALUES
-                ):
+                elif isinstance(value, str) and value.lower() in StringParsingConstants.BOOL_STRING_VALUES:
                     eval_context[var_name] = value.lower() == "true"
                 else:
                     eval_context[var_name] = value
@@ -328,9 +309,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Manage workflow classification rules")
-    parser.add_argument(
-        "action", choices=["stats", "add-keyword", "test"], help="Action to perform"
-    )
+    parser.add_argument("action", choices=["stats", "add-keyword", "test"], help="Action to perform")
     parser.add_argument("--category", help="Keyword category")
     parser.add_argument("--keyword", help="Keyword to add")
     parser.add_argument("--message", help="Message to test classification")
@@ -352,9 +331,7 @@ if __name__ == "__main__":
     elif args.action == "add-keyword":
         if args.category and args.keyword:
             classifier.add_keywords(args.category, [args.keyword])
-            print(  # noqa: print
-                f"Added '{args.keyword}' to category '{args.category}'"
-            )  # noqa: print
+            print(f"Added '{args.keyword}' to category '{args.category}'")  # noqa: print  # noqa: print
         else:
             print("Error: --category and --keyword required")  # noqa: print
 

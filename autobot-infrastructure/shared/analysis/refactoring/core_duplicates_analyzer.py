@@ -93,9 +93,7 @@ def _filter_string_duplicates(results: dict) -> list:
     """Filter string duplicates to core files only (Issue #560: extracted)."""
     core_duplicates = []
     for dup in results["duplicate_strings"]:
-        core_strings = [
-            s for s in dup["occurrences"] if is_core_autobot_file(s["file"])
-        ]
+        core_strings = [s for s in dup["occurrences"] if is_core_autobot_file(s["file"])]
         if len(core_strings) >= 3:  # Higher threshold for strings
             core_duplicates.append(
                 {
@@ -134,9 +132,7 @@ def _print_summary(duplicates: dict) -> None:
     print(f"   Core API duplicates: {len(duplicates['apis'])}")
 
 
-def _print_top_duplicates(
-    sorted_funcs: list, sorted_configs: list, sorted_strings: list
-) -> None:
+def _print_top_duplicates(sorted_funcs: list, sorted_configs: list, sorted_strings: list) -> None:
     """Print top duplicates for each category (Issue #560: extracted)."""
     # Top function duplicates
     print("\n🔄 TOP CORE FUNCTION DUPLICATES:")
@@ -240,15 +236,9 @@ def analyze_core_duplicates():
     )
 
     # Sort by count
-    sorted_funcs = sorted(
-        core_function_duplicates, key=lambda x: x["count"], reverse=True
-    )
-    sorted_configs = sorted(
-        core_config_duplicates, key=lambda x: x["count"], reverse=True
-    )
-    sorted_strings = sorted(
-        core_string_duplicates, key=lambda x: x["count"], reverse=True
-    )
+    sorted_funcs = sorted(core_function_duplicates, key=lambda x: x["count"], reverse=True)
+    sorted_configs = sorted(core_config_duplicates, key=lambda x: x["count"], reverse=True)
+    sorted_strings = sorted(core_string_duplicates, key=lambda x: x["count"], reverse=True)
 
     # Print top duplicates and recommendations
     _print_top_duplicates(sorted_funcs, sorted_configs, sorted_strings)

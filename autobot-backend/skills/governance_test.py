@@ -13,10 +13,7 @@ from skills.governance import GovernanceEngine
 from skills.models import GovernanceMode
 from skills.promoter import SkillPromoter
 
-VALID_SKILL_MD = (
-    "---\nname: test-skill\nversion: 1.0.0\n"
-    "description: Test skill\ntools: [do_x]\n---\n# Test\n"
-)
+VALID_SKILL_MD = "---\nname: test-skill\nversion: 1.0.0\n" "description: Test skill\ntools: [do_x]\n---\n# Test\n"
 
 
 @pytest.fixture
@@ -66,12 +63,8 @@ async def test_approve_returns_approved_result():
 @pytest.mark.anyio
 async def test_semi_auto_persists_approval_to_db():
     """SEMI_AUTO mode should persist a SkillApproval row to DB (Issue #951)."""
-    with patch(
-        "skills.governance._persist_approval", new_callable=AsyncMock
-    ) as mock_persist:
-        with patch(
-            "skills.governance.GovernanceEngine._notify_admin", new_callable=AsyncMock
-        ):
+    with patch("skills.governance._persist_approval", new_callable=AsyncMock) as mock_persist:
+        with patch("skills.governance.GovernanceEngine._notify_admin", new_callable=AsyncMock):
             engine = GovernanceEngine(mode=GovernanceMode.SEMI_AUTO)
             result = await engine.request_activation(
                 "gap-skill", "autobot-self", "needs capability X", skill_id="skill-123"
@@ -86,12 +79,8 @@ async def test_semi_auto_persists_approval_to_db():
 @pytest.mark.anyio
 async def test_semi_auto_uses_skill_name_when_no_skill_id():
     """When skill_id is omitted, skill_name is used as the approval skill_id."""
-    with patch(
-        "skills.governance._persist_approval", new_callable=AsyncMock
-    ) as mock_persist:
-        with patch(
-            "skills.governance.GovernanceEngine._notify_admin", new_callable=AsyncMock
-        ):
+    with patch("skills.governance._persist_approval", new_callable=AsyncMock) as mock_persist:
+        with patch("skills.governance.GovernanceEngine._notify_admin", new_callable=AsyncMock):
             engine = GovernanceEngine(mode=GovernanceMode.SEMI_AUTO)
             await engine.request_activation("my-skill", "autobot-self", "reason")
     call_args = mock_persist.call_args[0]
@@ -101,9 +90,7 @@ async def test_semi_auto_uses_skill_name_when_no_skill_id():
 @pytest.mark.anyio
 async def test_full_auto_does_not_persist_approval():
     """FULL_AUTO mode skips DB persistence (no human review needed)."""
-    with patch(
-        "skills.governance._persist_approval", new_callable=AsyncMock
-    ) as mock_persist:
+    with patch("skills.governance._persist_approval", new_callable=AsyncMock) as mock_persist:
         engine = GovernanceEngine(mode=GovernanceMode.FULL_AUTO)
         await engine.request_activation("auto-skill", "autobot-self", "auto")
     mock_persist.assert_not_called()

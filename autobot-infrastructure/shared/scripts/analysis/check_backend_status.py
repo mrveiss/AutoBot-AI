@@ -104,9 +104,7 @@ class BackendStatusChecker:
             results.append(result)
 
             if result["success"]:
-                logger.info(
-                    f"✅ {result['status_code']} ({result.get('response_time_ms', 'N/A')}ms)"
-                )
+                logger.info(f"✅ {result['status_code']} ({result.get('response_time_ms', 'N/A')}ms)")
                 successful += 1
             else:
                 logger.error(f"❌ {result['error']}")
@@ -126,25 +124,16 @@ class BackendStatusChecker:
         # Generate recommendations
         logger.info("\n📋 Recommendations:")
         if failed > 0:
-            if any(
-                result.get("error", "").startswith("Connection refused")
-                for result in results
-            ):
+            if any(result.get("error", "").startswith("Connection refused") for result in results):
                 logger.info("  • Start the backend server: ./run_agent.sh")
 
-            timeout_failures = [
-                r for r in results if "timeout" in r.get("error", "").lower()
-            ]
+            timeout_failures = [r for r in results if "timeout" in r.get("error", "").lower()]
             if timeout_failures:
-                logger.info(
-                    f"  • {len(timeout_failures)} endpoints timing out - check server performance"
-                )
+                logger.info(f"  • {len(timeout_failures)} endpoints timing out - check server performance")
 
             not_found_failures = [r for r in results if r.get("status_code") == 404]
             if not_found_failures:
-                logger.info(
-                    f"  • {len(not_found_failures)} endpoints not found - verify API routes"
-                )
+                logger.info(f"  • {len(not_found_failures)} endpoints not found - verify API routes")
 
         if successful > 0:
             logger.info("  • Some endpoints working - partial functionality available")
@@ -158,17 +147,13 @@ class BackendStatusChecker:
         # Try the simplest endpoint first
         result = self.check_endpoint("/api/hello")
         if result["success"]:
-            logger.info(
-                f"✅ Backend is running ({result.get('response_time_ms', 'N/A')}ms)"
-            )
+            logger.info(f"✅ Backend is running ({result.get('response_time_ms', 'N/A')}ms)")
             return True
 
         # Try health endpoint as fallback
         result = self.check_endpoint("/api/system/health")
         if result["success"]:
-            logger.info(
-                f"✅ Backend is running ({result.get('response_time_ms', 'N/A')}ms)"
-            )
+            logger.info(f"✅ Backend is running ({result.get('response_time_ms', 'N/A')}ms)")
             return True
 
         logger.error(f"❌ Backend not responding: {result['error']}")
@@ -187,12 +172,8 @@ def main():
         default=ServiceURLs.BACKEND_LOCAL,
         help="Backend base URL (default: ServiceURLs.BACKEND_LOCAL)",
     )
-    parser.add_argument(
-        "--quick", action="store_true", help="Run quick health check only"
-    )
-    parser.add_argument(
-        "--json", action="store_true", help="Output results in JSON format"
-    )
+    parser.add_argument("--quick", action="store_true", help="Run quick health check only")
+    parser.add_argument("--json", action="store_true", help="Output results in JSON format")
 
     args = parser.parse_args()
 

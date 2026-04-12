@@ -13,10 +13,9 @@ import logging
 import uuid
 from typing import Dict, List, Optional
 
+from constants.ttl_constants import TTL_1_HOUR
 from services.command_approval_manager import AgentRole
 from type_defs.common import Metadata
-
-from constants.ttl_constants import TTL_1_HOUR
 
 from .models import AgentSessionState, AgentTerminalSession
 

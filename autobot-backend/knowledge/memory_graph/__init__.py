@@ -8,11 +8,11 @@ so those PRs can be merged without breaking any import sites.
 
 from autobot_memory_graph import *  # noqa: F401, F403
 from autobot_memory_graph import (  # noqa: F401
-    AutoBotMemoryGraph,
-    AutoBotMemoryGraphCore,
     ENTITY_TYPES,
     RELATION_TYPES,
     VALID_ACTIVITY_TYPES,
+    AutoBotMemoryGraph,
+    AutoBotMemoryGraphCore,
     HybridScorer,
     MemoryGraphQueryProcessor,
     QueryIntent,

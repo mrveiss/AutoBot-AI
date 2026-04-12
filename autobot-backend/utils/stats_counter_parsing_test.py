@@ -80,9 +80,7 @@ class TestStatsCounterParsing:
         assert "initialized_at" not in result
 
     @pytest.mark.asyncio
-    async def test_get_all_stats_handles_invalid_integer_values(
-        self, stats_mixin_instance, caplog
-    ):
+    async def test_get_all_stats_handles_invalid_integer_values(self, stats_mixin_instance, caplog):
         """Test that invalid integer values are logged and skipped."""
         # Mock Redis response with an unexpected non-integer value
         stats_mixin_instance.aioredis_client.hgetall = AsyncMock(
@@ -107,13 +105,9 @@ class TestStatsCounterParsing:
         assert "non-integer value" in caplog.text
 
     @pytest.mark.asyncio
-    async def test_get_all_stats_returns_empty_dict_on_error(
-        self, stats_mixin_instance
-    ):
+    async def test_get_all_stats_returns_empty_dict_on_error(self, stats_mixin_instance):
         """Test that an empty dict is returned when Redis fails."""
-        stats_mixin_instance.aioredis_client.hgetall = AsyncMock(
-            side_effect=Exception("Redis connection failed")
-        )
+        stats_mixin_instance.aioredis_client.hgetall = AsyncMock(side_effect=Exception("Redis connection failed"))
 
         result = await stats_mixin_instance._get_all_stats()
 

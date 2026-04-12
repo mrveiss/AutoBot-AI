@@ -131,9 +131,7 @@ class DistributedServiceDiscovery(AsyncInitializable):
         self.services.update(primary_services)
         self.backup_endpoints.update(backup_endpoints)
 
-        logger.info(
-            "Service registry initialized with %s services", len(self.services)
-        )
+        logger.info("Service registry initialized with %s services", len(self.services))
 
     def _get_config_value(self, service_name: str, key: str, default_key: str):
         """Get configuration value with fallback to system defaults. Issue #281: Extracted helper."""
@@ -148,11 +146,7 @@ class DistributedServiceDiscovery(AsyncInitializable):
         if not value:
             value = self._system_defaults.get(
                 default_key,
-                (
-                    NetworkConstants.LOCALHOST_NAME
-                    if key == "host"
-                    else NetworkConstants.BACKEND_PORT
-                ),
+                (NetworkConstants.LOCALHOST_NAME if key == "host" else NetworkConstants.BACKEND_PORT),
             )
         return value
 
@@ -185,12 +179,8 @@ class DistributedServiceDiscovery(AsyncInitializable):
                 "http",
             ),
             "browser": ServiceEndpoint(
-                self._get_config_value(
-                    "browser_service", "host", "browser_service_host"
-                ),
-                self._get_config_value(
-                    "browser_service", "port", "browser_service_port"
-                ),
+                self._get_config_value("browser_service", "host", "browser_service_host"),
+                self._get_config_value("browser_service", "port", "browser_service_port"),
                 "http",
             ),
             "ollama": ServiceEndpoint(
@@ -273,9 +263,7 @@ class DistributedServiceDiscovery(AsyncInitializable):
             ),
         ]
 
-    async def get_service_endpoint(
-        self, service_name: str
-    ) -> Optional[ServiceEndpoint]:
+    async def get_service_endpoint(self, service_name: str) -> Optional[ServiceEndpoint]:
         """
         Get healthy service endpoint instantly (no DNS resolution delays)
 
@@ -301,9 +289,7 @@ class DistributedServiceDiscovery(AsyncInitializable):
         if service_name in self.backup_endpoints:
             for backup in self.backup_endpoints[service_name]:
                 if await self._quick_health_check(backup):
-                    logger.warning(
-                        f"🔄 Using backup endpoint for {service_name}: {backup.url}"
-                    )
+                    logger.warning(f"🔄 Using backup endpoint for {service_name}: {backup.url}")
                     return backup
 
         # Return primary even if unhealthy (let caller handle)
@@ -403,9 +389,7 @@ class DistributedServiceDiscovery(AsyncInitializable):
             # Try health endpoint first, then root
             health_urls = [f"{endpoint.url}/health", f"{endpoint.url}/", endpoint.url]
             for url in health_urls:
-                if await self._try_health_url(
-                    url, http_client, timeout, start_time, endpoint
-                ):
+                if await self._try_health_url(url, http_client, timeout, start_time, endpoint):
                     return True
 
             endpoint.is_healthy = False
@@ -443,9 +427,7 @@ class DistributedServiceDiscovery(AsyncInitializable):
     def start_background_health_monitoring(self):
         """Start background health monitoring (optional)"""
         if not self._health_check_task:
-            self._health_check_task = asyncio.create_task(
-                self._background_health_monitor()
-            )
+            self._health_check_task = asyncio.create_task(self._background_health_monitor())
 
     async def _background_health_monitor(self):
         """Background task to keep service health updated"""
@@ -454,26 +436,18 @@ class DistributedServiceDiscovery(AsyncInitializable):
                 # Check all services in parallel
                 tasks = []
                 for service_name, endpoint in self.services.items():
-                    if endpoint.is_stale(
-                        TimingConstants.STANDARD_TIMEOUT
-                    ):  # Check stale services
+                    if endpoint.is_stale(TimingConstants.STANDARD_TIMEOUT):  # Check stale services
                         task = asyncio.create_task(self._quick_health_check(endpoint))
                         tasks.append((service_name, task))
 
                 if tasks:
-                    await asyncio.gather(
-                        *[task for _, task in tasks], return_exceptions=True
-                    )
+                    await asyncio.gather(*[task for _, task in tasks], return_exceptions=True)
 
-                await asyncio.sleep(
-                    ServiceDiscoveryConfig.HEALTH_CHECK_INTERVAL_S
-                )  # Check every 30 seconds
+                await asyncio.sleep(ServiceDiscoveryConfig.HEALTH_CHECK_INTERVAL_S)  # Check every 30 seconds
 
             except Exception as e:
                 logger.error("Background health monitoring error: %s", e)
-                await asyncio.sleep(
-                    TimingConstants.STANDARD_TIMEOUT
-                )  # Back off on errors
+                await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)  # Back off on errors
 
 
 # Global instance for easy access (thread-safe)
@@ -587,25 +561,13 @@ def _build_core_service_endpoints(
             "redis",
         ),
         "backend": _create_service_endpoint_dict(
-            get_val_fn(
-                "backend", "host", "backend_host", NetworkConstants.LOCALHOST_NAME
-            ),
-            int(
-                get_val_fn(
-                    "backend", "port", "backend_port", NetworkConstants.BACKEND_PORT
-                )
-            ),
+            get_val_fn("backend", "host", "backend_host", NetworkConstants.LOCALHOST_NAME),
+            int(get_val_fn("backend", "port", "backend_port", NetworkConstants.BACKEND_PORT)),
             "http",
         ),
         "frontend": _create_service_endpoint_dict(
-            get_val_fn(
-                "frontend", "host", "frontend_host", NetworkConstants.LOCALHOST_NAME
-            ),
-            int(
-                get_val_fn(
-                    "frontend", "port", "frontend_port", NetworkConstants.FRONTEND_PORT
-                )
-            ),
+            get_val_fn("frontend", "host", "frontend_host", NetworkConstants.LOCALHOST_NAME),
+            int(get_val_fn("frontend", "port", "frontend_port", NetworkConstants.FRONTEND_PORT)),
             "http",
         ),
     }
@@ -620,9 +582,7 @@ def _build_worker_service_endpoints(
     """
     return {
         "npu_worker": _create_service_endpoint_dict(
-            get_val_fn(
-                "npu_worker", "host", "npu_worker_host", NetworkConstants.LOCALHOST_NAME
-            ),
+            get_val_fn("npu_worker", "host", "npu_worker_host", NetworkConstants.LOCALHOST_NAME),
             int(
                 get_val_fn(
                     "npu_worker",
@@ -634,14 +594,8 @@ def _build_worker_service_endpoints(
             "http",
         ),
         "ai_stack": _create_service_endpoint_dict(
-            get_val_fn(
-                "ai_stack", "host", "ai_stack_host", NetworkConstants.LOCALHOST_NAME
-            ),
-            int(
-                get_val_fn(
-                    "ai_stack", "port", "ai_stack_port", NetworkConstants.AI_STACK_PORT
-                )
-            ),
+            get_val_fn("ai_stack", "host", "ai_stack_host", NetworkConstants.LOCALHOST_NAME),
+            int(get_val_fn("ai_stack", "port", "ai_stack_port", NetworkConstants.AI_STACK_PORT)),
             "http",
         ),
     }
@@ -673,14 +627,8 @@ def _build_auxiliary_service_endpoints(
             "http",
         ),
         "ollama": _create_service_endpoint_dict(
-            get_val_fn(
-                "ollama", "host", "ollama_host", NetworkConstants.LOCALHOST_NAME
-            ),
-            int(
-                get_val_fn(
-                    "ollama", "port", "ollama_port", NetworkConstants.OLLAMA_PORT
-                )
-            ),
+            get_val_fn("ollama", "host", "ollama_host", NetworkConstants.LOCALHOST_NAME),
+            int(get_val_fn("ollama", "port", "ollama_port", NetworkConstants.OLLAMA_PORT)),
             "http",
         ),
     }
@@ -733,8 +681,6 @@ def get_service_endpoint_sync(service_name: str) -> Optional[Dict]:
     }
 
     # Build service endpoints using helper (Issue #620)
-    service_endpoints = _build_service_endpoints_map(
-        services_config, backend_config, redis_config, {}
-    )
+    service_endpoints = _build_service_endpoints_map(services_config, backend_config, redis_config, {})
 
     return service_endpoints.get(service_name)

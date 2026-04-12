@@ -74,19 +74,13 @@ def _sample_keys(client: redis.Redis, max_sample: int = 100) -> Dict[str, int]:
     return dict(key_patterns), sampled
 
 
-def _log_pattern_stats(
-    key_patterns: Dict[str, int], sampled: int, total_keys: int
-) -> None:
+def _log_pattern_stats(key_patterns: Dict[str, int], sampled: int, total_keys: int) -> None:
     """Log pattern statistics (Issue #338 - extracted helper)."""
     logger.info("Sample patterns:")
-    for pattern, count in sorted(
-        key_patterns.items(), key=lambda x: x[1], reverse=True
-    ):
+    for pattern, count in sorted(key_patterns.items(), key=lambda x: x[1], reverse=True):
         percentage = (count / sampled) * 100 if sampled > 0 else 0
         estimated_total = int((count / sampled) * total_keys) if sampled > 0 else 0
-        logger.info(
-            f"  {pattern}: {count}/{sampled} sampled ({percentage:.1f}%) ≈ {estimated_total:,} total"
-        )
+        logger.info(f"  {pattern}: {count}/{sampled} sampled ({percentage:.1f}%) ≈ {estimated_total:,} total")
 
 
 def _analyze_database(client: redis.Redis, db_num: int, info: Dict) -> bool:
@@ -130,9 +124,7 @@ def analyze_all_redis_databases():
 
     for db_num in range(16):  # Redis typically has 16 databases (0-15)
         try:
-            client = redis.Redis(
-                host="localhost", port=6379, db=db_num, decode_responses=False
-            )
+            client = redis.Redis(host="localhost", port=6379, db=db_num, decode_responses=False)
             info = client.info()
             _analyze_database(client, db_num, info)
         except Exception as e:
@@ -142,9 +134,7 @@ def analyze_all_redis_databases():
     # Summary and recommendations
     logger.info("\n=== SUMMARY & RECOMMENDATIONS ===")
     logger.info("Based on analysis:")
-    logger.info(
-        "• Database 0: PRIMARY vector store (13,383 vectors) + minimal facts/config"
-    )
+    logger.info("• Database 0: PRIMARY vector store (13,383 vectors) + minimal facts/config")
     logger.info("• Other databases: Likely used for different services or empty")
 
     logger.info("\n💥 IMPACT OF DROPPING DATABASE 0:")

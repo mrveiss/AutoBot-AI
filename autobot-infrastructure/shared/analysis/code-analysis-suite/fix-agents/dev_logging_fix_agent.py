@@ -20,11 +20,7 @@ class DevLoggingFixer:
 
     def __init__(self, project_root: str, backup_dir: str = None):
         self.project_root = Path(project_root)
-        self.backup_dir = (
-            Path(backup_dir)
-            if backup_dir
-            else self.project_root / ".dev-logging-backups"
-        )
+        self.backup_dir = Path(backup_dir) if backup_dir else self.project_root / ".dev-logging-backups"
         self.report = {
             "timestamp": datetime.now().isoformat(),
             "files_processed": 0,
@@ -69,9 +65,7 @@ class DevLoggingFixer:
             return False
 
         # Skip test files
-        if any(
-            pattern in file_path.name.lower() for pattern in ["test", "spec", "mock"]
-        ):
+        if any(pattern in file_path.name.lower() for pattern in ["test", "spec", "mock"]):
             return False
 
         # Skip minified files
@@ -290,11 +284,7 @@ export { devLog as logger };
 
                 # Replace console.log with devLog.log
                 replacement = f"devLog.log({args})"
-                modified_content = (
-                    modified_content[:start_pos]
-                    + replacement
-                    + modified_content[end_pos:]
-                )
+                modified_content = modified_content[:start_pos] + replacement + modified_content[end_pos:]
 
                 converted_count += 1
                 conversion_details.append(
@@ -313,11 +303,7 @@ export { devLog as logger };
 
             # Look for existing imports or script tag
             for i, line in enumerate(lines):
-                if (
-                    "import " in line
-                    or line.strip().startswith("<script")
-                    or "from " in line
-                ):
+                if "import " in line or line.strip().startswith("<script") or "from " in line:
                     import_index = i + 1
                 elif line.strip() == "" and import_index > 0:
                     import_index = i
@@ -370,9 +356,7 @@ export { devLog as logger };
                 original_content = f.read()
 
             # Convert console.logs
-            modified_content, converted_count = self.convert_console_logs(
-                original_content, file_path
-            )
+            modified_content, converted_count = self.convert_console_logs(original_content, file_path)
 
             # If content changed, write back
             if converted_count > 0:
@@ -389,9 +373,7 @@ export { devLog as logger };
             return False
 
         except Exception as e:
-            self.report["errors"].append(
-                {"file": str(file_path.relative_to(self.project_root)), "error": str(e)}
-            )
+            self.report["errors"].append({"file": str(file_path.relative_to(self.project_root)), "error": str(e)})
             return False
 
     def convert_project(self, target_dir: str = None) -> Dict:
@@ -464,13 +446,9 @@ Import statement has been added: `import {{ devLog }} from '@/utils/devLogger.js
 """
 
         # Add details for each modified file
-        for detail in sorted(
-            self.report["details"], key=lambda x: x["converted_count"], reverse=True
-        ):
+        for detail in sorted(self.report["details"], key=lambda x: x["converted_count"], reverse=True):
             report_content += f"\n### {detail['file']}\n"
-            report_content += (
-                f"- Converted {detail['converted_count']} console.log statements\n"
-            )
+            report_content += f"- Converted {detail['converted_count']} console.log statements\n"
             report_content += "- Conversions:\n"
             for conv in detail["conversions"][:3]:  # Show first 3
                 report_content += f"  - Line {conv['line']}: `{conv['original']}` → `{conv['converted']}`\n"
@@ -521,15 +499,9 @@ All modified files have been backed up to: `{}`
 
 def main():
     """Main entry point for the development logging conversion tool."""
-    parser = argparse.ArgumentParser(
-        description="Convert console.log to environment-aware development logging"
-    )
-    parser.add_argument(
-        "project_path", help="Path to the project root or specific directory to convert"
-    )
-    parser.add_argument(
-        "--target-dir", help="Specific directory to convert (e.g., src/)", default=None
-    )
+    parser = argparse.ArgumentParser(description="Convert console.log to environment-aware development logging")
+    parser.add_argument("project_path", help="Path to the project root or specific directory to convert")
+    parser.add_argument("--target-dir", help="Specific directory to convert (e.g., src/)", default=None)
     parser.add_argument("--backup-dir", help="Directory to store backups", default=None)
     parser.add_argument("--report", help="Path for the conversion report", default=None)
 

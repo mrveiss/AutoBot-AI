@@ -17,11 +17,7 @@ async def _analyze_performance_issues_block_1():
     Helper for analyze_performance_issues (Issue #825).
     """
     # Critical issues (Memory leaks and blocking calls)
-    critical_issues = [
-        item
-        for item in results["performance_details"]
-        if item["severity"] == "critical"
-    ]
+    critical_issues = [item for item in results["performance_details"] if item["severity"] == "critical"]
     if critical_issues:
         logger.error("🚨 **Critical Performance Issues:**")
         for issue in critical_issues[:10]:  # Show top 10
@@ -37,9 +33,7 @@ async def _analyze_performance_issues_block_5():
     Helper for analyze_performance_issues (Issue #825).
     """
     # High priority issues
-    high_issues = [
-        item for item in results["performance_details"] if item["severity"] == "high"
-    ]
+    high_issues = [item for item in results["performance_details"] if item["severity"] == "high"]
     if high_issues:
         logger.warning("⚠️  **High Priority Performance Issues:**")
         for issue in high_issues[:5]:  # Show top 5
@@ -54,11 +48,7 @@ async def _analyze_performance_issues_block_2():
     Helper for analyze_performance_issues (Issue #825).
     """
     # Memory leak specific analysis
-    memory_issues = [
-        item
-        for item in results["performance_details"]
-        if item["type"] == "memory_leaks"
-    ]
+    memory_issues = [item for item in results["performance_details"] if item["type"] == "memory_leaks"]
     if memory_issues:
         logger.info("💾 **Memory Leak Analysis:**")
         logger.info(f"   Found {len(memory_issues)} potential memory leaks:")
@@ -77,16 +67,10 @@ async def _analyze_performance_issues_block_3():
     Helper for analyze_performance_issues (Issue #825).
     """
     # Blocking call analysis
-    blocking_issues = [
-        item
-        for item in results["performance_details"]
-        if item["type"] == "blocking_calls"
-    ]
+    blocking_issues = [item for item in results["performance_details"] if item["type"] == "blocking_calls"]
     if blocking_issues:
         logger.info("🔒 **Blocking Call Analysis:**")
-        logger.info(
-            f"   Found {len(blocking_issues)} blocking calls in async functions:"
-        )
+        logger.info(f"   Found {len(blocking_issues)} blocking calls in async functions:")
         for issue in blocking_issues[:5]:
             logger.info(f"   - {issue['file']}:{issue['line']}")
             logger.info(f"     Function: {issue['function'] or 'N/A'}")
@@ -99,9 +83,7 @@ async def _analyze_performance_issues_block_4():
     Helper for analyze_performance_issues (Issue #825).
     """
     # Database performance issues
-    db_issues = [
-        item for item in results["performance_details"] if "database" in item["type"]
-    ]
+    db_issues = [item for item in results["performance_details"] if "database" in item["type"]]
     if db_issues:
         logger.info("🗄️  **Database Performance Issues:**")
         logger.info(f"   Found {len(db_issues)} database-related performance issues:")
@@ -119,9 +101,7 @@ async def analyze_performance_issues():
     analyzer = PerformanceAnalyzer()
 
     # Run analysis
-    results = await analyzer.analyze_performance(
-        root_path=".", patterns=["src/**/*.py", "backend/**/*.py"]
-    )
+    results = await analyzer.analyze_performance(root_path=".", patterns=["src/**/*.py", "backend/**/*.py"])
 
     logger.info("\n=== Performance Analysis Results ===\n")
 
@@ -131,9 +111,7 @@ async def analyze_performance_issues():
     logger.error(f"   - Critical issues: {results['critical_issues']}")
     logger.info(f"   - High priority issues: {results['high_priority_issues']}")
     logger.info(f"   - Files with issues: {results['metrics']['files_with_issues']}")
-    logger.info(
-        "   - Performance debt score: %s", results["metrics"]["performance_debt_score"]
-    )
+    logger.info("   - Performance debt score: %s", results["metrics"]["performance_debt_score"])
     logger.info(f"   - Analysis time: {results['analysis_time_seconds']:.2f}s\n")
 
     # Category breakdown
@@ -217,15 +195,11 @@ async def _generate_performance_fixes_block_3():
     logger.info("```python")
     logger.error("# ❌ Bad - N+1 query problem")
     logger.info("for user in users:")
-    logger.info(
-        "    profile = db.query(Profile).filter(Profile.user_id == user.id).first()"
-    )
+    logger.info("    profile = db.query(Profile).filter(Profile.user_id == user.id).first()")
     logger.info("")
     logger.info("# ✅ Good - Bulk query")
     logger.info("user_ids = [user.id for user in users]")
-    logger.info(
-        "profiles = db.query(Profile).filter(Profile.user_id.in_(user_ids)).all()"
-    )
+    logger.info("profiles = db.query(Profile).filter(Profile.user_id.in_(user_ids)).all()")
     logger.info("profile_dict = {p.user_id: p for p in profiles}")
     logger.info("```")
     logger.info("")
@@ -342,9 +316,7 @@ async def demonstrate_monitoring_setup():
     logger.info("        execution_time = time.time() - start_time")
     logger.info("        ")
     logger.info("        if execution_time > 1.0:  # Log slow operations")
-    logger.warning(
-        "            logging.warning(f'{func.__name__} took {execution_time:.2f}s')"
-    )
+    logger.warning("            logging.warning(f'{func.__name__} took {execution_time:.2f}s')")
     logger.info("        ")
     logger.info("        return result")
     logger.info("    return wrapper")
@@ -358,9 +330,7 @@ async def demonstrate_monitoring_setup():
     logger.info("    used_memory = info['used_memory_human']")
     logger.info("    connected_clients = info['connected_clients']")
     logger.info("    ")
-    logger.info(
-        "    logging.info(f'Redis memory: {used_memory}, Clients: {connected_clients}')"
-    )
+    logger.info("    logging.info(f'Redis memory: {used_memory}, Clients: {connected_clients}')")
     logger.info("```")
     logger.info("")
 

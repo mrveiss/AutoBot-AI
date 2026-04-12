@@ -23,8 +23,8 @@ Usage::
 import json
 import logging
 import time
-from typing import Any, Dict, Optional
 from enum import Enum
+from typing import Any, Dict, Optional
 
 from autobot_shared.redis_client import get_redis_client
 

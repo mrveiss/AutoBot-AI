@@ -104,9 +104,7 @@ class ConfigMigrator:
                 if old_import in modified_content:
                     modified_content = modified_content.replace(old_import, new_import)
                     changes_made = True
-                    self.migration_log.append(
-                        f"Replaced '{old_import}' with '{new_import}' in {file_path}"
-                    )
+                    self.migration_log.append(f"Replaced '{old_import}' with '{new_import}' in {file_path}")
 
             # Handle variable reference updates
             variable_updates = {
@@ -120,9 +118,7 @@ class ConfigMigrator:
                 if re.search(pattern, modified_content):
                     modified_content = re.sub(pattern, new_var, modified_content)
                     changes_made = True
-                    self.migration_log.append(
-                        f"Updated variable reference '{old_var}' to '{new_var}' in {file_path}"
-                    )
+                    self.migration_log.append(f"Updated variable reference '{old_var}' to '{new_var}' in {file_path}")
 
             # Write back if changes were made
             if changes_made:
@@ -171,9 +167,7 @@ class ConfigMigrator:
             try:
                 if self.migrate_file(file_path):
                     stats["files_migrated"] += 1
-                    stats["changes_made"] += len(
-                        [log for log in self.migration_log if str(file_path) in log]
-                    )
+                    stats["changes_made"] += len([log for log in self.migration_log if str(file_path) in log])
             except Exception as e:
                 stats["files_failed"] += 1
                 logger.error("Migration failed for %s: %s", file_path, e)
@@ -232,9 +226,7 @@ class ConfigMigrator:
             for log_entry in self.migration_log[-50:]:  # Last 50 entries
                 f.write(f"- {log_entry}\n")
 
-            f.write(
-                "\n**Total configuration code reduced**: ~1,600 lines consolidated into unified system\n"
-            )
+            f.write("\n**Total configuration code reduced**: ~1,600 lines consolidated into unified system\n")
 
         logger.info("📄 Migration report saved to %s", report_path)
 
@@ -243,9 +235,7 @@ def main():
     """Main migration function"""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Migrate to consolidated configuration system"
-    )
+    parser = argparse.ArgumentParser(description="Migrate to consolidated configuration system")
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -265,9 +255,7 @@ def main():
     stats = migrator.run_migration(dry_run=args.dry_run)
 
     logger.info("\n🎊 CONSOLIDATION COMPLETE!")
-    logger.info(
-        f"📊 Files migrated: {stats['files_migrated']}/{stats['files_scanned']}"
-    )
+    logger.info(f"📊 Files migrated: {stats['files_migrated']}/{stats['files_scanned']}")
     logger.info(f"🔧 Changes made: {stats['changes_made']}")
     if stats["files_failed"] > 0:
         logger.error(f"⚠️  Files failed: {stats['files_failed']}")

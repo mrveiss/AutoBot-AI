@@ -26,9 +26,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/infrastructure", tags=["infrastructure"])
 
 # Directory where infrastructure playbooks are stored
-PLAYBOOKS_DIR = os.getenv(
-    "SLM_INFRASTRUCTURE_PLAYBOOKS_DIR", "/opt/autobot/autobot-slm-backend/ansible"
-)
+PLAYBOOKS_DIR = os.getenv("SLM_INFRASTRUCTURE_PLAYBOOKS_DIR", "/opt/autobot/autobot-slm-backend/ansible")
 
 
 class PlaybookCategory(str, Enum):
@@ -137,8 +135,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
     PlaybookInfo(
         id="monitoring-stack",
         name="Monitoring Stack Setup",
-        description="Deploy Prometheus, Grafana, and Alertmanager for "
-        "comprehensive fleet monitoring and alerting.",
+        description="Deploy Prometheus, Grafana, and Alertmanager for " "comprehensive fleet monitoring and alerting.",
         category=PlaybookCategory.MONITORING,
         playbook_file="deploy-slm-manager.yml",
         target_hosts=["00-SLM-Manager"],
@@ -153,8 +150,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
     PlaybookInfo(
         id="postgresql-db",
         name="PostgreSQL Database Setup",
-        description="Deploy PostgreSQL 16 database server for SLM "
-        "backend data persistence.",
+        description="Deploy PostgreSQL 16 database server for SLM " "backend data persistence.",
         category=PlaybookCategory.DATABASE,
         playbook_file="deploy-slm-manager.yml",
         target_hosts=["00-SLM-Manager"],
@@ -471,9 +467,7 @@ async def execute_playbook(
     _executions[execution_id] = execution
 
     # Start execution in background
-    asyncio.create_task(
-        _run_playbook(execution_id, playbook, request.variables, request.limit_hosts)
-    )
+    asyncio.create_task(_run_playbook(execution_id, playbook, request.variables, request.limit_hosts))
 
     logger.info(
         "Infrastructure playbook execution started: %s (%s) by %s",
@@ -605,8 +599,7 @@ async def _run_playbook(
             execution.status = PlaybookStatus.FAILED
             execution.completed_at = datetime.now(timezone.utc)
             execution.output.append(
-                f"[ERROR] Playbook not found: {playbook_path}. "
-                "Deploy playbooks via Ansible first."
+                f"[ERROR] Playbook not found: {playbook_path}. " "Deploy playbooks via Ansible first."
             )
             logger.error("Playbook file missing: %s", playbook_path)
             return
@@ -619,8 +612,7 @@ async def _run_playbook(
             execution.status = PlaybookStatus.FAILED
             execution.completed_at = datetime.now(timezone.utc)
             execution.output.append(
-                "[ERROR] No nodes registered — cannot build inventory. "
-                "Register nodes via the setup wizard first."
+                "[ERROR] No nodes registered — cannot build inventory. " "Register nodes via the setup wizard first."
             )
             logger.error("Dynamic inventory generation failed: no nodes in DB")
             return
@@ -634,9 +626,7 @@ async def _run_playbook(
         # Caller-supplied variables take precedence over stored secrets.
         merged_variables = {**deploy_secrets, **(variables or {})}
 
-        cmd = _build_playbook_command(
-            playbook_path, inventory_path, playbook, limit_hosts, merged_variables
-        )
+        cmd = _build_playbook_command(playbook_path, inventory_path, playbook, limit_hosts, merged_variables)
 
         execution.output.append(f"[INFO] Running: {' '.join(cmd)}")
 

@@ -41,10 +41,9 @@ logger = logging.getLogger(__name__)
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from constants.threshold_constants import TimingConstants
+from scripts.backup_manager import BackupManager
 from utils.script_utils import ScriptFormatter
 from utils.service_registry import get_service_registry
-
-from scripts.backup_manager import BackupManager
 
 
 class DeploymentStrategy:
@@ -148,9 +147,7 @@ class ZeroDowntimeDeployer:
                 # Deep merge configuration
                 default_config.update(file_config)
             except Exception as e:
-                self.print_step(
-                    f"Warning: Could not load deployment config: {e}", "warning"
-                )
+                self.print_step(f"Warning: Could not load deployment config: {e}", "warning")
 
         return default_config
 
@@ -191,26 +188,18 @@ class ZeroDowntimeDeployer:
 
             # Execute strategy-specific deployment
             if strategy == DeploymentStrategy.BLUE_GREEN:
-                success = await self._deploy_blue_green(
-                    deployment_record, version, **kwargs
-                )
+                success = await self._deploy_blue_green(deployment_record, version, **kwargs)
             elif strategy == DeploymentStrategy.ROLLING:
-                success = await self._deploy_rolling(
-                    deployment_record, version, **kwargs
-                )
+                success = await self._deploy_rolling(deployment_record, version, **kwargs)
             elif strategy == DeploymentStrategy.CANARY:
-                success = await self._deploy_canary(
-                    deployment_record, version, **kwargs
-                )
+                success = await self._deploy_canary(deployment_record, version, **kwargs)
             else:
                 self.print_step(f"Unknown deployment strategy: {strategy}", "error")
                 success = False
 
             # Update deployment status
             deployment_record["completed_at"] = datetime.now().isoformat()
-            deployment_record["status"] = (
-                DeploymentStatus.COMPLETED if success else DeploymentStatus.FAILED
-            )
+            deployment_record["status"] = DeploymentStatus.COMPLETED if success else DeploymentStatus.FAILED
 
             # Save deployment record
             self._save_deployment_record(deployment_record)
@@ -262,9 +251,7 @@ class ZeroDowntimeDeployer:
             green_port = service_config["port"] + 1000  # Offset for green
 
             # Start green service
-            success = await self._start_green_service(
-                service_name, green_port, version, service_config
-            )
+            success = await self._start_green_service(service_name, green_port, version, service_config)
 
             if not success:
                 self.print_step(f"Failed to deploy {service_name} to green", "error")
@@ -303,9 +290,7 @@ class ZeroDowntimeDeployer:
         Returns:
             True if all services remain healthy, False otherwise.
         """
-        self.print_step(
-            f"Monitoring green environment for {monitoring_duration}s", "info"
-        )
+        self.print_step(f"Monitoring green environment for {monitoring_duration}s", "info")
 
         for i in range(monitoring_duration // int(TimingConstants.LONG_DELAY)):
             await asyncio.sleep(TimingConstants.LONG_DELAY)
@@ -315,9 +300,7 @@ class ZeroDowntimeDeployer:
             for service_name, service_info in green_services.items():
                 try:
                     async with aiohttp.ClientSession() as session:
-                        async with session.get(
-                            service_info["health_url"], timeout=5
-                        ) as response:
+                        async with session.get(service_info["health_url"], timeout=5) as response:
                             if response.status != 200:
                                 all_healthy = False
                                 break
@@ -330,9 +313,7 @@ class ZeroDowntimeDeployer:
 
         return True
 
-    async def _deploy_blue_green(
-        self, deployment_record: Dict[str, Any], version: str, **kwargs
-    ) -> bool:
+    async def _deploy_blue_green(self, deployment_record: Dict[str, Any], version: str, **kwargs) -> bool:
         """Execute blue-green deployment."""
         self.print_step("Starting blue-green deployment", "deploy")
 
@@ -373,9 +354,7 @@ class ZeroDowntimeDeployer:
         # Step 4: Verify green environment under load (Issue #281: uses extracted helper)
         self.print_step("Phase 4: Verifying green environment under load", "test")
 
-        if not await self._verify_green_under_load(
-            green_services, monitoring_duration=120
-        ):
+        if not await self._verify_green_under_load(green_services, monitoring_duration=120):
             self.print_step("Green environment became unhealthy", "error")
             await self._switch_traffic_to_blue()
             await self._cleanup_green_environment(green_services)
@@ -406,9 +385,7 @@ class ZeroDowntimeDeployer:
         **kwargs,
     ) -> bool:
         """Execute rolling deployment."""
-        self.print_step(
-            f"Starting rolling deployment (batch size: {batch_size})", "deploy"
-        )
+        self.print_step(f"Starting rolling deployment (batch size: {batch_size})", "deploy")
 
         deployment_record["status"] = DeploymentStatus.DEPLOYING
 
@@ -419,18 +396,14 @@ class ZeroDowntimeDeployer:
         for i in range(0, len(services), batch_size):
             batch = services[i : i + batch_size]
 
-            self.print_step(
-                f"Rolling batch {i//batch_size + 1}: {', '.join(batch)}", "deploy"
-            )
+            self.print_step(f"Rolling batch {i//batch_size + 1}: {', '.join(batch)}", "deploy")
 
             # Deploy each service in the batch
             for service_name in batch:
                 success = await self._rolling_update_service(service_name, version)
 
                 if not success:
-                    self.print_step(
-                        f"Rolling update failed for {service_name}", "error"
-                    )
+                    self.print_step(f"Rolling update failed for {service_name}", "error")
                     return False
 
                 deployment_record["steps"].append(
@@ -455,9 +428,7 @@ class ZeroDowntimeDeployer:
         **kwargs,
     ) -> bool:
         """Execute canary deployment."""
-        self.print_step(
-            f"Starting canary deployment ({traffic_percent}% traffic)", "deploy"
-        )
+        self.print_step(f"Starting canary deployment ({traffic_percent}% traffic)", "deploy")
 
         deployment_record["status"] = DeploymentStatus.DEPLOYING
 
@@ -469,9 +440,7 @@ class ZeroDowntimeDeployer:
             service_config = self.deployment_config["services"].get(service_name, {})
             canary_port = service_config["port"] + 2000  # Offset for canary
 
-            success = await self._start_canary_service(
-                service_name, canary_port, version, service_config
-            )
+            success = await self._start_canary_service(service_name, canary_port, version, service_config)
 
             if not success:
                 self.print_step(f"Failed to deploy canary {service_name}", "error")
@@ -483,16 +452,12 @@ class ZeroDowntimeDeployer:
             }
 
         # Configure load balancer for canary traffic
-        self.print_step(
-            f"Phase 2: Routing {traffic_percent}% traffic to canary", "switch"
-        )
+        self.print_step(f"Phase 2: Routing {traffic_percent}% traffic to canary", "switch")
         await self._configure_canary_traffic(canary_services, traffic_percent)
 
         # Monitor canary performance
         self.print_step("Phase 3: Monitoring canary performance", "test")
-        canary_healthy = await self._monitor_canary_health(
-            canary_services, duration=300
-        )  # 5 minutes
+        canary_healthy = await self._monitor_canary_health(canary_services, duration=300)  # 5 minutes
 
         if not canary_healthy:
             self.print_step("Canary failed health monitoring", "error")
@@ -521,9 +486,7 @@ class ZeroDowntimeDeployer:
 
         return True
 
-    async def _start_green_service(
-        self, service_name: str, port: int, version: str, config: Dict[str, Any]
-    ) -> bool:
+    async def _start_green_service(self, service_name: str, port: int, version: str, config: Dict[str, Any]) -> bool:
         """Start a service in green environment."""
         try:
             # For Docker-based services
@@ -571,9 +534,7 @@ class ZeroDowntimeDeployer:
             self.print_step(f"Error starting green {service_name}: {e}", "error")
             return False
 
-    async def _wait_for_service_health(
-        self, service_name: str, health_url: str, timeout: int
-    ) -> bool:
+    async def _wait_for_service_health(self, service_name: str, health_url: str, timeout: int) -> bool:
         """Wait for service to become healthy."""
         self.print_step(f"Waiting for {service_name} health check", "test")
 
@@ -590,9 +551,7 @@ class ZeroDowntimeDeployer:
 
             await asyncio.sleep(self.deployment_config["health_check_interval"])
 
-        self.print_step(
-            f"{service_name} failed to become healthy within {timeout}s", "error"
-        )
+        self.print_step(f"{service_name} failed to become healthy within {timeout}s", "error")
         return False
 
     async def _switch_traffic_to_green(self, green_services: Dict[str, Any]) -> bool:
@@ -603,14 +562,10 @@ class ZeroDowntimeDeployer:
             return await self._switch_nginx_to_green(green_services, lb_config)
         else:
             # Simple port switching for development
-            self.print_step(
-                "Switching to green environment (development mode)", "switch"
-            )
+            self.print_step("Switching to green environment (development mode)", "switch")
             return True
 
-    async def _switch_nginx_to_green(
-        self, green_services: Dict[str, Any], lb_config: Dict[str, Any]
-    ) -> bool:
+    async def _switch_nginx_to_green(self, green_services: Dict[str, Any], lb_config: Dict[str, Any]) -> bool:
         """Switch Nginx configuration to green environment."""
         try:
             config_file = lb_config.get("config_file")
@@ -679,12 +634,8 @@ server {{
         for service_name in green_services:
             try:
                 # Stop Docker containers
-                await asyncio.create_subprocess_shell(
-                    f"docker stop autobot-{service_name}-green 2>/dev/null || true"
-                )
-                await asyncio.create_subprocess_shell(
-                    f"docker rm autobot-{service_name}-green 2>/dev/null || true"
-                )
+                await asyncio.create_subprocess_shell(f"docker stop autobot-{service_name}-green 2>/dev/null || true")
+                await asyncio.create_subprocess_shell(f"docker rm autobot-{service_name}-green 2>/dev/null || true")
             except Exception:
                 logger.debug("Suppressed exception in try block", exc_info=True)
 
@@ -715,9 +666,7 @@ server {{
             # Stop local process (would need PID tracking in real implementation)
             await asyncio.create_subprocess_shell(f"pkill -f {service_name}")
 
-    async def _start_service(
-        self, service_name: str, version: str, config: Dict[str, Any]
-    ) -> bool:
+    async def _start_service(self, service_name: str, version: str, config: Dict[str, Any]) -> bool:
         """Start a service with specified version."""
         # Implementation would start the service
         # This is a simplified version
@@ -726,10 +675,7 @@ server {{
 
     def _save_deployment_record(self, deployment_record: Dict[str, Any]) -> None:
         """Save deployment record to file."""
-        record_file = (
-            self.deployment_dir
-            / f"deployment_{deployment_record['deployment_id']}.json"
-        )
+        record_file = self.deployment_dir / f"deployment_{deployment_record['deployment_id']}.json"
 
         with open(record_file, "w") as f:
             json.dump(deployment_record, f, indent=2)
@@ -748,9 +694,7 @@ server {{
         """List recent deployments."""
         deployments = []
 
-        for deployment_file in sorted(
-            self.deployment_dir.glob("deployment_*.json"), reverse=True
-        ):
+        for deployment_file in sorted(self.deployment_dir.glob("deployment_*.json"), reverse=True):
             if len(deployments) >= limit:
                 break
 
@@ -800,16 +744,10 @@ Examples:
         help="Deployment strategy",
     )
     parser.add_argument("--version", help="Version to deploy")
-    parser.add_argument(
-        "--batch-size", type=int, default=1, help="Rolling deployment batch size"
-    )
-    parser.add_argument(
-        "--traffic-percent", type=int, default=10, help="Canary traffic percentage"
-    )
+    parser.add_argument("--batch-size", type=int, default=1, help="Rolling deployment batch size")
+    parser.add_argument("--traffic-percent", type=int, default=10, help="Canary traffic percentage")
     parser.add_argument("--deployment-id", help="Deployment ID for rollback")
-    parser.add_argument(
-        "--deployment-dir", default="deployments", help="Deployment directory"
-    )
+    parser.add_argument("--deployment-dir", default="deployments", help="Deployment directory")
 
     return parser.parse_args()
 
@@ -890,9 +828,7 @@ def _handle_list_action(deployer: ZeroDowntimeDeployer) -> int:
 
     logger.info("\n🚀 Recent Deployments:")
     logger.info("=" * 80)
-    logger.info(
-        f"{'ID':<20} {'Strategy':<12} {'Version':<15} {'Status':<12} {'Date':<20}"
-    )
+    logger.info(f"{'ID':<20} {'Strategy':<12} {'Version':<15} {'Status':<12} {'Date':<20}")
     logger.info("-" * 80)
 
     for deployment in deployments:

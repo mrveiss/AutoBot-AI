@@ -173,9 +173,7 @@ class TemporalKnowledgeManager:
 
         return KnowledgePriority.MEDIUM  # Default
 
-    def register_content(
-        self, content_id: str, metadata: Dict[str, Any], content_hash: str
-    ) -> TemporalMetadata:
+    def register_content(self, content_id: str, metadata: Dict[str, Any], content_hash: str) -> TemporalMetadata:
         """Register new content with temporal tracking."""
         current_time = time.time()
 
@@ -198,9 +196,7 @@ class TemporalKnowledgeManager:
         # Store with content hash for change detection
         self.temporal_metadata[content_id] = temporal_meta
 
-        logger.debug(
-            f"Registered content: {content_id} (priority: {priority.value}, TTL: {ttl_hours}h)"
-        )
+        logger.debug(f"Registered content: {content_id} (priority: {priority.value}, TTL: {ttl_hours}h)")
         return temporal_meta
 
     def update_content_access(self, content_id: str):
@@ -224,16 +220,12 @@ class TemporalKnowledgeManager:
             if time_since_last > 0:
                 # Exponential moving average of update frequency
                 new_frequency = 86400 / time_since_last  # Updates per day
-                meta.update_frequency = (meta.update_frequency * 0.8) + (
-                    new_frequency * 0.2
-                )
+                meta.update_frequency = (meta.update_frequency * 0.8) + (new_frequency * 0.2)
 
             meta.last_modified = current_time
             meta.freshness_score = 1.0  # Reset to fresh
 
-            logger.debug(
-                f"Updated modification: {content_id} (frequency: {meta.update_frequency:.2f}/day)"
-            )
+            logger.debug(f"Updated modification: {content_id} (frequency: {meta.update_frequency:.2f}/day)")
 
     def _update_freshness_score(self, meta: TemporalMetadata):
         """Update freshness score based on various factors."""
@@ -251,9 +243,7 @@ class TemporalKnowledgeManager:
         frequency_factor = min(1.0, meta.update_frequency / 2.0)  # Cap at 2 updates/day
 
         # Combined freshness score
-        meta.freshness_score = (
-            (age_factor * 0.5) + (access_factor * 0.3) + (frequency_factor * 0.2)
-        )
+        meta.freshness_score = (age_factor * 0.5) + (access_factor * 0.3) + (frequency_factor * 0.2)
 
     async def scan_for_expired_content(self) -> List[InvalidationJob]:
         """Scan for expired content and create invalidation jobs."""
@@ -280,18 +270,14 @@ class TemporalKnowledgeManager:
                 expired_jobs.append(job)
 
         if expired_jobs:
-            logger.info(
-                f"Found {sum(len(job.content_ids) for job in expired_jobs)} expired content items"
-            )
+            logger.info(f"Found {sum(len(job.content_ids) for job in expired_jobs)} expired content items")
 
         return expired_jobs
 
     async def process_invalidation_job(self, job: InvalidationJob, kb_instance):
         """Process an invalidation job by removing expired content."""
         try:
-            logger.info(
-                f"Processing invalidation job: {len(job.content_ids)} items (priority: {job.priority.value})"
-            )
+            logger.info(f"Processing invalidation job: {len(job.content_ids)} items (priority: {job.priority.value})")
 
             # Delete all facts in parallel - eliminates N+1 sequential deletions
             async def delete_content(content_id: str) -> bool:
@@ -320,9 +306,7 @@ class TemporalKnowledgeManager:
             # Update analytics
             self.temporal_analytics["total_invalidations"] += removed_count
 
-            logger.info(
-                f"Invalidation job completed: {removed_count}/{len(job.content_ids)} items removed"
-            )
+            logger.info(f"Invalidation job completed: {removed_count}/{len(job.content_ids)} items removed")
 
         except Exception as e:
             logger.error("Invalidation job failed: %s", e)
@@ -346,9 +330,7 @@ class TemporalKnowledgeManager:
                 refresh_candidates.append(content_id)
 
         if refresh_candidates:
-            logger.info(
-                f"Scheduled smart refresh for {len(refresh_candidates)} content items"
-            )
+            logger.info(f"Scheduled smart refresh for {len(refresh_candidates)} content items")
 
         return refresh_candidates
 
@@ -427,12 +409,8 @@ class TemporalKnowledgeManager:
         ) = self._collect_distribution_stats()
 
         avg_age = sum(ages) / len(ages) if ages else 0
-        avg_access_count = (
-            sum(access_counts) / len(access_counts) if access_counts else 0
-        )
-        avg_freshness = (
-            sum(freshness_scores) / len(freshness_scores) if freshness_scores else 0
-        )
+        avg_access_count = sum(access_counts) / len(access_counts) if access_counts else 0
+        avg_freshness = sum(freshness_scores) / len(freshness_scores) if freshness_scores else 0
 
         return {
             "total_content": total_content,
@@ -448,9 +426,7 @@ class TemporalKnowledgeManager:
             "analysis_timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
-    async def start_background_processing(
-        self, kb_instance, check_interval_minutes: int = 30
-    ):
+    async def start_background_processing(self, kb_instance, check_interval_minutes: int = 30):
         """Start background processing for temporal management."""
         if self.is_running:
             logger.warning("Background processing already running")
@@ -459,9 +435,7 @@ class TemporalKnowledgeManager:
         self.is_running = True
         self.check_interval_minutes = check_interval_minutes
 
-        logger.info(
-            f"Starting temporal background processing (interval: {check_interval_minutes} minutes)"
-        )
+        logger.info(f"Starting temporal background processing (interval: {check_interval_minutes} minutes)")
 
         try:
             while self.is_running:
@@ -494,9 +468,7 @@ class TemporalKnowledgeManager:
                     break
                 except Exception as e:
                     logger.error("Temporal background processing error: %s", e)
-                    await asyncio.sleep(
-                        TimingConstants.STANDARD_TIMEOUT
-                    )  # Wait before retry
+                    await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)  # Wait before retry
 
         finally:
             self.is_running = False

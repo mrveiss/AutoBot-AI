@@ -31,9 +31,7 @@ DEFAULT_REPO_PATH = os.environ.get("SLM_REPO_PATH", "/opt/autobot")
 # Remote agent installation path on managed nodes
 REMOTE_AGENT_PATH = "/opt/slm-agent"
 # SSH key for connecting to managed nodes
-SSH_KEY_PATH = os.environ.get(
-    "SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key"  # noqa: ssot-path
-)
+SSH_KEY_PATH = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")  # noqa: ssot-path
 
 
 class CodeDistributor:
@@ -56,9 +54,7 @@ class CodeDistributor:
         """Get current commit hash from database settings."""
         try:
             async with db_service.session() as db:
-                result = await db.execute(
-                    select(Setting).where(Setting.key == "slm_agent_latest_commit")
-                )
+                result = await db.execute(select(Setting).where(Setting.key == "slm_agent_latest_commit"))
                 setting = result.scalar_one_or_none()
                 if setting:
                     return setting.value
@@ -105,9 +101,7 @@ class CodeDistributor:
 
                 # Create and add version.json
                 built_at = datetime.utcnow().isoformat()
-                version_content = (
-                    f'{{"commit": "{commit_hash}", "built_at": "{built_at}"}}'
-                )
+                version_content = f'{{"commit": "{commit_hash}", "built_at": "{built_at}"}}'
                 version_bytes = version_content.encode("utf-8")
                 version_info = tarfile.TarInfo(name="version.json")
                 version_info.size = len(version_bytes)
@@ -156,9 +150,7 @@ class CodeDistributor:
             cmd.extend(["-i", SSH_KEY_PATH])
         return cmd
 
-    async def _ensure_remote_directories(
-        self, node_id: str, ip_address: str, ssh_user: str, ssh_port: int
-    ) -> None:
+    async def _ensure_remote_directories(self, node_id: str, ip_address: str, ssh_user: str, ssh_port: int) -> None:
         """
         Create remote directory structure for agent installation.
 
@@ -187,9 +179,7 @@ class CodeDistributor:
         except Exception as e:
             logger.warning("Could not create remote dir on %s: %s", node_id, e)
 
-    async def _create_slm_package_init(
-        self, node_id: str, ip_address: str, ssh_user: str, ssh_port: int
-    ) -> None:
+    async def _create_slm_package_init(self, node_id: str, ip_address: str, ssh_user: str, ssh_port: int) -> None:
         """
         Create slm package __init__.py for proper Python import.
 
@@ -208,9 +198,7 @@ class CodeDistributor:
             "# Author: mrveiss\\n"
             '"""SLM Package."""'
         )
-        slm_init_script = (
-            f"echo -e '{slm_init_content}' > {REMOTE_AGENT_PATH}/slm/__init__.py"
-        )
+        slm_init_script = f"echo -e '{slm_init_content}' > {REMOTE_AGENT_PATH}/slm/__init__.py"
         slm_init_cmd.extend([f"{ssh_user}@{ip_address}", slm_init_script])
 
         try:
@@ -331,9 +319,7 @@ class CodeDistributor:
         except Exception as e:
             logger.warning("Could not update version.json on %s: %s", node_id, e)
 
-    async def _restart_slm_agent(
-        self, node_id: str, ip_address: str, ssh_user: str, ssh_port: int
-    ) -> None:
+    async def _restart_slm_agent(self, node_id: str, ip_address: str, ssh_user: str, ssh_port: int) -> None:
         """
         Restart slm-agent service on remote node.
 
@@ -400,10 +386,7 @@ class CodeDistributor:
 
     def _build_ssh_opts(self, ssh_port: int) -> str:
         """Helper for trigger_node_sync. Ref: #1088."""
-        ssh_opts = (
-            f"ssh -o StrictHostKeyChecking=accept-new "
-            f"-o ConnectTimeout=30 -p {ssh_port}"
-        )
+        ssh_opts = f"ssh -o StrictHostKeyChecking=accept-new " f"-o ConnectTimeout=30 -p {ssh_port}"
         if Path(SSH_KEY_PATH).exists():
             ssh_opts += f" -i {SSH_KEY_PATH}"
         return ssh_opts
@@ -458,9 +441,7 @@ class CodeDistributor:
             return False, error_msg
 
         # Step 3: Update version.json on remote node
-        await self._update_remote_version(
-            node_id, ip_address, ssh_user, ssh_port, commit_hash
-        )
+        await self._update_remote_version(node_id, ip_address, ssh_user, ssh_port, commit_hash)
 
         # Step 4: Restart slm-agent service if requested
         if restart and strategy != "manual":

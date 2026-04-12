@@ -195,9 +195,7 @@ class FrontendAnalyzer:
 
         logger.info("Frontend Analyzer initialized")
 
-    async def analyze_frontend_code(
-        self, root_path: str = ".", patterns: List[str] = None
-    ) -> Dict[str, Any]:
+    async def analyze_frontend_code(self, root_path: str = ".", patterns: List[str] = None) -> Dict[str, Any]:
         """Analyze frontend code for issues and patterns"""
 
         start_time = time.time()
@@ -223,9 +221,7 @@ class FrontendAnalyzer:
         framework_usage = self._analyze_framework_usage(components)
 
         # Performance analysis
-        performance_analysis = await self._analyze_frontend_performance(
-            components, issues
-        )
+        performance_analysis = await self._analyze_frontend_performance(components, issues)
 
         # Accessibility analysis
         accessibility_analysis = self._analyze_accessibility_issues(issues)
@@ -234,9 +230,7 @@ class FrontendAnalyzer:
         security_analysis = self._analyze_frontend_security(issues)
 
         # Generate recommendations
-        recommendations = self._generate_frontend_recommendations(
-            issues, framework_usage
-        )
+        recommendations = self._generate_frontend_recommendations(issues, framework_usage)
 
         analysis_time = time.time() - start_time
 
@@ -261,9 +255,7 @@ class FrontendAnalyzer:
         logger.info(f"Frontend analysis complete in {analysis_time:.2f}s")
         return results
 
-    async def _discover_frontend_components(
-        self, root_path: str, patterns: List[str]
-    ) -> List[FrontendComponent]:
+    async def _discover_frontend_components(self, root_path: str, patterns: List[str]) -> List[FrontendComponent]:
         """Discover frontend components"""
 
         components = []
@@ -281,9 +273,7 @@ class FrontendAnalyzer:
 
         return components
 
-    async def _analyze_file_component(
-        self, file_path: str
-    ) -> Optional[FrontendComponent]:
+    async def _analyze_file_component(self, file_path: str) -> Optional[FrontendComponent]:
         """Analyze a single file as a frontend component"""
 
         try:
@@ -462,23 +452,15 @@ class FrontendAnalyzer:
 
         file_path_obj = Path(file_path)
         test_patterns = [
-            file_path_obj.parent
-            / f"{file_path_obj.stem}.test.{file_path_obj.suffix[1:]}",
-            file_path_obj.parent
-            / f"{file_path_obj.stem}.spec.{file_path_obj.suffix[1:]}",
-            file_path_obj.parent
-            / "__tests__"
-            / f"{file_path_obj.stem}.test.{file_path_obj.suffix[1:]}",
-            file_path_obj.parent
-            / "tests"
-            / f"{file_path_obj.stem}.test.{file_path_obj.suffix[1:]}",
+            file_path_obj.parent / f"{file_path_obj.stem}.test.{file_path_obj.suffix[1:]}",
+            file_path_obj.parent / f"{file_path_obj.stem}.spec.{file_path_obj.suffix[1:]}",
+            file_path_obj.parent / "__tests__" / f"{file_path_obj.stem}.test.{file_path_obj.suffix[1:]}",
+            file_path_obj.parent / "tests" / f"{file_path_obj.stem}.test.{file_path_obj.suffix[1:]}",
         ]
 
         return any(test_file.exists() for test_file in test_patterns)
 
-    async def _analyze_frontend_issues(
-        self, root_path: str, patterns: List[str]
-    ) -> List[FrontendIssue]:
+    async def _analyze_frontend_issues(self, root_path: str, patterns: List[str]) -> List[FrontendIssue]:
         """Analyze frontend code for issues"""
 
         issues = []
@@ -512,15 +494,11 @@ class FrontendAnalyzer:
             # Analyze different issue categories
             for category, patterns in self.frontend_issues.items():
                 # Skip framework-specific patterns for other frameworks
-                if category.endswith("_specific") and not category.startswith(
-                    framework
-                ):
+                if category.endswith("_specific") and not category.startswith(framework):
                     continue
 
                 for pattern, description, severity in patterns:
-                    for match in re.finditer(
-                        pattern, content, re.MULTILINE | re.IGNORECASE
-                    ):
+                    for match in re.finditer(pattern, content, re.MULTILINE | re.IGNORECASE):
                         line_num = content[: match.start()].count("\n") + 1
 
                         issues.append(
@@ -569,9 +547,7 @@ class FrontendAnalyzer:
 
         return "Review and fix this issue according to best practices"
 
-    def _analyze_framework_usage(
-        self, components: List[FrontendComponent]
-    ) -> Dict[str, Any]:
+    def _analyze_framework_usage(self, components: List[FrontendComponent]) -> Dict[str, Any]:
         """Analyze framework usage across components"""
 
         usage = {}
@@ -586,16 +562,12 @@ class FrontendAnalyzer:
 
             # Track common patterns
             if component.lifecycle_hooks:
-                usage[framework].setdefault("lifecycle_hooks", []).extend(
-                    component.lifecycle_hooks
-                )
+                usage[framework].setdefault("lifecycle_hooks", []).extend(component.lifecycle_hooks)
 
         # Calculate percentages and clean up
         total_components = len(components)
         for framework, data in usage.items():
-            data["percentage"] = (
-                (data["count"] / total_components * 100) if total_components > 0 else 0
-            )
+            data["percentage"] = (data["count"] / total_components * 100) if total_components > 0 else 0
             if "lifecycle_hooks" in data:
                 data["lifecycle_hooks"] = list(set(data["lifecycle_hooks"]))
 
@@ -612,11 +584,7 @@ class FrontendAnalyzer:
             "total_performance_issues": len(performance_issues),
             "issues_by_type": self._group_issues_by_description(performance_issues),
             "components_with_issues": len(
-                [
-                    c
-                    for c in components
-                    if any(i.file_path == c.file_path for i in performance_issues)
-                ]
+                [c for c in components if any(i.file_path == c.file_path for i in performance_issues)]
             ),
             "recommendations": [
                 "Remove console.log statements from production code",
@@ -626,9 +594,7 @@ class FrontendAnalyzer:
             ],
         }
 
-    def _analyze_accessibility_issues(
-        self, issues: List[FrontendIssue]
-    ) -> Dict[str, Any]:
+    def _analyze_accessibility_issues(self, issues: List[FrontendIssue]) -> Dict[str, Any]:
         """Analyze accessibility issues"""
 
         a11y_issues = [i for i in issues if i.issue_type == "accessibility"]
@@ -636,9 +602,7 @@ class FrontendAnalyzer:
         return {
             "total_accessibility_issues": len(a11y_issues),
             "issues_by_severity": self._group_issues_by_severity(a11y_issues),
-            "wcag_compliance_score": max(
-                0, 100 - len(a11y_issues) * 5
-            ),  # Rough scoring
+            "wcag_compliance_score": max(0, 100 - len(a11y_issues) * 5),  # Rough scoring
             "recommendations": [
                 "Add alt attributes to all images",
                 "Ensure keyboard navigation support",
@@ -654,19 +618,11 @@ class FrontendAnalyzer:
 
         return {
             "total_security_issues": len(security_issues),
-            "critical_issues": len(
-                [i for i in security_issues if i.severity == "critical"]
-            ),
-            "high_priority_issues": len(
-                [i for i in security_issues if i.severity == "high"]
-            ),
+            "critical_issues": len([i for i in security_issues if i.severity == "critical"]),
+            "high_priority_issues": len([i for i in security_issues if i.severity == "high"]),
             "security_score": max(
                 0,
-                100
-                - len(
-                    [i for i in security_issues if i.severity in ["critical", "high"]]
-                )
-                * 20,
+                100 - len([i for i in security_issues if i.severity in ["critical", "high"]]) * 20,
             ),
             "recommendations": [
                 "Sanitize all user inputs",
@@ -686,34 +642,24 @@ class FrontendAnalyzer:
         # Security recommendations
         security_issues = [i for i in issues if i.issue_type == "security"]
         if security_issues:
-            recommendations.append(
-                f"🛡️ Fix {len(security_issues)} security issues to prevent XSS and code injection"
-            )
+            recommendations.append(f"🛡️ Fix {len(security_issues)} security issues to prevent XSS and code injection")
 
         # Performance recommendations
         perf_issues = [i for i in issues if i.issue_type == "performance"]
         if perf_issues:
-            recommendations.append(
-                f"⚡ Optimize {len(perf_issues)} performance issues for better user experience"
-            )
+            recommendations.append(f"⚡ Optimize {len(perf_issues)} performance issues for better user experience")
 
         # Accessibility recommendations
         a11y_issues = [i for i in issues if i.issue_type == "accessibility"]
         if a11y_issues:
-            recommendations.append(
-                f"♿ Address {len(a11y_issues)} accessibility issues for better inclusion"
-            )
+            recommendations.append(f"♿ Address {len(a11y_issues)} accessibility issues for better inclusion")
 
         # Framework-specific recommendations
         if "vue" in framework_usage:
-            recommendations.append(
-                "🔧 Consider Vue 3 Composition API for better code organization"
-            )
+            recommendations.append("🔧 Consider Vue 3 Composition API for better code organization")
 
         if "react" in framework_usage:
-            recommendations.append(
-                "🔧 Use React Hooks and avoid deprecated lifecycle methods"
-            )
+            recommendations.append("🔧 Use React Hooks and avoid deprecated lifecycle methods")
 
         # General recommendations
         recommendations.extend(
@@ -756,9 +702,7 @@ class FrontendAnalyzer:
 
         return max(0.0, min(100.0, score))
 
-    def _group_issues_by_description(
-        self, issues: List[FrontendIssue]
-    ) -> Dict[str, int]:
+    def _group_issues_by_description(self, issues: List[FrontendIssue]) -> Dict[str, int]:
         """Group issues by description"""
         groups = {}
         for issue in issues:
@@ -829,9 +773,7 @@ class FrontendAnalyzer:
         await self._ensure_redis()
         if self.redis_client:
             try:
-                await self.redis_client.setex(
-                    self.FRONTEND_KEY, 3600, json.dumps(results, default=str)
-                )
+                await self.redis_client.setex(self.FRONTEND_KEY, 3600, json.dumps(results, default=str))
             except Exception as e:
                 logger.warning(f"Failed to cache results: {e}")
 
@@ -857,9 +799,7 @@ async def main():
     # Framework usage
     logger.info("\n=== Framework Usage ===")
     for framework, usage in results["framework_usage"].items():
-        logger.info(
-            f"{framework}: {usage['count']} components ({usage['percentage']:.1f}%)"
-        )
+        logger.info(f"{framework}: {usage['count']} components ({usage['percentage']:.1f}%)")
 
     # Issues by category
     categories = ["security", "performance", "accessibility", "best_practices"]
@@ -868,9 +808,7 @@ async def main():
         if category_issues:
             logger.info(f"\n=== {category.replace('_', ' ').title()} Issues ===")
             for issue in category_issues[:5]:  # Show first 5
-                logger.info(
-                    f"• {issue['description']} ({issue['file_path']}:{issue['line_number']})"
-                )
+                logger.info(f"• {issue['description']} ({issue['file_path']}:{issue['line_number']})")
 
 
 if __name__ == "__main__":

@@ -113,9 +113,7 @@ class TestGetGpuVramAll:
         mock_pynvml = MagicMock()
         mock_pynvml.nvmlDeviceGetCount.return_value = 2
         free_values = [_gb(4.0), _gb(24.0)]
-        mock_pynvml.nvmlDeviceGetMemoryInfo.side_effect = [
-            _make_mem_info(v) for v in free_values
-        ]
+        mock_pynvml.nvmlDeviceGetMemoryInfo.side_effect = [_make_mem_info(v) for v in free_values]
         with patch.dict("sys.modules", {"pynvml": mock_pynvml}):
             _, per_gpu = analyzer._get_gpu_vram_all()
         assert per_gpu[0] == pytest.approx(4.0, rel=1e-3)
@@ -163,9 +161,11 @@ class TestGetCurrentResourcesMultiGpu:
             _make_mem_info(_gb(10.0)),
         ]
 
-        with patch("psutil.cpu_percent", return_value=30.0), patch(
-            "psutil.virtual_memory", return_value=self._fake_virtual_memory()
-        ), patch.dict("sys.modules", {"pynvml": mock_pynvml}):
+        with (
+            patch("psutil.cpu_percent", return_value=30.0),
+            patch("psutil.virtual_memory", return_value=self._fake_virtual_memory()),
+            patch.dict("sys.modules", {"pynvml": mock_pynvml}),
+        ):
             resources = analyzer.get_current_resources()
 
         assert isinstance(resources, SystemResources)
@@ -175,9 +175,11 @@ class TestGetCurrentResourcesMultiGpu:
     def test_no_gpu_gives_zero_vram(self):
         """No GPU system: both VRAM fields are 0 / empty."""
         analyzer = SystemResourceAnalyzer()
-        with patch("psutil.cpu_percent", return_value=30.0), patch(
-            "psutil.virtual_memory", return_value=self._fake_virtual_memory()
-        ), patch.dict("sys.modules", {"pynvml": None}):
+        with (
+            patch("psutil.cpu_percent", return_value=30.0),
+            patch("psutil.virtual_memory", return_value=self._fake_virtual_memory()),
+            patch.dict("sys.modules", {"pynvml": None}),
+        ):
             resources = analyzer.get_current_resources()
 
         assert resources.gpu_vram_gb == 0.0

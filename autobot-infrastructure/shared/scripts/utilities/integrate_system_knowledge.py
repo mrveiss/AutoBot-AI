@@ -14,9 +14,7 @@ import sys
 from pathlib import Path
 
 # Setup logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -36,9 +34,7 @@ def _build_man_content_parts(man_data: dict, command: str, section: int) -> list
 
     for opt in man_data.get("options", [])[:20]:  # Top 20 options
         if isinstance(opt, dict):
-            content_parts.append(
-                f"- `{opt.get('flag', '')}`: {opt.get('description', '')}"
-            )
+            content_parts.append(f"- `{opt.get('flag', '')}`: {opt.get('description', '')}")
         else:
             content_parts.append(f"- {opt}")
 
@@ -47,9 +43,7 @@ def _build_man_content_parts(man_data: dict, command: str, section: int) -> list
         content_parts.append("## Examples:")
         for ex in man_data.get("examples", [])[:5]:  # Top 5 examples
             if isinstance(ex, dict):
-                content_parts.append(
-                    f"- `{ex.get('command', '')}`: {ex.get('description', '')}"
-                )
+                content_parts.append(f"- `{ex.get('command', '')}`: {ex.get('description', '')}")
             else:
                 content_parts.append(f"- {ex}")
 
@@ -201,9 +195,7 @@ async def integrate_autobot_documentation(kb_v2):
             logger.error("Error integrating %s: %s", doc_path, e)
             continue
 
-    logger.info(
-        "✓ Integrated %s documentation files into Knowledge Base V2", integrated_count
-    )
+    logger.info("✓ Integrated %s documentation files into Knowledge Base V2", integrated_count)
     return integrated_count
 
 

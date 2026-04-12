@@ -90,9 +90,7 @@ class ConcurrentWorkflowLimiter:
             raise ValueError("max_concurrent must be >= 1")
         self._max_concurrent = max_concurrent
         self._overflow_policy = overflow_policy
-        self._cancel_callback: Optional[Callable[[str], Awaitable[None]]] = (
-            cancel_callback
-        )
+        self._cancel_callback: Optional[Callable[[str], Awaitable[None]]] = cancel_callback
         self._running: Dict[str, float] = {}  # workflow_id → start timestamp
         self._queue: Deque[_QueuedEntry] = deque()
 
@@ -120,9 +118,7 @@ class ConcurrentWorkflowLimiter:
         - DROP_OLDEST: cancels oldest running workflow first.
         """
         if workflow_id in self._running:
-            logger.warning(
-                "ConcurrentWorkflowLimiter: workflow %s already running", workflow_id
-            )
+            logger.warning("ConcurrentWorkflowLimiter: workflow %s already running", workflow_id)
             return
 
         if self.running_count < self._max_concurrent:
@@ -170,9 +166,7 @@ class ConcurrentWorkflowLimiter:
             "running_workflow_ids": list(self._running.keys()),
         }
 
-    def register_cancel_callback(
-        self, callback: Callable[[str], Awaitable[None]]
-    ) -> None:
+    def register_cancel_callback(self, callback: Callable[[str], Awaitable[None]]) -> None:
         """
         Register the async callback invoked when DROP_OLDEST evicts a workflow.
 
@@ -260,8 +254,7 @@ class ConcurrentWorkflowLimiter:
 
         if oldest_id in self._running:
             logger.error(
-                "ConcurrentWorkflowLimiter: evicted workflow %s still running after "
-                "5 s; forcing slot removal",
+                "ConcurrentWorkflowLimiter: evicted workflow %s still running after " "5 s; forcing slot removal",
                 oldest_id,
             )
             del self._running[oldest_id]
@@ -306,9 +299,7 @@ class ConcurrencyLimitError(Exception):
     def __init__(self, workflow_id: str, limit: int) -> None:
         self.workflow_id = workflow_id
         self.limit = limit
-        super().__init__(
-            f"Concurrency limit {limit} reached — workflow '{workflow_id}' rejected"
-        )
+        super().__init__(f"Concurrency limit {limit} reached — workflow '{workflow_id}' rejected")
 
 
 # ---------------------------------------------------------------------------

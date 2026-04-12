@@ -72,9 +72,7 @@ class TestAdvancedRAGOptimizerRerankWeights(unittest.TestCase):
         mock_ce = MagicMock()
         mock_ce.predict.return_value = [ce_score]
         optimizer._cross_encoder = mock_ce
-        asyncio.get_event_loop().run_until_complete(
-            optimizer._apply_cross_encoder_scores("query", [result])
-        )
+        asyncio.get_event_loop().run_until_complete(optimizer._apply_cross_encoder_scores("query", [result]))
 
         self.assertAlmostEqual(result.rerank_score, expected, places=6)
 
@@ -92,9 +90,7 @@ class TestAdvancedRAGOptimizerRerankWeights(unittest.TestCase):
         mock_ce = MagicMock()
         mock_ce.predict.return_value = [ce_score]
         optimizer._cross_encoder = mock_ce
-        asyncio.get_event_loop().run_until_complete(
-            optimizer._apply_cross_encoder_scores("query", [result])
-        )
+        asyncio.get_event_loop().run_until_complete(optimizer._apply_cross_encoder_scores("query", [result]))
 
         self.assertAlmostEqual(result.rerank_score, expected, places=6)
 
@@ -114,9 +110,7 @@ class TestAdvancedRAGOptimizerRerankWeights(unittest.TestCase):
         mock_ce = MagicMock()
         mock_ce.predict.return_value = [ce_score]
         optimizer._cross_encoder = mock_ce
-        asyncio.get_event_loop().run_until_complete(
-            optimizer._apply_cross_encoder_scores("query", [result])
-        )
+        asyncio.get_event_loop().run_until_complete(optimizer._apply_cross_encoder_scores("query", [result]))
 
         self.assertAlmostEqual(result.rerank_score, expected, places=6)
 

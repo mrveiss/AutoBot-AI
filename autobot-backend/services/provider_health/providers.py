@@ -13,9 +13,9 @@ import aiohttp
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.ssot_config import get_ollama_url
+from constants.model_constants import ANTHROPIC_CLAUDE3_HAIKU_DATED
 
 from .base import BaseProviderHealth, ProviderHealthResult, ProviderStatus
-from constants.model_constants import ANTHROPIC_CLAUDE3_HAIKU_DATED
 
 logger = logging.getLogger(__name__)
 

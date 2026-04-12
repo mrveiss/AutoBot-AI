@@ -43,10 +43,7 @@ async def run_agent_command(
         return {"status": "success", "output": result["stdout"]}
     else:
         # Combine stderr and error info for backward compatibility
-        error_msg = (
-            result["stderr"]
-            or f"Command failed with return code {result['return_code']}"
-        )
+        error_msg = result["stderr"] or f"Command failed with return code {result['return_code']}"
         if result["status"] == "timeout":
             error_msg = f"Command timed out after {timeout} seconds"
 

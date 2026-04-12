@@ -45,7 +45,7 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-from constants.ttl_constants import TTL_24_HOURS, TTL_7_DAYS
+from constants.ttl_constants import TTL_7_DAYS, TTL_24_HOURS
 
 from .config import AutoResearchConfig
 from .models import Experiment, ExperimentResult, HyperParams

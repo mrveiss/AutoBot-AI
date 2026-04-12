@@ -99,9 +99,7 @@ async def _run_ansible_service_action(
         )
 
         if process.returncode == 0:
-            logger.info(
-                "Service %s %s on %s completed", service_name, action, node.hostname
-            )
+            logger.info("Service %s %s on %s completed", service_name, action, node.hostname)
             return True, f"Service {service_name} {action} completed"
         else:
             error = stderr.decode("utf-8", errors="replace")
@@ -303,9 +301,7 @@ async def _parse_ansible_service_facts(
             "enabled": service_info.get("status") == "enabled",
         }
 
-        was_created, was_updated = await _upsert_service(
-            db, node_id, clean_name, svc_data, now
-        )
+        was_created, was_updated = await _upsert_service(db, node_id, clean_name, svc_data, now)
         if was_created:
             created += 1
         elif was_updated:
@@ -389,20 +385,14 @@ async def scan_node_services(
 
         # Extract service facts from Ansible result
         # service_facts returns ansible_facts.services as a dict
-        services_data = (
-            result.get("facts", {}).get(ansible_target, {}).get("services", {})
-        )
+        services_data = result.get("facts", {}).get(ansible_target, {}).get("services", {})
 
         if not services_data:
             logger.warning("No service facts returned for %s", node.hostname)
-            return _build_scan_failure_response(
-                node_id, "No service data returned from Ansible"
-            )
+            return _build_scan_failure_response(node_id, "No service data returned from Ansible")
 
         now = datetime.utcnow()
-        discovered, created, updated = await _parse_ansible_service_facts(
-            services_data, db, node_id, now
-        )
+        discovered, created, updated = await _parse_ansible_service_facts(services_data, db, node_id, now)
 
         await db.commit()
         logger.info(
@@ -605,9 +595,7 @@ async def stop_service(
     )
 
 
-async def _perform_port_aware_restart(
-    node: Node, service_name: str, port: Optional[int]
-) -> Tuple[bool, str]:
+async def _perform_port_aware_restart(node: Node, service_name: str, port: Optional[int]) -> Tuple[bool, str]:
     """Perform port-aware restart sequence.
 
     Helper for restart_service (Issue #665).
@@ -631,9 +619,7 @@ async def _perform_port_aware_restart(
         return await _run_ansible_service_action(node, service_name, "restart")
 
 
-async def _update_service_after_restart(
-    db: AsyncSession, node_id: str, service_name: str
-) -> None:
+async def _update_service_after_restart(db: AsyncSession, node_id: str, service_name: str) -> None:
     """Update service database record after successful restart.
 
     Helper for restart_service (Issue #665).
@@ -653,9 +639,7 @@ async def _update_service_after_restart(
         await db.commit()
 
 
-async def _notify_restart_result(
-    node_id: str, service_name: str, success: bool, message: str
-) -> None:
+async def _notify_restart_result(node_id: str, service_name: str, success: bool, message: str) -> None:
     """Send WebSocket notification for restart result.
 
     Helper for restart_service (Issue #665).
@@ -825,9 +809,7 @@ async def _get_restart_services(
     return _separate_and_order_services(all_services, excluded)
 
 
-async def _restart_service_list(
-    node: Node, services: list, node_id: str, is_slm: bool
-) -> tuple[list, int, int]:
+async def _restart_service_list(node: Node, services: list, node_id: str, is_slm: bool) -> tuple[list, int, int]:
     """Restart a list of services sequentially, return results.
 
     Helper for restart_all_node_services (#816).
@@ -845,9 +827,7 @@ async def _restart_service_list(
     return results, successful, failed
 
 
-async def _restart_slm_services_deferred(
-    node: Node, slm_services: list, node_id: str
-) -> None:
+async def _restart_slm_services_deferred(node: Node, slm_services: list, node_id: str) -> None:
     """Restart SLM services after HTTP response is sent.
 
     Runs as a FastAPI background task to avoid killing the connection
@@ -858,9 +838,7 @@ async def _restart_slm_services_deferred(
         await _restart_single_service(node, svc, node_id, is_slm=True)
 
 
-def _separate_and_order_services(
-    all_services: list, excluded_services: list
-) -> tuple[list, list]:
+def _separate_and_order_services(all_services: list, excluded_services: list) -> tuple[list, list]:
     """
     Separate SLM services from others and return ordered lists.
 
@@ -907,9 +885,7 @@ async def _restart_single_service(
         " (SLM service - last)" if is_slm else "",
     )
 
-    success, message = await _run_ansible_service_action(
-        node, svc.service_name, "restart"
-    )
+    success, message = await _run_ansible_service_action(node, svc.service_name, "restart")
 
     result = {
         "service_name": svc.service_name,
@@ -974,23 +950,17 @@ async def restart_all_node_services(
     """
     node = await _get_node_or_404(db, node_id)
     excluded = request.exclude_services if request else []
-    other_services, slm_services = await _get_restart_services(
-        db, node_id, request, excluded
-    )
+    other_services, slm_services = await _get_restart_services(db, node_id, request, excluded)
 
     if not other_services and not slm_services:
         return _build_empty_restart_response(node_id)
 
     # Restart non-SLM services synchronously
-    results, successful, failed = await _restart_service_list(
-        node, other_services, node_id, is_slm=False
-    )
+    results, successful, failed = await _restart_service_list(node, other_services, node_id, is_slm=False)
 
     # Defer SLM services to background task (avoids killing connection)
     if slm_services:
-        background_tasks.add_task(
-            _restart_slm_services_deferred, node, slm_services, node_id
-        )
+        background_tasks.add_task(_restart_slm_services_deferred, node, slm_services, node_id)
 
     await db.commit()
 
@@ -1014,9 +984,7 @@ async def list_service_conflicts(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> ServiceConflictListResponse:
     """List all known service conflicts."""
-    result = await db.execute(
-        select(ServiceConflict).order_by(ServiceConflict.service_name_a)
-    )
+    result = await db.execute(select(ServiceConflict).order_by(ServiceConflict.service_name_a))
     conflicts = result.scalars().all()
 
     return ServiceConflictListResponse(
@@ -1075,9 +1043,7 @@ async def delete_service_conflict(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> dict:
     """Delete a service conflict."""
-    result = await db.execute(
-        select(ServiceConflict).where(ServiceConflict.id == conflict_id)
-    )
+    result = await db.execute(select(ServiceConflict).where(ServiceConflict.id == conflict_id))
     conflict = result.scalar_one_or_none()
 
     if not conflict:
@@ -1107,8 +1073,7 @@ async def get_service_conflicts(
     """Get all conflicts for a specific service."""
     result = await db.execute(
         select(ServiceConflict).where(
-            (ServiceConflict.service_name_a == service_name)
-            | (ServiceConflict.service_name_b == service_name)
+            (ServiceConflict.service_name_a == service_name) | (ServiceConflict.service_name_b == service_name)
         )
     )
     conflicts = result.scalars().all()

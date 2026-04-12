@@ -47,15 +47,9 @@ def migrate(db_url: str) -> None:
         """)
 
         # Create indexes
-        create_index_if_not_exists(
-            cursor, "idx_credentials_node_id", "node_credentials", "node_id"
-        )
-        create_index_if_not_exists(
-            cursor, "idx_credentials_type", "node_credentials", "credential_type"
-        )
-        create_index_if_not_exists(
-            cursor, "idx_credentials_active", "node_credentials", "is_active"
-        )
+        create_index_if_not_exists(cursor, "idx_credentials_node_id", "node_credentials", "node_id")
+        create_index_if_not_exists(cursor, "idx_credentials_type", "node_credentials", "credential_type")
+        create_index_if_not_exists(cursor, "idx_credentials_active", "node_credentials", "is_active")
         logger.info("Created node_credentials table with indexes")
     else:
         logger.info("node_credentials table already exists")

@@ -44,9 +44,7 @@ def _decode_bytes(data: Any) -> str:
     return data.decode("utf-8") if isinstance(data, bytes) else str(data)
 
 
-def _scan_keys(
-    client: redis.Redis, max_scan: int = 10000
-) -> Tuple[Dict[str, int], Dict[str, List[str]], int]:
+def _scan_keys(client: redis.Redis, max_scan: int = 10000) -> Tuple[Dict[str, int], Dict[str, List[str]], int]:
     """Scan and categorize Redis keys (Issue #338 - extracted helper)."""
     key_patterns: Dict[str, int] = defaultdict(int)
     key_samples: Dict[str, List[str]] = defaultdict(list)
@@ -150,11 +148,7 @@ def _log_impact_assessment(key_patterns: Dict[str, int]) -> None:
     """Log impact assessment (Issue #338 - extracted helper)."""
     logger.info("\n=== IMPACT ASSESSMENT ===")
     vector_keys = key_patterns.get("llama_index/vector", 0)
-    total_other_keys = sum(
-        count
-        for pattern, count in key_patterns.items()
-        if pattern != "llama_index/vector"
-    )
+    total_other_keys = sum(count for pattern, count in key_patterns.items() if pattern != "llama_index/vector")
 
     logger.info(f"Vector keys: {vector_keys:,}")
     logger.info(f"Non-vector keys: {total_other_keys:,}")
@@ -166,9 +160,7 @@ def _log_impact_assessment(key_patterns: Dict[str, int]) -> None:
         logger.info("⚠️ Database 0 is PRIMARILY vectors with minimal other data")
         logger.info("💥 DROPPING DB 0 = Mostly knowledge base loss + some other data")
     else:
-        logger.info(
-            "🔄 Database 0 contains MIXED data - vectors + significant other data"
-        )
+        logger.info("🔄 Database 0 contains MIXED data - vectors + significant other data")
         logger.info("💥 DROPPING DB 0 = Knowledge base + other system data loss")
 
 
@@ -191,9 +183,7 @@ def analyze_redis_db0():
 
         logger.info("Total keys scanned: %s", total_keys)
         logger.info("\nKey patterns found:")
-        for pattern, count in sorted(
-            key_patterns.items(), key=lambda x: x[1], reverse=True
-        ):
+        for pattern, count in sorted(key_patterns.items(), key=lambda x: x[1], reverse=True):
             logger.info(f"  {pattern}: {count:,} keys")
             if pattern in key_samples and key_samples[pattern]:
                 logger.info("    Samples: %s", key_samples[pattern])

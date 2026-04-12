@@ -196,9 +196,7 @@ class WorkflowAnalyzer:
             "implementation_requirements": self.get_implementation_requirements(),
         }
 
-    def identify_improvements_needed(
-        self, ideal_workflow: List[WorkflowStep]
-    ) -> List[str]:
+    def identify_improvements_needed(self, ideal_workflow: List[WorkflowStep]) -> List[str]:
         """Identify what needs to be implemented for ideal workflow."""
         return [
             "Enhanced Orchestrator with multi-agent coordination logic",

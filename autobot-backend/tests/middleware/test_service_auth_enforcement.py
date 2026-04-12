@@ -37,7 +37,6 @@ from middleware.service_auth_enforcement import (
     requires_service_auth,
 )
 
-
 # ---------------------------------------------------------------------------
 # Path matching
 # ---------------------------------------------------------------------------
@@ -115,21 +114,15 @@ class TestGetEnforcementMode:
 
 class TestCircuitBreaker:
     def test_full_enforcement_at_100_percent(self):
-        with patch.dict(
-            os.environ, {"SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE": "100"}
-        ):
+        with patch.dict(os.environ, {"SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE": "100"}):
             assert _should_enforce_by_circuit_breaker() is True
 
     def test_no_enforcement_at_0_percent(self):
-        with patch.dict(
-            os.environ, {"SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE": "0"}
-        ):
+        with patch.dict(os.environ, {"SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE": "0"}):
             assert _should_enforce_by_circuit_breaker() is False
 
     def test_probabilistic_at_50_percent(self):
-        with patch.dict(
-            os.environ, {"SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE": "50"}
-        ):
+        with patch.dict(os.environ, {"SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE": "50"}):
             results = {_should_enforce_by_circuit_breaker() for _ in range(200)}
             assert True in results and False in results
 
@@ -196,16 +189,12 @@ class TestHasOverrideToken:
         return req
 
     def test_correct_token_returns_true(self):
-        with patch.dict(
-            os.environ, {"SERVICE_AUTH_OVERRIDE_TOKEN": "super-secret-token"}
-        ):
+        with patch.dict(os.environ, {"SERVICE_AUTH_OVERRIDE_TOKEN": "super-secret-token"}):
             req = self._make_request("super-secret-token")
             assert _has_override_token(req) is True
 
     def test_wrong_token_returns_false(self):
-        with patch.dict(
-            os.environ, {"SERVICE_AUTH_OVERRIDE_TOKEN": "super-secret-token"}
-        ):
+        with patch.dict(os.environ, {"SERVICE_AUTH_OVERRIDE_TOKEN": "super-secret-token"}):
             req = self._make_request("wrong-token")
             assert _has_override_token(req) is False
 
@@ -216,9 +205,7 @@ class TestHasOverrideToken:
             assert _has_override_token(req) is False
 
     def test_missing_header_returns_false(self):
-        with patch.dict(
-            os.environ, {"SERVICE_AUTH_OVERRIDE_TOKEN": "super-secret-token"}
-        ):
+        with patch.dict(os.environ, {"SERVICE_AUTH_OVERRIDE_TOKEN": "super-secret-token"}):
             req = MagicMock()
             req.headers = {}
             req.headers.get = lambda k, d=None: d
@@ -307,9 +294,7 @@ class TestEnforceServiceAuth:
             ),
             patch(
                 "middleware.service_auth_enforcement.validate_service_auth",
-                side_effect=HTTPException(
-                    status_code=401, detail="Missing required headers"
-                ),
+                side_effect=HTTPException(status_code=401, detail="Missing required headers"),
             ),
         ):
             req = _make_request("/api/npu/results")
@@ -437,9 +422,7 @@ class TestEnforcementModeGating:
             patch.dict(os.environ, {"SERVICE_AUTH_ENFORCEMENT_MODE": "false"}),
             patch(
                 "middleware.service_auth_enforcement.validate_service_auth",
-                side_effect=HTTPException(
-                    status_code=401, detail="Missing required headers"
-                ),
+                side_effect=HTTPException(status_code=401, detail="Missing required headers"),
             ),
         ):
             req = _make_request("/api/npu/results")
@@ -468,9 +451,7 @@ class TestEnforcementModeGating:
             ),
             patch(
                 "middleware.service_auth_enforcement.validate_service_auth",
-                side_effect=HTTPException(
-                    status_code=401, detail="Missing required headers"
-                ),
+                side_effect=HTTPException(status_code=401, detail="Missing required headers"),
             ),
         ):
             req = _make_request("/api/npu/results")
@@ -511,9 +492,7 @@ class TestEnforcementModeGating:
             env.pop("SERVICE_AUTH_ENFORCEMENT_MODE", None)
             with patch(
                 "middleware.service_auth_enforcement.validate_service_auth",
-                side_effect=HTTPException(
-                    status_code=401, detail="Missing required headers"
-                ),
+                side_effect=HTTPException(status_code=401, detail="Missing required headers"),
             ):
                 req = _make_request("/api/npu/results")
                 result = await enforce_service_auth(req, call_next)

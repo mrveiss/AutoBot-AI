@@ -159,9 +159,7 @@ def test_config_validation():
         validation_result = config.validate_config()
 
         assert isinstance(validation_result, dict), "Validation should return dict"
-        assert (
-            "config_loaded" in validation_result
-        ), "Should include config_loaded status"
+        assert "config_loaded" in validation_result, "Should include config_loaded status"
 
         logger.info("   Configuration validation operational")
         logger.info(
@@ -170,9 +168,7 @@ def test_config_validation():
         )
 
         if validation_result.get("issues"):
-            logger.warning(
-                "   Configuration issues found: %d", len(validation_result["issues"])
-            )
+            logger.warning("   Configuration issues found: %d", len(validation_result["issues"]))
             for issue in validation_result["issues"][:3]:  # Show first 3 issues
                 logger.warning("      - %s", issue)
         else:
@@ -202,14 +198,10 @@ def test_config_performance():
         avg_time_ms = (duration / 1000) * 1000
 
         if avg_time_ms < 1.0:  # Less than 1ms average
-            logger.info(
-                "   Configuration access performance good: %.2fms avg", avg_time_ms
-            )
+            logger.info("   Configuration access performance good: %.2fms avg", avg_time_ms)
             return True
         else:
-            logger.warning(
-                "   Configuration access slower than expected: %.2fms avg", avg_time_ms
-            )
+            logger.warning("   Configuration access slower than expected: %.2fms avg", avg_time_ms)
             return True  # Still pass, just slower
 
     except Exception as e:

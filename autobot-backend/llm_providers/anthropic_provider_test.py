@@ -10,8 +10,8 @@ calls are made.
 
 from __future__ import annotations
 
-import types
 import sys
+import types
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -41,14 +41,13 @@ _make_anthropic_stub()
 _make_xxhash_stub()
 
 
+from llm_interface_pkg.models import LLMRequest  # noqa: E402
 from llm_providers.anthropic_provider import (  # noqa: E402  (import after stub)
+    AnthropicProvider,
     _build_api_kwargs,
     _extract_text_content,
     _strip_think_blocks,
-    AnthropicProvider,
 )
-from llm_interface_pkg.models import LLMRequest  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # _strip_think_blocks

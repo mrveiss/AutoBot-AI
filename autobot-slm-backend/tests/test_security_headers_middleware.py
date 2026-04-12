@@ -66,15 +66,11 @@ class TestCsrfEnforcement:
         assert response.status_code == 401
 
     def test_post_with_auth_passes_through(self):
-        response = _client.post(
-            "/api/nodes", headers={"Authorization": "Bearer fake.jwt.token"}
-        )
+        response = _client.post("/api/nodes", headers={"Authorization": "Bearer fake.jwt.token"})
         assert response.status_code == 200
 
     def test_delete_with_auth_passes_through(self):
-        response = _client.delete(
-            "/api/nodes", headers={"Authorization": "Bearer fake.jwt.token"}
-        )
+        response = _client.delete("/api/nodes", headers={"Authorization": "Bearer fake.jwt.token"})
         assert response.status_code == 200
 
     def test_get_without_auth_passes_through(self):
@@ -128,9 +124,7 @@ class TestSecurityHeaders:
     def test_security_header_present(self, header: str, expected: str):
         headers = self._get_headers()
         assert header in headers, f"Missing header: {header}"
-        assert (
-            headers[header] == expected
-        ), f"Header {header!r}: expected {expected!r}, got {headers[header]!r}"
+        assert headers[header] == expected, f"Header {header!r}: expected {expected!r}, got {headers[header]!r}"
 
     def test_hsts_header_present(self):
         headers = self._get_headers()

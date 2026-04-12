@@ -28,9 +28,7 @@ class AutoBotMonitor:
 
     def __init__(self):
         """Initialize monitoring dashboard with project root path."""
-        self.project_root = Path(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        )
+        self.project_root = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
     def get_system_overview(self):
         """Get high-level system status"""
@@ -44,15 +42,11 @@ class AutoBotMonitor:
         logger.info("RECENT ANALYSIS STATUS")
         logger.info("-" * 30)
 
-        analysis_files = list(
-            self.project_root.glob("reports/codebase_analysis_*.json")
-        )
+        analysis_files = list(self.project_root.glob("reports/codebase_analysis_*.json"))
 
         if analysis_files:
             latest_analysis = max(analysis_files, key=os.path.getctime)
-            age = datetime.now() - datetime.fromtimestamp(
-                os.path.getctime(latest_analysis)
-            )
+            age = datetime.now() - datetime.fromtimestamp(os.path.getctime(latest_analysis))
 
             if age < timedelta(days=1):
                 status = "FRESH"
@@ -108,9 +102,7 @@ class AutoBotMonitor:
                 lines = result.stdout.split("\n")
                 fast_endpoints = len([line for line in lines if "FAST" in line])
                 good_endpoints = len([line for line in lines if "GOOD" in line])
-                slow_endpoints = len(
-                    [line for line in lines if "SLOW" in line or "VERY SLOW" in line]
-                )
+                slow_endpoints = len([line for line in lines if "SLOW" in line or "VERY SLOW" in line])
 
                 logger.info("Fast Endpoints: %d", fast_endpoints)
                 logger.info("Good Endpoints: %d", good_endpoints)
@@ -215,13 +207,9 @@ class AutoBotMonitor:
         logger.info("-" * 30)
 
         # Check if analysis is recent
-        analysis_files = list(
-            self.project_root.glob("reports/codebase_analysis_*.json")
-        )
+        analysis_files = list(self.project_root.glob("reports/codebase_analysis_*.json"))
         if not analysis_files:
-            logger.info(
-                "Run codebase profiling: python scripts/comprehensive_code_profiler.py"
-            )
+            logger.info("Run codebase profiling: python scripts/comprehensive_code_profiler.py")
         else:
             latest = max(analysis_files, key=os.path.getctime)
             age = datetime.now() - datetime.fromtimestamp(os.path.getctime(latest))
@@ -238,9 +226,7 @@ class AutoBotMonitor:
             )
 
             if result.returncode != 0:
-                logger.info(
-                    "Start backend for full monitoring: ./run_agent.sh --test-mode"
-                )
+                logger.info("Start backend for full monitoring: ./run_agent.sh --test-mode")
         except (
             subprocess.TimeoutExpired,
             subprocess.CalledProcessError,

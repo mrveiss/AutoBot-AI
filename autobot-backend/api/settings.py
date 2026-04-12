@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Any, List, Optional
 
 import aiofiles
-
 from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel

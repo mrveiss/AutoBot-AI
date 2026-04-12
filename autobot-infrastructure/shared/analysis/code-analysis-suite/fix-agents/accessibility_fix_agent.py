@@ -193,26 +193,18 @@ class AccessibilityFixAgent:
 
             if label:
                 # Add aria-label to opening button tag
-                button_tag_match = re.match(
-                    r"(<button[^>]*)(>)", button_html, re.IGNORECASE
-                )
+                button_tag_match = re.match(r"(<button[^>]*)(>)", button_html, re.IGNORECASE)
                 if button_tag_match:
                     opening_tag = button_tag_match.group(1)
 
                     # Add aria-label before closing >
                     new_opening_tag = f'{opening_tag} aria-label="{label}">'
-                    new_button_html = button_html.replace(
-                        button_tag_match.group(0), new_opening_tag
-                    )
+                    new_button_html = button_html.replace(button_tag_match.group(0), new_opening_tag)
 
                     # Replace in the main content
                     start_pos = match.start() + offset
                     end_pos = match.end() + offset
-                    modified_content = (
-                        modified_content[:start_pos]
-                        + new_button_html
-                        + modified_content[end_pos:]
-                    )
+                    modified_content = modified_content[:start_pos] + new_button_html + modified_content[end_pos:]
 
                     # Update offset for next replacement
                     offset += len(new_button_html) - len(button_html)
@@ -265,9 +257,7 @@ class AccessibilityFixAgent:
             # Replace in content
             start_pos = match.start() + offset
             end_pos = match.end() + offset
-            modified_content = (
-                modified_content[:start_pos] + new_img_tag + modified_content[end_pos:]
-            )
+            modified_content = modified_content[:start_pos] + new_img_tag + modified_content[end_pos:]
 
             # Update offset
             offset += len(new_img_tag) - len(img_tag)
@@ -297,16 +287,12 @@ class AccessibilityFixAgent:
             # Replace in content
             start_pos = match.start() + offset
             end_pos = match.end() + offset
-            modified_content = (
-                modified_content[:start_pos] + new_element + modified_content[end_pos:]
-            )
+            modified_content = modified_content[:start_pos] + new_element + modified_content[end_pos:]
 
             # Update offset
             offset += len(new_element) - len(element)
 
-            fixes_applied.append(
-                "Added keyboard navigation support to clickable element"
-            )
+            fixes_applied.append("Added keyboard navigation support to clickable element")
 
         return modified_content, fixes_applied
 
@@ -319,11 +305,7 @@ class AccessibilityFixAgent:
         score -= img_no_alt * 5
 
         # Check for buttons without labels
-        button_no_label = len(
-            re.findall(
-                r"<button(?![^>]*(?:aria-label|title)\s*=)", content, re.IGNORECASE
-            )
-        )
+        button_no_label = len(re.findall(r"<button(?![^>]*(?:aria-label|title)\s*=)", content, re.IGNORECASE))
         score -= button_no_label * 5
 
         # Check for clickable elements without keyboard support
@@ -337,9 +319,7 @@ class AccessibilityFixAgent:
         score -= clickable_no_kbd * 3
 
         # Check for positive tabindex (bad practice)
-        positive_tabindex = len(
-            re.findall(r'tabindex\s*=\s*["\']?[1-9]', content, re.IGNORECASE)
-        )
+        positive_tabindex = len(re.findall(r'tabindex\s*=\s*["\']?[1-9]', content, re.IGNORECASE))
         score -= positive_tabindex * 2
 
         return max(0, score)
@@ -358,21 +338,15 @@ class AccessibilityFixAgent:
             all_fixes = []
 
             # Fix buttons
-            modified_content, button_fixes = self.fix_button_accessibility(
-                modified_content
-            )
+            modified_content, button_fixes = self.fix_button_accessibility(modified_content)
             all_fixes.extend(button_fixes)
 
             # Fix images
-            modified_content, image_fixes = self.fix_image_accessibility(
-                modified_content
-            )
+            modified_content, image_fixes = self.fix_image_accessibility(modified_content)
             all_fixes.extend(image_fixes)
 
             # Fix keyboard navigation
-            modified_content, keyboard_fixes = self.fix_keyboard_navigation(
-                modified_content
-            )
+            modified_content, keyboard_fixes = self.fix_keyboard_navigation(modified_content)
             all_fixes.extend(keyboard_fixes)
 
             if all_fixes:
@@ -397,13 +371,9 @@ class AccessibilityFixAgent:
                 }
 
                 self.report_data["fixes_applied"].append(fix_record)
-                self.report_data["files_modified"].append(
-                    str(file_path.relative_to(self.root_path))
-                )
+                self.report_data["files_modified"].append(str(file_path.relative_to(self.root_path)))
 
-                print(
-                    f"✅ Fixed {len(all_fixes)} accessibility issues in {file_path.name}"
-                )
+                print(f"✅ Fixed {len(all_fixes)} accessibility issues in {file_path.name}")
                 for fix in all_fixes[:3]:  # Show first 3 fixes
                     print(f"   • {fix}")
                 if len(all_fixes) > 3:
@@ -444,17 +414,14 @@ class AccessibilityFixAgent:
                 fixed_count += 1
 
         # Calculate summary statistics
-        total_fixes = sum(
-            len(fix["fixes"]) for fix in self.report_data["fixes_applied"]
-        )
+        total_fixes = sum(len(fix["fixes"]) for fix in self.report_data["fixes_applied"])
 
         self.report_data["summary"] = {
             "total_files_scanned": len(filtered_files),
             "files_modified": fixed_count,
             "total_fixes_applied": total_fixes,
             "accessibility_improvements": sum(
-                fix.get("accessibility_score_improvement", 0)
-                for fix in self.report_data["fixes_applied"]
+                fix.get("accessibility_score_improvement", 0) for fix in self.report_data["fixes_applied"]
             ),
         }
 
@@ -588,19 +555,11 @@ Recommended tools for ongoing accessibility validation:
 if __name__ == "__main__":
     import sys
 
-    root_path = (
-        sys.argv[1]
-        if len(sys.argv) > 1
-        else "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-vue"
-    )
+    root_path = sys.argv[1] if len(sys.argv) > 1 else "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-vue"
 
     agent = AccessibilityFixAgent(root_path)
     agent.scan_and_fix()
     agent.generate_report()
 
-    print(
-        "\n🎉 Accessibility fix complete! Your AutoBot frontend is now more accessible."
-    )
-    print(
-        "📋 Check the generated report for detailed information about the improvements made."
-    )
+    print("\n🎉 Accessibility fix complete! Your AutoBot frontend is now more accessible.")
+    print("📋 Check the generated report for detailed information about the improvements made.")

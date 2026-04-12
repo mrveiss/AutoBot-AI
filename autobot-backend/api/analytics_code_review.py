@@ -21,13 +21,13 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from api.analytics_shared import (  # noqa: F401 – used by history/metrics/summary
+    resolve_source_or_404 as _resolve_source_or_404,
+)
+from api.analytics_shared import resolve_source_root_or_404 as _resolve_source_root_or_404
 from auth_middleware import check_admin_permission, get_current_user
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_7_DAYS
-from api.analytics_shared import (
-    resolve_source_or_404 as _resolve_source_or_404,  # noqa: F401 – used by history/metrics/summary
-    resolve_source_root_or_404 as _resolve_source_root_or_404,
-)
 
 logger = logging.getLogger(__name__)
 

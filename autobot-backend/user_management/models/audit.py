@@ -112,11 +112,7 @@ class AuditLog(Base):
     )
 
     def __repr__(self) -> str:
-        return (
-            f"<AuditLog(action={self.action}, "
-            f"resource_type={self.resource_type}, "
-            f"outcome={self.outcome})>"
-        )
+        return f"<AuditLog(action={self.action}, " f"resource_type={self.resource_type}, " f"outcome={self.outcome})>"
 
 
 # Standard audit actions

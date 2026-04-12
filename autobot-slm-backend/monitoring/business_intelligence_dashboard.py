@@ -194,9 +194,7 @@ class SystemHealthScore:
 class BusinessIntelligenceDashboard:
     """Business Intelligence and Analytics Dashboard for AutoBot."""
 
-    def __init__(
-        self, redis_host: str = NetworkConstants.REDIS_VM_IP, redis_port: int = 6379
-    ):
+    def __init__(self, redis_host: str = NetworkConstants.REDIS_VM_IP, redis_port: int = 6379):
         self.logger = logging.getLogger(__name__)
         self.redis_host = redis_host
         self.redis_port = redis_port
@@ -262,11 +260,7 @@ class BusinessIntelligenceDashboard:
             Tuple of (break_even_months, total_roi_percent).
         """
         monthly_savings = productivity_gain_hours * 50  # $50/hour value
-        break_even_months = (
-            total_hardware_cost / monthly_savings
-            if monthly_savings > 0
-            else float("inf")
-        )
+        break_even_months = total_hardware_cost / monthly_savings if monthly_savings > 0 else float("inf")
         annual_savings = monthly_savings * 12
         total_roi = (
             (annual_savings - monthly_operational_cost * 12) / total_hardware_cost * 100
@@ -278,25 +272,17 @@ class BusinessIntelligenceDashboard:
     async def calculate_roi_metrics(self) -> ROIMetrics:
         """Calculate comprehensive ROI metrics."""
         try:
-            total_hardware_cost = sum(
-                hw["cost"] for hw in self.hardware_investments.values()
-            )
+            total_hardware_cost = sum(hw["cost"] for hw in self.hardware_investments.values())
             monthly_operational_cost = sum(self.operational_costs.values())
 
             performance_data = await self._get_historical_performance_data()
-            performance_improvement = await self._calculate_performance_improvement(
-                performance_data
-            )
+            performance_improvement = await self._calculate_performance_improvement(performance_data)
 
-            productivity_gain_hours = self._estimate_productivity_gains(
-                performance_improvement
-            )
+            productivity_gain_hours = self._estimate_productivity_gains(performance_improvement)
 
             total_monthly_operations = await self._estimate_monthly_operations()
             cost_per_operation = (
-                monthly_operational_cost / total_monthly_operations
-                if total_monthly_operations > 0
-                else 0
+                monthly_operational_cost / total_monthly_operations if total_monthly_operations > 0 else 0
             )
 
             break_even_months, total_roi = self._compute_savings_and_roi(
@@ -352,24 +338,16 @@ class BusinessIntelligenceDashboard:
                     services = metrics.get("services", [])
                     if services:
                         avg_response_time = statistics.mean(
-                            [
-                                s.response_time
-                                for s in services
-                                if hasattr(s, "response_time")
-                            ]
+                            [s.response_time for s in services if hasattr(s, "response_time")]
                         )
                         performance_data["api_response_times"].append(avg_response_time)
 
                     system = metrics.get("system")
                     if system:
                         if hasattr(system, "cpu_percent"):
-                            performance_data["cpu_utilization"].append(
-                                system.cpu_percent
-                            )
+                            performance_data["cpu_utilization"].append(system.cpu_percent)
                         if hasattr(system, "memory_percent"):
-                            performance_data["memory_utilization"].append(
-                                system.memory_percent
-                            )
+                            performance_data["memory_utilization"].append(system.memory_percent)
 
                 except Exception:
                     continue  # nosec B112
@@ -380,9 +358,7 @@ class BusinessIntelligenceDashboard:
             self.logger.error(f"Error getting historical performance data: {e}")
             return {}
 
-    async def _calculate_performance_improvement(
-        self, performance_data: Dict[str, List[float]]
-    ) -> float:
+    async def _calculate_performance_improvement(self, performance_data: Dict[str, List[float]]) -> float:
         """Calculate overall performance improvement percentage."""
         try:
             improvements = []
@@ -415,9 +391,7 @@ class BusinessIntelligenceDashboard:
             # Base calculation: performance improvement translates to time saved
             base_hours_per_month = 160  # 40 hours/week * 4 weeks
             time_saved_ratio = performance_improvement / 100
-            productivity_gain = (
-                base_hours_per_month * time_saved_ratio * 0.1
-            )  # Conservative estimate
+            productivity_gain = base_hours_per_month * time_saved_ratio * 0.1  # Conservative estimate
 
             return min(productivity_gain, 40)  # Cap at 40 hours/month
 
@@ -433,18 +407,14 @@ class BusinessIntelligenceDashboard:
             daily_knowledge_searches = 500
             daily_llm_requests = 200
 
-            total_daily_operations = (
-                daily_api_calls + daily_knowledge_searches + daily_llm_requests
-            )
+            total_daily_operations = daily_api_calls + daily_knowledge_searches + daily_llm_requests
             return total_daily_operations * 30  # Monthly
 
         except Exception as e:
             self.logger.error(f"Error estimating monthly operations: {e}")
             return 0
 
-    def _build_component_definitions(
-        self, utilization_data: Dict[str, float]
-    ) -> Dict[str, Dict]:
+    def _build_component_definitions(self, utilization_data: Dict[str, float]) -> Dict[str, Dict]:
         """Helper for analyze_cost_efficiency. Ref: #1088."""
         return {
             "cpu": {
@@ -490,15 +460,11 @@ class BusinessIntelligenceDashboard:
 
             for component, data in components.items():
                 utilization = data["utilization"]
-                efficiency_score = min(
-                    utilization / data["baseline_efficiency"] * 100, 100
-                )
+                efficiency_score = min(utilization / data["baseline_efficiency"] * 100, 100)
 
                 # Calculate optimization potential
                 if efficiency_score < 70:
-                    optimization_potential = (
-                        data["monthly_cost"] * (70 - efficiency_score) / 100
-                    )
+                    optimization_potential = data["monthly_cost"] * (70 - efficiency_score) / 100
                 else:
                     optimization_potential = 0
 
@@ -535,30 +501,16 @@ class BusinessIntelligenceDashboard:
 
             utilization = {
                 "cpu": (
-                    system.get("cpu_percent", 0)
-                    if isinstance(system.get("cpu_percent"), _NUMERIC_TYPES)
-                    else 0
+                    system.get("cpu_percent", 0) if isinstance(system.get("cpu_percent"), _NUMERIC_TYPES) else 0
                 ),  # Issue #380
                 "memory": (
-                    system.get("memory_percent", 0)
-                    if isinstance(system.get("memory_percent"), _NUMERIC_TYPES)
-                    else 0
+                    system.get("memory_percent", 0) if isinstance(system.get("memory_percent"), _NUMERIC_TYPES) else 0
                 ),  # Issue #380
                 "storage": (
-                    system.get("disk_percent", 0)
-                    if isinstance(system.get("disk_percent"), _NUMERIC_TYPES)
-                    else 0
+                    system.get("disk_percent", 0) if isinstance(system.get("disk_percent"), _NUMERIC_TYPES) else 0
                 ),  # Issue #380
-                "gpu": (
-                    system.get("gpu_utilization", 0)
-                    if system.get("gpu_utilization") is not None
-                    else 0
-                ),
-                "npu": (
-                    system.get("npu_utilization", 0)
-                    if system.get("npu_utilization") is not None
-                    else 0
-                ),
+                "gpu": (system.get("gpu_utilization", 0) if system.get("gpu_utilization") is not None else 0),
+                "npu": (system.get("npu_utilization", 0) if system.get("npu_utilization") is not None else 0),
                 "network": 30.0,  # Estimated network utilization
             }
 
@@ -579,25 +531,19 @@ class BusinessIntelligenceDashboard:
             # Predict CPU utilization
             cpu_data = performance_data.get("cpu_utilization", [])
             if len(cpu_data) >= 10:
-                cpu_prediction = await self._predict_metric_trend(
-                    cpu_data, "cpu_utilization"
-                )
+                cpu_prediction = await self._predict_metric_trend(cpu_data, "cpu_utilization")
                 predictions.append(cpu_prediction)
 
             # Predict API response times
             api_data = performance_data.get("api_response_times", [])
             if len(api_data) >= 10:
-                api_prediction = await self._predict_metric_trend(
-                    api_data, "api_response_time"
-                )
+                api_prediction = await self._predict_metric_trend(api_data, "api_response_time")
                 predictions.append(api_prediction)
 
             # Predict memory utilization
             memory_data = performance_data.get("memory_utilization", [])
             if len(memory_data) >= 10:
-                memory_prediction = await self._predict_metric_trend(
-                    memory_data, "memory_utilization"
-                )
+                memory_prediction = await self._predict_metric_trend(memory_data, "memory_utilization")
                 predictions.append(memory_prediction)
 
         except Exception as e:
@@ -635,9 +581,7 @@ class BusinessIntelligenceDashboard:
 
         return current_value, predicted_7d, predicted_30d, trend_direction, confidence
 
-    async def _predict_metric_trend(
-        self, data: List[float], metric_name: str
-    ) -> PerformancePrediction:
+    async def _predict_metric_trend(self, data: List[float], metric_name: str) -> PerformancePrediction:
         """Predict trend for a specific metric."""
         try:
             if len(data) < 5:
@@ -660,9 +604,7 @@ class BusinessIntelligenceDashboard:
                 confidence,
             ) = self._compute_linear_trend(data)
 
-            recommendation = self._generate_metric_recommendation(
-                metric_name, trend_direction, predicted_30d
-            )
+            recommendation = self._generate_metric_recommendation(metric_name, trend_direction, predicted_30d)
 
             return PerformancePrediction(
                 timestamp=datetime.now(timezone.utc).isoformat(),
@@ -688,9 +630,7 @@ class BusinessIntelligenceDashboard:
                 recommended_action="Prediction failed",
             )
 
-    def _generate_metric_recommendation(
-        self, metric_name: str, trend: str, predicted_value: float
-    ) -> str:
+    def _generate_metric_recommendation(self, metric_name: str, trend: str, predicted_value: float) -> str:
         """Generate recommendations based on metric trends."""
         # Get thresholds from centralized config
         cpu_threshold = ALERT_THRESHOLDS.get("cpu_percent", 80.0)
@@ -712,9 +652,7 @@ class BusinessIntelligenceDashboard:
 
         elif metric_name == "api_response_time":
             if trend == "increasing" and predicted_value > 3.0:
-                return (
-                    "API response time increasing - investigate performance bottlenecks"
-                )
+                return "API response time increasing - investigate performance bottlenecks"
             elif trend == "decreasing":
                 return "API response time improving - performance optimizations working"
             else:
@@ -727,9 +665,7 @@ class BusinessIntelligenceDashboard:
 
         Helper for calculate_system_health_score.
         """
-        healthy_services = sum(
-            1 for s in services_data if getattr(s, "is_healthy", False)
-        )
+        healthy_services = sum(1 for s in services_data if getattr(s, "is_healthy", False))
         total_services = max(len(services_data), 1)
         return (healthy_services / total_services) * 100
 
@@ -759,20 +695,14 @@ class BusinessIntelligenceDashboard:
         ]
         return statistics.mean([max(c, 0) for c in efficiency_components])
 
-    def _calculate_user_satisfaction_score(
-        self, performance_data: Dict[str, List[float]]
-    ) -> float:
+    def _calculate_user_satisfaction_score(self, performance_data: Dict[str, List[float]]) -> float:
         """Calculate user satisfaction score from response times.
 
         Helper for calculate_system_health_score.
         """
         api_times = performance_data.get("api_response_times", [])
         if api_times:
-            avg_response_time = (
-                statistics.mean(api_times[-10:])
-                if len(api_times) >= 10
-                else statistics.mean(api_times)
-            )
+            avg_response_time = statistics.mean(api_times[-10:]) if len(api_times) >= 10 else statistics.mean(api_times)
             return max(0, 100 - (avg_response_time - 1.0) * 20)
         return 80.0
 
@@ -809,9 +739,7 @@ class BusinessIntelligenceDashboard:
 
             services_data = []
             if self.redis_client:
-                latest_data = self.redis_client.hget(
-                    "autobot:performance:latest", "data"
-                )
+                latest_data = self.redis_client.hget("autobot:performance:latest", "data")
                 if latest_data:
                     metrics = json.loads(latest_data)
                     services_data = metrics.get("services", [])
@@ -820,9 +748,7 @@ class BusinessIntelligenceDashboard:
             performance_score = self._calculate_performance_score(utilization_data)
             efficiency_score = self._calculate_efficiency_score(utilization_data)
             security_score = 85.0
-            user_satisfaction = self._calculate_user_satisfaction_score(
-                performance_data
-            )
+            user_satisfaction = self._calculate_user_satisfaction_score(performance_data)
 
             scores = [
                 availability_score,
@@ -882,9 +808,7 @@ class BusinessIntelligenceDashboard:
                     "total_roi_percent": roi_metrics.total_roi_percent,
                     "monthly_operational_cost": roi_metrics.operational_cost_monthly_usd,
                     "break_even_months": roi_metrics.break_even_months,
-                    "total_optimization_potential": sum(
-                        ca.optimization_potential_usd for ca in cost_analysis
-                    ),
+                    "total_optimization_potential": sum(ca.optimization_potential_usd for ca in cost_analysis),
                 },
                 "roi_analysis": asdict(roi_metrics),
                 "cost_efficiency": [asdict(ca) for ca in cost_analysis],
@@ -935,10 +859,7 @@ class BusinessIntelligenceDashboard:
 
         # Store in local file
         try:
-            report_file = (
-                self.dashboard_data_path
-                / f"bi_dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-            )
+            report_file = self.dashboard_data_path / f"bi_dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
             async with aiofiles.open(report_file, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(report, indent=2, default=str))
         except OSError as e:
@@ -946,9 +867,7 @@ class BusinessIntelligenceDashboard:
         except Exception as e:
             self.logger.error(f"Error storing dashboard report to file: {e}")
 
-    def _prepare_dashboard_template_vars(
-        self, report: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _prepare_dashboard_template_vars(self, report: Dict[str, Any]) -> Dict[str, Any]:
         """Prepare template variables for dashboard rendering.
 
         Helper for _generate_visual_dashboard.
@@ -957,11 +876,7 @@ class BusinessIntelligenceDashboard:
         health = report.get("system_health", {})
 
         health_score = round(health.get("overall_score", 0), 1)
-        health_color = (
-            "#28a745"
-            if health_score >= 80
-            else "#ffc107" if health_score >= 60 else "#dc3545"
-        )
+        health_color = "#28a745" if health_score >= 80 else "#ffc107" if health_score >= 60 else "#dc3545"
 
         roi_percent = round(summary.get("total_roi_percent", 0), 1)
         roi_class = "roi-positive" if roi_percent > 0 else "roi-negative"
@@ -974,19 +889,13 @@ class BusinessIntelligenceDashboard:
             "roi_class": roi_class,
             "break_even_months": round(summary.get("break_even_months", 0), 1),
             "monthly_cost": round(summary.get("monthly_operational_cost", 0)),
-            "optimization_potential": round(
-                summary.get("total_optimization_potential", 0)
-            ),
-            "hardware_investment": round(
-                report.get("roi_analysis", {}).get("hardware_investment_usd", 0)
-            ),
+            "optimization_potential": round(summary.get("total_optimization_potential", 0)),
+            "hardware_investment": round(report.get("roi_analysis", {}).get("hardware_investment_usd", 0)),
             "availability_score": round(health.get("availability_score", 0), 1),
             "performance_score": round(health.get("performance_score", 0), 1),
             "security_score": round(health.get("security_score", 0), 1),
             "efficiency_score": round(health.get("efficiency_score", 0), 1),
-            "user_satisfaction_score": round(
-                health.get("user_satisfaction_score", 0), 1
-            ),
+            "user_satisfaction_score": round(health.get("user_satisfaction_score", 0), 1),
             "cost_analysis": report.get("cost_efficiency", []),
             "predictions": report.get("performance_predictions", []),
             "improvement_areas": health.get("improvement_areas", []),
@@ -1011,10 +920,7 @@ class BusinessIntelligenceDashboard:
             template_vars = self._prepare_dashboard_template_vars(report)
             dashboard_html = dashboard_template.render(**template_vars)
 
-            dashboard_file = (
-                self.dashboard_data_path
-                / f"dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
-            )
+            dashboard_file = self.dashboard_data_path / f"dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
             await self._save_dashboard_html(dashboard_html, dashboard_file)
 
         except Exception as e:
@@ -1026,20 +932,14 @@ if __name__ == "__main__":
     import argparse
 
     async def main():
-        parser = argparse.ArgumentParser(
-            description="AutoBot Business Intelligence Dashboard"
-        )
+        parser = argparse.ArgumentParser(description="AutoBot Business Intelligence Dashboard")
         parser.add_argument(
             "--generate",
             action="store_true",
             help="Generate comprehensive dashboard report",
         )
-        parser.add_argument(
-            "--roi", action="store_true", help="Calculate ROI metrics only"
-        )
-        parser.add_argument(
-            "--health", action="store_true", help="Calculate system health score only"
-        )
+        parser.add_argument("--roi", action="store_true", help="Calculate ROI metrics only")
+        parser.add_argument("--health", action="store_true", help="Calculate system health score only")
 
         args = parser.parse_args()
 
@@ -1049,12 +949,8 @@ if __name__ == "__main__":
         if args.roi:
             roi_metrics = await bi_dashboard.calculate_roi_metrics()
             logger.info("📈 ROI Analysis:")
-            logger.info(
-                f"Total Hardware Investment: ${roi_metrics.hardware_investment_usd:,.2f}"
-            )
-            logger.info(
-                f"Monthly Operational Cost: ${roi_metrics.operational_cost_monthly_usd:,.2f}"
-            )
+            logger.info(f"Total Hardware Investment: ${roi_metrics.hardware_investment_usd:,.2f}")
+            logger.info(f"Monthly Operational Cost: ${roi_metrics.operational_cost_monthly_usd:,.2f}")
             logger.info(f"Total ROI: {roi_metrics.total_roi_percent:.1f}%")
             logger.info(f"Break Even: {roi_metrics.break_even_months:.1f} months")
 
@@ -1073,16 +969,10 @@ if __name__ == "__main__":
             logger.info("✅ Dashboard generated successfully!")
             logger.info("📊 Report summary:")
             summary = report.get("summary", {})
-            logger.info(
-                f"  Overall Health: {summary.get('overall_health_score', 0):.1f}/100"
-            )
+            logger.info(f"  Overall Health: {summary.get('overall_health_score', 0):.1f}/100")
             logger.info(f"  Total ROI: {summary.get('total_roi_percent', 0):.1f}%")
-            logger.info(
-                f"  Monthly Cost: ${summary.get('monthly_operational_cost', 0):.2f}"
-            )
+            logger.info(f"  Monthly Cost: ${summary.get('monthly_operational_cost', 0):.2f}")
             optimization_potential = summary.get("total_optimization_potential", 0)
-            logger.info(
-                f"  Optimization Potential: ${optimization_potential:.2f}/month"
-            )
+            logger.info(f"  Optimization Potential: ${optimization_potential:.2f}/month")
 
     asyncio.run(main())

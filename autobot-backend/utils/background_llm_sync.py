@@ -64,9 +64,7 @@ class BackgroundLLMSync:
         # Initialize known services
         self._initialize_known_services()
 
-        logger.info(
-            f"BackgroundLLMSync initialized with {check_interval}s check interval"
-        )
+        logger.info(f"BackgroundLLMSync initialized with {check_interval}s check interval")
 
     def _initialize_known_services(self):
         """Initialize known LLM services for monitoring."""
@@ -87,9 +85,7 @@ class BackgroundLLMSync:
         ]
 
         for name, endpoint in known_services:
-            self.services[name] = LLMServiceStatus(
-                service_name=name, endpoint=endpoint, status="unknown"
-            )
+            self.services[name] = LLMServiceStatus(service_name=name, endpoint=endpoint, status="unknown")
 
     async def check_service_health(self, service: LLMServiceStatus) -> bool:
         """Check the health of a specific LLM service (thread-safe)."""
@@ -109,9 +105,7 @@ class BackgroundLLMSync:
                 service.success_count += 1
                 service.status = "healthy"
 
-            logger.debug(
-                f"Health check passed for {service.service_name} ({response_time:.3f}s)"
-            )
+            logger.debug(f"Health check passed for {service.service_name} ({response_time:.3f}s)")
             return True
 
         except Exception as e:
@@ -139,9 +133,7 @@ class BackgroundLLMSync:
         healthy_count = sum(1 for result in results if result is True)
         total_count = len(self.services)
 
-        logger.info(
-            f"Health check complete: {healthy_count}/{total_count} services healthy"
-        )
+        logger.info(f"Health check complete: {healthy_count}/{total_count} services healthy")
 
     async def warm_connection_pools(self):
         """Warm up connection pools for better performance."""
@@ -162,15 +154,9 @@ class BackgroundLLMSync:
             # Copy service data under lock
             async with self._lock:
                 total_services = len(self.services)
-                healthy_services = sum(
-                    1 for s in self.services.values() if s.status == "healthy"
-                )
-                offline_services = sum(
-                    1 for s in self.services.values() if s.status == "offline"
-                )
-                response_times = [
-                    s.response_time for s in self.services.values() if s.response_time
-                ]
+                healthy_services = sum(1 for s in self.services.values() if s.status == "healthy")
+                offline_services = sum(1 for s in self.services.values() if s.status == "offline")
+                response_times = [s.response_time for s in self.services.values() if s.response_time]
 
             # Process outside lock
             avg_response_time = 0.0

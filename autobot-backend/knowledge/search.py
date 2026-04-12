@@ -30,10 +30,6 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
 from autobot_shared.error_boundaries import error_boundary
 
-# Issue #3828: canonical vector search engine — SearchMixin.search() delegates here.
-from knowledge.vector_search_engine import SearchResult as _EngineSearchResult
-from knowledge.vector_search_engine import get_vector_search_engine
-
 # Import components from the search_components package
 from knowledge.search_components import (
     KeywordSearcher,
@@ -50,6 +46,10 @@ from knowledge.search_components.helpers import (
     score_fact_by_terms,
 )
 from knowledge.search_components.hybrid_search import HybridSearcher
+
+# Issue #3828: canonical vector search engine — SearchMixin.search() delegates here.
+from knowledge.vector_search_engine import SearchResult as _EngineSearchResult
+from knowledge.vector_search_engine import get_vector_search_engine
 from models.task_context import EnhancedSearchContext
 
 if TYPE_CHECKING:

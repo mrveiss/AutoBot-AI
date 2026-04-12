@@ -30,9 +30,7 @@ from security.input_validator import WebResearchInputValidator
 from security.secure_web_research import SecureWebResearch
 
 # Set up logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -99,55 +97,39 @@ class WebResearchSecurityTester:
             config = DomainSecurityConfig()
             async with DomainSecurityManager(config) as domain_manager:
                 # Test 1: Safe domain (should pass)
-                safe_result = await domain_manager.validate_domain_safety(
-                    "https://github.com/example/repo"
-                )
+                safe_result = await domain_manager.validate_domain_safety("https://github.com/example/repo")
                 if safe_result["safe"]:
                     test_details["subtests"]["safe_domain"] = "PASSED"
                     test_details["passed"] += 1
                 else:
-                    test_details["subtests"][
-                        "safe_domain"
-                    ] = f"FAILED - {safe_result['reason']}"
+                    test_details["subtests"]["safe_domain"] = f"FAILED - {safe_result['reason']}"
                     test_details["failed"] += 1
 
                 # Test 2: Malicious domain pattern (should block)
-                malicious_result = await domain_manager.validate_domain_safety(
-                    "https://malware.com/payload"
-                )
+                malicious_result = await domain_manager.validate_domain_safety("https://malware.com/payload")
                 if not malicious_result["safe"]:
                     test_details["subtests"]["malicious_domain"] = "PASSED"
                     test_details["passed"] += 1
                 else:
-                    test_details["subtests"][
-                        "malicious_domain"
-                    ] = "FAILED - Did not block malicious domain"
+                    test_details["subtests"]["malicious_domain"] = "FAILED - Did not block malicious domain"
                     test_details["failed"] += 1
 
                 # Test 3: Private IP blocking
-                private_result = await domain_manager.validate_domain_safety(
-                    "http://192.168.1.1/admin"
-                )
+                private_result = await domain_manager.validate_domain_safety("http://192.168.1.1/admin")
                 if not private_result["safe"]:
                     test_details["subtests"]["private_ip_blocking"] = "PASSED"
                     test_details["passed"] += 1
                 else:
-                    test_details["subtests"][
-                        "private_ip_blocking"
-                    ] = "FAILED - Did not block private IP"
+                    test_details["subtests"]["private_ip_blocking"] = "FAILED - Did not block private IP"
                     test_details["failed"] += 1
 
                 # Test 4: Invalid URL handling
-                invalid_result = await domain_manager.validate_domain_safety(
-                    "not-a-url"
-                )
+                invalid_result = await domain_manager.validate_domain_safety("not-a-url")
                 if not invalid_result["safe"]:
                     test_details["subtests"]["invalid_url"] = "PASSED"
                     test_details["passed"] += 1
                 else:
-                    test_details["subtests"][
-                        "invalid_url"
-                    ] = "FAILED - Did not reject invalid URL"
+                    test_details["subtests"]["invalid_url"] = "FAILED - Did not reject invalid URL"
                     test_details["failed"] += 1
 
                 # Test 5: Statistics retrieval
@@ -156,9 +138,7 @@ class WebResearchSecurityTester:
                     test_details["subtests"]["statistics"] = "PASSED"
                     test_details["passed"] += 1
                 else:
-                    test_details["subtests"][
-                        "statistics"
-                    ] = "FAILED - Invalid statistics format"
+                    test_details["subtests"]["statistics"] = "FAILED - Invalid statistics format"
                     test_details["failed"] += 1
 
             # Update overall test results
@@ -194,9 +174,7 @@ class WebResearchSecurityTester:
                 test_details["subtests"]["safe_query"] = "PASSED"
                 test_details["passed"] += 1
             else:
-                test_details["subtests"][
-                    "safe_query"
-                ] = f"FAILED - {safe_result.get('threats_detected', [])}"
+                test_details["subtests"]["safe_query"] = f"FAILED - {safe_result.get('threats_detected', [])}"
                 test_details["failed"] += 1
 
             # Test 2: Script injection (should block)
@@ -206,9 +184,7 @@ class WebResearchSecurityTester:
                 test_details["subtests"]["script_injection"] = "PASSED"
                 test_details["passed"] += 1
             else:
-                test_details["subtests"][
-                    "script_injection"
-                ] = "FAILED - Did not detect script injection"
+                test_details["subtests"]["script_injection"] = "FAILED - Did not detect script injection"
                 test_details["failed"] += 1
 
             # Test 3: SQL injection patterns (should block)
@@ -218,9 +194,7 @@ class WebResearchSecurityTester:
                 test_details["subtests"]["sql_injection"] = "PASSED"
                 test_details["passed"] += 1
             else:
-                test_details["subtests"][
-                    "sql_injection"
-                ] = "FAILED - Did not detect SQL injection"
+                test_details["subtests"]["sql_injection"] = "FAILED - Did not detect SQL injection"
                 test_details["failed"] += 1
 
             # Test 4: Suspicious keywords (should warn)
@@ -233,9 +207,7 @@ class WebResearchSecurityTester:
                 test_details["subtests"]["suspicious_keywords"] = "PASSED"
                 test_details["passed"] += 1
             else:
-                test_details["subtests"][
-                    "suspicious_keywords"
-                ] = "FAILED - Did not detect suspicious keywords"
+                test_details["subtests"]["suspicious_keywords"] = "FAILED - Did not detect suspicious keywords"
                 test_details["failed"] += 1
 
             # Test 5: URL validation
@@ -245,9 +217,7 @@ class WebResearchSecurityTester:
                 test_details["subtests"]["url_validation"] = "PASSED"
                 test_details["passed"] += 1
             else:
-                test_details["subtests"][
-                    "url_validation"
-                ] = f"FAILED - {url_result.get('threats_detected', [])}"
+                test_details["subtests"]["url_validation"] = f"FAILED - {url_result.get('threats_detected', [])}"
                 test_details["failed"] += 1
 
             # Test 6: Content sanitization
@@ -257,9 +227,7 @@ class WebResearchSecurityTester:
                 test_details["subtests"]["content_sanitization"] = "PASSED"
                 test_details["passed"] += 1
             else:
-                test_details["subtests"][
-                    "content_sanitization"
-                ] = "FAILED - Did not sanitize malicious content"
+                test_details["subtests"]["content_sanitization"] = "FAILED - Did not sanitize malicious content"
                 test_details["failed"] += 1
 
             # Update overall test results
@@ -306,9 +274,7 @@ class WebResearchSecurityTester:
                     test_details["subtests"]["domain_safety"] = "PASSED"
                     test_details["passed"] += 1
                 else:
-                    test_details["subtests"][
-                        "domain_safety"
-                    ] = f"FAILED - {domain_result.get('reason', 'unknown')}"
+                    test_details["subtests"]["domain_safety"] = f"FAILED - {domain_result.get('reason', 'unknown')}"
                     test_details["failed"] += 1
 
                 # Test 3: Security statistics
@@ -317,9 +283,7 @@ class WebResearchSecurityTester:
                     test_details["subtests"]["statistics"] = "PASSED"
                     test_details["passed"] += 1
                 else:
-                    test_details["subtests"][
-                        "statistics"
-                    ] = "FAILED - Invalid statistics format"
+                    test_details["subtests"]["statistics"] = "FAILED - Invalid statistics format"
                     test_details["failed"] += 1
 
                 # Test 4: Security component testing
@@ -363,9 +327,7 @@ class WebResearchSecurityTester:
                 test_details["subtests"]["domain_config"] = "PASSED"
                 test_details["passed"] += 1
             else:
-                test_details["subtests"][
-                    "domain_config"
-                ] = "FAILED - Could not load domain security config"
+                test_details["subtests"]["domain_config"] = "FAILED - Could not load domain security config"
                 test_details["failed"] += 1
 
             # Test 2: Settings validation
@@ -378,14 +340,10 @@ class WebResearchSecurityTester:
                     test_details["subtests"]["web_research_enabled"] = "PASSED"
                     test_details["passed"] += 1
                 else:
-                    test_details["subtests"][
-                        "web_research_enabled"
-                    ] = "FAILED - Web research not enabled in settings"
+                    test_details["subtests"]["web_research_enabled"] = "FAILED - Web research not enabled in settings"
                     test_details["failed"] += 1
             else:
-                test_details["subtests"][
-                    "web_research_enabled"
-                ] = "FAILED - Settings file not found"
+                test_details["subtests"]["web_research_enabled"] = "FAILED - Settings file not found"
                 test_details["failed"] += 1
 
             # Update overall test results
@@ -441,9 +399,7 @@ class WebResearchSecurityTester:
                         test_details["subtests"][test_case_name] = "PASSED"
                         test_details["passed"] += 1
                     else:
-                        test_details["subtests"][
-                            test_case_name
-                        ] = "FAILED - Did not block malicious input"
+                        test_details["subtests"][test_case_name] = "FAILED - Did not block malicious input"
                         test_details["failed"] += 1
                 else:
                     # Should be allowed
@@ -491,17 +447,13 @@ class WebResearchSecurityTester:
             end_time = time.time()
 
             avg_time = (end_time - start_time) / 100
-            test_details["metrics"]["avg_query_validation_ms"] = round(
-                avg_time * 1000, 2
-            )
+            test_details["metrics"]["avg_query_validation_ms"] = round(avg_time * 1000, 2)
 
             if avg_time < 0.01:  # Less than 10ms per query
                 test_details["subtests"]["query_validation_performance"] = "PASSED"
                 test_details["passed"] += 1
             else:
-                test_details["subtests"][
-                    "query_validation_performance"
-                ] = f"FAILED - Too slow: {avg_time:.3f}s"
+                test_details["subtests"]["query_validation_performance"] = f"FAILED - Too slow: {avg_time:.3f}s"
                 test_details["failed"] += 1
 
             # Test 2: URL validation performance
@@ -513,17 +465,13 @@ class WebResearchSecurityTester:
             end_time = time.time()
 
             avg_url_time = (end_time - start_time) / 50
-            test_details["metrics"]["avg_url_validation_ms"] = round(
-                avg_url_time * 1000, 2
-            )
+            test_details["metrics"]["avg_url_validation_ms"] = round(avg_url_time * 1000, 2)
 
             if avg_url_time < 0.005:  # Less than 5ms per URL
                 test_details["subtests"]["url_validation_performance"] = "PASSED"
                 test_details["passed"] += 1
             else:
-                test_details["subtests"][
-                    "url_validation_performance"
-                ] = f"FAILED - Too slow: {avg_url_time:.3f}s"
+                test_details["subtests"]["url_validation_performance"] = f"FAILED - Too slow: {avg_url_time:.3f}s"
                 test_details["failed"] += 1
 
             # Update overall test results
@@ -563,9 +511,7 @@ class WebResearchSecurityTester:
         logger.info(f"Overall Status: {color}{overall_status}{reset_color}")
         logger.info(f"Tests Passed: {self.test_results['tests_passed']}")
         logger.error(f"Tests Failed: {self.test_results['tests_failed']}")
-        print(
-            f"Total Tests: {self.test_results['tests_passed'] + self.test_results['tests_failed']}"
-        )
+        print(f"Total Tests: {self.test_results['tests_passed'] + self.test_results['tests_failed']}")
 
         logger.info("\nDetailed Results:")
         logger.info("-" * 40)
@@ -592,17 +538,11 @@ class WebResearchSecurityTester:
         logger.info("\n" + "=" * 80)
 
         if overall_status == "PASSED":
-            logger.info(
-                "🛡️  ALL SECURITY TESTS PASSED - Web research can be safely enabled"
-            )
+            logger.info("🛡️  ALL SECURITY TESTS PASSED - Web research can be safely enabled")
         elif overall_status == "MOSTLY_PASSED":
-            print(
-                "⚠️  MOST TESTS PASSED - Review failed tests before enabling web research"
-            )
+            print("⚠️  MOST TESTS PASSED - Review failed tests before enabling web research")
         else:
-            print(
-                "❌ SECURITY TESTS FAILED - DO NOT enable web research until issues are resolved"
-            )
+            print("❌ SECURITY TESTS FAILED - DO NOT enable web research until issues are resolved")
 
         logger.info("=" * 80)
 

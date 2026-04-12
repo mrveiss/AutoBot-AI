@@ -92,8 +92,6 @@ async def fix_dimensions():
 if __name__ == "__main__":
     success = asyncio.run(fix_dimensions())
     if success:
-        logger.info(
-            "\nKnowledge base is now ready! You can run populate_knowledge_base.py"
-        )
+        logger.info("\nKnowledge base is now ready! You can run populate_knowledge_base.py")
     else:
         logger.error("\nFailed to fix dimensions issue")

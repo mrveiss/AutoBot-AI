@@ -16,9 +16,9 @@ import sys
 import types
 from datetime import datetime, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
-from unittest.mock import patch
 
 
 def _make_shared_mock(return_path=None):

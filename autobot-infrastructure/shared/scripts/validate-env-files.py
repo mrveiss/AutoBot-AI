@@ -102,23 +102,16 @@ def validate_redis_databases(env_vars: Dict[str, str], env_type: str = "") -> Li
     for db_var, expected_value in expected_dbs.items():
         if db_var in env_vars:
             if env_vars[db_var] != expected_value:
-                errors.append(
-                    f"Redis database mismatch: {db_var} = {env_vars[db_var]}, expected {expected_value}"
-                )
+                errors.append(f"Redis database mismatch: {db_var} = {env_vars[db_var]}, expected {expected_value}")
         else:
             errors.append(f"Missing Redis database assignment: {db_var}")
 
     # Check for duplicate database numbers
     db_values = []
     for db_var, value in env_vars.items():
-        if (
-            db_var.startswith("AUTOBOT_REDIS_DB_")
-            and db_var != "AUTOBOT_REDIS_DB_TESTING"
-        ):
+        if db_var.startswith("AUTOBOT_REDIS_DB_") and db_var != "AUTOBOT_REDIS_DB_TESTING":
             if value in db_values:
-                errors.append(
-                    f"Duplicate Redis database number: {value} used by {db_var}"
-                )
+                errors.append(f"Duplicate Redis database number: {value} used by {db_var}")
             db_values.append(value)
 
     return errors
@@ -145,9 +138,7 @@ def validate_ip_consistency(env_vars: Dict[str, str], env_type: str) -> List[str
     for var in ip_vars:
         value = env_vars[var]
         if not re.match(pattern, value):
-            errors.append(
-                f"IP address pattern mismatch in {var}: {value} (expected pattern: {pattern})"
-            )
+            errors.append(f"IP address pattern mismatch in {var}: {value} (expected pattern: {pattern})")
 
     return errors
 
@@ -172,16 +163,12 @@ def validate_url_consistency(env_vars: Dict[str, str]) -> List[str]:
                 expected_url = f"redis://{env_vars[host_var]}:{env_vars[port_var]}"
 
             if actual_url != expected_url:
-                errors.append(
-                    f"URL mismatch: {url_var} = {actual_url}, expected {expected_url}"
-                )
+                errors.append(f"URL mismatch: {url_var} = {actual_url}, expected {expected_url}")
 
     return errors
 
 
-def validate_port_consistency(
-    env_vars: Dict[str, str], config: Dict[str, Any]
-) -> List[str]:
+def validate_port_consistency(env_vars: Dict[str, str], config: Dict[str, Any]) -> List[str]:
     """Validate port assignments match configuration"""
     errors = []
 
@@ -202,9 +189,7 @@ def validate_port_consistency(
             expected_port = str(expected_ports[config_key])
 
             if actual_port != expected_port:
-                errors.append(
-                    f"Port mismatch: {env_var} = {actual_port}, expected {expected_port}"
-                )
+                errors.append(f"Port mismatch: {env_var} = {actual_port}, expected {expected_port}")
 
     return errors
 
@@ -223,9 +208,7 @@ def check_legacy_compatibility(env_vars: Dict[str, str]) -> List[str]:
 
     for legacy_var, modern_var in legacy_mappings:
         if modern_var in env_vars and legacy_var not in env_vars:
-            warnings.append(
-                f"Missing legacy compatibility variable: {legacy_var} (should match {modern_var})"
-            )
+            warnings.append(f"Missing legacy compatibility variable: {legacy_var} (should match {modern_var})")
         elif legacy_var in env_vars and modern_var in env_vars:
             if env_vars[legacy_var] != env_vars[modern_var]:
                 warnings.append(
@@ -235,9 +218,7 @@ def check_legacy_compatibility(env_vars: Dict[str, str]) -> List[str]:
     return warnings
 
 
-def validate_environment_file(
-    file_path: Path, env_type: str, config: Dict[str, Any]
-) -> Dict[str, List[str]]:
+def validate_environment_file(file_path: Path, env_type: str, config: Dict[str, Any]) -> Dict[str, List[str]]:
     """Validate a single environment file"""
     results = {"errors": [], "warnings": []}
 

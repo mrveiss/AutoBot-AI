@@ -29,9 +29,7 @@ async def test_llm_failsafe_direct():
         logger.info("   Calling get_robust_llm_response with: %s", prompt)
 
         # Set a timeout to catch hangs
-        response = await asyncio.wait_for(
-            get_robust_llm_response(prompt, context={"test": "direct"}), timeout=15.0
-        )
+        response = await asyncio.wait_for(get_robust_llm_response(prompt, context={"test": "direct"}), timeout=15.0)
 
         logger.error("✅ LLM Failsafe response received:")
         logger.info("   Tier: %s", response.tier_used.value)
@@ -77,9 +75,7 @@ async def test_classification_without_communication():
         logger.info("   Making direct LLM interface call...")
 
         # Call LLM interface directly
-        response = await asyncio.wait_for(
-            llm.chat_completion(messages, llm_type="task"), timeout=15.0
-        )
+        response = await asyncio.wait_for(llm.chat_completion(messages, llm_type="task"), timeout=15.0)
 
         logger.info("✅ Direct LLM interface response:")
         logger.info("   Response: %s...", response.get("response", "No response")[:100])
@@ -111,9 +107,7 @@ async def main():
 
     if llm_result and direct_result:
         logger.error("\n✅ Both LLM failsafe and direct interface work!")
-        logger.info(
-            "   The issue is in the classification agent or communication protocol"
-        )
+        logger.info("   The issue is in the classification agent or communication protocol")
     elif direct_result and not llm_result:
         logger.error("\n🚨 LLM failsafe agent is the problem!")
     elif llm_result and not direct_result:

@@ -71,19 +71,12 @@ def _create_async_wrapper(func, category: str):
         try:
             result = await func(*args, **kwargs)
             execution_time = time.time() - start_time
-            logger.info(
-                f"PERFORMANCE [{category}]: {func.__name__} executed in {execution_time:.3f}s"
-            )
-            _store_performance_in_redis(
-                category, func.__name__, execution_time, len(args), len(kwargs)
-            )
+            logger.info(f"PERFORMANCE [{category}]: {func.__name__} executed in {execution_time:.3f}s")
+            _store_performance_in_redis(category, func.__name__, execution_time, len(args), len(kwargs))
             return result
         except Exception as e:
             execution_time = time.time() - start_time
-            logger.error(
-                f"PERFORMANCE [{category}]: {func.__name__} failed "
-                f"after {execution_time:.3f}s: {e}"
-            )
+            logger.error(f"PERFORMANCE [{category}]: {func.__name__} failed " f"after {execution_time:.3f}s: {e}")
             raise
 
     return async_wrapper
@@ -103,16 +96,11 @@ def _create_sync_wrapper(func, category: str):
         try:
             result = func(*args, **kwargs)
             execution_time = time.time() - start_time
-            logger.info(
-                f"PERFORMANCE [{category}]: {func.__name__} executed in {execution_time:.3f}s"
-            )
+            logger.info(f"PERFORMANCE [{category}]: {func.__name__} executed in {execution_time:.3f}s")
             return result
         except Exception as e:
             execution_time = time.time() - start_time
-            logger.error(
-                f"PERFORMANCE [{category}]: {func.__name__} failed "
-                f"after {execution_time:.3f}s: {e}"
-            )
+            logger.error(f"PERFORMANCE [{category}]: {func.__name__} failed " f"after {execution_time:.3f}s: {e}")
             raise
 
     return sync_wrapper

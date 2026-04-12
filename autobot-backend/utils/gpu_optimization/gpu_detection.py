@@ -125,9 +125,7 @@ def _check_apple_gpu() -> Optional[Dict[str, Any]]:
                 return {
                     "name": chip,
                     "gpu_cores": gpu_cores,
-                    "metal_supported": (
-                        "supported" in metal_support.lower() if metal_support else False
-                    ),
+                    "metal_supported": ("supported" in metal_support.lower() if metal_support else False),
                 }
         return None
     except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -242,9 +240,7 @@ def _detect_nvidia_capabilities(
             timeout=10,
         )
         if result.returncode == 0:
-            first_line = (
-                result.stdout.strip().splitlines()[0] if result.stdout.strip() else ""
-            )
+            first_line = result.stdout.strip().splitlines()[0] if result.stdout.strip() else ""
             parts = first_line.split(", ")
             if len(parts) >= 2:
                 memory_mb = int(parts[0].strip())

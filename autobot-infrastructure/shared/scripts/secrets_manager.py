@@ -111,9 +111,7 @@ class SecretsManager:
             self.print_step("Generating new master encryption key", "secure")
 
             # Use password-based key derivation
-            password = getpass.getpass(
-                "Enter master password for secrets encryption: "
-            ).encode()
+            password = getpass.getpass("Enter master password for secrets encryption: ").encode()
             salt = os.urandom(16)
 
             kdf = PBKDF2HMAC(
@@ -144,9 +142,7 @@ class SecretsManager:
                 with open(self.secrets_index_file, "r") as f:
                     return json.load(f)
             except Exception as e:
-                self.print_step(
-                    f"Warning: Could not load secrets index: {e}", "warning"
-                )
+                self.print_step(f"Warning: Could not load secrets index: {e}", "warning")
 
         return {"secrets": {}, "chats": {}}
 
@@ -294,9 +290,7 @@ class SecretsManager:
             # Load and decrypt secret
             secret_file = self.secrets_dir / f"{secret_id}.secret"
             if not secret_file.exists():
-                self.print_step(
-                    f"Secret file not found: {secret_id[:8]}...", "error"
-                )
+                self.print_step(f"Secret file not found: {secret_id[:8]}...", "error")
                 return None
 
             with open(secret_file, "rb") as f:
@@ -308,9 +302,7 @@ class SecretsManager:
             with self._index_lock:
                 if secret_id in self.secrets_index["secrets"]:
                     self.secrets_index["secrets"][secret_id]["access_count"] += 1
-                    self.secrets_index["secrets"][secret_id][
-                        "last_accessed"
-                    ] = datetime.now().isoformat()
+                    self.secrets_index["secrets"][secret_id]["last_accessed"] = datetime.now().isoformat()
             self._save_secrets_index()
 
             # Log audit event
@@ -328,9 +320,7 @@ class SecretsManager:
             self.print_step(f"Error decrypting secret: {e}", "error")
             return None
 
-    def list_secrets(
-        self, scope: str = None, chat_id: str = None, secret_type: str = None
-    ) -> List[Dict[str, Any]]:
+    def list_secrets(self, scope: str = None, chat_id: str = None, secret_type: str = None) -> List[Dict[str, Any]]:
         """List secrets with filtering options (thread-safe)."""
         secrets = []
 
@@ -350,9 +340,7 @@ class SecretsManager:
             if scope == SecretScope.CHAT:
                 if not chat_id or metadata["chat_id"] != chat_id:
                     continue
-            elif (
-                metadata["scope"] == SecretScope.CHAT and chat_id != metadata["chat_id"]
-            ):
+            elif metadata["scope"] == SecretScope.CHAT and chat_id != metadata["chat_id"]:
                 # Skip chat secrets from other chats
                 continue
 
@@ -478,9 +466,7 @@ class SecretsManager:
         # Thread-safe read and validation
         with self._index_lock:
             if secret_id not in self.secrets_index["secrets"]:
-                self.print_step(
-                    f"Secret not found: {secret_id[:8]}...", "error"
-                )
+                self.print_step(f"Secret not found: {secret_id[:8]}...", "error")
                 return False
 
             secret_metadata = self.secrets_index["secrets"][secret_id]
@@ -536,9 +522,7 @@ class SecretsManager:
             self.print_step(f"Error transferring secret: {e}", "error")
             return False
 
-    def cleanup_chat_secrets(
-        self, chat_id: str, transfer_to_general: bool = False
-    ) -> Dict[str, int]:
+    def cleanup_chat_secrets(self, chat_id: str, transfer_to_general: bool = False) -> Dict[str, int]:
         """Cleanup secrets for a deleted chat."""
         self.print_header(f"Cleaning up secrets for chat: {chat_id}")
 
@@ -582,9 +566,7 @@ class SecretsManager:
 
         return {"transferred": transferred_count, "deleted": deleted_count}
 
-    def get_secrets_for_agent(
-        self, agent_type: str, chat_id: str = None
-    ) -> Dict[str, str]:
+    def get_secrets_for_agent(self, agent_type: str, chat_id: str = None) -> Dict[str, str]:
         """Get secrets relevant for an agent type."""
         relevant_secrets = {}
 
@@ -614,9 +596,7 @@ class SecretsManager:
 
         return relevant_secrets
 
-    def rotate_secret(
-        self, secret_id: str, new_value: str, chat_id: str = None
-    ) -> bool:
+    def rotate_secret(self, secret_id: str, new_value: str, chat_id: str = None) -> bool:
         """Rotate a secret (update with new value and log rotation)."""
         if self.update_secret(secret_id, value=new_value, chat_id=chat_id):
             # Log rotation event
@@ -632,9 +612,7 @@ class SecretsManager:
             return True
         return False
 
-    def export_secrets(
-        self, chat_id: str = None, include_values: bool = False
-    ) -> Dict[str, Any]:
+    def export_secrets(self, chat_id: str = None, include_values: bool = False) -> Dict[str, Any]:
         """Export secrets (metadata only by default, values with explicit flag)."""
         secrets = self.list_secrets(chat_id=chat_id)
 
@@ -666,9 +644,7 @@ class SecretsManager:
             active_chats_count = len(self.secrets_index["chats"])
 
         total_secrets = len(secrets_copy)
-        chat_secrets = sum(
-            1 for s in secrets_copy.values() if s["scope"] == SecretScope.CHAT
-        )
+        chat_secrets = sum(1 for s in secrets_copy.values() if s["scope"] == SecretScope.CHAT)
         general_secrets = total_secrets - chat_secrets
 
         # Secret types distribution
@@ -724,21 +700,15 @@ def _handle_add_command(secrets_manager: SecretsManager, args) -> int:
     )
 
     if args.json:
-        logger.info(
-            json.dumps({"secret_id": secret_id, "status": "created"})
-        )
+        logger.info(json.dumps({"secret_id": secret_id, "status": "created"}))
     else:
-        logger.info(
-            "Secret created with ID: %s", secret_id[:8] + "..."
-        )
+        logger.info("Secret created with ID: %s", secret_id[:8] + "...")
     return 0
 
 
 def _handle_list_command(secrets_manager: SecretsManager, args) -> int:
     """Handle --list command (Issue #315: extracted helper)."""
-    secrets = secrets_manager.list_secrets(
-        scope=args.scope, chat_id=args.chat_id, secret_type=args.type
-    )
+    secrets = secrets_manager.list_secrets(scope=args.scope, chat_id=args.chat_id, secret_type=args.type)
 
     if args.json:
         logger.info(json.dumps({"secrets": secrets}))
@@ -750,20 +720,12 @@ def _handle_list_command(secrets_manager: SecretsManager, args) -> int:
 
     logger.info(f"\n🔐 Found {len(secrets)} secrets:")
     logger.info("=" * 80)
-    logger.info(
-        f"{'Name':<25} {'Type':<15} {'Scope':<10} {'Chat ID':<15} {'Created':<20}"
-    )
+    logger.info(f"{'Name':<25} {'Type':<15} {'Scope':<10} {'Chat ID':<15} {'Created':<20}")
     logger.info("-" * 80)
 
     for secret in secrets:
-        created = datetime.fromisoformat(
-            secret["created_at"]
-        ).strftime("%Y-%m-%d %H:%M")
-        chat_display = (
-            secret.get("chat_id", "")[:12]
-            if secret.get("chat_id")
-            else ""
-        )
+        created = datetime.fromisoformat(secret["created_at"]).strftime("%Y-%m-%d %H:%M")
+        chat_display = secret.get("chat_id", "")[:12] if secret.get("chat_id") else ""
         # Log metadata only, no secret values
         logger.info(
             "%s %s %s %s %s",
@@ -787,9 +749,7 @@ def _handle_get_command(secrets_manager: SecretsManager, args) -> int:
     if value:
         if args.json:
             # Intentional: CLI --get outputs secret to stdout
-            sys.stdout.write(
-                json.dumps({"value": value}) + "\n"
-            )
+            sys.stdout.write(json.dumps({"value": value}) + "\n")
         else:
             # Intentional: CLI --get outputs secret to stdout
             sys.stdout.write(value + "\n")
@@ -801,9 +761,7 @@ def _handle_get_command(secrets_manager: SecretsManager, args) -> int:
 
 def _handle_cleanup_command(secrets_manager: SecretsManager, args) -> int:
     """Handle --cleanup-chat command (Issue #315: extracted helper)."""
-    result = secrets_manager.cleanup_chat_secrets(
-        args.cleanup_chat, args.transfer_to_general
-    )
+    result = secrets_manager.cleanup_chat_secrets(args.cleanup_chat, args.transfer_to_general)
 
     if args.json:
         logger.info(json.dumps(result))
@@ -819,34 +777,19 @@ def _handle_security_report_command(secrets_manager: SecretsManager, args) -> in
     report = secrets_manager.get_security_report()
 
     # Report contains aggregate stats only, no secret values
-    safe_report = {
-        k: v for k, v in report.items()
-        if k != "recent_activity"
-    }
+    safe_report = {k: v for k, v in report.items() if k != "recent_activity"}
     if args.json:
         logger.info(json.dumps(safe_report, indent=2))
         return 0
 
     logger.info("\nSecurity Report:")
     logger.info("=" * 50)
-    logger.info(
-        "Total secrets: %s", safe_report["total_secrets"]
-    )
-    logger.info(
-        "General secrets: %s", safe_report["general_secrets"]
-    )
-    logger.info(
-        "Chat secrets: %s", safe_report["chat_secrets"]
-    )
-    logger.info(
-        "Active chats: %s", safe_report["active_chats"]
-    )
-    logger.info(
-        "Encryption: %s", safe_report["encryption_status"]
-    )
-    logger.info(
-        "Audit logging: %s", safe_report["audit_logging"]
-    )
+    logger.info("Total secrets: %s", safe_report["total_secrets"])
+    logger.info("General secrets: %s", safe_report["general_secrets"])
+    logger.info("Chat secrets: %s", safe_report["chat_secrets"])
+    logger.info("Active chats: %s", safe_report["active_chats"])
+    logger.info("Encryption: %s", safe_report["encryption_status"])
+    logger.info("Audit logging: %s", safe_report["audit_logging"])
 
     if safe_report["secret_types"]:
         logger.info("\nSecret types:")
@@ -862,13 +805,9 @@ def _add_action_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--get", action="store_true", help="Get secret value")
     parser.add_argument("--update", action="store_true", help="Update secret")
     parser.add_argument("--delete", action="store_true", help="Delete secret")
-    parser.add_argument(
-        "--transfer", action="store_true", help="Transfer secret to general scope"
-    )
+    parser.add_argument("--transfer", action="store_true", help="Transfer secret to general scope")
     parser.add_argument("--cleanup-chat", help="Cleanup secrets for deleted chat")
-    parser.add_argument(
-        "--security-report", action="store_true", help="Generate security report"
-    )
+    parser.add_argument("--security-report", action="store_true", help="Generate security report")
 
 
 def _add_parameter_arguments(parser: argparse.ArgumentParser) -> None:
@@ -896,9 +835,7 @@ def _add_parameter_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Transfer secrets to general instead of deleting",
     )
-    parser.add_argument(
-        "--secrets-dir", default="data/secrets", help="Secrets directory"
-    )
+    parser.add_argument("--secrets-dir", default="data/secrets", help="Secrets directory")
     parser.add_argument("--json", action="store_true", help="Output in JSON format")
 
 

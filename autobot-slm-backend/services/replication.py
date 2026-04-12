@@ -72,9 +72,7 @@ class ReplicationService:
         if service_type != "redis":
             return False, f"Unsupported service type: {service_type}"
 
-        replication = await self._log_and_load_replication(
-            db, replication_id, source_node, target_node
-        )
+        replication = await self._log_and_load_replication(db, replication_id, source_node, target_node)
         if not replication:
             return False, "Replication record not found"
 
@@ -100,9 +98,7 @@ class ReplicationService:
                 redis_password,
             )
 
-            await self._finalize_replication_success(
-                db, replication, replication_id, sync_info
-            )
+            await self._finalize_replication_success(db, replication, replication_id, sync_info)
 
             return True, "Replication established successfully"
 
@@ -111,9 +107,7 @@ class ReplicationService:
             await self._mark_replication_failed(db, replication, str(e)[:500])
             return False, f"Replication setup error: {e}"
 
-    async def _get_replication_record(
-        self, db: AsyncSession, replication_id: str
-    ) -> Optional[Replication]:
+    async def _get_replication_record(self, db: AsyncSession, replication_id: str) -> Optional[Replication]:
         """Fetch replication record and update to syncing status.
 
         Helper for setup_replication (Issue #665).
@@ -125,9 +119,7 @@ class ReplicationService:
         Returns:
             Replication object or None if not found
         """
-        result = await db.execute(
-            select(Replication).where(Replication.replication_id == replication_id)
-        )
+        result = await db.execute(select(Replication).where(Replication.replication_id == replication_id))
         replication = result.scalar_one_or_none()
         if not replication:
             return None
@@ -137,9 +129,7 @@ class ReplicationService:
         await db.commit()
         return replication
 
-    async def _mark_replication_failed(
-        self, db: AsyncSession, replication: Replication, error_message: str
-    ) -> None:
+    async def _mark_replication_failed(self, db: AsyncSession, replication: Replication, error_message: str) -> None:
         """Set replication to failed status with error message.
 
         Helper for setup_replication (Issue #665).
@@ -185,9 +175,7 @@ class ReplicationService:
         )
 
         if not success:
-            await self._mark_replication_failed(
-                db, replication, "Ansible playbook failed"
-            )
+            await self._mark_replication_failed(db, replication, "Ansible playbook failed")
             return False, "Failed to configure replication via Ansible"
 
         # Wait for replication to sync
@@ -199,9 +187,7 @@ class ReplicationService:
         )
 
         if not sync_success:
-            await self._mark_replication_failed(
-                db, replication, "Replication sync failed or timed out"
-            )
+            await self._mark_replication_failed(db, replication, "Replication sync failed or timed out")
             return False, "Replication sync failed"
 
         return None
@@ -256,12 +242,8 @@ class ReplicationService:
 
         try:
             # Get keyspace info from both nodes
-            source_keyspace = await self._get_keyspace_info(
-                source_ip, ssh_user, ssh_port, redis_password
-            )
-            target_keyspace = await self._get_keyspace_info(
-                target_ip, ssh_user, ssh_port, redis_password
-            )
+            source_keyspace = await self._get_keyspace_info(source_ip, ssh_user, ssh_port, redis_password)
+            target_keyspace = await self._get_keyspace_info(target_ip, ssh_user, ssh_port, redis_password)
 
             result["source"] = source_keyspace
             result["target"] = target_keyspace
@@ -280,9 +262,7 @@ class ReplicationService:
             self._add_key_count_check(result["checks"], source_keys, target_keys)
 
             # Get replication lag info and add replication checks
-            repl_info = await self._get_replication_info(
-                target_ip, ssh_user, ssh_port, redis_password
-            )
+            repl_info = await self._get_replication_info(target_ip, ssh_user, ssh_port, redis_password)
             self._add_replication_checks(result["checks"], result["lag"], repl_info)
 
             # Determine overall sync status
@@ -291,9 +271,7 @@ class ReplicationService:
 
         except Exception as e:
             logger.error("Sync verification failed: %s", e)
-            result["checks"].append(
-                self._build_check("verification", "failed", str(e)[:200])
-            )
+            result["checks"].append(self._build_check("verification", "failed", str(e)[:200]))
 
         return result
 
@@ -303,9 +281,7 @@ class ReplicationService:
         replication_id: str,
     ) -> Tuple[bool, str]:
         """Promote a replica to primary (break replication)."""
-        result = await db.execute(
-            select(Replication).where(Replication.replication_id == replication_id)
-        )
+        result = await db.execute(select(Replication).where(Replication.replication_id == replication_id))
         replication = result.scalar_one_or_none()
         if not replication:
             return False, "Replication not found"
@@ -314,9 +290,7 @@ class ReplicationService:
             return False, f"Cannot promote replication in status: {replication.status}"
 
         # Get target node
-        node_result = await db.execute(
-            select(Node).where(Node.node_id == replication.target_node_id)
-        )
+        node_result = await db.execute(select(Node).where(Node.node_id == replication.target_node_id))
         target_node = node_result.scalar_one_or_none()
         if not target_node:
             return False, "Target node not found"
@@ -353,9 +327,7 @@ class ReplicationService:
         replication_id: str,
     ) -> Tuple[bool, str]:
         """Stop replication without promotion (just break the link)."""
-        result = await db.execute(
-            select(Replication).where(Replication.replication_id == replication_id)
-        )
+        result = await db.execute(select(Replication).where(Replication.replication_id == replication_id))
         replication = result.scalar_one_or_none()
         if not replication:
             return False, "Replication not found"
@@ -377,25 +349,19 @@ class ReplicationService:
         replication_id: str,
     ) -> Optional[Dict]:
         """Update lag info for a replication."""
-        result = await db.execute(
-            select(Replication).where(Replication.replication_id == replication_id)
-        )
+        result = await db.execute(select(Replication).where(Replication.replication_id == replication_id))
         replication = result.scalar_one_or_none()
         if not replication:
             return None
 
         # Get target node
-        node_result = await db.execute(
-            select(Node).where(Node.node_id == replication.target_node_id)
-        )
+        node_result = await db.execute(select(Node).where(Node.node_id == replication.target_node_id))
         target_node = node_result.scalar_one_or_none()
         if not target_node:
             return None
 
         # Get Redis password
-        source_result = await db.execute(
-            select(Node).where(Node.node_id == replication.source_node_id)
-        )
+        source_result = await db.execute(select(Node).where(Node.node_id == replication.source_node_id))
         source_node = source_result.scalar_one_or_none()
 
         redis_password = ""
@@ -420,9 +386,7 @@ class ReplicationService:
             # Check if replication is still active
             if repl_info.get("master_link_status") != "up":
                 replication.status = ReplicationStatus.FAILED.value
-                replication.error = (
-                    f"Master link down: {repl_info.get('master_link_status')}"
-                )
+                replication.error = f"Master link down: {repl_info.get('master_link_status')}"
 
             await db.commit()
             return repl_info
@@ -450,9 +414,7 @@ class ReplicationService:
         """
         return {"name": name, "status": status, "message": message}
 
-    def _add_key_count_check(
-        self, checks: list, source_keys: int, target_keys: int
-    ) -> None:
+    def _add_key_count_check(self, checks: list, source_keys: int, target_keys: int) -> None:
         """Add key count comparison check to checks list.
 
         Helper for verify_sync (Issue #665).
@@ -465,17 +427,9 @@ class ReplicationService:
         key_diff = abs(source_keys - target_keys)
 
         if key_diff == 0:
-            checks.append(
-                self._build_check(
-                    "key_count", "passed", f"Key counts match: {source_keys}"
-                )
-            )
+            checks.append(self._build_check("key_count", "passed", f"Key counts match: {source_keys}"))
         elif key_diff <= 10:
-            checks.append(
-                self._build_check(
-                    "key_count", "warning", f"Minor key difference: {key_diff} keys"
-                )
-            )
+            checks.append(self._build_check("key_count", "warning", f"Minor key difference: {key_diff} keys"))
         else:
             checks.append(
                 self._build_check(
@@ -485,9 +439,7 @@ class ReplicationService:
                 )
             )
 
-    def _add_replication_checks(
-        self, checks: list, result_lag: Dict, repl_info: Dict
-    ) -> None:
+    def _add_replication_checks(self, checks: list, result_lag: Dict, repl_info: Dict) -> None:
         """Add replication link and lag checks to checks list.
 
         Helper for verify_sync (Issue #665).
@@ -499,11 +451,7 @@ class ReplicationService:
         """
         if repl_info.get("role") != "slave":
             role = repl_info.get("role", "unknown")
-            checks.append(
-                self._build_check(
-                    "role_check", "warning", f"Target role is '{role}', not 'slave'"
-                )
-            )
+            checks.append(self._build_check("role_check", "warning", f"Target role is '{role}', not 'slave'"))
             return
 
         lag_bytes = repl_info.get("lag_bytes", 0)
@@ -514,11 +462,7 @@ class ReplicationService:
 
         # Check replication link status
         if link_status == "up":
-            checks.append(
-                self._build_check(
-                    "replication_link", "passed", "Replication link is up"
-                )
-            )
+            checks.append(self._build_check("replication_link", "passed", "Replication link is up"))
         else:
             checks.append(
                 self._build_check(
@@ -530,21 +474,11 @@ class ReplicationService:
 
         # Check replication lag
         if lag_bytes == 0:
-            checks.append(
-                self._build_check("replication_lag", "passed", "No replication lag")
-            )
+            checks.append(self._build_check("replication_lag", "passed", "No replication lag"))
         elif lag_bytes < 1024:
-            checks.append(
-                self._build_check(
-                    "replication_lag", "warning", f"Minor lag: {lag_bytes} bytes"
-                )
-            )
+            checks.append(self._build_check("replication_lag", "warning", f"Minor lag: {lag_bytes} bytes"))
         else:
-            checks.append(
-                self._build_check(
-                    "replication_lag", "failed", f"Significant lag: {lag_bytes} bytes"
-                )
-            )
+            checks.append(self._build_check("replication_lag", "failed", f"Significant lag: {lag_bytes} bytes"))
 
     # =========================================================================
     # Private Methods
@@ -715,9 +649,7 @@ class ReplicationService:
         start_time = datetime.utcnow()
 
         while (datetime.utcnow() - start_time).seconds < timeout:
-            repl_info = await self._get_replication_info(
-                target_ip, ssh_user, ssh_port, redis_password
-            )
+            repl_info = await self._get_replication_info(target_ip, ssh_user, ssh_port, redis_password)
 
             if repl_info.get("master_link_status") == "up":
                 # Check if sync is in progress
@@ -924,17 +856,10 @@ class ReplicationService:
                 await asyncio.sleep(30)  # Check every 30 seconds
 
                 async with db_service.session() as db:
-                    result = await db.execute(
-                        select(Replication).where(
-                            Replication.replication_id == replication_id
-                        )
-                    )
+                    result = await db.execute(select(Replication).where(Replication.replication_id == replication_id))
                     replication = result.scalar_one_or_none()
 
-                    if (
-                        not replication
-                        or replication.status != ReplicationStatus.ACTIVE.value
-                    ):
+                    if not replication or replication.status != ReplicationStatus.ACTIVE.value:
                         logger.info("Lag monitor stopping for %s", replication_id)
                         break
 

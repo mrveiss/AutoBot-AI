@@ -68,9 +68,7 @@ class SimplePerformanceAnalyzer:
         for category, pattern_list in self.patterns.items():
             for pattern, description in pattern_list:
                 try:
-                    for match in re.finditer(
-                        pattern, content, re.MULTILINE | re.DOTALL
-                    ):
+                    for match in re.finditer(pattern, content, re.MULTILINE | re.DOTALL):
                         line_num = content[: match.start()].count("\n") + 1
 
                         # Get context
@@ -113,11 +111,7 @@ class SimplePerformanceAnalyzer:
 
         # Skip certain directories
         python_files = [
-            f
-            for f in python_files
-            if not any(
-                skip in str(f) for skip in ["venv", "__pycache__", ".git", "test_"]
-            )
+            f for f in python_files if not any(skip in str(f) for skip in ["venv", "__pycache__", ".git", "test_"])
         ]
 
         print(f"Analyzing {len(python_files)} Python files...")
@@ -201,15 +195,11 @@ def main():
 
     if "memory_leaks" in results["by_category"]:
         leaks = len(results["by_category"]["memory_leaks"])
-        print(
-            f"1. Fix {leaks} memory leaks by using 'with' statements for file operations"
-        )
+        print(f"1. Fix {leaks} memory leaks by using 'with' statements for file operations")
 
     if "blocking_calls" in results["by_category"]:
         blocking = len(results["by_category"]["blocking_calls"])
-        print(
-            f"2. Replace {blocking} blocking calls with async equivalents (asyncio.sleep, aiohttp)"
-        )
+        print(f"2. Replace {blocking} blocking calls with async equivalents (asyncio.sleep, aiohttp)")
 
     if "database_issues" in results["by_category"]:
         db = len(results["by_category"]["database_issues"])
@@ -217,9 +207,7 @@ def main():
 
     if "inefficient_loops" in results["by_category"]:
         loops = len(results["by_category"]["inefficient_loops"])
-        print(
-            f"4. Refactor {loops} inefficient loops using list comprehensions or vectorization"
-        )
+        print(f"4. Refactor {loops} inefficient loops using list comprehensions or vectorization")
 
     print(f"\n=== Quick Fixes ===")
     print(f"Replace: time.sleep() → await asyncio.sleep()")

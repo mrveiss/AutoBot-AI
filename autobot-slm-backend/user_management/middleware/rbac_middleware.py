@@ -231,9 +231,7 @@ def _extract_user_context(
     return user_id, org_id
 
 
-def _require_authentication(
-    user_id: Optional[uuid.UUID], permissions_desc: str
-) -> None:
+def _require_authentication(user_id: Optional[uuid.UUID], permissions_desc: str) -> None:
     """
     Check that user is authenticated, raise 401 if not.
 
@@ -280,14 +278,10 @@ def require_permission(permission: str):
             _require_authentication(user_id, permission)
 
             # Check permission
-            has_permission = await rbac_middleware.check_permission(
-                user_id, permission, org_id
-            )
+            has_permission = await rbac_middleware.check_permission(user_id, permission, org_id)
 
             if not has_permission:
-                logger.warning(
-                    "Permission denied: user=%s, permission=%s", user_id, permission
-                )
+                logger.warning("Permission denied: user=%s, permission=%s", user_id, permission)
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"Permission '{permission}' required",
@@ -324,9 +318,7 @@ def require_any_permission(permissions: List[str]):
             user_id, org_id = _extract_user_context(request)
             _require_authentication(user_id, str(permissions))
 
-            has_permission = await rbac_middleware.check_any_permission(
-                user_id, permissions, org_id
-            )
+            has_permission = await rbac_middleware.check_any_permission(user_id, permissions, org_id)
 
             if not has_permission:
                 logger.warning(
@@ -370,9 +362,7 @@ def require_all_permissions(permissions: List[str]):
             user_id, org_id = _extract_user_context(request)
             _require_authentication(user_id, str(permissions))
 
-            has_permission = await rbac_middleware.check_all_permissions(
-                user_id, permissions, org_id
-            )
+            has_permission = await rbac_middleware.check_all_permissions(user_id, permissions, org_id)
 
             if not has_permission:
                 logger.warning(

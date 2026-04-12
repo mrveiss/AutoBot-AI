@@ -106,9 +106,7 @@ class SecurityFixAgent:
             print(f"❌ Failed to create backup: {e}")
             return ""
 
-    def scan_for_vulnerabilities(
-        self, content: str, file_path: str
-    ) -> List[Dict[str, Any]]:
+    def scan_for_vulnerabilities(self, content: str, file_path: str) -> List[Dict[str, Any]]:
         """Scan content for XSS vulnerabilities."""
         vulnerabilities = []
 
@@ -163,9 +161,7 @@ class SecurityFixAgent:
         helpers_needed = set()
 
         # Sort vulnerabilities by position (end to start) to avoid offset issues
-        sorted_vulns = sorted(
-            vulnerabilities, key=lambda x: x["position"]["start"], reverse=True
-        )
+        sorted_vulns = sorted(vulnerabilities, key=lambda x: x["position"]["start"], reverse=True)
 
         for vuln in sorted_vulns:
             vuln_type = vuln["type"]
@@ -183,11 +179,7 @@ class SecurityFixAgent:
                     # Replace in content
                     start_pos = vuln["position"]["start"]
                     end_pos = vuln["position"]["end"]
-                    fixed_content = (
-                        fixed_content[:start_pos]
-                        + fixed_match
-                        + fixed_content[end_pos:]
-                    )
+                    fixed_content = fixed_content[:start_pos] + fixed_match + fixed_content[end_pos:]
 
                     fix_applied = {
                         "type": vuln_type,
@@ -251,9 +243,7 @@ class SecurityFixAgent:
             """,
         }
 
-        return "\n".join(
-            [helpers[helper] for helper in helpers_needed if helper in helpers]
-        )
+        return "\n".join([helpers[helper] for helper in helpers_needed if helper in helpers])
 
     def validate_html_structure(self, content: str) -> bool:
         """Basic HTML structure validation."""
@@ -304,9 +294,7 @@ class SecurityFixAgent:
                     "LOW": "🟢",
                 }
                 icon = severity_icon.get(vuln["severity"], "⚪")
-                print(
-                    f"  {icon} Line {vuln['line']}: {vuln['type']} ({vuln['severity']})"
-                )
+                print(f"  {icon} Line {vuln['line']}: {vuln['type']} ({vuln['severity']})")
                 print(f"     Match: {vuln['match'][:100]}")
 
             # Create backup
@@ -320,9 +308,7 @@ class SecurityFixAgent:
 
             # Apply fixes
             print(f"\n🔧 Applying security fixes...")
-            fixed_content, fixes_applied = self.apply_security_fixes(
-                original_content, vulnerabilities
-            )
+            fixed_content, fixes_applied = self.apply_security_fixes(original_content, vulnerabilities)
 
             # Validate the fixed content
             if not self.validate_html_structure(fixed_content):
@@ -467,34 +453,24 @@ class SecurityFixAgent:
                 }
                 icon = severity_icon.get(vuln["severity"], "⚪")
 
-                report_content += (
-                    f"**{i}. {vuln['type'].replace('_', ' ').title()}** {icon}\n"
-                )
+                report_content += f"**{i}. {vuln['type'].replace('_', ' ').title()}** {icon}\n"
                 report_content += f"- **File:** `{vuln['file']}`\n"
                 report_content += f"- **Line:** {vuln['line']}\n"
                 report_content += f"- **Severity:** {vuln['severity']}\n"
                 ellipsis = "..." if len(vuln["match"]) > 100 else ""
-                report_content += (
-                    f"- **Pattern:** `{vuln['match'][:100]}{ellipsis}`\n\n"
-                )
+                report_content += f"- **Pattern:** `{vuln['match'][:100]}{ellipsis}`\n\n"
 
         # Applied fixes
         if self.report["fixes_applied"]:
             report_content += "## Applied Security Fixes\n\n"
             for i, fix in enumerate(self.report["fixes_applied"], 1):
-                report_content += (
-                    f"**Fix {i}:** {fix['type'].replace('_', ' ').title()}\n"
-                )
+                report_content += f"**Fix {i}:** {fix['type'].replace('_', ' ').title()}\n"
                 report_content += f"- **Line:** {fix['line']}\n"
                 report_content += f"- **Severity:** {fix['severity']}\n"
                 orig_ellipsis = "..." if len(fix["original"]) > 80 else ""
                 fixed_ellipsis = "..." if len(fix["fixed"]) > 80 else ""
-                report_content += (
-                    f"- **Original:** `{fix['original'][:80]}{orig_ellipsis}`\n"
-                )
-                report_content += (
-                    f"- **Fixed:** `{fix['fixed'][:80]}{fixed_ellipsis}`\n\n"
-                )
+                report_content += f"- **Original:** `{fix['original'][:80]}{orig_ellipsis}`\n"
+                report_content += f"- **Fixed:** `{fix['fixed'][:80]}{fixed_ellipsis}`\n\n"
 
         # Recommendations
         report_content += "## Security Recommendations\n\n"
@@ -510,9 +486,7 @@ class SecurityFixAgent:
             report_content += f"- Status: {result['status'].upper()}\n"
 
             if result["status"] == "fixed":
-                report_content += (
-                    f"- Vulnerabilities Found: {result['vulnerabilities_found']}\n"
-                )
+                report_content += f"- Vulnerabilities Found: {result['vulnerabilities_found']}\n"
                 report_content += f"- Fixes Applied: {result['fixes_applied']}\n"
                 report_content += f"- Backup Created: `{result['backup_path']}`\n"
             elif result["status"] == "error":

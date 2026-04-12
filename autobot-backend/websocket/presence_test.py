@@ -14,7 +14,6 @@ import pytest
 
 from websocket.presence import PresenceManager, presence_websocket_handler
 
-
 # ====================================================================
 # PresenceManager Unit Tests
 # ====================================================================
@@ -194,9 +193,7 @@ async def test_handler_responds_to_ping() -> None:
     from fastapi import WebSocketDisconnect
 
     ping_json = json.dumps({"type": "ping"})
-    ws.receive_text = AsyncMock(
-        side_effect=[ping_json, WebSocketDisconnect()]
-    )
+    ws.receive_text = AsyncMock(side_effect=[ping_json, WebSocketDisconnect()])
 
     with patch("websocket.presence.presence_manager") as mock_pm:
         mock_pm.connect = AsyncMock()
@@ -205,9 +202,5 @@ async def test_handler_responds_to_ping() -> None:
 
         await presence_websocket_handler(ws, "sess-1", "user-A")
 
-    pong_calls = [
-        call.args[0]
-        for call in ws.send_json.call_args_list
-        if call.args[0].get("type") == "pong"
-    ]
+    pong_calls = [call.args[0] for call in ws.send_json.call_args_list if call.args[0].get("type") == "pong"]
     assert len(pong_calls) == 1

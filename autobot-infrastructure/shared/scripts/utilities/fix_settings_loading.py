@@ -39,9 +39,7 @@ class SettingsLoadingFixer:
                 return True
             else:
                 logger.error(f"❌ Backend health check failed: {response.status_code}")
-                self.issues_found.append(
-                    "Backend health endpoint not responding correctly"
-                )
+                self.issues_found.append("Backend health endpoint not responding correctly")
                 return False
 
         except requests.exceptions.Timeout:
@@ -66,9 +64,7 @@ class SettingsLoadingFixer:
                 return settings
             else:
                 logger.error(f"❌ Settings endpoint returned: {response.status_code}")
-                self.issues_found.append(
-                    f"Settings endpoint error: {response.status_code}"
-                )
+                self.issues_found.append(f"Settings endpoint error: {response.status_code}")
                 return None
 
         except requests.exceptions.Timeout:
@@ -99,9 +95,7 @@ class SettingsLoadingFixer:
 
             if missing_sections:
                 logger.error(f"❌ Missing sections in settings.json: {missing_sections}")
-                self.issues_found.append(
-                    f"Missing settings sections: {missing_sections}"
-                )
+                self.issues_found.append(f"Missing settings sections: {missing_sections}")
                 return False
 
             logger.info("✅ settings.json file is valid")
@@ -122,16 +116,10 @@ class SettingsLoadingFixer:
             logger.info("🔍 Checking frontend processes...")
             result = subprocess.run(["ps", "aux"], capture_output=True, text=True)
 
-            vite_processes = [
-                line
-                for line in result.stdout.split("\n")
-                if "vite" in line.lower() and "node" in line
-            ]
+            vite_processes = [line for line in result.stdout.split("\n") if "vite" in line.lower() and "node" in line]
 
             if vite_processes:
-                logger.info(
-                    f"✅ Frontend dev server running ({len(vite_processes)} processes)"
-                )
+                logger.info(f"✅ Frontend dev server running ({len(vite_processes)} processes)")
                 return True
             else:
                 logger.warning("⚠️ Frontend dev server not detected")
@@ -295,9 +283,7 @@ if (!localStorage.getItem('chat_settings')) {
         logger.info("1. Open AutoBot in your browser: http://localhost:5173")
         logger.info("2. Press F12 to open Developer Tools")
         logger.info("3. Go to the Console tab")
-        logger.info(
-            "4. Copy and paste the script from: scripts/utilities/browser_settings_fix.js"
-        )
+        logger.info("4. Copy and paste the script from: scripts/utilities/browser_settings_fix.js")
         logger.info("5. Press Enter to run the script")
         logger.info("6. Follow the on-screen instructions")
         logger.info("=" * 70)
@@ -356,9 +342,7 @@ if (!localStorage.getItem('chat_settings')) {
         logger.info("=" * 70)
 
         # If backend is not responding, try to restart it
-        if "Backend API timeout" in str(
-            self.issues_found
-        ) or "Backend server not running" in str(self.issues_found):
+        if "Backend API timeout" in str(self.issues_found) or "Backend server not running" in str(self.issues_found):
             if self.restart_backend():
                 logger.info("✅ Backend server restarted")
             else:

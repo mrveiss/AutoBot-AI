@@ -185,9 +185,7 @@ class WorkflowSerializer:
 
         schema_ver = data.get("schema_version")
         if schema_ver != SCHEMA_VERSION:
-            issues.append(
-                f"schema_version '{schema_ver}' is not supported (expected '{SCHEMA_VERSION}')."
-            )
+            issues.append(f"schema_version '{schema_ver}' is not supported (expected '{SCHEMA_VERSION}').")
 
         for required in ("name", "description", "steps"):
             if not data.get(required):
@@ -196,9 +194,7 @@ class WorkflowSerializer:
         steps = data.get("steps")
         if isinstance(steps, list):
             if len(steps) > _MAX_IMPORT_STEPS:
-                issues.append(
-                    f"Import contains {len(steps)} steps; maximum allowed is {_MAX_IMPORT_STEPS}."
-                )
+                issues.append(f"Import contains {len(steps)} steps; maximum allowed is {_MAX_IMPORT_STEPS}.")
             for i, step in enumerate(steps):
                 step_issues = self._validate_step(i, step)
                 issues.extend(step_issues)
@@ -208,9 +204,7 @@ class WorkflowSerializer:
         automation_mode = data.get("automation_mode", "semi_automatic")
         valid_modes = {m.value for m in AutomationMode}
         if automation_mode not in valid_modes:
-            issues.append(
-                f"'automation_mode' value '{automation_mode}' is not one of {sorted(valid_modes)}."
-            )
+            issues.append(f"'automation_mode' value '{automation_mode}' is not one of {sorted(valid_modes)}.")
 
         return issues
 
@@ -341,7 +335,5 @@ def _parse_automation_mode(value: str) -> AutomationMode:
     try:
         return AutomationMode(value)
     except ValueError:
-        logger.warning(
-            "Unknown automation_mode '%s'; defaulting to semi_automatic", value
-        )
+        logger.warning("Unknown automation_mode '%s'; defaulting to semi_automatic", value)
         return AutomationMode.SEMI_AUTOMATIC

@@ -96,9 +96,7 @@ def calculate_power_efficiency(
     return 0.0
 
 
-def _check_metrics_opportunities(
-    gpu_metrics: Any, opportunities: List[Dict[str, Any]]
-) -> None:
+def _check_metrics_opportunities(gpu_metrics: Any, opportunities: List[Dict[str, Any]]) -> None:
     """Check GPU metrics for optimization opportunities (Issue #665: extracted helper)."""
     # Low utilization opportunity
     if gpu_metrics.utilization_percent < 50:
@@ -154,10 +152,7 @@ def _check_capability_opportunities(
 ) -> None:
     """Check GPU capabilities for optimization opportunities (Issue #665: extracted helper)."""
     # Mixed precision opportunity
-    if (
-        capabilities.mixed_precision
-        and "mixed_precision_enabled" not in current_optimizations
-    ):
+    if capabilities.mixed_precision and "mixed_precision_enabled" not in current_optimizations:
         opportunities.append(
             {
                 "type": "mixed_precision",
@@ -172,10 +167,7 @@ def _check_capability_opportunities(
         )
 
     # Tensor Core opportunity
-    if (
-        capabilities.tensor_cores
-        and "tensor_core_optimization" not in current_optimizations
-    ):
+    if capabilities.tensor_cores and "tensor_core_optimization" not in current_optimizations:
         opportunities.append(
             {
                 "type": "tensor_cores",
@@ -222,9 +214,7 @@ def _build_metrics_dict(gpu_metrics: Any) -> Dict[str, Any]:
     }
 
 
-def _calculate_efficiency_scores(
-    gpu_metrics: Any, capabilities: GPUCapabilities
-) -> Dict[str, float]:
+def _calculate_efficiency_scores(gpu_metrics: Any, capabilities: GPUCapabilities) -> Dict[str, float]:
     """
     Calculate all efficiency scores for GPU metrics.
 
@@ -275,22 +265,13 @@ async def monitor_gpu_acceleration_efficiency(
             return efficiency_report
 
         efficiency_report["metrics"] = _build_metrics_dict(gpu_metrics)
-        efficiency_report["efficiency_scores"] = _calculate_efficiency_scores(
-            gpu_metrics, capabilities
-        )
-        efficiency_report["overall_efficiency"] = _calculate_overall_efficiency(
-            efficiency_report["efficiency_scores"]
-        )
-        efficiency_report["optimization_opportunities"] = (
-            identify_optimization_opportunities(
-                gpu_metrics, capabilities, current_optimizations
-            )
+        efficiency_report["efficiency_scores"] = _calculate_efficiency_scores(gpu_metrics, capabilities)
+        efficiency_report["overall_efficiency"] = _calculate_overall_efficiency(efficiency_report["efficiency_scores"])
+        efficiency_report["optimization_opportunities"] = identify_optimization_opportunities(
+            gpu_metrics, capabilities, current_optimizations
         )
 
-        logger.info(
-            f"GPU efficiency monitoring completed. "
-            f"Overall: {efficiency_report['overall_efficiency']:.1f}%"
-        )
+        logger.info(f"GPU efficiency monitoring completed. " f"Overall: {efficiency_report['overall_efficiency']:.1f}%")
         return efficiency_report
 
     except Exception as e:

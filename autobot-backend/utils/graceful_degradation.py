@@ -79,9 +79,7 @@ class FallbackStrategy(ABC):
         """Check if this strategy can handle the request"""
 
     @abstractmethod
-    async def generate_response(
-        self, request: str, context: Dict[str, Any]
-    ) -> FallbackResponse:
+    async def generate_response(self, request: str, context: Dict[str, Any]) -> FallbackResponse:
         """Generate a fallback response"""
 
     @abstractmethod
@@ -104,9 +102,7 @@ class CachedResponseStrategy(FallbackStrategy):
         cached_response = await self._find_cached_response(request)
         return cached_response is not None
 
-    async def generate_response(
-        self, request: str, context: Dict[str, Any]
-    ) -> FallbackResponse:
+    async def generate_response(self, request: str, context: Dict[str, Any]) -> FallbackResponse:
         """Return cached response if available"""
         cached_response = await self._find_cached_response(request)
 
@@ -134,9 +130,7 @@ class CachedResponseStrategy(FallbackStrategy):
         """Return the strategy identifier name."""
         return "cached_response"
 
-    async def cache_response(
-        self, request: str, response: str, confidence: float = 1.0
-    ):
+    async def cache_response(self, request: str, response: str, confidence: float = 1.0):
         """Cache a successful response for future fallback use"""
         cache_key = self._generate_cache_key(request)
         cache_file = self.cache_dir / f"{cache_key}.json"
@@ -182,9 +176,7 @@ class CachedResponseStrategy(FallbackStrategy):
         # Try similarity-based matching
         return await self._find_similar_cached_response(request)
 
-    async def _find_similar_cached_response(
-        self, request: str
-    ) -> Optional[Dict[str, Any]]:
+    async def _find_similar_cached_response(self, request: str) -> Optional[Dict[str, Any]]:
         """Find a cached response for similar request"""
         request_words = set(request.lower().split())
         best_match = None
@@ -192,9 +184,7 @@ class CachedResponseStrategy(FallbackStrategy):
 
         try:
             # Issue #358 - use lambda for proper glob() execution in thread
-            cache_files = await asyncio.to_thread(
-                lambda: list(self.cache_dir.glob("*.json"))
-            )
+            cache_files = await asyncio.to_thread(lambda: list(self.cache_dir.glob("*.json")))
             for cache_file in cache_files:
                 try:
                     async with aiofiles.open(cache_file, "r", encoding="utf-8") as f:
@@ -215,10 +205,7 @@ class CachedResponseStrategy(FallbackStrategy):
                     union = request_words.union(cached_words)
                     similarity = len(intersection) / len(union)
 
-                    if (
-                        similarity > best_similarity
-                        and similarity >= self.similarity_threshold
-                    ):
+                    if similarity > best_similarity and similarity >= self.similarity_threshold:
                         best_similarity = similarity
                         best_match = cached_data
                         best_match["confidence"] = similarity
@@ -291,9 +278,7 @@ class TemplateResponseStrategy(FallbackStrategy):
         """Template strategy can handle any request"""
         return True
 
-    async def generate_response(
-        self, request: str, context: Dict[str, Any]
-    ) -> FallbackResponse:
+    async def generate_response(self, request: str, context: Dict[str, Any]) -> FallbackResponse:
         """Generate template-based response"""
         request_lower = request.lower()
         best_template = self.templates["general"]
@@ -303,9 +288,7 @@ class TemplateResponseStrategy(FallbackStrategy):
             if template_name == "general":
                 continue
 
-            score = sum(
-                1 for pattern in template_data["patterns"] if pattern in request_lower
-            )
+            score = sum(1 for pattern in template_data["patterns"] if pattern in request_lower)
             if score > best_score:
                 best_score = score
                 best_template = template_data
@@ -334,9 +317,7 @@ class StaticResponseStrategy(FallbackStrategy):
             "service_unavailable": (
                 "AutoBot is currently experiencing technical difficulties. Please try again later."
             ),
-            "maintenance": (
-                "AutoBot is currently undergoing maintenance. Service will be restored shortly."
-            ),
+            "maintenance": ("AutoBot is currently undergoing maintenance. Service will be restored shortly."),
             "emergency": (
                 "AutoBot services are temporarily unavailable. Please contact support if this issue persists."
             ),
@@ -346,14 +327,10 @@ class StaticResponseStrategy(FallbackStrategy):
         """Static strategy can always handle requests"""
         return True
 
-    async def generate_response(
-        self, request: str, context: Dict[str, Any]
-    ) -> FallbackResponse:
+    async def generate_response(self, request: str, context: Dict[str, Any]) -> FallbackResponse:
         """Generate static emergency response"""
         response_type = context.get("emergency_type", "service_unavailable")
-        content = self.static_responses.get(
-            response_type, self.static_responses["emergency"]
-        )
+        content = self.static_responses.get(response_type, self.static_responses["emergency"])
 
         return FallbackResponse(
             content=content,
@@ -384,9 +361,7 @@ class GracefulDegradationManager:
         self._lock = asyncio.Lock()
 
         # Service monitoring
-        self.service_status = ServiceStatus(
-            health=ServiceHealth.HEALTHY, degradation_level=DegradationLevel.NORMAL
-        )
+        self.service_status = ServiceStatus(health=ServiceHealth.HEALTHY, degradation_level=DegradationLevel.NORMAL)
 
         # Failure tracking
         self.failure_history: List[float] = []
@@ -399,9 +374,7 @@ class GracefulDegradationManager:
             "total_requests": 0,
             "successful_requests": 0,
             "degraded_responses": 0,
-            "fallback_usage": {
-                strategy.get_strategy_name(): 0 for strategy in self.strategies
-            },
+            "fallback_usage": {strategy.get_strategy_name(): 0 for strategy in self.strategies},
             "average_response_time": 0.0,
             "uptime_start": time.time(),
         }
@@ -424,9 +397,7 @@ class GracefulDegradationManager:
             self._monitoring_task = None
         logger.info("Graceful degradation monitoring stopped")
 
-    async def handle_request(
-        self, request: str, context: Dict[str, Any] = None
-    ) -> FallbackResponse:
+    async def handle_request(self, request: str, context: Dict[str, Any] = None) -> FallbackResponse:
         """Handle a request with graceful degradation (thread-safe)"""
         context = context or {}
         async with self._lock:
@@ -474,9 +445,7 @@ class GracefulDegradationManager:
             response_time = time.time() - start_time
             await self._update_response_time_metric(response_time)
 
-    async def _use_fallback_strategy(
-        self, request: str, context: Dict[str, Any]
-    ) -> FallbackResponse:
+    async def _use_fallback_strategy(self, request: str, context: Dict[str, Any]) -> FallbackResponse:
         """Use fallback strategies to handle the request (thread-safe)"""
         async with self._lock:
             self.metrics["degraded_responses"] += 1
@@ -486,17 +455,11 @@ class GracefulDegradationManager:
                 if await strategy.can_handle(request, context):
                     response = await strategy.generate_response(request, context)
                     async with self._lock:
-                        self.metrics["fallback_usage"][
-                            strategy.get_strategy_name()
-                        ] += 1
-                    logger.info(
-                        f"Used fallback strategy: {strategy.get_strategy_name()}"
-                    )
+                        self.metrics["fallback_usage"][strategy.get_strategy_name()] += 1
+                    logger.info(f"Used fallback strategy: {strategy.get_strategy_name()}")
                     return response
             except Exception as e:
-                logger.warning(
-                    f"Fallback strategy {strategy.get_strategy_name()} failed: {e}"
-                )
+                logger.warning(f"Fallback strategy {strategy.get_strategy_name()} failed: {e}")
 
         # Ultimate fallback
         return FallbackResponse(
@@ -558,24 +521,18 @@ class GracefulDegradationManager:
         async with self._lock:
             consecutive_failures = self.service_status.consecutive_failures
             current_time = time.time()
-            recent_failures = [
-                f for f in self.failure_history if current_time - f <= 300
-            ]
+            recent_failures = [f for f in self.failure_history if current_time - f <= 300]
             total_requests = self.metrics["total_requests"]
             error_rate = len(recent_failures) / max(1, total_requests) * 100
 
-            health, level = self._determine_health_status(
-                consecutive_failures, error_rate
-            )
+            health, level = self._determine_health_status(consecutive_failures, error_rate)
             self.service_status.health = health
             self.service_status.degradation_level = level
             self.service_status.error_rate = error_rate
             health_val = health.value
             level_name = level.name
 
-        logger.info(
-            "Service health updated: %s (degradation: %s)", health_val, level_name
-        )
+        logger.info("Service health updated: %s (degradation: %s)", health_val, level_name)
 
     async def _update_response_time_metric(self, response_time: float):
         """Update average response time metric (thread-safe)"""
@@ -647,9 +604,7 @@ class GracefulDegradationManager:
                 "last_success": self.service_status.last_success,
                 "last_failure": self.service_status.last_failure,
             }
-            degradation_active = (
-                self.service_status.degradation_level != DegradationLevel.NORMAL
-            )
+            degradation_active = self.service_status.degradation_level != DegradationLevel.NORMAL
 
         return {
             **metrics_copy,
@@ -667,9 +622,7 @@ class GracefulDegradationManager:
     async def reset_service_status(self):
         """Reset service status to healthy (for recovery, thread-safe)"""
         async with self._lock:
-            self.service_status = ServiceStatus(
-                health=ServiceHealth.HEALTHY, degradation_level=DegradationLevel.NORMAL
-            )
+            self.service_status = ServiceStatus(health=ServiceHealth.HEALTHY, degradation_level=DegradationLevel.NORMAL)
             self.failure_history.clear()
         logger.info("Service status reset to healthy")
 
@@ -719,9 +672,7 @@ async def main():
             response = await manager.handle_request(request)
             logger.debug("\nRequest %s: %s", i + 1, request)
             logger.debug("Response: %s...", response.content[:100])
-            logger.debug(
-                "Source: %s, Confidence: %.2f", response.source, response.confidence
-            )
+            logger.debug("Source: %s, Confidence: %.2f", response.source, response.confidence)
             logger.debug("Degradation Level: %s", response.degradation_level.name)
 
             # Simulate some delay between requests
@@ -732,9 +683,7 @@ async def main():
         logger.debug("Testing forced degradation levels...")
 
         await manager.force_degradation_level(DegradationLevel.MINIMAL)
-        response = await manager.handle_request(
-            "Test request during minimal degradation"
-        )
+        response = await manager.handle_request("Test request during minimal degradation")
         logger.debug("Minimal degradation response: %s", response.content)
 
         await manager.force_degradation_level(DegradationLevel.EMERGENCY)

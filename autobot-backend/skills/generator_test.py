@@ -14,11 +14,7 @@ VALID_SKILL_MD = (
     "---\nname: pdf-parser\nversion: 1.0.0\n"
     "description: Parse PDF documents\ntools: [parse_pdf]\n---\n# PDF Parser\n"
 )
-VALID_SKILL_PY = (
-    "import sys, json\n"
-    "for line in sys.stdin:\n"
-    '    sys.stdout.write(\'{"jsonrpc":"2.0"}\')\n'
-)
+VALID_SKILL_PY = "import sys, json\n" "for line in sys.stdin:\n" '    sys.stdout.write(\'{"jsonrpc":"2.0"}\')\n'
 
 
 @pytest.fixture

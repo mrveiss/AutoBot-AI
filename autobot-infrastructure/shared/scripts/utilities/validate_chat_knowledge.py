@@ -122,9 +122,7 @@ def test_frontend_components():
                             os.path.basename(component_path),
                         )
             else:
-                logger.error(
-                    "❌ Component missing: %s", os.path.basename(component_path)
-                )
+                logger.error("❌ Component missing: %s", os.path.basename(component_path))
                 return False
 
         logger.info("🎉 All frontend components are present!")

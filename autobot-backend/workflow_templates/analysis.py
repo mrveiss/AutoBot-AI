@@ -218,11 +218,7 @@ def _get_log_analysis_variables() -> Dict[str, str]:
 
 def create_log_analysis_template() -> WorkflowTemplate:
     """Create log analysis workflow template."""
-    steps = (
-        _build_log_collection_steps()
-        + _build_log_analysis_steps()
-        + _build_log_reporting_steps()
-    )
+    steps = _build_log_collection_steps() + _build_log_analysis_steps() + _build_log_reporting_steps()
     return WorkflowTemplate(
         id="log_analysis",
         name="Log Analysis",

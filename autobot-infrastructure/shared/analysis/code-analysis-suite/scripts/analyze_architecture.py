@@ -31,9 +31,7 @@ async def _display_summary_and_metrics(results):
     # Detailed metrics
     metrics = results["metrics"]
     logger.info("🏛️ **Architectural Quality Metrics:**")
-    logger.info(
-        f"   - Coupling score: {metrics['coupling_score']}/100 (lower coupling is better)"
-    )
+    logger.info(f"   - Coupling score: {metrics['coupling_score']}/100 (lower coupling is better)")
     logger.info(f"   - Cohesion score: {metrics['cohesion_score']}/100")
     logger.info(f"   - Pattern adherence: {metrics['pattern_adherence_score']}/100")
     logger.info(f"   - Maintainability index: {metrics['maintainability_index']}/100")
@@ -75,9 +73,7 @@ async def _display_design_patterns(results):
 
         logger.info("\n📋 **Pattern Details:**")
         for pattern in results["detected_patterns"][:10]:  # Show first 10
-            logger.info(
-                f"   - {pattern['pattern'].title()} in {pattern['file']}:{pattern['line']}"
-            )
+            logger.info(f"   - {pattern['pattern'].title()} in {pattern['file']}:{pattern['line']}")
             logger.info(f"     {pattern['description']}")
         logger.info()
 
@@ -93,13 +89,9 @@ async def _display_architectural_issues(results):
             severity_emoji = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
             emoji = severity_emoji.get(issue["severity"], "⚪")
 
-            logger.info(
-                f"\n   {emoji} **{issue['type'].replace('_', ' ').title()}** ({issue['severity']})"
-            )
+            logger.info(f"\n   {emoji} **{issue['type'].replace('_', ' ').title()}** ({issue['severity']})")
             logger.info(f"      {issue['description']}")
-            logger.info(
-                f"      Affects: {issue['affected_components_count']} components"
-            )
+            logger.info(f"      Affects: {issue['affected_components_count']} components")
             logger.info(f"      💡 Suggestion: {issue['suggestion']}")
             logger.info(f"      🔧 Refactoring effort: {issue['refactoring_effort']}")
             if issue["pattern_violation"]:
@@ -111,18 +103,12 @@ async def _display_coupling_analysis(results):
 
     Helper for analyze_architectural_patterns (Issue #825).
     """
-    high_coupling_components = [
-        c for c in results["components"] if c["coupling_score"] > 10
-    ]
+    high_coupling_components = [c for c in results["components"] if c["coupling_score"] > 10]
     if high_coupling_components:
         logger.info(f"\n🔗 **High Coupling Analysis:**")
-        logger.info(
-            f"   Found {len(high_coupling_components)} components with high coupling:"
-        )
+        logger.info(f"   Found {len(high_coupling_components)} components with high coupling:")
         for comp in high_coupling_components[:5]:  # Show top 5
-            logger.info(
-                f"   - {comp['type'].title()} '{comp['name']}' in {comp['file']}"
-            )
+            logger.info(f"   - {comp['type'].title()} '{comp['name']}' in {comp['file']}")
             logger.info(f"     Coupling score: {comp['coupling_score']} dependencies")
             logger.info(f"     Dependencies: {', '.join(comp['dependencies'][:5])}")
             if len(comp["dependencies"]) > 5:
@@ -136,11 +122,7 @@ async def _display_cohesion_and_complexity(results):
     Helper for analyze_architectural_patterns (Issue #825).
     """
     # Low cohesion analysis
-    low_cohesion_classes = [
-        c
-        for c in results["components"]
-        if c["type"] == "class" and c["cohesion_score"] < 0.3
-    ]
+    low_cohesion_classes = [c for c in results["components"] if c["type"] == "class" and c["cohesion_score"] < 0.3]
     if low_cohesion_classes:
         logger.info(f"🔄 **Low Cohesion Analysis:**")
         logger.info(f"   Found {len(low_cohesion_classes)} classes with low cohesion:")
@@ -151,16 +133,12 @@ async def _display_cohesion_and_complexity(results):
         logger.info()
 
     # Complex components
-    complex_components = [
-        c for c in results["components"] if c["complexity_score"] > 20
-    ]
+    complex_components = [c for c in results["components"] if c["complexity_score"] > 20]
     if complex_components:
         logger.info(f"🧠 **High Complexity Analysis:**")
         logger.info(f"   Found {len(complex_components)} highly complex components:")
         for comp in complex_components[:5]:
-            logger.info(
-                f"   - {comp['type'].title()} '{comp['name']}' in {comp['file']}"
-            )
+            logger.info(f"   - {comp['type'].title()} '{comp['name']}' in {comp['file']}")
             logger.info(f"     Complexity score: {comp['complexity_score']}")
             if comp["patterns"]:
                 logger.info(f"     Patterns: {', '.join(comp['patterns'])}")
@@ -175,9 +153,7 @@ async def analyze_architectural_patterns():
     analyzer = ArchitecturalPatternAnalyzer()
 
     # Run analysis
-    results = await analyzer.analyze_architecture(
-        root_path=".", patterns=["src/**/*.py", "backend/**/*.py"]
-    )
+    results = await analyzer.analyze_architecture(root_path=".", patterns=["src/**/*.py", "backend/**/*.py"])
 
     await _display_summary_and_metrics(results)
     await _display_component_breakdown(results)
@@ -402,12 +378,8 @@ async def demonstrate_architecture_testing():
     logger.info("from pathlib import Path")
     logger.info()
     logger.info("def test_layer_dependencies():")
-    logger.info(
-        '    """Test that presentation layer doesn\'t import from infrastructure"""'
-    )
-    logger.info(
-        "    presentation_files = list(Path('src/presentation').glob('**/*.py'))"
-    )
+    logger.info('    """Test that presentation layer doesn\'t import from infrastructure"""')
+    logger.info("    presentation_files = list(Path('src/presentation').glob('**/*.py'))")
     logger.info("    ")
     logger.info("    for file_path in presentation_files:")
     logger.info("        with open(file_path) as f:")
@@ -416,9 +388,7 @@ async def demonstrate_architecture_testing():
     logger.info("        for node in ast.walk(tree):")
     logger.info("            if isinstance(node, ast.ImportFrom):")
     logger.info("                if node.module and 'infrastructure' in node.module:")
-    logger.info(
-        "                    assert False, f'{file_path} imports from infrastructure'"
-    )
+    logger.info("                    assert False, f'{file_path} imports from infrastructure'")
     logger.info("```")
     logger.info()
 
@@ -432,12 +402,8 @@ async def demonstrate_architecture_testing():
     logger.info("        ")
     logger.info("        for node in ast.walk(tree):")
     logger.info("            if isinstance(node, ast.ClassDef):")
-    logger.info(
-        "                method_count = len([n for n in node.body if isinstance(n, ast.FunctionDef)])"
-    )
-    logger.info(
-        "                assert method_count < 20, f'Class {node.name} has {method_count} methods'"
-    )
+    logger.info("                method_count = len([n for n in node.body if isinstance(n, ast.FunctionDef)])")
+    logger.info("                assert method_count < 20, f'Class {node.name} has {method_count} methods'")
     logger.info("```")
     logger.info()
 

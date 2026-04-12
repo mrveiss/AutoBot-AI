@@ -147,9 +147,7 @@ async def _get_security_event_counts(db: AsyncSession, last_24h: datetime) -> di
     violations_count = policy_violations.scalar() or 0
 
     # Total events in 24h
-    total_events = await db.execute(
-        select(func.count(SecurityEvent.id)).where(SecurityEvent.timestamp >= last_24h)
-    )
+    total_events = await db.execute(select(func.count(SecurityEvent.id)).where(SecurityEvent.timestamp >= last_24h))
     total_events_count = total_events.scalar() or 0
 
     return {
@@ -161,9 +159,7 @@ async def _get_security_event_counts(db: AsyncSession, last_24h: datetime) -> di
     }
 
 
-async def _get_expiring_certificates_count(
-    db: AsyncSession, now: datetime, last_30d: datetime
-) -> int:
+async def _get_expiring_certificates_count(db: AsyncSession, now: datetime, last_30d: datetime) -> int:
     """Get count of certificates expiring in the next 30 days.
 
     Helper for get_security_overview (Issue #665).
@@ -211,9 +207,7 @@ async def get_security_overview(
     score = _calculate_security_score(counts, certs_expiring_count)
 
     # Recent events
-    recent = await db.execute(
-        select(SecurityEvent).order_by(SecurityEvent.timestamp.desc()).limit(10)
-    )
+    recent = await db.execute(select(SecurityEvent).order_by(SecurityEvent.timestamp.desc()).limit(10))
     recent_events = recent.scalars().all()
 
     return SecurityOverviewResponse(
@@ -241,12 +235,8 @@ async def list_audit_logs(
     username: Optional[str] = Query(None, description="Filter by username"),
     action: Optional[str] = Query(None, description="Filter by action"),
     success: Optional[bool] = Query(None, description="Filter by success status"),
-    since: Optional[datetime] = Query(
-        None, description="Filter events after this time"
-    ),
-    until: Optional[datetime] = Query(
-        None, description="Filter events before this time"
-    ),
+    since: Optional[datetime] = Query(None, description="Filter events after this time"),
+    until: Optional[datetime] = Query(None, description="Filter events before this time"),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
 ) -> AuditLogListResponse:
@@ -364,9 +354,7 @@ async def _get_security_event_aggregates(db: AsyncSession) -> dict:
     total = count_result.scalar() or 0
 
     unack_result = await db.execute(
-        select(func.count(SecurityEvent.id)).where(
-            SecurityEvent.is_acknowledged.is_(False)
-        )
+        select(func.count(SecurityEvent.id)).where(SecurityEvent.is_acknowledged.is_(False))
     )
     unacknowledged_count = unack_result.scalar() or 0
 
@@ -390,9 +378,7 @@ async def list_security_events(
     _: Annotated[dict, Depends(get_current_user)],
     event_type: Optional[str] = Query(None, description="Filter by event type"),
     severity: Optional[str] = Query(None, description="Filter by severity"),
-    acknowledged: Optional[bool] = Query(
-        None, description="Filter by acknowledged status"
-    ),
+    acknowledged: Optional[bool] = Query(None, description="Filter by acknowledged status"),
     resolved: Optional[bool] = Query(None, description="Filter by resolved status"),
     source_ip: Optional[str] = Query(None, description="Filter by source IP"),
     node_id: Optional[str] = Query(None, description="Filter by node ID"),
@@ -492,9 +478,7 @@ async def get_threat_summary(
     )
     resolved = resolved_result.scalar() or 0
 
-    total_result = await db.execute(
-        select(func.count(SecurityEvent.id)).where(SecurityEvent.timestamp >= since)
-    )
+    total_result = await db.execute(select(func.count(SecurityEvent.id)).where(SecurityEvent.timestamp >= since))
     total = total_result.scalar() or 0
 
     return ThreatSummary(
@@ -510,9 +494,7 @@ async def get_threat_summary(
     )
 
 
-@router.post(
-    "/events", response_model=SecurityEventResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("/events", response_model=SecurityEventResponse, status_code=status.HTTP_201_CREATED)
 async def create_security_event(
     event_data: SecurityEventCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -551,9 +533,7 @@ async def get_security_event(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> SecurityEventResponse:
     """Get a specific security event."""
-    result = await db.execute(
-        select(SecurityEvent).where(SecurityEvent.event_id == event_id)
-    )
+    result = await db.execute(select(SecurityEvent).where(SecurityEvent.event_id == event_id))
     event = result.scalar_one_or_none()
 
     if not event:
@@ -573,9 +553,7 @@ async def acknowledge_security_event(
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> SecurityEventResponse:
     """Acknowledge a security event."""
-    result = await db.execute(
-        select(SecurityEvent).where(SecurityEvent.event_id == event_id)
-    )
+    result = await db.execute(select(SecurityEvent).where(SecurityEvent.event_id == event_id))
     event = result.scalar_one_or_none()
 
     if not event:
@@ -591,9 +569,7 @@ async def acknowledge_security_event(
     await db.commit()
     await db.refresh(event)
 
-    logger.info(
-        "Security event acknowledged: %s by %s", event_id, event.acknowledged_by
-    )
+    logger.info("Security event acknowledged: %s by %s", event_id, event.acknowledged_by)
     return SecurityEventResponse.model_validate(event)
 
 
@@ -605,9 +581,7 @@ async def resolve_security_event(
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> SecurityEventResponse:
     """Resolve a security event."""
-    result = await db.execute(
-        select(SecurityEvent).where(SecurityEvent.event_id == event_id)
-    )
+    result = await db.execute(select(SecurityEvent).where(SecurityEvent.event_id == event_id))
     event = result.scalar_one_or_none()
 
     if not event:
@@ -725,9 +699,7 @@ async def get_security_policy(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> SecurityPolicyResponse:
     """Get a specific security policy."""
-    result = await db.execute(
-        select(SecurityPolicy).where(SecurityPolicy.policy_id == policy_id)
-    )
+    result = await db.execute(select(SecurityPolicy).where(SecurityPolicy.policy_id == policy_id))
     policy = result.scalar_one_or_none()
 
     if not policy:
@@ -747,9 +719,7 @@ async def update_security_policy(
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> SecurityPolicyResponse:
     """Update a security policy."""
-    result = await db.execute(
-        select(SecurityPolicy).where(SecurityPolicy.policy_id == policy_id)
-    )
+    result = await db.execute(select(SecurityPolicy).where(SecurityPolicy.policy_id == policy_id))
     policy = result.scalar_one_or_none()
 
     if not policy:
@@ -780,9 +750,7 @@ async def delete_security_policy(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> None:
     """Delete a security policy."""
-    result = await db.execute(
-        select(SecurityPolicy).where(SecurityPolicy.policy_id == policy_id)
-    )
+    result = await db.execute(select(SecurityPolicy).where(SecurityPolicy.policy_id == policy_id))
     policy = result.scalar_one_or_none()
 
     if not policy:
@@ -804,9 +772,7 @@ async def activate_security_policy(
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> SecurityPolicyResponse:
     """Activate a security policy and enable enforcement."""
-    result = await db.execute(
-        select(SecurityPolicy).where(SecurityPolicy.policy_id == policy_id)
-    )
+    result = await db.execute(select(SecurityPolicy).where(SecurityPolicy.policy_id == policy_id))
     policy = result.scalar_one_or_none()
 
     if not policy:
@@ -833,9 +799,7 @@ async def deactivate_security_policy(
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> SecurityPolicyResponse:
     """Deactivate a security policy and disable enforcement."""
-    result = await db.execute(
-        select(SecurityPolicy).where(SecurityPolicy.policy_id == policy_id)
-    )
+    result = await db.execute(select(SecurityPolicy).where(SecurityPolicy.policy_id == policy_id))
     policy = result.scalar_one_or_none()
 
     if not policy:
@@ -948,9 +912,7 @@ async def list_expiring_certificates(
     certs = result.scalars().all()
 
     return [
-        CertificateResponse.model_validate(
-            cert, update={"days_until_expiry": _days_until(cert.not_after)}
-        )
+        CertificateResponse.model_validate(cert, update={"days_until_expiry": _days_until(cert.not_after)})
         for cert in certs
     ]
 
@@ -970,15 +932,11 @@ async def report_certificate(
     not_after_dt = _parse_openssl_date(report.not_after)
 
     # Upsert: find existing cert for this node or create new
-    existing = await db.execute(
-        select(Certificate).where(Certificate.node_id == report.node_id)
-    )
+    existing = await db.execute(select(Certificate).where(Certificate.node_id == report.node_id))
     cert = existing.scalar_one_or_none()
 
     if cert is None:
-        cert = Certificate(
-            cert_id=f"{report.node_id}-{int(datetime.utcnow().timestamp())}"
-        )
+        cert = Certificate(cert_id=f"{report.node_id}-{int(datetime.utcnow().timestamp())}")
         db.add(cert)
 
     cert.node_id = report.node_id
@@ -993,9 +951,7 @@ async def report_certificate(
     await db.commit()
     await db.refresh(cert)
 
-    logger.info(
-        "Cert reported for node %s (expires %s)", report.node_id, report.not_after
-    )
+    logger.info("Cert reported for node %s (expires %s)", report.node_id, report.not_after)
     resp = CertificateResponse.model_validate(cert)
     resp.days_until_expiry = _days_until(cert.not_after)
     return resp

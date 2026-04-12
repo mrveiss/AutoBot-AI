@@ -86,9 +86,7 @@ class OrganizationService(BaseService):
         self._require_platform_admin()
 
         slug = await self._validate_and_prepare_slug(name, slug)
-        org = self._build_organization_entity(
-            name, slug, description, settings, subscription_tier, max_users
-        )
+        org = self._build_organization_entity(name, slug, description, settings, subscription_tier, max_users)
 
         self.session.add(org)
         await self.session.flush()
@@ -119,9 +117,7 @@ class OrganizationService(BaseService):
             Organization instance or None
         """
         result = await self.session.execute(
-            select(Organization)
-            .where(Organization.id == org_id)
-            .where(Organization.deleted_at.is_(None))
+            select(Organization).where(Organization.id == org_id).where(Organization.deleted_at.is_(None))
         )
         return result.scalar_one_or_none()
 
@@ -220,9 +216,7 @@ class OrganizationService(BaseService):
         if not org:
             raise OrganizationNotFoundError(f"Organization {org_id} not found")
 
-        changes = self._apply_organization_updates(
-            org, name, description, settings, subscription_tier, max_users
-        )
+        changes = self._apply_organization_updates(org, name, description, settings, subscription_tier, max_users)
         await self.session.flush()
 
         if changes:
@@ -267,9 +261,7 @@ class OrganizationService(BaseService):
         logger.info("Deactivated organization: %s", org_id)
         return True
 
-    async def delete_organization(
-        self, org_id: uuid.UUID, hard_delete: bool = False
-    ) -> bool:
+    async def delete_organization(self, org_id: uuid.UUID, hard_delete: bool = False) -> bool:
         """
         Delete an organization.
 
@@ -339,10 +331,7 @@ class OrganizationService(BaseService):
             Number of teams
         """
         result = await self.session.execute(
-            select(func.count())
-            .select_from(Team)
-            .where(Team.org_id == org_id)
-            .where(Team.deleted_at.is_(None))
+            select(func.count()).select_from(Team).where(Team.org_id == org_id).where(Team.deleted_at.is_(None))
         )
         return result.scalar() or 0
 
@@ -430,9 +419,7 @@ class OrganizationService(BaseService):
 
         existing = await self.get_organization_by_slug(slug)
         if existing:
-            raise DuplicateOrganizationError(
-                f"Organization with slug '{slug}' already exists"
-            )
+            raise DuplicateOrganizationError(f"Organization with slug '{slug}' already exists")
         return slug
 
     def _build_organization_entity(

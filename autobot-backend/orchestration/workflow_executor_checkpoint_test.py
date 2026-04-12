@@ -14,7 +14,6 @@ import pytest
 
 from orchestration.workflow_executor import WorkflowExecutor
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

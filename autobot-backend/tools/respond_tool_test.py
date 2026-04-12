@@ -145,9 +145,7 @@ class TestRespondToolProcessing:
         handler.terminal_tool = None
 
         # No break_loop specified - should default to True
-        tool_calls = [
-            {"name": "respond", "params": {"text": "Done"}, "description": "Complete"}
-        ]
+        tool_calls = [{"name": "respond", "params": {"text": "Done"}, "description": "Complete"}]
 
         break_loop_result = None
         async for item in handler._process_tool_calls(
@@ -193,9 +191,7 @@ class TestRespondToolProcessing:
         handler = ToolHandlerMixin()
         handler.terminal_tool = None
 
-        tool_calls = [
-            {"name": "unknown_tool", "params": {"foo": "bar"}, "description": "Unknown"}
-        ]
+        tool_calls = [{"name": "unknown_tool", "params": {"foo": "bar"}, "description": "Unknown"}]
 
         messages = []
         async for item in handler._process_tool_calls(
@@ -231,9 +227,7 @@ class TestBreakLoopIntegration:
         ]
 
         final_tuple = None
-        async for item in handler._process_tool_calls(
-            tool_calls, "s1", "t1", "http://localhost:11434", "llama3"
-        ):
+        async for item in handler._process_tool_calls(tool_calls, "s1", "t1", "http://localhost:11434", "llama3"):
             if isinstance(item, tuple) and len(item) == 2:
                 final_tuple = item
 
@@ -253,7 +247,9 @@ class TestBackwardsCompatibility:
 
         handler = ToolHandlerMixin()
 
-        text = """<TOOL_CALL name="execute_command" params='{"command":"ls -la","host":"main"}'>List files</TOOL_CALL>"""
+        text = (
+            """<TOOL_CALL name="execute_command" params='{"command":"ls -la","host":"main"}'>List files</TOOL_CALL>"""
+        )
         tool_calls = handler._parse_tool_calls(text)
 
         assert len(tool_calls) == 1
@@ -273,9 +269,7 @@ class TestBackwardsCompatibility:
         tool_calls = []
 
         final_tuple = None
-        async for item in handler._process_tool_calls(
-            tool_calls, "s1", "t1", "http://localhost:11434", "llama3"
-        ):
+        async for item in handler._process_tool_calls(tool_calls, "s1", "t1", "http://localhost:11434", "llama3"):
             if isinstance(item, tuple) and len(item) == 2:
                 final_tuple = item
 

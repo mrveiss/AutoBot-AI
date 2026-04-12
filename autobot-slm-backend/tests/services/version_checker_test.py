@@ -14,9 +14,7 @@ import pytest
 
 # Import git_tracker module directly
 git_tracker_path = Path(__file__).parent.parent.parent / "services" / "git_tracker.py"
-spec = __import__("importlib.util").util.spec_from_file_location(
-    "git_tracker", git_tracker_path
-)
+spec = __import__("importlib.util").util.spec_from_file_location("git_tracker", git_tracker_path)
 git_tracker_module = __import__("importlib.util").util.module_from_spec(spec)
 spec.loader.exec_module(git_tracker_module)
 
@@ -93,9 +91,7 @@ class TestVersionCheckTask:
                     mock_db_service.session.return_value = mock_session_ctx
 
                     # Run task once
-                    task = asyncio.create_task(
-                        git_tracker_module.version_check_task(interval=0.1)
-                    )
+                    task = asyncio.create_task(git_tracker_module.version_check_task(interval=0.1))
                     await asyncio.sleep(0.2)
                     task.cancel()
                     try:
@@ -110,9 +106,7 @@ class TestVersionCheckTask:
     async def test_task_updates_setting_on_success(self):
         """Test that version_check_task updates setting when remote commit is available."""
         with patch.object(git_tracker_module, "get_git_tracker") as mock_get_tracker:
-            with patch.object(
-                git_tracker_module, "update_latest_version_setting"
-            ) as mock_update:
+            with patch.object(git_tracker_module, "update_latest_version_setting") as mock_update:
                 with patch.object(git_tracker_module, "db_service") as mock_db_service:
                     mock_tracker = MagicMock()
                     mock_tracker.check_for_updates = AsyncMock(
@@ -133,9 +127,7 @@ class TestVersionCheckTask:
                     mock_db_service.session.return_value = mock_session_ctx
 
                     # Run task once
-                    task = asyncio.create_task(
-                        git_tracker_module.version_check_task(interval=0.1)
-                    )
+                    task = asyncio.create_task(git_tracker_module.version_check_task(interval=0.1))
                     await asyncio.sleep(0.2)
                     task.cancel()
                     try:
@@ -150,9 +142,7 @@ class TestVersionCheckTask:
     async def test_task_handles_no_remote_commit(self):
         """Test that version_check_task handles gracefully when remote commit is None."""
         with patch.object(git_tracker_module, "get_git_tracker") as mock_get_tracker:
-            with patch.object(
-                git_tracker_module, "update_latest_version_setting"
-            ) as mock_update:
+            with patch.object(git_tracker_module, "update_latest_version_setting") as mock_update:
                 mock_tracker = MagicMock()
                 mock_tracker.check_for_updates = AsyncMock(
                     return_value={
@@ -165,9 +155,7 @@ class TestVersionCheckTask:
                 mock_get_tracker.return_value = mock_tracker
 
                 # Run task once
-                task = asyncio.create_task(
-                    git_tracker_module.version_check_task(interval=0.1)
-                )
+                task = asyncio.create_task(git_tracker_module.version_check_task(interval=0.1))
                 await asyncio.sleep(0.2)
                 task.cancel()
                 try:
@@ -200,9 +188,7 @@ class TestVersionCheckTask:
             mock_get_tracker.return_value = mock_tracker
 
             # Run task for a bit
-            task = asyncio.create_task(
-                git_tracker_module.version_check_task(interval=0.1)
-            )
+            task = asyncio.create_task(git_tracker_module.version_check_task(interval=0.1))
             await asyncio.sleep(0.3)
             task.cancel()
             try:
@@ -219,9 +205,7 @@ class TestVersionCheckTask:
         with patch.object(git_tracker_module, "get_git_tracker") as mock_get_tracker:
             with patch.object(git_tracker_module, "logger") as mock_logger:
                 with patch.object(git_tracker_module, "update_latest_version_setting"):
-                    with patch.object(
-                        git_tracker_module, "db_service"
-                    ) as mock_db_service:
+                    with patch.object(git_tracker_module, "db_service") as mock_db_service:
                         mock_tracker = MagicMock()
                         mock_tracker.check_for_updates = AsyncMock(
                             return_value={
@@ -241,9 +225,7 @@ class TestVersionCheckTask:
                         mock_db_service.session.return_value = mock_session_ctx
 
                         # Run task once
-                        task = asyncio.create_task(
-                            git_tracker_module.version_check_task(interval=0.1)
-                        )
+                        task = asyncio.create_task(git_tracker_module.version_check_task(interval=0.1))
                         await asyncio.sleep(0.2)
                         task.cancel()
                         try:
@@ -252,9 +234,7 @@ class TestVersionCheckTask:
                             pass
 
                         # Verify info log was called about update
-                        info_calls = [
-                            str(call) for call in mock_logger.info.call_args_list
-                        ]
+                        info_calls = [str(call) for call in mock_logger.info.call_args_list]
                         assert any("Update available" in call for call in info_calls)
 
 

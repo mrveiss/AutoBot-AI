@@ -162,15 +162,11 @@ class TestStratumMetricsComputation:
         """Verify confidence increases with sample size."""
         # Small sample
         tasks_small = [_create_task_record("agent_a", f"t{i}") for i in range(5)]
-        metrics_small = analyzer._compute_stratum_metrics(
-            tasks_small, "success_rate", "low"
-        )
+        metrics_small = analyzer._compute_stratum_metrics(tasks_small, "success_rate", "low")
 
         # Large sample
         tasks_large = [_create_task_record("agent_a", f"t{i}") for i in range(100)]
-        metrics_large = analyzer._compute_stratum_metrics(
-            tasks_large, "success_rate", "low"
-        )
+        metrics_large = analyzer._compute_stratum_metrics(tasks_large, "success_rate", "low")
 
         assert metrics_small is not None
         assert metrics_large is not None
@@ -199,9 +195,7 @@ class TestConfoundingDetection:
             ),
         }
 
-        confounded, strength = analyzer._detect_confounding(
-            "success_rate", strata_results
-        )
+        confounded, strength = analyzer._detect_confounding("success_rate", strata_results)
         assert confounded is True
         assert strength > 0.0
 
@@ -219,9 +213,7 @@ class TestConfoundingDetection:
             ),
         }
 
-        confounded, strength = analyzer._detect_confounding(
-            "success_rate", strata_results
-        )
+        confounded, strength = analyzer._detect_confounding("success_rate", strata_results)
         assert confounded is False
         assert strength < 0.15
 
@@ -242,9 +234,7 @@ class TestTrueEffectEstimation:
             ),
         }
 
-        true_effect, confidence = analyzer._estimate_true_effect(
-            "success_rate", strata_results
-        )
+        true_effect, confidence = analyzer._estimate_true_effect("success_rate", strata_results)
         assert true_effect > 0  # Agent A is better
         assert confidence > 0.5  # High confidence (consistent direction)
 
@@ -261,9 +251,7 @@ class TestTrueEffectEstimation:
             ),
         }
 
-        true_effect, confidence = analyzer._estimate_true_effect(
-            "success_rate", strata_results
-        )
+        true_effect, confidence = analyzer._estimate_true_effect("success_rate", strata_results)
         assert confidence < 0.5  # Lower confidence (inconsistent direction)
 
 
@@ -359,25 +347,11 @@ class TestStratifiedComparisonIntegration:
         """Verify complete stratified comparison workflow."""
         # Create test data: agent_a is better at low complexity, agent_b at high
         tasks_a = [
-            _create_task_record(
-                "agent_a", f"t{i}", status="completed", query_complexity=1
-            )
-            for i in range(20)
-        ] + [
-            _create_task_record(
-                "agent_a", f"t{i+20}", status="failed", query_complexity=3
-            )
-            for i in range(5)
-        ]
+            _create_task_record("agent_a", f"t{i}", status="completed", query_complexity=1) for i in range(20)
+        ] + [_create_task_record("agent_a", f"t{i+20}", status="failed", query_complexity=3) for i in range(5)]
 
-        tasks_b = [
-            _create_task_record("agent_b", f"t{i}", status="failed", query_complexity=1)
-            for i in range(5)
-        ] + [
-            _create_task_record(
-                "agent_b", f"t{i+5}", status="completed", query_complexity=3
-            )
-            for i in range(20)
+        tasks_b = [_create_task_record("agent_b", f"t{i}", status="failed", query_complexity=1) for i in range(5)] + [
+            _create_task_record("agent_b", f"t{i+5}", status="completed", query_complexity=3) for i in range(20)
         ]
 
         with patch.object(analyzer, "_get_agent_history") as mock_history:
@@ -407,23 +381,15 @@ class TestStratifiedComparisonIntegration:
         with patch.object(analyzer, "_get_agent_history") as mock_history:
             mock_history.return_value = []
 
-            comparison = await analyzer.compare_agents_stratified(
-                "agent_a", "agent_b", "success_rate"
-            )
+            comparison = await analyzer.compare_agents_stratified("agent_a", "agent_b", "success_rate")
 
             assert comparison is None
 
     @pytest.mark.asyncio
     async def test_compare_agents_no_overlapping_strata(self, analyzer):
         """Verify None returned when strata don't overlap."""
-        tasks_a = [
-            _create_task_record("agent_a", f"t{i}", query_complexity=1)
-            for i in range(10)
-        ]
-        tasks_b = [
-            _create_task_record("agent_b", f"t{i}", query_complexity=3)
-            for i in range(10)
-        ]
+        tasks_a = [_create_task_record("agent_a", f"t{i}", query_complexity=1) for i in range(10)]
+        tasks_b = [_create_task_record("agent_b", f"t{i}", query_complexity=3) for i in range(10)]
 
         with patch.object(analyzer, "_get_agent_history") as mock_history:
 

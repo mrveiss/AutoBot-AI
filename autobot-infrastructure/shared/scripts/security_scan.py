@@ -52,8 +52,11 @@ class SecurityScanner:
         try:
             logger.info("Checking Python dependencies with pip-audit...")
             cmd = [
-                sys.executable, "-m", "pip_audit",
-                "--format=json", "--require",
+                sys.executable,
+                "-m",
+                "pip_audit",
+                "--format=json",
+                "--require",
                 str(self.project_root / "requirements.txt"),
             ]
             result = subprocess.run(cmd, capture_output=True, text=True)
@@ -73,9 +76,7 @@ class SecurityScanner:
             except json.JSONDecodeError:
                 return {"status": "error", "message": result.stderr}
         except FileNotFoundError:
-            logger.warning(
-                "pip-audit not found. Install with: pip install pip-audit"
-            )
+            logger.warning("pip-audit not found. Install with: pip install pip-audit")
             return {"status": "tool_missing"}
 
     def _scan_safety(self) -> Dict[str, Any]:
@@ -89,9 +90,7 @@ class SecurityScanner:
                 return {"status": "clean", "vulnerabilities": []}
             try:
                 vulns = json.loads(result.stdout)
-                logger.warning(
-                    "Safety found %s vulnerabilities", len(vulns)
-                )
+                logger.warning("Safety found %s vulnerabilities", len(vulns))
                 return {
                     "status": "vulnerabilities_found",
                     "vulnerabilities": vulns,
@@ -99,9 +98,7 @@ class SecurityScanner:
             except json.JSONDecodeError:
                 return {"status": "error", "message": result.stderr}
         except FileNotFoundError:
-            logger.warning(
-                "safety not found. Install with: pip install safety"
-            )
+            logger.warning("safety not found. Install with: pip install safety")
             return {"status": "tool_missing"}
 
     def _scan_npm_audit(self) -> Dict[str, Any]:
@@ -112,21 +109,13 @@ class SecurityScanner:
         try:
             logger.info("Checking Node.js dependencies...")
             cmd = ["npm", "audit", "--json", "--audit-level=moderate"]
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, cwd=npm_dir
-            )
+            result = subprocess.run(cmd, capture_output=True, text=True, cwd=npm_dir)
             audit_data = json.loads(result.stdout)
-            total = (
-                audit_data.get("metadata", {})
-                .get("vulnerabilities", {})
-                .get("total", 0)
-            )
+            total = audit_data.get("metadata", {}).get("vulnerabilities", {}).get("total", 0)
             if total == 0:
                 logger.info("No Node.js dependency vulnerabilities found")
                 return {"status": "clean", "vulnerabilities": 0}
-            logger.warning(
-                "Found %s Node.js dependency vulnerabilities", total
-            )
+            logger.warning("Found %s Node.js dependency vulnerabilities", total)
             return {
                 "status": "vulnerabilities_found",
                 "vulnerabilities": total,
@@ -170,9 +159,7 @@ class SecurityScanner:
                 if issue_count == 0:
                     logger.info("✅ Bandit found no security issues")
                 else:
-                    logger.warning(
-                        f"⚠️ Bandit found {issue_count} potential security issues"
-                    )
+                    logger.warning(f"⚠️ Bandit found {issue_count} potential security issues")
 
             except json.JSONDecodeError:
                 results["bandit"] = {"status": "error", "message": result.stderr}
@@ -198,9 +185,7 @@ class SecurityScanner:
                 if len(findings) == 0:
                     logger.info("✅ Semgrep found no security issues")
                 else:
-                    logger.warning(
-                        f"⚠️ Semgrep found {len(findings)} potential security issues"
-                    )
+                    logger.warning(f"⚠️ Semgrep found {len(findings)} potential security issues")
 
             except json.JSONDecodeError:
                 results["semgrep"] = {"status": "error", "message": result.stderr}
@@ -228,9 +213,7 @@ class SecurityScanner:
         # Also fixes: import re was inside loop (very inefficient)
         import re
 
-        combined_pattern = re.compile(
-            "|".join(f"({p})" for p in secret_patterns), re.IGNORECASE
-        )
+        combined_pattern = re.compile("|".join(f"({p})" for p in secret_patterns), re.IGNORECASE)
 
         found_secrets = []
         source_dirs = ["src/", "backend/"]
@@ -248,17 +231,10 @@ class SecurityScanner:
                         if combined_pattern.search(line):
                             found_secrets.append(
                                 {
-                                    "file": str(
-                                        py_file.relative_to(
-                                            self.project_root
-                                        )
-                                    ),
+                                    "file": str(py_file.relative_to(self.project_root)),
                                     "line": i,
                                     "pattern": "potential_secret",
-                                    "line_content": (
-                                        "[REDACTED - potential "
-                                        "secret detected]"
-                                    ),
+                                    "line_content": ("[REDACTED - potential " "secret detected]"),
                                 }
                             )
                 except Exception as e:
@@ -273,9 +249,7 @@ class SecurityScanner:
         if len(found_secrets) == 0:
             logger.info("✅ No obvious hardcoded secrets detected")
         else:
-            logger.warning(
-                "⚠️ Found %s potential hardcoded secrets", len(found_secrets)
-            )
+            logger.warning("⚠️ Found %s potential hardcoded secrets", len(found_secrets))
 
         return results
 
@@ -332,9 +306,7 @@ class SecurityScanner:
                     )
 
                     # Count error handling
-                    error_handling += len(
-                        re.findall(r"(?:try:|except|raise)", content, re.IGNORECASE)
-                    )
+                    error_handling += len(re.findall(r"(?:try:|except|raise)", content, re.IGNORECASE))
 
                 except Exception as e:
                     logger.debug("Error reading %s: %s", py_file, e)
@@ -366,43 +338,31 @@ class SecurityScanner:
         if dep_results.get("pip_audit", {}).get("status") == "vulnerabilities_found":
             vuln_count = len(dep_results["pip_audit"].get("vulnerabilities", []))
             summary["critical_issues"] += vuln_count
-            summary["recommendations"].append(
-                f"Update {vuln_count} vulnerable Python dependencies"
-            )
+            summary["recommendations"].append(f"Update {vuln_count} vulnerable Python dependencies")
 
         if dep_results.get("npm_audit", {}).get("status") == "vulnerabilities_found":
             vuln_count = dep_results["npm_audit"].get("vulnerabilities", 0)
             summary["warnings"] += vuln_count
-            summary["recommendations"].append(
-                f"Update {vuln_count} vulnerable Node.js dependencies"
-            )
+            summary["recommendations"].append(f"Update {vuln_count} vulnerable Node.js dependencies")
 
         # Analyze static analysis
         static_results = self.scan_results.get("static_analysis", {})
         bandit_issues = static_results.get("bandit", {}).get("issues_found", 0)
         if bandit_issues > 0:
             summary["warnings"] += bandit_issues
-            summary["recommendations"].append(
-                f"Review {bandit_issues} Bandit security findings"
-            )
+            summary["recommendations"].append(f"Review {bandit_issues} Bandit security findings")
 
         semgrep_issues = static_results.get("semgrep", {}).get("findings_count", 0)
         if semgrep_issues > 0:
             summary["warnings"] += semgrep_issues
-            summary["recommendations"].append(
-                f"Review {semgrep_issues} Semgrep security findings"
-            )
+            summary["recommendations"].append(f"Review {semgrep_issues} Semgrep security findings")
 
         # Analyze secret detection
         secret_results = self.scan_results.get("secret_detection", {})
-        secrets_found = secret_results.get("pattern_detection", {}).get(
-            "secrets_found", 0
-        )
+        secrets_found = secret_results.get("pattern_detection", {}).get("secrets_found", 0)
         if secrets_found > 0:
             summary["critical_issues"] += secrets_found
-            summary["recommendations"].append(
-                f"Remove {secrets_found} potential hardcoded secrets"
-            )
+            summary["recommendations"].append(f"Remove {secrets_found} potential hardcoded secrets")
 
         # Determine overall status
         if summary["critical_issues"] > 0:
@@ -537,24 +497,14 @@ class SecurityScanner:
         logger.info("🛡️ SECURITY SCAN SUMMARY")
         logger.info("=" * 50)
         overall = summary["overall_status"].upper()
-        emoji = status_emoji.get(
-            summary["overall_status"], "?"
-        )
-        logger.info(
-            "%s Overall Status: %s", emoji, overall
-        )
-        logger.info(
-            "Critical Issues: %s", summary["critical_issues"]
-        )
-        logger.info(
-            "Warnings: %s", summary["warnings"]
-        )
+        emoji = status_emoji.get(summary["overall_status"], "?")
+        logger.info("%s Overall Status: %s", emoji, overall)
+        logger.info("Critical Issues: %s", summary["critical_issues"])
+        logger.info("Warnings: %s", summary["warnings"])
 
         if summary.get("recommendations"):
             logger.info("\nRecommended Actions:")
-            for idx, rec in enumerate(
-                summary["recommendations"], 1
-            ):
+            for idx, rec in enumerate(summary["recommendations"], 1):
                 logger.info("  %s. %s", idx, rec)
 
         logger.info("=" * 50)

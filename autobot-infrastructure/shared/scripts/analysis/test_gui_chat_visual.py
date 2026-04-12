@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 import requests
+
 from constants import ServiceURLs
 
 
@@ -129,9 +130,7 @@ def test_gui_chat():
             content = result.get("content", "")
             if "Hello, can you hear me?" in content:
                 logger.info("✅ User message appears in chat")
-                if any(
-                    word in content.lower() for word in ["yes", "hello", "hi", "hear"]
-                ):
+                if any(word in content.lower() for word in ["yes", "hello", "hi", "hear"]):
                     logger.info("✅ Bot response detected!")
                 else:
                     logger.error("❌ No bot response detected")

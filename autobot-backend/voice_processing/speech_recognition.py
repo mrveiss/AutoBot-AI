@@ -64,9 +64,7 @@ class SpeechRecognitionEngine:
         except ImportError:
             logger.warning("Language detection not available")
 
-    async def _run_parallel_analysis(
-        self, audio_input: AudioInput, language: str = "en"
-    ) -> tuple:
+    async def _run_parallel_analysis(self, audio_input: AudioInput, language: str = "en") -> tuple:
         """Issue #665: Extracted from transcribe_audio to reduce function length.
 
         Run audio analysis operations in parallel for better performance.
@@ -124,9 +122,7 @@ class SpeechRecognitionEngine:
             },
         )
 
-    async def transcribe_audio(
-        self, audio_input: AudioInput, language: str = "en"
-    ) -> SpeechRecognitionResult:
+    async def transcribe_audio(self, audio_input: AudioInput, language: str = "en") -> SpeechRecognitionResult:
         """Transcribe audio to text using speech recognition.
 
         Args:
@@ -175,8 +171,7 @@ class SpeechRecognitionEngine:
                 )
 
                 logger.info(
-                    f"Speech recognition completed: {audio_input.audio_id}, "
-                    f"confidence: {result.confidence:.2f}"
+                    f"Speech recognition completed: {audio_input.audio_id}, " f"confidence: {result.confidence:.2f}"
                 )
                 return result
 
@@ -223,15 +218,11 @@ class SpeechRecognitionEngine:
             logger.debug("Noise level calculation failed: %s", e)
             return 0.5
 
-    def _try_google_recognition(
-        self, audio_data, language: str = "en"
-    ) -> List[Dict[str, Any]]:
+    def _try_google_recognition(self, audio_data, language: str = "en") -> List[Dict[str, Any]]:
         """Try Google speech recognition (Issue #298 - extracted helper)."""
         results = []
         try:
-            result = self.recognizer.recognize_google(
-                audio_data, language=language, show_all=True
-            )
+            result = self.recognizer.recognize_google(audio_data, language=language, show_all=True)
             if not result or "alternative" not in result:
                 return results
             for alt in result["alternative"]:
@@ -261,9 +252,7 @@ class SpeechRecognitionEngine:
             logger.debug("Sphinx Recognition failed: %s", e)
             return []
 
-    async def _perform_speech_recognition(
-        self, audio_input: AudioInput, language: str = "en"
-    ) -> Dict[str, Any]:
+    async def _perform_speech_recognition(self, audio_input: AudioInput, language: str = "en") -> Dict[str, Any]:
         """Perform actual speech recognition (#1329: language passthrough)."""
         empty_result = {
             "transcription": "",
@@ -308,19 +297,13 @@ class SpeechRecognitionEngine:
 
             if isinstance(audio_input.audio_data, bytes):
                 # Convert bytes to AudioData
-                audio_data = sr.AudioData(
-                    audio_input.audio_data, audio_input.sample_rate, 2  # 16-bit samples
-                )
+                audio_data = sr.AudioData(audio_input.audio_data, audio_input.sample_rate, 2)  # 16-bit samples
             elif isinstance(audio_input.audio_data, np.ndarray):
                 # Convert numpy array to bytes
-                audio_bytes = (
-                    (audio_input.audio_data * 32767).astype(np.int16).tobytes()
-                )
+                audio_bytes = (audio_input.audio_data * 32767).astype(np.int16).tobytes()
                 audio_data = sr.AudioData(audio_bytes, audio_input.sample_rate, 2)
             else:
-                raise ValueError(
-                    f"Unsupported audio data type: {type(audio_input.audio_data)}"
-                )
+                raise ValueError(f"Unsupported audio data type: {type(audio_input.audio_data)}")
 
             return audio_data
 
@@ -328,9 +311,7 @@ class SpeechRecognitionEngine:
             logger.error("Audio conversion failed: %s", e)
             raise
 
-    async def _detect_speech_segments(
-        self, audio_input: AudioInput
-    ) -> List[Dict[str, Any]]:
+    async def _detect_speech_segments(self, audio_input: AudioInput) -> List[Dict[str, Any]]:
         """Detect speech segments in audio for timing information"""
         try:
             # Simple speech segment detection

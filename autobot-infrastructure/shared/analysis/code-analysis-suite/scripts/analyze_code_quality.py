@@ -73,9 +73,7 @@ async def _display_technical_debt(debt):
         debt["estimated_total_effort_days"],
         debt["estimated_total_effort_hours"],
     )
-    logger.info(
-        "   🚨 Critical Issues Effort: %s hours", debt["estimated_critical_effort_hours"]
-    )
+    logger.info("   🚨 Critical Issues Effort: %s hours", debt["estimated_critical_effort_hours"])
     logger.info(f"   📈 Debt Ratio: {debt['debt_ratio']}% of total project")
     logger.info("")
 
@@ -97,14 +95,8 @@ async def _display_top_priority_issues(report):
     Helper for run_comprehensive_quality_analysis (Issue #825).
     """
     logger.info("🚨 **Top Priority Issues (Immediate Action Required):**")
-    critical_issues = [
-        issue
-        for issue in report["prioritized_issues"]
-        if issue["severity"] == "critical"
-    ]
-    high_issues = [
-        issue for issue in report["prioritized_issues"] if issue["severity"] == "high"
-    ]
+    critical_issues = [issue for issue in report["prioritized_issues"] if issue["severity"] == "critical"]
+    high_issues = [issue for issue in report["prioritized_issues"] if issue["severity"] == "high"]
 
     top_issues = critical_issues[:5] + high_issues[:5]
 
@@ -112,9 +104,7 @@ async def _display_top_priority_issues(report):
         severity_emoji = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
         emoji = severity_emoji.get(issue["severity"], "⚪")
 
-        logger.info(
-            f"\n{i}. {emoji} **{issue['title']}** ({issue['severity'].upper()})"
-        )
+        logger.info(f"\n{i}. {emoji} **{issue['title']}** ({issue['severity'].upper()})")
         logger.info(f"   📂 Category: {issue['category'].replace('_', ' ').title()}")
         if issue["file_path"] != "Multiple files":
             logger.info(f"   📄 File: {issue['file_path']}:{issue['line_number']}")
@@ -148,9 +138,7 @@ async def _display_critical_alerts(report):
         perf_data = report["detailed_analyses"]["performance"]
         if perf_data.get("critical_issues", 0) > 0:
             logger.error("⚡ **CRITICAL PERFORMANCE ALERT:**")
-            logger.info(
-                "   Found %s critical performance issues!", perf_data["critical_issues"]
-            )
+            logger.info("   Found %s critical performance issues!", perf_data["critical_issues"])
             logger.info("   These may cause memory leaks or system instability.")
             logger.info("")
 
@@ -355,9 +343,7 @@ async def generate_action_plan(report):
         logger.error(f"\n🚨 **Phase 1: Critical Issues (IMMEDIATE - Week 1)**")
         logger.error(f"   Address {critical_count} critical issues:")
 
-        critical_issues = [
-            i for i in report["prioritized_issues"] if i["severity"] == "critical"
-        ]
+        critical_issues = [i for i in report["prioritized_issues"] if i["severity"] == "critical"]
         for issue in critical_issues[:5]:  # Top 5 critical
             logger.info(f"   • {issue['title']}")
             logger.info(f"     Action: {issue['fix_suggestion']}")

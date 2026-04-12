@@ -74,13 +74,9 @@ def _get_model_purpose_map() -> dict:
 class AutoBotMonitor:
     def __init__(self):
         """Initialize system monitor with backend and frontend URLs."""
-        self.backend_port = os.getenv(
-            "AUTOBOT_BACKEND_PORT", NetworkConstants.BACKEND_PORT
-        )
+        self.backend_port = os.getenv("AUTOBOT_BACKEND_PORT", NetworkConstants.BACKEND_PORT)
         self.api_base = f"http://{NetworkConstants.LOCALHOST_NAME}:{self.backend_port}"
-        self.frontend_url = (
-            ServiceURLs.FRONTEND_VM
-        )  # FIXED: Frontend on VM1 (10.0.0.2), not localhost
+        self.frontend_url = ServiceURLs.FRONTEND_VM  # FIXED: Frontend on VM1 (10.0.0.2), not localhost
 
     def get_system_health(self) -> Dict[str, Any]:
         """Get AutoBot system health status."""
@@ -116,9 +112,7 @@ class AutoBotMonitor:
                         "memory_total_mb": int(parts[2].strip()),
                         "utilization_percent": int(parts[3].strip()),
                         "temperature_c": int(parts[4].strip()),
-                        "power_draw_w": (
-                            float(parts[5].strip()) if len(parts) > 5 else 0
-                        ),
+                        "power_draw_w": (float(parts[5].strip()) if len(parts) > 5 else 0),
                     }
             return {"available": False, "error": "nvidia-smi failed"}
         except Exception as e:
@@ -342,20 +336,12 @@ class AutoBotMonitor:
         services = {}
 
         # Check standard libraries
-        services["llama_index"] = self._check_library_import(
-            "llama_index", "pip install llama-index"
-        )
-        services["langchain"] = self._check_library_import(
-            "langchain", "pip install langchain"
-        )
-        services["chromadb"] = self._check_library_import(
-            "chromadb", "pip install chromadb"
-        )
+        services["llama_index"] = self._check_library_import("llama_index", "pip install llama-index")
+        services["langchain"] = self._check_library_import("langchain", "pip install langchain")
+        services["chromadb"] = self._check_library_import("chromadb", "pip install chromadb")
 
         # Playwright with browser check
-        services["playwright"] = self._check_library_import(
-            "playwright", "pip install playwright"
-        )
+        services["playwright"] = self._check_library_import("playwright", "pip install playwright")
         if services["playwright"]["installed"]:
             self._check_playwright_browsers(services)
 
@@ -383,14 +369,8 @@ class AutoBotMonitor:
                 services["redis"] = {
                     "installed": True,
                     "status": health_data.get("redis_status", "unknown"),
-                    "search_module": health_data.get(
-                        "redis_search_module_loaded", False
-                    ),
-                    "connection": (
-                        "connected"
-                        if health_data.get("redis_status") == "connected"
-                        else "disconnected"
-                    ),
+                    "search_module": health_data.get("redis_search_module_loaded", False),
+                    "connection": ("connected" if health_data.get("redis_status") == "connected" else "disconnected"),
                 }
             else:
                 services["redis"] = {
@@ -458,9 +438,7 @@ class AutoBotMonitor:
                     "success": True,
                     "response_time_seconds": round(response_time, 2),
                     "response_length": len(data.get("response", "")),
-                    "tokens_per_second": (
-                        "calculated" if "response" in data else "unknown"
-                    ),
+                    "tokens_per_second": ("calculated" if "response" in data else "unknown"),
                 }
             return {"success": False, "error": f"HTTP {response.status_code}"}
         except Exception as e:
@@ -497,12 +475,8 @@ class AutoBotMonitor:
         if npu.get("hardware_detected"):
             logger.info("   Hardware: ✅ Intel Core Ultra NPU detected")
             if npu.get("wsl_limitation"):
-                logger.warning(
-                    "   Status: ⚠️ WSL Environment - NPU drivers not accessible"
-                )
-                logger.info(
-                    "   Note: NPU requires native Linux/Windows for driver access"
-                )
+                logger.warning("   Status: ⚠️ WSL Environment - NPU drivers not accessible")
+                logger.info("   Note: NPU requires native Linux/Windows for driver access")
             elif npu.get("driver_available"):
                 logger.info("   Drivers: ✅ Available")
                 ov_ok = npu.get("openvino_support")
@@ -512,9 +486,7 @@ class AutoBotMonitor:
                 logger.info(f"   Utilization: {npu.get('utilization_percent', 0)}%")
             else:
                 logger.error("   Drivers: ❌ Not installed or not accessible")
-                logger.info(
-                    "   Recommendation: Install Intel NPU drivers on native system"
-                )
+                logger.info("   Recommendation: Install Intel NPU drivers on native system")
         else:
             logger.error("   Hardware: ❌ No Intel NPU detected")
             logger.info("   Current CPU: Check if NPU-capable processor")
@@ -548,27 +520,17 @@ class AutoBotMonitor:
                 status_icon = "⚠️"
                 extra_info = f"({service_info.get('error', 'Unknown status')})"
 
-            logger.info(
-                f"   {status_icon} {service_display}: {status.replace('_', ' ').title()} {extra_info}"
-            )
+            logger.info(f"   {status_icon} {service_display}: {status.replace('_', ' ').title()} {extra_info}")
 
             # Show additional details for specific services
             if service_name == "openvino" and service_info.get("devices"):
                 logger.info(f"      Devices: {', '.join(service_info['devices'])}")
             elif service_name == "redis" and service_info.get("search_module"):
-                logger.info(
-                    f"      RediSearch: {'✅ Enabled' if service_info['search_module'] else '❌ Disabled'}"
-                )
+                logger.info(f"      RediSearch: {'✅ Enabled' if service_info['search_module'] else '❌ Disabled'}")
             elif service_name == "playwright" and "browsers_available" in service_info:
-                logger.info(
-                    f"      Browsers: {'✅ Installed' if service_info['browsers_available'] else '❌ Missing'}"
-                )
-            elif service_name == "vue_frontend" and service_info.get(
-                "response_time_ms"
-            ):
-                logger.info(
-                    f"      Response Time: {service_info['response_time_ms']}ms"
-                )
+                logger.info(f"      Browsers: {'✅ Installed' if service_info['browsers_available'] else '❌ Missing'}")
+            elif service_name == "vue_frontend" and service_info.get("response_time_ms"):
+                logger.info(f"      Response Time: {service_info['response_time_ms']}ms")
 
     def _print_model_status(self) -> None:
         """
@@ -599,9 +561,7 @@ class AutoBotMonitor:
         to reduce function length from 140 to ~45 lines.
         """
         logger.info("\n" + "=" * 80)
-        logger.info(
-            f"🚀 AutoBot System Monitor - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-        )
+        logger.info(f"🚀 AutoBot System Monitor - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         logger.info("=" * 80)
 
         # System Health
@@ -609,9 +569,7 @@ class AutoBotMonitor:
         logger.info(f"\n📊 System Health: {health.get('status', 'unknown').upper()}")
         if health.get("status") == "healthy":
             logger.info(f"   LLM Model: {health.get('current_model', 'unknown')}")
-            logger.info(
-                f"   Embedding Model: {health.get('current_embedding_model', 'unknown')}"
-            )
+            logger.info(f"   Embedding Model: {health.get('current_embedding_model', 'unknown')}")
             logger.info(f"   Redis: {health.get('redis_status', 'unknown')}")
             logger.info(f"   Ollama: {health.get('ollama', 'unknown')}")
         else:
@@ -624,9 +582,7 @@ class AutoBotMonitor:
         resources = self.get_system_resources()
         if "error" not in resources:
             logger.info("\n💾 System Resources:")
-            logger.info(
-                f"   CPU: {resources['cpu']['percent']:.1f}% ({resources['cpu']['cores']} cores)"
-            )
+            logger.info(f"   CPU: {resources['cpu']['percent']:.1f}% ({resources['cpu']['cores']} cores)")
             mem = resources["memory"]
             logger.info(
                 "   Memory: %.1f/%.1f GB (%.1f%%)",
@@ -644,9 +600,7 @@ class AutoBotMonitor:
 
         # Frontend Status
         frontend = self.check_frontend_status()
-        logger.info(
-            f"\n🖥️  Frontend: {'✅ Available' if frontend.get('available') else '❌ Unavailable'}"
-        )
+        logger.info(f"\n🖥️  Frontend: {'✅ Available' if frontend.get('available') else '❌ Unavailable'}")
         if not frontend.get("available") and frontend.get("error"):
             logger.error(f"   Error: {frontend['error']}")
 

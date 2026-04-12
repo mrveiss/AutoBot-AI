@@ -147,9 +147,7 @@ class HostContainerDNS:
                 if resolved_ip == expected_ip:
                     logger.info("✅ %s → %s", name, resolved_ip)
                 else:
-                    logger.warning(
-                        "❌ %s → %s (expected %s)", name, resolved_ip, expected_ip
-                    )
+                    logger.warning("❌ %s → %s (expected %s)", name, resolved_ip, expected_ip)
 
             except socket.gaierror:
                 results[name] = False
@@ -188,9 +186,7 @@ class HostContainerDNS:
                         if result == 0:
                             logger.info("✅ %s:%s - reachable", container_name, port)
                         else:
-                            logger.warning(
-                                "❌ %s:%s - not reachable", container_name, port
-                            )
+                            logger.warning("❌ %s:%s - not reachable", container_name, port)
 
                     except Exception as e:
                         connectivity[container_name][port] = False
@@ -219,9 +215,7 @@ class HostContainerDNS:
 
     def run_daemon(self, interval: int = 60):
         """Run as daemon with periodic updates"""
-        logger.info(
-            "🚀 Starting host-container DNS daemon (refresh every %ss)", interval
-        )
+        logger.info("🚀 Starting host-container DNS daemon (refresh every %ss)", interval)
 
         while True:
             try:
@@ -240,13 +234,9 @@ def main():
 
     parser = argparse.ArgumentParser(description="Host-to-Container DNS Service")
     parser.add_argument("--daemon", action="store_true", help="Run as daemon")
-    parser.add_argument(
-        "--interval", type=int, default=60, help="Update interval for daemon (seconds)"
-    )
+    parser.add_argument("--interval", type=int, default=60, help="Update interval for daemon (seconds)")
     parser.add_argument("--test", action="store_true", help="Test DNS resolution")
-    parser.add_argument(
-        "--connectivity", action="store_true", help="Test container connectivity"
-    )
+    parser.add_argument("--connectivity", action="store_true", help="Test container connectivity")
     parser.add_argument("--show", action="store_true", help="Show current mappings")
 
     args = parser.parse_args()

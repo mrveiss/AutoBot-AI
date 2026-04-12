@@ -9,7 +9,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from constants.status_enums import TaskStatus
-
 from orchestration.sub_workflow import (
     MAX_NESTING_DEPTH,
     SubWorkflowExecutor,

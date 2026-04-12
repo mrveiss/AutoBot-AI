@@ -56,9 +56,7 @@ class CodeIssueAnalyzer:
         """Initialize Redis connection using canonical get_redis_client()"""
         try:
             # Use canonical Redis client utility for analytics database (DB 8)
-            self.analytics_redis = get_redis_client(
-                async_client=False, database="analytics"
-            )
+            self.analytics_redis = get_redis_client(async_client=False, database="analytics")
 
             ping_result = self.analytics_redis.ping()
             logger.info(f"✅ Connected to analytics Redis: {ping_result}")
@@ -79,9 +77,7 @@ class CodeIssueAnalyzer:
             scan_count = 0
 
             while len(vector_keys) < limit:
-                cursor, batch = self.analytics_redis.scan(
-                    cursor=cursor, match="llama_index/vector_*", count=1000
-                )
+                cursor, batch = self.analytics_redis.scan(cursor=cursor, match="llama_index/vector_*", count=1000)
                 vector_keys.extend(batch)
                 scan_count += 1
 
@@ -91,9 +87,7 @@ class CodeIssueAnalyzer:
             # Limit to requested amount
             vector_keys = vector_keys[:limit]
 
-            logger.info(
-                f"📄 Found {len(vector_keys)} vector keys, processing in batches..."
-            )
+            logger.info(f"📄 Found {len(vector_keys)} vector keys, processing in batches...")
 
             # Process in small batches to avoid timeout
             batch_size = 100
@@ -114,9 +108,7 @@ class CodeIssueAnalyzer:
                         if data and b"text" in data:
                             try:
                                 text = data[b"text"].decode("utf-8", errors="ignore")
-                                doc_id = data.get(b"doc_id", b"").decode(
-                                    "utf-8", errors="ignore"
-                                )
+                                doc_id = data.get(b"doc_id", b"").decode("utf-8", errors="ignore")
 
                                 # Only include meaningful code samples
                                 if len(text.strip()) > 20:
@@ -130,24 +122,18 @@ class CodeIssueAnalyzer:
                                     )
 
                             except Exception as e:
-                                logger.warning(
-                                    f"⚠️ Failed to process vector {key}: {e}"
-                                )
+                                logger.warning(f"⚠️ Failed to process vector {key}: {e}")
                                 continue
 
                     # Progress update
                     if (i // batch_size + 1) % 10 == 0:
-                        logger.info(
-                            f"📊 Processed {i + batch_size}/{len(vector_keys)} vectors..."
-                        )
+                        logger.info(f"📊 Processed {i + batch_size}/{len(vector_keys)} vectors...")
 
                     # Small pause to prevent overwhelming Redis
                     await asyncio.sleep(0.1)
 
                 except Exception as e:
-                    logger.warning(
-                        f"⚠️ Failed to process batch {i//batch_size + 1}: {e}"
-                    )
+                    logger.warning(f"⚠️ Failed to process batch {i//batch_size + 1}: {e}")
                     continue
 
             logger.info(f"✅ Successfully extracted {len(code_samples)} code samples")
@@ -157,9 +143,7 @@ class CodeIssueAnalyzer:
             logger.error(f"❌ Failed to get code samples: {e}")
             return []
 
-    async def find_duplicate_code(
-        self, code_samples: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    async def find_duplicate_code(self, code_samples: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Find duplicate code patterns"""
         try:
             logger.info("🔍 Analyzing for duplicate code patterns...")
@@ -181,16 +165,10 @@ class CodeIssueAnalyzer:
                 if len(samples) > 1:
                     # This is a duplicate pattern
                     duplicate_info = {
-                        "pattern": normalized_text[:200] + "..."
-                        if len(normalized_text) > 200
-                        else normalized_text,
+                        "pattern": normalized_text[:200] + "..." if len(normalized_text) > 200 else normalized_text,
                         "occurrences": len(samples),
                         "files": [sample["doc_id"] for sample in samples],
-                        "severity": "high"
-                        if len(samples) > 5
-                        else "medium"
-                        if len(samples) > 2
-                        else "low",
+                        "severity": "high" if len(samples) > 5 else "medium" if len(samples) > 2 else "low",
                         "estimated_lines": samples[0]["length"] // 50,  # Rough estimate
                     }
                     duplicates.append(duplicate_info)
@@ -202,9 +180,7 @@ class CodeIssueAnalyzer:
 
             # Show top 5 duplicates
             for i, dup in enumerate(duplicates[:5]):
-                logger.info(
-                    f"  {i+1}. {dup['occurrences']} occurrences in {len(dup['files'])} files"
-                )
+                logger.info(f"  {i+1}. {dup['occurrences']} occurrences in {len(dup['files'])} files")
 
             return duplicates
 
@@ -254,9 +230,7 @@ class CodeIssueAnalyzer:
         compiled_patterns = {}
         for category, pattern_list in patterns.items():
             combined = "|".join(f"({p})" for p in pattern_list)
-            compiled_patterns[category] = re.compile(
-                combined, re.IGNORECASE | re.MULTILINE
-            )
+            compiled_patterns[category] = re.compile(combined, re.IGNORECASE | re.MULTILINE)
 
         return compiled_patterns
 
@@ -281,24 +255,15 @@ class CodeIssueAnalyzer:
                 matches = compiled_pattern.findall(text)
 
                 for match in matches:
-                    value = (
-                        match[0]
-                        if isinstance(match, tuple) and len(match) > 0
-                        else match
-                    )
+                    value = match[0] if isinstance(match, tuple) and len(match) > 0 else match
 
                     if self.is_likely_hardcoded_value(category, value):
                         hardcoded[category].append(
                             {
                                 "value": value,
                                 "file": doc_id,
-                                "context": text[
-                                    max(0, text.find(value) - 50) : text.find(value)
-                                    + 100
-                                ],
-                                "severity": self.assess_hardcode_severity(
-                                    category, value
-                                ),
+                                "context": text[max(0, text.find(value) - 50) : text.find(value) + 100],
+                                "severity": self.assess_hardcode_severity(category, value),
                             }
                         )
 
@@ -308,9 +273,7 @@ class CodeIssueAnalyzer:
 
         return hardcoded
 
-    def _deduplicate_and_sort(
-        self, hardcoded: Dict[str, List[Dict]]
-    ) -> Dict[str, List[Dict]]:
+    def _deduplicate_and_sort(self, hardcoded: Dict[str, List[Dict]]) -> Dict[str, List[Dict]]:
         """Remove duplicates and sort by severity.
 
         Helper for find_hardcoded_values (Issue #825).
@@ -331,9 +294,7 @@ class CodeIssueAnalyzer:
 
         return hardcoded
 
-    async def find_hardcoded_values(
-        self, code_samples: List[Dict[str, Any]]
-    ) -> Dict[str, List[Dict[str, Any]]]:
+    async def find_hardcoded_values(self, code_samples: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
         """Find hardcoded values in code"""
         try:
             logger.info("🔍 Analyzing for hardcoded values...")
@@ -353,9 +314,7 @@ class CodeIssueAnalyzer:
                 text = sample["text"]
                 doc_id = sample["doc_id"]
 
-                sample_hardcoded = self._extract_hardcoded_matches(
-                    text, doc_id, compiled_patterns
-                )
+                sample_hardcoded = self._extract_hardcoded_matches(text, doc_id, compiled_patterns)
 
                 for category in all_hardcoded:
                     all_hardcoded[category].extend(sample_hardcoded[category])
@@ -378,12 +337,8 @@ class CodeIssueAnalyzer:
     # Moved outside method to avoid recreating on every call
     _IGNORE_PATTERNS: dict = {
         "ip_addresses": frozenset({"0.0.0.0", "255.255.255.255", "127.0.0.1"}),
-        "urls": frozenset(
-            {"http://example.com", "https://example.org", "http://localhost"}
-        ),
-        "file_paths": frozenset(
-            {"/dev/null", "/tmp", "/var/log", "~/", "/etc", "/usr", "/bin"}
-        ),
+        "urls": frozenset({"http://example.com", "https://example.org", "http://localhost"}),
+        "file_paths": frozenset({"/dev/null", "/tmp", "/var/log", "~/", "/etc", "/usr", "/bin"}),
         "passwords": frozenset({"password", "123456", "admin", "test"}),
         "api_keys": frozenset({"your_api_key", "api_key_here", "xxx"}),
     }
@@ -426,21 +381,13 @@ class CodeIssueAnalyzer:
             return "critical"
         if category == "api_keys" and len(value) > 20:
             return "critical"
-        if category == "database_connections" and any(
-            keyword in value.lower() for keyword in ["password", "secret"]
-        ):
+        if category == "database_connections" and any(keyword in value.lower() for keyword in ["password", "secret"]):
             return "critical"
 
         # High severity
-        if category == "ip_addresses" and not value.startswith(
-            ("127.", "192.168.", "10.", "172.")
-        ):
+        if category == "ip_addresses" and not value.startswith(("127.", "192.168.", "10.", "172.")):
             return "high"  # Public IP
-        if (
-            category == "urls"
-            and value.startswith("https://")
-            and "api" in value.lower()
-        ):
+        if category == "urls" and value.startswith("https://") and "api" in value.lower():
             return "high"
 
         # Medium severity
@@ -460,18 +407,14 @@ class CodeIssueAnalyzer:
         text = sample["text"]
         doc_id = sample["doc_id"]
 
-        import_matches = re.findall(
-            r"(?:import|from)\s+([a-zA-Z_][a-zA-Z0-9_.]*)", text
-        )
+        import_matches = re.findall(r"(?:import|from)\s+([a-zA-Z_][a-zA-Z0-9_.]*)", text)
         for imp in import_matches:
             import_patterns[imp] += 1
 
         if "import" in text and doc_id:
             dep_files.append((doc_id, import_matches))
 
-        function_matches = re.findall(
-            r"def\s+\w+.*?(?=\ndef|\nclass|\n\n|\Z)", text, re.DOTALL
-        )
+        function_matches = re.findall(r"def\s+\w+.*?(?=\ndef|\nclass|\n\n|\Z)", text, re.DOTALL)
         for func in function_matches:
             if len(func) > 1000:
                 issues.append(
@@ -512,9 +455,7 @@ class CodeIssueAnalyzer:
                 }
             )
 
-    async def analyze_architectural_issues(
-        self, code_samples: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    async def analyze_architectural_issues(self, code_samples: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Analyze for architectural issues"""
         try:
             logger.info("🔍 Analyzing for architectural issues...")
@@ -527,9 +468,7 @@ class CodeIssueAnalyzer:
 
             # Analyze patterns that indicate architectural issues
             for sample in code_samples:
-                self._analyze_sample_architecture(
-                    sample, issues, import_patterns, dependency_files
-                )
+                self._analyze_sample_architecture(sample, issues, import_patterns, dependency_files)
 
             # Note: Circular reference detection would analyze dependency_files
             # but is not implemented in this simplified version
@@ -546,9 +485,7 @@ class CodeIssueAnalyzer:
             logger.error(f"❌ Architectural analysis failed: {e}")
             return []
 
-    def _build_report_header(
-        self, duplicates: List, total_hardcoded: int, critical_hardcoded: int
-    ) -> str:
+    def _build_report_header(self, duplicates: List, total_hardcoded: int, critical_hardcoded: int) -> str:
         """Build report header and executive summary.
 
         Helper for generate_summary_report (Issue #825).
@@ -570,9 +507,7 @@ This analysis examined code vectors from the AutoBot codebase to identify:
 - **{len(duplicates)} duplicate patterns** identified
 - **Top duplicates:**"""
 
-    def _build_hardcoded_section(
-        self, hardcoded: Dict, total_hardcoded: int, critical_hardcoded: int
-    ) -> str:
+    def _build_hardcoded_section(self, hardcoded: Dict, total_hardcoded: int, critical_hardcoded: int) -> str:
         """Build hardcoded values section.
 
         Helper for generate_summary_report (Issue #825).
@@ -589,13 +524,9 @@ This analysis examined code vectors from the AutoBot codebase to identify:
 ### 🔒 Hardcoded Values
 - **{total_hardcoded} hardcoded values** found
 - **{critical_hardcoded} critical security issues**
-- **Breakdown by category:**""" + "".join(
-            hardcoded_lines
-        )
+- **Breakdown by category:**""" + "".join(hardcoded_lines)
 
-    def _build_architectural_section(
-        self, architectural: List, critical_arch: int, high_arch: int
-    ) -> str:
+    def _build_architectural_section(self, architectural: List, critical_arch: int, high_arch: int) -> str:
         """Build architectural issues section.
 
         Helper for generate_summary_report (Issue #825).
@@ -606,9 +537,7 @@ This analysis examined code vectors from the AutoBot codebase to identify:
 
         issue_type_lines = [
             f"\n  - {issue_type}: {count} occurrences"
-            for issue_type, count in sorted(
-                issue_types.items(), key=lambda x: x[1], reverse=True
-            )
+            for issue_type, count in sorted(issue_types.items(), key=lambda x: x[1], reverse=True)
         ]
 
         return f"""
@@ -616,9 +545,7 @@ This analysis examined code vectors from the AutoBot codebase to identify:
 ### 🏗️ Architectural Issues
 - **{len(architectural)} architectural issues** identified
 - **{critical_arch} critical** and **{high_arch} high** severity issues
-- **Common issues:**""" + "".join(
-            issue_type_lines
-        )
+- **Common issues:**""" + "".join(issue_type_lines)
 
     async def generate_summary_report(self) -> str:
         """Generate a comprehensive summary report.
@@ -637,26 +564,13 @@ This analysis examined code vectors from the AutoBot codebase to identify:
 
             total_hardcoded = sum(len(items) for items in hardcoded.values())
             critical_hardcoded = sum(
-                len([item for item in items if item.get("severity") == "critical"])
-                for items in hardcoded.values()
+                len([item for item in items if item.get("severity") == "critical"]) for items in hardcoded.values()
             )
 
-            critical_arch = len(
-                [
-                    issue
-                    for issue in architectural
-                    if issue.get("severity") == "critical"
-                ]
-            )
-            high_arch = len(
-                [issue for issue in architectural if issue.get("severity") == "high"]
-            )
+            critical_arch = len([issue for issue in architectural if issue.get("severity") == "critical"])
+            high_arch = len([issue for issue in architectural if issue.get("severity") == "high"])
 
-            report_parts.append(
-                self._build_report_header(
-                    duplicates, total_hardcoded, critical_hardcoded
-                )
-            )
+            report_parts.append(self._build_report_header(duplicates, total_hardcoded, critical_hardcoded))
 
             duplicate_lines = [
                 f"\n  {i+1}. {dup['occurrences']} occurrences ({dup['severity']} severity)"
@@ -664,20 +578,11 @@ This analysis examined code vectors from the AutoBot codebase to identify:
             ]
             report_parts.append("".join(duplicate_lines))
 
-            report_parts.append(
-                self._build_hardcoded_section(
-                    hardcoded, total_hardcoded, critical_hardcoded
-                )
-            )
+            report_parts.append(self._build_hardcoded_section(hardcoded, total_hardcoded, critical_hardcoded))
 
-            report_parts.append(
-                self._build_architectural_section(
-                    architectural, critical_arch, high_arch
-                )
-            )
+            report_parts.append(self._build_architectural_section(architectural, critical_arch, high_arch))
 
-            report_parts.append(
-                f"""
+            report_parts.append(f"""
 
 ## Recommendations
 
@@ -695,8 +600,7 @@ This analysis examined code vectors from the AutoBot codebase to identify:
 ## Detailed Findings
 
 [See individual sections below for specific items and recommendations]
-"""
-            )
+""")
 
             return "".join(report_parts)
 
@@ -765,10 +669,7 @@ async def _save_and_report(
 
     project_root = Path(__file__).parent.parent
     report_path = (
-        project_root
-        / "tests"
-        / "results"
-        / f"code_analysis_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+        project_root / "tests" / "results" / f"code_analysis_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
     )
     report_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -813,9 +714,7 @@ async def main():
             return
 
         code_samples, duplicates, total_hardcoded, architectural = result
-        await _save_and_report(
-            analyzer, code_samples, duplicates, total_hardcoded, architectural
-        )
+        await _save_and_report(analyzer, code_samples, duplicates, total_hardcoded, architectural)
 
     except Exception as e:
         logger.error(f"❌ Error: {e}")

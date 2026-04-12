@@ -50,11 +50,7 @@ class PayloadSizeTracker:
             "size": size,
             "status": "safe",
             "recommendation": None,
-            "average_size": (
-                sum(self.size_history) / len(self.size_history)
-                if self.size_history
-                else 0
-            ),
+            "average_size": (sum(self.size_history) / len(self.size_history) if self.size_history else 0),
         }
 
         if size > self.max_safe_size:
@@ -108,9 +104,7 @@ class ConversationRateLimiter:
 
         # Request tracking
         self.request_history = deque()
-        self.payload_tracker = PayloadSizeTracker(
-            max_payload_size, warning_payload_size
-        )
+        self.payload_tracker = PayloadSizeTracker(max_payload_size, warning_payload_size)
 
         # Lock for thread-safe stats access
         import threading
@@ -127,9 +121,7 @@ class ConversationRateLimiter:
         self.last_warning_time = 0
         self.warning_cooldown = 300  # 5 minutes between warnings
 
-        logger.info(
-            f"ConversationRateLimiter initialized: {requests_per_minute}/min, {requests_per_hour}/hour"
-        )
+        logger.info(f"ConversationRateLimiter initialized: {requests_per_minute}/min, {requests_per_hour}/hour")
 
     def can_make_request(self, payload: Any = None) -> Dict[str, Any]:
         """
@@ -152,9 +144,7 @@ class ConversationRateLimiter:
             payload_check = self.payload_tracker.analyze_payload(payload)
 
         # Determine if request can proceed
-        can_proceed = (
-            rate_check["can_proceed"] and payload_check["status"] != "dangerous"
-        )
+        can_proceed = rate_check["can_proceed"] and payload_check["status"] != "dangerous"
 
         # Calculate wait time if needed
         wait_time = 0
@@ -208,8 +198,7 @@ class ConversationRateLimiter:
             # Update average response time
             if response_time and success:
                 self.average_response_time = (
-                    self.average_response_time * (self.total_requests - 1)
-                    + response_time
+                    self.average_response_time * (self.total_requests - 1) + response_time
                 ) / self.total_requests
 
         # Log rate limit violations
@@ -222,12 +211,8 @@ class ConversationRateLimiter:
         current_time = time.time()
         self._cleanup_old_requests(current_time)
 
-        minute_requests = len(
-            [r for r in self.request_history if current_time - r.timestamp <= 60]
-        )
-        hour_requests = len(
-            [r for r in self.request_history if current_time - r.timestamp <= 3600]
-        )
+        minute_requests = len([r for r in self.request_history if current_time - r.timestamp <= 60])
+        hour_requests = len([r for r in self.request_history if current_time - r.timestamp <= 3600])
 
         successful_requests = len([r for r in self.request_history if r.success])
 
@@ -263,12 +248,8 @@ class ConversationRateLimiter:
         minute_window = current_time - 60
         hour_window = current_time - 3600
 
-        minute_requests = len(
-            [r for r in self.request_history if r.timestamp > minute_window]
-        )
-        hour_requests = len(
-            [r for r in self.request_history if r.timestamp > hour_window]
-        )
+        minute_requests = len([r for r in self.request_history if r.timestamp > minute_window])
+        hour_requests = len([r for r in self.request_history if r.timestamp > hour_window])
 
         # Check limits
         minute_exceeded = minute_requests >= self.requests_per_minute
@@ -277,19 +258,11 @@ class ConversationRateLimiter:
         # Calculate wait times
         wait_time = 0
         if minute_exceeded:
-            oldest_in_minute = min(
-                [
-                    r.timestamp
-                    for r in self.request_history
-                    if r.timestamp > minute_window
-                ]
-            )
+            oldest_in_minute = min([r.timestamp for r in self.request_history if r.timestamp > minute_window])
             wait_time = max(wait_time, 60 - (current_time - oldest_in_minute))
 
         if hour_exceeded:
-            oldest_in_hour = min(
-                [r.timestamp for r in self.request_history if r.timestamp > hour_window]
-            )
+            oldest_in_hour = min([r.timestamp for r in self.request_history if r.timestamp > hour_window])
             wait_time = max(wait_time, 3600 - (current_time - oldest_in_hour))
 
         return {

@@ -6,6 +6,7 @@
 Startup Performance Profiler
 Profiles AutoBot backend startup to identify bottlenecks
 """
+
 import cProfile
 import os
 import pstats

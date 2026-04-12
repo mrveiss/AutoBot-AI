@@ -32,9 +32,7 @@ from datetime import datetime
 sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 # Import our framework
@@ -215,9 +213,7 @@ class LongRunningOperationsDemo:
             if context.should_resume():
                 checkpoint_data = context.get_resume_data()
                 start_item = checkpoint_data.processed_items
-                processed_data = checkpoint_data.intermediate_results.get(
-                    "processed_data", []
-                )
+                processed_data = checkpoint_data.intermediate_results.get("processed_data", [])
                 logger.info(f"Resuming from item {start_item}")
             else:
                 start_item = 0
@@ -239,9 +235,7 @@ class LongRunningOperationsDemo:
 
                 # Save checkpoint every 20 items
                 if (i + 1) % 20 == 0:
-                    await context.save_checkpoint(
-                        {"processed_data": processed_data}, f"item_{i + 1}"
-                    )
+                    await context.save_checkpoint({"processed_data": processed_data}, f"item_{i + 1}")
 
                 # Simulate an interruption at item 50
                 if i == 50:
@@ -274,20 +268,14 @@ class LongRunningOperationsDemo:
             logger.error(f"Operation failed as expected: {operation.error_info}")
 
             # Find the latest checkpoint
-            checkpoints = await self.manager.checkpoint_manager.list_checkpoints(
-                operation_id
-            )
+            checkpoints = await self.manager.checkpoint_manager.list_checkpoints(operation_id)
             if checkpoints:
                 latest_checkpoint = checkpoints[-1]
-                print(
-                    f"Found checkpoint at {latest_checkpoint.progress_percentage:.1f}% progress"
-                )
+                print(f"Found checkpoint at {latest_checkpoint.progress_percentage:.1f}% progress")
 
                 # Resume from checkpoint
                 logger.info("Resuming operation from checkpoint...")
-                new_operation_id = await self.manager.resume_operation(
-                    latest_checkpoint.checkpoint_id
-                )
+                new_operation_id = await self.manager.resume_operation(latest_checkpoint.checkpoint_id)
 
                 logger.info(f"Resumed as new operation: {new_operation_id}")
 
@@ -366,9 +354,7 @@ class LongRunningOperationsDemo:
 
             for name, op_id in operations:
                 operation = self.manager.get_operation(op_id)
-                status_line.append(
-                    f"{name}: {operation.progress.progress_percentage:.1f}%"
-                )
+                status_line.append(f"{name}: {operation.progress.progress_percentage:.1f}%")
 
                 if operation.status not in [
                     OperationStatus.COMPLETED,
@@ -520,9 +506,7 @@ class LongRunningOperationsDemo:
 
 async def main():
     """Main entry point"""
-    parser = argparse.ArgumentParser(
-        description="Long-Running Operations Framework Demo"
-    )
+    parser = argparse.ArgumentParser(description="Long-Running Operations Framework Demo")
     parser.add_argument(
         "--demo-type",
         choices=["all", "indexing", "testing", "security", "checkpoint", "concurrent"],

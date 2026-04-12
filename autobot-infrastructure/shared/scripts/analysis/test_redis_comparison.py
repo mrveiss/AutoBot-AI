@@ -22,9 +22,7 @@ _DB_KNOWLEDGE = int(os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE", "1"))
 sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -34,9 +32,7 @@ async def test_redis_connection():
     try:
         import redis
 
-        client = redis.Redis(
-            host="localhost", port=6379, db=_DB_KNOWLEDGE, decode_responses=True
-        )
+        client = redis.Redis(host="localhost", port=6379, db=_DB_KNOWLEDGE, decode_responses=True)
         client.ping()
         logger.info("✅ Redis connection successful")
 
@@ -78,14 +74,10 @@ async def test_llamaindex_redis():
         )
 
         # Initialize vector store
-        vector_store = RedisVectorStore(
-            schema=schema, redis_url="redis://localhost:6379", redis_kwargs={"db": 2}
-        )
+        vector_store = RedisVectorStore(schema=schema, redis_url="redis://localhost:6379", redis_kwargs={"db": 2})
 
         # Test embedding model
-        embed_model = OllamaEmbedding(
-            model_name="nomic-embed-text:latest", base_url=ServiceURLs.OLLAMA_LOCAL
-        )
+        embed_model = OllamaEmbedding(model_name="nomic-embed-text:latest", base_url=ServiceURLs.OLLAMA_LOCAL)
 
         # Create index from existing vector store
         storage_context = StorageContext.from_defaults(vector_store=vector_store)
@@ -102,9 +94,7 @@ async def test_llamaindex_redis():
         # Wrap synchronous call in thread to prevent blocking
         response = await asyncio.to_thread(query_engine.query, test_query)
 
-        logger.info(
-            f"✅ LlamaIndex query successful: {len(response.source_nodes)} results"
-        )
+        logger.info(f"✅ LlamaIndex query successful: {len(response.source_nodes)} results")
         for i, node in enumerate(response.source_nodes[:2]):
             logger.info(f"  Result {i+1}: {node.text[:100]}... (score: {node.score})")
 
@@ -174,9 +164,7 @@ async def _test_existing_data_access(embeddings):
             redis_url="redis://localhost:6379/2",
         )
 
-        existing_results = await asyncio.to_thread(
-            existing_store.similarity_search, "deployment configuration", k=3
-        )
+        existing_results = await asyncio.to_thread(existing_store.similarity_search, "deployment configuration", k=3)
         logger.info(f"✅ Accessed existing data: {len(existing_results)} results")
         return True, len(existing_results)
 
@@ -206,15 +194,10 @@ async def test_langchain_redis():
         except ImportError:
             from langchain_community.embeddings import OllamaEmbeddings
 
-            logger.warning(
-                "langchain-ollama not installed, using deprecated "
-                "langchain_community fallback"
-            )
+            logger.warning("langchain-ollama not installed, using deprecated " "langchain_community fallback")
 
         # Initialize embedding model
-        embeddings = OllamaEmbeddings(
-            model="nomic-embed-text:latest", base_url=ServiceURLs.OLLAMA_LOCAL
-        )
+        embeddings = OllamaEmbeddings(model="nomic-embed-text:latest", base_url=ServiceURLs.OLLAMA_LOCAL)
 
         vector_store = _create_vector_store(modern_langchain, embeddings)
 
@@ -223,19 +206,13 @@ async def test_langchain_redis():
         test_metadata = [{"source": "test", "type": "integration_test"}]
 
         # Add test document
-        doc_ids = await asyncio.to_thread(
-            vector_store.add_texts, test_docs, metadatas=test_metadata
-        )
+        doc_ids = await asyncio.to_thread(vector_store.add_texts, test_docs, metadatas=test_metadata)
         logger.info(f"✅ Added test document with IDs: {doc_ids}")
 
         # Test similarity search
-        results = await asyncio.to_thread(
-            vector_store.similarity_search, "test document", k=3
-        )
+        results = await asyncio.to_thread(vector_store.similarity_search, "test document", k=3)
 
-        logger.info(
-            f"✅ LangChain similarity search successful: {len(results)} results"
-        )
+        logger.info(f"✅ LangChain similarity search successful: {len(results)} results")
         for i, doc in enumerate(results[:2]):
             logger.info(f"  Result {i+1}: {doc.page_content[:100]}...")
 
@@ -296,9 +273,7 @@ async def analyze_existing_data():
     try:
         import redis
 
-        client = redis.Redis(
-            host="localhost", port=6379, db=_DB_KNOWLEDGE, decode_responses=True
-        )
+        client = redis.Redis(host="localhost", port=6379, db=_DB_KNOWLEDGE, decode_responses=True)
 
         # Get sample documents
         sample_keys = list(client.scan_iter(match="llama_index/vector*", count=5))
@@ -359,10 +334,7 @@ async def main():
     # Generate recommendation
     logger.info("\n=== RECOMMENDATION ===")
 
-    if (
-        performance["llamaindex"]["results"] > 0
-        and performance["langchain"]["results"] > 0
-    ):
+    if performance["llamaindex"]["results"] > 0 and performance["langchain"]["results"] > 0:
         logger.info("Both implementations can access data successfully")
 
         if performance["llamaindex"]["time"] < performance["langchain"]["time"]:

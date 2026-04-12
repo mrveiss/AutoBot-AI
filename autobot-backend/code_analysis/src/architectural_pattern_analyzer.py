@@ -18,7 +18,6 @@ import logging
 import time
 from typing import Any, Dict, List
 
-
 # Issue #394: Import from architectural_analysis package
 from .architectural_analysis import (
     ArchitecturalComponent,

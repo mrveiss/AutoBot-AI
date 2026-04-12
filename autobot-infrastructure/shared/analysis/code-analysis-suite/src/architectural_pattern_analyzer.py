@@ -135,9 +135,7 @@ class ArchitecturalPatternAnalyzer:
 
         logger.info("Architectural Pattern Analyzer initialized")
 
-    async def analyze_architecture(
-        self, root_path: str = ".", patterns: List[str] = None
-    ) -> Dict[str, Any]:
+    async def analyze_architecture(self, root_path: str = ".", patterns: List[str] = None) -> Dict[str, Any]:
         """Analyze architectural patterns and design quality"""
 
         start_time = time.time()
@@ -201,9 +199,7 @@ class ArchitecturalPatternAnalyzer:
         logger.info(f"Architectural analysis complete in {analysis_time:.2f}s")
         return results
 
-    async def _discover_components(
-        self, root_path: str, patterns: List[str]
-    ) -> List[ArchitecturalComponent]:
+    async def _discover_components(self, root_path: str, patterns: List[str]) -> List[ArchitecturalComponent]:
         """Discover architectural components in the codebase"""
 
         components = []
@@ -213,14 +209,10 @@ class ArchitecturalPatternAnalyzer:
             for file_path in root.glob(pattern):
                 if file_path.is_file() and not self._should_skip_file(file_path):
                     try:
-                        file_components = await self._extract_components_from_file(
-                            str(file_path)
-                        )
+                        file_components = await self._extract_components_from_file(str(file_path))
                         components.extend(file_components)
                     except Exception as e:
-                        logger.warning(
-                            f"Failed to extract components from {file_path}: {e}"
-                        )
+                        logger.warning(f"Failed to extract components from {file_path}: {e}")
 
         return components
 
@@ -241,9 +233,7 @@ class ArchitecturalPatternAnalyzer:
         path_str = str(file_path)
         return any(pattern in path_str for pattern in skip_patterns)
 
-    async def _extract_components_from_file(
-        self, file_path: str
-    ) -> List[ArchitecturalComponent]:
+    async def _extract_components_from_file(self, file_path: str) -> List[ArchitecturalComponent]:
         """Extract architectural components from a file"""
 
         components = []
@@ -261,13 +251,9 @@ class ArchitecturalPatternAnalyzer:
                     if component:
                         components.append(component)
 
-                elif isinstance(node, ast.FunctionDef) and not self._is_method(
-                    node, tree
-                ):
+                elif isinstance(node, ast.FunctionDef) and not self._is_method(node, tree):
                     # Top-level functions
-                    component = self._analyze_function_component(
-                        node, file_path, content
-                    )
+                    component = self._analyze_function_component(node, file_path, content)
                     if component:
                         components.append(component)
 
@@ -294,11 +280,7 @@ class ArchitecturalPatternAnalyzer:
             dependencies = self._extract_class_dependencies(node, content)
 
             # Extract interfaces (methods)
-            interfaces = [
-                method.name
-                for method in node.body
-                if isinstance(method, ast.FunctionDef)
-            ]
+            interfaces = [method.name for method in node.body if isinstance(method, ast.FunctionDef)]
 
             # Check if abstract
             is_abstract = self._is_abstract_class(node)
@@ -404,9 +386,7 @@ class ArchitecturalPatternAnalyzer:
             logger.error(f"Error analyzing module {file_path}: {e}")
             return None
 
-    def _extract_class_dependencies(
-        self, node: ast.ClassDef, content: str
-    ) -> List[str]:
+    def _extract_class_dependencies(self, node: ast.ClassDef, content: str) -> List[str]:
         """Extract dependencies for a class"""
         dependencies = []
 
@@ -426,9 +406,7 @@ class ArchitecturalPatternAnalyzer:
 
         return list(set(dependencies))
 
-    def _extract_function_dependencies(
-        self, node: ast.FunctionDef, content: str
-    ) -> List[str]:
+    def _extract_function_dependencies(self, node: ast.FunctionDef, content: str) -> List[str]:
         """Extract dependencies for a function"""
         dependencies = []
 
@@ -453,10 +431,7 @@ class ArchitecturalPatternAnalyzer:
         for method in node.body:
             if isinstance(method, ast.FunctionDef):
                 for decorator in method.decorator_list:
-                    if (
-                        isinstance(decorator, ast.Name)
-                        and decorator.id == "abstractmethod"
-                    ):
+                    if isinstance(decorator, ast.Name) and decorator.id == "abstractmethod":
                         return True
 
         return False
@@ -479,11 +454,7 @@ class ArchitecturalPatternAnalyzer:
         attribute_refs = {}
         for method in methods:
             for child in ast.walk(method):
-                if (
-                    isinstance(child, ast.Attribute)
-                    and isinstance(child.value, ast.Name)
-                    and child.value.id == "self"
-                ):
+                if isinstance(child, ast.Attribute) and isinstance(child.value, ast.Name) and child.value.id == "self":
                     attr_name = child.attr
                     if attr_name not in attribute_refs:
                         attribute_refs[attr_name] = []
@@ -493,9 +464,7 @@ class ArchitecturalPatternAnalyzer:
             return 0.5  # Neutral cohesion
 
         # Calculate how many methods share attributes
-        shared_attributes = sum(
-            1 for methods_list in attribute_refs.values() if len(methods_list) > 1
-        )
+        shared_attributes = sum(1 for methods_list in attribute_refs.values() if len(methods_list) > 1)
         total_attributes = len(attribute_refs)
 
         return shared_attributes / total_attributes if total_attributes > 0 else 0.5
@@ -568,9 +537,7 @@ class ArchitecturalPatternAnalyzer:
 
         return patterns
 
-    async def _detect_patterns(
-        self, root_path: str, patterns: List[str]
-    ) -> List[Dict[str, Any]]:
+    async def _detect_patterns(self, root_path: str, patterns: List[str]) -> List[Dict[str, Any]]:
         """Detect design patterns across the codebase"""
 
         detected_patterns = []
@@ -588,9 +555,7 @@ class ArchitecturalPatternAnalyzer:
                             pattern_sigs,
                         ) in self.pattern_signatures.items():
                             for regex_pattern, description in pattern_sigs:
-                                for match in re.finditer(
-                                    regex_pattern, content, re.MULTILINE | re.IGNORECASE
-                                ):
+                                for match in re.finditer(regex_pattern, content, re.MULTILINE | re.IGNORECASE):
                                     line_num = content[: match.start()].count("\n") + 1
                                     detected_patterns.append(
                                         {
@@ -606,9 +571,7 @@ class ArchitecturalPatternAnalyzer:
 
         return detected_patterns
 
-    async def _analyze_dependencies(
-        self, components: List[ArchitecturalComponent]
-    ) -> Dict[str, List[str]]:
+    async def _analyze_dependencies(self, components: List[ArchitecturalComponent]) -> Dict[str, List[str]]:
         """Analyze dependencies between components"""
 
         dependencies = {}
@@ -628,11 +591,7 @@ class ArchitecturalPatternAnalyzer:
         issues = []
 
         # Identify God classes
-        god_classes = [
-            c
-            for c in components
-            if c.component_type == "class" and c.complexity_score > 50
-        ]
+        god_classes = [c for c in components if c.component_type == "class" and c.complexity_score > 50]
         if god_classes:
             issues.append(
                 ArchitecturalIssue(
@@ -662,11 +621,7 @@ class ArchitecturalPatternAnalyzer:
             )
 
         # Identify low cohesion
-        low_cohesion = [
-            c
-            for c in components
-            if c.component_type == "class" and c.cohesion_score < 0.3
-        ]
+        low_cohesion = [c for c in components if c.component_type == "class" and c.cohesion_score < 0.3]
         if low_cohesion:
             issues.append(
                 ArchitecturalIssue(
@@ -698,9 +653,7 @@ class ArchitecturalPatternAnalyzer:
 
         return issues
 
-    def _detect_circular_dependencies(
-        self, dependencies: Dict[str, List[str]]
-    ) -> List[str]:
+    def _detect_circular_dependencies(self, dependencies: Dict[str, List[str]]) -> List[str]:
         """Detect circular dependencies using DFS"""
         visited = set()
         rec_stack = set()
@@ -744,9 +697,7 @@ class ArchitecturalPatternAnalyzer:
         # Average cohesion
         class_components = [c for c in components if c.component_type == "class"]
         avg_cohesion = (
-            sum(c.cohesion_score for c in class_components) / len(class_components)
-            if class_components
-            else 0
+            sum(c.cohesion_score for c in class_components) / len(class_components) if class_components else 0
         )
         cohesion_score = avg_cohesion * 100
 
@@ -760,13 +711,9 @@ class ArchitecturalPatternAnalyzer:
         maintainability = max(0, 100 - (avg_complexity * 2))
 
         # Abstraction score (ratio of abstract to concrete classes)
-        abstract_classes = len(
-            [c for c in components if c.component_type == "class" and c.is_abstract]
-        )
+        abstract_classes = len([c for c in components if c.component_type == "class" and c.is_abstract])
         total_classes = len([c for c in components if c.component_type == "class"])
-        abstraction_score = (
-            (abstract_classes / total_classes * 100) if total_classes > 0 else 0
-        )
+        abstraction_score = (abstract_classes / total_classes * 100) if total_classes > 0 else 0
 
         # Instability score (dependencies out vs dependencies in)
         # Simplified calculation
@@ -774,10 +721,7 @@ class ArchitecturalPatternAnalyzer:
 
         # Overall architecture score (weighted average)
         architecture_score = (
-            coupling_score * 0.25
-            + cohesion_score * 0.25
-            + pattern_adherence * 0.3
-            + maintainability * 0.2
+            coupling_score * 0.25 + cohesion_score * 0.25 + pattern_adherence * 0.3 + maintainability * 0.2
         )
 
         return ArchitecturalMetrics(
@@ -791,9 +735,7 @@ class ArchitecturalPatternAnalyzer:
             instability_score=round(instability_score, 2),
         )
 
-    async def _generate_architecture_recommendations(
-        self, issues: List[ArchitecturalIssue]
-    ) -> List[str]:
+    async def _generate_architecture_recommendations(self, issues: List[ArchitecturalIssue]) -> List[str]:
         """Generate architectural improvement recommendations"""
 
         recommendations = []
@@ -807,24 +749,16 @@ class ArchitecturalPatternAnalyzer:
 
         # Generate specific recommendations
         if "god_class" in by_type:
-            recommendations.append(
-                "Break down God classes using Single Responsibility Principle"
-            )
+            recommendations.append("Break down God classes using Single Responsibility Principle")
 
         if "tight_coupling" in by_type:
-            recommendations.append(
-                "Reduce coupling through dependency injection and interface segregation"
-            )
+            recommendations.append("Reduce coupling through dependency injection and interface segregation")
 
         if "low_cohesion" in by_type:
-            recommendations.append(
-                "Increase cohesion by grouping related functionality together"
-            )
+            recommendations.append("Increase cohesion by grouping related functionality together")
 
         if "circular_dependency" in by_type:
-            recommendations.append(
-                "Eliminate circular dependencies using dependency inversion"
-            )
+            recommendations.append("Eliminate circular dependencies using dependency inversion")
 
         # General recommendations
         recommendations.extend(
@@ -889,9 +823,7 @@ class ArchitecturalPatternAnalyzer:
             try:
                 cursor = 0
                 while True:
-                    cursor, keys = await self.redis_client.scan(
-                        cursor, match="architecture_analysis:*", count=100
-                    )
+                    cursor, keys = await self.redis_client.scan(cursor, match="architecture_analysis:*", count=100)
                     if keys:
                         await self.redis_client.delete(*keys)
                     if cursor == 0:
@@ -906,9 +838,7 @@ async def main():
     analyzer = ArchitecturalPatternAnalyzer()
 
     # Analyze architectural patterns
-    results = await analyzer.analyze_architecture(
-        root_path=".", patterns=["src/**/*.py", "backend/**/*.py"]
-    )
+    results = await analyzer.analyze_architecture(root_path=".", patterns=["src/**/*.py", "backend/**/*.py"])
 
     # Print summary
     logger.info(f"\n=== Architectural Pattern Analysis Results ===")
@@ -942,9 +872,7 @@ async def main():
     if results["architectural_issues"]:
         logger.info(f"\n=== Architectural Issues ===")
         for issue in results["architectural_issues"]:
-            logger.info(
-                f"{issue['type']} ({issue['severity']}): {issue['description']}"
-            )
+            logger.info(f"{issue['type']} ({issue['severity']}): {issue['description']}")
             logger.info(f"  Affects {issue['affected_components_count']} components")
             logger.info(f"  Suggestion: {issue['suggestion']}")
             logger.info(f"  Refactoring effort: {issue['refactoring_effort']}")

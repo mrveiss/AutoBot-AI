@@ -47,14 +47,10 @@ class GitRepoSync(BaseRepoSync):
                 stderr=asyncio.subprocess.PIPE,
             )
         except FileNotFoundError as exc:
-            raise RuntimeError(
-                "git clone failed: git binary not found on PATH"
-            ) from exc
+            raise RuntimeError("git clone failed: git binary not found on PATH") from exc
         _, stderr = await proc.communicate()
         if proc.returncode != 0:
-            raise RuntimeError(
-                f"git clone failed: {stderr.decode('utf-8', errors='replace')}"
-            )
+            raise RuntimeError(f"git clone failed: {stderr.decode('utf-8', errors='replace')}")
         logger.info("Cloned skill repo %s@%s", self.url, self.branch)
 
     @staticmethod

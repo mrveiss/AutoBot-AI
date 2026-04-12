@@ -23,10 +23,9 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from enhanced_project_state_tracker import get_state_tracker
 from phase_progression_manager import get_progression_manager
+from scripts.phase_validation_system import PhaseValidator
 from utils.html_dashboard_utils import create_dashboard_header, get_light_theme_css
 from utils.template_loader import load_css, template_exists
-
-from scripts.phase_validation_system import PhaseValidator
 
 logger = logging.getLogger(__name__)
 
@@ -164,9 +163,7 @@ class ValidationDashboardGenerator:
         Helper for generate_real_time_report (#825).
         """
         try:
-            validation_results = await asyncio.wait_for(
-                self.validator.validate_all_phases(), timeout=30.0
-            )
+            validation_results = await asyncio.wait_for(self.validator.validate_all_phases(), timeout=30.0)
         except asyncio.TimeoutError:
             logger.debug("Validation timed out, using fallback results")
             validation_results = self._get_minimal_validation_results()
@@ -181,9 +178,7 @@ class ValidationDashboardGenerator:
             state_summary = self._get_default_state_summary()
 
         try:
-            progression_status = (
-                await self.progression_manager.check_progression_eligibility()
-            )
+            progression_status = await self.progression_manager.check_progression_eligibility()
         except Exception as e:
             logger.debug("Progression manager unavailable: %s", e)
             progression_status = self._get_default_progression_status()
@@ -208,17 +203,11 @@ class ValidationDashboardGenerator:
         return {
             "generated_at": datetime.now().isoformat(),
             "system_overview": {
-                "overall_maturity": validation_results["overall_assessment"][
-                    "system_maturity_score"
-                ],
+                "overall_maturity": validation_results["overall_assessment"]["system_maturity_score"],
                 "total_phases": len(phases),
-                "completed_phases": len(
-                    [p for p in phases.values() if p["completion_percentage"] >= 95.0]
-                ),
+                "completed_phases": len([p for p in phases.values() if p["completion_percentage"] >= 95.0]),
                 "system_health": self._assess_system_health(validation_results),
-                "active_capabilities": state_summary["current_state"]["system_metrics"][
-                    "capability_count"
-                ],
+                "active_capabilities": state_summary["current_state"]["system_metrics"]["capability_count"],
             },
             "phase_details": self._format_phase_details(phases),
             "progression_status": {
@@ -241,9 +230,7 @@ class ValidationDashboardGenerator:
             data = await self._gather_validation_data()
             validation_results, state_summary, progression_status = data
 
-            current_metrics = self._calculate_current_metrics(
-                validation_results, state_summary, progression_status
-            )
+            current_metrics = self._calculate_current_metrics(validation_results, state_summary, progression_status)
             trend_data = await self._generate_trend_data()
             recommendations = await self._generate_recommendations(validation_results)
             alerts = self._check_system_alerts(validation_results, state_summary)
@@ -280,35 +267,19 @@ class ValidationDashboardGenerator:
                 "phases_above_90": len([s for s in completion_scores if s >= 90.0]),
             },
             "system_maturity": {
-                "overall_score": validation_results["overall_assessment"][
-                    "system_maturity_score"
-                ],
-                "development_stage": validation_results["overall_assessment"][
-                    "development_stage"
-                ],
-                "capability_ratio": state_summary["current_state"]["system_metrics"][
-                    "capability_count"
-                ]
-                / 100.0,
+                "overall_score": validation_results["overall_assessment"]["system_maturity_score"],
+                "development_stage": validation_results["overall_assessment"]["development_stage"],
+                "capability_ratio": state_summary["current_state"]["system_metrics"]["capability_count"] / 100.0,
             },
             "progression_metrics": {
-                "eligible_for_progression": len(
-                    progression_status.get("eligible_phases", [])
-                )
-                > 0,
-                "progression_velocity": state_summary["trends"]
-                .get("progression_velocity", {})
-                .get("current", 0),
+                "eligible_for_progression": len(progression_status.get("eligible_phases", [])) > 0,
+                "progression_velocity": state_summary["trends"].get("progression_velocity", {}).get("current", 0),
                 "blocks_count": len(progression_status.get("blocked_phases", [])),
                 "available_count": len(progression_status.get("eligible_phases", [])),
             },
             "quality_indicators": {
-                "validation_score": state_summary["current_state"]["system_metrics"][
-                    "validation_score"
-                ],
-                "error_rate": state_summary["current_state"]["system_metrics"].get(
-                    "error_rate", 0
-                ),
+                "validation_score": state_summary["current_state"]["system_metrics"]["validation_score"],
+                "error_rate": state_summary["current_state"]["system_metrics"].get("error_rate", 0),
                 "recent_changes": len(state_summary["recent_changes"]),
             },
         }
@@ -330,9 +301,7 @@ class ValidationDashboardGenerator:
                 "maturity_trend": [
                     {
                         "timestamp": (start_time + timedelta(hours=i)).isoformat(),
-                        "value": min(
-                            100, 50 + i * 2 + (i % 3)
-                        ),  # Mock increasing trend
+                        "value": min(100, 50 + i * 2 + (i % 3)),  # Mock increasing trend
                     }
                     for i in range(self.chart_data_points)
                 ],
@@ -368,13 +337,10 @@ class ValidationDashboardGenerator:
                 "display_name": phase_name.replace("_", " ").title(),
                 "completion_percentage": phase_data["completion_percentage"],
                 "status": phase_data["status"],
-                "status_color": self._get_status_color(
-                    phase_data["completion_percentage"]
-                ),
+                "status_color": self._get_status_color(phase_data["completion_percentage"]),
                 "missing_items": phase_data.get("missing_items", []),
                 "missing_count": len(phase_data.get("missing_items", [])),
-                "requirements_met": len(phase_data.get("requirements", []))
-                - len(phase_data.get("missing_items", [])),
+                "requirements_met": len(phase_data.get("requirements", [])) - len(phase_data.get("missing_items", [])),
                 "total_requirements": len(phase_data.get("requirements", [])),
                 "last_updated": datetime.now().isoformat(),
                 # Add detailed validation results
@@ -398,9 +364,7 @@ class ValidationDashboardGenerator:
 
         # Extract directory validation results
         if "directories_validation" in phase_data:
-            validation_details["directories_check"] = phase_data[
-                "directories_validation"
-            ]
+            validation_details["directories_check"] = phase_data["directories_validation"]
 
         # Extract endpoint validation results
         if "endpoints_validation" in phase_data:
@@ -412,9 +376,7 @@ class ValidationDashboardGenerator:
 
         # Extract performance validation results
         if "performance_validation" in phase_data:
-            validation_details["performance_check"] = phase_data[
-                "performance_validation"
-            ]
+            validation_details["performance_check"] = phase_data["performance_validation"]
 
         # Extract security validation results
         if "security_validation" in phase_data:
@@ -487,9 +449,7 @@ class ValidationDashboardGenerator:
 
     def _assess_system_health(self, validation_results: Dict) -> str:
         """Assess overall system health"""
-        maturity_score = validation_results["overall_assessment"][
-            "system_maturity_score"
-        ]
+        maturity_score = validation_results["overall_assessment"]["system_maturity_score"]
 
         if maturity_score >= 90.0:
             return "excellent"
@@ -500,9 +460,7 @@ class ValidationDashboardGenerator:
         else:
             return "needs_attention"
 
-    async def _generate_recommendations(
-        self, validation_results: Dict
-    ) -> List[Dict[str, Any]]:
+    async def _generate_recommendations(self, validation_results: Dict) -> List[Dict[str, Any]]:
         """Generate actionable recommendations"""
         recommendations = []
 
@@ -534,9 +492,7 @@ class ValidationDashboardGenerator:
                 )
 
         # System-level recommendations
-        overall_maturity = validation_results["overall_assessment"][
-            "system_maturity_score"
-        ]
+        overall_maturity = validation_results["overall_assessment"]["system_maturity_score"]
 
         if overall_maturity < 70.0:
             recommendations.append(
@@ -551,16 +507,12 @@ class ValidationDashboardGenerator:
 
         return recommendations
 
-    def _check_system_alerts(
-        self, validation_results: Dict, state_summary: Dict
-    ) -> List[Dict[str, Any]]:
+    def _check_system_alerts(self, validation_results: Dict, state_summary: Dict) -> List[Dict[str, Any]]:
         """Check for system alerts and warnings"""
         alerts = []
 
         # Critical maturity alert
-        maturity_score = validation_results["overall_assessment"][
-            "system_maturity_score"
-        ]
+        maturity_score = validation_results["overall_assessment"]["system_maturity_score"]
         if maturity_score < 30.0:
             alerts.append(
                 {
@@ -573,11 +525,7 @@ class ValidationDashboardGenerator:
 
         # Phase completion alerts
         phases = validation_results["phases"]
-        stalled_phases = [
-            name
-            for name, data in phases.items()
-            if data["completion_percentage"] < 25.0
-        ]
+        stalled_phases = [name for name, data in phases.items() if data["completion_percentage"] < 25.0]
 
         if len(stalled_phases) > 3:
             alerts.append(
@@ -643,9 +591,7 @@ class ValidationDashboardGenerator:
             return load_css("validation_dashboard")
 
         # Fallback for backwards compatibility if template is missing
-        logger.warning(
-            "CSS template not found, using inline fallback: %s", template_path
-        )
+        logger.warning("CSS template not found, using inline fallback: %s", template_path)
         return self._get_fallback_css()
 
     def _get_fallback_css(self) -> str:
@@ -687,10 +633,7 @@ class ValidationDashboardGenerator:
         generated_at = report_data["generated_at"][:19].replace("T", " ")
         header_html = create_dashboard_header(
             title="AutoBot Validation Dashboard",
-            subtitle=(
-                "Real-time system validation and progress monitoring"
-                f"<br>Generated: {generated_at}"
-            ),
+            subtitle=("Real-time system validation and progress monitoring" f"<br>Generated: {generated_at}"),
             theme="light",
         )
         trends = report_data["trends"]["maturity_trend"]
@@ -705,14 +648,10 @@ class ValidationDashboardGenerator:
             "completed_phases": system_overview["completed_phases"],
             "total_phases": system_overview["total_phases"],
             "active_capabilities": system_overview["active_capabilities"],
-            "system_health_display": (
-                system_overview["system_health"].replace("_", " ").title()
-            ),
+            "system_health_display": (system_overview["system_health"].replace("_", " ").title()),
             "phase_html": self._generate_phase_html(phase_details),
             "alerts_html": self._generate_alerts_html(alerts),
-            "recommendations_html": (
-                self._generate_recommendations_html(recommendations)
-            ),
+            "recommendations_html": (self._generate_recommendations_html(recommendations)),
             "maturity_labels": json.dumps([p["timestamp"][-8:-3] for p in trends]),
             "maturity_data": json.dumps([p["value"] for p in trends]),
             "refresh_timeout": self.refresh_interval * 1000,
@@ -739,8 +678,7 @@ class ValidationDashboardGenerator:
         html_parts = []
 
         for phase in phase_details:
-            html_parts.append(
-                """
+            html_parts.append("""
                 <div class="phase-item" style="border-color: {phase['status_color']}">
                     <div>
                         <strong>{phase['display_name']}</strong>
@@ -757,8 +695,7 @@ class ValidationDashboardGenerator:
                         </div>
                     </div>
                 </div>
-            """
-            )
+            """)
 
         return "".join(html_parts)
 
@@ -769,14 +706,12 @@ class ValidationDashboardGenerator:
 
         html_parts = []
         for alert in alerts:
-            html_parts.append(
-                """
+            html_parts.append("""
                 <div class="alert alert-{alert['level']}">
                     <div style="font-weight: bold;">{alert['title']}</div>
                     <div>{alert['message']}</div>
                 </div>
-            """
-            )
+            """)
 
         return "".join(html_parts)
 
@@ -787,8 +722,7 @@ class ValidationDashboardGenerator:
 
         html_parts = []
         for rec in recommendations[:5]:  # Show top 5 recommendations
-            html_parts.append(
-                """
+            html_parts.append("""
                 <div class="recommendation">
                     <div class="recommendation-title">
                         {rec['title']}
@@ -799,8 +733,7 @@ class ValidationDashboardGenerator:
                         💡 {rec['action']}
                     </div>
                 </div>
-            """
-            )
+            """)
 
         return "".join(html_parts)
 
@@ -827,12 +760,8 @@ class ValidationDashboardGenerator:
 # CLI interface
 def main():
     """Main function for CLI usage"""
-    parser = argparse.ArgumentParser(
-        description="AutoBot Validation Dashboard Generator"
-    )
-    parser.add_argument(
-        "--ci-mode", action="store_true", help="Run in CI mode with simplified output"
-    )
+    parser = argparse.ArgumentParser(description="AutoBot Validation Dashboard Generator")
+    parser.add_argument("--ci-mode", action="store_true", help="Run in CI mode with simplified output")
     parser.add_argument(
         "--output",
         type=str,
@@ -863,15 +792,11 @@ def main():
                 if args.ci_mode:
                     # Simple CI output
                     system_overview = report.get("system_overview", {})
-                    logger.info(
-                        f"System Maturity: {system_overview.get('overall_maturity', 0):.1f}%"
-                    )
+                    logger.info(f"System Maturity: {system_overview.get('overall_maturity', 0):.1f}%")
                     logger.info(
                         f"Completed Phases: {system_overview.get('completed_phases', 0)}/{system_overview.get('total_phases', 0)}"
                     )
-                    logger.info(
-                        f"System Health: {system_overview.get('system_health', 'unknown')}"
-                    )
+                    logger.info(f"System Health: {system_overview.get('system_health', 'unknown')}")
                 else:
                     logger.info(json.dumps(report, indent=2, default=str))
 

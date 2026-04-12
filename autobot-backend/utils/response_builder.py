@@ -197,9 +197,7 @@ def created_response(
         JSONResponse with 201 status
     """
     headers = {"Location": location} if location else None
-    return success_response(
-        data=data, message=message, status_code=201, headers=headers
-    )
+    return success_response(data=data, message=message, status_code=201, headers=headers)
 
 
 def no_content_response() -> JSONResponse:

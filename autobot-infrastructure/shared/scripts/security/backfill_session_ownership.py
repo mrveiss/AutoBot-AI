@@ -39,20 +39,17 @@ from typing import List, Optional
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 from backend.security.session_ownership import SessionOwnershipValidator
+
 from utils.redis_client import get_redis_client
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
 class SessionOwnershipBackfill:
     """Backfill session ownership for existing chat sessions"""
 
-    def __init__(
-        self, default_owner: str = "admin", dry_run: bool = False, verbose: bool = False
-    ):
+    def __init__(self, default_owner: str = "admin", dry_run: bool = False, verbose: bool = False):
         """Initialize backfill tool with owner defaults and operational flags."""
         self.default_owner = default_owner
         self.dry_run = dry_run
@@ -86,9 +83,7 @@ class SessionOwnershipBackfill:
         cursor = 0
 
         while True:
-            cursor, keys = await self.redis.scan(
-                cursor, match="chat_session:*", count=100
-            )
+            cursor, keys = await self.redis.scan(cursor, match="chat_session:*", count=100)
 
             # Extract session IDs
             for key in keys:
@@ -173,14 +168,11 @@ class SessionOwnershipBackfill:
                     self.already_owned += 1
                     if self.verbose:
                         logger.info(
-                            f"[{idx}/{self.total_sessions}] {session_id[:16]}... "
-                            f"already owned by {existing_owner}"
+                            f"[{idx}/{self.total_sessions}] {session_id[:16]}... " f"already owned by {existing_owner}"
                         )
                 else:
                     # Assign to default owner
-                    success = await self.assign_session_owner(
-                        session_id, self.default_owner
-                    )
+                    success = await self.assign_session_owner(session_id, self.default_owner)
 
                     if success:
                         self.newly_assigned += 1
@@ -249,9 +241,7 @@ class SessionOwnershipBackfill:
 
 async def main():
     """Main entry point"""
-    parser = argparse.ArgumentParser(
-        description="Backfill session ownership for AutoBot chat sessions"
-    )
+    parser = argparse.ArgumentParser(description="Backfill session ownership for AutoBot chat sessions")
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -264,9 +254,7 @@ async def main():
         help="Default owner for unowned sessions (default: admin)",
     )
     parser.add_argument("--verbose", action="store_true", help="Show detailed progress")
-    parser.add_argument(
-        "--force", action="store_true", help="Skip confirmation prompts"
-    )
+    parser.add_argument("--force", action="store_true", help="Skip confirmation prompts")
     parser.add_argument(
         "--verify-only",
         action="store_true",
@@ -276,9 +264,7 @@ async def main():
     args = parser.parse_args()
 
     # Create backfill instance
-    backfill = SessionOwnershipBackfill(
-        default_owner=args.default_owner, dry_run=args.dry_run, verbose=args.verbose
-    )
+    backfill = SessionOwnershipBackfill(default_owner=args.default_owner, dry_run=args.dry_run, verbose=args.verbose)
 
     try:
         # Initialize
@@ -292,12 +278,8 @@ async def main():
         # Confirmation prompt (unless forced or dry-run)
         if not args.force and not args.dry_run:
             logger.info("")
-            logger.warning(
-                "⚠️  WARNING: This will modify session ownership in Redis DB 0"
-            )
-            logger.info(
-                f"   All unowned sessions will be assigned to: {args.default_owner}"
-            )
+            logger.warning("⚠️  WARNING: This will modify session ownership in Redis DB 0")
+            logger.info(f"   All unowned sessions will be assigned to: {args.default_owner}")
             logger.info("")
             response = input("Continue? [y/N]: ")
             if response.lower() not in ("y", "yes"):

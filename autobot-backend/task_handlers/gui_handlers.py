@@ -28,9 +28,7 @@ class GUIClickElementHandler(TaskHandler):
         clicks = ctx.get_payload_value("clicks", 1)
         interval = ctx.get_payload_value("interval", 0.0)
 
-        result = ctx.worker.gui_controller.click_element(
-            image_path, confidence, button, clicks, interval
-        )
+        result = ctx.worker.gui_controller.click_element(image_path, confidence, button, clicks, interval)
 
         ctx.audit_log(
             "gui_click_element",

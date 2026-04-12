@@ -14,12 +14,11 @@ import subprocess
 from pathlib import Path
 
 import yaml
+
 from constants import ServiceURLs
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -50,9 +49,7 @@ def check_gpu_status():
                 temp = int(parts[4].strip())
 
                 logger.info("   Name: %s", name)
-                logger.info(
-                    f"   Memory: {used_mem}/{total_mem} MB ({(used_mem/total_mem)*100:.1f}% used)"
-                )
+                logger.info(f"   Memory: {used_mem}/{total_mem} MB ({(used_mem/total_mem)*100:.1f}% used)")
                 logger.info("   Utilization: %s%", utilization)
                 logger.info("   Temperature: %s°C", temp)
 

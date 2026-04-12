@@ -58,9 +58,7 @@ class BatchableRequest:
         """Generate unique request ID if not provided."""
         if not self.id:
             # Generate unique ID based on content and timestamp
-            content_hash = hashlib.md5(
-                self.content.encode(), usedforsecurity=False
-            ).hexdigest()[:8]
+            content_hash = hashlib.md5(self.content.encode(), usedforsecurity=False).hexdigest()[:8]
             self.id = f"req_{content_hash}_{int(self.timestamp * 1000)}"
 
 
@@ -92,18 +90,14 @@ class RequestSimilarityAnalyzer:
             "documentation": 0.5,
         }
 
-    def calculate_similarity(
-        self, req1: BatchableRequest, req2: BatchableRequest
-    ) -> float:
+    def calculate_similarity(self, req1: BatchableRequest, req2: BatchableRequest) -> float:
         """Calculate similarity score between two requests"""
         try:
             # Context type similarity
             context_similarity = 1.0 if req1.context_type == req2.context_type else 0.3
 
             # Content similarity (simplified - could use more sophisticated NLP)
-            content_similarity = self._calculate_content_similarity(
-                req1.content, req2.content
-            )
+            content_similarity = self._calculate_content_similarity(req1.content, req2.content)
 
             # Priority compatibility
             priority_diff = abs(req1.priority.value - req2.priority.value)
@@ -112,9 +106,7 @@ class RequestSimilarityAnalyzer:
             # Weighted combination
             context_weight = self.context_weights.get(req1.context_type, 0.6)
             final_similarity = (
-                context_similarity * context_weight
-                + content_similarity * 0.4
-                + priority_similarity * 0.3
+                context_similarity * context_weight + content_similarity * 0.4 + priority_similarity * 0.3
             ) / (context_weight + 0.4 + 0.3)
 
             return min(1.0, final_similarity)
@@ -173,9 +165,7 @@ class AdaptiveBatchingEngine:
     def __init__(self):
         """Initialize adaptive engine with history tracking and learning parameters."""
         self.batch_history: deque = deque(maxlen=1000)
-        self.strategy_performance: Dict[BatchingStrategy, List[float]] = defaultdict(
-            list
-        )
+        self.strategy_performance: Dict[BatchingStrategy, List[float]] = defaultdict(list)
         self.current_strategy = BatchingStrategy.ADAPTIVE
         self.learning_window = 50  # Number of batches to consider for adaptation
 
@@ -225,14 +215,10 @@ class AdaptiveBatchingEngine:
                     best_strategy = strategy
 
         if best_strategy and best_strategy != self.current_strategy:
-            logger.info(
-                f"Adapting batching strategy from {self.current_strategy} to {best_strategy}"
-            )
+            logger.info(f"Adapting batching strategy from {self.current_strategy} to {best_strategy}")
             self.current_strategy = best_strategy
 
-    def get_recommended_strategy(
-        self, current_load: int, queue_size: int
-    ) -> BatchingStrategy:
+    def get_recommended_strategy(self, current_load: int, queue_size: int) -> BatchingStrategy:
         """Get recommended strategy based on current conditions"""
         if self.current_strategy == BatchingStrategy.ADAPTIVE:
             # Dynamic strategy selection based on current conditions
@@ -262,9 +248,7 @@ class IntelligentRequestBatcher:
 
         # Core components
         self.pending_requests: Dict[str, BatchableRequest] = {}
-        self.request_queues: Dict[RequestPriority, deque] = {
-            priority: deque() for priority in RequestPriority
-        }
+        self.request_queues: Dict[RequestPriority, deque] = {priority: deque() for priority in RequestPriority}
         self.similarity_analyzer = RequestSimilarityAnalyzer()
         self.adaptive_engine = AdaptiveBatchingEngine()
 
@@ -299,9 +283,7 @@ class IntelligentRequestBatcher:
         """
         async with self._task_lock:
             if self._processing_task is None:
-                self._processing_task = asyncio.create_task(
-                    self._batch_processing_loop()
-                )
+                self._processing_task = asyncio.create_task(self._batch_processing_loop())
                 logger.info("Intelligent request batcher started")
 
     async def stop(self):
@@ -326,9 +308,7 @@ class IntelligentRequestBatcher:
         logger.debug("Added request %s with priority %s", request.id, request.priority)
         return request.id
 
-    async def get_result(
-        self, request_id: str, timeout: float = TimingConstants.SHORT_TIMEOUT
-    ) -> Optional[str]:
+    async def get_result(self, request_id: str, timeout: float = TimingConstants.SHORT_TIMEOUT) -> Optional[str]:
         """Get the result for a specific request"""
         start_time = time.time()
 
@@ -353,14 +333,10 @@ class IntelligentRequestBatcher:
         while not self._shutdown:
             try:
                 await self._process_pending_requests()
-                await asyncio.sleep(
-                    TimingConstants.MICRO_DELAY
-                )  # Small delay to prevent CPU spinning
+                await asyncio.sleep(TimingConstants.MICRO_DELAY)  # Small delay to prevent CPU spinning
             except Exception as e:
                 logger.error("Error in batch processing loop: %s", e)
-                await asyncio.sleep(
-                    TimingConstants.STANDARD_DELAY
-                )  # Longer delay on error
+                await asyncio.sleep(TimingConstants.STANDARD_DELAY)  # Longer delay on error
 
     async def _process_pending_requests(self):
         """Process pending requests using intelligent batching"""
@@ -370,9 +346,7 @@ class IntelligentRequestBatcher:
         # Get current strategy
         current_load = len(self.active_batches)
         total_queue_size = sum(len(queue) for queue in self.request_queues.values())
-        strategy = self.adaptive_engine.get_recommended_strategy(
-            current_load, total_queue_size
-        )
+        strategy = self.adaptive_engine.get_recommended_strategy(current_load, total_queue_size)
 
         # Process by priority (critical first)
         for priority in RequestPriority:
@@ -433,9 +407,7 @@ class IntelligentRequestBatcher:
 
         return batch
 
-    async def _create_size_threshold_batch(
-        self, queue: deque
-    ) -> List[BatchableRequest]:
+    async def _create_size_threshold_batch(self, queue: deque) -> List[BatchableRequest]:
         """Create batch when size threshold is reached"""
         if len(queue) < self.max_batch_size:
             return []  # Wait for more requests
@@ -486,9 +458,7 @@ class IntelligentRequestBatcher:
 
         return batch
 
-    async def _create_priority_weighted_batch(
-        self, queue: deque
-    ) -> List[BatchableRequest]:
+    async def _create_priority_weighted_batch(self, queue: deque) -> List[BatchableRequest]:
         """Create batch considering priority weights"""
         batch = []
 
@@ -592,9 +562,7 @@ class IntelligentRequestBatcher:
             error_message=str(error),
         )
 
-    async def _execute_batch(
-        self, batch: List[BatchableRequest], strategy: BatchingStrategy
-    ):
+    async def _execute_batch(self, batch: List[BatchableRequest], strategy: BatchingStrategy):
         """Execute a batch of requests."""
         if not batch:
             return
@@ -620,9 +588,7 @@ class IntelligentRequestBatcher:
             self.adaptive_engine.record_batch_result(strategy, result)
 
             await self._execute_batch_callbacks(batch, individual_responses, response)
-            logger.info(
-                f"Successfully executed batch {batch_id} with {len(batch)} requests"
-            )
+            logger.info(f"Successfully executed batch {batch_id} with {len(batch)} requests")
 
         except Exception as e:
             logger.error("Error executing batch %s: %s", batch_id, e)
@@ -636,10 +602,7 @@ class IntelligentRequestBatcher:
             return batch[0].content
 
         # Build request sections using list + join (O(n)) instead of += (O(n²))
-        request_sections = [
-            f"Request {i} (ID: {request.id}):\n{request.content}"
-            for i, request in enumerate(batch, 1)
-        ]
+        request_sections = [f"Request {i} (ID: {request.id}):\n{request.content}" for i, request in enumerate(batch, 1)]
         combined = (
             "I have multiple related requests to process:\n\n"
             + "\n\n".join(request_sections)
@@ -658,8 +621,7 @@ class IntelligentRequestBatcher:
         processing fails loudly rather than returning fake responses.
         """
         logger.warning(
-            "_execute_combined_request called but no API client is wired. (#2869) "
-            "Request content length: %d chars",
+            "_execute_combined_request called but no API client is wired. (#2869) " "Request content length: %d chars",
             len(content),
         )
         raise NotImplementedError(
@@ -667,9 +629,7 @@ class IntelligentRequestBatcher:
             "Inject a real LLM/API client into RequestBatcher before enabling batching. (#2869)"
         )
 
-    def _parse_batch_response(
-        self, batch: List[BatchableRequest], response: str
-    ) -> Dict[str, str]:
+    def _parse_batch_response(self, batch: List[BatchableRequest], response: str) -> Dict[str, str]:
         """Parse batch response back to individual responses"""
         individual_responses = {}
 
@@ -681,17 +641,13 @@ class IntelligentRequestBatcher:
                 # Look for request ID in response
                 if request.id in response:
                     # Extract relevant portion (simplified)
-                    individual_responses[request.id] = (
-                        f"Response for {request.id}: {response[:200]}..."
-                    )
+                    individual_responses[request.id] = f"Response for {request.id}: {response[:200]}..."
                 else:
                     individual_responses[request.id] = response
 
         return individual_responses
 
-    async def _update_statistics(
-        self, batch: List[BatchableRequest], result: BatchResult
-    ):
+    async def _update_statistics(self, batch: List[BatchableRequest], result: BatchResult):
         """Update batching statistics (thread-safe)"""
         async with self._stats_lock:
             self.stats["total_batches"] += 1
@@ -700,17 +656,13 @@ class IntelligentRequestBatcher:
             # Update average batch size
             total_requests = self.stats["requests_batched"]
             total_batches = self.stats["total_batches"]
-            self.stats["average_batch_size"] = (
-                total_requests / total_batches if total_batches > 0 else 0
-            )
+            self.stats["average_batch_size"] = total_requests / total_batches if total_batches > 0 else 0
 
             # Calculate efficiency gain (requests processed vs individual API calls)
             individual_calls = self.stats["total_requests"]
             batch_calls = self.stats["total_batches"]
             self.stats["efficiency_gain"] = (
-                (individual_calls - batch_calls) / individual_calls
-                if individual_calls > 0
-                else 0
+                (individual_calls - batch_calls) / individual_calls if individual_calls > 0 else 0
             )
 
     async def get_statistics(self) -> Dict[str, Any]:
@@ -724,18 +676,13 @@ class IntelligentRequestBatcher:
             **stats_copy,
             "pending_requests": len(self.pending_requests),
             "active_batches": len(self.active_batches),
-            "queue_sizes": {
-                priority.name: len(queue)
-                for priority, queue in self.request_queues.items()
-            },
+            "queue_sizes": {priority.name: len(queue) for priority, queue in self.request_queues.items()},
             "current_strategy": self.adaptive_engine.current_strategy.name,
         }
 
 
 # Convenience functions for easy integration
-async def create_batcher(
-    max_batch_size: int = 5, time_window: float = 2.0
-) -> IntelligentRequestBatcher:
+async def create_batcher(max_batch_size: int = 5, time_window: float = 2.0) -> IntelligentRequestBatcher:
     """Create and start an intelligent request batcher"""
     batcher = IntelligentRequestBatcher(max_batch_size, time_window)
     await batcher.start()

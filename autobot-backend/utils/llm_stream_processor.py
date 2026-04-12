@@ -98,16 +98,12 @@ class LLMStreamingInterface:
                     content, success = await processor.process_ollama_stream()
 
                     processing_time = processor.get_processing_time()
-                    logger.info(
-                        f"Stream processed in {processing_time:.2f}ms with {processor.chunk_count} chunks"
-                    )
+                    logger.info(f"Stream processed in {processing_time:.2f}ms with {processor.chunk_count} chunks")
 
                     return content, success
                 else:
                     error_text = await response.text()
-                    logger.error(
-                        f"Ollama request failed: {response.status} - {error_text}"
-                    )
+                    logger.error(f"Ollama request failed: {response.status} - {error_text}")
                     return f"Error: HTTP {response.status}", False
 
         except Exception as e:

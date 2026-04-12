@@ -71,9 +71,7 @@ async def _store_card(db, node, card: Optional[Dict[str, Any]]) -> None:
     extra = dict(node.extra_data or {})
     extra["a2a_card"] = card
     extra["a2a_card_fetched_at"] = datetime.now(timezone.utc).isoformat()
-    await db.execute(
-        update(Node).where(Node.node_id == node.node_id).values(extra_data=extra)
-    )
+    await db.execute(update(Node).where(Node.node_id == node.node_id).values(extra_data=extra))
     await db.commit()
 
 
@@ -113,9 +111,7 @@ async def _refresh_all_backend_nodes() -> None:
     from services.database import db_service
 
     async with db_service.session() as db:
-        result = await db.execute(
-            select(Node).where(Node.status.in_(["online", "enrolled"]))
-        )
+        result = await db.execute(select(Node).where(Node.status.in_(["online", "enrolled"])))
         nodes = result.scalars().all()
 
     backend_nodes = [n for n in nodes if _A2A_ROLE in (n.roles or [])]
@@ -138,9 +134,7 @@ def _build_external_agent_ssl_ctx(ssl_verify: bool):
     return ssl_ctx
 
 
-def _build_external_agent_headers(
-    api_key: Optional[str], agent_id: int
-) -> Dict[str, str]:
+def _build_external_agent_headers(api_key: Optional[str], agent_id: int) -> Dict[str, str]:
     """Helper for fetch_card_for_external. Ref: #1088."""
     headers: Dict[str, str] = {}
     if api_key:
@@ -153,9 +147,7 @@ def _build_external_agent_headers(
     return headers
 
 
-async def _fetch_external_agent_card(
-    url: str, ssl_ctx, headers: Dict[str, str], agent_id: int
-):
+async def _fetch_external_agent_card(url: str, ssl_ctx, headers: Dict[str, str], agent_id: int):
     """Helper for fetch_card_for_external. Ref: #1088."""
     import aiohttp
 
@@ -188,9 +180,7 @@ async def fetch_card_for_external(agent_id: int) -> Optional[Dict[str, Any]]:
     from services.database import db_service
 
     async with db_service.session() as db:
-        result = await db.execute(
-            select(ExternalAgent).where(ExternalAgent.id == agent_id)
-        )
+        result = await db.execute(select(ExternalAgent).where(ExternalAgent.id == agent_id))
         agent = result.scalar_one_or_none()
         if agent is None:
             logger.warning("External agent %s not found", agent_id)
@@ -200,9 +190,7 @@ async def fetch_card_for_external(agent_id: int) -> Optional[Dict[str, Any]]:
         headers = _build_external_agent_headers(agent.api_key, agent_id)
         ssl_ctx = _build_external_agent_ssl_ctx(agent.ssl_verify)
 
-        card, error_msg = await _fetch_external_agent_card(
-            url, ssl_ctx, headers, agent_id
-        )
+        card, error_msg = await _fetch_external_agent_card(url, ssl_ctx, headers, agent_id)
 
         now = datetime.now(timezone.utc)
         await db.execute(
@@ -227,9 +215,7 @@ async def _refresh_all_external_agents() -> None:
     from services.database import db_service
 
     async with db_service.session() as db:
-        result = await db.execute(
-            select(ExternalAgent).where(ExternalAgent.enabled.is_(True))
-        )
+        result = await db.execute(select(ExternalAgent).where(ExternalAgent.enabled.is_(True)))
         agents = result.scalars().all()
 
     if not agents:

@@ -56,9 +56,7 @@ class AnalyticsRedisOptimizer:
                 health_check_interval=30,
             )
 
-            self.analytics_redis = redis.Redis(
-                connection_pool=self.connection_pool, decode_responses=False
-            )
+            self.analytics_redis = redis.Redis(connection_pool=self.connection_pool, decode_responses=False)
 
             # Test connection
             ping_result = self.analytics_redis.ping()
@@ -95,9 +93,7 @@ class AnalyticsRedisOptimizer:
 
         return db_size, memory_info, performance_info, sample_keys
 
-    def _identify_timeout_risks(
-        self, db_size: int, memory_info: Dict, performance_info: Dict
-    ) -> tuple:
+    def _identify_timeout_risks(self, db_size: int, memory_info: Dict, performance_info: Dict) -> tuple:
         """Identify timeout risks and calculate hit rate.
 
         Helper for analyze_database_performance (Issue #825).
@@ -126,10 +122,7 @@ class AnalyticsRedisOptimizer:
         if performance_info["keyspace_hits"] + performance_info["keyspace_misses"] > 0:
             hit_rate = (
                 performance_info["keyspace_hits"]
-                / (
-                    performance_info["keyspace_hits"]
-                    + performance_info["keyspace_misses"]
-                )
+                / (performance_info["keyspace_hits"] + performance_info["keyspace_misses"])
                 * 100
             )
 
@@ -155,9 +148,7 @@ class AnalyticsRedisOptimizer:
                 performance_info,
                 sample_keys,
             ) = self._collect_db_metrics()
-            timeout_risks, hit_rate = self._identify_timeout_risks(
-                db_size, memory_info, performance_info
-            )
+            timeout_risks, hit_rate = self._identify_timeout_risks(db_size, memory_info, performance_info)
 
             analysis = {
                 "database_size": db_size,
@@ -189,9 +180,7 @@ class AnalyticsRedisOptimizer:
         batch_count = 0
 
         while True:
-            cursor, batch = self.analytics_redis.scan(
-                cursor=cursor, match="llama_index/vector_*", count=1000
-            )
+            cursor, batch = self.analytics_redis.scan(cursor=cursor, match="llama_index/vector_*", count=1000)
             vector_keys.extend(batch)
             batch_count += 1
 
@@ -199,9 +188,7 @@ class AnalyticsRedisOptimizer:
                 break
 
             if batch_count % 10 == 0:
-                logger.info(
-                    f"📦 Scanned {len(vector_keys)} vectors (batch {batch_count})"
-                )
+                logger.info(f"📦 Scanned {len(vector_keys)} vectors (batch {batch_count})")
 
             if batch_count % 50 == 0:
                 await asyncio.sleep(0.1)
@@ -224,11 +211,7 @@ class AnalyticsRedisOptimizer:
                 total_size += vector_size
 
                 for field in vector_data.keys():
-                    field_name = (
-                        field.decode("utf-8")
-                        if isinstance(field, bytes)
-                        else str(field)
-                    )
+                    field_name = field.decode("utf-8") if isinstance(field, bytes) else str(field)
                     field_counts[field_name] = field_counts.get(field_name, 0) + 1
 
                 if i % 25 == 0:
@@ -240,9 +223,7 @@ class AnalyticsRedisOptimizer:
 
         return total_size, field_counts
 
-    def _generate_vector_recommendations(
-        self, vector_keys: List, average_size: int
-    ) -> List[Dict]:
+    def _generate_vector_recommendations(self, vector_keys: List, average_size: int) -> List[Dict]:
         """Generate optimization recommendations.
 
         Helper for optimize_vector_operations (Issue #825).
@@ -288,25 +269,17 @@ class AnalyticsRedisOptimizer:
             }
 
             if sample_keys:
-                total_size, field_counts = await self._analyze_vector_samples(
-                    sample_keys
-                )
+                total_size, field_counts = await self._analyze_vector_samples(sample_keys)
 
-                vector_analysis["average_size"] = (
-                    total_size // sample_size if sample_size > 0 else 0
-                )
+                vector_analysis["average_size"] = total_size // sample_size if sample_size > 0 else 0
                 vector_analysis["field_analysis"] = field_counts
-                vector_analysis[
-                    "optimization_recommendations"
-                ] = self._generate_vector_recommendations(
+                vector_analysis["optimization_recommendations"] = self._generate_vector_recommendations(
                     vector_keys, vector_analysis["average_size"]
                 )
 
             logger.info("📊 Vector analysis complete:")
             logger.info(f"  - Average size: {vector_analysis['average_size']} bytes")
-            logger.info(
-                f"  - Recommendations: {len(vector_analysis['optimization_recommendations'])}"
-            )
+            logger.info(f"  - Recommendations: {len(vector_analysis['optimization_recommendations'])}")
 
             return vector_analysis
 
@@ -333,9 +306,7 @@ class AnalyticsRedisOptimizer:
                 for config_key, config_value in config_commands:
                     try:
                         self.analytics_redis.config_set(config_key, config_value)
-                        fixes_applied.append(
-                            f"Redis config: {config_key} = {config_value}"
-                        )
+                        fixes_applied.append(f"Redis config: {config_key} = {config_value}")
                     except Exception as e:
                         logger.warning(f"⚠️ Could not set {config_key}: {e}")
 
@@ -399,9 +370,7 @@ class AnalyticsRedisOptimizer:
             logger.info("⚡ Creating optimized batch operations...")
 
             # Test batch operation performance
-            test_keys = self.analytics_redis.scan(
-                match="llama_index/vector_*", count=10
-            )[1]
+            test_keys = self.analytics_redis.scan(match="llama_index/vector_*", count=10)[1]
 
             if test_keys:
                 # Test pipeline performance
@@ -415,9 +384,7 @@ class AnalyticsRedisOptimizer:
 
                 pipeline_time = time.time() - start_time
 
-                logger.info(
-                    f"⚡ Pipeline test: {len(test_keys)} operations in {pipeline_time:.3f}s"
-                )
+                logger.info(f"⚡ Pipeline test: {len(test_keys)} operations in {pipeline_time:.3f}s")
 
                 if pipeline_time < 1.0:  # Good performance
                     logger.info("✅ Pipeline performance is good")
@@ -462,9 +429,7 @@ class AnalyticsRedisOptimizer:
             scan_count = 0
 
             while cursor != 0 or scan_count == 0:
-                cursor, batch = self.analytics_redis.scan(
-                    cursor=cursor, match="llama_index/vector_*", count=1000
-                )
+                cursor, batch = self.analytics_redis.scan(cursor=cursor, match="llama_index/vector_*", count=1000)
                 keys.extend(batch)
                 scan_count += 1
 
@@ -475,9 +440,7 @@ class AnalyticsRedisOptimizer:
             test_results["large_operation_test"] = True
             test_results["performance_metrics"]["large_operation_time"] = large_op_time
             test_results["performance_metrics"]["keys_scanned"] = len(keys)
-            logger.info(
-                f"✅ Large operation test: {len(keys)} keys in {large_op_time:.3f}s"
-            )
+            logger.info(f"✅ Large operation test: {len(keys)} keys in {large_op_time:.3f}s")
 
         except Exception as e:
             logger.error(f"❌ Large operation test failed: {e}")
@@ -504,9 +467,7 @@ class AnalyticsRedisOptimizer:
 
                 test_results["pipeline_test"] = len(results) == len(test_sample)
                 test_results["performance_metrics"]["pipeline_time"] = pipeline_time
-                logger.info(
-                    f"✅ Pipeline test: {len(test_sample)} operations in {pipeline_time:.3f}s"
-                )
+                logger.info(f"✅ Pipeline test: {len(test_sample)} operations in {pipeline_time:.3f}s")
         except Exception as e:
             logger.error(f"❌ Pipeline test failed: {e}")
 
@@ -533,27 +494,19 @@ class AnalyticsRedisOptimizer:
                     "FT.SEARCH", "analytics_index", "*", "LIMIT", "0", "5"
                 )
                 test_results["search_test"] = True
-                test_results["performance_metrics"]["search_results"] = len(
-                    search_result
-                )
+                test_results["performance_metrics"]["search_results"] = len(search_result)
                 logger.info("✅ Search test: Found results")
             except Exception as e:
                 logger.info(f"ℹ️ Search test skipped (no index): {e}")
 
             # Calculate overall success rate
-            passed_tests = sum(
-                1 for test in test_results.values() if isinstance(test, bool) and test
-            )
-            total_tests = sum(
-                1 for test in test_results.values() if isinstance(test, bool)
-            )
+            passed_tests = sum(1 for test in test_results.values() if isinstance(test, bool) and test)
+            total_tests = sum(1 for test in test_results.values() if isinstance(test, bool))
             success_rate = (passed_tests / total_tests * 100) if total_tests > 0 else 0
 
             test_results["overall_success_rate"] = success_rate
 
-            logger.info(
-                f"🎯 Test summary: {passed_tests}/{total_tests} tests passed ({success_rate:.1f}%)"
-            )
+            logger.info(f"🎯 Test summary: {passed_tests}/{total_tests} tests passed ({success_rate:.1f}%)")
 
             return test_results
 
@@ -580,9 +533,7 @@ async def main():
         analysis = await optimizer.analyze_database_performance()
 
         if analysis:
-            logger.info(
-                f"✅ Analysis complete - {len(analysis.get('timeout_risks', []))} risks identified"
-            )
+            logger.info(f"✅ Analysis complete - {len(analysis.get('timeout_risks', []))} risks identified")
         else:
             logger.warning("⚠️ Performance analysis incomplete")
 
@@ -630,20 +581,14 @@ async def main():
         logger.info("📊 Summary:")
         if analysis:
             logger.info(f"  - Database size: {analysis.get('database_size', 0)} keys")
-            logger.info(
-                f"  - Memory usage: {analysis.get('memory_info', {}).get('used_memory_human', 'Unknown')}"
-            )
+            logger.info(f"  - Memory usage: {analysis.get('memory_info', {}).get('used_memory_human', 'Unknown')}")
             logger.info(f"  - Timeout risks: {len(analysis.get('timeout_risks', []))}")
         if fixes:
             logger.info(f"  - Fixes applied: {len(fixes)}")
         if test_results:
-            logger.info(
-                f"  - Test success rate: {test_results.get('overall_success_rate', 0):.1f}%"
-            )
+            logger.info(f"  - Test success rate: {test_results.get('overall_success_rate', 0):.1f}%")
 
-        logger.info(
-            "\n💡 Analytics Redis operations should now be more stable and timeout-resistant!"
-        )
+        logger.info("\n💡 Analytics Redis operations should now be more stable and timeout-resistant!")
 
     except Exception as e:
         logger.error(f"❌ Error: {e}")

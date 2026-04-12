@@ -8,6 +8,7 @@ AutoBot Startup Coordinator
 Manages startup sequence with proper state reporting and dependencies.
 Each component reports its state before dependent components can start.
 """
+
 import asyncio
 import json
 import logging
@@ -169,9 +170,7 @@ class StartupCoordinator:
         )
 
         # Optional components
-        self.components["ai_stack"] = ComponentInfo(
-            name="ai_stack", dependencies=["redis", "config"]
-        )
+        self.components["ai_stack"] = ComponentInfo(name="ai_stack", dependencies=["redis", "config"])
 
     def save_state(self):
         """Save current startup state to file"""
@@ -207,9 +206,7 @@ class StartupCoordinator:
 
         try:
             healthy = await self._perform_health_check(component)
-            component.health_status = (
-                HealthStatus.HEALTHY if healthy else HealthStatus.UNHEALTHY
-            )
+            component.health_status = HealthStatus.HEALTHY if healthy else HealthStatus.UNHEALTHY
             return healthy
         except Exception as e:
             logger.debug("Health check failed for %s: %s", component.name, e)
@@ -267,9 +264,7 @@ class StartupCoordinator:
 
         return env, cwd
 
-    async def _wait_for_component_health(
-        self, component: ComponentInfo, process: subprocess.Popen
-    ) -> bool:
+    async def _wait_for_component_health(self, component: ComponentInfo, process: subprocess.Popen) -> bool:
         """Wait for component to become healthy with timeout (Issue #665: extracted helper)."""
         max_wait = self.max_startup_time
         check_interval = 2
@@ -288,9 +283,7 @@ class StartupCoordinator:
                 component.state = ComponentState.READY
                 component.ready_time = time.time()
                 startup_duration = component.ready_time - component.start_time
-                logger.info(
-                    "✅ %s is ready (took %.1fs)", component.name, startup_duration
-                )
+                logger.info("✅ %s is ready (took %.1fs)", component.name, startup_duration)
                 self.save_state()
                 return True
 
@@ -352,9 +345,7 @@ class StartupCoordinator:
             self.save_state()
             return False
 
-    async def startup_sequence(
-        self, target_components: Optional[Set[str]] = None
-    ) -> bool:
+    async def startup_sequence(self, target_components: Optional[Set[str]] = None) -> bool:
         """Execute the complete startup sequence"""
         if target_components is None:
             target_components = set(self.components.keys())
@@ -429,9 +420,7 @@ class StartupCoordinator:
         successful = len(started_components)
         len(failed_components)
 
-        logger.info(
-            "🎯 Startup completed: %s/%s components started", successful, total_target
-        )
+        logger.info("🎯 Startup completed: %s/%s components started", successful, total_target)
 
         if failed_components:
             logger.error("❌ Failed components: %s", ", ".join(failed_components))
@@ -480,9 +469,7 @@ def _show_component_status(coordinator: StartupCoordinator) -> None:
         )
 
 
-def _validate_target_components(
-    coordinator: StartupCoordinator, components: list
-) -> Optional[set]:
+def _validate_target_components(coordinator: StartupCoordinator, components: list) -> Optional[set]:
     """Validate and return target components.
 
     Helper for main (Issue #825).

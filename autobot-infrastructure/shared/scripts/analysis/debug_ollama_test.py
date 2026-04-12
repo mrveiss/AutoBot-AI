@@ -5,6 +5,7 @@
 """
 Test script to reproduce the Ollama timeout issue
 """
+
 import asyncio
 import json
 import logging
@@ -65,9 +66,7 @@ def _parse_chunk_content(line_text: str, full_content: str) -> tuple:
         return full_content, None, False
 
 
-async def _process_streaming_response(
-    response, stream_timeout: float = 10.0, max_chunks: int = 100
-) -> dict:
+async def _process_streaming_response(response, stream_timeout: float = 10.0, max_chunks: int = 100) -> dict:
     """Process streaming response from Ollama (Issue #315: extracted helper)."""
     full_content = ""
     chunk_count = 0
@@ -79,9 +78,7 @@ async def _process_streaming_response(
         print(f"Processing chunk {chunk_count}, elapsed: {elapsed:.2f}s")
 
         if elapsed > stream_timeout:
-            logger.warning(
-                f"Stream timeout exceeded ({stream_timeout}s), breaking stream"
-            )
+            logger.warning(f"Stream timeout exceeded ({stream_timeout}s), breaking stream")
             break
 
         chunk_count += 1

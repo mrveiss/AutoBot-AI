@@ -147,10 +147,7 @@ class TestMMRModerateDiversity(unittest.TestCase):
 
     def test_all_results_returned(self):
         """MMR must return every result — none are dropped."""
-        results = [
-            _make_result(f"doc_{i}", 1.0 - i * 0.1, _unit([float(i), 1.0]))
-            for i in range(5)
-        ]
+        results = [_make_result(f"doc_{i}", 1.0 - i * 0.1, _unit([float(i), 1.0])) for i in range(5)]
         reordered = apply_mmr_reorder(results, mmr_lambda=0.5)
         self.assertEqual(len(reordered), len(results))
 
@@ -197,9 +194,7 @@ class TestMMRNoEmbedding(unittest.TestCase):
 
     def test_no_embeddings_preserves_score_order(self):
         """Without embeddings, max_sim=0 for all → pure relevance ordering."""
-        results = [
-            {"content": f"doc_{i}", "rerank_score": 1.0 - i * 0.1} for i in range(4)
-        ]
+        results = [{"content": f"doc_{i}", "rerank_score": 1.0 - i * 0.1} for i in range(4)]
         reordered = apply_mmr_reorder(results, mmr_lambda=0.5)
         scores = [r["rerank_score"] for r in reordered]
         self.assertEqual(scores, sorted(scores, reverse=True))

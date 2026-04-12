@@ -17,9 +17,7 @@ from pathlib import Path
 from typing import Any
 
 # Setup logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -133,9 +131,7 @@ class LLMModelOptimizer:
         stdout, stderr = await process.communicate()
 
         if process.returncode != 0:
-            raise subprocess.CalledProcessError(
-                process.returncode, "ollama list", stderr.decode()
-            )
+            raise subprocess.CalledProcessError(process.returncode, "ollama list", stderr.decode())
 
         parsed = {}
         for line in stdout.decode().strip().split("\n")[1:]:
@@ -420,9 +416,7 @@ class LLMModelOptimizer:
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
-                stdout, stderr = await asyncio.wait_for(
-                    process.communicate(), timeout=30
-                )
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
 
                 if process.returncode == 0 and "OK" in stdout.decode().upper():
                     results[model] = {"status": "success", "response_time": "< 30s"}
@@ -452,9 +446,7 @@ class LLMModelOptimizer:
                 "models_installed": len(results.get("installations", {})),
                 "configs_updated": len(results.get("config_updates", {})),
                 "validation_success": sum(
-                    1
-                    for v in results.get("validation", {}).values()
-                    if v.get("status") == "success"
+                    1 for v in results.get("validation", {}).values() if v.get("status") == "success"
                 ),
             },
             "details": results,
@@ -480,12 +472,7 @@ class LLMModelOptimizer:
             results_copy = dict(self.optimization_results)
 
         report = self._build_report(results_copy)
-        report_path = (
-            self.autobot_root
-            / "analysis"
-            / "ai-ml"
-            / f"llm_optimization_report_{int(time.time())}.json"
-        )
+        report_path = self.autobot_root / "analysis" / "ai-ml" / f"llm_optimization_report_{int(time.time())}.json"
         report_path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(report_path, "w", encoding="utf-8") as f:

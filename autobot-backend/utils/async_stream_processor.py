@@ -115,9 +115,7 @@ class OllamaStreamProcessor(StreamProcessor):
             return False, None
 
         except json.JSONDecodeError as e:
-            logger.warning(
-                f"Invalid JSON chunk from Ollama: {chunk_data[:100]}... Error: {e}"
-            )
+            logger.warning(f"Invalid JSON chunk from Ollama: {chunk_data[:100]}... Error: {e}")
             # Try to extract any plain text content
             if chunk_data.strip():
                 return False, chunk_data.strip()
@@ -182,9 +180,7 @@ class OpenAIStreamProcessor(StreamProcessor):
 
                     # Check for finish_reason
                     if choices[0].get("finish_reason"):
-                        logger.info(
-                            f"🎯 OpenAI completion: {choices[0]['finish_reason']}"
-                        )
+                        logger.info(f"🎯 OpenAI completion: {choices[0]['finish_reason']}")
                         return True, content if content else None
 
                     return False, content if content else None
@@ -257,9 +253,7 @@ def _determine_completion_signal(
     return StreamCompletionSignal.PROVIDER_SPECIFIC
 
 
-def _check_error_condition(
-    processor: StreamProcessor, chunk_data: str
-) -> Optional[StreamCompletionSignal]:
+def _check_error_condition(processor: StreamProcessor, chunk_data: str) -> Optional[StreamCompletionSignal]:
     """Issue #665: Extracted from _process_stream_loop to reduce function length."""
     error = processor.detect_error_condition(chunk_data)
     if error:
@@ -285,9 +279,7 @@ async def _process_stream_loop(
         current_buffer_size += len(chunk_bytes)
 
         # Check stream limits
-        limit_signal = _check_stream_limits(
-            chunk_count, max_chunks, current_buffer_size, max_buffer_size
-        )
+        limit_signal = _check_stream_limits(chunk_count, max_chunks, current_buffer_size, max_buffer_size)
         if limit_signal:
             completion_signal = limit_signal
             break
@@ -308,9 +300,7 @@ async def _process_stream_loop(
         if content_to_add:
             content_parts.append(content_to_add)
         if is_complete:
-            completion_signal = _determine_completion_signal(
-                processor, chunk_data, content_parts, chunk_count
-            )
+            completion_signal = _determine_completion_signal(processor, chunk_data, content_parts, chunk_count)
             break
 
         # Brief yield to prevent blocking every 10 chunks
@@ -365,8 +355,7 @@ def _log_stream_completion(
     Issue #620.
     """
     logger.info(
-        "Stream processing complete: "
-        "chunks=%d, content_length=%d, success=%s, signal=%s, time=%.2fs",
+        "Stream processing complete: " "chunks=%d, content_length=%d, success=%s, signal=%s, time=%.2fs",
         chunk_count,
         content_length,
         completed_successfully,
@@ -457,9 +446,7 @@ async def process_stream_with_cancellation(
             content=content,
             completed_successfully=success,
             completion_signal=(
-                StreamCompletionSignal.DONE_CHUNK_RECEIVED
-                if success
-                else StreamCompletionSignal.ERROR_CONDITION
+                StreamCompletionSignal.DONE_CHUNK_RECEIVED if success else StreamCompletionSignal.ERROR_CONDITION
             ),
             total_chunks=0,  # Will be filled by processor
             processing_time=processing_time,

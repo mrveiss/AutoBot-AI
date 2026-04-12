@@ -29,9 +29,7 @@ async def _display_summary_and_framework_usage(results):
     logger.info(f"📊 **Analysis Summary:**")
     logger.info(f"   • Total components analyzed: {results['total_components']}")
     logger.info(f"   • Total issues found: {results['total_issues']}")
-    logger.info(
-        f"   • Frameworks detected: {', '.join(results['frameworks_detected'])}"
-    )
+    logger.info(f"   • Frameworks detected: {', '.join(results['frameworks_detected'])}")
     logger.info(f"   • Overall quality score: {results['quality_score']:.1f}/100")
     logger.info(f"   • Analysis time: {results['analysis_time_seconds']:.2f} seconds")
     logger.info()
@@ -41,9 +39,7 @@ async def _display_summary_and_framework_usage(results):
         logger.info("🏗️ **Framework Usage:**")
         for framework, usage in results["framework_usage"].items():
             framework_name = framework.title()
-            logger.info(
-                f"   • {framework_name}: {usage['count']} components ({usage['percentage']:.1f}%)"
-            )
+            logger.info(f"   • {framework_name}: {usage['count']} components ({usage['percentage']:.1f}%)")
 
             if usage.get("lifecycle_hooks"):
                 hooks = ", ".join(usage["lifecycle_hooks"][:5])
@@ -61,14 +57,8 @@ async def _display_component_analysis(results):
     if results["components"]:
         logger.info("🧩 **Component Analysis:**")
 
-        components_with_tests = len(
-            [c for c in results["components"] if c["has_tests"]]
-        )
-        test_coverage = (
-            (components_with_tests / len(results["components"]) * 100)
-            if results["components"]
-            else 0
-        )
+        components_with_tests = len([c for c in results["components"] if c["has_tests"]])
+        test_coverage = (components_with_tests / len(results["components"]) * 100) if results["components"] else 0
 
         logger.info(
             f"   • Components with tests: {components_with_tests}/{len(results['components'])} ({test_coverage:.1f}%)"
@@ -85,9 +75,7 @@ async def _display_component_analysis(results):
             logger.info("   • Most complex components:")
             for comp in complex_components:
                 complexity = len(comp["methods"]) + len(comp["props"])
-                logger.info(
-                    f"     - {comp['name']} ({comp['component_type']}): {complexity} methods+props"
-                )
+                logger.info(f"     - {comp['name']} ({comp['component_type']}): {complexity} methods+props")
         logger.info()
 
 
@@ -99,55 +87,37 @@ async def _display_security_performance_accessibility(results):
     # Security analysis
     security_analysis = results["security_analysis"]
     logger.info(f"🛡️ **Security Analysis:**")
-    logger.info(
-        f"   • Total security issues: {security_analysis['total_security_issues']}"
-    )
+    logger.info(f"   • Total security issues: {security_analysis['total_security_issues']}")
     logger.info(f"   • Critical issues: {security_analysis['critical_issues']}")
-    logger.info(
-        f"   • High priority issues: {security_analysis['high_priority_issues']}"
-    )
+    logger.info(f"   • High priority issues: {security_analysis['high_priority_issues']}")
     logger.info(f"   • Security score: {security_analysis['security_score']:.1f}/100")
 
     if security_analysis["total_security_issues"] > 0:
-        security_issues = [
-            i for i in results["issues"] if i["issue_type"] == "security"
-        ]
+        security_issues = [i for i in results["issues"] if i["issue_type"] == "security"]
         logger.info("   • Top security issues:")
         for issue in security_issues[:3]:  # Show top 3
             severity_emoji = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
             emoji = severity_emoji.get(issue["severity"], "⚪")
-            logger.info(
-                f"     {emoji} {issue['description']} ({issue['file_path']}:{issue['line_number']})"
-            )
+            logger.info(f"     {emoji} {issue['description']} ({issue['file_path']}:{issue['line_number']})")
     logger.info()
 
     # Performance analysis
     performance_analysis = results["performance_analysis"]
     logger.info(f"⚡ **Performance Analysis:**")
-    logger.info(
-        f"   • Total performance issues: {performance_analysis['total_performance_issues']}"
-    )
-    logger.info(
-        f"   • Components with issues: {performance_analysis['components_with_issues']}"
-    )
+    logger.info(f"   • Total performance issues: {performance_analysis['total_performance_issues']}")
+    logger.info(f"   • Components with issues: {performance_analysis['components_with_issues']}")
 
     if performance_analysis["issues_by_type"]:
         logger.info("   • Issue breakdown:")
-        for issue_desc, count in list(performance_analysis["issues_by_type"].items())[
-            :5
-        ]:
+        for issue_desc, count in list(performance_analysis["issues_by_type"].items())[:5]:
             logger.info(f"     - {issue_desc}: {count}")
     logger.info()
 
     # Accessibility analysis
     accessibility_analysis = results["accessibility_analysis"]
     logger.info(f"♿ **Accessibility Analysis:**")
-    logger.info(
-        f"   • Total accessibility issues: {accessibility_analysis['total_accessibility_issues']}"
-    )
-    logger.info(
-        f"   • WCAG compliance score: {accessibility_analysis['wcag_compliance_score']:.1f}/100"
-    )
+    logger.info(f"   • Total accessibility issues: {accessibility_analysis['total_accessibility_issues']}")
+    logger.info(f"   • WCAG compliance score: {accessibility_analysis['wcag_compliance_score']:.1f}/100")
 
     if accessibility_analysis.get("issues_by_severity"):
         logger.info("   • Issues by severity:")
@@ -184,9 +154,7 @@ async def _display_detailed_issues(results):
             # Show top issues by severity
             sorted_issues = sorted(
                 type_issues,
-                key=lambda x: {"critical": 4, "high": 3, "medium": 2, "low": 1}.get(
-                    x["severity"], 0
-                ),
+                key=lambda x: {"critical": 4, "high": 3, "medium": 2, "low": 1}.get(x["severity"], 0),
                 reverse=True,
             )
 
@@ -200,9 +168,7 @@ async def _display_detailed_issues(results):
                 emoji = severity_emoji.get(issue["severity"], "⚪")
 
                 logger.info(f"   {emoji} {issue['description']}")
-                logger.info(
-                    f"      📄 {issue['file_path']}:{issue['line_number']} ({issue['framework']})"
-                )
+                logger.info(f"      📄 {issue['file_path']}:{issue['line_number']} ({issue['framework']})")
                 logger.info(f"      💡 Suggestion: {issue['suggestion']}")
 
 
@@ -256,9 +222,7 @@ async def _display_critical_issues_report(results):
     critical_issues = [i for i in results["issues"] if i["severity"] == "critical"]
     if critical_issues:
         logger.info(f"\n🚨 **CRITICAL ISSUES - IMMEDIATE ACTION REQUIRED:**")
-        logger.info(
-            f"Found {len(critical_issues)} critical issues that need immediate attention:"
-        )
+        logger.info(f"Found {len(critical_issues)} critical issues that need immediate attention:")
 
         for issue in critical_issues:
             logger.info(f"\n🔴 **{issue['description']}**")
@@ -271,9 +235,7 @@ async def analyze_frontend_code():
     """Run comprehensive frontend code analysis"""
 
     logger.info("🎨 Starting frontend code analysis...")
-    logger.info(
-        "Analyzing JavaScript, TypeScript, Vue, React, Angular, and other frontend files..."
-    )
+    logger.info("Analyzing JavaScript, TypeScript, Vue, React, Angular, and other frontend files...")
     logger.info()
 
     analyzer = FrontendAnalyzer()
@@ -410,9 +372,7 @@ async def main():
     # Check if we're in the right directory
     if not Path("src").exists():
         logger.info("❌ Please run this script from the code-analysis-suite directory")
-        logger.info(
-            "Usage: cd code-analysis-suite && python scripts/analyze_frontend.py"
-        )
+        logger.info("Usage: cd code-analysis-suite && python scripts/analyze_frontend.py")
         return
 
     # Run analysis

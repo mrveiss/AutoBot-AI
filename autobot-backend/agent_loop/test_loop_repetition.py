@@ -20,7 +20,6 @@ from unittest.mock import AsyncMock, MagicMock
 from agent_loop.loop import AgentLoop
 from agent_loop.types import AgentLoopConfig, LoopState, TaskContext
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

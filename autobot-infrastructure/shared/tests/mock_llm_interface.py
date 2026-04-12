@@ -118,11 +118,7 @@ class MockLLMInterface:
                 }
             )
 
-        if (
-            "think" in content_lower
-            or "opinion" in content_lower
-            or "believe" in content_lower
-        ):
+        if "think" in content_lower or "opinion" in content_lower or "believe" in content_lower:
             facts.append(
                 {
                     **self.response_templates["opinion"],
@@ -212,11 +208,7 @@ class MockLLMInterface:
         return facts[:10]  # Limit to 10 facts max
 
     async def chat_completion(
-        self,
-        messages: List[Dict[str, str]],
-        llm_type: str = "task",
-        structured_output: bool = False,
-        **kwargs
+        self, messages: List[Dict[str, str]], llm_type: str = "task", structured_output: bool = False, **kwargs
     ) -> Dict[str, Any]:
         """Mock chat completion that generates realistic fact extraction responses."""
 
@@ -231,9 +223,7 @@ class MockLLMInterface:
                 break
 
         # Extract the actual text content from the prompt
-        content_match = re.search(
-            r"Text to analyze:\s*(.*?)(?:\n\nContext:|$)", user_message, re.DOTALL
-        )
+        content_match = re.search(r"Text to analyze:\s*(.*?)(?:\n\nContext:|$)", user_message, re.DOTALL)
         if content_match:
             content = content_match.group(1).strip()
         else:

@@ -23,39 +23,25 @@ def get_replacement_map() -> Dict[str, str]:
     redis_config = unified_config_manager.get_redis_config()
     backend_config = unified_config_manager.get_backend_config()
     services_config = unified_config_manager.get_distributed_services_config()
-    system_defaults = (
-        unified_config_manager.get_config_section("service_discovery_defaults") or {}
-    )
+    system_defaults = unified_config_manager.get_config_section("service_discovery_defaults") or {}
 
     # Get values from configuration without hardcoded fallbacks
-    redis_host = redis_config.get("host") or system_defaults.get(
-        "redis_host", "localhost"
-    )
+    redis_host = redis_config.get("host") or system_defaults.get("redis_host", "localhost")
     redis_port = redis_config.get("port") or system_defaults.get("redis_port", 6379)
-    backend_host = backend_config.get("host") or system_defaults.get(
-        "backend_host", "localhost"
-    )
-    backend_port = backend_config.get("port") or system_defaults.get(
-        "backend_port", 8001
-    )
+    backend_host = backend_config.get("host") or system_defaults.get("backend_host", "localhost")
+    backend_port = backend_config.get("port") or system_defaults.get("backend_port", 8001)
     backend_api_endpoint = f"http://{backend_host}:{backend_port}"
 
     # Get service-specific hosts from configuration
-    frontend_host = services_config.get("frontend", {}).get(
-        "host"
-    ) or system_defaults.get("frontend_host", "localhost")
-    frontend_port = services_config.get("frontend", {}).get(
-        "port"
-    ) or system_defaults.get("frontend_port", 5173)
-    npu_worker_host = services_config.get("npu_worker", {}).get(
-        "host"
-    ) or system_defaults.get("npu_worker_host", "localhost")
-    ai_stack_host = services_config.get("ai_stack", {}).get(
-        "host"
-    ) or system_defaults.get("ai_stack_host", "localhost")
-    browser_host = services_config.get("browser_service", {}).get(
-        "host"
-    ) or system_defaults.get("browser_service_host", "localhost")
+    frontend_host = services_config.get("frontend", {}).get("host") or system_defaults.get("frontend_host", "localhost")
+    frontend_port = services_config.get("frontend", {}).get("port") or system_defaults.get("frontend_port", 5173)
+    npu_worker_host = services_config.get("npu_worker", {}).get("host") or system_defaults.get(
+        "npu_worker_host", "localhost"
+    )
+    ai_stack_host = services_config.get("ai_stack", {}).get("host") or system_defaults.get("ai_stack_host", "localhost")
+    browser_host = services_config.get("browser_service", {}).get("host") or system_defaults.get(
+        "browser_service_host", "localhost"
+    )
     ollama_config = services_config.get("ollama", {})
     ollama_port = ollama_config.get("port") or system_defaults.get("ollama_port", 11434)
 
@@ -121,9 +107,7 @@ def add_import_if_needed(content: str, file_path: Path) -> str:
         return content
 
     # Check if any of our constants are used
-    uses_constants = any(
-        const_name in content for const_name in REPLACEMENT_MAP.values()
-    )
+    uses_constants = any(const_name in content for const_name in REPLACEMENT_MAP.values())
     if not uses_constants:
         return content
 
@@ -134,9 +118,7 @@ def add_import_if_needed(content: str, file_path: Path) -> str:
     # Find the best place to add the import
     last_import_line = -1
     for i, line in enumerate(lines):
-        if line.strip().startswith(
-            ("import ", "from ")
-        ) and not line.strip().startswith("from ."):
+        if line.strip().startswith(("import ", "from ")) and not line.strip().startswith("from ."):
             last_import_line = i
 
     if last_import_line >= 0:
@@ -145,11 +127,7 @@ def add_import_if_needed(content: str, file_path: Path) -> str:
     else:
         # Add at the beginning after any docstring
         insert_pos = 0
-        if (
-            lines
-            and lines[0].strip().startswith('"""')
-            or lines[0].strip().startswith("'''")
-        ):
+        if lines and lines[0].strip().startswith('"""') or lines[0].strip().startswith("'''"):
             # Find end of docstring
             quote_char = '"""' if lines[0].strip().startswith('"""') else "'''"
             for i in range(1, len(lines)):
@@ -169,9 +147,7 @@ def refactor_file_content(content: str, file_path: Path) -> Tuple[str, int]:
     replacements_made = 0
 
     # Sort replacements by length (longest first) to avoid partial replacements
-    sorted_replacements = sorted(
-        REPLACEMENT_MAP.items(), key=lambda x: len(x[0]), reverse=True
-    )
+    sorted_replacements = sorted(REPLACEMENT_MAP.items(), key=lambda x: len(x[0]), reverse=True)
 
     for hardcoded_value, constant_name in sorted_replacements:
         # Create patterns for different contexts
@@ -257,9 +233,7 @@ def find_core_files() -> List[Path]:
 def main():
     """Main refactoring function"""
     logger.info("🚀 Starting network constants refactoring...")
-    logger.info(
-        f"📋 Will replace {len(REPLACEMENT_MAP)} hardcoded values with constants"
-    )
+    logger.info(f"📋 Will replace {len(REPLACEMENT_MAP)} hardcoded values with constants")
 
     # Use project-relative path
     root_path = Path(__file__).parent.parent.parent
@@ -276,9 +250,7 @@ def main():
                 content = f.read()
 
             # Check if file contains any hardcoded values
-            has_hardcoded = any(
-                hardcoded in content for hardcoded in REPLACEMENT_MAP.keys()
-            )
+            has_hardcoded = any(hardcoded in content for hardcoded in REPLACEMENT_MAP.keys())
             if not has_hardcoded:
                 continue
 

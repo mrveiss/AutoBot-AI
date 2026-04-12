@@ -16,7 +16,6 @@ Endpoints:
 
 import logging
 
-from constants.error_constants import ERR_TEMPLATE_NOT_FOUND
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.knowledge_models import (
@@ -28,6 +27,7 @@ from api.knowledge_models import (
     ValidateMetadataRequest,
 )
 from auth_middleware import check_admin_permission
+from constants.error_constants import ERR_TEMPLATE_NOT_FOUND
 from knowledge import get_knowledge_base
 
 logger = logging.getLogger(__name__)

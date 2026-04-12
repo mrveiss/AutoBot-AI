@@ -325,9 +325,7 @@ class DeploymentService:
         self, db: AsyncSession, deployment_data: DeploymentCreate, triggered_by: str
     ) -> DeploymentResponse:
         """Create a new deployment."""
-        result = await db.execute(
-            select(Node).where(Node.node_id == deployment_data.node_id)
-        )
+        result = await db.execute(select(Node).where(Node.node_id == deployment_data.node_id))
         node = result.scalar_one_or_none()
         if not node:
             raise ValueError(f"Node not found: {deployment_data.node_id}")
@@ -349,13 +347,9 @@ class DeploymentService:
 
         return DeploymentResponse.model_validate(deployment)
 
-    async def get_deployment(
-        self, db: AsyncSession, deployment_id: str
-    ) -> Optional[DeploymentResponse]:
+    async def get_deployment(self, db: AsyncSession, deployment_id: str) -> Optional[DeploymentResponse]:
         """Get a deployment by ID."""
-        result = await db.execute(
-            select(Deployment).where(Deployment.deployment_id == deployment_id)
-        )
+        result = await db.execute(select(Deployment).where(Deployment.deployment_id == deployment_id))
         deployment = result.scalar_one_or_none()
         if deployment:
             return DeploymentResponse.model_validate(deployment)
@@ -379,9 +373,7 @@ class DeploymentService:
 
         query = query.order_by(Deployment.created_at.desc())
 
-        count_result = await db.execute(
-            select(Deployment.id).where(query.whereclause or True)
-        )
+        count_result = await db.execute(select(Deployment.id).where(query.whereclause or True))
         total = len(count_result.all())
 
         query = query.offset((page - 1) * per_page).limit(per_page)
@@ -393,13 +385,9 @@ class DeploymentService:
             total,
         )
 
-    async def cancel_deployment(
-        self, db: AsyncSession, deployment_id: str
-    ) -> Optional[DeploymentResponse]:
+    async def cancel_deployment(self, db: AsyncSession, deployment_id: str) -> Optional[DeploymentResponse]:
         """Cancel a pending or running deployment."""
-        result = await db.execute(
-            select(Deployment).where(Deployment.deployment_id == deployment_id)
-        )
+        result = await db.execute(select(Deployment).where(Deployment.deployment_id == deployment_id))
         deployment = result.scalar_one_or_none()
 
         if not deployment:
@@ -422,27 +410,19 @@ class DeploymentService:
 
         return DeploymentResponse.model_validate(deployment)
 
-    async def rollback_deployment(
-        self, db: AsyncSession, deployment_id: str
-    ) -> Optional[DeploymentResponse]:
+    async def rollback_deployment(self, db: AsyncSession, deployment_id: str) -> Optional[DeploymentResponse]:
         """Rollback a completed deployment."""
-        result = await db.execute(
-            select(Deployment).where(Deployment.deployment_id == deployment_id)
-        )
+        result = await db.execute(select(Deployment).where(Deployment.deployment_id == deployment_id))
         deployment = result.scalar_one_or_none()
 
         if not deployment:
             return None
 
         if deployment.status != DeploymentStatus.COMPLETED.value:
-            raise ValueError(
-                f"Cannot rollback deployment in status: {deployment.status}"
-            )
+            raise ValueError(f"Cannot rollback deployment in status: {deployment.status}")
 
         # Get the node
-        node_result = await db.execute(
-            select(Node).where(Node.node_id == deployment.node_id)
-        )
+        node_result = await db.execute(select(Node).where(Node.node_id == deployment.node_id))
         node = node_result.scalar_one_or_none()
 
         if not node:
@@ -466,9 +446,7 @@ class DeploymentService:
         self, db: AsyncSession, deployment_id: str, triggered_by: str
     ) -> Optional[DeploymentResponse]:
         """Retry a failed deployment by creating a new deployment with same config."""
-        result = await db.execute(
-            select(Deployment).where(Deployment.deployment_id == deployment_id)
-        )
+        result = await db.execute(select(Deployment).where(Deployment.deployment_id == deployment_id))
         original = result.scalar_one_or_none()
 
         if not original:
@@ -509,17 +487,13 @@ class DeploymentService:
 
         Helper for _run_deployment (Issue #665).
         """
-        result = await db.execute(
-            select(Deployment).where(Deployment.deployment_id == deployment_id)
-        )
+        result = await db.execute(select(Deployment).where(Deployment.deployment_id == deployment_id))
         deployment = result.scalar_one_or_none()
 
         if not deployment:
             return None, None
 
-        node_result = await db.execute(
-            select(Node).where(Node.node_id == deployment.node_id)
-        )
+        node_result = await db.execute(select(Node).where(Node.node_id == deployment.node_id))
         node = node_result.scalar_one_or_none()
 
         return deployment, node
@@ -632,13 +606,9 @@ class DeploymentService:
             if os.path.isfile(path) and os.access(path, os.X_OK):
                 return path
 
-        raise FileNotFoundError(
-            "ansible-playbook not found. Install Ansible: apt install ansible"
-        )
+        raise FileNotFoundError("ansible-playbook not found. Install Ansible: apt install ansible")
 
-    def _build_ansible_base_command(
-        self, playbook_path: Path, host: str, roles: List[str]
-    ) -> List[str]:
+    def _build_ansible_base_command(self, playbook_path: Path, host: str, roles: List[str]) -> List[str]:
         """Build the base ansible-playbook command list.
 
         Helper for _execute_ansible_playbook (Issue #665).
@@ -679,9 +649,7 @@ class DeploymentService:
 
         if ssh_password:
             if not shutil.which("sshpass"):
-                raise RuntimeError(
-                    "Password auth requires 'sshpass'. Install: sudo apt install sshpass"
-                )
+                raise RuntimeError("Password auth requires 'sshpass'. Install: sudo apt install sshpass")
             cmd.extend(
                 [
                     "-e",
@@ -755,9 +723,7 @@ class DeploymentService:
 
         return output
 
-    def _get_effective_password(
-        self, node: Node, ssh_password: Optional[str]
-    ) -> Optional[str]:
+    def _get_effective_password(self, node: Node, ssh_password: Optional[str]) -> Optional[str]:
         """Get SSH password from parameter or decrypt from node storage.
 
         Helper for enroll_node (Issue #665).
@@ -784,17 +750,13 @@ class DeploymentService:
             try:
                 return decrypt_data(encrypted_password)
             except Exception as e:
-                logger.error(
-                    "Failed to decrypt SSH password for node %s: %s", node.node_id, e
-                )
+                logger.error("Failed to decrypt SSH password for node %s: %s", node.node_id, e)
                 raise RuntimeError("Failed to decrypt stored credentials")
         else:
             # Legacy plaintext password (migration path)
             return encrypted_password
 
-    async def _handle_enrollment_success(
-        self, db: AsyncSession, node: Node, output: str
-    ) -> None:
+    async def _handle_enrollment_success(self, db: AsyncSession, node: Node, output: str) -> None:
         """Update node status and clear password after successful enrollment.
 
         Helper for enroll_node (Issue #665).
@@ -818,13 +780,9 @@ class DeploymentService:
 
         await db.commit()
 
-        logger.info(
-            "Enrollment completed for node %s - auth_method set to key", node.node_id
-        )
+        logger.info("Enrollment completed for node %s - auth_method set to key", node.node_id)
 
-    async def enroll_node(
-        self, db: AsyncSession, node_id: str, ssh_password: Optional[str] = None
-    ) -> Tuple[bool, str]:
+    async def enroll_node(self, db: AsyncSession, node_id: str, ssh_password: Optional[str] = None) -> Tuple[bool, str]:
         """
         Enroll a node by deploying the SLM agent.
 
@@ -928,9 +886,7 @@ class DeploymentService:
         Helper for _execute_enrollment_playbook (Issue #665).
         """
         if not shutil.which("sshpass"):
-            raise RuntimeError(
-                "Password auth requires 'sshpass'. Install: sudo apt install sshpass"
-            )
+            raise RuntimeError("Password auth requires 'sshpass'. Install: sudo apt install sshpass")
         cmd.extend(
             [
                 "-e",
@@ -959,9 +915,7 @@ class DeploymentService:
         admin_url = settings.external_url
 
         # Build the ansible command
-        cmd = self._build_enrollment_command(
-            playbook_path, host, node_id, ssh_user, ssh_port, admin_url
-        )
+        cmd = self._build_enrollment_command(playbook_path, host, node_id, ssh_user, ssh_port, admin_url)
 
         # Add password authentication if provided
         if ssh_password:
@@ -1054,9 +1008,7 @@ class DeploymentService:
 
         Helper for _create_enrollment_playbook (Issue #665).
         """
-        return _ENROLLMENT_PLAYBOOK_TEMPLATE.replace(
-            "__SLM_PUBKEY_PLACEHOLDER__", slm_pubkey
-        )
+        return _ENROLLMENT_PLAYBOOK_TEMPLATE.replace("__SLM_PUBKEY_PLACEHOLDER__", slm_pubkey)
 
     async def _create_enrollment_playbook(self, path: Path) -> None:
         """Create the enrollment playbook for deploying SLM agent."""

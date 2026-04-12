@@ -16,9 +16,7 @@ TimestampStr = str
 # Note: Using Any to avoid Pydantic recursive type alias issues
 
 JSONPrimitive = Union[str, int, float, bool, None]
-JSONValue = (
-    Any  # Simplified to avoid recursion - represents any JSON-serializable value
-)
+JSONValue = Any  # Simplified to avoid recursion - represents any JSON-serializable value
 JSONArray = List[Any]
 JSONObject = Dict[str, Any]
 

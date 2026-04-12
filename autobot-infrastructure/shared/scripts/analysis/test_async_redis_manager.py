@@ -29,9 +29,7 @@ from backend.utils.redis_compatibility import (
     test_async_migration,
 )
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -63,9 +61,7 @@ async def test_async_redis_database():
 
     # Test GET operation
     get_result = await database.get(test_key)
-    assert (
-        get_result == test_value
-    ), f"GET operation failed: expected {test_value}, got {get_result}"
+    assert get_result == test_value, f"GET operation failed: expected {test_value}, got {get_result}"
     logger.info("✅ GET operation successful")
 
     # Test EXISTS operation
@@ -88,9 +84,7 @@ async def test_async_redis_database():
     logger.info("✅ HSET operation successful")
 
     hget_result = await database.hget(hash_name, hash_field)
-    assert (
-        hget_result == hash_value
-    ), f"HGET operation failed: expected {hash_value}, got {hget_result}"
+    assert hget_result == hash_value, f"HGET operation failed: expected {hash_value}, got {hget_result}"
     logger.info("✅ HGET operation successful")
 
     hgetall_result = await database.hgetall(hash_name)
@@ -257,9 +251,7 @@ async def test_circuit_breaker():
     # Create a database with aggressive circuit breaker settings
     from backend.utils.async_redis_manager import CircuitBreakerConfig
 
-    circuit_config = CircuitBreakerConfig(
-        failure_threshold=2, recovery_timeout=5, success_threshold=1
-    )
+    circuit_config = CircuitBreakerConfig(failure_threshold=2, recovery_timeout=5, success_threshold=1)
 
     # Test with invalid host to trigger failures
     test_db = AsyncRedisDatabase(
@@ -278,9 +270,7 @@ async def test_circuit_breaker():
 
     # Test circuit breaker statistics
     stats = test_db.get_stats()
-    assert (
-        stats["circuit_state"] == "open" or stats["stats"]["failed_operations"] > 0
-    ), "Circuit breaker not triggered"
+    assert stats["circuit_state"] == "open" or stats["stats"]["failed_operations"] > 0, "Circuit breaker not triggered"
     logger.info("✅ Circuit breaker statistics working")
 
     await test_db.close()
@@ -340,9 +330,7 @@ async def test_compatibility_layer():
 
     # Test migration test function
     migration_results = await test_async_migration("main")
-    assert migration_results[
-        "overall_success"
-    ], f"Migration test failed: {migration_results}"
+    assert migration_results["overall_success"], f"Migration test failed: {migration_results}"
     assert migration_results["migration_ready"], "System not ready for migration"
     logger.info("✅ Migration test successful")
 
@@ -438,17 +426,13 @@ async def run_comprehensive_tests():
             logger.error(f"         Error: {result['error']}")
 
     logger.info("-" * 60)
-    logger.info(
-        f"Total: {passed_tests}/{total_tests} tests passed in {total_time:.3f}s"
-    )
+    logger.info(f"Total: {passed_tests}/{total_tests} tests passed in {total_time:.3f}s")
 
     if passed_tests == total_tests:
         logger.info("🎉 ALL TESTS PASSED! AsyncRedisManager is ready for production.")
         return True
     else:
-        logger.error(
-            f"💥 {total_tests - passed_tests} tests failed. Please fix issues before deployment."
-        )
+        logger.error(f"💥 {total_tests - passed_tests} tests failed. Please fix issues before deployment.")
         return False
 
 

@@ -26,12 +26,8 @@ def forward_connection(client_socket, target_host, target_port):
                     break
 
         # Start forwarding in both directions
-        client_to_server = threading.Thread(
-            target=forward_data, args=(client_socket, server_socket)
-        )
-        server_to_client = threading.Thread(
-            target=forward_data, args=(server_socket, client_socket)
-        )
+        client_to_server = threading.Thread(target=forward_data, args=(client_socket, server_socket))
+        server_to_client = threading.Thread(target=forward_data, args=(server_socket, client_socket))
 
         client_to_server.daemon = True
         server_to_client.daemon = True
@@ -58,9 +54,7 @@ def start_forwarder(listen_host, listen_port, target_host, target_port):
     try:
         server.bind((listen_host, listen_port))
         server.listen(5)
-        print(
-            f"Port forwarder started: {listen_host}:{listen_port} -> {target_host}:{target_port}"
-        )
+        print(f"Port forwarder started: {listen_host}:{listen_port} -> {target_host}:{target_port}")
 
         while True:
             client_socket, addr = server.accept()

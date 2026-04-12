@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 import requests
+
 from constants import ServiceURLs
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -151,9 +152,7 @@ class SettingsLoadingFixer:
                 return True
             else:
                 logger.error("❌ Backend health check failed: %s", response.status_code)
-                self.issues_found.append(
-                    "Backend health endpoint not responding correctly"
-                )
+                self.issues_found.append("Backend health endpoint not responding correctly")
                 return False
 
         except requests.exceptions.Timeout:
@@ -178,9 +177,7 @@ class SettingsLoadingFixer:
                 return settings
             else:
                 logger.error("❌ Settings endpoint returned: %s", response.status_code)
-                self.issues_found.append(
-                    f"Settings endpoint error: {response.status_code}"
-                )
+                self.issues_found.append(f"Settings endpoint error: {response.status_code}")
                 return None
 
         except requests.exceptions.Timeout:
@@ -210,12 +207,8 @@ class SettingsLoadingFixer:
             missing_sections = [s for s in required_sections if s not in settings]
 
             if missing_sections:
-                logger.error(
-                    "❌ Missing sections in settings.json: %s", missing_sections
-                )
-                self.issues_found.append(
-                    f"Missing settings sections: {missing_sections}"
-                )
+                logger.error("❌ Missing sections in settings.json: %s", missing_sections)
+                self.issues_found.append(f"Missing settings sections: {missing_sections}")
                 return False
 
             logger.info("✅ settings.json file is valid")
@@ -236,16 +229,10 @@ class SettingsLoadingFixer:
             logger.info("🔍 Checking frontend processes...")
             result = subprocess.run(["ps", "aux"], capture_output=True, text=True)
 
-            vite_processes = [
-                line
-                for line in result.stdout.split("\n")
-                if "vite" in line.lower() and "node" in line
-            ]
+            vite_processes = [line for line in result.stdout.split("\n") if "vite" in line.lower() and "node" in line]
 
             if vite_processes:
-                logger.info(
-                    f"✅ Frontend dev server running ({len(vite_processes)} processes)"
-                )
+                logger.info(f"✅ Frontend dev server running ({len(vite_processes)} processes)")
                 return True
             else:
                 logger.warning("⚠️ Frontend dev server not detected")
@@ -317,9 +304,7 @@ class SettingsLoadingFixer:
         logger.info("1. Open AutoBot in your browser: ServiceURLs.FRONTEND_LOCAL")
         logger.info("2. Press F12 to open Developer Tools")
         logger.info("3. Go to the Console tab")
-        logger.info(
-            "4. Copy and paste the script from: scripts/utilities/browser_settings_utility.js"
-        )
+        logger.info("4. Copy and paste the script from: scripts/utilities/browser_settings_utility.js")
         logger.info("5. Press Enter to run the script")
         logger.info("6. Follow the on-screen instructions")
         logger.info("=" * 70)
@@ -392,9 +377,7 @@ class SettingsLoadingFixer:
         logger.info("=" * 70)
 
         # If backend is not responding, try to restart it
-        if "Backend API timeout" in str(
-            self.issues_found
-        ) or "Backend server not running" in str(self.issues_found):
+        if "Backend API timeout" in str(self.issues_found) or "Backend server not running" in str(self.issues_found):
             if self.restart_backend():
                 logger.info("✅ Backend server restarted")
             else:

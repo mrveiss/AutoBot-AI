@@ -298,9 +298,7 @@ class SystemMonitor:
 
         return metrics
 
-    async def _check_http_service_health(
-        self, url: str, service_name: str, service_metrics: Dict[str, Any]
-    ) -> None:
+    async def _check_http_service_health(self, url: str, service_name: str, service_metrics: Dict[str, Any]) -> None:
         """
         Check HTTP service health and update metrics.
 
@@ -308,9 +306,7 @@ class SystemMonitor:
         """
         start_time = time.time()
         try:
-            async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=5)
-            ) as session:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
                 async with session.get(url) as response:
                     response_time = (time.time() - start_time) * 1000
                     service_metrics["response_time_ms"] = response_time
@@ -376,9 +372,7 @@ class SystemMonitor:
 
             # Issue #665: Use extracted helper methods for specific service types
             if service["url"]:
-                await self._check_http_service_health(
-                    service["url"], service_name, service_metrics
-                )
+                await self._check_http_service_health(service["url"], service_name, service_metrics)
             elif service_name == "redis":
                 # Issue #666: Now properly awaited since _check_redis_health is async
                 await self._check_redis_health(service_metrics)
@@ -415,26 +409,15 @@ class SystemMonitor:
             for process in psutil.process_iter(["pid", "name", "cmdline"]):
                 try:
                     proc_info = process.info
-                    cmdline = (
-                        " ".join(proc_info["cmdline"]) if proc_info["cmdline"] else ""
-                    )
+                    cmdline = " ".join(proc_info["cmdline"]) if proc_info["cmdline"] else ""
 
                     # Check if process is related to the service
                     if (
                         service_name.lower() in proc_info["name"].lower()
                         or service_name.lower() in cmdline.lower()
-                        or (
-                            service_name == "backend"
-                            and ("uvicorn" in cmdline or "main.py" in cmdline)
-                        )
-                        or (
-                            service_name == "frontend"
-                            and ("vite" in cmdline or "dev" in cmdline)
-                        )
-                        or (
-                            service_name == "redis"
-                            and "redis-server" in proc_info["name"].lower()
-                        )
+                        or (service_name == "backend" and ("uvicorn" in cmdline or "main.py" in cmdline))
+                        or (service_name == "frontend" and ("vite" in cmdline or "dev" in cmdline))
+                        or (service_name == "redis" and "redis-server" in proc_info["name"].lower())
                     ):
                         proc = psutil.Process(proc_info["pid"])
                         memory_info = proc.memory_info()
@@ -552,9 +535,7 @@ class SystemMonitor:
 
         return health_results
 
-    async def _perform_single_health_check(
-        self, check: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _perform_single_health_check(self, check: Dict[str, Any]) -> Dict[str, Any]:
         """Perform a single health check"""
         result = {
             "service": check["service"],
@@ -569,9 +550,7 @@ class SystemMonitor:
 
             if check["url"]:
                 # HTTP health check
-                async with aiohttp.ClientSession(
-                    timeout=aiohttp.ClientTimeout(total=10)
-                ) as session:
+                async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
                     async with session.get(check["url"]) as response:
                         result["response_time_ms"] = (time.time() - start_time) * 1000
 
@@ -690,9 +669,7 @@ class SystemMonitor:
                 "total_errors": row[2] or 0,
                 "total_successes": row[3] or 0,
                 "avg_memory_mb": round(row[4] or 0, 2),
-                "error_rate": round(
-                    (row[2] or 0) / max((row[2] or 0) + (row[3] or 0), 1) * 100, 2
-                ),
+                "error_rate": round((row[2] or 0) / max((row[2] or 0) + (row[3] or 0), 1) * 100, 2),
             }
         return status
 
@@ -787,9 +764,7 @@ class SystemMonitor:
 
         return dashboard
 
-    def _delete_old_records(
-        self, conn, table_name: str, retention_date: datetime
-    ) -> int:
+    def _delete_old_records(self, conn, table_name: str, retention_date: datetime) -> int:
         """
         Delete old records from a specific table.
 
@@ -816,19 +791,11 @@ class SystemMonitor:
         try:
             with sqlite3.connect(self.metrics_db) as conn:
                 # Issue #665: Use extracted helper for consistent cleanup
-                deleted_system = self._delete_old_records(
-                    conn, "system_metrics", retention_date
-                )
-                deleted_app = self._delete_old_records(
-                    conn, "application_metrics", retention_date
-                )
-                deleted_health = self._delete_old_records(
-                    conn, "health_checks", retention_date
-                )
+                deleted_system = self._delete_old_records(conn, "system_metrics", retention_date)
+                deleted_app = self._delete_old_records(conn, "application_metrics", retention_date)
+                deleted_health = self._delete_old_records(conn, "health_checks", retention_date)
                 # Alerts have longer retention (90 days)
-                deleted_alerts = self._delete_old_records(
-                    conn, "alerts", alert_retention_date
-                )
+                deleted_alerts = self._delete_old_records(conn, "alerts", alert_retention_date)
 
                 logger.info(
                     f"Cleaned up {deleted_system} system metrics, {deleted_app} app metrics, "
@@ -855,9 +822,7 @@ class SystemMonitor:
 
             # Perform health checks
             health_results = await self.perform_health_checks()
-            logger.info(
-                "🏥 Health: %s", health_results.get("overall_status", "unknown")
-            )
+            logger.info("🏥 Health: %s", health_results.get("overall_status", "unknown"))
 
             # Generate dashboard
             dashboard = self.generate_monitoring_dashboard()
@@ -871,13 +836,9 @@ class SystemMonitor:
 
             # Check for alerts
             if self.alerts_triggered:
-                logger.warning(
-                    f"⚠️  {len(self.alerts_triggered)} alerts triggered this cycle"
-                )
+                logger.warning(f"⚠️  {len(self.alerts_triggered)} alerts triggered this cycle")
                 for alert in self.alerts_triggered:
-                    logger.warning(
-                        f"  • {alert['severity'].upper()}: {alert['message']}"
-                    )
+                    logger.warning(f"  • {alert['severity'].upper()}: {alert['message']}")
                 self.alerts_triggered.clear()
 
             return {
@@ -896,9 +857,7 @@ class SystemMonitor:
         logger.info("🎯 Starting AutoBot monitoring system...")
 
         if continuous:
-            logger.info(
-                f"📡 Continuous monitoring every {self.config['collection_interval']} seconds"
-            )
+            logger.info(f"📡 Continuous monitoring every {self.config['collection_interval']} seconds")
 
             while True:
                 try:
@@ -914,9 +873,7 @@ class SystemMonitor:
                     break
                 except Exception as e:
                     logger.error("Monitoring error: %s", e)
-                    await asyncio.sleep(
-                        TimingConstants.ERROR_RECOVERY_LONG_DELAY
-                    )  # Wait before retrying
+                    await asyncio.sleep(TimingConstants.ERROR_RECOVERY_LONG_DELAY)  # Wait before retrying
         else:
             # Single monitoring cycle
             results = await self.run_monitoring_cycle()
@@ -946,9 +903,7 @@ async def main():
             logger.info("  • Memory Usage: %.1f%%", system.get("memory_percent", 0))
             logger.info("  • Disk Usage: %.1f%%", system.get("disk_percent", 0))
 
-            logger.info(
-                "Health Status: %s", health.get("overall_status", "unknown").upper()
-            )
+            logger.info("Health Status: %s", health.get("overall_status", "unknown").upper())
 
             services = health.get("services", {})
             for service_name, service_data in services.items():

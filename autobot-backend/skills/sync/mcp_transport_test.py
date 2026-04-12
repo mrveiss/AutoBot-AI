@@ -87,9 +87,7 @@ async def test_http_transport_send_receive():
     with patch("aiohttp.ClientSession", return_value=mock_session):
         transport = HTTPTransport("http://mcp.example.com")
         await transport.connect()
-        await transport.send(
-            {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}
-        )
+        await transport.send({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}})
         result = await transport.receive()
 
     assert result == payload
@@ -123,9 +121,7 @@ async def test_http_transport_non_200_raises():
     with patch("aiohttp.ClientSession", return_value=mock_session):
         transport = HTTPTransport("http://mcp.example.com")
         with pytest.raises(aiohttp.ClientResponseError):
-            await transport.send(
-                {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}
-            )
+            await transport.send({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}})
 
 
 # ---------------------------------------------------------------------------
@@ -149,9 +145,7 @@ async def test_stdio_transport_send_receive():
     with patch("asyncio.create_subprocess_exec", AsyncMock(return_value=mock_proc)):
         transport = StdioTransport("npx fake-mcp-server")
         await transport.connect()
-        await transport.send(
-            {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}
-        )
+        await transport.send({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}})
         result = await transport.receive()
 
     assert result["result"]["tools"] == []
@@ -374,9 +368,7 @@ async def test_resource_subscription_yields_notifications():
     mock_transport = AsyncMock(spec=MCPTransport)
     mock_transport.receive = AsyncMock(side_effect=[update, EOFError("closed")])
 
-    sub = ResourceSubscription(
-        uri="file:///tmp/data.json", transport=mock_transport, timeout=1.0
-    )
+    sub = ResourceSubscription(uri="file:///tmp/data.json", transport=mock_transport, timeout=1.0)
     received = []
     async with sub as active_sub:
         async for notification in active_sub:
@@ -397,13 +389,9 @@ async def test_resource_subscription_ignores_unrelated_messages():
     }
 
     mock_transport = AsyncMock(spec=MCPTransport)
-    mock_transport.receive = AsyncMock(
-        side_effect=[unrelated, update, EOFError("closed")]
-    )
+    mock_transport.receive = AsyncMock(side_effect=[unrelated, update, EOFError("closed")])
 
-    sub = ResourceSubscription(
-        uri="file:///tmp/x", transport=mock_transport, timeout=1.0
-    )
+    sub = ResourceSubscription(uri="file:///tmp/x", transport=mock_transport, timeout=1.0)
     received = []
     async with sub as active_sub:
         async for notification in active_sub:

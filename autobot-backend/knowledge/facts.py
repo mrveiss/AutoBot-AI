@@ -710,9 +710,7 @@ class FactsMixin:
             return
 
         # Import sanitization utility
-        from knowledge.utils import (
-            sanitize_metadata_for_chromadb as _sanitize_metadata_for_chromadb,
-        )
+        from knowledge.utils import sanitize_metadata_for_chromadb as _sanitize_metadata_for_chromadb
 
         # Sanitize metadata for ChromaDB
         sanitized_metadata = _sanitize_metadata_for_chromadb(metadata)

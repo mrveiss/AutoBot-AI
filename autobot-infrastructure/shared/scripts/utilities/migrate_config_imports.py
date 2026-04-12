@@ -288,16 +288,12 @@ class ConfigMigrator:
             logger.info("1. Run tests to verify migrations")
             logger.info("2. Review changes with: git diff")
             logger.info("3. Remove backup files if satisfied: rm **/*.backup")
-            logger.info(
-                "4. Commit changes: git add . && git commit -m 'refactor: Migrate to unified_config (#142)'"
-            )
+            logger.info("4. Commit changes: git add . && git commit -m 'refactor: Migrate to unified_config (#142)'")
 
 
 def main():
     """Entry point for config import migration CLI."""
-    parser = argparse.ArgumentParser(
-        description="Migrate config imports to unified_config.py"
-    )
+    parser = argparse.ArgumentParser(description="Migrate config imports to unified_config.py")
     parser.add_argument("--file", help="Single file to migrate")
     parser.add_argument(
         "--batch",

@@ -81,11 +81,7 @@ class DuplicateDetector:
                     # Get function source
                     lines = content.split("\n")
                     start_line = node.lineno - 1
-                    end_line = (
-                        node.end_lineno
-                        if hasattr(node, "end_lineno")
-                        else start_line + 10
-                    )
+                    end_line = node.end_lineno if hasattr(node, "end_lineno") else start_line + 10
 
                     func_source = "\n".join(lines[start_line:end_line])
                     normalized = self.normalize_code(func_source)
@@ -116,11 +112,7 @@ class DuplicateDetector:
                     # Get class source
                     lines = content.split("\n")
                     start_line = node.lineno - 1
-                    end_line = (
-                        node.end_lineno
-                        if hasattr(node, "end_lineno")
-                        else start_line + 20
-                    )
+                    end_line = node.end_lineno if hasattr(node, "end_lineno") else start_line + 20
 
                     class_source = "\n".join(lines[start_line:end_line])
                     normalized = self.normalize_code(class_source)
@@ -355,9 +347,7 @@ class DuplicateDetector:
         # Import duplicates
         for import_stmt, files in self.import_patterns.items():
             if len(files) >= 5:  # Only report imports used in 5+ files
-                results["duplicate_imports"].append(
-                    {"count": len(files), "import": import_stmt, "files": files}
-                )
+                results["duplicate_imports"].append({"count": len(files), "import": import_stmt, "files": files})
 
         # API pattern duplicates
         for hash_key, patterns in self.api_patterns.items():
@@ -402,9 +392,7 @@ class DuplicateDetector:
             "total_duplicate_classes": len(results["duplicate_classes"]),
             "total_duplicate_imports": len(results["duplicate_imports"]),
             "total_duplicate_api_patterns": len(results["duplicate_api_patterns"]),
-            "total_duplicate_config_patterns": len(
-                results["duplicate_config_patterns"]
-            ),
+            "total_duplicate_config_patterns": len(results["duplicate_config_patterns"]),
             "total_duplicate_strings": len(results["duplicate_strings"]),
             "total_patterns": (
                 len(results["duplicate_functions"])
@@ -434,32 +422,24 @@ def main():
     print(f"   - Duplicate classes: {summary['total_duplicate_classes']}")
     print(f"   - Duplicate imports: {summary['total_duplicate_imports']}")
     print(f"   - Duplicate API patterns: {summary['total_duplicate_api_patterns']}")
-    print(
-        f"   - Duplicate config patterns: {summary['total_duplicate_config_patterns']}"
-    )
+    print(f"   - Duplicate config patterns: {summary['total_duplicate_config_patterns']}")
     print(f"   - Duplicate strings: {summary['total_duplicate_strings']}")
 
     # Show top duplicates
     print("\n🔄 TOP FUNCTION DUPLICATES:")
-    for dup in sorted(
-        results["duplicate_functions"], key=lambda x: x["count"], reverse=True
-    )[:5]:
+    for dup in sorted(results["duplicate_functions"], key=lambda x: x["count"], reverse=True)[:5]:
         print(f"   {dup['count']} occurrences: {dup['functions'][0]['name']}")
         for func in dup["functions"]:
             print(f"     - {func['file']}:{func['line']}")
 
     print("\n🔄 TOP CONFIGURATION DUPLICATES:")
-    for dup in sorted(
-        results["duplicate_config_patterns"], key=lambda x: x["count"], reverse=True
-    )[:5]:
+    for dup in sorted(results["duplicate_config_patterns"], key=lambda x: x["count"], reverse=True)[:5]:
         print(f"   {dup['count']} occurrences: {dup['patterns'][0]['pattern'][:50]}...")
         for pattern in dup["patterns"]:
             print(f"     - {pattern['file']}:{pattern['line']}")
 
     print("\n🔄 TOP STRING DUPLICATES:")
-    for dup in sorted(
-        results["duplicate_strings"], key=lambda x: x["count"], reverse=True
-    )[:5]:
+    for dup in sorted(results["duplicate_strings"], key=lambda x: x["count"], reverse=True)[:5]:
         print(f"   {dup['count']} occurrences: {dup['value']}")
         for occ in dup["occurrences"][:3]:  # Show first 3
             print(f"     - {occ['file']}:{occ['line']}")
@@ -467,7 +447,9 @@ def main():
     # Save detailed results
     import json
 
-    output_file = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/analysis/refactoring/duplicate_analysis_results.json"
+    output_file = (
+        "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/analysis/refactoring/duplicate_analysis_results.json"
+    )
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
     with open(output_file, "w") as f:

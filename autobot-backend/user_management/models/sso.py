@@ -142,9 +142,7 @@ class SSOProvider(Base, TimestampMixin):
 
     def __repr__(self) -> str:
         scope = f"org:{self.org_id}" if self.org_id else "global"
-        return (
-            f"<SSOProvider(type={self.provider_type}, name={self.name}, scope={scope})>"
-        )
+        return f"<SSOProvider(type={self.provider_type}, name={self.name}, scope={scope})>"
 
     @property
     def is_enterprise(self) -> bool:
@@ -219,9 +217,7 @@ class UserSSOLink(Base, TimestampMixin):
     )
 
     # Unique constraint: one link per provider external ID
-    __table_args__ = (
-        UniqueConstraint("provider_id", "external_id", name="uq_provider_external_id"),
-    )
+    __table_args__ = (UniqueConstraint("provider_id", "external_id", name="uq_provider_external_id"),)
 
     # Relationships
     user: Mapped["User"] = relationship(
@@ -236,8 +232,7 @@ class UserSSOLink(Base, TimestampMixin):
 
     def __repr__(self) -> str:
         return (
-            f"<UserSSOLink(user_id={self.user_id}, "
-            f"provider_id={self.provider_id}, external_id={self.external_id})>"
+            f"<UserSSOLink(user_id={self.user_id}, " f"provider_id={self.provider_id}, external_id={self.external_id})>"
         )
 
     def record_login(self) -> None:

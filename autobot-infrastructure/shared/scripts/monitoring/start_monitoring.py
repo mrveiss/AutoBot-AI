@@ -109,10 +109,7 @@ class PerformanceMonitoringManager:
                 logger.warning("Failed to collect baseline metrics")
 
             # Run initial GPU optimization if enabled
-            if (
-                self.config["gpu_optimization_enabled"]
-                and gpu_capabilities["gpu_available"]
-            ):
+            if self.config["gpu_optimization_enabled"] and gpu_capabilities["gpu_available"]:
                 logger.info("Running initial GPU optimization...")
                 optimization_result = await optimize_gpu_for_multimodal()
                 if optimization_result.success:
@@ -120,9 +117,7 @@ class PerformanceMonitoringManager:
                         "GPU optimization completed: %.1f%% improvement",
                         optimization_result.performance_improvement,
                     )
-                    self.optimizations_applied += len(
-                        optimization_result.applied_optimizations
-                    )
+                    self.optimizations_applied += len(optimization_result.applied_optimizations)
                 else:
                     logger.warning("GPU optimization failed")
 
@@ -215,9 +210,7 @@ class PerformanceMonitoringManager:
                             "Periodic optimization completed: %.1f%% improvement",
                             optimization_result.performance_improvement,
                         )
-                        self.optimizations_applied += len(
-                            optimization_result.applied_optimizations
-                        )
+                        self.optimizations_applied += len(optimization_result.applied_optimizations)
                     else:
                         logger.warning("Periodic optimization failed")
                 else:
@@ -228,9 +221,7 @@ class PerformanceMonitoringManager:
 
             except Exception as e:
                 logger.error("Error in periodic optimization loop: %s", e)
-                await asyncio.sleep(
-                    TimingConstants.STANDARD_TIMEOUT
-                )  # Wait before retrying
+                await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)  # Wait before retrying
 
     async def _dashboard_update_loop(self):
         """Dashboard update loop for real-time monitoring"""
@@ -238,9 +229,7 @@ class PerformanceMonitoringManager:
 
         while self.monitoring_active:
             try:
-                await asyncio.sleep(
-                    TimingConstants.LONG_DELAY
-                )  # Update every 10 seconds
+                await asyncio.sleep(TimingConstants.LONG_DELAY)  # Update every 10 seconds
 
                 if not self.monitoring_active:
                     break
@@ -257,9 +246,7 @@ class PerformanceMonitoringManager:
 
             except Exception as e:
                 logger.error("Error in dashboard update loop: %s", e)
-                await asyncio.sleep(
-                    TimingConstants.ERROR_RECOVERY_LONG_DELAY
-                )  # Wait before retrying
+                await asyncio.sleep(TimingConstants.ERROR_RECOVERY_LONG_DELAY)  # Wait before retrying
 
     def _log_dashboard_summary(self, dashboard_data):
         """Log dashboard summary information"""
@@ -280,16 +267,12 @@ class PerformanceMonitoringManager:
             if dashboard_data.get("system"):
                 system = dashboard_data["system"]
                 summary_parts.append(f"CPU: {system.get('cpu_usage_percent', 0):.0f}%")
-                summary_parts.append(
-                    f"MEM: {system.get('memory_usage_percent', 0):.0f}%"
-                )
+                summary_parts.append(f"MEM: {system.get('memory_usage_percent', 0):.0f}%")
 
             # Alert summary
             recent_alerts = dashboard_data.get("recent_alerts", [])
             if recent_alerts:
-                critical_alerts = sum(
-                    1 for alert in recent_alerts if alert.get("severity") == "critical"
-                )
+                critical_alerts = sum(1 for alert in recent_alerts if alert.get("severity") == "critical")
                 if critical_alerts > 0:
                     summary_parts.append(f"⚠️ {critical_alerts} critical alerts")
 
@@ -311,9 +294,7 @@ class PerformanceMonitoringManager:
                 category = alert.get("category", "unknown")
                 message = alert.get("message", "No message")
 
-                log_level = (
-                    logging.CRITICAL if severity == "critical" else logging.WARNING
-                )
+                log_level = logging.CRITICAL if severity == "critical" else logging.WARNING
                 logger.log(
                     log_level,
                     f"PERFORMANCE ALERT [{severity.upper()}] {category}: {message}",
@@ -331,10 +312,7 @@ class PerformanceMonitoringManager:
         try:
             category = alert.get("category", "")
 
-            if (
-                category == "gpu"
-                and "thermal throttling" in alert.get("message", "").lower()
-            ):
+            if category == "gpu" and "thermal throttling" in alert.get("message", "").lower():
                 logger.critical("GPU thermal throttling detected - reducing GPU load")
                 # Could implement automated GPU load reduction here
 
@@ -342,9 +320,7 @@ class PerformanceMonitoringManager:
                 logger.critical("High memory usage detected - triggering cleanup")
                 # Could implement automated memory cleanup here
 
-            elif (
-                category == "service" and "critical" in alert.get("message", "").lower()
-            ):
+            elif category == "service" and "critical" in alert.get("message", "").lower():
                 logger.critical("Critical service issue detected")
                 # Could implement service restart or fallback here
 
@@ -385,15 +361,11 @@ class PerformanceMonitoringManager:
             reports_dir = project_root / "reports" / "performance"
             reports_dir.mkdir(parents=True, exist_ok=True)
 
-            benchmark_file = (
-                reports_dir / f"performance_benchmark_{int(time.time())}.json"
-            )
+            benchmark_file = reports_dir / f"performance_benchmark_{int(time.time())}.json"
             with open(benchmark_file, "w") as f:
                 json.dump(results, f, indent=2, default=str)
 
-            logger.info(
-                "Benchmark suite completed. Results saved to: %s", benchmark_file
-            )
+            logger.info("Benchmark suite completed. Results saved to: %s", benchmark_file)
             return results
 
         except Exception as e:
@@ -434,9 +406,7 @@ async def _run_daemon_loop(manager: PerformanceMonitoringManager) -> None:
         await manager.stop_monitoring()
 
 
-async def _handle_start_command(
-    manager: PerformanceMonitoringManager, daemon: bool
-) -> None:
+async def _handle_start_command(manager: PerformanceMonitoringManager, daemon: bool) -> None:
     """Handle start command (Issue #315: extracted helper)."""
     if not await manager.initialize():
         logger.error("Failed to initialize monitoring")
@@ -466,9 +436,7 @@ async def _handle_test_command(manager: PerformanceMonitoringManager) -> None:
     )
 
     capabilities = get_gpu_capabilities()
-    logger.info(
-        "GPU capabilities test: %s", "✓" if capabilities["gpu_available"] else "✗"
-    )
+    logger.info("GPU capabilities test: %s", "✓" if capabilities["gpu_available"] else "✗")
 
     efficiency = await monitor_gpu_efficiency()
     logger.info(
@@ -522,9 +490,7 @@ async def main():
 
         elif args.command == "benchmark":
             await manager.initialize()
-            logger.info(
-                json.dumps(await manager.run_benchmark_suite(), indent=2, default=str)
-            )
+            logger.info(json.dumps(await manager.run_benchmark_suite(), indent=2, default=str))
 
         elif args.command == "test":
             await _handle_test_command(manager)

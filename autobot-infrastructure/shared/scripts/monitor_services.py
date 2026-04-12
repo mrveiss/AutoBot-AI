@@ -83,9 +83,7 @@ class ServiceMonitor:
 
             # Calculate overall health statistics
             total_services = len(health_results)
-            healthy_services = sum(
-                1 for h in health_results.values() if h.status == ServiceStatus.HEALTHY
-            )
+            healthy_services = sum(1 for h in health_results.values() if h.status == ServiceStatus.HEALTHY)
 
             overall_status = {
                 "timestamp": timestamp.isoformat(),
@@ -93,9 +91,7 @@ class ServiceMonitor:
                 "total_services": total_services,
                 "healthy_services": healthy_services,
                 "unhealthy_services": total_services - healthy_services,
-                "health_percentage": (healthy_services / total_services * 100)
-                if total_services > 0
-                else 0,
+                "health_percentage": (healthy_services / total_services * 100) if total_services > 0 else 0,
                 "uptime": str(timestamp - self.start_time),
                 "services": {
                     service: {
@@ -138,9 +134,7 @@ class ServiceMonitor:
         """Stop monitoring."""
         self.is_monitoring = False
 
-    def get_service_history(
-        self, service: str, hours: int = 24
-    ) -> List[Dict[str, Any]]:
+    def get_service_history(self, service: str, hours: int = 24) -> List[Dict[str, Any]]:
         """Get historical data for a specific service."""
         if service not in self.monitoring_data:
             return []
@@ -174,16 +168,12 @@ class ServiceMonitor:
             total_checks = len(recent_checks)
 
             avg_response_time = (
-                sum(r.get("response_time", 0) for r in recent_checks) / total_checks
-                if total_checks > 0
-                else 0
+                sum(r.get("response_time", 0) for r in recent_checks) / total_checks if total_checks > 0 else 0
             )
 
             report["services"][service] = {
                 "current_status": history[-1]["status"] if history else "unknown",
-                "availability_percentage": (healthy_checks / total_checks * 100)
-                if total_checks > 0
-                else 0,
+                "availability_percentage": (healthy_checks / total_checks * 100) if total_checks > 0 else 0,
                 "average_response_time": round(avg_response_time, 3),
                 "total_checks": len(history),
                 "last_check": history[-1]["timestamp"] if history else None,
@@ -258,9 +248,7 @@ class WebDashboard:
     def __init__(self, monitor: ServiceMonitor, port: int = 8080):
         """Initialize web dashboard with Flask application and routes."""
         if not FLASK_AVAILABLE:
-            raise ImportError(
-                "Flask required for web dashboard. Install with: pip install flask flask-cors"
-            )
+            raise ImportError("Flask required for web dashboard. Install with: pip install flask flask-cors")
 
         self.monitor = monitor
         self.port = port
@@ -538,9 +526,7 @@ async def main():
     parser.add_argument("--cli", action="store_true", help="Start CLI monitor")
     parser.add_argument("--json", action="store_true", help="Output JSON report")
     parser.add_argument("--port", type=int, default=8080, help="Web dashboard port")
-    parser.add_argument(
-        "--interval", type=int, default=30, help="Check interval in seconds"
-    )
+    parser.add_argument("--interval", type=int, default=30, help="Check interval in seconds")
     parser.add_argument("--output", help="Output file for JSON report")
 
     args = parser.parse_args()

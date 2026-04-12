@@ -23,8 +23,9 @@ async def resolve_source_or_404(source_id: Optional[str]) -> None:
     """
     if source_id is None:
         return
-    from api.codebase_analytics.endpoints.shared import resolve_source_root
     from fastapi import HTTPException
+
+    from api.codebase_analytics.endpoints.shared import resolve_source_root
 
     source_root = await resolve_source_root(source_id)
     if source_root is None:
@@ -47,8 +48,9 @@ async def resolve_source_root_or_404(source_id: Optional[str]) -> Optional[Path]
     """
     if source_id is None:
         return None
-    from api.codebase_analytics.endpoints.shared import resolve_source_root
     from fastapi import HTTPException
+
+    from api.codebase_analytics.endpoints.shared import resolve_source_root
 
     source_root = await resolve_source_root(source_id)
     if source_root is None:

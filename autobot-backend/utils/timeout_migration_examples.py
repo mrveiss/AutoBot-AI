@@ -85,9 +85,7 @@ async def _get_indexing_resume_state(
     """
     if context.should_resume():
         checkpoint_data = context.get_resume_data()
-        processed_files = checkpoint_data.intermediate_results.get(
-            "processed_files", []
-        )
+        processed_files = checkpoint_data.intermediate_results.get("processed_files", [])
         start_index = len(processed_files)
         logger.info("Resuming indexing from file %s", start_index)
     else:
@@ -251,9 +249,7 @@ def _build_security_scan_result(
     Returns:
         Final result dictionary
     """
-    total_vulnerabilities = sum(
-        len(result.get("vulnerabilities", [])) for result in scan_results
-    )
+    total_vulnerabilities = sum(len(result.get("vulnerabilities", [])) for result in scan_results)
     return {
         "total_files_scanned": len(scan_results),
         "total_vulnerabilities": total_vulnerabilities,
@@ -300,9 +296,7 @@ async def _save_security_scan_checkpoint(
     Issue #620: Extracted from _process_security_scan_files to reduce function length. Issue #620.
     """
     if (index + 1) % checkpoint_interval == 0:
-        await context.save_checkpoint(
-            {"scan_results": scan_results}, f"file_{index + 1}"
-        )
+        await context.save_checkpoint({"scan_results": scan_results}, f"file_{index + 1}")
 
 
 async def _process_security_scan_files(
@@ -334,9 +328,7 @@ async def _process_security_scan_files(
 
     for i, file_path in enumerate(files_to_scan[start_index:], start_index):
         try:
-            await _update_security_scan_progress(
-                context, file_path, i, total_files, vulnerability_count, scan_types
-            )
+            await _update_security_scan_progress(context, file_path, i, total_files, vulnerability_count, scan_types)
             file_scan_result = await file_scanner(file_path, scan_types)
             scan_results.append(file_scan_result)
 
@@ -451,18 +443,14 @@ class ExistingOperationMigrator:
             description="Migrate from fixed timeout to dynamic checkpoint-based testing",
             operation_function=self._enhanced_test_suite_operation,
             priority=OperationPriority.HIGH,
-            estimated_items=len(
-                list(Path(f"{PATH.PROJECT_ROOT}/tests").rglob("test_*.py"))
-            ),
+            estimated_items=len(list(Path(f"{PATH.PROJECT_ROOT}/tests").rglob("test_*.py"))),
             execute_immediately=False,
         )
 
         logger.info("Migrated comprehensive test suite operation: %s", operation_id)
         return operation_id
 
-    async def _enhanced_test_suite_operation(
-        self, context: OperationExecutionContext
-    ) -> Dict[str, Any]:
+    async def _enhanced_test_suite_operation(self, context: OperationExecutionContext) -> Dict[str, Any]:
         """
         Enhanced test suite with checkpoint/resume and parallel execution.
 
@@ -488,9 +476,7 @@ class ExistingOperationMigrator:
         )
 
         # Validation phase: calculate and return results
-        return self._calculate_test_results(
-            total_tests, completed_tests, failed_tests, context.should_resume()
-        )
+        return self._calculate_test_results(total_tests, completed_tests, failed_tests, context.should_resume())
 
     def _discover_test_files(self) -> List[Path]:
         """Discover all test files in the tests directory.
@@ -523,9 +509,7 @@ class ExistingOperationMigrator:
         """
         if context.should_resume():
             checkpoint_data = context.get_resume_data()
-            completed_tests = checkpoint_data.intermediate_results.get(
-                "completed_tests", []
-            )
+            completed_tests = checkpoint_data.intermediate_results.get("completed_tests", [])
             failed_tests = checkpoint_data.intermediate_results.get("failed_tests", [])
             start_index = len(completed_tests) + len(failed_tests)
             logger.info("Resuming test suite from test %s", start_index)
@@ -553,9 +537,7 @@ class ExistingOperationMigrator:
 
         max_concurrent = min(4, len(test_files))
 
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=max_concurrent
-        ) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_concurrent) as executor:
             for i, test_file in enumerate(test_files[start_index:], start_index):
                 try:
                     await self._update_test_progress(
@@ -566,9 +548,7 @@ class ExistingOperationMigrator:
                         completed_tests,
                         failed_tests,
                     )
-                    test_result = await self._run_test_with_executor(
-                        executor, test_file
-                    )
+                    test_result = await self._run_test_with_executor(executor, test_file)
 
                     if test_result["status"] == "PASS":
                         completed_tests.append(test_result)
@@ -672,9 +652,7 @@ class ExistingOperationMigrator:
             Test result dictionary.
         """
         future = executor.submit(self._run_single_test, test_file)
-        test_result = await asyncio.get_running_loop().run_in_executor(
-            None, lambda: future.result(timeout=300)
-        )
+        test_result = await asyncio.get_running_loop().run_in_executor(None, lambda: future.result(timeout=300))
         return test_result
 
     def _record_test_error(
@@ -717,9 +695,7 @@ class ExistingOperationMigrator:
 
             files_to_scan = _collect_security_scan_files(scan_paths)
             total_files = len(files_to_scan)
-            await context.update_progress(
-                "File discovery for security scan", 0, total_files
-            )
+            await context.update_progress("File discovery for security scan", 0, total_files)
 
             scan_results, start_index = await _get_security_scan_resume_state(context)
             scan_results, _ = await _process_security_scan_files(
@@ -732,9 +708,7 @@ class ExistingOperationMigrator:
                 self._scan_file_for_security,
             )
 
-            return _build_security_scan_result(
-                scan_results, scan_types, context.should_resume()
-            )
+            return _build_security_scan_result(scan_results, scan_types, context.should_resume())
 
         operation_id = await self.manager.create_operation(
             operation_type=OperationType.SECURITY_SCAN,
@@ -816,9 +790,7 @@ class ExistingOperationMigrator:
                 "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
 
-    def _check_vulnerability_patterns(
-        self, content: str, vulnerabilities: List[Dict[str, Any]]
-    ) -> None:
+    def _check_vulnerability_patterns(self, content: str, vulnerabilities: List[Dict[str, Any]]) -> None:
         """Check for common vulnerability patterns in file content. Issue #620."""
         if "password" in content.lower() and "=" in content:
             vulnerabilities.append(
@@ -838,9 +810,7 @@ class ExistingOperationMigrator:
                 }
             )
 
-    def _check_secret_patterns(
-        self, content: str, vulnerabilities: List[Dict[str, Any]]
-    ) -> None:
+    def _check_secret_patterns(self, content: str, vulnerabilities: List[Dict[str, Any]]) -> None:
         """Check for potential secret patterns in file content. Issue #620."""
         import re
 
@@ -853,9 +823,7 @@ class ExistingOperationMigrator:
                 }
             )
 
-    async def _scan_file_for_security(
-        self, file_path: Path, scan_types: List[str]
-    ) -> Dict[str, Any]:
+    async def _scan_file_for_security(self, file_path: Path, scan_types: List[str]) -> Dict[str, Any]:
         """Scan a single file for security issues (placeholder implementation)"""
         await asyncio.sleep(TimingConstants.FAST_POLL_INTERVAL)  # Simulate scan time
 
@@ -916,9 +884,7 @@ async def _wait_for_operation_completion(operation_id: str) -> Any:
     """Wait for operation to complete and return result (Issue #315 - extracted helper)."""
     terminal_states = {"completed", "failed", "timeout", "cancelled"}
     while True:
-        operation = operation_integration_manager.operation_manager.get_operation(
-            operation_id
-        )
+        operation = operation_integration_manager.operation_manager.get_operation(operation_id)
         if operation.status.value in terminal_states:
             if operation.result is not None:
                 return operation.result
@@ -961,9 +927,7 @@ def _create_enhanced_operation(func, args, kwargs, progress_callback):
     return enhanced_operation
 
 
-async def _execute_via_operation_manager(
-    enhanced_operation, operation_type, func, priority, items
-):
+async def _execute_via_operation_manager(enhanced_operation, operation_type, func, priority, items):
     """
     Execute operation through the operation manager.
 
@@ -997,19 +961,12 @@ def migrate_timeout_operation(
         async def wrapper(*args, **kwargs):
             """Execute operation with enhanced progress and timeout handling."""
             progress_callback = kwargs.pop("progress_callback", None)
-            enhanced_op = _create_enhanced_operation(
-                func, args, kwargs, progress_callback
-            )
+            enhanced_op = _create_enhanced_operation(func, args, kwargs, progress_callback)
             items = _get_estimated_items(estimated_items, args)
 
             # Execute with operation manager if available
-            if (
-                operation_integration_manager
-                and operation_integration_manager.operation_manager
-            ):
-                return await _execute_via_operation_manager(
-                    enhanced_op, operation_type, func, priority, items
-                )
+            if operation_integration_manager and operation_integration_manager.operation_manager:
+                return await _execute_via_operation_manager(enhanced_op, operation_type, func, priority, items)
 
             # Fallback to direct execution
             return await enhanced_op(None)
@@ -1029,9 +986,7 @@ if __name__ == "__main__":
         if operation_integration_manager:
             await operation_integration_manager.initialize()
 
-            migrator = ExistingOperationMigrator(
-                operation_integration_manager.operation_manager
-            )
+            migrator = ExistingOperationMigrator(operation_integration_manager.operation_manager)
 
             # Migrate existing operations
             indexing_op = await migrator.migrate_knowledge_base_indexing()

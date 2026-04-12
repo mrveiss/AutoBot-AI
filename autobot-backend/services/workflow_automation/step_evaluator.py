@@ -91,9 +91,7 @@ class WorkflowStepEvaluator:
             "current_step_index": workflow.current_step_index,
             "total_steps": len(workflow.steps),
             "completed_steps": [
-                s
-                for s in workflow.steps[: workflow.current_step_index]
-                if s.status == WorkflowStepStatus.COMPLETED
+                s for s in workflow.steps[: workflow.current_step_index] if s.status == WorkflowStepStatus.COMPLETED
             ],
             "automation_mode": workflow.automation_mode.value,
             "session_id": workflow.session_id,
@@ -113,11 +111,7 @@ class WorkflowStepEvaluator:
             Safety score as float
         """
         return next(
-            (
-                s.score
-                for s in judgment.criterion_scores
-                if s.dimension.value == "safety"
-            ),
+            (s.score for s in judgment.criterion_scores if s.dimension.value == "safety"),
             default,
         )
 
@@ -159,22 +153,15 @@ class WorkflowStepEvaluator:
                 "reasoning": security_judgment.reasoning,
             },
             "combined_safety_score": min_safety,
-            "suggestions": (
-                workflow_judgment.improvement_suggestions
-                + security_judgment.improvement_suggestions
-            ),
+            "suggestions": (workflow_judgment.improvement_suggestions + security_judgment.improvement_suggestions),
         }
 
         if not should_proceed:
             reasons = []
             if not should_approve_workflow:
-                reasons.append(
-                    f"Workflow evaluation: {workflow_judgment.recommendation}"
-                )
+                reasons.append(f"Workflow evaluation: {workflow_judgment.recommendation}")
             if not should_approve_security:
-                reasons.append(
-                    f"Security evaluation: {security_judgment.recommendation}"
-                )
+                reasons.append(f"Security evaluation: {security_judgment.recommendation}")
             if min_safety <= 0.7:
                 reasons.append(f"Safety score too low: {min_safety:.2f}")
             result["reason"] = "; ".join(reasons)
@@ -252,9 +239,7 @@ class WorkflowStepEvaluator:
             "suggestions": ["Manual review recommended due to evaluation error"],
         }
 
-    async def evaluate_step(
-        self, workflow: ActiveWorkflow, step: WorkflowStep
-    ) -> Metadata:
+    async def evaluate_step(self, workflow: ActiveWorkflow, step: WorkflowStep) -> Metadata:
         """Evaluate workflow step using LLM judges. Ref: #1088.
 
         Issue #281: Refactored from 144 lines to use extracted helper methods.
@@ -277,24 +262,16 @@ class WorkflowStepEvaluator:
 
             # Fail-open: if either judge errored (LLM unavailable),
             # approve with warning instead of silently rejecting (#1464)
-            judge_error = self._check_judge_errors(
-                (workflow_judgment, security_judgment), step.step_id
-            )
+            judge_error = self._check_judge_errors((workflow_judgment, security_judgment), step.step_id)
             if judge_error:
                 return judge_error
 
-            should_approve_workflow = (
-                workflow_judgment.recommendation in APPROVAL_RECOMMENDATIONS
-            )
-            should_approve_security = (
-                security_judgment.recommendation in APPROVAL_RECOMMENDATIONS
-            )
+            should_approve_workflow = workflow_judgment.recommendation in APPROVAL_RECOMMENDATIONS
+            should_approve_security = security_judgment.recommendation in APPROVAL_RECOMMENDATIONS
             workflow_safety = self._extract_safety_score(workflow_judgment)
             security_safety = self._extract_safety_score(security_judgment)
             min_safety = min(workflow_safety, security_safety)
-            should_proceed = (
-                should_approve_workflow and should_approve_security and min_safety > 0.7
-            )
+            should_proceed = should_approve_workflow and should_approve_security and min_safety > 0.7
             evaluation_result = self._build_evaluation_result(
                 should_proceed,
                 workflow_judgment,

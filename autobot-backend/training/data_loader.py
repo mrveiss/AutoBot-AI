@@ -122,9 +122,7 @@ class PatternDataset(Dataset):
     def _load_patterns(self) -> List[CodePattern]:
         """Load patterns from database."""
         with self._SessionLocal() as db:
-            query = db.query(CodePattern).filter(
-                CodePattern.frequency >= self.min_frequency
-            )
+            query = db.query(CodePattern).filter(CodePattern.frequency >= self.min_frequency)
 
             if self.language:
                 query = query.filter(CodePattern.language == self.language)
@@ -203,9 +201,6 @@ def create_dataloaders(
 
     vocab_size = dataset.get_vocab_size()
 
-    logger.info(
-        f"Created dataloaders: train={train_size}, val={val_size}, "
-        f"vocab={vocab_size}"
-    )
+    logger.info(f"Created dataloaders: train={train_size}, val={val_size}, " f"vocab={vocab_size}")
 
     return train_loader, val_loader, vocab_size

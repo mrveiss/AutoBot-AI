@@ -7,16 +7,17 @@ Unit tests for branch health metrics (Issue #4112).
 Tests branch divergence calculation, health scoring, and metrics collection.
 """
 
-import pytest
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from utils.branch_metrics import (
     BranchDivergence,
     BranchMetrics,
     BranchMetricsCollector,
-    get_unhealthy_branches,
     get_highly_diverged_branches,
+    get_unhealthy_branches,
 )
 
 
@@ -87,9 +88,7 @@ class TestBranchMetricsCollector:
     @pytest.mark.asyncio
     async def test_get_branch_divergence_success(self, collector):
         """Test successful divergence calculation."""
-        with patch.object(
-            collector, "_run_git_cmd"
-        ) as mock_run:
+        with patch.object(collector, "_run_git_cmd") as mock_run:
             # Mock git responses
             async def mock_git_cmd(*args):
                 if "ahead" in str(args):
@@ -110,9 +109,7 @@ class TestBranchMetricsCollector:
     @pytest.mark.asyncio
     async def test_get_branch_divergence_invalid_output(self, collector):
         """Test divergence with invalid git output."""
-        with patch.object(
-            collector, "_run_git_cmd"
-        ) as mock_run:
+        with patch.object(collector, "_run_git_cmd") as mock_run:
             mock_run.return_value = ("invalid", 0)
 
             div = await collector.get_branch_divergence("feature/test")
@@ -123,9 +120,7 @@ class TestBranchMetricsCollector:
     @pytest.mark.asyncio
     async def test_get_all_branches(self, collector):
         """Test getting all branches."""
-        with patch.object(
-            collector, "_run_git_cmd"
-        ) as mock_run:
+        with patch.object(collector, "_run_git_cmd") as mock_run:
             branch_output = "origin/Dev_new_gui\norigin/feature/test1\norigin/feature/test2"
             mock_run.return_value = (branch_output, 0)
 
@@ -139,9 +134,7 @@ class TestBranchMetricsCollector:
     @pytest.mark.asyncio
     async def test_get_all_branches_empty(self, collector):
         """Test getting branches with empty repo."""
-        with patch.object(
-            collector, "_run_git_cmd"
-        ) as mock_run:
+        with patch.object(collector, "_run_git_cmd") as mock_run:
             mock_run.return_value = ("", 1)
 
             branches = await collector.get_all_branches()
@@ -169,11 +162,10 @@ class TestBranchMetricsCollector:
     @pytest.mark.asyncio
     async def test_analyze_all_branches_skips_base(self, collector):
         """Test that analyze_all_branches skips base branch."""
-        with patch.object(
-            collector, "get_all_branches"
-        ) as mock_branches, patch.object(
-            collector, "calculate_branch_health"
-        ) as mock_health:
+        with (
+            patch.object(collector, "get_all_branches") as mock_branches,
+            patch.object(collector, "calculate_branch_health") as mock_health,
+        ):
             # Setup
             mock_branches.return_value = ["Dev_new_gui", "feature/test"]
             mock_health.return_value = BranchMetrics(
@@ -195,9 +187,7 @@ class TestModuleFunctions:
     @pytest.mark.asyncio
     async def test_get_unhealthy_branches(self):
         """Test get_unhealthy_branches function."""
-        with patch(
-            "utils.branch_metrics.BranchMetricsCollector"
-        ) as mock_collector_class:
+        with patch("utils.branch_metrics.BranchMetricsCollector") as mock_collector_class:
             # Setup mock
             mock_collector = AsyncMock()
             mock_collector_class.return_value = mock_collector
@@ -222,25 +212,19 @@ class TestModuleFunctions:
     @pytest.mark.asyncio
     async def test_get_highly_diverged_branches(self):
         """Test get_highly_diverged_branches function."""
-        with patch(
-            "utils.branch_metrics.BranchMetricsCollector"
-        ) as mock_collector_class:
+        with patch("utils.branch_metrics.BranchMetricsCollector") as mock_collector_class:
             # Setup mock
             mock_collector = AsyncMock()
             mock_collector_class.return_value = mock_collector
 
             metrics1 = BranchMetrics(
                 branch="clean",
-                divergence=BranchDivergence(
-                    branch="clean", total_commits_diverged=5
-                ),
+                divergence=BranchDivergence(branch="clean", total_commits_diverged=5),
                 health_score=90.0,
             )
             metrics2 = BranchMetrics(
                 branch="diverged",
-                divergence=BranchDivergence(
-                    branch="diverged", total_commits_diverged=50
-                ),
+                divergence=BranchDivergence(branch="diverged", total_commits_diverged=50),
                 health_score=40.0,
             )
             mock_collector.analyze_all_branches.return_value = [metrics1, metrics2]

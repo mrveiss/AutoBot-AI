@@ -100,9 +100,7 @@ class MicroserviceArchitectureEvaluator:
 
         return info
 
-    def _process_file_for_directory_analysis(
-        self, item: Path, info: Dict[str, Any]
-    ) -> None:
+    def _process_file_for_directory_analysis(self, item: Path, info: Dict[str, Any]) -> None:
         """(Issue #315 - extracted) Process a single file for directory analysis"""
         info["file_count"] += 1
         suffix = item.suffix.lower()
@@ -129,11 +127,7 @@ class MicroserviceArchitectureEvaluator:
             loc = 0
             for line in lines:
                 stripped = line.strip()
-                if (
-                    stripped
-                    and not stripped.startswith("#")
-                    and not stripped.startswith("//")
-                ):
+                if stripped and not stripped.startswith("#") and not stripped.startswith("//"):
                     loc += 1
 
             return loc
@@ -325,9 +319,7 @@ class MicroserviceArchitectureEvaluator:
         except Exception as e:
             logger.warning("Could not analyze agent file %s: %s", agent_file, e)
 
-    def _extract_agent_classes_and_functions(
-        self, tree: ast.AST, agent_info: Dict[str, Any]
-    ) -> None:
+    def _extract_agent_classes_and_functions(self, tree: ast.AST, agent_info: Dict[str, Any]) -> None:
         """(Issue #315 - extracted) Extract classes and functions from agent AST"""
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef):
@@ -355,9 +347,7 @@ class MicroserviceArchitectureEvaluator:
 
         return "unknown"
 
-    def _extract_agent_dependencies(
-        self, content: str, agent_info: Dict[str, Any]
-    ) -> None:
+    def _extract_agent_dependencies(self, content: str, agent_info: Dict[str, Any]) -> None:
         """(Issue #315 - extracted) Extract dependencies from agent file"""
         import_pattern = r"from\s+([^\\s]+)\s+import|import\s+([^\\s]+)"
         imports = re.findall(import_pattern, content)
@@ -367,9 +357,7 @@ class MicroserviceArchitectureEvaluator:
             if dep and dep.startswith(_PROJECT_IMPORT_PREFIXES):  # Issue #380
                 agent_info["dependencies"].append(dep)
 
-    def _group_agent_by_type(
-        self, agent_info: Dict[str, Any], agents: Dict[str, Any]
-    ) -> None:
+    def _group_agent_by_type(self, agent_info: Dict[str, Any], agents: Dict[str, Any]) -> None:
         """(Issue #315 - extracted) Group agent by its type"""
         agent_type = agent_info["agent_type"]
         if agent_type not in agents["agent_types"]:
@@ -392,9 +380,7 @@ class MicroserviceArchitectureEvaluator:
 
         return utilities
 
-    def _process_utils_directory(
-        self, utils_dir: Path, utilities: Dict[str, Any]
-    ) -> None:
+    def _process_utils_directory(self, utils_dir: Path, utilities: Dict[str, Any]) -> None:
         """(Issue #315 - extracted) Process a utilities directory"""
         for util_file in utils_dir.glob("*.py"):
             if util_file.name == "__init__.py":
@@ -425,9 +411,7 @@ class MicroserviceArchitectureEvaluator:
         except Exception as e:
             logger.debug("Could not analyze utility file %s: %s", util_file, e)
 
-    def _extract_utility_functions_and_classes(
-        self, content: str, util_info: Dict[str, Any]
-    ) -> None:
+    def _extract_utility_functions_and_classes(self, content: str, util_info: Dict[str, Any]) -> None:
         """(Issue #315 - extracted) Extract functions and classes from utility"""
         tree = ast.parse(content)
         for node in ast.walk(tree):
@@ -437,9 +421,7 @@ class MicroserviceArchitectureEvaluator:
             elif isinstance(node, ast.ClassDef):
                 util_info["classes"].append(node.name)
 
-    def _categorize_and_group_utility(
-        self, util_info: Dict[str, Any], utilities: Dict[str, Any]
-    ) -> None:
+    def _categorize_and_group_utility(self, util_info: Dict[str, Any], utilities: Dict[str, Any]) -> None:
         """(Issue #315 - extracted) Categorize and group utility by type"""
         util_type = util_info["utility_type"]
         if util_type not in utilities["utility_types"]:
@@ -497,9 +479,7 @@ class MicroserviceArchitectureEvaluator:
                 continue
             self._process_service_file(py_file, pattern, services)
 
-    def _process_service_file(
-        self, py_file: Path, pattern: str, services: Dict[str, Any]
-    ) -> None:
+    def _process_service_file(self, py_file: Path, pattern: str, services: Dict[str, Any]) -> None:
         """(Issue #315 - extracted) Process a single service file"""
         try:
             with open(py_file, "r", encoding="utf-8") as f:
@@ -524,9 +504,7 @@ class MicroserviceArchitectureEvaluator:
         except Exception as e:
             logger.debug("Could not analyze service file %s: %s", py_file, e)
 
-    def _extract_service_classes_and_functions(
-        self, content: str, service_info: Dict[str, Any]
-    ) -> None:
+    def _extract_service_classes_and_functions(self, content: str, service_info: Dict[str, Any]) -> None:
         """(Issue #315 - extracted) Extract classes and functions from service file"""
         tree = ast.parse(content)
         for node in ast.walk(tree):
@@ -536,9 +514,7 @@ class MicroserviceArchitectureEvaluator:
                 if not node.name.startswith("_"):
                     service_info["functions"].append(node.name)
 
-    def _group_service_by_type(
-        self, pattern: str, service_info: Dict[str, Any], services: Dict[str, Any]
-    ) -> None:
+    def _group_service_by_type(self, pattern: str, service_info: Dict[str, Any], services: Dict[str, Any]) -> None:
         """(Issue #315 - extracted) Group service by its type"""
         if pattern not in services["service_types"]:
             services["service_types"][pattern] = []
@@ -568,9 +544,7 @@ class MicroserviceArchitectureEvaluator:
 
         return stats
 
-    def _process_file_for_statistics(
-        self, file_path: Path, stats: Dict[str, Any], files_info: list
-    ) -> None:
+    def _process_file_for_statistics(self, file_path: Path, stats: Dict[str, Any], files_info: list) -> None:
         """(Issue #315 - extracted) Process a file for statistics collection"""
         stats["total_files"] += 1
         size = file_path.stat().st_size
@@ -613,9 +587,7 @@ class MicroserviceArchitectureEvaluator:
         has_models = (self.project_root / "src" / "models").exists() or any(
             "model" in str(p) for p in self.project_root.rglob("*.py")
         )
-        has_views = (self.project_root / "frontend").exists() or (
-            self.project_root / "autobot-vue"
-        ).exists()
+        has_views = (self.project_root / "frontend").exists() or (self.project_root / "autobot-vue").exists()
         has_controllers = (self.project_root / "backend" / "api").exists()
 
         patterns["mvc_pattern"] = has_models and has_views and has_controllers
@@ -630,28 +602,20 @@ class MicroserviceArchitectureEvaluator:
         has_business_layer = (self.project_root / "src").exists()
         has_presentation_layer = has_views
 
-        patterns["layered_architecture"] = (
-            has_data_layer and has_business_layer and has_presentation_layer
-        )
+        patterns["layered_architecture"] = has_data_layer and has_business_layer and has_presentation_layer
 
         # Calculate microservice readiness score
         readiness_score = 0
 
         # +2 if API is well-organized
         api_endpoints = (
-            self.analysis_results.get("project_structure", {})
-            .get("key_components", {})
-            .get("api_endpoints", {})
+            self.analysis_results.get("project_structure", {}).get("key_components", {}).get("api_endpoints", {})
         )
         if len(api_endpoints.get("endpoint_groups", {})) >= 3:
             readiness_score += 2
 
         # +2 if agents are well-separated
-        agents = (
-            self.analysis_results.get("project_structure", {})
-            .get("key_components", {})
-            .get("agents", {})
-        )
+        agents = self.analysis_results.get("project_structure", {}).get("key_components", {}).get("agents", {})
         if len(agents.get("agent_types", {})) >= 3:
             readiness_score += 2
 
@@ -660,11 +624,7 @@ class MicroserviceArchitectureEvaluator:
             readiness_score += 2
 
         # +2 if utilities are well-organized
-        utilities = (
-            self.analysis_results.get("project_structure", {})
-            .get("key_components", {})
-            .get("utilities", {})
-        )
+        utilities = self.analysis_results.get("project_structure", {}).get("key_components", {}).get("utilities", {})
         if len(utilities.get("utility_types", {})) >= 4:
             readiness_score += 2
 
@@ -679,9 +639,7 @@ class MicroserviceArchitectureEvaluator:
         patterns["microservice_readiness"] = readiness_score
 
         # Check for API gateway
-        patterns["api_gateway_present"] = (
-            self.project_root / "backend" / "app_factory.py"
-        ).exists()
+        patterns["api_gateway_present"] = (self.project_root / "backend" / "app_factory.py").exists()
 
         return patterns
 
@@ -708,19 +666,15 @@ class MicroserviceArchitectureEvaluator:
                     content = f.read()
 
                 # Find local imports (src.* and backend.*)
-                import_pattern = r"from\s+(src\.[^\\s]+|backend\.[^\\s]+)\s+import|import\s+(src\.[^\\s]+|backend\.[^\\s]+)"
+                import_pattern = (
+                    r"from\s+(src\.[^\\s]+|backend\.[^\\s]+)\s+import|import\s+(src\.[^\\s]+|backend\.[^\\s]+)"
+                )
                 imports = re.findall(import_pattern, content)
 
-                file_module = (
-                    str(py_file.relative_to(self.project_root))
-                    .replace("/", ".")
-                    .replace(".py", "")
-                )
+                file_module = str(py_file.relative_to(self.project_root)).replace("/", ".").replace(".py", "")
 
                 for imp1, imp2 in imports:
-                    imported_module = (imp1 or imp2).split(".")[
-                        0:3
-                    ]  # Take first 3 parts
+                    imported_module = (imp1 or imp2).split(".")[0:3]  # Take first 3 parts
                     imported_module = ".".join(imported_module)
                     import_graph[file_module].add(imported_module)
 
@@ -740,16 +694,12 @@ class MicroserviceArchitectureEvaluator:
 
         dependencies["shared_modules"] = [
             {"module": module, "import_count": count}
-            for module, count in sorted(
-                import_counts.items(), key=lambda x: x[1], reverse=True
-            )
+            for module, count in sorted(import_counts.items(), key=lambda x: x[1], reverse=True)
             if count >= 3
         ][:10]
 
         # Detect potential circular dependencies (simplified)
-        dependencies["circular_dependencies"] = self._detect_circular_dependencies(
-            import_graph
-        )
+        dependencies["circular_dependencies"] = self._detect_circular_dependencies(import_graph)
 
         logger.info("📊 Analyzed %s modules", len(import_graph))
         logger.info(
@@ -798,15 +748,11 @@ class MicroserviceArchitectureEvaluator:
                 )
 
         # Sort by coupling score
-        coupling["high_coupling_modules"].sort(
-            key=lambda x: x["coupling_score"], reverse=True
-        )
+        coupling["high_coupling_modules"].sort(key=lambda x: x["coupling_score"], reverse=True)
 
         return coupling
 
-    def _detect_circular_dependencies(
-        self, import_graph: Dict[str, Set[str]]
-    ) -> List[List[str]]:
+    def _detect_circular_dependencies(self, import_graph: Dict[str, Set[str]]) -> List[List[str]]:
         """Detect circular dependencies using DFS"""
         visited = set()
         rec_stack = set()
@@ -848,9 +794,7 @@ class MicroserviceArchitectureEvaluator:
         }
 
         # Analyze API endpoints for service boundaries
-        api_endpoints = self.analysis_results["project_structure"]["key_components"][
-            "api_endpoints"
-        ]
+        api_endpoints = self.analysis_results["project_structure"]["key_components"]["api_endpoints"]
         for domain, endpoints in api_endpoints.get("endpoint_groups", {}).items():
             if len(endpoints) >= 3:  # Domains with sufficient endpoints
                 service = {
@@ -876,9 +820,7 @@ class MicroserviceArchitectureEvaluator:
                 boundaries["proposed_services"].append(service)
 
         # Identify shared services
-        utilities = self.analysis_results["project_structure"]["key_components"][
-            "utilities"
-        ]
+        utilities = self.analysis_results["project_structure"]["key_components"]["utilities"]
         for util_type, util_names in utilities.get("utility_types", {}).items():
             if util_type in [
                 "caching",
@@ -892,16 +834,12 @@ class MicroserviceArchitectureEvaluator:
                     "type": "shared_service",
                     "utilities": util_names,
                     "estimated_complexity": 3,
-                    "responsibilities": [
-                        f"Provide {util_type} functionality across all services"
-                    ],
+                    "responsibilities": [f"Provide {util_type} functionality across all services"],
                 }
                 boundaries["shared_services"].append(service)
 
         # Identify data services
-        models = self.analysis_results["project_structure"]["key_components"][
-            "data_models"
-        ]
+        models = self.analysis_results["project_structure"]["key_components"]["data_models"]
         for db_type in models.get("database_types", []):
             service = {
                 "name": f"{db_type}DataService",
@@ -917,21 +855,11 @@ class MicroserviceArchitectureEvaluator:
             boundaries["data_services"].append(service)
 
         # Generate rationale for boundaries
-        for service in (
-            boundaries["proposed_services"]
-            + boundaries["shared_services"]
-            + boundaries["data_services"]
-        ):
-            boundaries["boundary_rationale"][
-                service["name"]
-            ] = self._generate_boundary_rationale(service)
+        for service in boundaries["proposed_services"] + boundaries["shared_services"] + boundaries["data_services"]:
+            boundaries["boundary_rationale"][service["name"]] = self._generate_boundary_rationale(service)
 
-        logger.info(
-            "🎯 Identified %s proposed services", len(boundaries["proposed_services"])
-        )
-        logger.info(
-            "🔧 Identified %s shared services", len(boundaries["shared_services"])
-        )
+        logger.info("🎯 Identified %s proposed services", len(boundaries["proposed_services"]))
+        logger.info("🔧 Identified %s shared services", len(boundaries["shared_services"]))
         logger.info("💾 Identified %s data services", len(boundaries["data_services"]))
 
         return boundaries
@@ -1055,9 +983,7 @@ class MicroserviceArchitectureEvaluator:
 
         # Phase 3: Agent Services (Compute-Heavy)
         agent_services = [
-            s
-            for s in self.analysis_results["service_boundaries"]["proposed_services"]
-            if s["type"] == "agent_service"
+            s for s in self.analysis_results["service_boundaries"]["proposed_services"] if s["type"] == "agent_service"
         ]
         if agent_services:
             phase3 = {
@@ -1077,9 +1003,7 @@ class MicroserviceArchitectureEvaluator:
 
         # Phase 4: API Services
         api_services = [
-            s
-            for s in self.analysis_results["service_boundaries"]["proposed_services"]
-            if s["type"] == "api_service"
+            s for s in self.analysis_results["service_boundaries"]["proposed_services"] if s["type"] == "api_service"
         ]
         if api_services:
             phase4 = {
@@ -1098,9 +1022,7 @@ class MicroserviceArchitectureEvaluator:
             strategy["migration_phases"].append(phase4)
 
         # Create dependency order
-        strategy["dependency_order"] = self._create_dependency_order(
-            strategy["migration_phases"]
-        )
+        strategy["dependency_order"] = self._create_dependency_order(strategy["migration_phases"])
 
         # Risk assessment
         strategy["risk_assessment"] = self._assess_migration_risks()
@@ -1111,9 +1033,7 @@ class MicroserviceArchitectureEvaluator:
         # Rollback strategy
         strategy["rollback_strategy"] = self._create_rollback_strategy()
 
-        logger.info(
-            "📋 Created %s-phase migration strategy", len(strategy["migration_phases"])
-        )
+        logger.info("📋 Created %s-phase migration strategy", len(strategy["migration_phases"]))
 
         return strategy
 
@@ -1218,9 +1138,7 @@ class MicroserviceArchitectureEvaluator:
         # Current architecture analysis
         file_stats = structure["file_statistics"]
         total_services = (
-            len(boundaries["proposed_services"])
-            + len(boundaries["shared_services"])
-            + len(boundaries["data_services"])
+            len(boundaries["proposed_services"]) + len(boundaries["shared_services"]) + len(boundaries["data_services"])
         )
 
         # Recommendations based on analysis
@@ -1249,19 +1167,13 @@ class MicroserviceArchitectureEvaluator:
                 f"✅ HIGH READINESS: Microservice readiness score {readiness}/10 - well-prepared for migration"
             )
         elif readiness >= 4:
-            recommendations.append(
-                f"🟡 MEDIUM READINESS: Score {readiness}/10 - some preparation needed"
-            )
+            recommendations.append(f"🟡 MEDIUM READINESS: Score {readiness}/10 - some preparation needed")
         else:
-            recommendations.append(
-                f"🔴 LOW READINESS: Score {readiness}/10 - significant preparation required"
-            )
+            recommendations.append(f"🔴 LOW READINESS: Score {readiness}/10 - significant preparation required")
 
         # Dependency analysis
         dependencies = self.analysis_results["dependency_analysis"]
-        high_coupling_count = len(
-            dependencies["coupling_analysis"]["high_coupling_modules"]
-        )
+        high_coupling_count = len(dependencies["coupling_analysis"]["high_coupling_modules"])
 
         if high_coupling_count > 5:
             recommendations.append(
@@ -1299,9 +1211,7 @@ class MicroserviceArchitectureEvaluator:
             json.dump(self.analysis_results, f, indent=2)
 
         # Save markdown summary
-        md_report_path = (
-            self.reports_dir / f"microservice_evaluation_summary_{timestamp}.md"
-        )
+        md_report_path = self.reports_dir / f"microservice_evaluation_summary_{timestamp}.md"
         with open(md_report_path, "w") as f:
             f.write(self._generate_markdown_report())
 
@@ -1472,9 +1382,7 @@ This analysis evaluates the AutoBot codebase for microservice architecture migra
 """
 
         coupling = dependencies["coupling_analysis"]
-        report += (
-            f"- **High Coupling Modules:** {len(coupling['high_coupling_modules'])}\n\n"
-        )
+        report += f"- **High Coupling Modules:** {len(coupling['high_coupling_modules'])}\n\n"
 
         for module in coupling["high_coupling_modules"][:5]:  # Top 5 highly coupled
             report += f"- `{module['module']}`: Fan-out({module['fan_out']}) + Fan-in({module['fan_in']}) = {module['coupling_score']}\n"
@@ -1483,9 +1391,7 @@ This analysis evaluates the AutoBot codebase for microservice architecture migra
 ### Shared Dependencies
 """
         for shared in dependencies["shared_modules"][:5]:  # Top 5 shared modules
-            report += (
-                f"- `{shared['module']}`: Used by {shared['import_count']} modules\n"
-            )
+            report += f"- `{shared['module']}`: Used by {shared['import_count']} modules\n"
 
         if dependencies["circular_dependencies"]:
             report += """
@@ -1522,9 +1428,7 @@ This analysis evaluates the AutoBot codebase for microservice architecture migra
         report += """
 ### Technology Stack
 """
-        for tech, tool in migration["implementation_plan"][
-            "tools_and_technologies"
-        ].items():
+        for tech, tool in migration["implementation_plan"]["tools_and_technologies"].items():
             report += f"- **{tech.replace('_', ' ').title()}:** {tool}\n"
 
         report += """
@@ -1578,22 +1482,16 @@ This analysis evaluates the AutoBot codebase for microservice architecture migra
 
         try:
             # Step 1: Analyze project structure
-            self.analysis_results[
-                "project_structure"
-            ] = self.analyze_project_structure()
+            self.analysis_results["project_structure"] = self.analyze_project_structure()
 
             # Step 2: Analyze dependencies
             self.analysis_results["dependency_analysis"] = self.analyze_dependencies()
 
             # Step 3: Identify service boundaries
-            self.analysis_results[
-                "service_boundaries"
-            ] = self.identify_service_boundaries()
+            self.analysis_results["service_boundaries"] = self.identify_service_boundaries()
 
             # Step 4: Create migration strategy
-            self.analysis_results[
-                "migration_strategy"
-            ] = self.create_migration_strategy()
+            self.analysis_results["migration_strategy"] = self.create_migration_strategy()
 
             # Step 5: Generate recommendations
             self.analysis_results["recommendations"] = self.generate_recommendations()
@@ -1621,19 +1519,13 @@ This analysis evaluates the AutoBot codebase for microservice architecture migra
         logger.info("=" * 70)
 
         logger.info("📊 CODEBASE ANALYSIS:")
-        logger.info(
-            f"  • Total Lines of Code: {structure['file_statistics']['total_loc']:,}"
-        )
-        logger.info(
-            f"  • Python Files: {structure['file_statistics']['python_files']:,}"
-        )
+        logger.info(f"  • Total Lines of Code: {structure['file_statistics']['total_loc']:,}")
+        logger.info(f"  • Python Files: {structure['file_statistics']['python_files']:,}")
         logger.info(
             "  • API Endpoints: %s",
             structure["key_components"]["api_endpoints"]["total_endpoints"],
         )
-        logger.info(
-            "  • AI Agents: %s", structure["key_components"]["agents"]["total_agents"]
-        )
+        logger.info("  • AI Agents: %s", structure["key_components"]["agents"]["total_agents"])
 
         logger.info("\n🎯 SERVICE BOUNDARIES:")
         logger.info("  • Proposed Services: %s", len(boundaries["proposed_services"]))
@@ -1644,10 +1536,7 @@ This analysis evaluates the AutoBot codebase for microservice architecture migra
         logger.info("  • Migration Phases: %s", len(migration["migration_phases"]))
         logger.info(
             "  • Estimated Duration: %s weeks",
-            sum(
-                phase["estimated_duration_weeks"]
-                for phase in migration["migration_phases"]
-            ),
+            sum(phase["estimated_duration_weeks"] for phase in migration["migration_phases"]),
         )
 
         logger.info("\n⚡ READINESS ASSESSMENT:")
@@ -1657,13 +1546,9 @@ This analysis evaluates the AutoBot codebase for microservice architecture migra
         if readiness >= 7:
             logger.info("  ✅ HIGH READINESS - Excellent candidate for microservices")
         elif readiness >= 4:
-            logger.info(
-                "  🟡 MEDIUM READINESS - Good candidate with some preparation needed"
-            )
+            logger.info("  🟡 MEDIUM READINESS - Good candidate with some preparation needed")
         else:
-            logger.info(
-                "  🔴 LOW READINESS - Significant refactoring required before migration"
-            )
+            logger.info("  🔴 LOW READINESS - Significant refactoring required before migration")
 
         logger.info("=" * 70)
 

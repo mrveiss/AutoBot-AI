@@ -60,9 +60,7 @@ class CancellationToken:
             except Exception as e:
                 logger.error("Error in cancellation callback: %s", e)
 
-    def add_cancellation_callback(
-        self, callback: Callable[["CancellationToken"], None]
-    ):
+    def add_cancellation_callback(self, callback: Callable[["CancellationToken"], None]):
         """Add callback to execute when cancelled"""
         self._callbacks.append(callback)
 
@@ -125,9 +123,7 @@ class ResourceMonitor:
             pass
 
             # Just check if interface can be created (no actual request)
-            self.llm_available = (
-                True  # Assume available unless circuit breaker says otherwise
-            )
+            self.llm_available = True  # Assume available unless circuit breaker says otherwise
         except Exception:
             self.llm_available = False
 
@@ -197,9 +193,7 @@ class SmartCancellationHandler:
                         )
 
                     # Cancel if LLM is unavailable and operation needs it
-                    if not resources["llm"] and (
-                        "llm" in operation_id_lower or "chat" in operation_id_lower
-                    ):
+                    if not resources["llm"] and ("llm" in operation_id_lower or "chat" in operation_id_lower):
                         token.cancel(
                             CancellationReason.RESOURCE_UNAVAILABLE,
                             "LLM service unavailable",
@@ -212,15 +206,11 @@ class SmartCancellationHandler:
                             "Knowledge base unavailable",
                         )
 
-                await asyncio.sleep(
-                    TimingConstants.STANDARD_DELAY
-                )  # Check every second
+                await asyncio.sleep(TimingConstants.STANDARD_DELAY)  # Check every second
 
             except Exception as e:
                 logger.error("Error in condition monitoring: %s", e)
-                await asyncio.sleep(
-                    TimingConstants.ERROR_RECOVERY_DELAY
-                )  # Wait longer on error
+                await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY)  # Wait longer on error
 
     async def shutdown(self):
         """Graceful shutdown - cancel all operations"""
@@ -228,9 +218,7 @@ class SmartCancellationHandler:
 
         for operation_id, token in self.active_tokens.items():
             if not token.is_cancelled:
-                token.cancel(
-                    CancellationReason.GRACEFUL_SHUTDOWN, "System shutting down"
-                )
+                token.cancel(CancellationReason.GRACEFUL_SHUTDOWN, "System shutting down")
 
         if self.monitor_task:
             self.monitor_task.cancel()
@@ -244,9 +232,7 @@ class SmartCancellationHandler:
 cancellation_handler = SmartCancellationHandler()
 
 
-async def execute_with_cancellation(
-    operation: Callable, operation_id: str, *args, **kwargs
-) -> Any:
+async def execute_with_cancellation(operation: Callable, operation_id: str, *args, **kwargs) -> Any:
     """
     Execute operation with smart cancellation instead of timeouts.
     Operations complete naturally or are cancelled due to real conditions.
@@ -258,13 +244,9 @@ async def execute_with_cancellation(
     try:
         # Execute operation with cancellation checking
         if asyncio.iscoroutinefunction(operation):
-            result = await _execute_async_with_cancellation(
-                operation, token, *args, **kwargs
-            )
+            result = await _execute_async_with_cancellation(operation, token, *args, **kwargs)
         else:
-            result = await _execute_sync_with_cancellation(
-                operation, token, *args, **kwargs
-            )
+            result = await _execute_sync_with_cancellation(operation, token, *args, **kwargs)
 
         logger.info("✅ Operation completed successfully: %s", operation_id)
         return result
@@ -282,9 +264,7 @@ async def execute_with_cancellation(
         cancellation_handler.remove_token(operation_id)
 
 
-async def _execute_async_with_cancellation(
-    operation, token: CancellationToken, *args, **kwargs
-):
+async def _execute_async_with_cancellation(operation, token: CancellationToken, *args, **kwargs):
     """Execute async operation with cancellation checks"""
 
     # Create task for the operation
@@ -311,9 +291,7 @@ async def _execute_async_with_cancellation(
     return await operation_task
 
 
-async def _execute_sync_with_cancellation(
-    operation, token: CancellationToken, *args, **kwargs
-):
+async def _execute_sync_with_cancellation(operation, token: CancellationToken, *args, **kwargs):
     """Execute sync operation with cancellation checks"""
 
     # Run in thread pool with periodic cancellation checks
@@ -355,31 +333,19 @@ async def _execute_sync_with_cancellation(
 # Convenience functions for common operations
 
 
-async def execute_llm_request_with_cancellation(
-    llm_function, operation_id: str, *args, **kwargs
-):
+async def execute_llm_request_with_cancellation(llm_function, operation_id: str, *args, **kwargs):
     """Execute LLM request with smart cancellation"""
-    return await execute_with_cancellation(
-        llm_function, f"llm_{operation_id}", *args, **kwargs
-    )
+    return await execute_with_cancellation(llm_function, f"llm_{operation_id}", *args, **kwargs)
 
 
-async def execute_kb_search_with_cancellation(
-    kb_function, operation_id: str, *args, **kwargs
-):
+async def execute_kb_search_with_cancellation(kb_function, operation_id: str, *args, **kwargs):
     """Execute knowledge base search with smart cancellation"""
-    return await execute_with_cancellation(
-        kb_function, f"knowledge_{operation_id}", *args, **kwargs
-    )
+    return await execute_with_cancellation(kb_function, f"knowledge_{operation_id}", *args, **kwargs)
 
 
-async def execute_redis_operation_with_cancellation(
-    redis_function, operation_id: str, *args, **kwargs
-):
+async def execute_redis_operation_with_cancellation(redis_function, operation_id: str, *args, **kwargs):
     """Execute Redis operation with smart cancellation"""
-    return await execute_with_cancellation(
-        redis_function, f"redis_{operation_id}", *args, **kwargs
-    )
+    return await execute_with_cancellation(redis_function, f"redis_{operation_id}", *args, **kwargs)
 
 
 # Context manager for automatic token management

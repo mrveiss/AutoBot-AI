@@ -171,9 +171,7 @@ def test_backward_compatibility(config: ConfigManager):
         category = ".".join(parts[:-1])
         timeout_type = parts[-1]
 
-        actual = config.get_timeout_for_env(
-            category, timeout_type, environment="production"
-        )
+        actual = config.get_timeout_for_env(category, timeout_type, environment="production")
 
         # For Redis get operation, production override is 0.5
         if path == "redis.operations.get":
@@ -251,15 +249,11 @@ def main():
 
         if all_passed:
             logger.info("✅ ALL VALIDATION CHECKS PASSED")
-            logger.info(
-                "\n✨ Timeout configuration is ready for Phase 2 (code migration)"
-            )
+            logger.info("\n✨ Timeout configuration is ready for Phase 2 (code migration)")
             return 0
         else:
             logger.error("❌ VALIDATION FAILED")
-            logger.warning(
-                "\n⚠️  Fix configuration issues before proceeding to Phase 2"
-            )
+            logger.warning("\n⚠️  Fix configuration issues before proceeding to Phase 2")
             return 1
 
     except Exception as e:

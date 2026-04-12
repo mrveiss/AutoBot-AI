@@ -29,9 +29,7 @@ def test_endpoint_performance(url, description, params=None):
         duration_ms = (end_time - start_time) * 1000
         status = "✅" if response.status_code == 200 else "❌"
 
-        logger.info(
-            f"{status} {description}: {duration_ms:.0f}ms (Status: {response.status_code})"
-        )
+        logger.info(f"{status} {description}: {duration_ms:.0f}ms (Status: {response.status_code})")
         return duration_ms, response.status_code == 200
 
     except Exception as e:
@@ -64,9 +62,7 @@ def _get_endpoint_list(base_url: str) -> list:
     ]
 
 
-def _log_performance_summary(
-    results: list, total_time: float, successful_tests: int, total_endpoints: int
-):
+def _log_performance_summary(results: list, total_time: float, successful_tests: int, total_endpoints: int):
     """Log sorted performance summary of test results.
 
     Helper for test_api_endpoints (#825).

@@ -283,13 +283,9 @@ async def _run_test_suite_loop(
 
     for i, test_file in enumerate(test_files):
         try:
-            test_result, test_passed = await _execute_single_test(
-                test_file, i, total_tests, passed, failed, context
-            )
+            test_result, test_passed = await _execute_single_test(test_file, i, total_tests, passed, failed, context)
             results.append(test_result)
-            passed, failed = (
-                (passed + 1, failed) if test_passed else (passed, failed + 1)
-            )
+            passed, failed = (passed + 1, failed) if test_passed else (passed, failed + 1)
             await _save_test_checkpoint_if_needed(i, results, passed, failed, context)
         except Exception as e:
             context.logger.error("Failed to run test %s: %s", test_file, e)
@@ -379,9 +375,7 @@ def _create_indexing_operation(
 
         for i, file_path in enumerate(all_files):
             try:
-                file_info = await _process_indexing_file_with_progress(
-                    file_path, i, total_files, start_time, context
-                )
+                file_info = await _process_indexing_file_with_progress(file_path, i, total_files, start_time, context)
                 results.append(file_info)
                 await _save_indexing_checkpoint_if_needed(i, results, context)
             except Exception as e:
@@ -479,14 +473,10 @@ if __name__ == "__main__":
 
         try:
             # Start codebase indexing
-            indexing_op_id = await execute_codebase_indexing(
-                str(PATH.PROJECT_ROOT / "src"), manager, ["*.py"]
-            )
+            indexing_op_id = await execute_codebase_indexing(str(PATH.PROJECT_ROOT / "src"), manager, ["*.py"])
 
             # Start test suite
-            test_op_id = await execute_comprehensive_test_suite(
-                str(PATH.TESTS_DIR), manager, ["test_*.py"]
-            )
+            test_op_id = await execute_comprehensive_test_suite(str(PATH.TESTS_DIR), manager, ["test_*.py"])
 
             # Monitor operations
             while True:
@@ -495,12 +485,10 @@ if __name__ == "__main__":
 
                 if indexing_op and test_op:
                     print(  # noqa: print
-                        f"Indexing: {indexing_op.status.value} - "
-                        f"{indexing_op.progress.progress_percent:.1f}%"
+                        f"Indexing: {indexing_op.status.value} - " f"{indexing_op.progress.progress_percent:.1f}%"
                     )
                     print(  # noqa: print
-                        f"Testing: {test_op.status.value} - "
-                        f"{test_op.progress.progress_percent:.1f}%"
+                        f"Testing: {test_op.status.value} - " f"{test_op.progress.progress_percent:.1f}%"
                     )
 
                     if indexing_op.status in (
