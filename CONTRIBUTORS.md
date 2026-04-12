@@ -1,157 +1,291 @@
 # Contributing to AutoBot
 
-Thank you for your interest in contributing to AutoBot! Community contributions are what make this project thrive.
+Thank you for your interest in contributing to AutoBot! This guide will help you find work that matches your skills and understand our contribution process.
 
 ---
 
-## 🎯 How to Find Issues to Work On
+## Welcome Contributors!
 
-AutoBot uses GitHub labels to organize issues by skill area and difficulty. Here's how to find work that matches your expertise:
+AutoBot is built by and for the community. Whether you're fixing a bug, improving documentation, adding features, or reporting issues—your contributions matter and help make AutoBot better for everyone.
 
-### For First-Time Contributors
+---
 
-Start with **good-first-issue** — these are beginner-friendly and designed as learning opportunities:
+## How to Find Issues
 
-- **All good-first-issues:** https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Agood-first-issue
+Our issues are organized by **skill category** and **difficulty level** to help you find work that matches your expertise.
 
-### By Skill Area
+### For Beginners (New to Open Source)
 
-**Frontend (Vue.js, TypeScript, UI)**
-- https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Afrontend+label%3Ahelp-wanted
+Start here! These issues are explicitly designed for learning:
 
-**Backend (FastAPI, Python, APIs, Database)**
-- https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Abackend+label%3Ahelp-wanted
+- **[Good First Issues](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Agood-first-issue)** — Self-contained tasks perfect for your first contribution
+  - Expected time: < 2 hours
+  - Usually minimal dependencies
+  - Great for learning the codebase
 
-**Infrastructure (Docker, Ansible, DevOps)**
-- https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Ainfrastructure+label%3Ahelp-wanted
+### By Skill Category
 
-**Documentation (Guides, Examples, API Docs)**
-- https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Adocs+label%3Ahelp-wanted
+Pick issues that match your expertise:
 
-**Testing (Tests, Coverage, QA)**
-- https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Atesting+label%3Ahelp-wanted
+#### 🎨 Frontend Developers
+**Stack:** Vue.js, TypeScript, CSS, Vite, component development
+
+- **[Frontend Issues](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Afrontend)**
+- **[Help Wanted: Frontend](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Afrontend+label%3Ahelp-wanted)**
+
+#### 🔧 Backend Developers
+**Stack:** FastAPI, Python, database queries, APIs, async logic
+
+- **[Backend Issues](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Abackend)**
+- **[Help Wanted: Backend](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Abackend+label%3Ahelp-wanted)**
+
+#### 🚀 Infrastructure & DevOps
+**Stack:** Docker, Ansible, deployment, CI/CD, scaling, networking
+
+- **[Infrastructure Issues](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Ainfrastructure)**
+- **[Help Wanted: Infrastructure](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Ainfrastructure+label%3Ahelp-wanted)**
+
+#### 📚 Documentation
+**Stack:** Guides, examples, tutorials, README, API docs
+
+- **[Docs Issues](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Adocs)**
+- **[Help Wanted: Docs](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Adocs+label%3Ahelp-wanted)**
+
+#### 🧪 Testing & QA
+**Stack:** Unit tests, integration tests, test coverage, testing tools
+
+- **[Testing Issues](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Atesting)**
+- **[Help Wanted: Testing](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Atesting+label%3Ahelp-wanted)**
 
 ### By Priority
 
-**High Priority Issues** (blocking other work, critical bugs)
-- https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Apriority-high
+If you want to work on what matters most right now:
+
+- **[High Priority Issues](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Apriority-high)** — Critical bugs, blocking work
+- **[Medium Priority Issues](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Apriority-medium)** — Important but non-blocking
+- **[Low Priority Issues](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Apriority-low)** — Nice-to-have improvements
 
 ---
 
-## 📚 Understanding Difficulty Levels
+## Understanding Difficulty Levels
 
-### `good-first-issue` — Beginner Friendly
-- Clear problem statement
-- Self-contained (doesn't require changes across multiple files)
-- ~1-2 hours to complete
-- Minimal architectural knowledge needed
-- Great for learning the codebase
+Each issue is labeled by complexity. Here's what each level means:
 
-### `intermediate` — Moderate Complexity
-- Requires understanding one system area
-- ~2-8 hours to complete
-- Some architectural knowledge needed
-- May span multiple files within a system
+### 🟢 Good First Issue
+- **Scope:** Self-contained, isolated to one component
+- **Time:** < 2 hours of focused work
+- **Prerequisites:** Understanding of basic concepts in one area
+- **Why it's good for beginners:** Limited scope, fewer dependencies, built to teach
+- **Example:** Add a missing button to the UI, improve error messages, fix a simple bug
 
-### `advanced` — High Complexity
-- Requires deep architecture knowledge
-- Cross-cutting changes or system-wide impact
-- ~8+ hours or more
-- May require design discussion before implementation
+### 🟡 Intermediate
+- **Scope:** Requires understanding of one system area
+- **Time:** 2-8 hours of work
+- **Prerequisites:** Knowledge of at least one major component (e.g., backend APIs, frontend architecture)
+- **Why it's good for intermediate contributors:** Not trivial, but not overwhelming
+- **Example:** Refactor API endpoints, improve frontend state management, optimize database queries
+
+### 🔴 Advanced
+- **Scope:** Cross-cutting concerns, deep architecture knowledge
+- **Time:** 8+ hours or requires discussion with maintainers
+- **Prerequisites:** Deep knowledge of multiple components or system architecture
+- **Why it's challenging:** High impact, complex interactions, may affect multiple systems
+- **Example:** Major refactors, new features affecting multiple components, complex performance optimizations
 
 ---
 
-## 🛠️ How to Contribute: Step-by-Step
+## Understanding Skill Categories
 
-### 1. Find an Issue
-Pick an issue from the links above that matches your interests and skill level.
+AutoBot's codebase spans multiple domains. Pick the area that matches your expertise:
 
-### 2. Comment "I'd Like to Work on This"
-Leave a comment on the issue claiming it. This prevents duplicate work.
+- **Frontend** — User interface, dashboard, chat experience
+- **Backend** — API logic, data processing, infrastructure automation
+- **Infrastructure** — Docker, Ansible, deployment, CI/CD pipelines
+- **Documentation** — Guides, examples, API docs, tutorials
+- **Testing** — Unit tests, integration tests, test tooling, QA
 
-Example:
-> I'd like to work on this. I have experience with Vue.js and would be happy to tackle this frontend issue.
+---
 
-### 3. Set Up Your Development Environment
-Follow the [INSTALL.md](INSTALL.md) guide for detailed setup instructions.
+## Step-by-Step: How to Contribute
 
-Quick setup:
+### 1️⃣ Find an Issue
+Browse the links above to find an issue that matches your skills and interest.
+
+### 2️⃣ Comment on the Issue
+Before starting work, comment: **"I'd like to work on this"**
+
+This prevents duplicate work and lets maintainers give you guidance.
+
+### 3️⃣ Set Up Your Development Environment
+Follow the instructions in the [README](./README.md) to get AutoBot running locally.
+
+For detailed development setup:
 ```bash
-git clone https://github.com/mrveiss/AutoBot-AI.git
+git clone https://github.com/YOUR_USERNAME/AutoBot-AI.git
 cd AutoBot-AI
 cp .env.example .env
 docker compose up -d
 ```
 
-### 4. Create a Branch
+See [INSTALL.md](./docs/INSTALL.md) for full setup details.
+
+### 4️⃣ Create a Branch
 ```bash
 git checkout -b feature/your-feature-name
-# or
-git checkout -b fix/your-bug-fix-name
 ```
 
-### 5. Make Your Changes
-- Write code following the existing patterns
-- Add tests if applicable
-- Update documentation if needed
+Use descriptive branch names:
+- `fix/issue-4000-crash-on-startup` (bug fix)
+- `feat/command-palette-search` (feature)
+- `docs/update-readme-install` (documentation)
+- `refactor/simplify-api-layer` (refactoring)
 
-### 6. Submit a Pull Request
-Push your branch and open a pull request:
+### 5️⃣ Make Your Changes
+Edit the code, write tests, update docs if needed.
+
+**Code guidelines:**
+- Keep commits focused and descriptive
+- Write tests for new features
+- Update documentation as needed
+- Follow existing code style
+
+### 6️⃣ Submit a Pull Request
+Push to your fork and open a PR against `Dev_new_gui` branch.
+
+In your PR description:
+- Reference the issue: "Closes #1234"
+- Describe what you changed and why
+- Mention any limitations or known issues
+- Include test results if applicable
+
+Example:
+```
+Closes #4000
+
+## Description
+Fixed crash on startup when knowledge base directory doesn't exist.
+
+## Testing
+- [x] Tested with missing directory
+- [x] Tested with existing directory
+- [x] Ran pytest locally (all pass)
+```
+
+### 7️⃣ Respond to Review Feedback
+Maintainers will review your work. Questions or requests for changes are normal!
+
+- Address feedback respectfully
+- Push new commits to the same branch (PR auto-updates)
+- Re-request review once changes are made
+
+### 8️⃣ Celebrate! 🎉
+Once approved, your PR will be merged. You're now a contributor to AutoBot!
+
+---
+
+## Code of Conduct
+
+We're committed to fostering an inclusive and respectful community:
+
+- **Be respectful** — Treat all contributors with kindness
+- **Be constructive** — Provide thoughtful feedback
+- **Be collaborative** — We're all learning and growing together
+- **No harassment** — Zero tolerance for discrimination or harassment of any kind
+- **Focus on code** — Critique ideas and code, not people
+
+See [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) for more details.
+
+---
+
+## Getting Help
+
+Stuck? Have questions? Need guidance?
+
+### 💬 GitHub Discussions
+Ask questions, share ideas, and get feedback from the community:
+- [GitHub Discussions](https://github.com/mrveiss/AutoBot-AI/discussions)
+
+### 📖 Documentation
+- [README](./README.md) — Overview and quick start
+- [Installation Guide](./docs/INSTALL.md) — Detailed setup instructions
+- [Architecture Docs](./docs/architecture/) — System design and component overview
+
+### 🐛 Issues
+If something is broken:
+- [Open an issue](https://github.com/mrveiss/AutoBot-AI/issues/new/choose) with details
+- Check if someone already reported it (search existing issues first)
+
+### 💰 Bounties
+
+Some issues are marked with a **`bounty`** label. These issues have financial rewards available through our bounty program.
+
+- Check the issue for details on the bounty amount
+- Visit [Polar.sh](https://polar.sh/mrveiss/AutoBot-AI) for the full bounty program
+- Bounties are available to community members who complete the work
+
+---
+
+## Developer Tips
+
+### Running Tests
 ```bash
-git push origin feature/your-feature-name
+# Run all tests
+make test
+
+# Run specific test file
+pytest autobot-backend/tests/test_chat.py
+
+# Run with coverage
+pytest --cov
 ```
 
-Then visit GitHub and create a PR. Include:
-- Clear description of what you changed
-- Link to the issue you're fixing
-- How you tested your changes
+### Building the Project
+```bash
+# Development mode (live reload)
+make dev
 
-### 7. Respond to Review Feedback
-A maintainer will review your PR and may request changes. Respond to feedback and keep the conversation going until the PR is merged.
+# Production build
+make build
+```
 
----
+### Code Style
+- **Python:** Black + isort (configured in `.pre-commit-config.yaml`)
+- **TypeScript/Vue:** ESLint + Prettier (auto-format on save in most IDEs)
+- **Commit messages:** Use conventional commits (`feat:`, `fix:`, `docs:`, etc.)
 
-## 🤝 Code of Conduct
+### Pre-commit Hooks
+Before committing, pre-commit hooks will automatically format code and run checks:
+```bash
+# Install pre-commit hooks
+pre-commit install
 
-We are committed to providing a welcoming and inclusive environment. Please see our [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for details.
-
----
-
-## ❓ Getting Help
-
-### Questions About an Issue?
-Leave a comment on the issue — the maintainers and community are here to help.
-
-### General Questions About AutoBot?
-Start a discussion: https://github.com/mrveiss/AutoBot-AI/discussions
-
-### Need Help Setting Up?
-Check [INSTALL.md](INSTALL.md) or open a discussion with your question.
+# Run hooks manually
+pre-commit run --all-files
+```
 
 ---
 
-## 📖 Documentation
+## Getting Recognition
 
-- **[README.md](README.md)** — Project overview and quick start
-- **[INSTALL.md](INSTALL.md)** — Detailed installation guide
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** — Contribution guidelines
-- **[docs/](docs/)** — Full documentation and architecture guides
+Contributors are recognized in multiple ways:
 
----
-
-## Thank You!
-
-Your contributions — whether code, docs, bug reports, or ideas — help make AutoBot better for everyone. We appreciate you! 🙏
+1. **GitHub profile** — Visible on the repository's contributors page
+2. **Commit history** — Your commits are part of AutoBot's permanent record
+3. **Community spotlights** — Active contributors may be featured in our discussions/announcements
+4. **Maintainer roles** — Significant, consistent contributors may become maintainers
 
 ---
 
-## Next Steps
+## Questions?
 
-Ready to contribute?
+- Check [GitHub Discussions](https://github.com/mrveiss/AutoBot-AI/discussions) for common questions
+- Open an [issue](https://github.com/mrveiss/AutoBot-AI/issues) if you find a bug
+- Comment on an issue if you need clarification
 
-1. **Pick an issue** from one of the links above
-2. **Comment that you're working on it**
-3. **Follow the step-by-step guide** above
-4. **Submit a PR** with your changes
+---
 
-We're excited to work with you!
+## Thank You! 🙏
+
+Whether it's code, documentation, bug reports, or feedback—your contributions make AutoBot better. Thank you for being part of our community!
+
+**Happy contributing!**
