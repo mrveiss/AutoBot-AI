@@ -409,6 +409,7 @@ code_deployment() {
     # Copy code from code_source to service directories where Ansible expects them
     info "Distributing code to service directories..."
     local dirs_to_copy=(
+        "autobot-slm-agent"
         "autobot-slm-backend"
         "autobot-slm-frontend"
         "autobot_shared"
