@@ -49,7 +49,8 @@
       "fetchError": "Nevar izveidot savienojumu ar serveri. Lūdzu, pēc brīža mēģiniet vēlreiz.",
       "dataError": "Dažu datu trūkst vai tie ir bojāti. Pārlādēšana var palīdzēt.",
       "chunkLoadError": "Atklāts lietojumprogrammas atjauninājums. Lūdzu, atkārtoti ielādējiet lapu, lai iegūtu jaunāko versiju.",
-      "resizeObserverError": "Nepieciešama displeja atsvaidzināšana. Šī kļūda parasti ir nekaitīga."
+      "resizeObserverError": "Nepieciešama displeja atsvaidzināšana. Šī kļūda parasti ir nekaitīga.",
+      "component": "Component error"
     },
     "permissionDenied": {
       "title": "Piekļuve liegta",
@@ -58,7 +59,8 @@
       "yourRole": "Jūsu loma:",
       "goBack": "Iet atpakaļ",
       "goToHome": "Dodieties uz sākumlapu",
-      "contactAdmin": "Ja uzskatāt, ka jums ir jābūt piekļuvei, lūdzu, sazinieties ar savu administratoru."
+      "contactAdmin": "Ja uzskatāt, ka jums ir jābūt piekļuvei, lūdzu, sazinieties ar savu administratoru.",
+      "goHome": "Go to Home"
     },
     "welcome": {
       "message": "Laipni lūdzam pakalpojumā AutoBot."
@@ -74,7 +76,10 @@
       "days": "pirms {n} d.",
       "hours": "pirms {n} st.",
       "minutes": "pirms {n} min."
-    }
+    },
+    "page": "Page",
+    "hasMore": "Load more",
+    "previous": "Previous"
   },
   "chat": {
     "sendMessage": "Nosūtīt ziņu...",
@@ -580,7 +585,55 @@
     "languageSelect": "Interfeisa valoda",
     "languageHint": "Izvēlieties vēlamo valodu. Ja būs pieejami tulkojumi, saskarne tiks nekavējoties pārslēgta. AI atbildēs arī tiks izmantota šī valoda.",
     "languageChanged": "Valoda ir veiksmīgi atjaunināta",
-    "languageChangeFailed": "Neizdevās atjaunināt valodu"
+    "languageChangeFailed": "Neizdevās atjaunināt valodu",
+    "webResearch": {
+      "maxResultsHint": "Maximum number of search results to retrieve (1–50)",
+      "title": "Web Research",
+      "methodLabel": "Search method",
+      "confirmationLabel": "Require confirmation",
+      "rateLimitRequests": "Requests",
+      "timeoutLabel": "Timeout (seconds)",
+      "enabledLabel": "Enable web research",
+      "methodBasic": "Basic",
+      "thresholdLabel": "Auto-research threshold",
+      "methodAdvanced": "Advanced",
+      "desc": "Configure automated web research behaviour and privacy settings",
+      "rateLimitLabel": "Rate limiting",
+      "methodHint": "Choose how web searches are performed",
+      "maxResultsLabel": "Max results",
+      "confirmationHint": "Ask before performing a web search on your behalf",
+      "methodApiBased": "API-based",
+      "storeInKbHint": "Save research results to the knowledge base",
+      "filterAdultHint": "Filter adult content from search results",
+      "enabledHint": "Allow AutoBot to search the web when answering questions",
+      "privacyLabel": "Privacy & storage",
+      "anonymizeHint": "Anonymize requests before sending to search engines",
+      "timeoutHint": "Maximum time to wait for search results (5–120 s)",
+      "rateLimitWindow": "Window (s)",
+      "thresholdHint": "Confidence level below which AutoBot triggers an automatic search",
+      "rateLimitHint": "Limit how many requests are sent in a given time window"
+    },
+    "apiKeys": {
+      "enterKey": "Enter API key...",
+      "stepSummary": "Summary",
+      "next": "Next",
+      "configureKeysDescription": "Configure required API keys below. Click the license link to accept any required model agreements.",
+      "noKeysRequired": "No API keys are required for the selected roles.",
+      "back": "Back",
+      "statusReady": "Ready",
+      "manageInSecrets": "Manage all secrets in Settings",
+      "required": "Required",
+      "save": "Save Keys",
+      "acceptLicense": "Accept license / Get key",
+      "stepRoles": "Roles",
+      "optional": "Optional",
+      "wizardTitle": "API Key Setup",
+      "statusMissing": "Missing",
+      "summaryDescription": "Review your API key configuration before saving.",
+      "statusSkipped": "Skipped (optional)",
+      "stepKeys": "API Keys",
+      "selectRolesDescription": "Select the roles deployed on your nodes to see which API keys are needed."
+    }
   },
   "voice": {
     "title": "Balss",
@@ -1086,6 +1139,13 @@
         "indexed": "Indeksēts",
         "neverIndexed": "Nekad nav indeksēts",
         "subtitle": "Izvēlieties projektu, lai skatītu analītiku"
+      },
+      "tabs": {
+        "overview": "Overview",
+        "codeReview": "Code Review",
+        "evolution": "Evolution",
+        "codeGeneration": "Code Generation",
+        "codeQuality": "Code Quality"
       }
     },
     "patterns": {
@@ -1229,7 +1289,11 @@
       "suggestions": "Suggestions",
       "issuesFound": "Issues Found",
       "analysisHistory": "Analysis History",
-      "noPreviousScan": "No previous scan available"
+      "noPreviousScan": "No previous scan available",
+      "redisScore": "Redis Usage Score",
+      "securityScore": "Security Score",
+      "performanceScore": "Performance Score",
+      "scoreNotAvailable": "Not available in this view — see Codebase Analytics"
     },
     "evolution": {
       "title": "Code Evolution",
@@ -1375,13 +1439,7 @@
       "syncing": "Syncing...",
       "syncNow": "Sync Now",
       "edit": "Edit",
-      "share": {
-        "userIds": "User IDs",
-        "userIdsHint": "one per line or comma-separated",
-        "userIdsHelp": "Enter user IDs separated by commas or new lines.",
-        "currentlySharedWith": "Currently shared with",
-        "updateAccess": "Update Access"
-      },
+      "share": "Share",
       "deleteTitle": "Delete",
       "indexingRunning": "Indexing running",
       "removeFromQueue": "Remove from queue",
@@ -1793,7 +1851,9 @@
       "medium": "Medium",
       "low": "Low",
       "showingOf": "Showing {shown} of {total}",
-      "emptyMessage": "No problems detected"
+      "emptyMessage": "No problems detected",
+      "exportMarkdown": "Export Markdown",
+      "exportJson": "Export JSON"
     },
     "indexing": {
       "inProgress": "Indexing In Progress",
@@ -2621,7 +2681,8 @@
         "noResults": "Nav atrasta neviena entītīja, kas atbilst jūsu meklējumam",
         "sourcesCount": "{count} avoti"
       },
-      "noEntities3D": "Nav entītiju, ko parādīt"
+      "noEntities3D": "Nav entītiju, ko parādīt",
+      "loading3dVisualization": "Loading3d visualization"
     },
     "connectors": {
       "title": "Avotu savienotāji",
@@ -3024,7 +3085,10 @@
       "deleteSelectedAria": "Dzēst atlasītos elementus",
       "compileChatAria": "Kompilēt sarunu zināšanu bāzē",
       "applyDecisionsAria": "Piemērot lēmumus",
-      "cancelAria": "Atcelt"
+      "cancelAria": "Atcelt",
+      "toKbCount": "To kb count",
+      "toDeleteCount": "To delete count",
+      "temporaryCount": "Temporary count"
     },
     "systemKnowledge": {
       "vectorizeTooltip": "Ģenerēt vektoru iegulšanas visiem zināšanu bāzes ierakstiem, lai iespējotu semantisko meklēšanu",
@@ -3058,6 +3122,30 @@
       "noneEligibleTooltip": "Visi izvēlētie dokumenti jau ir vektorizēti vai gaida",
       "clearSelection": "Notīrīt",
       "clearSelectionTitle": "Notīrīt izvēli"
+    },
+    "treeNode": {
+      "itemsCount": "Items count",
+      "unvectorized": "Unvectorized",
+      "vectorizeFolderTitle": "Vectorize folder title"
+    },
+    "share": {
+      "searching": "Searching...",
+      "noResults": "No results found",
+      "title": "Share \"{name}\"",
+      "searchError": "Search failed",
+      "searchUnavailable": "Search unavailable"
+    },
+    "memoryOrphan": {
+      "entitiesToClean": "Entities to clean",
+      "moreOrphans": "More orphans"
+    },
+    "verification": {
+      "pageInfo": "Page info",
+      "selectedCount": "Selected count"
+    },
+    "sessionOrphan": {
+      "moreOrphans": "More orphans",
+      "factsToClean": "Facts to clean"
     }
   },
   "workflow": {
@@ -3160,7 +3248,24 @@
       "sectionDescHistory": "View past workflow executions and results",
       "sectionDescOrchestration": "Visualize multi-agent orchestration chains",
       "sectionDescAgents": "View agent capabilities and performance metrics",
-      "sectionDescGuiAutomation": "Detect and execute GUI automation opportunities from screen capture"
+      "sectionDescGuiAutomation": "Detect and execute GUI automation opportunities from screen capture",
+      "sectionDescScreenAnalysis": "Capture and analyze screen content",
+      "sectionTitleVideoProcessing": "Video Processing",
+      "liveDashboardAriaLabel": "View live workflow execution dashboard",
+      "sectionDescLiveDashboard": "Real-time workflow execution monitoring with agent observability",
+      "sectionTitleLiveDashboard": "Live Execution Dashboard",
+      "mediaGallery": "Media Gallery",
+      "sectionTitleMediaGallery": "Media Gallery",
+      "sectionTitleScreenAnalysis": "Screen Analysis",
+      "liveDashboard": "Live Dashboard",
+      "sectionDescMediaGallery": "Browse captured media and analysis results",
+      "videoProcessing": "Video Processing",
+      "mediaGalleryAriaLabel": "Media Gallery - browse captured media",
+      "videoProcessingAriaLabel": "Video Processing - process and analyze video frames",
+      "screenAnalysisAriaLabel": "Screen Analysis - capture and analyze screen content",
+      "sectionDescVideoProcessing": "Process and analyze video frames",
+      "screenAnalysis": "Screen Analysis",
+      "vision": "VISION"
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -3256,7 +3361,15 @@
       "stepLabel": "Step",
       "conditionLabel": "Condition",
       "parallelLabel": "Parallel",
-      "clearConfirm": "Clear all nodes?"
+      "clearConfirm": "Clear all nodes?",
+      "visionCapture": "Screen Capture",
+      "visionTypeText": "Type Text",
+      "addVisionNode": "Add vision automation node",
+      "visionOcr": "OCR Extract",
+      "visionWait": "Wait for Element",
+      "visionClick": "Click Element",
+      "vision": "Vision",
+      "visionFindElement": "Find Element"
     },
     "editStep": {
       "title": "Edit Step {step}",
@@ -3342,6 +3455,78 @@
       "addStepAriaLabel": "Add step",
       "cancel": "Cancel",
       "cancelAriaLabel": "Cancel"
+    },
+    "phaseProgression": {
+      "retry": "Retry",
+      "unknownPhase": "Unknown Phase",
+      "readyTitle": "Phase Validation Ready",
+      "readyHint": "Click \"Load Validation Data\" above to fetch phase status from the validation dashboard.",
+      "loadData": "Load Validation Data",
+      "errorTitle": "Phase validation temporarily unavailable",
+      "capabilities": "Capabilities",
+      "systemMaturity": "System Maturity",
+      "loading": "Loading...",
+      "errorBody": "The validation system is currently not accessible, but the application continues to work normally.",
+      "title": "System Phase Status"
+    },
+    "notifications": {
+      "channelMapping": "Event-to-Channel Routing",
+      "eventStepFailed": "Step Failed",
+      "eventRouting": "Event Routing",
+      "channelEmail": "Email",
+      "channelMappingHint": "Select which channels receive notifications for each event type.",
+      "chooseWorkflow": "-- Select a workflow --",
+      "emailRecipients": "Email Recipients",
+      "eventCompleted": "Workflow Completed",
+      "eventRoutingHint": "Choose which channels receive each event type",
+      "sectionTitle": "Notification Settings",
+      "enableNotifications": "Enable notifications for this workflow",
+      "saved": "Saved successfully",
+      "slackWebhook": "Slack Webhook URL",
+      "loading": "Loading configuration...",
+      "selectWorkflow": "Workflow",
+      "title": "Notification Settings",
+      "eventFailed": "Workflow Failed",
+      "saving": "Saving...",
+      "channelInApp": "In-App",
+      "slackWebhookUrl": "Slack Webhook URL",
+      "webhookUrl": "Webhook URL",
+      "sidebarLabel": "Notifications",
+      "emailPlaceholder": "Enter email and press Enter",
+      "save": "Save",
+      "eventApprovalNeeded": "Approval Needed",
+      "channelSlack": "Slack",
+      "emailHint": "Comma-separated email addresses",
+      "channelWebhook": "Webhook",
+      "sectionDesc": "Configure per-workflow notification routing"
+    },
+    "liveDashboard": {
+      "activeExecutions": "Active Executions",
+      "noActiveWorkflows": "No Active Workflows",
+      "loading": "Loading workflows...",
+      "cancelled": "Cancelled",
+      "noActiveDescription": "Start a workflow to see live execution progress here.",
+      "reconnect": "Reconnect",
+      "failed": "Failed",
+      "connectionLive": "Live",
+      "pending": "Pending",
+      "completedRecent": "Completed",
+      "paused": "Paused",
+      "connectionConnecting": "Connecting...",
+      "running": "Running",
+      "stepOf": "Step {current} of {total}",
+      "stepN": "Step {n}",
+      "connectionDisconnected": "Disconnected"
+    },
+    "agentObservability": {
+      "tasksCompleted": "{count} tasks completed",
+      "failed": "Failed",
+      "avgTime": "Avg Time",
+      "title": "Agent Observability",
+      "noAgentsDescription": "Agent performance metrics will appear once workflows are executed.",
+      "loading": "Loading agent metrics...",
+      "noAgents": "No Agent Data",
+      "success": "Success"
     }
   },
   "agent": {
@@ -3365,6 +3550,50 @@
       "defaultModel": "noklusējuma",
       "moreCount": "+{count} vēl",
       "summaryStats": "{backend} aizmugures • {specialized} specializētie aģenti"
+    },
+    "settings": {
+      "retry": {
+        "delayHint": "Delay between retry attempts (100-30000)",
+        "delayLabel": "Retry Delay",
+        "attemptsLabel": "Retry Attempts",
+        "title": "Retry",
+        "attemptsHint": "Number of retry attempts on failure (0-10)"
+      },
+      "saveSuccess": "Agent settings saved successfully.",
+      "save": "Save Settings",
+      "concurrency": {
+        "title": "Concurrency",
+        "maxAgents": "Max Concurrent Agents",
+        "maxAgentsHint": "Number of agents that can run simultaneously (1-20)"
+      },
+      "memory": {
+        "title": "Memory",
+        "enableHint": "Allow agents to retain context across invocations",
+        "enableLabel": "Enable Agent Memory"
+      },
+      "execution": {
+        "priorityLabel": "Priority Queue",
+        "priorityHint": "Use priority-based task scheduling for agents",
+        "title": "Execution",
+        "parallelHint": "Allow multiple agents to execute tasks in parallel",
+        "parallelLabel": "Parallel Execution"
+      },
+      "logging": {
+        "levelHint": "Controls verbosity of agent log output",
+        "levelLabel": "Log Level",
+        "title": "Logging"
+      },
+      "timeouts": {
+        "title": "Timeouts",
+        "agentTimeoutHint": "Maximum time an agent can run before being terminated (30-3600)",
+        "seconds": "seconds",
+        "agentTimeout": "Agent Timeout"
+      },
+      "unsavedChanges": "You have unsaved changes",
+      "loading": "Loading settings...",
+      "resetDefaults": "Reset to Defaults",
+      "saving": "Saving...",
+      "tabTitle": "Settings"
     }
   },
   "errors": {
@@ -3539,7 +3768,21 @@
       "statusConnecting": "Connecting...",
       "statusDisconnected": "Disconnected",
       "statusError": "Error",
-      "statusUnknown": "Unknown"
+      "statusUnknown": "Unknown",
+      "stepProgress": "Step {current} of {total}",
+      "noStepData": "No step data available."
+    },
+    "modal": {
+      "editCommandEmpty": "Command cannot be empty.",
+      "editedBadge": "Edited",
+      "executeAll": "Execute All Remaining",
+      "editCommandPlaceholder": "Enter the command to execute...",
+      "editReset": "Reset to original",
+      "editCommandAriaLabel": "Edit this step command",
+      "editCommandLabel": "Edit command",
+      "editCommand": "Edit",
+      "editCancel": "Cancel",
+      "editSave": "Save"
     }
   },
   "llm": {
@@ -3789,7 +4032,9 @@
       "sections": {
         "imports": "Imports",
         "importedBy": "Imported By"
-      }
+      },
+      "loadingVisualization": "Loading visualization...",
+      "retry": "Retry"
     },
     "moduleImports": {
       "title": "Modules with Most Imports",
@@ -4926,6 +5171,42 @@
       "clearAll": "Notīrīt visu",
       "sharedBy": "Dalījies",
       "revokedBy": "Atsaukts no"
+    },
+    "invite": {
+      "permissionLevel": "Permission level",
+      "searchPlaceholder": "Search by name or email...",
+      "alreadyInSession": "Already in session",
+      "available": "Available",
+      "searchUsers": "Search users",
+      "sendInvitation": "Send invitation",
+      "closeDialog": "Close dialog",
+      "noUsersFound": "No users found",
+      "title": "Invite Collaborators",
+      "inSession": "In session",
+      "sending": "Sending..."
+    },
+    "participants": {
+      "you": "You",
+      "loadingRoles": "Loading roles...",
+      "invite": "Invite",
+      "collaborationOffline": "Collaboration offline",
+      "inviteParticipant": "Invite participant",
+      "remove": "Remove",
+      "noParticipants": "No participants yet",
+      "inviteToCollaborate": "Invite to collaborate",
+      "changeRoleFor": "Change role for",
+      "loading": "Loading participants...",
+      "title": "Participants"
+    },
+    "presence": {
+      "tabLabel": "Active tab",
+      "unknownTab": "Unknown tab",
+      "you": "You",
+      "noParticipants": "No participants",
+      "participants": "Participants",
+      "offline": "Offline",
+      "collaboratorTooltip": "Collaborator",
+      "youStatus": "Your status"
     }
   },
   "research": {
@@ -5001,7 +5282,11 @@
       "noEntriesHint": "Noslēpumu lietojums tiks reģistrēts šeit",
       "justNow": "tikko",
       "minutesAgo": "pirms {minutes} min.",
-      "hoursAgo": "pirms {hours} st."
+      "hoursAgo": "pirms {hours} st.",
+      "create": "Create",
+      "delete": "Delete",
+      "read": "Read",
+      "update": "Update"
     },
     "vault": {
       "title": "Noslēpumu glabātuve",
@@ -5030,7 +5315,9 @@
       "revokeConfirm": "Vai tiešām vēlaties atsaukt piekļuvi šim noslēpumam?",
       "noSecrets": "Nav atrastu noslēpumu",
       "noSecretsSearch": "Pamēģiniet citu meklēšanu",
-      "noSecretsHint": "Pievienojiet noslēpumu, lai sāktu"
+      "noSecretsHint": "Pievienojiet noslēpumu, lai sāktu",
+      "deleteBtn": "Delete",
+      "loading": "Loading..."
     },
     "share": {
       "title": "Dalīties ar noslēpumu",
@@ -6109,7 +6396,14 @@
     "devSpeedup": "Dev Tools",
     "desktop": "Desktop",
     "customDashboard": "Custom Dashboard",
-    "agentRegistry": "Agents"
+    "agentRegistry": "Agents",
+    "switchLanguage": "Switch language",
+    "openMainMenu": "Open main menu",
+    "skipToContent": "Skip to content",
+    "services": "Services",
+    "skipToNavigation": "Skip to navigation",
+    "profile": "Profile",
+    "systemStatus": "System Status"
   },
   "reasoningTrace": {
     "title": "Reasoning trace",

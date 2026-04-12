@@ -49,7 +49,8 @@
       "fetchError": "No se puede conectar con el servidor. Inténtelo de nuevo en un momento.",
       "dataError": "Algunos datos faltan o están dañados. Recargar puede ayudar.",
       "chunkLoadError": "Actualización de la aplicación detectada. Vuelva a cargar la página para obtener la última versión.",
-      "resizeObserverError": "Se necesita actualización de pantalla. Este error suele ser inofensivo."
+      "resizeObserverError": "Se necesita actualización de pantalla. Este error suele ser inofensivo.",
+      "component": "Component error"
     },
     "permissionDenied": {
       "title": "Acceso denegado",
@@ -58,7 +59,8 @@
       "yourRole": "Tu papel:",
       "goBack": "Volver",
       "goToHome": "Ir a casa",
-      "contactAdmin": "Si cree que debería tener acceso, comuníquese con su administrador."
+      "contactAdmin": "Si cree que debería tener acceso, comuníquese con su administrador.",
+      "goHome": "Go to Home"
     },
     "welcome": {
       "message": "Bienvenido a AutoBot."
@@ -74,7 +76,10 @@
       "days": "hace {n} d",
       "hours": "hace {n} h",
       "minutes": "hace {n} min"
-    }
+    },
+    "page": "Page",
+    "hasMore": "Load more",
+    "previous": "Previous"
   },
   "chat": {
     "sendMessage": "Enviar un mensaje...",
@@ -580,7 +585,55 @@
     "languageSelect": "Idioma de la interfaz",
     "languageHint": "Seleccione su idioma preferido. La interfaz cambiará inmediatamente si hay traducciones disponibles. Las respuestas de la IA también utilizarán este lenguaje.",
     "languageChanged": "Idioma actualizado exitosamente",
-    "languageChangeFailed": "No se pudo actualizar el idioma"
+    "languageChangeFailed": "No se pudo actualizar el idioma",
+    "webResearch": {
+      "maxResultsHint": "Maximum number of search results to retrieve (1–50)",
+      "title": "Web Research",
+      "methodLabel": "Search method",
+      "confirmationLabel": "Require confirmation",
+      "rateLimitRequests": "Requests",
+      "timeoutLabel": "Timeout (seconds)",
+      "enabledLabel": "Enable web research",
+      "methodBasic": "Basic",
+      "thresholdLabel": "Auto-research threshold",
+      "methodAdvanced": "Advanced",
+      "desc": "Configure automated web research behaviour and privacy settings",
+      "rateLimitLabel": "Rate limiting",
+      "methodHint": "Choose how web searches are performed",
+      "maxResultsLabel": "Max results",
+      "confirmationHint": "Ask before performing a web search on your behalf",
+      "methodApiBased": "API-based",
+      "storeInKbHint": "Save research results to the knowledge base",
+      "filterAdultHint": "Filter adult content from search results",
+      "enabledHint": "Allow AutoBot to search the web when answering questions",
+      "privacyLabel": "Privacy & storage",
+      "anonymizeHint": "Anonymize requests before sending to search engines",
+      "timeoutHint": "Maximum time to wait for search results (5–120 s)",
+      "rateLimitWindow": "Window (s)",
+      "thresholdHint": "Confidence level below which AutoBot triggers an automatic search",
+      "rateLimitHint": "Limit how many requests are sent in a given time window"
+    },
+    "apiKeys": {
+      "enterKey": "Enter API key...",
+      "stepSummary": "Summary",
+      "next": "Next",
+      "configureKeysDescription": "Configure required API keys below. Click the license link to accept any required model agreements.",
+      "noKeysRequired": "No API keys are required for the selected roles.",
+      "back": "Back",
+      "statusReady": "Ready",
+      "manageInSecrets": "Manage all secrets in Settings",
+      "required": "Required",
+      "save": "Save Keys",
+      "acceptLicense": "Accept license / Get key",
+      "stepRoles": "Roles",
+      "optional": "Optional",
+      "wizardTitle": "API Key Setup",
+      "statusMissing": "Missing",
+      "summaryDescription": "Review your API key configuration before saving.",
+      "statusSkipped": "Skipped (optional)",
+      "stepKeys": "API Keys",
+      "selectRolesDescription": "Select the roles deployed on your nodes to see which API keys are needed."
+    }
   },
   "voice": {
     "title": "Voz",
@@ -1086,6 +1139,13 @@
       "empty": {
         "title": "Sin resultados de análisis",
         "description": "Este proyecto aún no ha sido indexado. Haz clic abajo para iniciar la indexación."
+      },
+      "tabs": {
+        "overview": "Overview",
+        "codeReview": "Code Review",
+        "evolution": "Evolution",
+        "codeGeneration": "Code Generation",
+        "codeQuality": "Code Quality"
       }
     },
     "patterns": {
@@ -1229,7 +1289,11 @@
       "suggestions": "Sugerencias",
       "issuesFound": "Problemas encontrados",
       "analysisHistory": "Historial de análisis",
-      "noPreviousScan": "No previous scan available"
+      "noPreviousScan": "No previous scan available",
+      "redisScore": "Redis Usage Score",
+      "securityScore": "Security Score",
+      "performanceScore": "Performance Score",
+      "scoreNotAvailable": "Not available in this view — see Codebase Analytics"
     },
     "evolution": {
       "title": "Evolución del código",
@@ -1375,13 +1439,7 @@
       "syncing": "Sincronizando...",
       "syncNow": "Sincronizar ahora",
       "edit": "Editar",
-      "share": {
-        "userIds": "User IDs",
-        "userIdsHint": "one per line or comma-separated",
-        "userIdsHelp": "Enter user IDs separated by commas or new lines.",
-        "currentlySharedWith": "Currently shared with",
-        "updateAccess": "Update Access"
-      },
+      "share": "Share",
       "deleteTitle": "Eliminar fuente",
       "indexingRunning": "Indexación en curso",
       "removeFromQueue": "Quitar de la cola",
@@ -1793,7 +1851,9 @@
       "medium": "Medio",
       "low": "Bajo",
       "showingOf": "Mostrando {shown} de {total}",
-      "emptyMessage": "No se encontraron problemas"
+      "emptyMessage": "No se encontraron problemas",
+      "exportMarkdown": "Export Markdown",
+      "exportJson": "Export JSON"
     },
     "indexing": {
       "inProgress": "Indexación en curso",
@@ -2621,7 +2681,8 @@
         "noResults": "No se encontraron entidades que coincidan con su búsqueda",
         "sourcesCount": "{count} fuentes"
       },
-      "noEntities3D": "No hay entidades para mostrar"
+      "noEntities3D": "No hay entidades para mostrar",
+      "loading3dVisualization": "Loading3d visualization"
     },
     "connectors": {
       "title": "Conectores de fuentes",
@@ -3024,7 +3085,10 @@
       "deleteSelectedAria": "Delete selected items",
       "compileChatAria": "Compile chat to knowledge base",
       "applyDecisionsAria": "Apply decisions",
-      "cancelAria": "Cancel"
+      "cancelAria": "Cancel",
+      "toKbCount": "To kb count",
+      "toDeleteCount": "To delete count",
+      "temporaryCount": "Temporary count"
     },
     "systemKnowledge": {
       "vectorizeTooltip": "Generate vector embeddings for all knowledge base entries to enable semantic search",
@@ -3058,6 +3122,30 @@
       "noneEligibleTooltip": "Todos los documentos seleccionados ya están vectorizados o pendientes",
       "clearSelection": "Limpiar",
       "clearSelectionTitle": "Limpiar selección"
+    },
+    "treeNode": {
+      "itemsCount": "Items count",
+      "unvectorized": "Unvectorized",
+      "vectorizeFolderTitle": "Vectorize folder title"
+    },
+    "share": {
+      "searching": "Searching...",
+      "noResults": "No results found",
+      "title": "Share \"{name}\"",
+      "searchError": "Search failed",
+      "searchUnavailable": "Search unavailable"
+    },
+    "memoryOrphan": {
+      "entitiesToClean": "Entities to clean",
+      "moreOrphans": "More orphans"
+    },
+    "verification": {
+      "pageInfo": "Page info",
+      "selectedCount": "Selected count"
+    },
+    "sessionOrphan": {
+      "moreOrphans": "More orphans",
+      "factsToClean": "Facts to clean"
     }
   },
   "workflow": {
@@ -3160,7 +3248,24 @@
       "sectionDescHistory": "View past workflow executions and results",
       "sectionDescOrchestration": "Visualize multi-agent orchestration chains",
       "sectionDescAgents": "View agent capabilities and performance metrics",
-      "sectionDescGuiAutomation": "Detect and execute GUI automation opportunities from screen capture"
+      "sectionDescGuiAutomation": "Detect and execute GUI automation opportunities from screen capture",
+      "sectionDescScreenAnalysis": "Capture and analyze screen content",
+      "sectionTitleVideoProcessing": "Video Processing",
+      "liveDashboardAriaLabel": "View live workflow execution dashboard",
+      "sectionDescLiveDashboard": "Real-time workflow execution monitoring with agent observability",
+      "sectionTitleLiveDashboard": "Live Execution Dashboard",
+      "mediaGallery": "Media Gallery",
+      "sectionTitleMediaGallery": "Media Gallery",
+      "sectionTitleScreenAnalysis": "Screen Analysis",
+      "liveDashboard": "Live Dashboard",
+      "sectionDescMediaGallery": "Browse captured media and analysis results",
+      "videoProcessing": "Video Processing",
+      "mediaGalleryAriaLabel": "Media Gallery - browse captured media",
+      "videoProcessingAriaLabel": "Video Processing - process and analyze video frames",
+      "screenAnalysisAriaLabel": "Screen Analysis - capture and analyze screen content",
+      "sectionDescVideoProcessing": "Process and analyze video frames",
+      "screenAnalysis": "Screen Analysis",
+      "vision": "VISION"
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -3256,7 +3361,15 @@
       "stepLabel": "Step",
       "conditionLabel": "Condition",
       "parallelLabel": "Parallel",
-      "clearConfirm": "Clear all nodes?"
+      "clearConfirm": "Clear all nodes?",
+      "visionCapture": "Screen Capture",
+      "visionTypeText": "Type Text",
+      "addVisionNode": "Add vision automation node",
+      "visionOcr": "OCR Extract",
+      "visionWait": "Wait for Element",
+      "visionClick": "Click Element",
+      "vision": "Vision",
+      "visionFindElement": "Find Element"
     },
     "editStep": {
       "title": "Edit Step {step}",
@@ -3342,6 +3455,78 @@
       "addStepAriaLabel": "Add step",
       "cancel": "Cancel",
       "cancelAriaLabel": "Cancel"
+    },
+    "phaseProgression": {
+      "retry": "Retry",
+      "unknownPhase": "Unknown Phase",
+      "readyTitle": "Phase Validation Ready",
+      "readyHint": "Click \"Load Validation Data\" above to fetch phase status from the validation dashboard.",
+      "loadData": "Load Validation Data",
+      "errorTitle": "Phase validation temporarily unavailable",
+      "capabilities": "Capabilities",
+      "systemMaturity": "System Maturity",
+      "loading": "Loading...",
+      "errorBody": "The validation system is currently not accessible, but the application continues to work normally.",
+      "title": "System Phase Status"
+    },
+    "notifications": {
+      "channelMapping": "Event-to-Channel Routing",
+      "eventStepFailed": "Step Failed",
+      "eventRouting": "Event Routing",
+      "channelEmail": "Email",
+      "channelMappingHint": "Select which channels receive notifications for each event type.",
+      "chooseWorkflow": "-- Select a workflow --",
+      "emailRecipients": "Email Recipients",
+      "eventCompleted": "Workflow Completed",
+      "eventRoutingHint": "Choose which channels receive each event type",
+      "sectionTitle": "Notification Settings",
+      "enableNotifications": "Enable notifications for this workflow",
+      "saved": "Saved successfully",
+      "slackWebhook": "Slack Webhook URL",
+      "loading": "Loading configuration...",
+      "selectWorkflow": "Workflow",
+      "title": "Notification Settings",
+      "eventFailed": "Workflow Failed",
+      "saving": "Saving...",
+      "channelInApp": "In-App",
+      "slackWebhookUrl": "Slack Webhook URL",
+      "webhookUrl": "Webhook URL",
+      "sidebarLabel": "Notifications",
+      "emailPlaceholder": "Enter email and press Enter",
+      "save": "Save",
+      "eventApprovalNeeded": "Approval Needed",
+      "channelSlack": "Slack",
+      "emailHint": "Comma-separated email addresses",
+      "channelWebhook": "Webhook",
+      "sectionDesc": "Configure per-workflow notification routing"
+    },
+    "liveDashboard": {
+      "activeExecutions": "Active Executions",
+      "noActiveWorkflows": "No Active Workflows",
+      "loading": "Loading workflows...",
+      "cancelled": "Cancelled",
+      "noActiveDescription": "Start a workflow to see live execution progress here.",
+      "reconnect": "Reconnect",
+      "failed": "Failed",
+      "connectionLive": "Live",
+      "pending": "Pending",
+      "completedRecent": "Completed",
+      "paused": "Paused",
+      "connectionConnecting": "Connecting...",
+      "running": "Running",
+      "stepOf": "Step {current} of {total}",
+      "stepN": "Step {n}",
+      "connectionDisconnected": "Disconnected"
+    },
+    "agentObservability": {
+      "tasksCompleted": "{count} tasks completed",
+      "failed": "Failed",
+      "avgTime": "Avg Time",
+      "title": "Agent Observability",
+      "noAgentsDescription": "Agent performance metrics will appear once workflows are executed.",
+      "loading": "Loading agent metrics...",
+      "noAgents": "No Agent Data",
+      "success": "Success"
     }
   },
   "agent": {
@@ -3365,6 +3550,50 @@
       "defaultModel": "predeterminado",
       "moreCount": "+{count} más",
       "summaryStats": "{backend} backend • {specialized} agentes especializados"
+    },
+    "settings": {
+      "retry": {
+        "delayHint": "Delay between retry attempts (100-30000)",
+        "delayLabel": "Retry Delay",
+        "attemptsLabel": "Retry Attempts",
+        "title": "Retry",
+        "attemptsHint": "Number of retry attempts on failure (0-10)"
+      },
+      "saveSuccess": "Agent settings saved successfully.",
+      "save": "Save Settings",
+      "concurrency": {
+        "title": "Concurrency",
+        "maxAgents": "Max Concurrent Agents",
+        "maxAgentsHint": "Number of agents that can run simultaneously (1-20)"
+      },
+      "memory": {
+        "title": "Memory",
+        "enableHint": "Allow agents to retain context across invocations",
+        "enableLabel": "Enable Agent Memory"
+      },
+      "execution": {
+        "priorityLabel": "Priority Queue",
+        "priorityHint": "Use priority-based task scheduling for agents",
+        "title": "Execution",
+        "parallelHint": "Allow multiple agents to execute tasks in parallel",
+        "parallelLabel": "Parallel Execution"
+      },
+      "logging": {
+        "levelHint": "Controls verbosity of agent log output",
+        "levelLabel": "Log Level",
+        "title": "Logging"
+      },
+      "timeouts": {
+        "title": "Timeouts",
+        "agentTimeoutHint": "Maximum time an agent can run before being terminated (30-3600)",
+        "seconds": "seconds",
+        "agentTimeout": "Agent Timeout"
+      },
+      "unsavedChanges": "You have unsaved changes",
+      "loading": "Loading settings...",
+      "resetDefaults": "Reset to Defaults",
+      "saving": "Saving...",
+      "tabTitle": "Settings"
     }
   },
   "errors": {
@@ -3539,7 +3768,21 @@
       "statusConnecting": "Connecting...",
       "statusDisconnected": "Disconnected",
       "statusError": "Error",
-      "statusUnknown": "Unknown"
+      "statusUnknown": "Unknown",
+      "stepProgress": "Step {current} of {total}",
+      "noStepData": "No step data available."
+    },
+    "modal": {
+      "editCommandEmpty": "Command cannot be empty.",
+      "editedBadge": "Edited",
+      "executeAll": "Execute All Remaining",
+      "editCommandPlaceholder": "Enter the command to execute...",
+      "editReset": "Reset to original",
+      "editCommandAriaLabel": "Edit this step command",
+      "editCommandLabel": "Edit command",
+      "editCommand": "Edit",
+      "editCancel": "Cancel",
+      "editSave": "Save"
     }
   },
   "llm": {
@@ -3789,7 +4032,9 @@
       "sections": {
         "imports": "Imports",
         "importedBy": "Imported By"
-      }
+      },
+      "loadingVisualization": "Loading visualization...",
+      "retry": "Retry"
     },
     "moduleImports": {
       "title": "Modules with Most Imports",
@@ -4926,6 +5171,42 @@
       "clearAll": "Borrar todo",
       "sharedBy": "Compartido por",
       "revokedBy": "Revocado por"
+    },
+    "invite": {
+      "permissionLevel": "Permission level",
+      "searchPlaceholder": "Search by name or email...",
+      "alreadyInSession": "Already in session",
+      "available": "Available",
+      "searchUsers": "Search users",
+      "sendInvitation": "Send invitation",
+      "closeDialog": "Close dialog",
+      "noUsersFound": "No users found",
+      "title": "Invite Collaborators",
+      "inSession": "In session",
+      "sending": "Sending..."
+    },
+    "participants": {
+      "you": "You",
+      "loadingRoles": "Loading roles...",
+      "invite": "Invite",
+      "collaborationOffline": "Collaboration offline",
+      "inviteParticipant": "Invite participant",
+      "remove": "Remove",
+      "noParticipants": "No participants yet",
+      "inviteToCollaborate": "Invite to collaborate",
+      "changeRoleFor": "Change role for",
+      "loading": "Loading participants...",
+      "title": "Participants"
+    },
+    "presence": {
+      "tabLabel": "Active tab",
+      "unknownTab": "Unknown tab",
+      "you": "You",
+      "noParticipants": "No participants",
+      "participants": "Participants",
+      "offline": "Offline",
+      "collaboratorTooltip": "Collaborator",
+      "youStatus": "Your status"
     }
   },
   "research": {
@@ -5001,7 +5282,11 @@
       "noEntriesHint": "El uso de secretos se registrará aquí",
       "justNow": "justo ahora",
       "minutesAgo": "hace {minutes} min",
-      "hoursAgo": "hace {hours} h"
+      "hoursAgo": "hace {hours} h",
+      "create": "Create",
+      "delete": "Delete",
+      "read": "Read",
+      "update": "Update"
     },
     "vault": {
       "title": "Bóveda de secretos",
@@ -5030,7 +5315,9 @@
       "revokeConfirm": "¿Está seguro de que desea revocar el acceso a este secreto?",
       "noSecrets": "No se encontraron secretos",
       "noSecretsSearch": "Pruebe una búsqueda diferente",
-      "noSecretsHint": "Añada un secreto para empezar"
+      "noSecretsHint": "Añada un secreto para empezar",
+      "deleteBtn": "Delete",
+      "loading": "Loading..."
     },
     "share": {
       "title": "Compartir secreto",
@@ -6109,7 +6396,14 @@
     "devSpeedup": "Dev Tools",
     "desktop": "Desktop",
     "customDashboard": "Custom Dashboard",
-    "agentRegistry": "Agents"
+    "agentRegistry": "Agents",
+    "switchLanguage": "Switch language",
+    "openMainMenu": "Open main menu",
+    "skipToContent": "Skip to content",
+    "services": "Services",
+    "skipToNavigation": "Skip to navigation",
+    "profile": "Profile",
+    "systemStatus": "System Status"
   },
   "reasoningTrace": {
     "title": "Traza de razonamiento",
