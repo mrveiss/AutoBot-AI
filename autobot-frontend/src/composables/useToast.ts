@@ -2,22 +2,34 @@
  * Toast Notification Composable
  *
  * Provides a global toast notification system for user feedback.
+ * Supports both module-level singleton usage and Vue provide/inject.
  *
- * Usage:
+ * Usage (direct import):
  * ```typescript
  * import { useToast } from '@/composables/useToast'
  *
  * const { showToast } = useToast()
- *
- * // Show different types of toasts
  * showToast('Operation successful', 'success')
- * showToast('Something went wrong', 'error', 5000)
+ * showToast('Something went wrong', 'error')   // persistent — no auto-dismiss
  * showToast('Please wait...', 'info')
  * showToast('Proceed with caution', 'warning')
  * ```
+ *
+ * Usage (provide/inject — register in App.vue):
+ * ```typescript
+ * import { provideToast } from '@/composables/useToast'
+ * provideToast()   // call once in the root component setup
+ *
+ * // In any child component:
+ * import { useToast } from '@/composables/useToast'
+ * const { showToast } = useToast()
+ * ```
+ *
+ * @author mrveiss
+ * @copyright 2025 mrveiss
  */
 
-import { ref, type Ref } from 'vue'
+import { ref, inject, provide, type Ref, type InjectionKey } from 'vue'
 
 export type ToastType = 'info' | 'success' | 'warning' | 'error'
 
@@ -35,72 +47,100 @@ export interface UseToastReturn {
   clearAllToasts: () => void
 }
 
-// Global toast state (shared across all component instances)
-const toasts = ref<Toast[]>([])
-let nextId = 1
+/** Maximum number of toasts displayed simultaneously (oldest evicted first). */
+export const MAX_TOASTS = 5
 
 /**
- * Toast notification composable
- *
- * @returns Toast notification utilities
+ * Default auto-dismiss durations per toast type (ms).
+ * 0 = persistent (no auto-dismiss).
  */
-export function useToast(): UseToastReturn {
-  /**
-   * Show a toast notification
-   *
-   * @param message - Message to display
-   * @param type - Toast type: 'info', 'success', 'warning', 'error'
-   * @param duration - Duration in milliseconds (0 = no auto-remove)
-   * @returns Toast ID for manual removal
-   */
-  const showToast = (
-    message: string,
-    type: ToastType = 'info',
-    duration = 3000
-  ): number => {
-    const id = nextId++
-    const toast: Toast = {
-      id,
-      message,
-      type,
-      duration
-    }
+export const TOAST_DURATIONS: Record<ToastType, number> = {
+  success: 4000,
+  info: 4000,
+  warning: 4000,
+  error: 0,  // errors are persistent until manually dismissed
+}
 
-    toasts.value.push(toast)
+/** Injection key for provide/inject usage. */
+export const TOAST_INJECT_KEY: InjectionKey<UseToastReturn> = Symbol('useToast')
 
-    // Auto-remove after duration
-    if (duration > 0) {
-      setTimeout(() => {
-        removeToast(id)
-      }, duration)
-    }
+// ============================================================
+// Module-level singleton state (shared across all instances
+// that do NOT use the provide/inject path).
+// ============================================================
+const _toasts = ref<Toast[]>([])
+let _nextId = 1
 
-    return id
-  }
-
-  /**
-   * Remove a toast by ID
-   *
-   * @param id - Toast ID to remove
-   */
+function _buildApi(toasts: Ref<Toast[]>, idCounter: { value: number }): UseToastReturn {
   const removeToast = (id: number): void => {
-    const index = toasts.value.findIndex((toast) => toast.id === id)
+    const index = toasts.value.findIndex((t) => t.id === id)
     if (index > -1) {
       toasts.value.splice(index, 1)
     }
   }
 
-  /**
-   * Clear all toasts
-   */
+  const showToast = (
+    message: string,
+    type: ToastType = 'info',
+    duration?: number,
+  ): number => {
+    const resolvedDuration = duration !== undefined ? duration : TOAST_DURATIONS[type]
+    const id = idCounter.value++
+    const toast: Toast = { id, message, type, duration: resolvedDuration }
+
+    // Enforce maximum stack size — evict the oldest toast when full.
+    if (toasts.value.length >= MAX_TOASTS) {
+      toasts.value.splice(0, toasts.value.length - MAX_TOASTS + 1)
+    }
+
+    toasts.value.push(toast)
+
+    if (resolvedDuration > 0) {
+      setTimeout(() => {
+        removeToast(id)
+      }, resolvedDuration)
+    }
+
+    return id
+  }
+
   const clearAllToasts = (): void => {
     toasts.value.splice(0)
   }
 
-  return {
-    toasts,
-    showToast,
-    removeToast,
-    clearAllToasts
-  }
+  return { toasts, showToast, removeToast, clearAllToasts }
+}
+
+// Singleton counter object (mutable reference so _buildApi closure can mutate it).
+const _idCounter = { value: _nextId }
+const _singletonApi = _buildApi(_toasts, _idCounter)
+
+// Keep module-level nextId in sync (for backward compat if any code read it).
+Object.defineProperty(_idCounter, 'value', {
+  get: () => _nextId,
+  set: (v: number) => { _nextId = v },
+})
+
+/**
+ * Register the toast API with the current Vue component tree via provide().
+ * Call once in the root App component's setup().
+ * Child components calling useToast() will receive the same instance.
+ */
+export function provideToast(): UseToastReturn {
+  provide(TOAST_INJECT_KEY, _singletonApi)
+  return _singletonApi
+}
+
+/**
+ * Toast notification composable.
+ *
+ * When called inside a component that has a provideToast() ancestor, the
+ * injected instance is returned (same state). Otherwise falls back to the
+ * module-level singleton, which is the same underlying state.
+ *
+ * @returns Toast notification utilities
+ */
+export function useToast(): UseToastReturn {
+  const injected = inject(TOAST_INJECT_KEY, null)
+  return injected ?? _singletonApi
 }
