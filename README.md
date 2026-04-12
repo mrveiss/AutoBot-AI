@@ -220,17 +220,48 @@ We welcome contributions! Whether you're fixing bugs, adding features, or improv
 
 ## How to Contribute
 
-AutoBot is open source and we welcome contributions from the community!
+AutoBot is open source and we welcome contributions from the community! Whether you're fixing bugs, adding features, or improving documentation, your contributions help build better infrastructure automation for everyone.
 
-**New to open source?** Start with [good-first-issue](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Agood-first-issue) issues — these are beginner-friendly and designed as learning opportunities.
+### 🚀 For Beginners (New to Open Source)
 
-**Experienced developer?** Find issues matching your skill:
-- [Frontend (Vue.js, TypeScript)](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Afrontend+label%3Ahelp-wanted)
-- [Backend (FastAPI, Python)](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Abackend+label%3Ahelp-wanted)
-- [Infrastructure (Docker, Ansible)](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Ainfrastructure+label%3Ahelp-wanted)
-- [Documentation](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Adocs+label%3Ahelp-wanted)
+Start with [**good-first-issue** labeled tasks](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Agood-first-issue). These are:
+- Self-contained and beginner-friendly
+- Expected to take less than 2 hours
+- Perfect for learning the codebase
+- Great introduction to our contribution process
 
-See [CONTRIBUTORS.md](CONTRIBUTORS.md) for detailed contribution guidelines.
+### 💻 For Experienced Developers
+
+Find issues matching your skill area:
+
+- **🎨 Frontend** (Vue.js, TypeScript, CSS, Vite)
+  - [Help Wanted: Frontend](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Afrontend+label%3Ahelp-wanted)
+  - [All Frontend Issues](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Afrontend)
+
+- **🔧 Backend** (FastAPI, Python, APIs, Databases)
+  - [Help Wanted: Backend](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Abackend+label%3Ahelp-wanted)
+  - [All Backend Issues](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Abackend)
+
+- **🚀 Infrastructure & DevOps** (Docker, Ansible, CI/CD, Deployment)
+  - [Help Wanted: Infrastructure](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Ainfrastructure+label%3Ahelp-wanted)
+  - [All Infrastructure Issues](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Ainfrastructure)
+
+- **📚 Documentation** (Guides, Examples, README, API Docs)
+  - [Help Wanted: Docs](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Adocs+label%3Ahelp-wanted)
+  - [All Docs Issues](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Adocs)
+
+- **🧪 Testing & QA** (Unit Tests, Integration Tests, Test Coverage)
+  - [Help Wanted: Testing](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Atesting+label%3Ahelp-wanted)
+  - [All Testing Issues](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Atesting)
+
+### 💰 Bounty Opportunities
+
+Want to earn money contributing? Check out issues with the [**bounty** label](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Abounty). Visit [Polar.sh](https://polar.sh/mrveiss/AutoBot-AI) for details and to claim rewards.
+
+### 📖 Step-by-Step Contribution Guide
+
+Detailed contribution process, code style guidelines, and development setup:
+→ **[Read CONTRIBUTORS.md](CONTRIBUTORS.md)**
 
 ---
 
