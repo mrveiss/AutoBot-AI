@@ -336,6 +336,59 @@ export function useKnowledgeBase() {
   }
 
   /**
+   * Ingest a YouTube URL or remote audio/video URL via Whisper transcription.
+   * Issue #3243: POST /api/knowledge_base/audio
+   */
+  const ingestAudioUrl = async (params: {
+    url: string
+    title?: string
+    category?: string
+    tags?: string[]
+    whisper_model?: string
+    language?: string
+  }): Promise<UploadResponse> => {
+    try {
+      const response = await apiClient.post(`${getApiBase()}/knowledge_base/audio`, {
+        url: params.url,
+        title: params.title ?? '',
+        category: params.category ?? 'audio',
+        tags: params.tags ?? [],
+        whisper_model: params.whisper_model ?? 'base',
+        language: params.language ?? null,
+      })
+      const data = await parseApiResponse(response)
+      return data
+    } catch (error) {
+      logger.error('Audio URL ingest failed:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Upload a local audio/video file for Whisper transcription and KB indexing.
+   * Issue #3243: POST /api/knowledge_base/audio/upload
+   */
+  const uploadAudioFile = async (formData: FormData): Promise<UploadResponse> => {
+    try {
+      const url = await appConfig.getApiUrl(`${getApiBase()}/knowledge_base/audio/upload`)
+      const response = await fetchWithAuth(url, {
+        method: 'POST',
+        body: formData,
+      })
+      if (!response.ok) {
+        const errorText = await response.text()
+        logger.error('Audio upload failed:', response.status, errorText)
+        throw new Error(`Audio upload failed: ${response.status} ${response.statusText}`)
+      }
+      const data = await parseApiResponse(response)
+      return data
+    } catch (error) {
+      logger.error('Error uploading audio file:', error)
+      throw error
+    }
+  }
+
+  /**
    * Fetch machine profiles
    */
   const fetchMachineProfiles = async (): Promise<MachineProfile[]> => {
@@ -818,6 +871,8 @@ export function useKnowledgeBase() {
     advancedSearch,  // Issue #555: Consolidated search with all options
     addFact,
     uploadKnowledgeFile,
+    ingestAudioUrl,   // Issue #3243: YouTube / remote audio URL ingestion
+    uploadAudioFile,  // Issue #3243: Local audio/video file upload
     fetchMachineProfiles,
     fetchManPagesSummary,
     integrateManPages,

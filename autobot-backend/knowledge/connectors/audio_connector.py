@@ -363,7 +363,7 @@ async def _download_direct_url(url: str, dest_dir: str) -> str:
                 raise RuntimeError(
                     f"Failed to download {url}: HTTP {resp.status}"
                 )
-            with open(dest_path, "wb", encoding=None) as fh:  # type: ignore[call-overload]
+            with open(dest_path, "wb") as fh:
                 async for chunk in resp.content.iter_chunked(65536):
                     fh.write(chunk)
     return dest_path

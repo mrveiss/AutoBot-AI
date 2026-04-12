@@ -63,7 +63,9 @@ scikit-learn>=1.8.0           # Issue #2027: RAPTOR clustering
 aiohttp>=3.13.4         # Async HTTP client - SECURITY UPDATE
 beautifulsoup4>=4.14.3  # HTML parsing for link pipeline
 Pillow>=12.1.1          # Image processing - SECURITY UPDATE (OOB write fix)
+
+# Audio/video/YouTube ingestion via Whisper (Issue #3243)
+openai-whisper>=20240930  # CPU Whisper transcription (NPU-accelerated path via npu_client)
+yt-dlp>=2024.12.13        # YouTube and remote audio/video download
 # Optional (install separately for full media support):
 # opencv-python>=4.8.0   # Frame extraction for video pipeline
-# transformers>=4.30.0   # Whisper transcription for audio pipeline
-# librosa>=0.10.0        # Audio decoding (used with transformers)

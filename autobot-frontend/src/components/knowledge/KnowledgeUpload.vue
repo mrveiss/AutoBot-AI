@@ -373,6 +373,103 @@
       </div>
     </div>
 
+      <!-- Audio / Video / YouTube Method (Issue #3243) -->
+      <div class="upload-method upload-method--audio">
+        <div class="method-header">
+          <i class="fas fa-microphone-alt"></i>
+          <h4>{{ $t('knowledge.upload.audioYouTube') }}</h4>
+        </div>
+
+        <div class="method-content">
+          <!-- YouTube / remote URL sub-panel -->
+          <div class="form-group">
+            <label for="audio-url">{{ $t('knowledge.upload.audioUrlLabel') }}</label>
+            <input
+              id="audio-url"
+              v-model="audioEntry.url"
+              type="url"
+              class="form-input"
+              :placeholder="$t('knowledge.upload.audioUrlPlaceholder')"
+            />
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="audio-title">{{ $t('knowledge.upload.titleLabel') }}</label>
+              <input
+                id="audio-title"
+                v-model="audioEntry.title"
+                type="text"
+                class="form-input"
+                :placeholder="$t('knowledge.upload.titlePlaceholder')"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="audio-model">{{ $t('knowledge.upload.whisperModel') }}</label>
+              <select id="audio-model" v-model="audioEntry.whisperModel" class="form-select">
+                <option value="tiny">tiny</option>
+                <option value="base">base</option>
+                <option value="small">small</option>
+                <option value="medium">medium</option>
+                <option value="large">large</option>
+              </select>
+            </div>
+          </div>
+
+          <button
+            @click="submitAudioUrl"
+            :disabled="!audioEntry.url.startsWith('http') || isAudioSubmitting"
+            class="submit-btn"
+          >
+            <template v-if="isAudioSubmitting">
+              <i class="fas fa-spinner fa-spin"></i>
+              {{ $t('knowledge.upload.transcribing') }}
+            </template>
+            <template v-else>
+              <i class="fas fa-file-audio"></i>
+              {{ $t('knowledge.upload.transcribeUrl') }}
+            </template>
+          </button>
+
+          <div class="method-divider">
+            <span>or</span>
+          </div>
+
+          <!-- Local file upload sub-panel -->
+          <div class="form-group">
+            <label>{{ $t('knowledge.upload.audioFileLabel') }}</label>
+            <input
+              ref="audioFileInput"
+              type="file"
+              accept=".mp3,.wav,.m4a,.ogg,.flac,.mp4,.mkv,.webm"
+              style="display:none"
+              @change="handleAudioFileSelect"
+            />
+            <button class="browse-btn" @click="audioFileInput?.click()">
+              <i class="fas fa-folder-open"></i>
+              {{ audioEntry.selectedFileName || $t('knowledge.upload.chooseAudioFile') }}
+            </button>
+          </div>
+
+          <button
+            @click="submitAudioFile"
+            :disabled="!audioEntry.selectedFile || isAudioSubmitting"
+            class="submit-btn"
+          >
+            <template v-if="isAudioSubmitting">
+              <i class="fas fa-spinner fa-spin"></i>
+              {{ $t('knowledge.upload.transcribing') }}
+            </template>
+            <template v-else>
+              <i class="fas fa-upload"></i>
+              {{ $t('knowledge.upload.uploadAndTranscribe') }}
+            </template>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Overall Upload Progress -->
     <div v-if="uploadProgress.show" class="upload-progress">
       <div class="progress-header">
@@ -451,7 +548,7 @@ interface FileItem {
 
 const store = useKnowledgeStore()
 const controller = useKnowledgeController()
-const { getFileIcon } = useKnowledgeBase()
+const { getFileIcon, ingestAudioUrl, uploadAudioFile } = useKnowledgeBase()
 const {
   progress: uploadProgress,
   startProgress,
@@ -484,6 +581,17 @@ const fileEntry = reactive({
   category: '',
   tagsInput: ''
 })
+
+// Issue #3243: Audio / YouTube ingestion state
+const audioEntry = reactive({
+  url: '',
+  title: '',
+  whisperModel: 'base',
+  selectedFile: null as File | null,
+  selectedFileName: '',
+})
+const audioFileInput = ref<HTMLInputElement | null>(null)
+const isAudioSubmitting = ref(false)
 
 // =============================================================================
 // UI State
@@ -951,6 +1059,66 @@ function detectCategory(filename: string): string | null {
 
 function generateId(): string {
   return `file-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+}
+
+// =============================================================================
+// Issue #3243: Audio / YouTube ingestion methods
+// =============================================================================
+
+function handleAudioFileSelect(event: Event): void {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  audioEntry.selectedFile = file
+  audioEntry.selectedFileName = file.name
+}
+
+async function submitAudioUrl(): Promise<void> {
+  if (!audioEntry.url.startsWith('http') || isAudioSubmitting.value) return
+  isAudioSubmitting.value = true
+  successMessage.value = ''
+  errorMessage.value = ''
+  try {
+    const result = await ingestAudioUrl({
+      url: audioEntry.url,
+      title: audioEntry.title,
+      category: 'audio',
+      whisper_model: audioEntry.whisperModel,
+    })
+    successMessage.value = (result as { message?: string }).message ?? 'Audio transcribed and indexed'
+    audioEntry.url = ''
+    audioEntry.title = ''
+  } catch (err) {
+    errorMessage.value = err instanceof Error ? err.message : 'Audio URL ingestion failed'
+    logger.error('Audio URL ingest error:', err)
+  } finally {
+    isAudioSubmitting.value = false
+  }
+}
+
+async function submitAudioFile(): Promise<void> {
+  if (!audioEntry.selectedFile || isAudioSubmitting.value) return
+  isAudioSubmitting.value = true
+  successMessage.value = ''
+  errorMessage.value = ''
+  try {
+    const formData = new FormData()
+    formData.append('file', audioEntry.selectedFile)
+    formData.append('title', audioEntry.title || audioEntry.selectedFileName)
+    formData.append('category', 'audio')
+    formData.append('whisper_model', audioEntry.whisperModel)
+    const result = await uploadAudioFile(formData)
+    successMessage.value = (result as { message?: string }).message ?? 'Audio file transcribed and indexed'
+    audioEntry.selectedFile = null
+    audioEntry.selectedFileName = ''
+    audioEntry.title = ''
+    if (audioFileInput.value) audioFileInput.value.value = ''
+  } catch (err) {
+    errorMessage.value = err instanceof Error ? err.message : 'Audio file upload failed'
+    logger.error('Audio file upload error:', err)
+  } finally {
+    isAudioSubmitting.value = false
+  }
 }
 
 // =============================================================================
