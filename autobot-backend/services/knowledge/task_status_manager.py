@@ -8,10 +8,11 @@ Enables polling of async task progress without in-memory state.
 Used by documentation indexing, man pages, and other background tasks.
 """
 
+import asyncio
 import json
 import logging
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Optional
 
 from autobot_shared.redis_client import get_redis_client
@@ -74,7 +75,7 @@ class TaskStatusManager:
         )
 
         await cls._save_to_redis(status)
-        logger.info(f"[{task_id}] Created task status: {message}")
+        logger.info("[%s] Created task status: %s", task_id, message)
         return status
 
     @classmethod
@@ -127,11 +128,11 @@ class TaskStatusManager:
             existing.elapsed_seconds = elapsed_seconds
 
         await cls._save_to_redis(existing)
-        logger.debug(f"[{task_id}] Updated status: {status} ({progress_percent}%)")
+        logger.debug("[%s] Updated status: %s (%s%%)", task_id, status, progress_percent)
         return existing
 
     @classmethod
-    async def get_task(task_id: str) -> Optional[TaskStatus]:
+    async def get_task(cls, task_id: str) -> Optional[TaskStatus]:
         """
         Retrieve task status from Redis.
 
@@ -140,7 +141,9 @@ class TaskStatusManager:
         """
         try:
             redis_client = get_redis_client()
-            data = redis_client.get(TaskStatusManager._get_redis_key(task_id))
+            data = await asyncio.to_thread(
+                redis_client.get, cls._get_redis_key(task_id)
+            )
 
             if not data:
                 return None
@@ -148,7 +151,7 @@ class TaskStatusManager:
             task_dict = json.loads(data)
             return TaskStatus(**task_dict)
         except Exception as e:
-            logger.error(f"[{task_id}] Error retrieving task status: {e}")
+            logger.error("[%s] Error retrieving task status: %s", task_id, e)
             return None
 
     @classmethod
@@ -164,11 +167,12 @@ class TaskStatusManager:
             key = cls._get_redis_key(task_status.task_id)
             data = json.dumps(asdict(task_status))
 
-            # Store with 24-hour expiration
-            redis_client.setex(key, TASK_TTL_SECONDS, data)
+            # Store with 24-hour expiration — use to_thread so the sync setex
+            # call does not block the event loop (#4102).
+            await asyncio.to_thread(redis_client.setex, key, TASK_TTL_SECONDS, data)
             return True
         except Exception as e:
-            logger.error(f"[{task_status.task_id}] Error saving to Redis: {e}")
+            logger.error("[%s] Error saving to Redis: %s", task_status.task_id, e)
             return False
 
     @classmethod
@@ -211,7 +215,7 @@ class TaskStatusManager:
         )
 
     @classmethod
-    async def delete_task(task_id: str) -> bool:
+    async def delete_task(cls, task_id: str) -> bool:
         """
         Delete task status from Redis.
 
@@ -220,8 +224,10 @@ class TaskStatusManager:
         """
         try:
             redis_client = get_redis_client()
-            redis_client.delete(TaskStatusManager._get_redis_key(task_id))
+            await asyncio.to_thread(
+                redis_client.delete, cls._get_redis_key(task_id)
+            )
             return True
         except Exception as e:
-            logger.error(f"[{task_id}] Error deleting task: {e}")
+            logger.error("[%s] Error deleting task: %s", task_id, e)
             return False
