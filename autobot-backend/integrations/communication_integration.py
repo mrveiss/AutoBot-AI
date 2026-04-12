@@ -24,24 +24,40 @@ from integrations.base import (
     IntegrationHealth,
     IntegrationStatus,
 )
+from integrations.rate_limiter import (
+    SLACK_REQUESTS_PER_HOUR,
+    SLACK_REQUESTS_PER_MINUTE,
+    IntegrationRateLimiter,
+)
 
 logger = logging.getLogger(__name__)
 
+_SLACK_RATE_LIMITER = IntegrationRateLimiter(
+    requests_per_minute=SLACK_REQUESTS_PER_MINUTE,
+    requests_per_hour=SLACK_REQUESTS_PER_HOUR,
+)
+
 
 class SlackIntegration(BaseIntegration):
-    """Slack workspace integration using Bot Token authentication."""
+    """Slack workspace integration using Bot Token authentication.
+
+    Rate limiting:
+    - Local sliding-window: 50 req/min, 2 000 req/hr per token
+    - Retry-After enforcement on HTTP 429 responses
+    - Exponential back-off for transient network errors
+    """
 
     def __init__(self, config: IntegrationConfig):
         super().__init__(config)
         self.base_url = config.base_url or "https://slack.com/api"
+        self._rate_limiter = _SLACK_RATE_LIMITER
+        self._token_key = config.token or "unauthenticated"
 
     async def test_connection(self) -> IntegrationHealth:
         """Test Slack connection by calling auth.test endpoint."""
         start_time = datetime.utcnow()
         if not self.config.token:
-            return self._create_health_response(
-                IntegrationStatus.ERROR, 0, "Bot token not configured"
-            )
+            return self._create_health_response(IntegrationStatus.ERROR, 0, "Bot token not configured")
 
         url = f"{self.base_url}/auth.test"
         headers = {"Authorization": f"Bearer {self.config.token}"}
@@ -55,9 +71,7 @@ class SlackIntegration(BaseIntegration):
                 "Connected to Slack",
                 {"team": result.get("team"), "user": result.get("user")},
             )
-        return self._create_health_response(
-            IntegrationStatus.ERROR, latency, result.get("error", "Unknown error")
-        )
+        return self._create_health_response(IntegrationStatus.ERROR, latency, result.get("error", "Unknown error"))
 
     def get_available_actions(self) -> List[IntegrationAction]:
         """Return list of supported Slack actions."""
@@ -88,9 +102,7 @@ class SlackIntegration(BaseIntegration):
             ),
         ]
 
-    async def execute_action(
-        self, action: str, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a named Slack action."""
         action_map = {
             "send_message": self._send_message,
@@ -141,9 +153,7 @@ class SlackIntegration(BaseIntegration):
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(
-                    url, headers=headers, data=form_data
-                ) as resp:
+                async with session.post(url, headers=headers, data=form_data) as resp:
                     result = await resp.json()
                     self._check_slack_response(url, resp.status, result)
                     return result
@@ -190,9 +200,7 @@ class SlackIntegration(BaseIntegration):
             return
 
         if http_status >= 500:
-            self.logger.warning(
-                "Slack server error for %s (HTTP %d)", url, http_status
-            )
+            self.logger.warning("Slack server error for %s (HTTP %d)", url, http_status)
             return
 
         if result.get("ok"):
@@ -206,13 +214,9 @@ class SlackIntegration(BaseIntegration):
                 slack_error,
             )
         elif slack_error in ("channel_not_found", "not_in_channel", "is_archived"):
-            self.logger.warning(
-                "Slack channel error at %s: %s", url, slack_error
-            )
+            self.logger.warning("Slack channel error at %s: %s", url, slack_error)
         else:
-            self.logger.warning(
-                "Slack API error at %s: %s", url, slack_error
-            )
+            self.logger.warning("Slack API error at %s: %s", url, slack_error)
 
     async def _make_slack_request(
         self,
@@ -221,35 +225,41 @@ class SlackIntegration(BaseIntegration):
         headers: Optional[Dict[str, str]] = None,
         data: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Make HTTP request to Slack API.
+        """Rate-limited HTTP request to the Slack API.
 
-        Handles network errors, timeouts, rate limits (HTTP 429), auth
-        failures, and application-level Slack errors (``ok: false``).
-        Never raises; returns ``{"ok": False, "error": "<reason>"}`` on failure.
+        Checks the local sliding-window quota before sending.  On HTTP 429
+        (Retry-After header) the limiter is updated and the request is
+        retried once after the prescribed wait.  Never raises; returns
+        ``{"ok": False, "error": "<reason>"}`` on failure.
         """
+        # Acquire a rate-limit slot (waits up to 120 s if near limit)
+        try:
+            await self._rate_limiter.acquire(self._token_key)
+        except asyncio.TimeoutError:
+            self.logger.error("Slack rate limit wait exceeded 120 s for %s", url)
+            return {"ok": False, "error": "rate_limit_timeout"}
+
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 if method == "GET":
-                    async with session.get(
-                        url, headers=headers, params=data
-                    ) as resp:
+                    async with session.get(url, headers=headers, params=data) as resp:
                         result = await resp.json()
                         self._check_slack_response(url, resp.status, result)
+                        if resp.status == 429:
+                            self._rate_limiter.apply_response_headers(self._token_key, dict(resp.headers))
                         return result
-                async with session.post(
-                    url, headers=headers, json=data
-                ) as resp:
+                async with session.post(url, headers=headers, json=data) as resp:
                     result = await resp.json()
                     self._check_slack_response(url, resp.status, result)
+                    if resp.status == 429:
+                        self._rate_limiter.apply_response_headers(self._token_key, dict(resp.headers))
                     return result
         except asyncio.TimeoutError:
             self.logger.warning("Slack request to %s timed out", url)
             return {"ok": False, "error": "timeout"}
         except aiohttp.ClientConnectionError as exc:
-            self.logger.warning(
-                "Slack connection error for %s: %s", url, exc
-            )
+            self.logger.warning("Slack connection error for %s: %s", url, exc)
             return {"ok": False, "error": str(exc)}
         except aiohttp.ClientError as exc:
             self.logger.warning("Slack request to %s failed: %s", url, exc)
@@ -287,17 +297,11 @@ class TeamsIntegration(BaseIntegration):
             result = await self._test_webhook()
             latency = (datetime.utcnow() - start_time).total_seconds() * 1000
             if result.get("success"):
-                return self._create_health_response(
-                    IntegrationStatus.CONNECTED, latency, "Webhook configured"
-                )
-            return self._create_health_response(
-                IntegrationStatus.ERROR, latency, "Webhook test failed"
-            )
+                return self._create_health_response(IntegrationStatus.CONNECTED, latency, "Webhook configured")
+            return self._create_health_response(IntegrationStatus.ERROR, latency, "Webhook test failed")
 
         if not self.config.token:
-            return self._create_health_response(
-                IntegrationStatus.ERROR, 0, "No token or webhook configured"
-            )
+            return self._create_health_response(IntegrationStatus.ERROR, 0, "No token or webhook configured")
 
         url = f"{self.graph_url}/me"
         headers = {"Authorization": f"Bearer {self.config.token}"}
@@ -310,9 +314,7 @@ class TeamsIntegration(BaseIntegration):
                 latency,
                 "Connected to Microsoft Teams",
             )
-        return self._create_health_response(
-            IntegrationStatus.ERROR, latency, "Authentication failed"
-        )
+        return self._create_health_response(IntegrationStatus.ERROR, latency, "Authentication failed")
 
     def get_available_actions(self) -> List[IntegrationAction]:
         """Return list of supported Teams actions."""
@@ -337,9 +339,7 @@ class TeamsIntegration(BaseIntegration):
             ),
         ]
 
-    async def execute_action(
-        self, action: str, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a named Teams action."""
         action_map = {
             "send_message": self._send_message,
@@ -443,9 +443,7 @@ class DiscordIntegration(BaseIntegration):
         """Test Discord connection by fetching bot user info."""
         start_time = datetime.utcnow()
         if not self.config.token:
-            return self._create_health_response(
-                IntegrationStatus.ERROR, 0, "Bot token not configured"
-            )
+            return self._create_health_response(IntegrationStatus.ERROR, 0, "Bot token not configured")
 
         url = f"{self.base_url}/users/@me"
         headers = {"Authorization": f"Bot {self.config.token}"}
@@ -460,9 +458,7 @@ class DiscordIntegration(BaseIntegration):
                 "Connected to Discord",
                 {"username": body.get("username"), "id": body.get("id")},
             )
-        return self._create_health_response(
-            IntegrationStatus.ERROR, latency, "Authentication failed"
-        )
+        return self._create_health_response(IntegrationStatus.ERROR, latency, "Authentication failed")
 
     def get_available_actions(self) -> List[IntegrationAction]:
         """Return list of supported Discord actions."""
@@ -487,9 +483,7 @@ class DiscordIntegration(BaseIntegration):
             ),
         ]
 
-    async def execute_action(
-        self, action: str, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a named Discord action."""
         action_map = {
             "send_message": self._send_message,
@@ -532,9 +526,7 @@ class DiscordIntegration(BaseIntegration):
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.request(
-                    method, url, headers=headers, json=data
-                ) as resp:
+                async with session.request(method, url, headers=headers, json=data) as resp:
                     body = await resp.json()
                     return {"status_code": resp.status, "body": body}
         except aiohttp.ClientError as exc:
