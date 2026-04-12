@@ -6,6 +6,8 @@ AutoResearch Experiment Runner
 
 Issue #2597: Execute training runs as isolated subprocesses with timeout
 enforcement and structured result parsing.
+Issue #3261: Resume and retry-failures support via append-only JSONL result
+file, reorg_results(), and filter_prompts().
 """
 
 from __future__ import annotations
@@ -17,10 +19,10 @@ import re
 import tempfile
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from .config import AutoResearchConfig
-from .models import Experiment, ExperimentResult, ExperimentState, ExperimentTask
+from .models import Experiment, ExperimentResult, ExperimentState, ScorerResult
 from .parser import ExperimentOutputParser
 from .store import ExperimentStore
 
@@ -58,6 +60,130 @@ _ENV_PARAM_MAP = {
     "warmup_steps": "AUTOBOT_EXP_WARMUP_STEPS",
     "weight_decay": "AUTOBOT_EXP_WEIGHT_DECAY",
 }
+
+
+# ---------------------------------------------------------------------------
+# Resume / retry-failures helpers  (Issue #3261)
+# ---------------------------------------------------------------------------
+
+# Type alias: key is (experiment_id, prompt_id)
+_ResultKey = Tuple[str, str]
+
+
+def append_result(
+    result_file: Path,
+    experiment_id: str,
+    prompt_id: str,
+    result: ScorerResult,
+) -> None:
+    """Append a single scored result to *result_file* as a JSONL record.
+
+    The file is created (including parent directories) if it does not exist.
+    Each record is a JSON object on its own line containing the composite key
+    fields plus the scorer output, making the file safe for concurrent readers
+    even while a writer is appending.
+    """
+    result_file.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "experiment_id": experiment_id,
+        "prompt_id": prompt_id,
+        **result.to_dict(),
+    }
+    with result_file.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(record) + "\n")
+    logger.debug(
+        "Appended result for (%s, %s) error=%s", experiment_id, prompt_id, result.error
+    )
+
+
+def reorg_results(result_file: Path) -> Dict[_ResultKey, ScorerResult]:
+    """Load *result_file*, de-duplicate by (experiment_id, prompt_id), and
+    re-write the canonical, sorted JSONL back to the same path.
+
+    Later records for the same key overwrite earlier ones (last-write-wins),
+    matching append_result semantics. Returns the de-duplicated mapping so
+    callers can inspect the final state without a second read.
+
+    If *result_file* does not exist the function is a no-op and returns {}.
+    """
+    if not result_file.exists():
+        return {}
+
+    results: Dict[_ResultKey, ScorerResult] = {}
+    with result_file.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                logger.warning("Skipping malformed JSONL line in %s", result_file)
+                continue
+            key: _ResultKey = (record["experiment_id"], record["prompt_id"])
+            results[key] = ScorerResult.from_dict(record)
+
+    # Sort by key for stable, deterministic output
+    sorted_items = sorted(results.items(), key=lambda kv: kv[0])
+
+    with result_file.open("w", encoding="utf-8") as fh:
+        for (exp_id, prompt_id), scorer_result in sorted_items:
+            record = {
+                "experiment_id": exp_id,
+                "prompt_id": prompt_id,
+                **scorer_result.to_dict(),
+            }
+            fh.write(json.dumps(record) + "\n")
+
+    logger.debug("reorg_results: %d unique records written to %s", len(results), result_file)
+    return results
+
+
+def filter_prompts(
+    prompts: Sequence[Tuple[str, str]],
+    result_file: Path,
+    *,
+    resume: bool = False,
+    retry_failures: bool = False,
+) -> List[Tuple[str, str]]:
+    """Return the subset of *prompts* that should be evaluated.
+
+    Each prompt is a ``(experiment_id, prompt_id)`` tuple.
+
+    Args:
+        prompts: Full list of ``(experiment_id, prompt_id)`` pairs to consider.
+        result_file: Path to the JSONL result file written by ``append_result``.
+        resume: When ``True``, skip prompts that already have a non-error result.
+        retry_failures: When ``True``, re-queue prompts whose result is an error
+            sentinel (``ScorerResult.is_error``). Has no effect when *resume* is
+            ``False``.
+
+    Returns:
+        Filtered list of ``(experiment_id, prompt_id)`` tuples to evaluate.
+    """
+    if not resume:
+        return list(prompts)
+
+    existing = reorg_results(result_file)
+
+    pending: List[Tuple[str, str]] = []
+    for key in prompts:
+        scorer_result = existing.get(key)
+        if scorer_result is None:
+            # Never evaluated — always include
+            pending.append(key)
+        elif scorer_result.is_error and retry_failures:
+            # Previously failed and caller wants a retry
+            pending.append(key)
+        # else: successful result present, skip
+
+    logger.info(
+        "filter_prompts: %d/%d prompts remain after resume (retry_failures=%s)",
+        len(pending),
+        len(prompts),
+        retry_failures,
+    )
+    return pending
 
 
 class ExperimentRunner:
@@ -417,41 +543,3 @@ class ExperimentRunner:
     @property
     def is_running(self) -> bool:
         return self._running
-
-    def build_task_inference_params(
-        self,
-        task: ExperimentTask,
-        experiment: Experiment,
-    ) -> dict:
-        """Delegate to module-level build_task_inference_params."""
-        return build_task_inference_params(task, experiment)
-
-
-def build_task_inference_params(
-    task: ExperimentTask,
-    experiment: Experiment,
-) -> dict:
-    """Return inference parameters for a single task, applying per-task overrides.
-
-    Issue #3259: Per-task required_temperature and system_prompt override the
-    experiment-level HyperParams so that deterministic tasks (e.g. ValBpb) and
-    sampling tasks (e.g. LLMJudge) can coexist within a single experiment.
-
-    Args:
-        task: The ExperimentTask whose overrides take precedence.
-        experiment: The parent experiment supplying experiment-level defaults.
-
-    Returns:
-        Dict with keys: prompt, temperature, system_prompt (system_prompt may
-        be None when neither the task nor the experiment declares one).
-    """
-    temperature = (
-        task.required_temperature
-        if task.required_temperature is not None
-        else experiment.hyperparams.extra.get("temperature")
-    )
-    return {
-        "prompt": task.prompt,
-        "temperature": temperature,
-        "system_prompt": task.system_prompt,
-    }

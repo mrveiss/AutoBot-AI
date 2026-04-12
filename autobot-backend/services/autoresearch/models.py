@@ -226,32 +226,27 @@ class Experiment:
 
 
 @dataclass
-class ExperimentTask:
-    """A single inference task within an experiment.
+class ScorerResult:
+    """Result from a single prompt evaluation.
 
-    Issue #3259: Per-task overrides for temperature and system_prompt so that
-    individual benchmark tasks can declare their own inference requirements
-    independent of the experiment-level HyperParams.
+    Issue #3261: Typed error field replaces magic strings so that
+    filter_prompts() can distinguish error sentinels from genuine scores.
     """
 
-    prompt: str
-    required_temperature: Optional[float] = None  # overrides HyperParams.temperature
-    system_prompt: Optional[str] = None  # injected as system message before user turn
+    score: Optional[float]
+    error: Optional[str] = None
+
+    @property
+    def is_error(self) -> bool:
+        """Return True when this result represents a failure."""
+        return self.error is not None
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
-            "prompt": self.prompt,
-            "required_temperature": self.required_temperature,
-            "system_prompt": self.system_prompt,
-        }
+        return {"score": self.score, "error": self.error}
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> ExperimentTask:
-        return cls(
-            prompt=data["prompt"],
-            required_temperature=data.get("required_temperature"),
-            system_prompt=data.get("system_prompt"),
-        )
+    def from_dict(cls, data: Dict[str, Any]) -> "ScorerResult":
+        return cls(score=data.get("score"), error=data.get("error"))
 
 
 @dataclass
