@@ -172,6 +172,35 @@ def configure_llm_awareness(app: FastAPI):
         logger.warning("LLM awareness middleware not available: %s", e)
 
 
+def configure_validation(app: FastAPI):
+    """Configure centralised input validation middleware (Issue #3274).
+
+    Registers ValidationMiddleware which:
+    - Scans query parameters and JSON request bodies for SQL injection,
+      command injection, and path-traversal patterns.
+    - Rejects oversized bodies (> 1 MiB) with HTTP 413.
+    - Returns ``{"error": ..., "details": ...}`` on any validation failure.
+
+    Must be registered *before* service-auth and route handlers so that
+    malicious payloads are rejected at the perimeter.
+
+    Args:
+        app: FastAPI application instance
+
+    Example:
+        ```python
+        configure_validation(app)
+        ```
+    """
+    try:
+        from middleware.validation_middleware import ValidationMiddleware
+
+        app.add_middleware(ValidationMiddleware)
+        logger.info("Input validation middleware enabled")
+    except ImportError as e:
+        logger.warning("Input validation middleware not available: %s", e)
+
+
 def configure_middleware(
     app: FastAPI,
     allow_origins: Optional[List[str]] = None,
@@ -179,6 +208,7 @@ def configure_middleware(
     enable_service_auth: bool = True,
     enable_llm_awareness: bool = True,
     enable_audit: bool = True,
+    enable_validation: bool = True,
 ):
     """
     Configure all middleware for FastAPI application
@@ -190,6 +220,7 @@ def configure_middleware(
         enable_service_auth: Enable service authentication middleware (default: True)
         enable_llm_awareness: Enable LLM awareness context injection (default: True)
         enable_audit: Enable audit logging middleware (default: True)
+        enable_validation: Enable centralised input validation middleware (default: True)
 
     Example:
         ```python
@@ -206,6 +237,11 @@ def configure_middleware(
 
     # Configure GZip compression
     configure_gzip(app, gzip_minimum_size)
+
+    # Configure input validation (Issue #3274) — must be outermost non-CORS
+    # middleware so injection patterns are rejected before any handler runs.
+    if enable_validation:
+        configure_validation(app)
 
     # Configure Service Authentication (optional)
     if enable_service_auth:
@@ -232,4 +268,5 @@ __all__ = [
     "configure_service_auth",
     "configure_audit",
     "configure_llm_awareness",
+    "configure_validation",
 ]
