@@ -15,9 +15,11 @@ Provides integrations with external tools and services:
 """
 
 from integrations.base import BaseIntegration, IntegrationConfig, IntegrationStatus
+from integrations.github_integration import GitHubIntegration
 
 __all__ = [
     "BaseIntegration",
     "IntegrationConfig",
     "IntegrationStatus",
+    "GitHubIntegration",
 ]
