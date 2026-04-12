@@ -380,6 +380,12 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["integrations-monitoring"],
         "integration_monitoring",
     ),
+    (
+        "api.integration_github",
+        "/integrations/github",
+        ["integrations-github"],
+        "integration_github",
+    ),
     # Skills repo management and governance MUST be registered before the base skills
     # router so their static path prefixes take precedence over skills' /{name} param.
     ("api.skills_repos", "/skills/repos", ["skills"], "skills-repos"),
