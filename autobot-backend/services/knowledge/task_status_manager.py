@@ -131,8 +131,8 @@ class TaskStatusManager:
         logger.debug("[%s] Updated status: %s (%s%%)", task_id, status, progress_percent)
         return existing
 
-    @classmethod
-    async def get_task(cls, task_id: str) -> Optional[TaskStatus]:
+    @staticmethod
+    async def get_task(task_id: str) -> Optional[TaskStatus]:
         """
         Retrieve task status from Redis.
 
@@ -214,8 +214,8 @@ class TaskStatusManager:
             error=error_message,
         )
 
-    @classmethod
-    async def delete_task(cls, task_id: str) -> bool:
+    @staticmethod
+    async def delete_task(task_id: str) -> bool:
         """
         Delete task status from Redis.
 
