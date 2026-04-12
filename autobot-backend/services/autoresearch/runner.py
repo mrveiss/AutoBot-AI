@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Optional
 
 from .config import AutoResearchConfig
-from .models import Experiment, ExperimentResult, ExperimentState
+from .models import Experiment, ExperimentResult, ExperimentState, ExperimentTask
 from .parser import ExperimentOutputParser
 from .store import ExperimentStore
 
@@ -417,3 +417,41 @@ class ExperimentRunner:
     @property
     def is_running(self) -> bool:
         return self._running
+
+    def build_task_inference_params(
+        self,
+        task: ExperimentTask,
+        experiment: Experiment,
+    ) -> dict:
+        """Delegate to module-level build_task_inference_params."""
+        return build_task_inference_params(task, experiment)
+
+
+def build_task_inference_params(
+    task: ExperimentTask,
+    experiment: Experiment,
+) -> dict:
+    """Return inference parameters for a single task, applying per-task overrides.
+
+    Issue #3259: Per-task required_temperature and system_prompt override the
+    experiment-level HyperParams so that deterministic tasks (e.g. ValBpb) and
+    sampling tasks (e.g. LLMJudge) can coexist within a single experiment.
+
+    Args:
+        task: The ExperimentTask whose overrides take precedence.
+        experiment: The parent experiment supplying experiment-level defaults.
+
+    Returns:
+        Dict with keys: prompt, temperature, system_prompt (system_prompt may
+        be None when neither the task nor the experiment declares one).
+    """
+    temperature = (
+        task.required_temperature
+        if task.required_temperature is not None
+        else experiment.hyperparams.extra.get("temperature")
+    )
+    return {
+        "prompt": task.prompt,
+        "temperature": temperature,
+        "system_prompt": task.system_prompt,
+    }

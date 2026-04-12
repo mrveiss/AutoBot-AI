@@ -83,8 +83,8 @@ class PromptScorer(ABC):
         """
 
 
-from .models import Experiment, ExperimentResult, HyperParams
-from .runner import ExperimentRunner
+from .models import Experiment, ExperimentResult, ExperimentTask, HyperParams
+from .runner import ExperimentRunner, build_task_inference_params
 
 
 class ValBpbScorer(PromptScorer):
@@ -126,10 +126,22 @@ class ValBpbScorer(PromptScorer):
         hp_data = context.get("hyperparams", {})
         hp = HyperParams.from_dict(hp_data) if hp_data else HyperParams()
 
+        # Issue #3259: ValBpb requires deterministic (greedy) output — always
+        # set required_temperature=0.0 so the dispatcher overrides whatever
+        # experiment-level temperature is configured.
+        task = ExperimentTask(
+            prompt=prompt_output,
+            required_temperature=0.0,
+        )
         experiment = Experiment(
             hypothesis=prompt_output,
             description="Prompt optimizer variant",
             hyperparams=hp,
+        )
+        inference_params = build_task_inference_params(task, experiment)
+        logger.debug(
+            "ValBpbScorer: dispatching with temperature=%s",
+            inference_params["temperature"],
         )
 
         experiment = await self._runner.run_experiment(experiment)
