@@ -35,6 +35,7 @@ from constants.model_constants import (
     EXPENSIVE_MODEL_MARKER_GPT4,
     EXPENSIVE_MODEL_MARKER_OPUS,
     MODEL_COSTS_PER_1M_TOKENS,
+    OPENAI_GPT4O,
 )
 from constants.ttl_constants import TTL_30_DAYS
 

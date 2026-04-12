@@ -11,8 +11,6 @@ import asyncio
 import logging
 import threading
 from datetime import datetime, timezone
-from pathlib import Path
-
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.analytics_models import CodeAnalysisRequest
@@ -62,7 +60,7 @@ async def index_codebase(
     """
     # Validate request
     try:
-        safe_target_path = validate_path(request.target_path, must_exist=True)
+        validate_path(request.target_path, must_exist=True)
     except (ValueError, PermissionError):
         raise HTTPException(
             status_code=400,
