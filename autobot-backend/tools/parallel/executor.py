@@ -52,6 +52,24 @@ _TEST_RUNNER_TOOLS: frozenset[str] = frozenset({
     "run_pytest",
 })
 
+# Tools that produce deployment/infrastructure output (Issue #4175)
+_DEPLOYMENT_TOOLS: frozenset[str] = frozenset({
+    "ansible",
+    "ansible_playbook",
+    "run_ansible",
+    "run_playbook",
+    "terraform",
+    "terraform_apply",
+    "terraform_plan",
+    "run_terraform",
+    "shell",
+    "bash",
+    "run_shell",
+    "run_bash",
+    "execute_shell",
+    "execute_bash",
+})
+
 
 @dataclass
 class _ArtifactCapture:
@@ -415,6 +433,23 @@ class ParallelToolExecutor:
                         ArtifactType.TEST_OUTPUT,
                         test_output,
                         label="Test Output",
+                    )
+                )
+
+        # --- deployment/infrastructure output (Issue #4175) ---
+        if call.tool_name in _DEPLOYMENT_TOOLS:
+            deployment_output = None
+            if isinstance(result, dict):
+                deployment_output = result.get("output") or result.get("stdout")
+            elif isinstance(result, str):
+                deployment_output = result
+
+            if deployment_output:
+                artifacts.append(
+                    build_artifact(
+                        ArtifactType.DEPLOYMENT_LOG,
+                        deployment_output,
+                        label="Deployment Output",
                     )
                 )
 
