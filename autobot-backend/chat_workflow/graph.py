@@ -216,6 +216,18 @@ async def initialize_session(state: ChatState, config: RunnableConfig) -> dict:
         )
         await manager._persist_user_message(state["session_id"], state["user_message"])
 
+        # Issue #3278: fire ON_MESSAGE_RECEIVED hook so plugins can observe chat input.
+        try:
+            from plugin_sdk.hooks import Hook, HookRegistry
+
+            await HookRegistry().call_hook(
+                Hook.ON_MESSAGE_RECEIVED.value,
+                session_id=state["session_id"],
+                message=state["user_message"],
+            )
+        except Exception as _hook_exc:  # noqa: BLE001
+            logger.debug("Plugin hook ON_MESSAGE_RECEIVED failed (non-fatal): %s", _hook_exc)
+
         return {
             "terminal_session_id": terminal_session_id,
             "user_wants_exit": user_wants_exit,
@@ -462,6 +474,19 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
         step_id=step_name,
     )
 
+    # Issue #3278: notify plugins before LLM execution.
+    try:
+        from plugin_sdk.hooks import Hook, HookRegistry
+
+        await HookRegistry().call_hook(
+            Hook.ON_AGENT_EXECUTE.value,
+            session_id=session_id,
+            iteration=iteration,
+            agent_type="chat_workflow",
+        )
+    except Exception as _hook_exc:  # noqa: BLE001
+        logger.debug("Plugin hook ON_AGENT_EXECUTE failed (non-fatal): %s", _hook_exc)
+
     try:
         messages, llm_response, should_continue = await _run_llm_iteration(
             manager, ctx, iteration, messages, stream_cb
@@ -475,7 +500,32 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
         emit_step_complete(
             step_name, _cot_start, output_summary=f"LLM error: {exc}", session_id=session_id
         )
+        # Issue #3278: notify plugins on agent error.
+        try:
+            from plugin_sdk.hooks import Hook, HookRegistry
+
+            await HookRegistry().call_hook(
+                Hook.ON_AGENT_ERROR.value,
+                session_id=session_id,
+                iteration=iteration,
+                error=str(exc),
+            )
+        except Exception as _hook_exc:  # noqa: BLE001
+            logger.debug("Plugin hook ON_AGENT_ERROR failed (non-fatal): %s", _hook_exc)
         return {"error": str(exc), "workflow_messages": messages}
+
+    # Issue #3278: notify plugins after successful LLM execution.
+    try:
+        from plugin_sdk.hooks import Hook, HookRegistry
+
+        await HookRegistry().call_hook(
+            Hook.ON_AGENT_COMPLETE.value,
+            session_id=session_id,
+            iteration=iteration,
+            response=llm_response or "",
+        )
+    except Exception as _hook_exc:  # noqa: BLE001
+        logger.debug("Plugin hook ON_AGENT_COMPLETE failed (non-fatal): %s", _hook_exc)
 
     all_responses = list(state.get("all_llm_responses", []))
     if llm_response:
@@ -672,6 +722,18 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
             new_fps,
         )
 
+    # Issue #3278: notify plugins before tool execution.
+    try:
+        from plugin_sdk.hooks import Hook, HookRegistry
+
+        await HookRegistry().call_hook(
+            Hook.ON_TOOL_CALL.value,
+            session_id=state.get("session_id"),
+            tool_calls=tool_calls,
+        )
+    except Exception as _hook_exc:  # noqa: BLE001
+        logger.debug("Plugin hook ON_TOOL_CALL failed (non-fatal): %s", _hook_exc)
+
     # Execute via existing manager method
     exec_history = list(state.get("execution_history", []))
     break_loop = False
@@ -712,6 +774,18 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
         messages.append(abort_msg)
         if stream_cb:
             stream_cb(abort_msg)
+
+    # Issue #3278: notify plugins after tool execution.
+    try:
+        from plugin_sdk.hooks import Hook, HookRegistry
+
+        await HookRegistry().call_hook(
+            Hook.ON_TOOL_COMPLETE.value,
+            session_id=session_id,
+            execution_history=exec_history,
+        )
+    except Exception as _hook_exc:  # noqa: BLE001
+        logger.debug("Plugin hook ON_TOOL_COMPLETE failed (non-fatal): %s", _hook_exc)
 
     # Issue #3232: emit step complete for the execute_tools block.
     emit_step_complete(
@@ -798,6 +872,20 @@ async def perform_knowledge_search(state: ChatState, config: RunnableConfig) -> 
             "Agentic search complete: context_len=%d",
             len(context_str),
         )
+
+        # Issue #3278: notify plugins after knowledge base search.
+        try:
+            from plugin_sdk.hooks import Hook, HookRegistry
+
+            await HookRegistry().call_hook(
+                Hook.ON_KB_SEARCH.value,
+                session_id=state.get("session_id"),
+                query=state["user_message"],
+                context_length=len(context_str),
+            )
+        except Exception as _hook_exc:  # noqa: BLE001
+            logger.debug("Plugin hook ON_KB_SEARCH failed (non-fatal): %s", _hook_exc)
+
         return {
             "agentic_context": context_str,
             "agentic_search_queries": queries_used,

@@ -1141,6 +1141,37 @@ async def _wire_scheduler_executor() -> None:
         )
 
 
+async def _init_plugin_manager(app: FastAPI) -> None:
+    """Discover and load plugins from the configured plugins directory.
+
+    Issue #3278 - Plugin and extension system for third-party integrations.
+    Non-critical: failures are logged and do not block startup.
+    """
+    try:
+        from pathlib import Path
+
+        from autobot_shared.ssot_config import config as ssot_config
+        from plugin_sdk.plugin_manager import PluginManager
+
+        plugins_root = ssot_config.path.plugins_path
+        plugin_dirs = [
+            plugins_root / "core-plugins",
+            plugins_root / "community-plugins",
+            # Development fallback
+            Path("plugins/core-plugins"),
+            Path("plugins/community-plugins"),
+        ]
+
+        plugin_manager = PluginManager(plugin_dirs)
+        await plugin_manager.startup()
+        app.state.plugin_manager = plugin_manager
+        logger.info("PluginManager started — %s", plugin_manager.get_plugin_status())
+    except Exception as pm_err:
+        logger.warning(
+            "Plugin manager startup failed (non-critical): %s", pm_err, exc_info=True
+        )
+
+
 async def initialize_background_services(app: FastAPI):
     """
     Phase 2: Initialize background services (NON-BLOCKING).
@@ -1183,6 +1214,7 @@ async def initialize_background_services(app: FastAPI):
         await _wire_npu_task_queue()
         await _wire_scheduler_executor()
         await _init_voice_interface(app)
+        await _init_plugin_manager(app)
 
         await update_app_state_multi(
             initialization_status="ready",
@@ -1256,14 +1288,13 @@ async def cleanup_services(app: FastAPI):
         # Issue #697: Flush and shutdown OpenTelemetry tracing
         await shutdown_tracing()
 
-        # Issue #3277: Flush and close audit logger before exit
+        # Issue #3278: Shutdown plugin manager
         try:
-            from services.audit_logger import close_audit_logger
-
-            await close_audit_logger()
-            logger.info("Audit logger flushed and closed")
-        except Exception as audit_error:
-            logger.warning("Audit logger shutdown failed: %s", audit_error)
+            if hasattr(app.state, "plugin_manager") and app.state.plugin_manager:
+                await app.state.plugin_manager.shutdown()
+                logger.info("✅ Plugin manager shutdown")
+        except Exception as pm_err:
+            logger.warning("Plugin manager shutdown failed: %s", pm_err)
 
         # Redis connections automatically managed by get_redis_client()
         logger.info("✅ Cleanup completed successfully")
