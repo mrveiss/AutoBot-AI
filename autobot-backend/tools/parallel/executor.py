@@ -34,11 +34,6 @@ logger = logging.getLogger(__name__)
 # Artifact Capture (Issue #4094)
 # =============================================================================
 
-# Size limits for artifact content (Issue #4173)
-_TEST_OUTPUT_MAX_BYTES: int = 100 * 1024   # 100 KB
-_CODE_DIFF_MAX_BYTES: int = 50 * 1024      # 50 KB
-_TRUNCATION_MARKER: str = "\n[TRUNCATED]"
-
 # Tools that mutate files — artifact capture is enabled for these
 _FILE_MODIFYING_TOOLS: frozenset[str] = frozenset({
     "edit_file",
@@ -365,26 +360,6 @@ class ParallelToolExecutor:
         filepath = call.arguments.get("file_path") or call.arguments.get("path")
         return _ArtifactCapture(filepath=filepath)
 
-    @staticmethod
-    def _truncate_artifact(content: str, max_bytes: int, label: str) -> tuple[str, bool]:
-        """Return (content, was_truncated) trimmed to max_bytes (UTF-8). Issue #4173.
-
-        Content is sliced at the byte boundary and a marker appended so readers
-        know the artifact is incomplete.  The caller must propagate was_truncated
-        to TaskArtifact.truncated so the flag survives TaskArtifact.__post_init__.
-        """
-        encoded = content.encode("utf-8")
-        if len(encoded) <= max_bytes:
-            return content, False
-        trimmed = encoded[:max_bytes].decode("utf-8", errors="ignore") + _TRUNCATION_MARKER
-        logger.warning(
-            "Artifact '%s' truncated from %d to %d bytes",
-            label,
-            len(encoded),
-            max_bytes,
-        )
-        return trimmed, True
-
     def _build_artifacts(
         self,
         call: ToolCall,
@@ -414,22 +389,23 @@ class ParallelToolExecutor:
                 original = result.get("original") or result.get("before")
                 modified = result.get("content") or result.get("after")
                 if original is not None and modified is not None:
-                    diff_str = DiffGenerator.generate_diff(
-                        original, modified, filename=capture.filepath
-                    )
-                    diff_label = f"Code Diff: {capture.filepath}"
-                    diff_str, diff_truncated = self._truncate_artifact(
-                        diff_str, _CODE_DIFF_MAX_BYTES, diff_label
-                    )
-                    diff_artifact = build_artifact(
-                        ArtifactType.CODE_DIFF,
-                        diff_str,
-                        label=diff_label,
-                        file_path=capture.filepath,
-                    )
-                    if diff_truncated:
-                        diff_artifact.truncated = True
-                    artifacts.append(diff_artifact)
+                    try:
+                        diff_str = DiffGenerator.generate_diff(
+                            original, modified, filename=capture.filepath
+                        )
+                        artifacts.append(
+                            build_artifact(
+                                ArtifactType.CODE_DIFF,
+                                diff_str,
+                                label=f"Code Diff: {capture.filepath}",
+                                file_path=capture.filepath,
+                            )
+                        )
+                    except Exception:
+                        logger.exception(
+                            "Diff generation failed for %s; skipping diff artifact",
+                            capture.filepath,
+                        )
 
         # --- test output ---
         if call.tool_name in _TEST_RUNNER_TOOLS:
@@ -440,17 +416,13 @@ class ParallelToolExecutor:
                 test_output = result
 
             if test_output:
-                test_output, test_truncated = self._truncate_artifact(
-                    test_output, _TEST_OUTPUT_MAX_BYTES, "Test Output"
+                artifacts.append(
+                    build_artifact(
+                        ArtifactType.TEST_OUTPUT,
+                        test_output,
+                        label="Test Output",
+                    )
                 )
-                test_artifact = build_artifact(
-                    ArtifactType.TEST_OUTPUT,
-                    test_output,
-                    label="Test Output",
-                )
-                if test_truncated:
-                    test_artifact.truncated = True
-                artifacts.append(test_artifact)
 
         return artifacts
 
