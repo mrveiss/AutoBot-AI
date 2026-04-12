@@ -19,10 +19,7 @@ from integrations.base import BaseIntegration, IntegrationConfig, IntegrationSta
 from integrations.github_integration import GitHubIntegration
 from integrations.notion_integration import NotionIntegration
 from integrations.rate_limiter import IntegrationRateLimiter
-from integrations.slack_integration import (
-    SlackChannelMapping,
-    SlackNotificationIntegration,
-)
+from integrations.slack_integration import SlackChannelMapping, SlackNotificationIntegration
 
 __all__ = [
     "BaseIntegration",

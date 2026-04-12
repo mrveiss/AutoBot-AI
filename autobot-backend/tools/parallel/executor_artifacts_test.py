@@ -118,7 +118,19 @@ class TestPublishObservationWithArtifacts:
 
         action_event = MagicMock(event_id="action-123")
         call = ToolCall(tool_name="edit_file", arguments={"file_path": "/tmp/test.py"})
+<<<<<<< HEAD
         artifacts = [build_artifact(ArtifactType.CUSTOM, "test artifact content", label="test")]
+=======
+        # Create a valid artifact using build_artifact to ensure JSON serializability
+        artifacts = [
+            build_artifact(
+                artifact_type=ArtifactType.FILE_CHANGE,
+                content="test change",
+                label="test.py",
+                file_path="/tmp/test.py"
+            )
+        ]
+>>>>>>> 5c4f059bc (fix(tests): ParallelToolExecutor test fixture - fix JSON serialization in artifact test (#4226))
 
         await executor._publish_observation_event(
             action_event=action_event,
