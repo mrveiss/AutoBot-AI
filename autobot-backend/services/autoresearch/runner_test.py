@@ -7,12 +7,15 @@ ExperimentRunner Unit Tests
 Issue #2637: Comprehensive tests for subprocess execution, timeout handling,
 cancellation, concurrent run rejection, evaluation logic, and parameter
 validation.
+Issue #3261: Tests for append_result, reorg_results, filter_prompts.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -23,11 +26,15 @@ from services.autoresearch.models import (
     ExperimentResult,
     ExperimentState,
     HyperParams,
+    ScorerResult,
 )
 from services.autoresearch.runner import (
     _EXTRA_KEY_PATTERN,
     _RESERVED_KEYS,
     ExperimentRunner,
+    append_result,
+    filter_prompts,
+    reorg_results,
 )
 
 logger = logging.getLogger(__name__)
@@ -657,7 +664,6 @@ class TestDockerCommand:
         exp = _make_experiment()
 
         import tempfile
-        from pathlib import Path
 
         with tempfile.TemporaryDirectory() as tmp:
             cmd = runner._build_docker_command(exp, Path(tmp))
@@ -674,7 +680,6 @@ class TestDockerCommand:
         exp = _make_experiment()
 
         import tempfile
-        from pathlib import Path
 
         with tempfile.TemporaryDirectory() as tmp:
             cmd = runner._build_docker_command(exp, Path(tmp))
@@ -693,7 +698,6 @@ class TestDockerCommand:
         exp = _make_experiment()
 
         import tempfile
-        from pathlib import Path
 
         with tempfile.TemporaryDirectory() as tmp:
             cmd = runner._build_docker_command(exp, Path(tmp))
@@ -707,7 +711,6 @@ class TestDockerCommand:
         exp = _make_experiment(hyperparams=hp)
 
         import tempfile
-        from pathlib import Path
 
         with tempfile.TemporaryDirectory() as tmp:
             cmd = runner._build_docker_command(exp, Path(tmp))
@@ -723,7 +726,6 @@ class TestDockerCommand:
         exp = _make_experiment(hyperparams=hp)
 
         import tempfile
-        from pathlib import Path
 
         with tempfile.TemporaryDirectory() as tmp:
             cmd = runner._build_docker_command(exp, Path(tmp))
@@ -738,7 +740,6 @@ class TestDockerCommand:
         runner._current_container_name = f"autobot_exp_{exp.id}"
 
         import tempfile
-        from pathlib import Path
 
         with tempfile.TemporaryDirectory() as tmp:
             cmd = runner._build_docker_command(exp, Path(tmp))
@@ -748,8 +749,6 @@ class TestDockerCommand:
         assert cmd[name_idx + 1] == f"autobot_exp_{exp.id}"
 
     def test_unsafe_mount_path_raises(self):
-        from pathlib import Path
-
         runner = _make_runner()
         with pytest.raises(ValueError, match="unsafe"):
             runner._validate_mount_path(Path("/"))
@@ -760,7 +759,6 @@ class TestDockerCommand:
         exp = _make_experiment()
 
         import tempfile
-        from pathlib import Path
 
         with tempfile.TemporaryDirectory() as tmp:
             cmd = runner._build_docker_command(exp, Path(tmp))
@@ -1017,3 +1015,161 @@ class TestDockerFallback:
         first_call_args = mock_exec.call_args_list[0][0]
         assert first_call_args[0] != "docker"
         assert result.val_bpb == 5.5
+
+
+# ---------------------------------------------------------------------------
+# append_result tests  (Issue #3261)
+# ---------------------------------------------------------------------------
+
+
+class TestAppendResult:
+    """Tests for append_result()."""
+
+    def test_creates_file_on_first_write(self, tmp_path):
+        result_file = tmp_path / "results.jsonl"
+        append_result(result_file, "exp1", "p1", ScorerResult(score=0.9))
+        assert result_file.exists()
+
+    def test_record_contains_key_and_score(self, tmp_path):
+        result_file = tmp_path / "results.jsonl"
+        append_result(result_file, "exp1", "p1", ScorerResult(score=0.9))
+        record = json.loads(result_file.read_text(encoding="utf-8").strip())
+        assert record["experiment_id"] == "exp1"
+        assert record["prompt_id"] == "p1"
+        assert record["score"] == 0.9
+        assert record["error"] is None
+
+    def test_error_record_stored(self, tmp_path):
+        result_file = tmp_path / "results.jsonl"
+        append_result(result_file, "exp1", "p1", ScorerResult(score=None, error="timeout"))
+        record = json.loads(result_file.read_text(encoding="utf-8").strip())
+        assert record["error"] == "timeout"
+        assert record["score"] is None
+
+    def test_multiple_appends_produce_multiple_lines(self, tmp_path):
+        result_file = tmp_path / "results.jsonl"
+        append_result(result_file, "exp1", "p1", ScorerResult(score=0.9))
+        append_result(result_file, "exp1", "p2", ScorerResult(score=0.8))
+        lines = [l for l in result_file.read_text(encoding="utf-8").splitlines() if l]
+        assert len(lines) == 2
+
+    def test_creates_parent_directories(self, tmp_path):
+        result_file = tmp_path / "deep" / "nested" / "results.jsonl"
+        append_result(result_file, "exp1", "p1", ScorerResult(score=1.0))
+        assert result_file.exists()
+
+
+# ---------------------------------------------------------------------------
+# reorg_results tests  (Issue #3261)
+# ---------------------------------------------------------------------------
+
+
+class TestReorgResults:
+    """Tests for reorg_results()."""
+
+    def test_returns_empty_dict_for_missing_file(self, tmp_path):
+        result_file = tmp_path / "missing.jsonl"
+        assert reorg_results(result_file) == {}
+
+    def test_deduplicates_last_write_wins(self, tmp_path):
+        result_file = tmp_path / "results.jsonl"
+        append_result(result_file, "exp1", "p1", ScorerResult(score=None, error="first"))
+        append_result(result_file, "exp1", "p1", ScorerResult(score=0.9))
+        results = reorg_results(result_file)
+        assert ("exp1", "p1") in results
+        assert results[("exp1", "p1")].score == 0.9
+        assert results[("exp1", "p1")].error is None
+
+    def test_file_rewritten_without_duplicates(self, tmp_path):
+        result_file = tmp_path / "results.jsonl"
+        append_result(result_file, "exp1", "p1", ScorerResult(score=None, error="err"))
+        append_result(result_file, "exp1", "p1", ScorerResult(score=0.7))
+        reorg_results(result_file)
+        lines = [l for l in result_file.read_text(encoding="utf-8").splitlines() if l]
+        assert len(lines) == 1
+
+    def test_sorted_output(self, tmp_path):
+        result_file = tmp_path / "results.jsonl"
+        append_result(result_file, "exp1", "p2", ScorerResult(score=0.5))
+        append_result(result_file, "exp1", "p1", ScorerResult(score=0.8))
+        append_result(result_file, "exp1", "p3", ScorerResult(score=0.3))
+        reorg_results(result_file)
+        lines = [l for l in result_file.read_text(encoding="utf-8").splitlines() if l]
+        prompt_ids = [json.loads(l)["prompt_id"] for l in lines]
+        assert prompt_ids == sorted(prompt_ids)
+
+    def test_skips_malformed_lines(self, tmp_path):
+        result_file = tmp_path / "results.jsonl"
+        result_file.write_text(
+            '{"experiment_id":"e","prompt_id":"p","score":1.0,"error":null}\n'
+            'not-json\n',
+            encoding="utf-8",
+        )
+        results = reorg_results(result_file)
+        assert len(results) == 1
+
+    def test_returns_correct_scorer_results(self, tmp_path):
+        result_file = tmp_path / "results.jsonl"
+        append_result(result_file, "exp1", "p1", ScorerResult(score=0.42))
+        results = reorg_results(result_file)
+        sr = results[("exp1", "p1")]
+        assert isinstance(sr, ScorerResult)
+        assert sr.score == pytest.approx(0.42)
+
+
+# ---------------------------------------------------------------------------
+# filter_prompts tests  (Issue #3261)
+# ---------------------------------------------------------------------------
+
+
+class TestFilterPrompts:
+    """Tests for filter_prompts()."""
+
+    def test_no_resume_returns_all_prompts(self, tmp_path):
+        result_file = tmp_path / "results.jsonl"
+        prompts = [("e", "p1"), ("e", "p2"), ("e", "p3")]
+        assert filter_prompts(prompts, result_file, resume=False) == prompts
+
+    def test_resume_skips_successful_results(self, tmp_path):
+        result_file = tmp_path / "results.jsonl"
+        append_result(result_file, "e", "p1", ScorerResult(score=0.9))
+        prompts = [("e", "p1"), ("e", "p2")]
+        remaining = filter_prompts(prompts, result_file, resume=True)
+        assert remaining == [("e", "p2")]
+
+    def test_resume_with_no_prior_results_returns_all(self, tmp_path):
+        result_file = tmp_path / "results.jsonl"
+        prompts = [("e", "p1"), ("e", "p2")]
+        remaining = filter_prompts(prompts, result_file, resume=True)
+        assert remaining == prompts
+
+    def test_retry_failures_requeues_error_results(self, tmp_path):
+        result_file = tmp_path / "results.jsonl"
+        append_result(result_file, "e", "p1", ScorerResult(score=None, error="timeout"))
+        append_result(result_file, "e", "p2", ScorerResult(score=0.8))
+        prompts = [("e", "p1"), ("e", "p2"), ("e", "p3")]
+        remaining = filter_prompts(prompts, result_file, resume=True, retry_failures=True)
+        assert ("e", "p1") in remaining  # error → retried
+        assert ("e", "p2") not in remaining  # success → skipped
+        assert ("e", "p3") in remaining  # unseen → included
+
+    def test_resume_without_retry_keeps_errors_skipped(self, tmp_path):
+        result_file = tmp_path / "results.jsonl"
+        append_result(result_file, "e", "p1", ScorerResult(score=None, error="err"))
+        prompts = [("e", "p1"), ("e", "p2")]
+        remaining = filter_prompts(prompts, result_file, resume=True, retry_failures=False)
+        # Error result without retry_failures: skip (treat as done)
+        assert ("e", "p1") not in remaining
+        assert ("e", "p2") in remaining
+
+    def test_empty_prompts_returns_empty(self, tmp_path):
+        result_file = tmp_path / "results.jsonl"
+        assert filter_prompts([], result_file, resume=True) == []
+
+    def test_all_prompts_complete_returns_empty(self, tmp_path):
+        result_file = tmp_path / "results.jsonl"
+        prompts = [("e", "p1"), ("e", "p2")]
+        for _, pid in prompts:
+            append_result(result_file, "e", pid, ScorerResult(score=0.5))
+        remaining = filter_prompts(prompts, result_file, resume=True)
+        assert remaining == []
