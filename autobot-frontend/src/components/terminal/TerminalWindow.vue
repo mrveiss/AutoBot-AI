@@ -355,6 +355,7 @@ export default {
     const {
       sendInput,
       sendSignal,
+      sendTabCompletion,
       isConnected,
       resize,
       connect: connectToService,
@@ -465,7 +466,8 @@ export default {
           onOutput: handleOutput,
           onPromptChange: handlePromptChange,
           onStatusChange: handleStatusChange,
-          onError: handleError
+          onError: handleError,
+          onTabCompletion: handleTabCompletionResponse,
         });
       } catch (error) {
         logger.error('Failed to connect:', error);
@@ -1026,9 +1028,14 @@ export default {
           event.preventDefault();
           {
             const cursorPos = terminalInput.value?.selectionStart ?? currentInput.value.length;
+            // Local static completion (commands + history) for instant feedback
             const result = tabCompletion.complete(currentInput.value, cursorPos);
             if (result !== null) {
               currentInput.value = result;
+            }
+            // Backend completion for real shell completions (Issue #3279)
+            if (currentInput.value.trim() && isConnected(sessionId.value)) {
+              sendTabCompletion(sessionId.value, currentInput.value, cursorPos);
             }
           }
           break;
@@ -1199,6 +1206,19 @@ export default {
         timestamp: new Date()
       });
       connectionStatus.value = 'error';
+    };
+
+    // Handle backend tab completion response (Issue #3279)
+    const handleTabCompletionResponse = (data) => {
+      const expanded = tabCompletion.registerBackendCompletions(
+        currentInput.value,
+        data.completions || [],
+        data.prefix || '',
+        data.common_prefix || '',
+      );
+      if (expanded !== null) {
+        currentInput.value = expanded;
+      }
     };
 
     const addOutputLine = (line) => {

@@ -39,6 +39,16 @@ export interface UseTabCompletionReturn {
   dismiss: () => void
   /** Register additional completions dynamically. */
   registerCommands: (cmds: CompletionItem[]) => void
+  /**
+   * Merge backend completions into the current suggestion list (Issue #3279).
+   * If common_prefix extends the current word, returns the new input string.
+   */
+  registerBackendCompletions: (
+    input: string,
+    completions: string[],
+    prefix: string,
+    commonPrefix: string,
+  ) => string | null
 }
 
 /** Builtin slash-commands available in the terminal. */
@@ -339,6 +349,57 @@ export function useTabCompletion(
       }))
   }
 
+  /**
+   * Merge completions received from the backend (Issue #3279).
+   *
+   * Converts raw backend completion strings to CompletionItems, deduplicates
+   * against already-shown suggestions, and updates the dropdown.  If the
+   * backend common_prefix is longer than the current word the function returns
+   * the expanded input string so the caller can update the input element.
+   */
+  const registerBackendCompletions = (
+    input: string,
+    completions: string[],
+    prefix: string,
+    commonPrefix: string,
+  ): string | null => {
+    if (completions.length === 0) return null
+
+    const backendItems: CompletionItem[] = completions.map((c) => ({
+      value: c,
+      type: (c.endsWith('/') ? 'path' : 'argument') as CompletionItem['type'],
+    }))
+
+    // Merge with any locally-computed suggestions, deduplicating by value
+    const existingValues = new Set(suggestions.value.map((s) => s.value))
+    const merged = [
+      ...suggestions.value,
+      ...backendItems.filter((b) => !existingValues.has(b.value)),
+    ]
+
+    suggestions.value = merged
+    isVisible.value = merged.length > 0
+    if (selectedIndex.value < 0 && merged.length > 0) {
+      selectedIndex.value = 0
+    }
+
+    // If single completion, auto-fill and dismiss
+    if (merged.length === 1) {
+      const { start } = extractWordAtCursor(input, input.length)
+      const result = buildReplacement(input, start, merged[0].value)
+      dismiss()
+      return result + ' '
+    }
+
+    // Extend to common prefix from backend if it adds characters
+    if (commonPrefix.length > prefix.length) {
+      const { start } = extractWordAtCursor(input, input.length)
+      return buildReplacement(input, start, commonPrefix)
+    }
+
+    return null
+  }
+
   return {
     suggestions,
     selectedIndex,
@@ -349,5 +410,6 @@ export function useTabCompletion(
     selectNext,
     dismiss,
     registerCommands,
+    registerBackendCompletions,
   }
 }
