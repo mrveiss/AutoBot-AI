@@ -52,20 +52,14 @@ logger = logging.getLogger(__name__)
 PLACEHOLDER_PATTERNS = {"example", "placeholder", "your_", "xxx", "changeme", "todo"}
 
 # Issue #380: Module-level frozensets for security pattern checking
-_HTTP_METHODS: FrozenSet[str] = frozenset(
-    {"get", "post", "put", "delete", "patch", "route"}
-)
-_INSECURE_RANDOM_FUNCS: FrozenSet[str] = frozenset(
-    {"random", "randint", "choice", "shuffle"}
-)
+_HTTP_METHODS: FrozenSet[str] = frozenset({"get", "post", "put", "delete", "patch", "route"})
+_INSECURE_RANDOM_FUNCS: FrozenSet[str] = frozenset({"random", "randint", "choice", "shuffle"})
 _PICKLE_MODULES: FrozenSet[str] = frozenset({"pickle", "cPickle"})
 _YAML_LOADER_ARGS: FrozenSet[str] = frozenset({"Loader", "SafeLoader"})
 _DEBUG_MODE_VARS: FrozenSet[str] = frozenset({"DEBUG", "DEBUG_MODE"})
 _LOAD_FUNCS: FrozenSet[str] = frozenset({"load", "loads"})  # Issue #380
 _VALIDATION_FUNCS: FrozenSet[str] = frozenset({"validate", "Validator", "Schema"})
-_VALIDATION_ATTRS: FrozenSet[str] = frozenset(
-    {"validate", "parse_obj", "model_validate"}
-)
+_VALIDATION_ATTRS: FrozenSet[str] = frozenset({"validate", "parse_obj", "model_validate"})
 
 
 class SecuritySeverity(Enum):
@@ -420,9 +414,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
 
     def _check_input_validation(self, node) -> None:
         """Check if web handler validates input."""
-        has_validation = self._has_validation_call(node) or self._has_type_annotations(
-            node
-        )
+        has_validation = self._has_validation_call(node) or self._has_type_annotations(node)
 
         if not has_validation:
             code = self._get_source_segment(node.lineno, node.end_lineno or node.lineno)
@@ -435,9 +427,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
                     line_end=node.end_lineno or node.lineno,
                     description=f"Web handler '{node.name}' may lack input validation",
                     recommendation="Use Pydantic models or validation decorators",
-                    owasp_category=OWASP_MAPPING[
-                        VulnerabilityType.MISSING_INPUT_VALIDATION
-                    ],
+                    owasp_category=OWASP_MAPPING[VulnerabilityType.MISSING_INPUT_VALIDATION],
                     cwe_id="CWE-20",
                     current_code=code,
                     secure_alternative="Use Pydantic BaseModel for request validation",
@@ -453,13 +443,9 @@ class SecurityASTVisitor(ast.NodeVisitor):
         # Check eval/exec
         if isinstance(func, ast.Name):
             if func.id == "eval":
-                self._add_injection_finding(
-                    node, "eval()", VulnerabilityType.COMMAND_INJECTION, "CWE-95"
-                )
+                self._add_injection_finding(node, "eval()", VulnerabilityType.COMMAND_INJECTION, "CWE-95")
             elif func.id == "exec":
-                self._add_injection_finding(
-                    node, "exec()", VulnerabilityType.COMMAND_INJECTION, "CWE-95"
-                )
+                self._add_injection_finding(node, "exec()", VulnerabilityType.COMMAND_INJECTION, "CWE-95")
             elif func.id == "compile":
                 # compile() can be dangerous with user input
                 self._add_injection_finding(
@@ -496,9 +482,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
                         line_end=node.lineno,
                         description=f"Weak hash algorithm: {func.attr}. {msg}",
                         recommendation="Use SHA-256 or SHA-3 for hashing, bcrypt/argon2 for passwords",
-                        owasp_category=OWASP_MAPPING[
-                            VulnerabilityType.WEAK_HASH_ALGORITHM
-                        ],
+                        owasp_category=OWASP_MAPPING[VulnerabilityType.WEAK_HASH_ALGORITHM],
                         cwe_id=cwe,
                         current_code=code,
                         secure_alternative="hashlib.sha256() or bcrypt.hashpw()",
@@ -520,9 +504,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
                             line_end=node.lineno,
                             description="random module is not cryptographically secure",
                             recommendation="Use secrets module for security-sensitive randomness",
-                            owasp_category=OWASP_MAPPING[
-                                VulnerabilityType.INSECURE_RANDOM
-                            ],
+                            owasp_category=OWASP_MAPPING[VulnerabilityType.INSECURE_RANDOM],
                             cwe_id="CWE-330",
                             current_code=code,
                             secure_alternative="secrets.token_hex() or secrets.randbelow()",
@@ -537,10 +519,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
 
         if isinstance(func, ast.Attribute):
             # Pickle is dangerous
-            if (
-                func.attr in _LOAD_FUNCS
-                and self._get_module_name(func) in _PICKLE_MODULES
-            ):
+            if func.attr in _LOAD_FUNCS and self._get_module_name(func) in _PICKLE_MODULES:
                 code = self._get_source_segment(node.lineno, node.lineno)
                 self.findings.append(
                     SecurityFinding(
@@ -574,9 +553,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
                             line_end=node.lineno,
                             description="yaml.load() without SafeLoader can execute arbitrary code",
                             recommendation="Use yaml.safe_load() or specify Loader=yaml.SafeLoader",
-                            owasp_category=OWASP_MAPPING[
-                                VulnerabilityType.YAML_LOAD_UNSAFE
-                            ],
+                            owasp_category=OWASP_MAPPING[VulnerabilityType.YAML_LOAD_UNSAFE],
                             cwe_id="CWE-502",
                             current_code=code,
                             secure_alternative="yaml.safe_load(data) or yaml.load(data, Loader=yaml.SafeLoader)",
@@ -604,9 +581,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
                                 line_end=node.lineno,
                                 description="subprocess with shell=True is vulnerable to injection",
                                 recommendation="Use shell=False and pass command as list",
-                                owasp_category=OWASP_MAPPING[
-                                    VulnerabilityType.COMMAND_INJECTION
-                                ],
+                                owasp_category=OWASP_MAPPING[VulnerabilityType.COMMAND_INJECTION],
                                 cwe_id="CWE-78",
                                 current_code=code,
                                 secure_alternative="subprocess.run(['cmd', 'arg1', 'arg2'], shell=False)",
@@ -631,9 +606,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
                                 line_end=node.lineno,
                                 description="Debug mode appears to be enabled",
                                 recommendation="Disable debug mode in production",
-                                owasp_category=OWASP_MAPPING[
-                                    VulnerabilityType.DEBUG_MODE_ENABLED
-                                ],
+                                owasp_category=OWASP_MAPPING[VulnerabilityType.DEBUG_MODE_ENABLED],
                                 cwe_id="CWE-489",
                                 current_code=code,
                                 secure_alternative="DEBUG = os.getenv('DEBUG', 'false').lower() == 'true'",
@@ -685,9 +658,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
                         line_end=node.lineno,
                         description=f"f-string in {function_name} is vulnerable to command injection",
                         recommendation="Use subprocess.run() with list arguments",
-                        owasp_category=OWASP_MAPPING[
-                            VulnerabilityType.COMMAND_INJECTION
-                        ],
+                        owasp_category=OWASP_MAPPING[VulnerabilityType.COMMAND_INJECTION],
                         cwe_id="CWE-78",
                         current_code=code,
                         secure_alternative="subprocess.run(['cmd', arg], shell=False)",
@@ -764,9 +735,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
         ]
         self.results: List[SecurityFinding] = []
         self.total_files_scanned: int = 0  # Issue #686: Track total files analyzed
-        self.use_semantic_analysis = (
-            use_semantic_analysis and HAS_ANALYTICS_INFRASTRUCTURE
-        )
+        self.use_semantic_analysis = use_semantic_analysis and HAS_ANALYTICS_INFRASTRUCTURE
         self.use_shared_cache = use_shared_cache and HAS_SHARED_CACHE
 
         # Issue #554: Initialize analytics infrastructure if semantic analysis enabled
@@ -820,9 +789,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
 
         return findings
 
-    def _check_hardcoded_secrets(
-        self, file_path: str, content: str, lines: List[str]
-    ) -> List[SecurityFinding]:
+    def _check_hardcoded_secrets(self, file_path: str, content: str, lines: List[str]) -> List[SecurityFinding]:
         """Check for hardcoded secrets (Issue #665: extracted helper)."""
         findings: List[SecurityFinding] = []
 
@@ -858,9 +825,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
 
         return findings
 
-    def _check_sql_injection(
-        self, file_path: str, content: str, lines: List[str]
-    ) -> List[SecurityFinding]:
+    def _check_sql_injection(self, file_path: str, content: str, lines: List[str]) -> List[SecurityFinding]:
         """Check for SQL injection patterns (Issue #665: extracted helper)."""
         findings: List[SecurityFinding] = []
 
@@ -888,9 +853,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
 
         return findings
 
-    def _check_path_traversal(
-        self, file_path: str, content: str, lines: List[str]
-    ) -> List[SecurityFinding]:
+    def _check_path_traversal(self, file_path: str, content: str, lines: List[str]) -> List[SecurityFinding]:
         """Check for path traversal vulnerabilities (Issue #665: extracted helper)."""
         findings: List[SecurityFinding] = []
         path_traversal_pattern = r'open\s*\(\s*[^)]*\+[^)]*\)|open\s*\(\s*f["\']'
@@ -926,9 +889,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
 
         return findings
 
-    def _regex_analysis(
-        self, file_path: str, content: str, lines: List[str]
-    ) -> List[SecurityFinding]:
+    def _regex_analysis(self, file_path: str, content: str, lines: List[str]) -> List[SecurityFinding]:
         """
         Perform regex-based security analysis.
 
@@ -947,9 +908,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
 
         return findings
 
-    def analyze_directory(
-        self, directory: Optional[str] = None
-    ) -> List[SecurityFinding]:
+    def analyze_directory(self, directory: Optional[str] = None) -> List[SecurityFinding]:
         """Analyze all Python files in a directory."""
         target = Path(directory) if directory else self.project_root
         self.results = []
@@ -1007,9 +966,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
     ) -> Dict[str, Any]:
         """Build the final summary dictionary with all metrics. Issue #620."""
         files_analyzed = (
-            self.total_files_scanned
-            if self.total_files_scanned > 0
-            else len(set(f.file_path for f in self.results))
+            self.total_files_scanned if self.total_files_scanned > 0 else len(set(f.file_path for f in self.results))
         )
 
         return {
@@ -1041,9 +998,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
         security_score = calculate_score_from_severity_counts(by_severity)
         risk_level = get_risk_level_from_score(security_score)
 
-        return self._build_summary_dict(
-            by_severity, by_type, by_owasp, security_score, risk_level
-        )
+        return self._build_summary_dict(by_severity, by_type, by_owasp, security_score, risk_level)
 
     def _get_risk_level(self, score: int) -> str:
         """
@@ -1083,16 +1038,12 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
         recommendations = []
 
         severity_priority = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-        sorted_findings = sorted(
-            self.results, key=lambda f: severity_priority.get(f.severity.value, 4)
-        )
+        sorted_findings = sorted(self.results, key=lambda f: severity_priority.get(f.severity.value, 4))
 
         seen_types = set()
         for finding in sorted_findings[:10]:
             if finding.vulnerability_type not in seen_types:
-                recommendations.append(
-                    f"[{finding.severity.value.upper()}] {finding.recommendation}"
-                )
+                recommendations.append(f"[{finding.severity.value.upper()}] {finding.recommendation}")
                 seen_types.add(finding.vulnerability_type)
 
         return recommendations
@@ -1120,9 +1071,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
             for finding in report["findings"][:20]:  # Limit to top 20
                 md.append(f"### {finding['vulnerability_type']}\n")
                 md.append(f"- **Severity**: {finding['severity']}\n")
-                md.append(
-                    f"- **File**: {finding['file_path']}:{finding['line_start']}\n"
-                )
+                md.append(f"- **File**: {finding['file_path']}:{finding['line_start']}\n")
                 md.append(f"- **Description**: {finding['description']}\n")
                 md.append(f"- **OWASP**: {finding['owasp_category']}\n")
                 if finding.get("cwe_id"):
@@ -1200,9 +1149,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
                     "description": "description",
                     "owasp_category": "owasp_category",
                 },
-                min_similarity=(
-                    SIMILARITY_MEDIUM if HAS_ANALYTICS_INFRASTRUCTURE else 0.7
-                ),
+                min_similarity=(SIMILARITY_MEDIUM if HAS_ANALYTICS_INFRASTRUCTURE else 0.7),
             )
         except Exception as e:
             logger.warning("Semantic duplicate detection failed: %s", e)
@@ -1265,9 +1212,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
         )
 
 
-def analyze_security(
-    directory: Optional[str] = None, exclude_patterns: Optional[List[str]] = None
-) -> Dict[str, Any]:
+def analyze_security(directory: Optional[str] = None, exclude_patterns: Optional[List[str]] = None) -> Dict[str, Any]:
     """
     Convenience function to analyze security of a directory.
 
@@ -1278,9 +1223,7 @@ def analyze_security(
     Returns:
         Dictionary with results and summary
     """
-    analyzer = SecurityAnalyzer(
-        project_root=directory, exclude_patterns=exclude_patterns
-    )
+    analyzer = SecurityAnalyzer(project_root=directory, exclude_patterns=exclude_patterns)
     results = analyzer.analyze_directory()
 
     return {

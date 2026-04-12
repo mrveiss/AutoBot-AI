@@ -284,10 +284,7 @@ def _calculate_intent_scores(message_lower: str) -> Dict[str, float]:
 
     Issue #620.
     """
-    return {
-        intent: sum(1 for kw in keywords if kw in message_lower)
-        for intent, keywords in INTENT_KEYWORDS.items()
-    }
+    return {intent: sum(1 for kw in keywords if kw in message_lower) for intent, keywords in INTENT_KEYWORDS.items()}
 
 
 def _boost_scores_from_context(
@@ -314,9 +311,7 @@ def _boost_scores_from_context(
             intent_scores[intent] += 0.5
 
 
-def detect_user_intent(
-    message: str, conversation_history: Optional[List[Dict[str, str]]] = None
-) -> str:
+def detect_user_intent(message: str, conversation_history: Optional[List[Dict[str, str]]] = None) -> str:
     """
     Detect user's intent to select appropriate context prompt.
 
@@ -355,14 +350,10 @@ def detect_user_intent(
 
     if max_score > 0:
         detected_intent = max(intent_scores, key=intent_scores.get)
-        logger.debug(
-            f"Intent detected: {detected_intent} (score: {max_score}) for message: {message[:50]}..."
-        )
+        logger.debug(f"Intent detected: {detected_intent} (score: {max_score}) for message: {message[:50]}...")
         return detected_intent
 
-    logger.debug(
-        f"No specific intent detected, using general context for: {message[:50]}..."
-    )
+    logger.debug(f"No specific intent detected, using general context for: {message[:50]}...")
     return "general"
 
 

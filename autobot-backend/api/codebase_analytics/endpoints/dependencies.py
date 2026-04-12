@@ -175,11 +175,7 @@ def _find_cycles_dfs(graph: Dict[str, Set[str]], max_length: int = 5) -> List[Di
                 norm = tuple(raw[min_i:] + raw[:min_i])
                 if norm not in seen:
                     seen.add(norm)
-                    severity = (
-                        "high"
-                        if len(path) <= 2
-                        else "medium" if len(path) <= 4 else "low"
-                    )
+                    severity = "high" if len(path) <= 2 else "medium" if len(path) <= 4 else "low"
                     cycle_path = path + [start]
                     cycles.append(
                         {
@@ -199,9 +195,7 @@ def _find_cycles_dfs(graph: Dict[str, Set[str]], max_length: int = 5) -> List[Di
     return sorted(cycles, key=lambda c: c["length"])[:50]
 
 
-def _process_chromadb_metadata(
-    metadata: dict, modules: Dict[str, Dict], seen_files: set
-) -> None:
+def _process_chromadb_metadata(metadata: dict, modules: Dict[str, Dict], seen_files: set) -> None:
     """Process a single metadata entry from ChromaDB (Issue #315: extracted).
 
     Updates modules dict and seen_files set in place.
@@ -242,9 +236,7 @@ async def _read_file_content(py_file: Path) -> str | None:
         return None
 
 
-def _detect_circular_deps(
-    runtime_rels: List[Dict], module_index: Dict[str, str]
-) -> List[Dict]:
+def _detect_circular_deps(runtime_rels: List[Dict], module_index: Dict[str, str]) -> List[Dict]:
     """Detect circular dependencies with DFS and module resolution (#1197).
 
     Resolves import targets to file paths using module_index, builds a
@@ -315,9 +307,7 @@ async def _analyze_file_imports(
 
     # Create import relationships for graph visualization
     for imp in file_imports:
-        import_relationships.append(
-            {"source": rel_path, "target": imp, "type": "import"}
-        )
+        import_relationships.append({"source": rel_path, "target": imp, "type": "import"})
 
     # Runtime-only imports for circular detection (#1197)
     for imp in _extract_runtime_imports(tree):
@@ -366,9 +356,7 @@ def _build_visualization_graph(
     # Sort external dependencies by usage
     sorted_external = [
         {"package": pkg, "usage_count": count}
-        for pkg, count in sorted(
-            external_deps.items(), key=lambda x: x[1], reverse=True
-        )
+        for pkg, count in sorted(external_deps.items(), key=lambda x: x[1], reverse=True)
     ]
 
     return {
@@ -433,11 +421,7 @@ async def _scan_filesystem_imports(
         "dist",
         "build",
     }
-    python_files = [
-        f
-        for f in python_files
-        if not any(excluded in f.parts for excluded in excluded_dirs)
-    ]
+    python_files = [f for f in python_files if not any(excluded in f.parts for excluded in excluded_dirs)]
     # Prioritize source directories over infrastructure/tooling (#1197)
     _priority = {"autobot-backend", "autobot_shared"}
     python_files.sort(key=lambda f: 0 if _priority & set(f.parts) else 1)
@@ -494,11 +478,7 @@ async def get_dependencies():
     # Build module index and detect circular imports (#1197)
     module_index = _build_module_index(modules)
     circular_deps = _detect_circular_deps(runtime_rels, module_index)
-    return JSONResponse(
-        _build_visualization_graph(
-            modules, import_relationships, external_deps, circular_deps
-        )
-    )
+    return JSONResponse(_build_visualization_graph(modules, import_relationships, external_deps, circular_deps))
 
 
 # ------------------------------------------------------------------
@@ -534,9 +514,7 @@ async def _run_dep_analysis(task_id: str) -> None:
         circular_deps = _detect_circular_deps(runtime_rels, module_index)
 
         await _manager.update_progress(task_id, "Building visualization", 90.0)
-        result = _build_visualization_graph(
-            modules, import_relationships, external_deps, circular_deps
-        )
+        result = _build_visualization_graph(modules, import_relationships, external_deps, circular_deps)
         await _manager.complete_task(task_id, result)
     except Exception as e:
         logger.error("Dependency analysis failed: %s", e)

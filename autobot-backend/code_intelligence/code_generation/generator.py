@@ -39,9 +39,7 @@ try:
 except ImportError:
     LLM_INTERFACE_AVAILABLE = False
     LLMInterface = None
-    logger.warning(
-        "LLMInterface not available - code generation will fail without LLM client"
-    )
+    logger.warning("LLMInterface not available - code generation will fail without LLM client")
 
 
 class LLMCodeGenerator:
@@ -142,9 +140,7 @@ class LLMCodeGenerator:
             )
         return None
 
-    def _validate_and_check_behavior(
-        self, code: str, request: RefactoringRequest
-    ) -> ValidationResult:
+    def _validate_and_check_behavior(self, code: str, request: RefactoringRequest) -> ValidationResult:
         """
         Validate generated code and check behavior preservation.
 
@@ -166,13 +162,9 @@ class LLMCodeGenerator:
             )
 
         if self.preserve_behavior and validation.is_valid:
-            preserved, differences = CodeValidator.compare_behavior(
-                request.context.code_snippet, code
-            )
+            preserved, differences = CodeValidator.compare_behavior(request.context.code_snippet, code)
             if not preserved:
-                validation.warnings.extend(
-                    [f"Behavior change: {d}" for d in differences]
-                )
+                validation.warnings.extend([f"Behavior change: {d}" for d in differences])
 
         return validation
 
@@ -244,11 +236,7 @@ class LLMCodeGenerator:
         if validation.is_valid:
             self._cache[cache_key] = generated_code
 
-        status = (
-            GenerationStatus.SUCCESS
-            if validation.is_valid
-            else GenerationStatus.VALIDATION_FAILED
-        )
+        status = GenerationStatus.SUCCESS if validation.is_valid else GenerationStatus.VALIDATION_FAILED
 
         return RefactoringResult(
             request_id=request_id,
@@ -288,13 +276,9 @@ class LLMCodeGenerator:
             code = self._extract_code(generated_text)
 
             validation = self._validate_and_check_behavior(code, request)
-            generated_code = self._build_generated_code(
-                code, request, validation, generated_text, generation_time
-            )
+            generated_code = self._build_generated_code(code, request, validation, generated_text, generation_time)
 
-            return self._build_success_result(
-                request_id, request, generated_code, validation, cache_key
-            )
+            return self._build_success_result(request_id, request, generated_code, validation, cache_key)
 
         except Exception as e:
             logger.error("Generation failed: %s", e)
@@ -314,9 +298,7 @@ class LLMCodeGenerator:
             "target_name": request.target_name or "",
             "new_name": request.new_name or "",
             "pattern_template": request.pattern_template or "",
-            "constraints": (
-                "\n".join(request.constraints) if request.constraints else ""
-            ),
+            "constraints": ("\n".join(request.constraints) if request.constraints else ""),
             "target_code": "",  # Could be enhanced
         }
 
@@ -384,9 +366,7 @@ class LLMCodeGenerator:
 
         return ""
 
-    def _calculate_confidence(
-        self, validation: ValidationResult, response: str
-    ) -> float:
+    def _calculate_confidence(self, validation: ValidationResult, response: str) -> float:
         """Calculate confidence score for generated code."""
         score = 1.0
 
@@ -421,9 +401,7 @@ class LLMCodeGenerator:
             suggestions.append(f"Consider: {warning}")
 
         if validation.complexity_score > 15:
-            suggestions.append(
-                "Consider breaking down complex logic into smaller functions"
-            )
+            suggestions.append("Consider breaking down complex logic into smaller functions")
 
         return suggestions
 

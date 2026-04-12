@@ -67,9 +67,7 @@ class TeamService(BaseService):
         """Validate team name is unique within organization. Issue #620."""
         existing = await self._find_team_by_name(name)
         if existing:
-            raise DuplicateTeamError(
-                f"Team with name '{name}' already exists in this organization"
-            )
+            raise DuplicateTeamError(f"Team with name '{name}' already exists in this organization")
 
     def _build_team_object(
         self,
@@ -167,9 +165,7 @@ class TeamService(BaseService):
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
-    def _build_list_teams_base_query(
-        self, include_deleted: bool, search: Optional[str]
-    ):
+    def _build_list_teams_base_query(self, include_deleted: bool, search: Optional[str]):
         """
         Build base query for listing teams with filters applied.
 
@@ -225,9 +221,7 @@ class TeamService(BaseService):
         total = count_result.scalar() or 0
 
         query = (
-            base_query.options(
-                selectinload(Team.memberships).selectinload(TeamMembership.user)
-            )
+            base_query.options(selectinload(Team.memberships).selectinload(TeamMembership.user))
             .order_by(Team.name)
             .limit(limit)
             .offset(offset)
@@ -237,9 +231,7 @@ class TeamService(BaseService):
 
         return teams, total
 
-    async def _apply_team_name_update(
-        self, team: Team, name: str, team_id: uuid.UUID, changes: dict
-    ) -> None:
+    async def _apply_team_name_update(self, team: Team, name: str, team_id: uuid.UUID, changes: dict) -> None:
         """
         Apply name update to team if name has changed.
 
@@ -373,9 +365,7 @@ class TeamService(BaseService):
             TeamNotFoundError: If team not found
         """
         if role not in self.VALID_ROLES:
-            raise MembershipError(
-                f"Invalid role '{role}'. Must be one of: {self.VALID_ROLES}"
-            )
+            raise MembershipError(f"Invalid role '{role}'. Must be one of: {self.VALID_ROLES}")
 
         team = await self.get_team(team_id)
         if not team:
@@ -383,9 +373,7 @@ class TeamService(BaseService):
 
         existing = await self._get_membership(team_id, user_id)
         if existing:
-            raise MembershipError(
-                f"User {user_id} is already a member of team {team_id}"
-            )
+            raise MembershipError(f"User {user_id} is already a member of team {team_id}")
 
         return team
 
@@ -475,9 +463,7 @@ class TeamService(BaseService):
         if membership.role == self.ROLE_OWNER:
             owner_count = await self._count_owners(team_id)
             if owner_count <= 1:
-                raise MembershipError(
-                    "Cannot remove the last owner. Transfer ownership first."
-                )
+                raise MembershipError("Cannot remove the last owner. Transfer ownership first.")
 
         await self.session.delete(membership)
         await self.session.flush()
@@ -506,9 +492,7 @@ class TeamService(BaseService):
         if old_role == self.ROLE_OWNER and new_role != self.ROLE_OWNER:
             owner_count = await self._count_owners(team_id)
             if owner_count <= 1:
-                raise MembershipError(
-                    "Cannot demote the last owner. Add another owner first."
-                )
+                raise MembershipError("Cannot demote the last owner. Add another owner first.")
 
     async def _log_role_change(
         self,
@@ -561,9 +545,7 @@ class TeamService(BaseService):
             MembershipError: If invalid role or operation not allowed
         """
         if new_role not in self.VALID_ROLES:
-            raise MembershipError(
-                f"Invalid role '{new_role}'. Must be one of: {self.VALID_ROLES}"
-            )
+            raise MembershipError(f"Invalid role '{new_role}'. Must be one of: {self.VALID_ROLES}")
 
         membership = await self._get_membership(team_id, user_id)
         if not membership:
@@ -595,9 +577,7 @@ class TeamService(BaseService):
             List of TeamMembership instances with user data
         """
         query = (
-            select(TeamMembership)
-            .options(selectinload(TeamMembership.user))
-            .where(TeamMembership.team_id == team_id)
+            select(TeamMembership).options(selectinload(TeamMembership.user)).where(TeamMembership.team_id == team_id)
         )
 
         if role:
@@ -623,10 +603,7 @@ class TeamService(BaseService):
             List of Team instances
         """
         query = (
-            select(Team)
-            .join(TeamMembership)
-            .where(TeamMembership.user_id == user_id)
-            .where(Team.deleted_at.is_(None))
+            select(Team).join(TeamMembership).where(TeamMembership.user_id == user_id).where(Team.deleted_at.is_(None))
         )
         query = self.apply_tenant_filter(query, Team)
         query = query.order_by(Team.name)
@@ -673,19 +650,13 @@ class TeamService(BaseService):
 
     async def _find_team_by_name(self, name: str) -> Optional[Team]:
         """Find team by name within current organization."""
-        query = (
-            select(Team)
-            .where(func.lower(Team.name) == name.lower())
-            .where(Team.deleted_at.is_(None))
-        )
+        query = select(Team).where(func.lower(Team.name) == name.lower()).where(Team.deleted_at.is_(None))
         query = self.apply_tenant_filter(query, Team)
 
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
-    async def _get_membership(
-        self, team_id: uuid.UUID, user_id: uuid.UUID
-    ) -> Optional[TeamMembership]:
+    async def _get_membership(self, team_id: uuid.UUID, user_id: uuid.UUID) -> Optional[TeamMembership]:
         """Get membership record."""
         result = await self.session.execute(
             select(TeamMembership).where(

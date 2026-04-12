@@ -268,9 +268,7 @@ async def _slm_exec(
     payload = {"command": command, "timeout": timeout}
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url, json=payload, headers=headers, ssl=False
-            ) as resp:
+            async with session.post(url, json=payload, headers=headers, ssl=False) as resp:
                 data: Dict[str, Any] = await resp.json()
                 return (
                     data.get("success", False),
@@ -282,9 +280,7 @@ async def _slm_exec(
         return False, "", str(exc)
 
 
-async def _extract_command_list(
-    node_id: str, slm_url: str, auth_token: str
-) -> Set[str]:
+async def _extract_command_list(node_id: str, slm_url: str, auth_token: str) -> Set[str]:
     """Extract list of available commands from a host via SLM API.
 
     Issue #933: Replaces ssh_service.execute_command.
@@ -359,9 +355,7 @@ async def extract_host_commands(host_id: str) -> Dict[str, ExtractedCommand]:
     if not command_names:
         return {}
 
-    descriptions = await _extract_command_descriptions(
-        host_id, command_names, slm_url, auth_token
-    )
+    descriptions = await _extract_command_descriptions(host_id, command_names, slm_url, auth_token)
 
     result: Dict[str, ExtractedCommand] = {}
     for name in command_names:
@@ -403,10 +397,7 @@ async def store_commands_in_knowledge_base(
         return 0
 
     # Infrastructure services removed - now managed by SLM server (#729)
-    logger.warning(
-        "store_commands_in_knowledge_base temporarily disabled - "
-        "infrastructure services removed (#729)"
-    )
+    logger.warning("store_commands_in_knowledge_base temporarily disabled - " "infrastructure services removed (#729)")
     return 0
 
 
@@ -426,10 +417,7 @@ async def get_commands_for_host(host_id: str) -> List[str]:
         List of command names available on the host (currently always empty)
     """
     # Infrastructure services removed - now managed by SLM server (#729)
-    logger.warning(
-        "get_commands_for_host temporarily disabled - "
-        "infrastructure services removed (#729)"
-    )
+    logger.warning("get_commands_for_host temporarily disabled - " "infrastructure services removed (#729)")
     return []
 
 
@@ -465,9 +453,7 @@ async def search_commands(
         # Filter by host if specified
         if host_id:
             # Infrastructure services removed - now managed by SLM server (#729)
-            logger.warning(
-                "Host filtering temporarily disabled - infrastructure services removed (#729)"
-            )
+            logger.warning("Host filtering temporarily disabled - infrastructure services removed (#729)")
 
         # Filter by category if specified
         if category:

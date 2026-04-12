@@ -195,9 +195,7 @@ class ExecuteShellCommandHandler(TaskHandler):
         """
         if returncode == 0:
             return self._build_success_result(ctx, output, command, use_shell)
-        return self._build_error_result(
-            ctx, output, error, returncode, command, use_shell
-        )
+        return self._build_error_result(ctx, output, error, returncode, command, use_shell)
 
     async def execute(self, ctx: TaskExecutionContext) -> Dict[str, Any]:
         """
@@ -221,14 +219,10 @@ class ExecuteShellCommandHandler(TaskHandler):
             use_shell = validation_result["use_shell"]
 
             # Issue #281: uses helper
-            returncode, output, error = await self._run_subprocess(
-                command, parsed_command, use_shell
-            )
+            returncode, output, error = await self._run_subprocess(command, parsed_command, use_shell)
 
             # Issue #281: uses helper, Issue #322: uses context
-            return self._build_result_and_log(
-                ctx, returncode, output, error, command, use_shell
-            )
+            return self._build_result_and_log(ctx, returncode, output, error, command, use_shell)
 
         except Exception as e:
             logger.error("Shell command execution error: %s", e)

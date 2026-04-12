@@ -40,9 +40,7 @@ class CompletionContext:
     decorators: List[str] = field(default_factory=list)
 
     # Block-level context
-    variables_in_scope: Dict[str, str] = field(
-        default_factory=dict
-    )  # name -> inferred type
+    variables_in_scope: Dict[str, str] = field(default_factory=dict)  # name -> inferred type
     control_flow_type: Optional[str] = None  # if/for/while/try/with
     indent_level: int = 0
 
@@ -80,10 +78,7 @@ class CompletionContext:
             },
             "function_context": {
                 "current_function": self.current_function,
-                "function_params": [
-                    {"name": name, "type": type_}
-                    for name, type_ in self.function_params
-                ],
+                "function_params": [{"name": name, "type": type_} for name, type_ in self.function_params],
                 "function_return_type": self.function_return_type,
                 "decorators": self.decorators,
             },
@@ -126,10 +121,7 @@ class CompletionContext:
             defined_functions=data["file_context"]["defined_functions"],
             module_docstring=data["file_context"]["module_docstring"],
             current_function=data["function_context"]["current_function"],
-            function_params=[
-                (p["name"], p["type"])
-                for p in data["function_context"]["function_params"]
-            ],
+            function_params=[(p["name"], p["type"]) for p in data["function_context"]["function_params"]],
             function_return_type=data["function_context"]["function_return_type"],
             decorators=data["function_context"]["decorators"],
             variables_in_scope=data["block_context"]["variables_in_scope"],

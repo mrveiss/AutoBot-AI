@@ -8,10 +8,10 @@ Integrates secure command execution with role-based permissions
 
 import asyncio
 import datetime
-from datetime import timezone
 import json
 import logging
 import os
+from datetime import timezone
 from typing import Any, Dict, List, Optional
 
 # Import the centralized ConfigManager
@@ -26,9 +26,7 @@ HIGH_RISK_COMMAND_RISKS = {CommandRisk.HIGH, CommandRisk.MODERATE}
 COMMAND_EXECUTION_ACTIONS = {"command_execution_attempt", "command_execution_complete"}
 
 
-def _parse_audit_log_entry(
-    line: str, user: Optional[str] = None
-) -> Optional[Dict[str, Any]]:
+def _parse_audit_log_entry(line: str, user: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """Parse a single audit log line and filter by user (Issue #315: extracted).
 
     Args:
@@ -64,9 +62,7 @@ class EnhancedSecurityLayer:
         # Use centralized config manager
         self.security_config = global_config_manager.get("security_config", {})
         self.enable_auth = self.security_config.get("enable_auth", False)
-        self.enable_command_security = self.security_config.get(
-            "enable_command_security", True
-        )
+        self.enable_command_security = self.security_config.get("enable_command_security", True)
         self.audit_log_file = self.security_config.get(
             "audit_log_file", os.getenv("AUTOBOT_AUDIT_LOG_FILE", "data/audit.log")
         )
@@ -74,9 +70,7 @@ class EnhancedSecurityLayer:
         self.allowed_users = self.security_config.get("allowed_users", {})
 
         # Command security settings
-        self.command_approval_required = self.security_config.get(
-            "command_approval_required", True
-        )
+        self.command_approval_required = self.security_config.get("command_approval_required", True)
         self.use_docker_sandbox = self.security_config.get("use_docker_sandbox", False)
 
         # Initialize secure command executor
@@ -128,9 +122,7 @@ class EnhancedSecurityLayer:
 
         return policy
 
-    def _log_approval_request(
-        self, command_id: str, approval_data: Dict[str, Any]
-    ) -> None:
+    def _log_approval_request(self, command_id: str, approval_data: Dict[str, Any]) -> None:
         """Log command approval request to audit log. Issue #620."""
         self.audit_log(
             action="command_approval_request",
@@ -144,9 +136,7 @@ class EnhancedSecurityLayer:
             },
         )
 
-    def _check_auto_approve_moderate(
-        self, command_id: str, approval_data: Dict[str, Any]
-    ) -> Optional[bool]:
+    def _check_auto_approve_moderate(self, command_id: str, approval_data: Dict[str, Any]) -> Optional[bool]:
         """Check if moderate risk command should be auto-approved. Issue #620.
 
         Returns:
@@ -220,9 +210,7 @@ class EnhancedSecurityLayer:
             self.approval_results[command_id] = approved
             self.pending_approvals[command_id].set()
 
-    def _handle_deprecated_role(
-        self, user_role: str, action_type: str, resource: Optional[str]
-    ) -> str:
+    def _handle_deprecated_role(self, user_role: str, action_type: str, resource: Optional[str]) -> str:
         """Handle deprecated privileged roles by logging and downgrading. Issue #620.
 
         Args:
@@ -261,9 +249,7 @@ class EnhancedSecurityLayer:
             return True
         return False
 
-    def _check_wildcard_permissions(
-        self, action_type: str, role_permissions: List[str]
-    ) -> bool:
+    def _check_wildcard_permissions(self, action_type: str, role_permissions: List[str]) -> bool:
         """Check if action matches any wildcard permissions. Issue #620.
 
         Args:
@@ -280,9 +266,7 @@ class EnhancedSecurityLayer:
                     return True
         return False
 
-    def check_permission(
-        self, user_role: str, action_type: str, resource: Optional[str] = None
-    ) -> bool:
+    def check_permission(self, user_role: str, action_type: str, resource: Optional[str] = None) -> bool:
         """
         Enhanced permission checking that includes command execution permissions
         SECURITY FIX: Removed god mode bypass - all roles use granular RBAC
@@ -313,15 +297,10 @@ class EnhancedSecurityLayer:
         if action_type in default_permissions:
             return True
 
-        logger.warning(
-            f"Permission DENIED for role '{user_role}' to perform "
-            f"action '{action_type}'"
-        )
+        logger.warning(f"Permission DENIED for role '{user_role}' to perform " f"action '{action_type}'")
         return False
 
-    def _create_permission_denied_result(
-        self, command: str, user: str, user_role: str
-    ) -> Dict[str, Any]:
+    def _create_permission_denied_result(self, command: str, user: str, user_role: str) -> Dict[str, Any]:
         """
         Create a permission denied result for command execution.
 
@@ -381,10 +360,7 @@ class EnhancedSecurityLayer:
         if "allow_shell_execute_safe" in role_permissions and risk != CommandRisk.SAFE:
             # User can only execute safe commands without approval
             return True
-        elif (
-            "allow_shell_execute" in role_permissions
-            and risk in HIGH_RISK_COMMAND_RISKS
-        ):
+        elif "allow_shell_execute" in role_permissions and risk in HIGH_RISK_COMMAND_RISKS:
             # User has shell execute permission but high-risk commands need approval
             return True
 
@@ -435,9 +411,7 @@ class EnhancedSecurityLayer:
 
         return default_role_permissions.get(user_role, [])
 
-    def _log_command_attempt(
-        self, command: str, user: str, user_role: str, force_approval: bool
-    ) -> None:
+    def _log_command_attempt(self, command: str, user: str, user_role: str, force_approval: bool) -> None:
         """Log command execution attempt to audit log. Issue #620."""
         self.audit_log(
             action="command_execution_attempt",
@@ -464,9 +438,7 @@ class EnhancedSecurityLayer:
             "security": {"enabled": False},
         }
 
-    def _log_command_complete(
-        self, command: str, user: str, result: Dict[str, Any]
-    ) -> None:
+    def _log_command_complete(self, command: str, user: str, result: Dict[str, Any]) -> None:
         """Log command execution completion to audit log. Issue #620."""
         self.audit_log(
             action="command_execution_complete",
@@ -479,9 +451,7 @@ class EnhancedSecurityLayer:
             },
         )
 
-    async def execute_command(
-        self, command: str, user: str, user_role: str
-    ) -> Dict[str, Any]:
+    async def execute_command(self, command: str, user: str, user_role: str) -> Dict[str, Any]:
         """
         Execute a command with security checks and audit logging
 
@@ -500,9 +470,7 @@ class EnhancedSecurityLayer:
         self._log_command_attempt(command, user, user_role, force_approval)
 
         if self.enable_command_security:
-            result = await self.command_executor.run_shell_command(
-                command, force_approval=force_approval
-            )
+            result = await self.command_executor.run_shell_command(command, force_approval=force_approval)
         else:
             result = await self._execute_basic_command(command)
 
@@ -526,9 +494,7 @@ class EnhancedSecurityLayer:
         except Exception as e:
             logger.error("Failed to write to audit log: %s", e)
 
-    def get_command_history(
-        self, user: Optional[str] = None, limit: int = 100
-    ) -> List[Dict[str, Any]]:
+    def get_command_history(self, user: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
         """
         Get command execution history from audit log
 
@@ -616,10 +582,7 @@ if __name__ == "__main__":
         logger.info("Command History:")
         history = security.get_command_history(limit=10)
         for entry in history:
-            logger.info(
-                f"- {entry['timestamp']}: {entry['user']} - "
-                f"{entry['action']} - {entry['outcome']}"
-            )
+            logger.info(f"- {entry['timestamp']}: {entry['user']} - " f"{entry['action']} - {entry['outcome']}")
             if "command" in entry.get("details", {}):
                 logger.info(f"  Command: {entry['details']['command']}")
 

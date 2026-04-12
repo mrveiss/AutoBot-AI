@@ -29,9 +29,7 @@ class ConnectionTestRequest(BaseModel):
 
     provider: str = Field(..., description="VCS provider (gitlab, bitbucket)")
     api_key: str = Field(..., description="API key or access token")
-    settings: Dict[str, Any] = Field(
-        default_factory=dict, description="Provider-specific settings"
-    )
+    settings: Dict[str, Any] = Field(default_factory=dict, description="Provider-specific settings")
 
 
 class ProviderInfo(BaseModel):
@@ -40,12 +38,8 @@ class ProviderInfo(BaseModel):
     id: str = Field(..., description="Provider identifier")
     name: str = Field(..., description="Provider display name")
     description: str = Field(..., description="Provider description")
-    required_settings: List[str] = Field(
-        default_factory=list, description="Required configuration settings"
-    )
-    optional_settings: List[str] = Field(
-        default_factory=list, description="Optional configuration settings"
-    )
+    required_settings: List[str] = Field(default_factory=list, description="Required configuration settings")
+    optional_settings: List[str] = Field(default_factory=list, description="Optional configuration settings")
 
 
 SUPPORTED_PROVIDERS = {
@@ -126,11 +120,7 @@ async def test_connection(request: ConnectionTestRequest) -> IntegrationHealth:
             api_key=request.api_key,
             base_url=request.settings.get("base_url"),
             username=request.settings.get("username"),
-            extra={
-                k: v
-                for k, v in request.settings.items()
-                if k not in ("base_url", "username")
-            },
+            extra={k: v for k, v in request.settings.items() if k not in ("base_url", "username")},
         )
 
         integration = _create_integration(request.provider, config)

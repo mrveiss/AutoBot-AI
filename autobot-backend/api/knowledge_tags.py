@@ -260,9 +260,7 @@ async def search_facts_by_tags(
             detail="Knowledge base not initialized - please check logs for errors",
         )
 
-    logger.info(
-        f"Searching facts by tags: {request.tags}, match_all={request.match_all}"
-    )
+    logger.info(f"Searching facts by tags: {request.tags}, match_all={request.match_all}")
 
     result = await kb.search_facts_by_tags(
         tags=request.tags,
@@ -369,10 +367,7 @@ async def bulk_tag_facts(
             detail="Knowledge base not initialized - please check logs for errors",
         )
 
-    logger.info(
-        f"Bulk {request.operation} tags: {len(request.fact_ids)} facts, "
-        f"{len(request.tags)} tags"
-    )
+    logger.info(f"Bulk {request.operation} tags: {len(request.fact_ids)} facts, " f"{len(request.tags)} tags")
 
     result = await kb.bulk_tag_facts(
         fact_ids=request.fact_ids,

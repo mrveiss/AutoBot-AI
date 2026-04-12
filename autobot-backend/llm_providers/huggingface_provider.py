@@ -65,11 +65,7 @@ class HuggingFaceProvider(BaseProvider):
         """Resolve HF token from settings or environment."""
         if self._api_token:
             return self._api_token
-        self._api_token = (
-            self._get_setting("api_token")
-            or os.getenv("HF_TOKEN")
-            or os.getenv("HUGGINGFACE_API_TOKEN")
-        )
+        self._api_token = self._get_setting("api_token") or os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_API_TOKEN")
         return self._api_token
 
     def _build_headers(self) -> Dict[str, str]:
@@ -98,9 +94,7 @@ class HuggingFaceProvider(BaseProvider):
         """Execute a non-streaming chat completion via HuggingFace Inference API."""
         self._total_requests += 1
         start = time.time()
-        model = request.model_name or self._get_setting(
-            "default_model", "meta-llama/Llama-3.2-3B-Instruct"
-        )
+        model = request.model_name or self._get_setting("default_model", "meta-llama/Llama-3.2-3B-Instruct")
         url = f"{_HF_BASE_URL}/v1/chat/completions"
         try:
             http_client = get_http_client()
@@ -113,9 +107,7 @@ class HuggingFaceProvider(BaseProvider):
             ) as resp:
                 if resp.status != 200:
                     body = await resp.text()
-                    raise RuntimeError(
-                        f"HuggingFace API returned HTTP {resp.status}: {body}"
-                    )
+                    raise RuntimeError(f"HuggingFace API returned HTTP {resp.status}: {body}")
                 data = await resp.json()
             choice = data["choices"][0]
             usage = data.get("usage", {})
@@ -147,9 +139,7 @@ class HuggingFaceProvider(BaseProvider):
     async def stream_completion(self, request: LLMRequest) -> AsyncIterator[str]:
         """Stream a chat completion from HuggingFace, yielding text chunks."""
         self._total_requests += 1
-        model = request.model_name or self._get_setting(
-            "default_model", "meta-llama/Llama-3.2-3B-Instruct"
-        )
+        model = request.model_name or self._get_setting("default_model", "meta-llama/Llama-3.2-3B-Instruct")
         url = f"{_HF_BASE_URL}/v1/chat/completions"
         payload = self._build_chat_payload(request, model)
         payload["stream"] = True
@@ -164,9 +154,7 @@ class HuggingFaceProvider(BaseProvider):
             ) as resp:
                 if resp.status != 200:
                     body = await resp.text()
-                    raise RuntimeError(
-                        f"HuggingFace stream returned HTTP {resp.status}: {body}"
-                    )
+                    raise RuntimeError(f"HuggingFace stream returned HTTP {resp.status}: {body}")
                 async for line in resp.content:
                     decoded = line.decode("utf-8").strip()
                     if decoded.startswith("data: "):

@@ -6,15 +6,15 @@
 import pytest
 
 from services.memory.compression import (
-    ContextCompressionService,
     _DEFAULT_COMPRESSION_THRESHOLD,
+    ContextCompressionService,
     _estimate_tokens,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_svc(config_path=None) -> ContextCompressionService:
     """Return a service instance without loading the real YAML (path missing)."""
@@ -29,6 +29,7 @@ def _msg(role: str, content: str) -> dict:
 # ---------------------------------------------------------------------------
 # Token estimation
 # ---------------------------------------------------------------------------
+
 
 class TestEstimateTokens:
     def test_empty_string(self) -> None:
@@ -47,6 +48,7 @@ class TestEstimateTokens:
 # ---------------------------------------------------------------------------
 # should_compress
 # ---------------------------------------------------------------------------
+
 
 class TestShouldCompress:
     @pytest.mark.asyncio
@@ -83,6 +85,7 @@ class TestShouldCompress:
 # ---------------------------------------------------------------------------
 # compress_history
 # ---------------------------------------------------------------------------
+
 
 class TestCompressHistory:
     @pytest.mark.asyncio
@@ -142,6 +145,7 @@ class TestCompressHistory:
 # ---------------------------------------------------------------------------
 # compress_kb_results
 # ---------------------------------------------------------------------------
+
 
 class TestCompressKbResults:
     @pytest.mark.asyncio
@@ -211,15 +215,14 @@ class TestCompressKbResults:
 # Load thresholds from real YAML
 # ---------------------------------------------------------------------------
 
+
 class TestLoadThresholds:
     def test_phi3_threshold_matches_context_window(self) -> None:
         """phi3 compression_threshold must equal its context_window_tokens (4096)."""
         from pathlib import Path
 
         # Locate the real YAML relative to this test file
-        yaml_path = (
-            Path(__file__).parent.parent.parent / "config" / "context_windows.yaml"
-        )
+        yaml_path = Path(__file__).parent.parent.parent / "config" / "context_windows.yaml"
         if not yaml_path.exists():
             pytest.skip("context_windows.yaml not found")
 
@@ -230,9 +233,7 @@ class TestLoadThresholds:
         """Large models (e.g. gpt-4o) should have threshold > 8192."""
         from pathlib import Path
 
-        yaml_path = (
-            Path(__file__).parent.parent.parent / "config" / "context_windows.yaml"
-        )
+        yaml_path = Path(__file__).parent.parent.parent / "config" / "context_windows.yaml"
         if not yaml_path.exists():
             pytest.skip("context_windows.yaml not found")
 
@@ -287,9 +288,7 @@ class TestCompressionThresholdValidation:
         """The committed context_windows.yaml must pass the validator for all models."""
         from pathlib import Path
 
-        yaml_path = (
-            Path(__file__).parent.parent.parent / "config" / "context_windows.yaml"
-        )
+        yaml_path = Path(__file__).parent.parent.parent / "config" / "context_windows.yaml"
         if not yaml_path.exists():
             pytest.skip("context_windows.yaml not found")
 

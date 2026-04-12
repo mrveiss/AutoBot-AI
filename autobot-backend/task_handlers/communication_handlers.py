@@ -82,9 +82,7 @@ class AskUserCommandApprovalHandler(TaskHandler):
             {"task_id": ctx.task_id, "command": command_to_approve},
         )
 
-        result = task_pending_approval(
-            f"Requested user approval for command: {command_to_approve}"
-        )
+        result = task_pending_approval(f"Requested user approval for command: {command_to_approve}")
 
         ctx.audit_log(
             "ask_user_command_approval",

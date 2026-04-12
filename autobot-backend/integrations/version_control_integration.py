@@ -105,9 +105,7 @@ class GitLabIntegration(BaseIntegration):
             ),
         ]
 
-    async def execute_action(
-        self, action: str, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a GitLab action.
 
         Args:
@@ -222,13 +220,8 @@ class GitLabIntegration(BaseIntegration):
         commit_sha = params["commit_sha"]
 
         async with aiohttp.ClientSession() as session:
-            url = (
-                f"{self.base_url}/projects/{project_id}"
-                f"/repository/commits/{commit_sha}"
-            )
-            async with session.get(
-                url, headers=self.headers, timeout=aiohttp.ClientTimeout(total=30)
-            ) as response:
+            url = f"{self.base_url}/projects/{project_id}" f"/repository/commits/{commit_sha}"
+            async with session.get(url, headers=self.headers, timeout=aiohttp.ClientTimeout(total=30)) as response:
                 response.raise_for_status()
                 commit = await response.json()
                 return {"commit": commit}
@@ -350,9 +343,7 @@ class BitbucketIntegration(BaseIntegration):
             ),
         ]
 
-    async def execute_action(
-        self, action: str, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a Bitbucket action.
 
         Args:
@@ -422,9 +413,7 @@ class BitbucketIntegration(BaseIntegration):
             if hasattr(self, "auth"):
                 kwargs["auth"] = self.auth
 
-            url = (
-                f"{self.base_url}/repositories/{workspace}/" f"{repo_slug}/pullrequests"
-            )
+            url = f"{self.base_url}/repositories/{workspace}/" f"{repo_slug}/pullrequests"
             kwargs["params"] = {"state": state}
 
             async with session.get(url, **kwargs) as response:
@@ -455,10 +444,7 @@ class BitbucketIntegration(BaseIntegration):
             if hasattr(self, "auth"):
                 kwargs["auth"] = self.auth
 
-            url = (
-                f"{self.base_url}/repositories/{workspace}/"
-                f"{repo_slug}/refs/branches"
-            )
+            url = f"{self.base_url}/repositories/{workspace}/" f"{repo_slug}/refs/branches"
             async with session.get(url, **kwargs) as response:
                 response.raise_for_status()
                 data = await response.json()
@@ -488,10 +474,7 @@ class BitbucketIntegration(BaseIntegration):
             if hasattr(self, "auth"):
                 kwargs["auth"] = self.auth
 
-            url = (
-                f"{self.base_url}/repositories/{workspace}/"
-                f"{repo_slug}/commit/{commit_hash}"
-            )
+            url = f"{self.base_url}/repositories/{workspace}/" f"{repo_slug}/commit/{commit_hash}"
             async with session.get(url, **kwargs) as response:
                 response.raise_for_status()
                 commit = await response.json()

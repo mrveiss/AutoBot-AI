@@ -31,9 +31,7 @@ class URLValidator:
     ]
 
     # Private IP ranges - converted from SecurityConstants.BLOCKED_IP_RANGES
-    PRIVATE_IP_RANGES = [
-        ipaddress.ip_network(cidr) for cidr in SecurityConstants.BLOCKED_IP_RANGES
-    ] + [
+    PRIVATE_IP_RANGES = [ipaddress.ip_network(cidr) for cidr in SecurityConstants.BLOCKED_IP_RANGES] + [
         ipaddress.ip_network("fc00::/7"),  # IPv6 unique local
         ipaddress.ip_network("fe80::/10"),  # IPv6 link local
     ]
@@ -79,9 +77,7 @@ class URLValidator:
 
             # Check if domain allowlist is configured
             if self.allowed_domains:
-                if not any(
-                    hostname.endswith(domain) for domain in self.allowed_domains
-                ):
+                if not any(hostname.endswith(domain) for domain in self.allowed_domains):
                     return False, f"Domain {hostname} not in allowed list"
 
             # Resolve hostname to IP and check if it's private

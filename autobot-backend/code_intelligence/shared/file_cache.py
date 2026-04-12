@@ -58,22 +58,14 @@ JAVASCRIPT_EXTENSIONS: FrozenSet[str] = frozenset({".js", ".jsx", ".mjs"})
 VUE_EXTENSIONS: FrozenSet[str] = frozenset({".vue"})
 CSS_EXTENSIONS: FrozenSet[str] = frozenset({".css", ".scss", ".sass", ".less"})
 HTML_EXTENSIONS: FrozenSet[str] = frozenset({".html", ".htm"})
-CONFIG_EXTENSIONS: FrozenSet[str] = frozenset(
-    {".json", ".yaml", ".yml", ".toml", ".ini"}
-)
+CONFIG_EXTENSIONS: FrozenSet[str] = frozenset({".json", ".yaml", ".yml", ".toml", ".ini"})
 SHELL_EXTENSIONS: FrozenSet[str] = frozenset({".sh", ".bash", ".zsh"})
 
 FRONTEND_EXTENSIONS: FrozenSet[str] = (
-    TYPESCRIPT_EXTENSIONS
-    | JAVASCRIPT_EXTENSIONS
-    | VUE_EXTENSIONS
-    | CSS_EXTENSIONS
-    | HTML_EXTENSIONS
+    TYPESCRIPT_EXTENSIONS | JAVASCRIPT_EXTENSIONS | VUE_EXTENSIONS | CSS_EXTENSIONS | HTML_EXTENSIONS
 )
 
-ALL_CODE_EXTENSIONS: FrozenSet[str] = (
-    PYTHON_EXTENSIONS | FRONTEND_EXTENSIONS | SHELL_EXTENSIONS
-)
+ALL_CODE_EXTENSIONS: FrozenSet[str] = PYTHON_EXTENSIONS | FRONTEND_EXTENSIONS | SHELL_EXTENSIONS
 
 
 @dataclass
@@ -173,9 +165,7 @@ class FileListCache:
         self._cache_lock = threading.Lock()
         self._initialized = True
 
-        logger.info(
-            "FileListCache initialized: ttl=%ds, root=%s", self._ttl, self._root_path
-        )
+        logger.info("FileListCache initialized: ttl=%ds, root=%s", self._ttl, self._root_path)
 
     def _make_cache_key(self, extensions: FrozenSet[str], root_path: Path) -> str:
         """Generate cache key from extensions and root path."""
@@ -217,9 +207,7 @@ class FileListCache:
         self._stats.last_refresh_time_ms = elapsed_ms
         self._stats.last_refresh_timestamp = time.time()
 
-        logger.debug(
-            "FileListCache scan complete: %d files in %.1fms", len(files), elapsed_ms
-        )
+        logger.debug("FileListCache scan complete: %d files in %.1fms", len(files), elapsed_ms)
 
         return files
 
@@ -264,9 +252,7 @@ class FileListCache:
                 root_path=str(root),
                 extensions=extensions,
             )
-            self._stats.total_files_cached = sum(
-                len(entry.files) for entry in self._cache.values()
-            )
+            self._stats.total_files_cached = sum(len(entry.files) for entry in self._cache.values())
 
         return files.copy()
 
@@ -284,17 +270,11 @@ class FileListCache:
                 self._stats.invalidations += 1
                 logger.info("FileListCache: All entries invalidated")
             else:
-                keys_to_remove = [
-                    key
-                    for key, entry in self._cache.items()
-                    if entry.extensions == extensions
-                ]
+                keys_to_remove = [key for key, entry in self._cache.items() if entry.extensions == extensions]
                 for key in keys_to_remove:
                     del self._cache[key]
                     self._stats.invalidations += 1
-                logger.info(
-                    "FileListCache: Invalidated %d entries", len(keys_to_remove)
-                )
+                logger.info("FileListCache: Invalidated %d entries", len(keys_to_remove))
 
     def get_stats(self) -> Dict:
         """
@@ -324,9 +304,7 @@ class FileListCache:
         evicted = 0
         with self._cache_lock:
             # Sort by timestamp (oldest first)
-            sorted_keys = sorted(
-                self._cache.keys(), key=lambda k: self._cache[k].timestamp
-            )
+            sorted_keys = sorted(self._cache.keys(), key=lambda k: self._cache[k].timestamp)
             for key in sorted_keys[:count]:
                 del self._cache[key]
                 evicted += 1

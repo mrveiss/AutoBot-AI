@@ -126,9 +126,7 @@ class DelegateTool:
             metadata={"error": result.error},
         )
 
-    def _build_error_response(
-        self, error: Exception, is_repairable: bool = False
-    ) -> DelegateToolResponse:
+    def _build_error_response(self, error: Exception, is_repairable: bool = False) -> DelegateToolResponse:
         """
         Build response for delegation exceptions.
 
@@ -159,9 +157,7 @@ class DelegateTool:
             DelegateToolResponse if validation fails, None if valid. Issue #620.
         """
         if not self.hierarchical_agent:
-            logger.warning(
-                "[Issue #657] Delegate tool called without hierarchical agent"
-            )
+            logger.warning("[Issue #657] Delegate tool called without hierarchical agent")
             return DelegateToolResponse(
                 success=False,
                 message="Delegation not available in current context",

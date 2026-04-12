@@ -145,9 +145,7 @@ async def test_evaluate_patch_tests_fail_rejected(tmp_path):
     patch = _make_patch()
 
     with (
-        mock_patch.object(
-            harness, "_write_temp_module", return_value=tmp_path / "tmp.py"
-        ),
+        mock_patch.object(harness, "_write_temp_module", return_value=tmp_path / "tmp.py"),
         mock_patch.object(
             harness,
             "_run_tests",
@@ -187,9 +185,7 @@ async def test_evaluate_patch_approved_no_gate(tmp_path):
     )
 
     with (
-        mock_patch.object(
-            harness, "_write_temp_module", return_value=tmp_path / "tmp.py"
-        ),
+        mock_patch.object(harness, "_write_temp_module", return_value=tmp_path / "tmp.py"),
         mock_patch.object(
             harness,
             "_run_tests",
@@ -230,9 +226,7 @@ async def test_evaluate_patch_gate_approved(tmp_path):
     archive = Archive()
 
     with (
-        mock_patch.object(
-            harness, "_write_temp_module", return_value=tmp_path / "tmp.py"
-        ),
+        mock_patch.object(harness, "_write_temp_module", return_value=tmp_path / "tmp.py"),
         mock_patch.object(
             harness,
             "_run_tests",
@@ -269,9 +263,7 @@ async def test_evaluate_patch_gate_rejected(tmp_path):
     archive = Archive()
 
     with (
-        mock_patch.object(
-            harness, "_write_temp_module", return_value=tmp_path / "tmp.py"
-        ),
+        mock_patch.object(harness, "_write_temp_module", return_value=tmp_path / "tmp.py"),
         mock_patch.object(
             harness,
             "_run_tests",
@@ -310,9 +302,7 @@ async def test_evaluate_patch_adds_to_archive(tmp_path):
     archive = Archive()
 
     with (
-        mock_patch.object(
-            harness, "_write_temp_module", return_value=tmp_path / "tmp.py"
-        ),
+        mock_patch.object(harness, "_write_temp_module", return_value=tmp_path / "tmp.py"),
         mock_patch.object(
             harness,
             "_run_tests",
@@ -355,9 +345,7 @@ async def test_evaluate_patch_rejects_when_gate_required_no_session(tmp_path):
     )
 
     with (
-        mock_patch.object(
-            harness, "_write_temp_module", return_value=tmp_path / "tmp.py"
-        ),
+        mock_patch.object(harness, "_write_temp_module", return_value=tmp_path / "tmp.py"),
         mock_patch.object(
             harness,
             "_run_tests",
@@ -397,9 +385,7 @@ async def test_apply_patch_backup_includes_patch_id(tmp_path):
     archive = Archive()
 
     with (
-        mock_patch.object(
-            harness, "_write_temp_module", return_value=tmp_path / "tmp.py"
-        ),
+        mock_patch.object(harness, "_write_temp_module", return_value=tmp_path / "tmp.py"),
         mock_patch.object(
             harness,
             "_run_tests",

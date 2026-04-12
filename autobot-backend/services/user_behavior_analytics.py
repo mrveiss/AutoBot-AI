@@ -103,9 +103,7 @@ class UserBehaviorAnalytics:
     async def get_redis(self):
         """Get Redis client for analytics database"""
         if self._redis is None:
-            self._redis = get_redis_client(
-                async_client=True, database=RedisDatabase.ANALYTICS
-            )
+            self._redis = get_redis_client(async_client=True, database=RedisDatabase.ANALYTICS)
         return self._redis
 
     def _build_event_operations(self, redis, event: UserEvent) -> list:
@@ -162,10 +160,7 @@ class UserBehaviorAnalytics:
             operations = self._build_event_operations(redis, event)
             # Issue #483: Execute all operations in parallel
             await asyncio.gather(*operations, return_exceptions=True)
-            logger.debug(
-                f"Tracked event: {event.event_type} on {event.feature} "
-                f"for session {event.session_id}"
-            )
+            logger.debug(f"Tracked event: {event.event_type} on {event.feature} " f"for session {event.session_id}")
             return True
 
         except Exception as e:
@@ -312,10 +307,7 @@ class UserBehaviorAnalytics:
                 current += timedelta(days=1)
 
             # Calculate totals
-            total_views = sum(
-                sum(v for k, v in day.items() if k.endswith(":views"))
-                for day in daily_data.values()
-            )
+            total_views = sum(sum(v for k, v in day.items() if k.endswith(":views")) for day in daily_data.values())
 
             return {
                 "period": {
@@ -332,9 +324,7 @@ class UserBehaviorAnalytics:
             logger.error("Failed to get daily stats: %s", e)
             return {"error": "Failed to retrieve daily stats", "daily_stats": {}}
 
-    def _process_feature_stats(
-        self, stats: dict, unique_users: int, unique_sessions: int, feat: str
-    ) -> Optional[dict]:
+    def _process_feature_stats(self, stats: dict, unique_users: int, unique_sessions: int, feat: str) -> Optional[dict]:
         """Process feature stats from Redis (Issue #665: extracted helper).
 
         Args:
@@ -362,9 +352,7 @@ class UserBehaviorAnalytics:
 
         # Extract event counts
         event_counts = {
-            key.replace("events:", ""): int(value)
-            for key, value in decoded_stats.items()
-            if key.startswith("events:")
+            key.replace("events:", ""): int(value) for key, value in decoded_stats.items() if key.startswith("events:")
         }
 
         return {
@@ -457,12 +445,8 @@ class UserBehaviorAnalytics:
             feature_data = features.get("features", {})
 
             # Calculate engagement scores
-            total_sessions = sum(
-                f.get("unique_sessions", 0) for f in feature_data.values()
-            )
-            total_time = sum(
-                f.get("total_time_spent_ms", 0) for f in feature_data.values()
-            )
+            total_sessions = sum(f.get("unique_sessions", 0) for f in feature_data.values())
+            total_time = sum(f.get("total_time_spent_ms", 0) for f in feature_data.values())
             total_views = sum(f.get("total_views", 0) for f in feature_data.values())
 
             avg_session_duration = total_time / max(total_sessions, 1)
@@ -470,10 +454,7 @@ class UserBehaviorAnalytics:
 
             # Feature popularity ranking
             popularity = sorted(
-                [
-                    {"feature": f, "views": d.get("total_views", 0)}
-                    for f, d in feature_data.items()
-                ],
+                [{"feature": f, "views": d.get("total_views", 0)} for f, d in feature_data.items()],
                 key=lambda x: x["views"],
                 reverse=True,
             )
@@ -487,9 +468,7 @@ class UserBehaviorAnalytics:
                     "pages_per_session": round(pages_per_session, 2),
                 },
                 "feature_popularity": popularity,
-                "most_popular_feature": (
-                    popularity[0]["feature"] if popularity else None
-                ),
+                "most_popular_feature": (popularity[0]["feature"] if popularity else None),
             }
 
         except Exception as e:
@@ -522,11 +501,7 @@ class UserBehaviorAnalytics:
 
                 result.append(
                     {
-                        "event_id": (
-                            event_id
-                            if isinstance(event_id, str)
-                            else event_id.decode("utf-8")
-                        ),
+                        "event_id": (event_id if isinstance(event_id, str) else event_id.decode("utf-8")),
                         **decoded,
                     }
                 )

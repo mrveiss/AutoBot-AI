@@ -124,9 +124,7 @@ class TestWorkflowCheckpointManager:
 
     def test_save_and_load(self) -> None:
         mgr = self._manager_with_fake_redis()
-        cp = StepCheckpoint(
-            step_id="step1", status=TaskStatus.COMPLETED.value, output={"success": True}
-        )
+        cp = StepCheckpoint(step_id="step1", status=TaskStatus.COMPLETED.value, output={"success": True})
         mgr.save("wf-1", cp)
 
         loaded = mgr.load_all("wf-1")
@@ -141,9 +139,7 @@ class TestWorkflowCheckpointManager:
     def test_save_multiple_steps(self) -> None:
         mgr = self._manager_with_fake_redis()
         for i in range(3):
-            mgr.save(
-                "wf-2", StepCheckpoint(step_id=f"s{i}", status=TaskStatus.COMPLETED.value, output={})
-            )
+            mgr.save("wf-2", StepCheckpoint(step_id=f"s{i}", status=TaskStatus.COMPLETED.value, output={}))
         loaded = mgr.load_all("wf-2")
         assert set(loaded.keys()) == {"s0", "s1", "s2"}
 
@@ -181,8 +177,7 @@ class TestWorkflowCheckpointManager:
     def test_checkpoint_ttl_is_30_days(self) -> None:
         """CHECKPOINT_TTL must be at least 30 days for paused workflows."""
         assert CHECKPOINT_TTL >= 30 * 24 * 3600, (
-            "CHECKPOINT_TTL is too short — paused workflows awaiting human "
-            "approval must survive at least 30 days"
+            "CHECKPOINT_TTL is too short — paused workflows awaiting human " "approval must survive at least 30 days"
         )
 
     def test_save_sets_ttl(self) -> None:
@@ -236,58 +231,44 @@ class TestStepErrorHandler:
     def test_abort_by_default(self) -> None:
         handler = StepErrorHandler()
         step = {"id": "s1", "action": "run"}
-        outcome = self._run(
-            handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"})
-        )
+        outcome = self._run(handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"}))
         assert outcome["action"] == StepErrorAction.ABORT
 
     def test_skip_action(self) -> None:
         handler = StepErrorHandler()
         step = self._step({"action": "skip"})
-        outcome = self._run(
-            handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"})
-        )
+        outcome = self._run(handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"}))
         assert outcome["action"] == StepErrorAction.SKIP
 
     def test_retry_below_max(self) -> None:
         handler = StepErrorHandler()
         step = self._step({"action": "retry", "max_retries": 3, "base_delay": 0.0})
-        outcome = self._run(
-            handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"})
-        )
+        outcome = self._run(handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"}))
         assert outcome["action"] == StepErrorAction.RETRY
 
     def test_retry_exhausted_becomes_abort(self) -> None:
         handler = StepErrorHandler()
         step = self._step({"action": "retry", "max_retries": 3, "base_delay": 0.0})
-        outcome = self._run(
-            handler.handle_error(step, ValueError("oops"), 3, {"workflow_id": "wf"})
-        )
+        outcome = self._run(handler.handle_error(step, ValueError("oops"), 3, {"workflow_id": "wf"}))
         assert outcome["action"] == StepErrorAction.ABORT
 
     def test_fallback_with_id(self) -> None:
         handler = StepErrorHandler()
         step = self._step({"action": "fallback", "fallback_step_id": "step_b"})
-        outcome = self._run(
-            handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"})
-        )
+        outcome = self._run(handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"}))
         assert outcome["action"] == StepErrorAction.FALLBACK
         assert outcome["fallback_id"] == "step_b"
 
     def test_fallback_without_id_becomes_abort(self) -> None:
         handler = StepErrorHandler()
         step = self._step({"action": "fallback"})
-        outcome = self._run(
-            handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"})
-        )
+        outcome = self._run(handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"}))
         assert outcome["action"] == StepErrorAction.ABORT
 
     def test_pause_action(self) -> None:
         handler = StepErrorHandler()
         step = self._step({"action": "pause"})
-        outcome = self._run(
-            handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"})
-        )
+        outcome = self._run(handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"}))
         assert outcome["action"] == StepErrorAction.PAUSE
 
     def test_exponential_backoff_grows(self) -> None:
@@ -319,7 +300,5 @@ class TestStepErrorHandler:
             "action": "run",
             "error_config": {"action": "invalid_action"},
         }
-        outcome = self._run(
-            handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"})
-        )
+        outcome = self._run(handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"}))
         assert outcome["action"] == StepErrorAction.ABORT

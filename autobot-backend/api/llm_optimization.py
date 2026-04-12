@@ -152,9 +152,7 @@ async def get_available_models(admin_check: bool = Depends(check_admin_permissio
     error_code_prefix="LLM_OPTIMIZATION",
 )
 @router.post("/models/select")
-async def select_optimal_model(
-    request: OptimizationRequest, admin_check: bool = Depends(check_admin_permission)
-):
+async def select_optimal_model(request: OptimizationRequest, admin_check: bool = Depends(check_admin_permission)):
     """Select the optimal model for a given task
 
     Issue #744: Requires admin authentication."""
@@ -197,9 +195,7 @@ async def select_optimal_model(
                     "memory_percent": resources["memory_percent"],
                     "available_memory_gb": resources["available_memory_gb"],
                 },
-                "selection_criteria": (
-                    "Balanced for performance, quality, and resource efficiency"
-                ),
+                "selection_criteria": ("Balanced for performance, quality, and resource efficiency"),
             },
             "timestamp": time.time(),
         }
@@ -254,9 +250,7 @@ async def track_model_performance(
     error_code_prefix="LLM_OPTIMIZATION",
 )
 @router.get("/models/performance/history/{model_name}")
-async def get_model_performance_history(
-    model_name: str, admin_check: bool = Depends(check_admin_permission)
-):
+async def get_model_performance_history(model_name: str, admin_check: bool = Depends(check_admin_permission)):
     """Get performance history for a specific model
 
     Issue #744: Requires admin authentication."""
@@ -267,9 +261,7 @@ async def get_model_performance_history(
         await optimizer.refresh_available_models()
 
         if model_name not in optimizer._models_cache:
-            raise HTTPException(
-                status_code=404, detail=f"Model '{model_name}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Model '{model_name}' not found")
 
         model = optimizer._models_cache[model_name]
 
@@ -307,9 +299,7 @@ async def get_optimization_suggestions(
 
     except Exception as e:
         logger.error("Error getting optimization suggestions: %s", e)
-        raise HTTPException(
-            status_code=500, detail="Failed to get optimization suggestions"
-        )
+        raise HTTPException(status_code=500, detail="Failed to get optimization suggestions")
 
 
 @with_error_handling(
@@ -347,9 +337,7 @@ async def compare_models(admin_check: bool = Depends(check_admin_permission)):
 
         # Sort each category by performance score
         for level in comparison_data:
-            comparison_data[level].sort(
-                key=lambda x: x["performance_score"], reverse=True
-            )
+            comparison_data[level].sort(key=lambda x: x["performance_score"], reverse=True)
 
         # Find best models in each category
         best_models = {}
@@ -401,9 +389,7 @@ async def benchmark_model(
         # Check if model exists
         models = await optimizer.refresh_available_models()
         if not any(model.name == model_name for model in models):
-            raise HTTPException(
-                status_code=404, detail=f"Model '{model_name}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Model '{model_name}' not found")
 
         # Note: In a real implementation, you would actually call the model here
         # For now, we'll return a benchmark structure
@@ -412,9 +398,7 @@ async def benchmark_model(
             "test_queries": test_queries,
             "iterations_per_query": iterations,
             "status": "benchmark_scheduled",
-            "message": (
-                "Benchmark scheduled. In a real implementation, this would run the actual model tests."
-            ),
+            "message": ("Benchmark scheduled. In a real implementation, this would run the actual model tests."),
             "expected_metrics": [
                 "average_response_time",
                 "tokens_per_second",
@@ -456,9 +440,7 @@ async def get_system_resources(admin_check: bool = Depends(check_admin_permissio
                 {
                     "type": "warning",
                     "message": "High CPU usage detected",
-                    "suggestion": (
-                        "Consider using lighter models or reducing concurrent requests"
-                    ),
+                    "suggestion": ("Consider using lighter models or reducing concurrent requests"),
                 }
             )
 
@@ -506,9 +488,7 @@ async def get_optimization_config(admin_check: bool = Depends(check_admin_permis
     Issue #744: Requires admin authentication."""
     try:
         optimization_config = {
-            "performance_threshold": config.get(
-                "llm.optimization.performance_threshold", 0.8
-            ),
+            "performance_threshold": config.get("llm.optimization.performance_threshold", 0.8),
             "cache_ttl": config.get("llm.optimization.cache_ttl", 3600),
             "min_samples": config.get("llm.optimization.min_samples", 5),
             "model_classification": {
@@ -762,9 +742,7 @@ async def get_inference_metrics(admin_check: bool = Depends(check_admin_permissi
     error_code_prefix="LLM_OPTIMIZATION",
 )
 @router.get("/inference/provider/{provider_type}/optimizations")
-async def get_provider_optimization_summary(
-    provider_type: str, admin_check: bool = Depends(check_admin_permission)
-):
+async def get_provider_optimization_summary(provider_type: str, admin_check: bool = Depends(check_admin_permission)):
     """
     Get optimization summary for a specific provider type (Issue #717).
 
@@ -792,8 +770,7 @@ async def get_provider_optimization_summary(
         if not provider_enum:
             raise HTTPException(
                 status_code=400,
-                detail=f"Unknown provider type: {provider_type}. "
-                f"Valid types: {list(provider_map.keys())}",
+                detail=f"Unknown provider type: {provider_type}. " f"Valid types: {list(provider_map.keys())}",
             )
 
         router = get_optimization_router()

@@ -79,9 +79,7 @@ class CustomOpenAIProvider(BaseProvider):
 
     def _resolve_api_key(self) -> str:
         """Resolve the API key (many local servers accept any non-empty string)."""
-        return (
-            self._get_setting("api_key") or os.getenv("CUSTOM_OPENAI_API_KEY") or "none"
-        )
+        return self._get_setting("api_key") or os.getenv("CUSTOM_OPENAI_API_KEY") or "none"
 
     def _ensure_client(self):
         """Lazily initialize the async OpenAI client pointed at the custom URL."""
@@ -90,9 +88,7 @@ class CustomOpenAIProvider(BaseProvider):
         try:
             import openai
         except ImportError as exc:
-            raise ImportError(
-                "openai package not installed. Run: pip install openai"
-            ) from exc
+            raise ImportError("openai package not installed. Run: pip install openai") from exc
         self._client = openai.AsyncOpenAI(
             base_url=self._resolve_base_url(),
             api_key=self._resolve_api_key(),
@@ -124,9 +120,7 @@ class CustomOpenAIProvider(BaseProvider):
         model = request.model_name or self._default_model()
         try:
             client = self._ensure_client()
-            response = await client.chat.completions.create(
-                **self._build_params(request, model)
-            )
+            response = await client.chat.completions.create(**self._build_params(request, model))
             choice = response.choices[0]
             usage = response.usage
             return LLMResponse(

@@ -594,9 +594,7 @@ class TestInternalHelpers:
 
     def test_max_seq_from_budget_inverse_of_compute(self):
         """max_seq from budget should invert compute_cache_bytes."""
-        kwargs = dict(
-            num_layers=2, batch_size=1, num_heads=2, head_dim=8, dtype_bytes=2
-        )
+        kwargs = dict(num_layers=2, batch_size=1, num_heads=2, head_dim=8, dtype_bytes=2)
         seq = 100
         budget = _compute_cache_bytes(max_seq_len=seq, **kwargs)
         recovered = _max_seq_from_budget(budget_bytes=budget, **kwargs)

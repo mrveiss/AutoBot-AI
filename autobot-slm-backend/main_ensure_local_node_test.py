@@ -103,9 +103,7 @@ def _load_module():
         "services.schedule_executor": MagicMock(),
     }
     with patch.dict(sys.modules, stubs):
-        spec = importlib.util.spec_from_file_location(
-            "isolated_main", _SLM_ROOT / "main.py"
-        )
+        spec = importlib.util.spec_from_file_location("isolated_main", _SLM_ROOT / "main.py")
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
 

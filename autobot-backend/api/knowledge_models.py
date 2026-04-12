@@ -82,9 +82,7 @@ class FactIdValidator(BaseModel):
         """Validate fact_id format to prevent injection attacks"""
         # Allow UUID format or safe alphanumeric with underscores/hyphens
         if not _ALNUM_ID_RE.match(v):
-            raise ValueError(
-                "Invalid fact_id format: only alphanumeric, underscore, and hyphen allowed"
-            )
+            raise ValueError("Invalid fact_id format: only alphanumeric, underscore, and hyphen allowed")
         # Prevent path traversal attempts (Issue #328 - uses shared validation)
         if contains_path_traversal(v):
             raise ValueError("Path traversal not allowed in fact_id")
@@ -116,9 +114,7 @@ class EnhancedSearchRequest(BaseModel):
         le=100,
         description="Max results to return",
     )
-    offset: int = Field(
-        default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Pagination offset"
-    )
+    offset: int = Field(default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Pagination offset")
     category: Optional[str] = Field(default=None, max_length=100)
     tags: Optional[List[str]] = Field(
         default=None,
@@ -131,8 +127,7 @@ class EnhancedSearchRequest(BaseModel):
     )
     mode: str = Field(
         default=CategoryDefaults.SEARCH_MODE_HYBRID,
-        description="Search mode: 'semantic' (vector only), 'keyword' (text only), "
-        "'hybrid' (both)",
+        description="Search mode: 'semantic' (vector only), 'keyword' (text only), " "'hybrid' (both)",
     )
     enable_reranking: bool = Field(
         default=False,
@@ -237,9 +232,7 @@ class ConsolidatedSearchRequest(BaseModel):
         le=100,
         description="Maximum results to return",
     )
-    category: Optional[str] = Field(
-        default=None, max_length=100, description="Filter by category"
-    )
+    category: Optional[str] = Field(default=None, max_length=100, description="Filter by category")
 
     # Search mode
     mode: str = Field(
@@ -284,9 +277,7 @@ class ConsolidatedSearchRequest(BaseModel):
     )
 
     # Pagination
-    offset: int = Field(
-        default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Pagination offset"
-    )
+    offset: int = Field(default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Pagination offset")
 
     # Advanced filtering (Issue #78 v2 features)
     created_after: Optional[str] = Field(
@@ -479,9 +470,7 @@ class AddTextRequest(BaseModel):
         """Validate access level (Issue #685)."""
         valid_levels = {"autobot", "general", "system", "user"}
         if v not in valid_levels:
-            raise ValueError(
-                f"Invalid access_level: {v}. Must be one of: {valid_levels}"
-            )
+            raise ValueError(f"Invalid access_level: {v}. Must be one of: {valid_levels}")
         return v
 
     @validator("source_type")
@@ -499,9 +488,7 @@ class ScanHostChangesRequest(BaseModel):
     machine_id: str = Field(..., min_length=1, max_length=100)
     force: bool = Field(default=False)
     scan_type: str = Field(default="manpages", max_length=50)
-    auto_vectorize: bool = Field(
-        default=False, description="Automatically vectorize detected changes"
-    )
+    auto_vectorize: bool = Field(default=False, description="Automatically vectorize detected changes")
 
 
 class AdvancedSearchRequest(BaseModel):
@@ -514,23 +501,15 @@ class AdvancedSearchRequest(BaseModel):
         le=50,
         description="Maximum results to return",
     )
-    enable_reranking: bool = Field(
-        default=True, description="Enable cross-encoder reranking"
-    )
-    return_context: bool = Field(
-        default=False, description="Return optimized context for RAG"
-    )
-    timeout: Optional[float] = Field(
-        default=None, description="Optional timeout in seconds"
-    )
+    enable_reranking: bool = Field(default=True, description="Enable cross-encoder reranking")
+    return_context: bool = Field(default=False, description="Return optimized context for RAG")
+    timeout: Optional[float] = Field(default=None, description="Optional timeout in seconds")
 
 
 class RerankRequest(BaseModel):
     """Request model for reranking existing search results"""
 
-    query: str = Field(
-        ..., min_length=1, max_length=1000, description="Original search query"
-    )
+    query: str = Field(..., min_length=1, max_length=1000, description="Original search query")
     results: List[Metadata] = Field(..., description="Search results to rerank")
 
 
@@ -549,10 +528,7 @@ class TagValidator(BaseModel):
         v = v.lower().strip()
         # Allow alphanumeric, hyphens, underscores
         if not _LOWERCASE_TAG_RE.match(v):
-            raise ValueError(
-                "Invalid tag format: only lowercase alphanumeric, underscore, "
-                "and hyphen allowed"
-            )
+            raise ValueError("Invalid tag format: only lowercase alphanumeric, underscore, " "and hyphen allowed")
         # Prevent injection attempts (Issue #328 - uses shared validation)
         if contains_path_traversal(v):
             raise ValueError("Invalid characters in tag")
@@ -624,10 +600,7 @@ class BulkTagRequest(BaseModel):
         """Validate each fact ID format (Critical fix #5)"""
         # Reuse existing FactIdValidator logic
         if not _ALNUM_ID_RE.match(v):
-            raise ValueError(
-                f"Invalid fact_id format: {v} - only alphanumeric, "
-                "underscore, and hyphen allowed"
-            )
+            raise ValueError(f"Invalid fact_id format: {v} - only alphanumeric, " "underscore, and hyphen allowed")
         # Prevent path traversal attempts (Issue #328 - uses shared validation)
         if contains_path_traversal(v):
             raise ValueError(f"Path traversal not allowed in fact_id: {v}")
@@ -693,10 +666,7 @@ class RenameTagRequest(BaseModel):
         """Validate new tag format."""
         v = v.lower().strip()
         if not _LOWERCASE_TAG_RE.match(v):
-            raise ValueError(
-                "Invalid tag format: only lowercase alphanumeric, underscore, "
-                "and hyphen allowed"
-            )
+            raise ValueError("Invalid tag format: only lowercase alphanumeric, underscore, " "and hyphen allowed")
         if contains_path_traversal(v):
             raise ValueError("Invalid characters in tag")
         return v
@@ -731,10 +701,7 @@ class MergeTagsRequest(BaseModel):
         """Validate target tag format."""
         v = v.lower().strip()
         if not _LOWERCASE_TAG_RE.match(v):
-            raise ValueError(
-                "Invalid tag format: only lowercase alphanumeric, underscore, "
-                "and hyphen allowed"
-            )
+            raise ValueError("Invalid tag format: only lowercase alphanumeric, underscore, " "and hyphen allowed")
         if contains_path_traversal(v):
             raise ValueError("Invalid characters in tag")
         return v
@@ -749,9 +716,7 @@ class GetFactsByTagRequest(BaseModel):
         le=500,
         description="Max facts to return",
     )
-    offset: int = Field(
-        default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Pagination offset"
-    )
+    offset: int = Field(default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Pagination offset")
     include_content: bool = Field(
         default=False,
         description="Include fact content in response",
@@ -803,9 +768,7 @@ class UpdateTagStyleRequest(BaseModel):
         """Validate hex color format."""
         if v is not None:
             if not _HEX_COLOR_RE.match(v):
-                raise ValueError(
-                    f"Invalid color format: {v}. Use hex format like '#3B82F6'"
-                )
+                raise ValueError(f"Invalid color format: {v}. Use hex format like '#3B82F6'")
         return v
 
     @validator("icon")
@@ -814,9 +777,7 @@ class UpdateTagStyleRequest(BaseModel):
         if v is not None:
             # Only allow alphanumeric, hyphens, and spaces (for icon classes)
             if not re.match(r"^[a-zA-Z0-9\s\-]+$", v):
-                raise ValueError(
-                    "Invalid icon format: only alphanumeric, spaces, hyphens"
-                )
+                raise ValueError("Invalid icon format: only alphanumeric, spaces, hyphens")
         return v
 
 
@@ -866,10 +827,7 @@ class CreateCategoryRequest(BaseModel):
         """Validate category name format."""
         v = v.lower().strip().replace(" ", "-")
         if not _CATEGORY_NAME_RE.match(v):
-            raise ValueError(
-                "Invalid category name: only lowercase alphanumeric, "
-                "hyphens, underscores allowed"
-            )
+            raise ValueError("Invalid category name: only lowercase alphanumeric, " "hyphens, underscores allowed")
         if contains_path_traversal(v):
             raise ValueError("Invalid characters in category name")
         return v
@@ -889,9 +847,7 @@ class CreateCategoryRequest(BaseModel):
         """Validate hex color format."""
         if v is not None:
             if not _HEX_COLOR_RE.match(v):
-                raise ValueError(
-                    f"Invalid color format: {v}. Use hex format like '#3B82F6'"
-                )
+                raise ValueError(f"Invalid color format: {v}. Use hex format like '#3B82F6'")
         return v
 
 
@@ -932,10 +888,7 @@ class UpdateCategoryRequest(BaseModel):
         if v is not None:
             v = v.lower().strip().replace(" ", "-")
             if not _CATEGORY_NAME_RE.match(v):
-                raise ValueError(
-                    "Invalid category name: only lowercase alphanumeric, "
-                    "hyphens, underscores allowed"
-                )
+                raise ValueError("Invalid category name: only lowercase alphanumeric, " "hyphens, underscores allowed")
         return v
 
     @validator("color")
@@ -943,9 +896,7 @@ class UpdateCategoryRequest(BaseModel):
         """Validate hex color format if provided."""
         if v is not None:
             if not _HEX_COLOR_RE.match(v):
-                raise ValueError(
-                    f"Invalid color format: {v}. Use hex format like '#3B82F6'"
-                )
+                raise ValueError(f"Invalid color format: {v}. Use hex format like '#3B82F6'")
         return v
 
 
@@ -1082,9 +1033,7 @@ class CreateCollectionRequest(BaseModel):
         """Validate hex color format."""
         if v is not None:
             if not _HEX_COLOR_RE.match(v):
-                raise ValueError(
-                    f"Invalid color format: {v}. Use hex format like '#3B82F6'"
-                )
+                raise ValueError(f"Invalid color format: {v}. Use hex format like '#3B82F6'")
         return v
 
 
@@ -1136,9 +1085,7 @@ class UpdateCollectionRequest(BaseModel):
         """Validate hex color format if provided."""
         if v is not None:
             if not _HEX_COLOR_RE.match(v):
-                raise ValueError(
-                    f"Invalid color format: {v}. Use hex format like '#3B82F6'"
-                )
+                raise ValueError(f"Invalid color format: {v}. Use hex format like '#3B82F6'")
         return v
 
 
@@ -1350,9 +1297,7 @@ class MetadataFieldDefinition(BaseModel):
         """Validate field name format."""
         v = v.strip()
         if not re.match(r"^[a-zA-Z][a-zA-Z0-9_]*$", v):
-            raise ValueError(
-                "Field name must start with letter, contain only alphanumeric/underscore"
-            )
+            raise ValueError("Field name must start with letter, contain only alphanumeric/underscore")
         return v
 
     @validator("type")
@@ -1638,9 +1583,7 @@ class DeduplicationRequest(BaseModel):
     def validate_strategy(cls, v):
         """Validate keep strategy"""
         if v not in _VALID_SORT_OPTIONS:  # Issue #380: use module constant
-            raise ValueError(
-                f"Invalid strategy: {v}. Must be one of {_VALID_SORT_OPTIONS}"
-            )
+            raise ValueError(f"Invalid strategy: {v}. Must be one of {_VALID_SORT_OPTIONS}")
         return v
 
 
@@ -1809,12 +1752,8 @@ class UpdateFactRequest(BaseModel):
         max_length=1000000,
         description="New content for the fact",
     )
-    category: Optional[str] = Field(
-        default=None, max_length=100, description="New category"
-    )
-    metadata: Optional[Metadata] = Field(
-        default=None, description="New or updated metadata"
-    )
+    category: Optional[str] = Field(default=None, max_length=100, description="New category")
+    metadata: Optional[Metadata] = Field(default=None, description="New or updated metadata")
 
     @validator("category")
     def validate_category(cls, v):

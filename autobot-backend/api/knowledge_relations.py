@@ -48,9 +48,7 @@ class CreateRelationRequest(BaseModel):
         ...,
         description="Type of relation (e.g., relates_to, depends_on, implements)",
     )
-    metadata: Optional[dict] = Field(
-        None, description="Optional metadata for the relation"
-    )
+    metadata: Optional[dict] = Field(None, description="Optional metadata for the relation")
 
 
 class DeleteRelationRequest(BaseModel):
@@ -58,9 +56,7 @@ class DeleteRelationRequest(BaseModel):
 
     source_fact_id: str = Field(..., description="ID of the source fact")
     target_fact_id: str = Field(..., description="ID of the target fact")
-    relation_type: Optional[str] = Field(
-        None, description="Specific relation type to delete (None = all relations)"
-    )
+    relation_type: Optional[str] = Field(None, description="Specific relation type to delete (None = all relations)")
 
 
 class TraverseRequest(BaseModel):
@@ -68,12 +64,8 @@ class TraverseRequest(BaseModel):
 
     start_fact_id: str = Field(..., description="Starting fact ID for traversal")
     max_depth: int = Field(2, ge=1, le=5, description="Maximum traversal depth")
-    relation_types: Optional[List[str]] = Field(
-        None, description="Optional list of relation types to follow"
-    )
-    include_fact_details: bool = Field(
-        False, description="Include full fact content in results"
-    )
+    relation_types: Optional[List[str]] = Field(None, description="Optional list of relation types to follow")
+    include_fact_details: bool = Field(False, description="Include full fact content in results")
 
 
 class HybridSearchRequest(BaseModel):
@@ -81,13 +73,9 @@ class HybridSearchRequest(BaseModel):
 
     query: str = Field(..., description="Search query text")
     top_k: int = Field(10, ge=1, le=100, description="Number of vector matches")
-    expand_relations: bool = Field(
-        True, description="Expand results with graph relations"
-    )
+    expand_relations: bool = Field(True, description="Expand results with graph relations")
     relation_depth: int = Field(1, ge=1, le=3, description="Relation traversal depth")
-    relation_types: Optional[List[str]] = Field(
-        None, description="Filter by relation types"
-    )
+    relation_types: Optional[List[str]] = Field(None, description="Filter by relation types")
 
 
 # ============================================================================
@@ -183,13 +171,9 @@ async def delete_fact_relation(req: Request, body: DeleteRelationRequest):
 async def get_fact_relations(
     req: Request,
     fact_id: str,
-    direction: str = Query(
-        "both", description="Direction: 'outgoing', 'incoming', or 'both'"
-    ),
+    direction: str = Query("both", description="Direction: 'outgoing', 'incoming', or 'both'"),
     relation_type: Optional[str] = Query(None, description="Filter by relation type"),
-    include_details: bool = Query(
-        False, description="Include full fact content for related facts"
-    ),
+    include_details: bool = Query(False, description="Include full fact content for related facts"),
 ):
     """
     Get all relations for a specific fact.

@@ -87,6 +87,7 @@ class HybridScorer:
         """Lazily obtain the async Redis client (cached on self._redis)."""
         if self._redis is None:
             from autobot_shared.redis_client import get_redis_client
+
             self._redis = await get_redis_client(async_client=True, database="knowledge")
         return self._redis
 
@@ -126,9 +127,7 @@ class HybridScorer:
             # Semantic score
             entity_embedding = await _fetch_entity_embedding(entity_id, redis)
             sem_score = (
-                cosine_similarity(query_embedding, entity_embedding)
-                if query_embedding and entity_embedding
-                else 0.0
+                cosine_similarity(query_embedding, entity_embedding) if query_embedding and entity_embedding else 0.0
             )
 
             # Keyword (BM25) score
@@ -144,9 +143,7 @@ class HybridScorer:
                     semantic_score=round(sem_score, 4),
                     keyword_score=round(kw_score, 4),
                     matched_keywords=matched,
-                    explanation=_build_explanation(
-                        sem_score, kw_score, combined, matched
-                    ),
+                    explanation=_build_explanation(sem_score, kw_score, combined, matched),
                 )
             )
 
@@ -158,9 +155,7 @@ class HybridScorer:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def cosine_similarity(
-        vec_a: List[float], vec_b: List[float]
-    ) -> float:
+    def cosine_similarity(vec_a: List[float], vec_b: List[float]) -> float:
         """Return cosine similarity in [0.0, 1.0] between two vectors."""
         return cosine_similarity(vec_a, vec_b)
 
@@ -226,9 +221,7 @@ class HybridScorer:
 # ---------------------------------------------------------------------------
 
 
-def cosine_similarity(
-    vec_a: Optional[List[float]], vec_b: Optional[List[float]]
-) -> float:
+def cosine_similarity(vec_a: Optional[List[float]], vec_b: Optional[List[float]]) -> float:
     """
     Compute cosine similarity between two float vectors.
 
@@ -294,11 +287,7 @@ def _build_explanation(
     matched_keywords: List[str],
 ) -> str:
     """Produce a human-readable explanation of the hybrid score."""
-    kw_part = (
-        f"keywords matched: {', '.join(matched_keywords)}"
-        if matched_keywords
-        else "no keyword matches"
-    )
+    kw_part = f"keywords matched: {', '.join(matched_keywords)}" if matched_keywords else "no keyword matches"
     return (
         f"score={combined:.2f} "
         f"(semantic={sem_score:.2f} × {SEMANTIC_WEIGHT}, "

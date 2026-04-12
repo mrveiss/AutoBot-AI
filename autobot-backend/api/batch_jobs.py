@@ -62,12 +62,8 @@ class BatchJobCreate(BaseModel):
 
     name: str = Field(..., description="Human-readable name for the job")
     job_type: BatchJobType = Field(..., description="Type of batch job")
-    parameters: Dict = Field(
-        default_factory=dict, description="Job-specific parameters"
-    )
-    schedule: Optional[str] = Field(
-        None, description="Optional cron expression for scheduling"
-    )
+    parameters: Dict = Field(default_factory=dict, description="Job-specific parameters")
+    schedule: Optional[str] = Field(None, description="Optional cron expression for scheduling")
     template_id: Optional[str] = Field(None, description="Optional template ID to use")
 
 
@@ -709,9 +705,7 @@ def _process_session_file(filename: str, chats_directory: str):
         stat = os.stat(chat_path)
         return {
             "id": chat_id,
-            "title": (
-                f"Chat {chat_id[-8:]}" if len(chat_id) > 8 else f"Chat {chat_id}"
-            ),
+            "title": (f"Chat {chat_id[-8:]}" if len(chat_id) > 8 else f"Chat {chat_id}"),
             "created_at": datetime.fromtimestamp(stat.st_ctime).isoformat(),
             "updated_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
             "message_count": 0,
@@ -834,19 +828,9 @@ async def batch_chat_initialization():
             return_exceptions=True,
         )
 
-        chat_sessions = (
-            results[0] if not isinstance(results[0], Exception) else {"sessions": []}
-        )
-        system_health = (
-            results[1]
-            if not isinstance(results[1], Exception)
-            else {"status": "unknown"}
-        )
-        service_health = (
-            results[2]
-            if not isinstance(results[2], Exception)
-            else {"status": "unknown"}
-        )
+        chat_sessions = results[0] if not isinstance(results[0], Exception) else {"sessions": []}
+        system_health = results[1] if not isinstance(results[1], Exception) else {"status": "unknown"}
+        service_health = results[2] if not isinstance(results[2], Exception) else {"status": "unknown"}
         settings = results[3] if not isinstance(results[3], Exception) else {}
 
         response = {

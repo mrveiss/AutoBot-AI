@@ -40,14 +40,9 @@ class AgentOrgNode(Base, TimestampMixin):
     agent_id = Column(String(255), nullable=False, unique=True, index=True)
     name = Column(String(255), nullable=False)
     reports_to = Column(String(255), nullable=True, index=True)
-    org_role = Column(
-        String(50), nullable=False, default=OrgRole.WORKER.value, index=True
-    )
+    org_role = Column(String(50), nullable=False, default=OrgRole.WORKER.value, index=True)
     title = Column(String(255), nullable=True)
     capabilities = Column(Text, nullable=True)
 
     def __repr__(self) -> str:
-        return (
-            f"<AgentOrgNode agent={self.agent_id!r} role={self.org_role!r} "
-            f"reports_to={self.reports_to!r}>"
-        )
+        return f"<AgentOrgNode agent={self.agent_id!r} role={self.org_role!r} " f"reports_to={self.reports_to!r}>"

@@ -428,9 +428,7 @@ def analyze_with_ast(filepath: str, content: str) -> list[PerformanceIssue]:
 # ============================================================================
 
 
-def analyze_with_regex(
-    filepath: str, content: str, patterns: dict[str, PatternDefinition]
-) -> list[PerformanceIssue]:
+def analyze_with_regex(filepath: str, content: str, patterns: dict[str, PatternDefinition]) -> list[PerformanceIssue]:
     """Analyze code using regex patterns."""
     issues: list[PerformanceIssue] = []
     lines = content.split("\n")
@@ -449,9 +447,7 @@ def analyze_with_regex(
                 snippet_start = max(0, line_start - 2)
                 snippet_end = min(len(lines), line_start + 2)
                 snippet = "\n".join(
-                    f"{i}: {lines[i-1]}"
-                    for i in range(snippet_start + 1, snippet_end + 1)
-                    if i <= len(lines)
+                    f"{i}: {lines[i-1]}" for i in range(snippet_start + 1, snippet_end + 1) if i <= len(lines)
                 )
 
                 issues.append(
@@ -551,9 +547,7 @@ async def analyze_path(
     # Return no_data response if no files to analyze
     if not files_to_analyze:
         return JSONResponse(
-            content=_no_data_response(
-                "No files found to analyze. Please provide a valid path."
-            ),
+            content=_no_data_response("No files found to analyze. Please provide a valid path."),
             status_code=200,
         )
 
@@ -561,9 +555,7 @@ async def analyze_path(
     for filepath in files_to_analyze:
         try:
             content = await asyncio.to_thread(filepath.read_text, encoding="utf-8")
-            all_issues.extend(
-                analyze_with_regex(str(filepath), content, PERFORMANCE_PATTERNS)
-            )
+            all_issues.extend(analyze_with_regex(str(filepath), content, PERFORMANCE_PATTERNS))
             if include_ast:
                 all_issues.extend(analyze_with_ast(str(filepath), content))
         except Exception as e:
@@ -691,31 +683,21 @@ async def get_summary(
                 "total_analyses": 0,
                 "average_score": 0,
                 "common_issues": [],
-                "patterns_enabled": sum(
-                    1 for p in PERFORMANCE_PATTERNS.values() if p.enabled
-                ),
+                "patterns_enabled": sum(1 for p in PERFORMANCE_PATTERNS.values() if p.enabled),
             }
 
         # Count issue frequency
         issue_counts: dict[str, int] = {}
         for analysis in _analysis_history:
             for issue in analysis.issues:
-                issue_counts[issue.pattern_id] = (
-                    issue_counts.get(issue.pattern_id, 0) + 1
-                )
+                issue_counts[issue.pattern_id] = issue_counts.get(issue.pattern_id, 0) + 1
 
         common_issues = [
             {
                 "pattern_id": k,
                 "count": v,
-                "name": (
-                    PERFORMANCE_PATTERNS[k].name if k in PERFORMANCE_PATTERNS else k
-                ),
-                "impact": (
-                    PERFORMANCE_PATTERNS[k].impact.value
-                    if k in PERFORMANCE_PATTERNS
-                    else "medium"
-                ),
+                "name": (PERFORMANCE_PATTERNS[k].name if k in PERFORMANCE_PATTERNS else k),
+                "impact": (PERFORMANCE_PATTERNS[k].impact.value if k in PERFORMANCE_PATTERNS else "medium"),
             }
             for k, v in sorted(issue_counts.items(), key=lambda x: -x[1])[:10]
         ]
@@ -730,9 +712,7 @@ async def get_summary(
                 1,
             ),
             "common_issues": common_issues,
-            "patterns_enabled": sum(
-                1 for p in PERFORMANCE_PATTERNS.values() if p.enabled
-            ),
+            "patterns_enabled": sum(1 for p in PERFORMANCE_PATTERNS.values() if p.enabled),
             "total_patterns": len(PERFORMANCE_PATTERNS),
         }
 
@@ -799,17 +779,11 @@ async def get_hotspots(
         {
             "file": filepath,
             "issue_count": len(issues),
-            "critical_count": sum(
-                1 for i in issues if i.impact == ImpactLevel.CRITICAL
-            ),
+            "critical_count": sum(1 for i in issues if i.impact == ImpactLevel.CRITICAL),
             "high_count": sum(1 for i in issues if i.impact == ImpactLevel.HIGH),
-            "top_issues": [
-                {"pattern_id": i.pattern_id, "name": i.name} for i in issues[:3]
-            ],
+            "top_issues": [{"pattern_id": i.pattern_id, "name": i.name} for i in issues[:3]],
         }
-        for filepath, issues in sorted(file_issues.items(), key=lambda x: -len(x[1]))[
-            :limit
-        ]
+        for filepath, issues in sorted(file_issues.items(), key=lambda x: -len(x[1]))[:limit]
     ]
 
     return hotspots

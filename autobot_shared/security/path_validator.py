@@ -59,9 +59,7 @@ def validate_path(
     if not user_path or "\x00" in user_path:
         raise ValueError("Invalid path: empty or contains null bytes")
 
-    roots = (
-        tuple(allowed_roots) if allowed_roots is not None else _DEFAULT_ALLOWED_ROOTS
-    )
+    roots = tuple(allowed_roots) if allowed_roots is not None else _DEFAULT_ALLOWED_ROOTS
 
     resolved = Path(os.path.realpath(user_path))
 

@@ -23,7 +23,6 @@ from services.knowledge_grounding_models import (
     KBStatus,
 )
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -106,10 +105,7 @@ class TestClaimExtraction:
         response = "Latency is 500ms. Memory usage is 2GB. Response time is 200ms."
         result = await claim_classifier.extract_claims(response)
         assert len(result.claims) > 0
-        assert any(
-            any(unit in claim.lower() for unit in ["ms", "gb", "mb"])
-            for claim in result.claims
-        )
+        assert any(any(unit in claim.lower() for unit in ["ms", "gb", "mb"]) for claim in result.claims)
 
     @pytest.mark.asyncio
     async def test_extract_procedural_claims(self, claim_classifier):
@@ -117,10 +113,7 @@ class TestClaimExtraction:
         response = "We should cache this data. Must validate input. Need to add logging."
         result = await claim_classifier.extract_claims(response)
         assert len(result.claims) > 0
-        assert any(
-            any(word in claim.lower() for word in ["should", "must", "need"])
-            for claim in result.claims
-        )
+        assert any(any(word in claim.lower() for word in ["should", "must", "need"]) for claim in result.claims)
 
     @pytest.mark.asyncio
     async def test_extract_predictive_claims(self, claim_classifier):
@@ -653,15 +646,10 @@ class TestIntegration:
     """Integration tests combining extraction and classification."""
 
     @pytest.mark.asyncio
-    async def test_end_to_end_extraction_and_classification(
-        self, claim_classifier
-    ):
+    async def test_end_to_end_extraction_and_classification(self, claim_classifier):
         """Extract claims from response and classify them."""
         claim_classifier._redis_client = None
-        response = (
-            "The API is slow. Latency is 5 seconds. "
-            "We should cache results. This will improve performance."
-        )
+        response = "The API is slow. Latency is 5 seconds. " "We should cache results. This will improve performance."
 
         # Extract claims
         extraction_result = await claim_classifier.extract_claims(response)
@@ -677,9 +665,7 @@ class TestIntegration:
             assert classification.kb_status is not None
 
     @pytest.mark.asyncio
-    async def test_claim_extraction_result_processing_time(
-        self, claim_classifier
-    ):
+    async def test_claim_extraction_result_processing_time(self, claim_classifier):
         """Verify processing time is tracked accurately."""
         response = "Test claim that should be processed."
         result = await claim_classifier.extract_claims(response)

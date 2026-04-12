@@ -97,9 +97,7 @@ async def test_knowledge_base_optimization():
         print(f"📄 Processing test document: {test_file}")  # noqa: print
 
         # Process with GPU-optimized chunking
-        results = await kb.add_documents_from_directory(
-            temp_dir, file_extensions=[".txt"]
-        )
+        results = await kb.add_documents_from_directory(temp_dir, file_extensions=[".txt"])
 
         processing_time = time.time() - start_time
 
@@ -111,9 +109,7 @@ async def test_knowledge_base_optimization():
 
         if results["total_chunks"] > 0:
             chunks_per_second = results["total_chunks"] / processing_time
-            print(
-                f"  ⚡ Performance: {chunks_per_second:.1f} chunks/sec"
-            )  # noqa: print
+            print(f"  ⚡ Performance: {chunks_per_second:.1f} chunks/sec")  # noqa: print
 
         # Test search functionality
         print("\n🔍 Testing search with processed document...")  # noqa: print
@@ -136,27 +132,17 @@ async def test_knowledge_base_optimization():
 
         # Estimate performance improvement based on previous benchmarks
         estimated_original_time = processing_time * 5.4  # Based on our 5.4x improvement
-        print(
-            f"  🐌 Estimated original processing time: {estimated_original_time:.2f}s"
-        )  # noqa: print
+        print(f"  🐌 Estimated original processing time: {estimated_original_time:.2f}s")  # noqa: print
         print(f"  🚀 GPU-optimized time: {processing_time:.2f}s")  # noqa: print
-        print(  # noqa: print
-            f"  📊 Speed improvement: ~{estimated_original_time/processing_time:.1f}x faster"
-        )
+        print(f"  📊 Speed improvement: ~{estimated_original_time/processing_time:.1f}x faster")  # noqa: print
 
         # Memory and resource efficiency
         if processing_time < 5.0:
-            print(
-                "  ✅ Excellent performance: <5 seconds for document processing"
-            )  # noqa: print
+            print("  ✅ Excellent performance: <5 seconds for document processing")  # noqa: print
         elif processing_time < 10.0:
-            print(
-                "  👍 Good performance: <10 seconds for document processing"
-            )  # noqa: print
+            print("  👍 Good performance: <10 seconds for document processing")  # noqa: print
         else:
-            print(  # noqa: print
-                f"  ⚠️  Performance needs optimization: >{processing_time:.1f} seconds"
-            )
+            print(f"  ⚠️  Performance needs optimization: >{processing_time:.1f} seconds")  # noqa: print
 
     print("\n🏁 Knowledge Base Optimization Test Complete")  # noqa: print
     return {
@@ -224,9 +210,7 @@ if __name__ == "__main__":
             print("⚠️  GPU-optimized semantic chunker may not be active")  # noqa: print
 
         print("📊 Performance Metrics:")  # noqa: print
-        print(
-            f"  - Document processing: {results['processing_time']:.2f}s"
-        )  # noqa: print
+        print(f"  - Document processing: {results['processing_time']:.2f}s")  # noqa: print
         print(f"  - Chunks created: {results['chunks_created']}")  # noqa: print
         print(f"  - Search performance: {results['search_time']:.3f}s")  # noqa: print
         print(f"  - Search results: {results['search_results']}")  # noqa: print
@@ -242,9 +226,7 @@ if __name__ == "__main__":
         )
 
         if success:
-            print(
-                "\n🎉 SUCCESS: Knowledge base GPU optimization is working correctly!"
-            )  # noqa: print
+            print("\n🎉 SUCCESS: Knowledge base GPU optimization is working correctly!")  # noqa: print
         else:
             print("\n⚠️  ATTENTION: Some optimization issues detected")  # noqa: print
 

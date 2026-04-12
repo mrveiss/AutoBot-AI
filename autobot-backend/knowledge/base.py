@@ -80,21 +80,15 @@ class KnowledgeBaseCore:
         self.redis_port = ssot_config.port.redis
         self.redis_password = ssot_config.redis.password
         self.redis_db = DATABASE_MAPPING["knowledge"]  # (#2670)
-        self.redis_index_name = config.get(
-            "redis.indexes.knowledge_base", "llama_index"
-        )
+        self.redis_index_name = config.get("redis.indexes.knowledge_base", "llama_index")
 
     def _init_chromadb_config(self) -> None:
         """Initialize ChromaDB configuration (Issue #398: extracted)."""
         self.chromadb_path = config.get("memory.chromadb.path", "data/chromadb")
-        self.chromadb_collection = config.get(
-            "memory.chromadb.collection_name", "autobot_memory"
-        )
+        self.chromadb_collection = config.get("memory.chromadb.collection_name", "autobot_memory")
         # Issue #72: HNSW parameters optimized for 545K+ vectors
         self.hnsw_space = config.get("memory.chromadb.hnsw.space", "cosine")
-        self.hnsw_construction_ef = config.get(
-            "memory.chromadb.hnsw.construction_ef", 300
-        )
+        self.hnsw_construction_ef = config.get("memory.chromadb.hnsw.construction_ef", 300)
         self.hnsw_search_ef = config.get("memory.chromadb.hnsw.search_ef", 100)
         self.hnsw_m = config.get("memory.chromadb.hnsw.M", 32)
 
@@ -151,9 +145,7 @@ class KnowledgeBaseCore:
 
                 # Verify vector store was actually initialized
                 if not self.vector_store:
-                    logger.error(
-                        "Vector store initialization failed - self.vector_store is None"
-                    )
+                    logger.error("Vector store initialization failed - self.vector_store is None")
                     raise RuntimeError("Vector store failed to initialize")
 
                 # Step 4: Initialize stats counters (Issue #71 - O(1) stats)
@@ -177,9 +169,7 @@ class KnowledgeBaseCore:
         """Alias for initialize() - backward compatibility with existing scripts."""
         return await self.initialize()
 
-    def _configure_llm_provider(
-        self, provider: str, model: str, endpoint: str, timeout: float, ssot_config
-    ) -> None:
+    def _configure_llm_provider(self, provider: str, model: str, endpoint: str, timeout: float, ssot_config) -> None:
         """Configure LLM provider for LlamaIndex (Issue #665: extracted helper).
 
         Args:
@@ -214,9 +204,7 @@ class KnowledgeBaseCore:
         else:
             raise ValueError(f"Unsupported LlamaIndex LLM provider: {provider}")
 
-    def _configure_embedding_provider(
-        self, provider: str, model_name: str, endpoint: str, ssot_config
-    ) -> int:
+    def _configure_embedding_provider(self, provider: str, model_name: str, endpoint: str, ssot_config) -> int:
         """Configure embedding provider for LlamaIndex (Issue #665: extracted helper).
 
         Args:
@@ -261,9 +249,7 @@ class KnowledgeBaseCore:
         """
         stored_model = await self._detect_stored_embedding_model()
         if stored_model:
-            logger.info(
-                "Using stored embedding model for consistency: %s", stored_model
-            )
+            logger.info("Using stored embedding model for consistency: %s", stored_model)
             return stored_model
 
         embed_model_name = ssot_config.llm.embedding_model
@@ -293,9 +279,7 @@ class KnowledgeBaseCore:
             embed_endpoint,
         )
 
-        self._configure_llm_provider(
-            llm_provider, llm_model, llm_endpoint, kb_timeouts.llm_default, ssot_config
-        )
+        self._configure_llm_provider(llm_provider, llm_model, llm_endpoint, kb_timeouts.llm_default, ssot_config)
 
         embed_model_name = await self._resolve_embedding_model_name(ssot_config)
 
@@ -341,8 +325,7 @@ class KnowledgeBaseCore:
             self.aioredis_client = await get_async_redis_client(database="knowledge")
             if self.aioredis_client is None:
                 raise Exception(
-                    "Async Redis client initialization returned None "
-                    "(circuit breaker open or Redis disabled)"
+                    "Async Redis client initialization returned None " "(circuit breaker open or Redis disabled)"
                 )
 
             # Test async connection
@@ -365,8 +348,7 @@ class KnowledgeBaseCore:
     async def _create_chroma_collection(self, chroma_client, hnsw_metadata: dict):
         """Create ChromaDB collection with HNSW parameters (Issue #398: extracted)."""
         logger.info(
-            "Creating ChromaDB collection with HNSW params: "
-            "space=%s, construction_ef=%d, search_ef=%d, M=%d",
+            "Creating ChromaDB collection with HNSW params: " "space=%s, construction_ef=%d, search_ef=%d, M=%d",
             self.hnsw_space,
             self.hnsw_construction_ef,
             self.hnsw_search_ef,
@@ -403,9 +385,7 @@ class KnowledgeBaseCore:
             hnsw_metadata = self._build_hnsw_metadata()
             await self._create_chroma_collection(chroma_client, hnsw_metadata)
 
-            logger.info(
-                "Skipping eager vector index creation - will create on first query"
-            )
+            logger.info("Skipping eager vector index creation - will create on first query")
 
         except Exception as e:
             logger.error("Failed to initialize ChromaDB vector store: %s", e)
@@ -422,17 +402,13 @@ class KnowledgeBaseCore:
         """
         try:
             if not self.vector_store:
-                logger.warning(
-                    "Cannot create vector index - vector store not initialized"
-                )
+                logger.warning("Cannot create vector index - vector store not initialized")
                 return
 
             logger.info("Creating initial vector index with ChromaDB...")
 
             # Create storage context with ChromaDB vector store
-            storage_context = StorageContext.from_defaults(
-                vector_store=self.vector_store
-            )
+            storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
 
             # Create index from existing vector store (connects to existing collection)
             self.vector_index = await asyncio.to_thread(
@@ -441,9 +417,7 @@ class KnowledgeBaseCore:
                 storage_context=storage_context,
             )
 
-            logger.info(
-                "✅ Vector index connected to ChromaDB collection - ready for queries"
-            )
+            logger.info("✅ Vector index connected to ChromaDB collection - ready for queries")
 
             # Note: No need to re-index existing facts - they're already in ChromaDB
             # from the migration process
@@ -460,9 +434,7 @@ class KnowledgeBaseCore:
         """Initialize knowledge ownership manager (Issue #688)."""
         try:
             if not self.redis_client:
-                logger.warning(
-                    "Cannot initialize ownership manager - Redis not available"
-                )
+                logger.warning("Cannot initialize ownership manager - Redis not available")
                 return
 
             from knowledge.ownership import KnowledgeOwnership
@@ -643,6 +615,5 @@ class KnowledgeBaseCore:
         # Only log, don't perform async operations in __del__
         if self.initialized:
             logger.debug(
-                "KnowledgeBase instance deleted while still initialized - "
-                "consider calling await close() explicitly"
+                "KnowledgeBase instance deleted while still initialized - " "consider calling await close() explicitly"
             )

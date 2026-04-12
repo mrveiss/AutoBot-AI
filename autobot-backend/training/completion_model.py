@@ -67,9 +67,7 @@ class CompletionModel(nn.Module):
         )
 
         # Attention mechanism
-        self.attention = nn.MultiheadAttention(
-            embed_dim=hidden_dim * 2, num_heads=8, dropout=dropout, batch_first=True
-        )
+        self.attention = nn.MultiheadAttention(embed_dim=hidden_dim * 2, num_heads=8, dropout=dropout, batch_first=True)
 
         # Output projection
         self.output_layer = nn.Sequential(
@@ -110,9 +108,7 @@ class CompletionModel(nn.Module):
 
         # Apply attention if pattern embeddings provided
         if pattern_embeddings is not None:
-            attended, _ = self.attention(
-                lstm_out, pattern_embeddings, pattern_embeddings
-            )
+            attended, _ = self.attention(lstm_out, pattern_embeddings, pattern_embeddings)
             context = attended + lstm_out  # Residual connection
         else:
             context = lstm_out
@@ -123,9 +119,7 @@ class CompletionModel(nn.Module):
 
         return logits, confidence
 
-    def predict(
-        self, input_ids: torch.Tensor, top_k: int = 5
-    ) -> Dict[str, torch.Tensor]:
+    def predict(self, input_ids: torch.Tensor, top_k: int = 5) -> Dict[str, torch.Tensor]:
         """
         Generate top-k predictions with confidence scores.
 

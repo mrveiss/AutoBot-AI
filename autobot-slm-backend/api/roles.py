@@ -187,17 +187,11 @@ async def get_fleet_health(
 
 async def _get_active_role_names(db: AsyncSession) -> set:
     """Return set of role names with at least one active NodeRole record."""
-    result = await db.execute(
-        select(NodeRole.role_name)
-        .where(NodeRole.status == RoleStatus.ACTIVE.value)
-        .distinct()
-    )
+    result = await db.execute(select(NodeRole.role_name).where(NodeRole.status == RoleStatus.ACTIVE.value).distinct())
     return set(result.scalars().all())
 
 
-def _classify_fleet_health(
-    all_roles: list, active_role_names: set
-) -> FleetHealthResponse:
+def _classify_fleet_health(all_roles: list, active_role_names: set) -> FleetHealthResponse:
     """Classify fleet health from role list and set of active role names."""
     required_down = []
     optional_down = []
@@ -224,9 +218,7 @@ def _classify_fleet_health(
             optional_down=optional_down,
             detail=detail,
         )
-    return FleetHealthResponse(
-        health="healthy", required_down=[], optional_down=[], detail="All roles active"
-    )
+    return FleetHealthResponse(health="healthy", required_down=[], optional_down=[], detail="All roles active")
 
 
 @router.get("/{role_name}", response_model=RoleResponse)
@@ -590,9 +582,7 @@ async def _run_ssh_cmd(node: Node, remote_cmd: str) -> tuple:
             process.communicate(),
             timeout=120.0,
         )
-        combined = stdout.decode("utf-8", errors="replace") + stderr.decode(
-            "utf-8", errors="replace"
-        )
+        combined = stdout.decode("utf-8", errors="replace") + stderr.decode("utf-8", errors="replace")
         return process.returncode == 0, combined[:2000]
     except asyncio.TimeoutError:
         return False, "Timeout after 120 seconds"

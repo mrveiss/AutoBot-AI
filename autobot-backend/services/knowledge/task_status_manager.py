@@ -27,6 +27,7 @@ TASK_TTL_SECONDS = 86400  # 24 hours
 @dataclass
 class TaskStatus:
     """Task status information for background operations."""
+
     task_id: str
     status: str  # "queued", "running", "completed", "failed"
     message: str
@@ -141,9 +142,7 @@ class TaskStatusManager:
         """
         try:
             redis_client = get_redis_client()
-            data = await asyncio.to_thread(
-                redis_client.get, cls._get_redis_key(task_id)
-            )
+            data = await asyncio.to_thread(redis_client.get, cls._get_redis_key(task_id))
 
             if not data:
                 return None
@@ -224,9 +223,7 @@ class TaskStatusManager:
         """
         try:
             redis_client = get_redis_client()
-            await asyncio.to_thread(
-                redis_client.delete, cls._get_redis_key(task_id)
-            )
+            await asyncio.to_thread(redis_client.delete, cls._get_redis_key(task_id))
             return True
         except Exception as e:
             logger.error("[%s] Error deleting task: %s", task_id, e)

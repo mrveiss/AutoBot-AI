@@ -177,9 +177,11 @@ class TestAudioPipelineAsync:
             }
         )
 
-        with patch("media.audio.pipeline._TRANSFORMERS_AVAILABLE", True), patch(
-            "media.audio.pipeline._whisper_pipeline", mock_whisper
-        ), patch("os.unlink"):
+        with (
+            patch("media.audio.pipeline._TRANSFORMERS_AVAILABLE", True),
+            patch("media.audio.pipeline._whisper_pipeline", mock_whisper),
+            patch("os.unlink"),
+        ):
             result = await pipe._process_impl(media_input)
 
         assert result.success is True

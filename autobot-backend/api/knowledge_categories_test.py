@@ -106,10 +106,7 @@ class TestCategoryListRetrieval:
 
         assert result["status"] == "success"
         assert len(result["categories"]) == 4
-        assert all(
-            cat["name"] in ["tools", "systems", "security", "automation"]
-            for cat in result["categories"]
-        )
+        assert all(cat["name"] in ["tools", "systems", "security", "automation"] for cat in result["categories"])
 
     @pytest.mark.asyncio
     async def test_get_categories_with_counts(self, mock_knowledge_base):
@@ -137,9 +134,7 @@ class TestCategoryListRetrieval:
     @pytest.mark.asyncio
     async def test_get_categories_error_handling(self, mock_knowledge_base):
         """Test error handling in category retrieval"""
-        mock_knowledge_base.get_knowledge_categories.side_effect = Exception(
-            "Database error"
-        )
+        mock_knowledge_base.get_knowledge_categories.side_effect = Exception("Database error")
 
         with pytest.raises(Exception) as exc_info:
             await mock_knowledge_base.get_knowledge_categories()
@@ -156,13 +151,9 @@ class TestCategoryFiltering:
     """Test filtering facts by category"""
 
     @pytest.mark.asyncio
-    async def test_filter_by_single_category(
-        self, mock_knowledge_base, sample_facts_by_category
-    ):
+    async def test_filter_by_single_category(self, mock_knowledge_base, sample_facts_by_category):
         """Test filtering by a single category"""
-        mock_knowledge_base.get_facts_by_category.return_value = (
-            sample_facts_by_category["tools"]
-        )
+        mock_knowledge_base.get_facts_by_category.return_value = sample_facts_by_category["tools"]
 
         result = await mock_knowledge_base.get_facts_by_category("tools")
 
@@ -170,13 +161,9 @@ class TestCategoryFiltering:
         assert all(fact["category"] == "tools" for fact in result)
 
     @pytest.mark.asyncio
-    async def test_filter_empty_category(
-        self, mock_knowledge_base, sample_facts_by_category
-    ):
+    async def test_filter_empty_category(self, mock_knowledge_base, sample_facts_by_category):
         """Test filtering category with no facts"""
-        mock_knowledge_base.get_facts_by_category.return_value = (
-            sample_facts_by_category["empty_category"]
-        )
+        mock_knowledge_base.get_facts_by_category.return_value = sample_facts_by_category["empty_category"]
 
         result = await mock_knowledge_base.get_facts_by_category("empty_category")
 
@@ -192,14 +179,10 @@ class TestCategoryFiltering:
         assert result == []
 
     @pytest.mark.asyncio
-    async def test_filter_case_sensitivity(
-        self, mock_knowledge_base, sample_facts_by_category
-    ):
+    async def test_filter_case_sensitivity(self, mock_knowledge_base, sample_facts_by_category):
         """Test case handling in category filtering"""
         # Test lowercase
-        mock_knowledge_base.get_facts_by_category.return_value = (
-            sample_facts_by_category["tools"]
-        )
+        mock_knowledge_base.get_facts_by_category.return_value = sample_facts_by_category["tools"]
         result = await mock_knowledge_base.get_facts_by_category("tools")
         assert len(result) == 2
 
@@ -225,9 +208,7 @@ class TestCategoryStatistics:
     """Test category statistics and counting"""
 
     @pytest.mark.asyncio
-    async def test_category_count_accuracy(
-        self, mock_knowledge_base, sample_categories
-    ):
+    async def test_category_count_accuracy(self, mock_knowledge_base, sample_categories):
         """Test category count matches actual documents"""
         mock_knowledge_base.get_knowledge_categories.return_value = {
             "status": "success",
@@ -249,9 +230,7 @@ class TestCategoryStatistics:
         """Test categories with zero documents"""
         mock_knowledge_base.get_knowledge_categories.return_value = {
             "status": "success",
-            "categories": [
-                {"name": "empty_cat", "count": 0, "description": "Empty category"}
-            ],
+            "categories": [{"name": "empty_cat", "count": 0, "description": "Empty category"}],
         }
 
         result = await mock_knowledge_base.get_knowledge_categories()
@@ -261,9 +240,7 @@ class TestCategoryStatistics:
         assert empty_cat["name"] == "empty_cat"
 
     @pytest.mark.asyncio
-    async def test_category_statistics_aggregation(
-        self, mock_knowledge_base, sample_categories
-    ):
+    async def test_category_statistics_aggregation(self, mock_knowledge_base, sample_categories):
         """Test statistics aggregation across categories"""
         mock_knowledge_base.get_knowledge_categories.return_value = {
             "status": "success",
@@ -301,9 +278,7 @@ class TestCacheBehavior:
         assert len(data["categories"]) == 4
 
     @pytest.mark.asyncio
-    async def test_cache_miss(
-        self, mock_redis_client, mock_knowledge_base, sample_categories
-    ):
+    async def test_cache_miss(self, mock_redis_client, mock_knowledge_base, sample_categories):
         """Test cache miss fetches from database"""
         # Setup cache miss
         mock_redis_client.get.return_value = None
@@ -322,9 +297,7 @@ class TestCacheBehavior:
             assert len(result["categories"]) == 4
 
             # Cache the result
-            await mock_redis_client.set(
-                cache_key, json.dumps(result).encode("utf-8"), ex=300  # 5 minutes
-            )
+            await mock_redis_client.set(cache_key, json.dumps(result).encode("utf-8"), ex=300)  # 5 minutes
 
         mock_redis_client.set.assert_called_once()
 
@@ -346,9 +319,7 @@ class TestCacheBehavior:
         data = {"categories": []}
 
         # Set with expiration
-        await mock_redis_client.set(
-            cache_key, json.dumps(data).encode("utf-8"), ex=300  # 5 minutes
-        )
+        await mock_redis_client.set(cache_key, json.dumps(data).encode("utf-8"), ex=300)  # 5 minutes
 
         # Verify set was called with expiration
         mock_redis_client.set.assert_called_once()
@@ -442,9 +413,7 @@ class TestEdgeCases:
         assert result["categories"][0]["name"] == long_name
 
     @pytest.mark.asyncio
-    async def test_concurrent_category_requests(
-        self, mock_knowledge_base, sample_categories
-    ):
+    async def test_concurrent_category_requests(self, mock_knowledge_base, sample_categories):
         """Test handling concurrent category retrieval requests"""
         mock_knowledge_base.get_knowledge_categories.return_value = {
             "status": "success",
@@ -461,9 +430,7 @@ class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_null_category_name_handling(self, mock_knowledge_base):
         """Test handling of null/None category names"""
-        mock_knowledge_base.get_facts_by_category.side_effect = ValueError(
-            "Category name cannot be None"
-        )
+        mock_knowledge_base.get_facts_by_category.side_effect = ValueError("Category name cannot be None")
 
         with pytest.raises(ValueError):
             await mock_knowledge_base.get_facts_by_category(None)

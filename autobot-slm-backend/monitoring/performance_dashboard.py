@@ -414,9 +414,7 @@ def _get_dashboard_html_body(header_html: str, metric_cards: str) -> str:
     </div>"""
 
 
-def _build_dashboard_html(
-    dark_theme_css: str, additional_css: str, body_html: str, javascript: str
-) -> str:
+def _build_dashboard_html(dark_theme_css: str, additional_css: str, body_html: str, javascript: str) -> str:
     """Build the complete dashboard HTML template (Issue #398: extracted)."""
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -464,9 +462,7 @@ class PerformanceDashboard:
         """Set up Jinja2 templates for HTML rendering."""
         template_dir = Path(__file__).parent / "templates"
         template_dir.mkdir(exist_ok=True)
-        aiohttp_jinja2.setup(
-            self.app, loader=jinja2.FileSystemLoader(str(template_dir))
-        )
+        aiohttp_jinja2.setup(self.app, loader=jinja2.FileSystemLoader(str(template_dir)))
 
         # Create dashboard HTML template if it doesn't exist
         self.create_dashboard_template()
@@ -477,25 +473,19 @@ class PerformanceDashboard:
         template_path.parent.mkdir(exist_ok=True)
 
         # Generate dashboard components using utility functions
-        header_html = create_dashboard_header(
-            title="🤖 AutoBot Performance Dashboard", status="healthy", theme="dark"
-        )
+        header_html = create_dashboard_header(title="🤖 AutoBot Performance Dashboard", status="healthy", theme="dark")
 
         # Generate metric cards
         metric_cards = "\n".join(
             [
-                create_metric_card(
-                    "CPU Usage", "--%", "22-core Intel Ultra 9 185H", "cpu-usage"
-                ),
+                create_metric_card("CPU Usage", "--%", "22-core Intel Ultra 9 185H", "cpu-usage"),
                 create_metric_card(
                     "Memory Usage",
                     "--%",
                     '<span id="memory-available">--GB</span> available',
                     "memory-usage",
                 ),
-                create_metric_card(
-                    "GPU Utilization", "--%", "NVIDIA RTX 4070", "gpu-usage"
-                ),
+                create_metric_card("GPU Utilization", "--%", "NVIDIA RTX 4070", "gpu-usage"),
                 create_metric_card(
                     "Active Services",
                     "--/--",
@@ -532,9 +522,7 @@ class PerformanceDashboard:
         """Get current performance metrics."""
         try:
             metrics = await self.monitor.generate_performance_report()
-            return web.json_response(
-                metrics, dumps=lambda obj: json.dumps(obj, default=str)
-            )
+            return web.json_response(metrics, dumps=lambda obj: json.dumps(obj, default=str))
         except Exception as e:
             logger.error("Error getting current metrics: %s", e)
             return web.json_response({"error": "Internal server error"}, status=500)
@@ -549,9 +537,7 @@ class PerformanceDashboard:
 
                 self.redis_client = get_redis_client(database="metrics")
                 if self.redis_client is None:
-                    return web.json_response(
-                        {"error": "Redis not available", "history": []}, status=503
-                    )
+                    return web.json_response({"error": "Redis not available", "history": []}, status=503)
 
             # Get last 100 metrics entries
             history = self.redis_client.lrange("autobot:performance:history", 0, 99)
@@ -568,9 +554,7 @@ class PerformanceDashboard:
 
         except Exception as e:
             logger.error("Error getting metrics history: %s", e)
-            return web.json_response(
-                {"error": "Internal server error", "history": []}, status=500
-            )
+            return web.json_response({"error": "Internal server error", "history": []}, status=500)
 
     async def get_system_status(self, request):
         """Get overall system status summary."""
@@ -596,11 +580,7 @@ class PerformanceDashboard:
                 "services": {
                     "healthy": healthy_services,
                     "total": total_services,
-                    "availability": (
-                        (healthy_services / total_services * 100)
-                        if total_services > 0
-                        else 0
-                    ),
+                    "availability": ((healthy_services / total_services * 100) if total_services > 0 else 0),
                 },
                 "alerts": len(alerts),
                 "timestamp": datetime.now().isoformat(),
@@ -712,9 +692,7 @@ class PerformanceDashboard:
         site = web.TCPSite(runner, bind_host, self.port)
         await site.start()
 
-        logger.info(
-            f"AutoBot Performance Dashboard running on http://localhost:{self.port}"
-        )
+        logger.info(f"AutoBot Performance Dashboard running on http://localhost:{self.port}")
         logger.info("Real-time monitoring active with WebSocket updates")
 
         # Keep the server running
@@ -732,9 +710,7 @@ async def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="AutoBot Performance Dashboard")
-    parser.add_argument(
-        "--port", type=int, default=9090, help="Dashboard port (default: 9090)"
-    )
+    parser.add_argument("--port", type=int, default=9090, help="Dashboard port (default: 9090)")
 
     args = parser.parse_args()
 

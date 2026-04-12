@@ -36,9 +36,7 @@ def set_process_adapter_service(svc: ProcessAdapterService) -> None:
 def _get_service() -> ProcessAdapterService:
     """Return the active ProcessAdapterService or raise 503 (#1406)."""
     if _process_svc is None:
-        raise HTTPException(
-            status_code=503, detail="Process adapter service unavailable"
-        )
+        raise HTTPException(status_code=503, detail="Process adapter service unavailable")
     return _process_svc
 
 
@@ -155,9 +153,7 @@ async def list_agent_processes(
 ) -> JSONResponse:
     """List recent processes for an agent with optional status filter (#1406)."""
     svc = _get_service()
-    processes = await svc.get_agent_processes(
-        agent_id=agent_id, status_filter=status, limit=limit
-    )
+    processes = await svc.get_agent_processes(agent_id=agent_id, status_filter=status, limit=limit)
     return JSONResponse(
         status_code=200,
         content={"agent_id": agent_id, "processes": processes, "total": len(processes)},

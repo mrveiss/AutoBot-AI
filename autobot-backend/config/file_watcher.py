@@ -18,9 +18,7 @@ logger = logging.getLogger(__name__)
 class FileWatcherMixin:
     """Mixin providing file watching and change callback functionality"""
 
-    async def _handle_config_file_change(
-        self, config_type: str, file_path: Any, new_data: Any
-    ) -> None:
+    async def _handle_config_file_change(self, config_type: str, file_path: Any, new_data: Any) -> None:
         """Handle detected config file change (Issue #315: extracted to reduce nesting).
 
         Args:
@@ -43,9 +41,7 @@ class FileWatcherMixin:
         # Notify callbacks
         await self._notify_callbacks(config_type, new_data)
 
-    async def _check_file_change(
-        self, config_type: str, file_path: Any, last_modified: float | None
-    ) -> float | None:
+    async def _check_file_change(self, config_type: str, file_path: Any, last_modified: float | None) -> float | None:
         """Check for file changes and reload if needed (Issue #315: extracted).
 
         Args:
@@ -112,9 +108,7 @@ class FileWatcherMixin:
 
             while True:
                 try:
-                    last_modified = await self._check_file_change(
-                        config_type, file_path, last_modified
-                    )
+                    last_modified = await self._check_file_change(config_type, file_path, last_modified)
                     await asyncio.sleep(FileWatcherConfig.CHECK_INTERVAL_S)
 
                 except asyncio.CancelledError:

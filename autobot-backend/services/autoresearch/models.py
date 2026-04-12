@@ -172,11 +172,7 @@ class Experiment:
     @property
     def improvement(self) -> Optional[float]:
         """Return bpb improvement over baseline (positive = better)."""
-        if (
-            self.result
-            and self.result.val_bpb is not None
-            and self.baseline_val_bpb is not None
-        ):
+        if self.result and self.result.val_bpb is not None and self.baseline_val_bpb is not None:
             return self.baseline_val_bpb - self.result.val_bpb
         return None
 

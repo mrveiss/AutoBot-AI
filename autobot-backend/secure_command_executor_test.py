@@ -44,9 +44,7 @@ class TestSecureCommandExecutor:
         """Set up test fixtures"""
         self.executor = SecureCommandExecutor()
         self.mock_approval_callback = AsyncMock()
-        self.executor_with_callback = SecureCommandExecutor(
-            require_approval_callback=self.mock_approval_callback
-        )
+        self.executor_with_callback = SecureCommandExecutor(require_approval_callback=self.mock_approval_callback)
 
     def test_executor_initialization(self):
         """Test SecureCommandExecutor initializes correctly"""
@@ -61,9 +59,7 @@ class TestSecureCommandExecutor:
         policy = SecurityPolicy()
         callback = AsyncMock()
 
-        executor = SecureCommandExecutor(
-            policy=policy, require_approval_callback=callback, use_docker_sandbox=True
-        )
+        executor = SecureCommandExecutor(policy=policy, require_approval_callback=callback, use_docker_sandbox=True)
 
         assert executor.policy is policy
         assert executor.require_approval_callback is callback
@@ -223,9 +219,7 @@ class TestSecureCommandExecutor:
     @pytest.mark.asyncio
     async def test_request_approval_no_callback(self):
         """Test approval request without callback"""
-        result = await self.executor._request_approval(
-            "rm file.txt", CommandRisk.HIGH, ["High-risk command: rm"]
-        )
+        result = await self.executor._request_approval("rm file.txt", CommandRisk.HIGH, ["High-risk command: rm"])
 
         # Should deny by default when no callback is set
         assert result is False
@@ -317,9 +311,7 @@ class TestSecureCommandExecutor:
             mock_subprocess.return_value = mock_process
 
             # Force approval for safe command
-            result = await self.executor_with_callback.run_shell_command(
-                "echo hello", force_approval=True
-            )
+            result = await self.executor_with_callback.run_shell_command("echo hello", force_approval=True)
 
             assert result["status"] == "success"
             assert result["security"]["approved"] is True

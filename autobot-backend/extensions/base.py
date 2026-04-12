@@ -445,9 +445,7 @@ class Extension:
             Modified query or None to keep unchanged
         """
 
-    async def on_after_rag_results(
-        self, ctx: HookContext
-    ) -> Optional[List[Dict[str, Any]]]:
+    async def on_after_rag_results(self, ctx: HookContext) -> Optional[List[Dict[str, Any]]]:
         """
         Called after RAG results are retrieved.
 
@@ -525,6 +523,4 @@ class Extension:
     # ========== Utility Methods ==========
 
     def __repr__(self) -> str:
-        return (
-            f"{self.__class__.__name__}(name='{self.name}', priority={self.priority})"
-        )
+        return f"{self.__class__.__name__}(name='{self.name}', priority={self.priority})"

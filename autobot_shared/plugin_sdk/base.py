@@ -42,18 +42,10 @@ class PluginManifest(BaseModel):
     display_name: str = Field(..., description="Human-readable plugin name")
     description: str = Field(..., description="Plugin description")
     author: str = Field(..., description="Plugin author")
-    entry_point: str = Field(
-        ..., description="Python module path (e.g., 'plugins.hello_plugin.main')"
-    )
-    dependencies: List[str] = Field(
-        default_factory=list, description="Required plugin names"
-    )
-    config_schema: Dict[str, Any] = Field(
-        default_factory=dict, description="JSON schema for plugin configuration"
-    )
-    hooks: List[str] = Field(
-        default_factory=list, description="Hook names this plugin provides"
-    )
+    entry_point: str = Field(..., description="Python module path (e.g., 'plugins.hello_plugin.main')")
+    dependencies: List[str] = Field(default_factory=list, description="Required plugin names")
+    config_schema: Dict[str, Any] = Field(default_factory=dict, description="JSON schema for plugin configuration")
+    hooks: List[str] = Field(default_factory=list, description="Hook names this plugin provides")
 
     @field_validator("version")
     @classmethod
@@ -218,11 +210,7 @@ class PluginRegistry:
 
     def get_enabled_plugins(self) -> Dict[str, BasePlugin]:
         """Get all enabled plugins."""
-        return {
-            name: plugin
-            for name, plugin in self._plugins.items()
-            if plugin.status == PluginStatus.ENABLED
-        }
+        return {name: plugin for name, plugin in self._plugins.items() if plugin.status == PluginStatus.ENABLED}
 
     def clear(self) -> None:
         """Clear all registered plugins."""

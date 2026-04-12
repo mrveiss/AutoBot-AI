@@ -37,9 +37,7 @@ class AgentConnection:
     weight: float
     co_success_count: int
     co_failure_count: int
-    last_updated: datetime = field(
-        default_factory=lambda: datetime.now(tz=timezone.utc)
-    )
+    last_updated: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
 
 
 @runtime_checkable
@@ -194,9 +192,7 @@ class AgentTopology:
 
         Issue #2137: Extracted to keep *record_outcome* under 30 lines.
         """
-        conn = await self.db.get_or_create_agent_connection(
-            from_agent, to_agent, task_type
-        )
+        conn = await self.db.get_or_create_agent_connection(from_agent, to_agent, task_type)
         target = 1.0 if success else 0.0
         new_weight = conn.weight * _DECAY + target * _LEARNING_RATE
 

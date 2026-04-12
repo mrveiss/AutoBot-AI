@@ -93,9 +93,7 @@ class TestSecurityEdgeCases:
 
         for malicious_command in injection_attempts:
             # Should detect high risk
-            risk, warnings = self.security.command_executor.assess_command_risk(
-                malicious_command
-            )
+            risk, warnings = self.security.command_executor.assess_command_risk(malicious_command)
             assert risk in [
                 CommandRisk.HIGH,
                 CommandRisk.CRITICAL,
@@ -103,12 +101,8 @@ class TestSecurityEdgeCases:
             assert len(warnings) > 0
 
             # Should require approval or be blocked
-            result = await self.security.execute_command(
-                malicious_command, user="developer", user_role="developer"
-            )
-            assert not result.get(
-                "success", False
-            ), f"Injection attempt succeeded: {malicious_command}"
+            result = await self.security.execute_command(malicious_command, user="developer", user_role="developer")
+            assert not result.get("success", False), f"Injection attempt succeeded: {malicious_command}"
 
     async def test_privilege_escalation_attempts(self):
         """Test various privilege escalation techniques"""
@@ -130,15 +124,11 @@ class TestSecurityEdgeCases:
         ]
 
         for escalation_command in escalation_attempts:
-            risk, warnings = self.security.command_executor.assess_command_risk(
-                escalation_command
-            )
+            risk, warnings = self.security.command_executor.assess_command_risk(escalation_command)
             assert risk in [CommandRisk.HIGH, CommandRisk.CRITICAL]
 
             # Non-admin users should be blocked
-            result = await self.security.execute_command(
-                escalation_command, user="developer", user_role="developer"
-            )
+            result = await self.security.execute_command(escalation_command, user="developer", user_role="developer")
             assert not result.get("success", False)
 
     # === Authentication Bypass Edge Cases ===
@@ -173,20 +163,14 @@ class TestSecurityEdgeCases:
 
         for user, claimed_role in role_confusion_attempts:
             # Should enforce actual user role, not claimed role
-            _has_permission = self.security.check_permission(
-                user, "allow_shell_execute", user_role=claimed_role
-            )
+            _has_permission = self.security.check_permission(user, "allow_shell_execute", user_role=claimed_role)
 
             if user != "admin":
                 # Non-admin users shouldn't get admin permissions regardless of claimed role
                 dangerous_command = "rm -rf /tmp/test"
-                result = await self.security.execute_command(
-                    dangerous_command, user=user, user_role=claimed_role
-                )
+                result = await self.security.execute_command(dangerous_command, user=user, user_role=claimed_role)
                 # Should either be blocked or require approval
-                assert not result.get("success", False) or result.get(
-                    "requires_approval", False
-                )
+                assert not result.get("success", False) or result.get("requires_approval", False)
 
     # === Resource Exhaustion Edge Cases ===
 
@@ -198,9 +182,7 @@ class TestSecurityEdgeCases:
         approval_ids = []
         for cmd in flood_commands:
             try:
-                result = await self.security.execute_command(
-                    cmd, user="developer", user_role="developer"
-                )
+                result = await self.security.execute_command(cmd, user="developer", user_role="developer")
                 if result.get("requires_approval"):
                     approval_ids.append(result.get("approval_id"))
             except Exception:
@@ -217,9 +199,7 @@ class TestSecurityEdgeCases:
         command = "echo 'test'"
 
         async def create_approval_request():
-            return await self.security.execute_command(
-                command, user="developer", user_role="developer"
-            )
+            return await self.security.execute_command(command, user="developer", user_role="developer")
 
         # Run concurrent requests
         tasks = [create_approval_request() for _ in range(10)]
@@ -241,9 +221,7 @@ class TestSecurityEdgeCases:
                 self.security.approve_command(approval_id, False)
 
             # Only one should succeed
-            results = await asyncio.gather(
-                approve_request(), deny_request(), return_exceptions=True
-            )
+            results = await asyncio.gather(approve_request(), deny_request(), return_exceptions=True)
             # At least one should succeed, others might fail gracefully
 
     # === Audit Log Manipulation Edge Cases ===
@@ -321,9 +299,7 @@ class TestSecurityEdgeCases:
         ]
 
         for bypass_config in bypass_attempts:
-            with patch(
-                "src.enhanced_security_layer.global_config_manager"
-            ) as mock_config:
+            with patch("src.enhanced_security_layer.global_config_manager") as mock_config:
                 # Simulate config change during runtime
                 modified_config = original_config.copy()
                 modified_config.update(bypass_config)
@@ -334,9 +310,7 @@ class TestSecurityEdgeCases:
 
                 # Test that dangerous commands are still properly handled
                 dangerous_command = "rm -rf /tmp/test"
-                _result = await new_security.execute_command(
-                    dangerous_command, user="guest", user_role="guest"
-                )
+                _result = await new_security.execute_command(dangerous_command, user="guest", user_role="guest")
 
                 # Even with modified config, should have some protection
                 # (This test verifies the security layer doesn't blindly trust config)
@@ -346,9 +320,7 @@ class TestSecurityEdgeCases:
     async def test_approval_timeout_manipulation(self):
         """Test manipulation of approval timeouts"""
         # Create approval request
-        result = await self.security.execute_command(
-            "echo 'timeout test'", user="developer", user_role="developer"
-        )
+        result = await self.security.execute_command("echo 'timeout test'", user="developer", user_role="developer")
 
         if result.get("requires_approval"):
             approval_id = result.get("approval_id")
@@ -376,9 +348,7 @@ class TestSecurityEdgeCases:
 
         for cmd in commands:
             try:
-                result = await self.security.execute_command(
-                    cmd, user="developer", user_role="developer"
-                )
+                result = await self.security.execute_command(cmd, user="developer", user_role="developer")
                 results.append(result)
             except Exception as e:
                 # Should handle gracefully
@@ -412,15 +382,11 @@ class TestSecurityEdgeCases:
         ]
 
         for escape_cmd in escape_attempts:
-            risk, warnings = self.security.command_executor.assess_command_risk(
-                escape_cmd
-            )
+            risk, warnings = self.security.command_executor.assess_command_risk(escape_cmd)
             assert risk in [CommandRisk.HIGH, CommandRisk.CRITICAL]
 
             # Should be blocked or require high-level approval
-            result = await self.security.execute_command(
-                escape_cmd, user="developer", user_role="developer"
-            )
+            result = await self.security.execute_command(escape_cmd, user="developer", user_role="developer")
             assert not result.get("success", False)
 
     # === Input Validation Edge Cases ===
@@ -446,9 +412,7 @@ class TestSecurityEdgeCases:
             try:
                 # Should handle gracefully without crashing
                 if isinstance(malformed_input, str):
-                    result = await self.security.execute_command(
-                        malformed_input, user="test", user_role="developer"
-                    )
+                    result = await self.security.execute_command(malformed_input, user="test", user_role="developer")
                     # Should either succeed safely or fail gracefully
                     assert isinstance(result, dict)
                 else:
@@ -483,9 +447,7 @@ class TestSecurityEdgeCases:
             assert risk in [CommandRisk.MEDIUM, CommandRisk.HIGH, CommandRisk.CRITICAL]
 
             # For restricted roles, should be blocked
-            result = await self.security.execute_command(
-                net_cmd, user="guest", user_role="guest"
-            )
+            result = await self.security.execute_command(net_cmd, user="guest", user_role="guest")
             assert not result.get("success", False)
 
 
@@ -518,9 +480,7 @@ class TestSecurityBoundaryConditions:
     async def test_empty_security_configuration(self):
         """Test behavior with minimal/empty security configuration"""
         # Should still function without crashing
-        result = await self.security.execute_command(
-            "echo 'test'", user="test", user_role="test"
-        )
+        result = await self.security.execute_command("echo 'test'", user="test", user_role="test")
         assert isinstance(result, dict)
 
     async def test_maximum_command_length(self):
@@ -531,9 +491,7 @@ class TestSecurityBoundaryConditions:
         for length in lengths:
             long_command = "echo '" + "A" * length + "'"
             try:
-                risk, warnings = self.security.command_executor.assess_command_risk(
-                    long_command
-                )
+                risk, warnings = self.security.command_executor.assess_command_risk(long_command)
                 # Should handle without crashing
                 assert isinstance(risk, CommandRisk)
             except Exception as e:
@@ -545,9 +503,7 @@ class TestSecurityBoundaryConditions:
         minimal_inputs = ["", " ", "\n", "\t", "\r\n"]
 
         for minimal_input in minimal_inputs:
-            result = await self.security.execute_command(
-                minimal_input, user="test", user_role="test"
-            )
+            result = await self.security.execute_command(minimal_input, user="test", user_role="test")
             # Should handle gracefully
             assert isinstance(result, dict)
 

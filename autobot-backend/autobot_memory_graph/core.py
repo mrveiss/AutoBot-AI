@@ -131,9 +131,7 @@ class AutoBotMemoryGraphCore:
 
             try:
                 # Initialize Redis client
-                self.redis_client = get_redis_client(
-                    async_client=True, database="knowledge"
-                )
+                self.redis_client = get_redis_client(async_client=True, database="knowledge")
 
                 # Create search indexes if they don't exist
                 await self._create_search_indexes()

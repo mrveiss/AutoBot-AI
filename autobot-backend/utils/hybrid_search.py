@@ -122,11 +122,7 @@ def _calculate_single_keyword_score(
 
     # Check for partial matches
     document_words = list(word_count.keys())
-    partial_matches = [
-        word
-        for word in document_words
-        if keyword_lower in word or word in keyword_lower
-    ]
+    partial_matches = [word for word in document_words if keyword_lower in word or word in keyword_lower]
     if partial_matches:
         return len(partial_matches) / total_words * 0.5
 
@@ -144,17 +140,13 @@ class HybridSearchEngine:
         self.semantic_weight = config.get("search.hybrid.semantic_weight", 0.7)
         self.keyword_weight = config.get("search.hybrid.keyword_weight", 0.3)
         self.min_keyword_score = config.get("search.hybrid.min_keyword_score", 0.1)
-        self.keyword_boost_factor = config.get(
-            "search.hybrid.keyword_boost_factor", 1.5
-        )
+        self.keyword_boost_factor = config.get("search.hybrid.keyword_boost_factor", 1.5)
 
     def _load_search_config(self) -> None:
         """Load search parameters from configuration. Issue #620."""
         self.semantic_top_k = config.get("search.hybrid.semantic_top_k", 15)
         self.final_top_k = config.get("search.hybrid.final_top_k", 10)
-        self.stop_words = set(
-            config.get("search.hybrid.stop_words", _DEFAULT_STOP_WORDS)
-        )
+        self.stop_words = set(config.get("search.hybrid.stop_words", _DEFAULT_STOP_WORDS))
         self.min_keyword_length = config.get("search.hybrid.min_keyword_length", 3)
 
     def __init__(self, knowledge_base=None):
@@ -175,11 +167,7 @@ class HybridSearchEngine:
         words = _WORD_BOUNDARY_RE.findall(text.lower())
 
         # Filter out stop words and short words
-        keywords = [
-            word
-            for word in words
-            if word not in self.stop_words and len(word) >= self.min_keyword_length
-        ]
+        keywords = [word for word in words if word not in self.stop_words and len(word) >= self.min_keyword_length]
 
         # Remove duplicates while preserving order
         seen = set()
@@ -214,18 +202,14 @@ class HybridSearchEngine:
 
         # Issue #620: Calculate score for each keyword using helper
         keyword_scores = [
-            _calculate_single_keyword_score(
-                keyword, word_count, total_words, document_metadata
-            )
+            _calculate_single_keyword_score(keyword, word_count, total_words, document_metadata)
             for keyword in query_keywords
         ]
 
         # Average keyword score with emphasis on matches
         if keyword_scores:
             # Give more weight to documents that match more keywords
-            match_ratio = sum(1 for score in keyword_scores if score > 0) / len(
-                keyword_scores
-            )
+            match_ratio = sum(1 for score in keyword_scores if score > 0) / len(keyword_scores)
             avg_score = sum(keyword_scores) / len(keyword_scores)
 
             # Boost documents that match multiple keywords
@@ -245,15 +229,11 @@ class HybridSearchEngine:
             keyword_score = 0.0
 
         # Weighted combination
-        combined_score = (
-            self.semantic_weight * semantic_score + self.keyword_weight * keyword_score
-        )
+        combined_score = self.semantic_weight * semantic_score + self.keyword_weight * keyword_score
 
         return combined_score
 
-    def _is_near_duplicate(
-        self, content: str, unique_results: List[Dict[str, Any]], threshold: float
-    ) -> bool:
+    def _is_near_duplicate(self, content: str, unique_results: List[Dict[str, Any]], threshold: float) -> bool:
         """Check if content is a near-duplicate of any existing result. (Issue #315)"""
         content_words = set(content.lower().split())
         if not content_words:
@@ -331,9 +311,7 @@ class HybridSearchEngine:
             "hybrid_score": hybrid_score,
             "semantic_score": semantic_score,
             "keyword_score": keyword_score,
-            "matched_keywords": [
-                kw for kw in query_keywords if kw.lower() in content.lower()
-            ],
+            "matched_keywords": [kw for kw in query_keywords if kw.lower() in content.lower()],
         }
 
     async def _fallback_semantic_search(
@@ -377,9 +355,7 @@ class HybridSearchEngine:
         unique_results = self.deduplicate_results(enhanced_results)
         return unique_results[: min(top_k, self.final_top_k)]
 
-    async def search(
-        self, query: str, top_k: int = 10, filters: Optional[Dict] = None
-    ) -> List[Dict[str, Any]]:
+    async def search(self, query: str, top_k: int = 10, filters: Optional[Dict] = None) -> List[Dict[str, Any]]:
         """
         Perform hybrid search combining semantic and keyword-based approaches.
 
@@ -399,18 +375,13 @@ class HybridSearchEngine:
             query_keywords = self.extract_keywords(query)
             self.logger.debug("Extracted keywords from '%s': %s", query, query_keywords)
 
-            semantic_results = await self.knowledge_base.search(
-                query, top_k=self.semantic_top_k, filters=filters
-            )
+            semantic_results = await self.knowledge_base.search(query, top_k=self.semantic_top_k, filters=filters)
 
             if not semantic_results:
                 self.logger.warning("No semantic results found for query: '%s'", query)
                 return []
 
-            enhanced_results = [
-                self._enhance_result_with_scores(result, query_keywords)
-                for result in semantic_results
-            ]
+            enhanced_results = [self._enhance_result_with_scores(result, query_keywords) for result in semantic_results]
 
             final_results = self._process_and_finalize_results(enhanced_results, top_k)
 
@@ -479,9 +450,7 @@ class HybridSearchEngine:
 
         hybrid_score = self.combine_scores(semantic_score, keyword_score)
 
-        matched_keywords = [
-            kw for kw in query_keywords if kw.lower() in content.lower()
-        ]
+        matched_keywords = [kw for kw in query_keywords if kw.lower() in content.lower()]
 
         return {
             "rank": rank,
@@ -499,14 +468,10 @@ class HybridSearchEngine:
             query_keywords = self.extract_keywords(query)
 
             # Get semantic results
-            semantic_results = await self.knowledge_base.search(
-                query, top_k=min(top_k * 2, 20)
-            )
+            semantic_results = await self.knowledge_base.search(query, top_k=min(top_k * 2, 20))
 
             # Build base explanation
-            explanation = self._build_explanation_base(
-                query, query_keywords, len(semantic_results)
-            )
+            explanation = self._build_explanation_base(query, query_keywords, len(semantic_results))
 
             # Build scoring details for each result
             for i, result in enumerate(semantic_results[:top_k]):

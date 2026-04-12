@@ -94,9 +94,7 @@ async def _run_git_clone(url: str, dest: str, branch: str) -> str:
         stderr=asyncio.subprocess.PIPE,
     )
     try:
-        _, stderr = await asyncio.wait_for(
-            proc.communicate(), timeout=_GIT_TIMEOUT_SECONDS
-        )
+        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=_GIT_TIMEOUT_SECONDS)
     except asyncio.TimeoutError:
         proc.kill()
         await proc.wait()
@@ -121,9 +119,7 @@ async def _run_git_pull(clone_path: str) -> str:
         stderr=asyncio.subprocess.PIPE,
     )
     try:
-        _, stderr = await asyncio.wait_for(
-            proc.communicate(), timeout=_GIT_TIMEOUT_SECONDS
-        )
+        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=_GIT_TIMEOUT_SECONDS)
     except asyncio.TimeoutError:
         proc.kill()
         await proc.wait()
@@ -214,11 +210,7 @@ async def _trigger_indexing(source: CodeSource) -> None:
                 import api.codebase_analytics.scanner as _scanner
 
                 _scanner._current_indexing_task_id = task_id
-                task = asyncio.create_task(
-                    _run_indexing_subprocess(
-                        task_id, source.clone_path, source_id=source.id
-                    )
-                )
+                task = asyncio.create_task(_run_indexing_subprocess(task_id, source.clone_path, source_id=source.id))
                 _active_tasks[task_id] = task
                 task.add_done_callback(_create_cleanup_callback(task_id))
             else:
@@ -467,9 +459,7 @@ async def _get_last_indexed(source_id: str) -> Optional[str]:
     return None
 
 
-async def _get_last_commit(
-    clone_path: str, repo: Optional[str], is_local: bool = False
-) -> Optional[dict]:
+async def _get_last_commit(clone_path: str, repo: Optional[str], is_local: bool = False) -> Optional[dict]:
     """Read latest git commit info from a clone directory.
 
     Helper for get_source_summary (#1458).

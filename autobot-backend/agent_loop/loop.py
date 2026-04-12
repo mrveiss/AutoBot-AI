@@ -165,9 +165,7 @@ class AgentLoop:
 
         return results
 
-    async def _create_task_plan(
-        self, task_description: str, initial_context: Optional[dict]
-    ) -> None:
+    async def _create_task_plan(self, task_description: str, initial_context: Optional[dict]) -> None:
         """Create execution plan if planner is available.
 
         Issue #620: Extracted from run_task to reduce function length.
@@ -269,9 +267,7 @@ class AgentLoop:
     # Iteration Logic
     # =========================================================================
 
-    async def _execute_iteration_phases(
-        self, result: IterationResult
-    ) -> IterationResult:
+    async def _execute_iteration_phases(self, result: IterationResult) -> IterationResult:
         """
         Execute all phases of an iteration.
 
@@ -310,9 +306,7 @@ class AgentLoop:
             result.phase_completed = LoopPhase.ITERATE
             return result
 
-        result.tools_executed = [
-            t.get("tool_name", "unknown") for t in tools_to_execute
-        ]
+        result.tools_executed = [t.get("tool_name", "unknown") for t in tools_to_execute]
         result.tool_results = tool_results
 
         for tool_name in result.tools_executed:
@@ -329,9 +323,7 @@ class AgentLoop:
         self._consecutive_errors = 0
         return result
 
-    def _log_iteration_completion(
-        self, start_time: float, result: IterationResult
-    ) -> None:
+    def _log_iteration_completion(self, start_time: float, result: IterationResult) -> None:
         """
         Log iteration completion details if configured.
 
@@ -390,12 +382,8 @@ class AgentLoop:
             "events": [e.to_dict() for e in events],
             "event_count": len(events),
             "event_types": list(set(e.event_type.name for e in events)),
-            "recent_actions": [
-                e.content for e in events if e.event_type == EventType.ACTION
-            ][-5:],
-            "recent_observations": [
-                e.content for e in events if e.event_type == EventType.OBSERVATION
-            ][-5:],
+            "recent_actions": [e.content for e in events if e.event_type == EventType.ACTION][-5:],
+            "recent_observations": [e.content for e in events if e.event_type == EventType.OBSERVATION][-5:],
         }
 
         return context
@@ -464,9 +452,7 @@ class AgentLoop:
             tool_calls = create_tool_calls(tools)
             return await self.tool_executor.execute_batch(
                 tool_calls,
-                task_id=(
-                    self._current_context.task_id if self._current_context else None
-                ),
+                task_id=(self._current_context.task_id if self._current_context else None),
             )
 
         # Sequential execution (fallback)
@@ -511,11 +497,7 @@ class AgentLoop:
                 return False
 
         # Check if all tools succeeded
-        all_succeeded = all(
-            "error" not in result
-            for result in tool_results.values()
-            if isinstance(result, dict)
-        )
+        all_succeeded = all("error" not in result for result in tool_results.values() if isinstance(result, dict))
 
         return all_succeeded
 
@@ -597,21 +579,16 @@ class AgentLoop:
         # Check for git tools
         git_tools = {"git", "gh", "github"}
         has_git_tool = any(
-            tool.get("tool_name", "").lower() in git_tools
-            or "git" in tool.get("tool_name", "").lower()
+            tool.get("tool_name", "").lower() in git_tools or "git" in tool.get("tool_name", "").lower()
             for tool in tools
         )
 
         if has_git_tool and self.config.think_on_git:
-            context = (
-                f"About to execute git tools: {[t.get('tool_name') for t in tools]}"
-            )
+            context = f"About to execute git tools: {[t.get('tool_name') for t in tools]}"
             result = await self.think_tool.think(
                 ThinkCategory.GIT_DECISION,
                 context,
-                task_id=(
-                    self._current_context.task_id if self._current_context else None
-                ),
+                task_id=(self._current_context.task_id if self._current_context else None),
             )
             if self._current_context:
                 self._current_context.add_think(result)
@@ -682,9 +659,7 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
 
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
-    def _check_tool_call_repetition(
-        self, tools: list[dict[str, Any]]
-    ) -> Optional[str]:
+    def _check_tool_call_repetition(self, tools: list[dict[str, Any]]) -> Optional[str]:
         """Check whether any pending tool call has been issued too many times.
 
         Returns the offending tool name if repetition is detected, else None.
@@ -746,9 +721,7 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
             result = await self.think_tool.think(
                 ThinkCategory.ERROR_RECOVERY,
                 f"Error: {error}",
-                task_id=(
-                    self._current_context.task_id if self._current_context else None
-                ),
+                task_id=(self._current_context.task_id if self._current_context else None),
             )
             if self._current_context:
                 self._current_context.add_think(result)

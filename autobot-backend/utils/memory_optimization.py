@@ -57,9 +57,7 @@ def _ensure_log_directory(log_file: Union[str, Path]) -> None:
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
 
-def _add_console_handler(
-    log: logging.Logger, level: int, formatter: logging.Formatter
-) -> None:
+def _add_console_handler(log: logging.Logger, level: int, formatter: logging.Formatter) -> None:
     """
     Add console handler to logger if requested.
 
@@ -79,9 +77,7 @@ class MemoryOptimizedLogging:
         name: str,
         log_file: Union[str, Path],
         level: int = logging.INFO,
-        max_bytes: int = int(
-            os.getenv("AUTOBOT_LOG_MAX_BYTES", "52428800")
-        ),  # 50MB default
+        max_bytes: int = int(os.getenv("AUTOBOT_LOG_MAX_BYTES", "52428800")),  # 50MB default
         backup_count: int = int(os.getenv("AUTOBOT_LOG_BACKUP_COUNT", "5")),
         console_output: bool = True,
     ) -> logging.Logger:
@@ -94,9 +90,7 @@ class MemoryOptimizedLogging:
         formatter = _get_log_formatter()
         _ensure_log_directory(log_file)
 
-        file_handler = RotatingFileHandler(
-            log_file, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8"
-        )
+        file_handler = RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8")
         file_handler.setLevel(level)
         file_handler.setFormatter(formatter)
         log.addHandler(file_handler)
@@ -310,9 +304,7 @@ class WeakCache:
         }
 
 
-def memory_efficient_cache(
-    maxsize: int = int(os.getenv("AUTOBOT_CACHE_SIZE", "128")), typed: bool = False
-):
+def memory_efficient_cache(maxsize: int = int(os.getenv("AUTOBOT_CACHE_SIZE", "128")), typed: bool = False):
     """
     Decorator for memory-efficient caching with weak references
 
@@ -405,8 +397,7 @@ class MemoryMonitor:
         # Log outside lock to avoid holding lock during I/O
         if warning_count is not None:
             logger.warning(
-                f"Memory usage {rss_mb:.1f}MB exceeds threshold {self.threshold_mb}MB "
-                f"(warning #{warning_count})"
+                f"Memory usage {rss_mb:.1f}MB exceeds threshold {self.threshold_mb}MB " f"(warning #{warning_count})"
             )
 
         return {
@@ -425,8 +416,7 @@ class MemoryMonitor:
         after_objects = len(gc.get_objects())
 
         logger.info(
-            f"Garbage collection: {collected} objects collected, "
-            f"{before_objects - after_objects} objects freed"
+            f"Garbage collection: {collected} objects collected, " f"{before_objects - after_objects} objects freed"
         )
 
         return {
@@ -507,14 +497,10 @@ def memory_usage_decorator(func: Callable) -> Callable:
             mem_after = process.memory_info().rss / (1024**2)
             mem_diff = mem_after - mem_before
 
-            memory_log_threshold = float(
-                os.getenv("AUTOBOT_MEMORY_LOG_THRESHOLD_MB", "1.0")
-            )
+            memory_log_threshold = float(os.getenv("AUTOBOT_MEMORY_LOG_THRESHOLD_MB", "1.0"))
             if abs(mem_diff) > memory_log_threshold:  # Log if change > threshold MB
                 logger.debug(
-                    f"{func.__name__} memory usage: "
-                    f"{mem_before:.1f}MB → {mem_after:.1f}MB "
-                    f"({mem_diff:+.1f}MB)"
+                    f"{func.__name__} memory usage: " f"{mem_before:.1f}MB → {mem_after:.1f}MB " f"({mem_diff:+.1f}MB)"
                 )
 
     return wrapper
@@ -525,9 +511,7 @@ _memory_monitor = None
 _memory_monitor_lock = threading.Lock()
 
 
-def get_memory_monitor(
-    threshold_mb: float = float(os.getenv("AUTOBOT_MEMORY_THRESHOLD_MB", "500.0"))
-) -> MemoryMonitor:
+def get_memory_monitor(threshold_mb: float = float(os.getenv("AUTOBOT_MEMORY_THRESHOLD_MB", "500.0"))) -> MemoryMonitor:
     """Get global memory monitor instance (thread-safe)"""
     global _memory_monitor
     if _memory_monitor is None:

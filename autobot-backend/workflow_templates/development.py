@@ -297,9 +297,7 @@ def _create_testing_strategy_steps() -> List[WorkflowStep]:
     Combines research/setup and execution steps using helper methods.
     Issue #620.
     """
-    return (
-        _create_testing_research_and_setup_steps() + _create_testing_execution_steps()
-    )
+    return _create_testing_research_and_setup_steps() + _create_testing_execution_steps()
 
 
 def create_testing_strategy_template() -> WorkflowTemplate:

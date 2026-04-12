@@ -10,19 +10,18 @@ Covers the two bugs fixed in #3880:
    ``memory.redis.enabled``.
 """
 
-import sys
 import os
+import sys
 from typing import Any, Dict
-
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config.validation import validate_startup_config
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _base_config(**overrides: Any) -> Dict[str, Any]:
     """Return a minimal valid config, with optional dot-notation overrides applied."""
@@ -52,6 +51,7 @@ def _base_config(**overrides: Any) -> Dict[str, Any]:
 # 1.  Truthiness fix — values of 0, False, "0", "" must NOT be rejected
 # ---------------------------------------------------------------------------
 
+
 class TestFalsyValidValues:
     """Ensure ``is None`` (not truthiness) is used for required-key checks."""
 
@@ -67,9 +67,7 @@ class TestFalsyValidValues:
         cfg = _base_config(**{"backend.server_host": ""})
         result = validate_startup_config(cfg)
         host_errors = [e for e in result.errors if "server_host" in e]
-        assert host_errors == [], (
-            "Empty string must not be treated as missing; got: " + str(host_errors)
-        )
+        assert host_errors == [], "Empty string must not be treated as missing; got: " + str(host_errors)
 
     def test_redis_host_zero_string_not_rejected(self):
         """Redis host of '0' must not trigger a missing-key error."""
@@ -99,6 +97,7 @@ class TestFalsyValidValues:
 # 2.  Redis host gated on memory.redis.enabled
 # ---------------------------------------------------------------------------
 
+
 class TestRedisHostConditionalRequirement:
     """memory.redis.host must only be required when memory.redis.enabled is True."""
 
@@ -121,9 +120,7 @@ class TestRedisHostConditionalRequirement:
         del cfg["memory"]["redis"]["host"]
         result = validate_startup_config(cfg)
         redis_errors = [e for e in result.errors if "redis.host" in e]
-        assert redis_errors == [], (
-            "Redis disabled — host must not be required. Errors: " + str(redis_errors)
-        )
+        assert redis_errors == [], "Redis disabled — host must not be required. Errors: " + str(redis_errors)
 
     def test_redis_disabled_and_host_none_is_valid(self):
         """None host with Redis disabled must also pass."""
@@ -155,6 +152,7 @@ class TestRedisHostConditionalRequirement:
 # ---------------------------------------------------------------------------
 # 3.  Fully valid minimal config must produce zero errors
 # ---------------------------------------------------------------------------
+
 
 def test_valid_config_produces_no_errors():
     cfg = _base_config()

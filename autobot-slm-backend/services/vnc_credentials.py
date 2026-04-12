@@ -200,9 +200,7 @@ class VNCCredentialService:
             return None
 
         # Get node for IP address
-        result = await db.execute(
-            select(Node).where(Node.node_id == credential.node_id)
-        )
+        result = await db.execute(select(Node).where(Node.node_id == credential.node_id))
         node = result.scalar_one_or_none()
         if not node:
             return None

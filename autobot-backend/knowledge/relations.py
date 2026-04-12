@@ -93,10 +93,7 @@ class RelationsMixin:
         if relation_type not in KB_RELATION_TYPES:
             return {
                 "success": False,
-                "message": (
-                    f"Invalid relation_type '{relation_type}'. "
-                    f"Valid: {sorted(KB_RELATION_TYPES)}"
-                ),
+                "message": (f"Invalid relation_type '{relation_type}'. " f"Valid: {sorted(KB_RELATION_TYPES)}"),
             }
 
         src_exists, tgt_exists = await asyncio.gather(
@@ -160,9 +157,7 @@ class RelationsMixin:
             kept = []
             for entry_bytes in raw_out:
                 entry = json.loads(entry_bytes)
-                if entry["to"] == target_fact_id and (
-                    relation_type is None or entry["type"] == relation_type
-                ):
+                if entry["to"] == target_fact_id and (relation_type is None or entry["type"] == relation_type):
                     removed += 1
                 else:
                     kept.append(entry_bytes)
@@ -177,9 +172,7 @@ class RelationsMixin:
             kept = []
             for entry_bytes in raw_in:
                 entry = json.loads(entry_bytes)
-                if entry["from"] == source_fact_id and (
-                    relation_type is None or entry["type"] == relation_type
-                ):
+                if entry["from"] == source_fact_id and (relation_type is None or entry["type"] == relation_type):
                     pass  # drop
                 else:
                     kept.append(entry_bytes)
@@ -278,9 +271,7 @@ class RelationsMixin:
             if depth >= max_depth:
                 continue
 
-            raw = await self.aioredis_client.lrange(
-                self._rel_out_key(current_id), 0, -1
-            )
+            raw = await self.aioredis_client.lrange(self._rel_out_key(current_id), 0, -1)
             for entry_bytes in raw:
                 entry = json.loads(entry_bytes)
                 if relation_types and entry["type"] not in relation_types:
@@ -366,9 +357,7 @@ class RelationsMixin:
 
         cursor = b"0"
         while True:
-            cursor, keys = await self.aioredis_client.scan(
-                cursor=cursor, match="kb:rel:out:*", count=200
-            )
+            cursor, keys = await self.aioredis_client.scan(cursor=cursor, match="kb:rel:out:*", count=200)
             for key in keys:
                 raw = await self.aioredis_client.lrange(key, 0, -1)
                 for entry_bytes in raw:

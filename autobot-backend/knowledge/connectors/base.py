@@ -37,9 +37,7 @@ class AbstractConnector(ABC):
 
     def __init__(self, config: ConnectorConfig) -> None:
         self.config = config
-        self.logger = logging.getLogger(
-            "%s.%s" % (__name__, self.connector_type or type(self).__name__)
-        )
+        self.logger = logging.getLogger("%s.%s" % (__name__, self.connector_type or type(self).__name__))
 
     # ------------------------------------------------------------------
     # Abstract interface — every connector MUST implement these
@@ -58,9 +56,7 @@ class AbstractConnector(ABC):
         """Fetch and return the content for a single source by ID."""
 
     @abstractmethod
-    async def detect_changes(
-        self, since: Optional[datetime] = None
-    ) -> List[ChangeInfo]:
+    async def detect_changes(self, since: Optional[datetime] = None) -> List[ChangeInfo]:
         """Return sources that changed since *since* (or all if since is None)."""
 
     # ------------------------------------------------------------------
@@ -126,9 +122,7 @@ class AbstractConnector(ABC):
 
             result.status = "success" if not result.errors else "partial"
         except Exception as exc:
-            self.logger.error(
-                "Sync failed for connector %s: %s", self.config.connector_id, exc
-            )
+            self.logger.error("Sync failed for connector %s: %s", self.config.connector_id, exc)
             result.errors.append(str(exc))
             result.status = "failed"
         finally:
@@ -145,9 +139,7 @@ class AbstractConnector(ABC):
 
             content = await self.fetch_content(change.source_id)
             if content is None:
-                self.logger.warning(
-                    "fetch_content returned None for %s", change.source_id
-                )
+                self.logger.warning("fetch_content returned None for %s", change.source_id)
                 result.errors.append("No content for source_id=%s" % change.source_id)
                 return
 

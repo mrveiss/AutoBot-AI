@@ -113,9 +113,7 @@ def _add_security_headers(response: Response) -> None:
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
 
     # Force HTTPS for 1 year (only meaningful when served over TLS)
-    response.headers.setdefault(
-        "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
-    )
+    response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 
     # Disable legacy XSS filter (modern browsers — use CSP instead)
     response.headers.setdefault("X-XSS-Protection", "0")

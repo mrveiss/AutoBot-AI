@@ -49,9 +49,7 @@ class CodeValidator:
     }
 
     @classmethod
-    def _validate_input(
-        cls, code: str, language: str
-    ) -> Tuple[bool, ValidationResult | None]:
+    def _validate_input(cls, code: str, language: str) -> Tuple[bool, ValidationResult | None]:
         """
         Check input validity before parsing.
 
@@ -75,9 +73,7 @@ class CodeValidator:
         return True, None
 
     @classmethod
-    def _parse_code_ast(
-        cls, code: str
-    ) -> Tuple[ast.AST | None, ValidationResult | None]:
+    def _parse_code_ast(cls, code: str) -> Tuple[ast.AST | None, ValidationResult | None]:
         """
         Parse code into AST, returning error result on syntax error.
 
@@ -123,9 +119,7 @@ class CodeValidator:
         line_count = len(code.splitlines())
 
         return ValidationResult(
-            status=(
-                ValidationStatus.VALID if not errors else ValidationStatus.STYLE_ERROR
-            ),
+            status=(ValidationStatus.VALID if not errors else ValidationStatus.STYLE_ERROR),
             is_valid=len(errors) == 0,
             errors=errors,
             warnings=warnings,
@@ -220,9 +214,7 @@ class CodeValidator:
         return complexity
 
     @classmethod
-    def compare_behavior(
-        cls, original: str, modified: str, test_inputs: List[Any] = None
-    ) -> Tuple[bool, List[str]]:
+    def compare_behavior(cls, original: str, modified: str, test_inputs: List[Any] = None) -> Tuple[bool, List[str]]:
         """
         Compare behavior of original and modified code.
 
@@ -240,12 +232,8 @@ class CodeValidator:
             return False, [f"Syntax error: {e}"]
 
         # Compare function signatures
-        orig_funcs = {
-            n.name: n for n in ast.walk(orig_ast) if isinstance(n, ast.FunctionDef)
-        }
-        mod_funcs = {
-            n.name: n for n in ast.walk(mod_ast) if isinstance(n, ast.FunctionDef)
-        }
+        orig_funcs = {n.name: n for n in ast.walk(orig_ast) if isinstance(n, ast.FunctionDef)}
+        mod_funcs = {n.name: n for n in ast.walk(mod_ast) if isinstance(n, ast.FunctionDef)}
 
         # Check for removed functions
         for name in orig_funcs:
@@ -259,9 +247,6 @@ class CodeValidator:
                 orig_args = [a.arg for a in orig_func.args.args]
                 mod_args = [a.arg for a in mod_func.args.args]
                 if orig_args != mod_args:
-                    differences.append(
-                        f"Function '{name}' signature changed: "
-                        f"{orig_args} -> {mod_args}"
-                    )
+                    differences.append(f"Function '{name}' signature changed: " f"{orig_args} -> {mod_args}")
 
         return len(differences) == 0, differences

@@ -33,9 +33,7 @@ class AuthService:
         """Hash a password."""
         return hash_password(password)
 
-    def create_access_token(
-        self, data: dict, expires_delta: Optional[timedelta] = None
-    ) -> str:
+    def create_access_token(self, data: dict, expires_delta: Optional[timedelta] = None) -> str:
         """Create a JWT access token."""
         default_delta = timedelta(minutes=settings.access_token_expire_minutes)
         return encode_jwt(
@@ -48,13 +46,9 @@ class AuthService:
         """Decode and validate a JWT token."""
         return decode_jwt_or_none(token, settings.secret_key)
 
-    async def create_user(
-        self, db: AsyncSession, user_data: UserCreate
-    ) -> UserResponse:
+    async def create_user(self, db: AsyncSession, user_data: UserCreate) -> UserResponse:
         """Create a new user."""
-        result = await db.execute(
-            select(User).where(User.username == user_data.username)
-        )
+        result = await db.execute(select(User).where(User.username == user_data.username))
         if result.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -77,18 +71,14 @@ class AuthService:
 
         return UserResponse.model_validate(user)
 
-    async def get_user_by_username(
-        self, db: AsyncSession, username: str
-    ) -> Optional[User]:
+    async def get_user_by_username(self, db: AsyncSession, username: str) -> Optional[User]:
         """Get a user by username."""
         result = await db.execute(select(User).where(User.username == username))
         return result.scalar_one_or_none()
 
     async def create_token_response(self, user: User) -> TokenResponse:
         """Create a token response for a user."""
-        access_token = self.create_access_token(
-            data={"sub": user.username, "admin": user.is_platform_admin}
-        )
+        access_token = self.create_access_token(data={"sub": user.username, "admin": user.is_platform_admin})
         return TokenResponse(
             access_token=access_token,
             token_type="bearer",  # nosec B106 - standard OAuth2 token type

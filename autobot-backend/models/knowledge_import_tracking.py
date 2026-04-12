@@ -178,9 +178,7 @@ class ImportTracker:
 
         return result[0] != current_hash  # Hash changed
 
-    def get_import_status(
-        self, file_path: Optional[str] = None, category: Optional[str] = None
-    ):
+    def get_import_status(self, file_path: Optional[str] = None, category: Optional[str] = None):
         """Get import status for files"""
         import sqlite3
 

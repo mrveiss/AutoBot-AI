@@ -67,9 +67,7 @@ class GPUOptimizationResult:
     timestamp: float = field(default_factory=time.time)
 
     @classmethod
-    def create_failed(
-        cls, optimization_type: str, error: str
-    ) -> "GPUOptimizationResult":
+    def create_failed(cls, optimization_type: str, error: str) -> "GPUOptimizationResult":
         """Create a failed optimization result."""
         return cls(
             success=False,

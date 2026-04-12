@@ -52,9 +52,7 @@ class SessionHandlerMixin:
             self.sessions[session_id].last_activity = time.time()
             return self.sessions[session_id]
 
-    def _determine_exit_intent(
-        self, classification: IntentClassification, safety_check: SafetyCheckResult
-    ) -> bool:
+    def _determine_exit_intent(self, classification: IntentClassification, safety_check: SafetyCheckResult) -> bool:
         """Determine if user wants to exit conversation (Issue #332 - extracted helper).
 
         Returns:
@@ -142,26 +140,18 @@ class SessionHandlerMixin:
 
         session = await self.get_or_create_session(session_id)
         session.message_count += 1
-        logger.debug(
-            "[ChatWorkflowManager] Session message_count: %d", session.message_count
-        )
+        logger.debug("[ChatWorkflowManager] Session message_count: %d", session.message_count)
 
         # Comprehensive intent classification with safety guards (Issue #159)
-        conversation_history_formatted = self._convert_conversation_history_format(
-            session.conversation_history
-        )
+        conversation_history_formatted = self._convert_conversation_history_format(session.conversation_history)
 
         # Initialize classifiers and analyze
         intent_classifier = IntentClassifier()
         context_analyzer = ConversationContextAnalyzer()
         safety_guards = ConversationSafetyGuards()
 
-        classification: IntentClassification = intent_classifier.classify(
-            message, conversation_history_formatted
-        )
-        context: ConversationContext = context_analyzer.analyze(
-            conversation_history_formatted, message
-        )
+        classification: IntentClassification = intent_classifier.classify(message, conversation_history_formatted)
+        context: ConversationContext = context_analyzer.analyze(conversation_history_formatted, message)
         safety_check: SafetyCheckResult = safety_guards.check(classification, context)
 
         # Determine exit intent (uses helper)

@@ -113,9 +113,7 @@ async def _scan_all_facts(kb) -> tuple[dict, int]:
 
         if keys:
             for i in range(0, len(results), 2):
-                fact_info = _process_fact_metadata(
-                    results[i], keys[i // 2], results[i + 1]
-                )
+                fact_info = _process_fact_metadata(results[i], keys[i // 2], results[i + 1])
                 if fact_info:
                     _group_fact_by_category_title(fact_info, fact_groups)
                     total_facts += 1
@@ -160,9 +158,7 @@ def _find_duplicates_in_groups(fact_groups: dict) -> tuple[list, list]:
     return duplicates_found, facts_to_delete
 
 
-async def _delete_facts_in_batches(
-    kb, facts_to_delete: list, batch_size: int = 100
-) -> int:
+async def _delete_facts_in_batches(kb, facts_to_delete: list, batch_size: int = 100) -> int:
     """Delete facts in batches (Issue #398: extracted).
 
     Returns:
@@ -207,9 +203,7 @@ async def deduplicate_facts(
 
     # Scan and group facts
     fact_groups, total_facts = await _scan_all_facts(kb)
-    logger.info(
-        f"Scanned {total_facts} facts, found {len(fact_groups)} unique combinations"
-    )
+    logger.info(f"Scanned {total_facts} facts, found {len(fact_groups)} unique combinations")
 
     # Find duplicates
     duplicates_found, facts_to_delete = _find_duplicates_in_groups(fact_groups)
@@ -393,10 +387,7 @@ def _build_quality_summary(quality: dict) -> dict:
     """
     return {
         "overall_score": quality.get("overall_score", 0),
-        "dimensions": {
-            dim: data.get("score", 0)
-            for dim, data in quality.get("dimensions", {}).items()
-        },
+        "dimensions": {dim: data.get("score", 0) for dim, data in quality.get("dimensions", {}).items()},
         "critical_issues": quality.get("summary", {}).get("critical_issues", 0),
         "warnings": quality.get("summary", {}).get("warnings", 0),
     }
@@ -459,9 +450,7 @@ def _create_vectorization_result() -> dict:
     }
 
 
-def _add_vectorization_detail(
-    results: dict, doc_id: str, command: str, status: str, **kwargs
-) -> None:
+def _add_vectorization_detail(results: dict, doc_id: str, command: str, status: str, **kwargs) -> None:
     """
     Add a detail entry to vectorization results. Issue #620.
 
@@ -477,9 +466,7 @@ def _add_vectorization_detail(
     results["details"].append(detail)
 
 
-def _build_document_metadata(
-    doc_change: dict, machine_id: str, content_size: int
-) -> dict:
+def _build_document_metadata(doc_change: dict, machine_id: str, content_size: int) -> dict:
     """
     Build metadata dict for knowledge base document. Issue #620.
 
@@ -503,9 +490,7 @@ def _build_document_metadata(
     }
 
 
-async def _vectorize_single_document(
-    kb, scanner, doc_change: dict, machine_id: str, results: dict
-) -> None:
+async def _vectorize_single_document(kb, scanner, doc_change: dict, machine_id: str, results: dict) -> None:
     """
     Vectorize a single document and update results.
 
@@ -521,9 +506,7 @@ async def _vectorize_single_document(
     # Validate required fields
     if not file_path or not command:
         results["skipped"] += 1
-        _add_vectorization_detail(
-            results, doc_id, command, "skipped", reason="Missing file_path or command"
-        )
+        _add_vectorization_detail(results, doc_id, command, "skipped", reason="Missing file_path or command")
         return
 
     try:
@@ -532,24 +515,18 @@ async def _vectorize_single_document(
 
         if not content or len(content.strip()) < 10:
             results["failed"] += 1
-            _add_vectorization_detail(
-                results, doc_id, command, "failed", reason="Empty or too short content"
-            )
+            _add_vectorization_detail(results, doc_id, command, "failed", reason="Empty or too short content")
             return
 
         # Issue #620: Extracted metadata building
         metadata = _build_document_metadata(doc_change, machine_id, len(content))
 
         # Add to knowledge base
-        kb_result = await kb.add_document(
-            content=content, metadata=metadata, doc_id=doc_id
-        )
+        kb_result = await kb.add_document(content=content, metadata=metadata, doc_id=doc_id)
 
         if kb_result.get("status") == "success":
             results["successful"] += 1
-            _add_vectorization_detail(
-                results, doc_id, command, "success", fact_id=kb_result.get("fact_id")
-            )
+            _add_vectorization_detail(results, doc_id, command, "success", fact_id=kb_result.get("fact_id"))
         else:
             results["failed"] += 1
             _add_vectorization_detail(
@@ -563,9 +540,7 @@ async def _vectorize_single_document(
     except Exception as e:
         logger.error("Vectorization failed for %s: %s", command, e)
         results["failed"] += 1
-        _add_vectorization_detail(
-            results, doc_id, command, "error", reason="Internal server error"
-        )
+        _add_vectorization_detail(results, doc_id, command, "error", reason="Internal server error")
 
 
 async def _process_vectorization(kb, scanner, result: dict, machine_id: str) -> dict:
@@ -576,9 +551,7 @@ async def _process_vectorization(kb, scanner, result: dict, machine_id: str) -> 
     documents_to_vectorize = result["changes"]["added"] + result["changes"]["updated"]
 
     for doc_change in documents_to_vectorize:
-        await _vectorize_single_document(
-            kb, scanner, doc_change, machine_id, vectorization_results
-        )
+        await _vectorize_single_document(kb, scanner, doc_change, machine_id, vectorization_results)
 
     logger.info(
         f"Vectorization completed: "
@@ -606,9 +579,7 @@ def _extract_scan_params(request_data: ScanHostChangesRequest) -> tuple:
     )
 
 
-def _perform_fast_scan(
-    redis_client, machine_id: str, scan_type: str, force: bool
-) -> tuple:
+def _perform_fast_scan(redis_client, machine_id: str, scan_type: str, force: bool) -> tuple:
     """
     Initialize scanner and perform fast document scan. Issue #620.
 
@@ -665,16 +636,12 @@ async def scan_host_changes(
 
     machine_id, force, scan_type, auto_vectorize = _extract_scan_params(request_data)
 
-    logger.info(
-        f"Fast scan starting for {machine_id} (type={scan_type}, auto_vectorize={auto_vectorize})"
-    )
+    logger.info(f"Fast scan starting for {machine_id} (type={scan_type}, auto_vectorize={auto_vectorize})")
 
     scanner, result = _perform_fast_scan(kb.redis_client, machine_id, scan_type, force)
 
     if auto_vectorize:
-        result["vectorization"] = await _process_vectorization(
-            kb, scanner, result, machine_id
-        )
+        result["vectorization"] = await _process_vectorization(kb, scanner, result, machine_id)
 
     return result
 
@@ -833,9 +800,7 @@ async def find_orphaned_facts(
 
     logger.info("Scanning for orphaned facts...")
 
-    total_checked, orphaned_facts = await asyncio.to_thread(
-        _scan_redis_for_orphans, kb.redis_client
-    )
+    total_checked, orphaned_facts = await asyncio.to_thread(_scan_redis_for_orphans, kb.redis_client)
 
     logger.info(
         "Checked %d facts with file paths, found %d orphans",
@@ -928,9 +893,7 @@ def _parse_fact_metadata(fact_data: dict) -> dict | None:
         return None
 
 
-def _build_orphan_fact_info(
-    key, fact_data: dict, metadata: dict, source_session_id: str
-) -> dict:
+def _build_orphan_fact_info(key, fact_data: dict, metadata: dict, source_session_id: str) -> dict:
     """Build orphan fact information dictionary."""
     fact_key = key.decode("utf-8") if isinstance(key, bytes) else key
     fact_id = fact_key.replace("fact:", "")
@@ -999,12 +962,8 @@ def _scan_redis_for_session_orphans(redis_client, existing_session_ids: set) -> 
 
             # Check if this session still exists
             if source_session_id not in existing_session_ids:
-                orphaned_facts.append(
-                    _build_orphan_fact_info(key, fact_data, metadata, source_session_id)
-                )
-                session_stats[source_session_id] = (
-                    session_stats.get(source_session_id, 0) + 1
-                )
+                orphaned_facts.append(_build_orphan_fact_info(key, fact_data, metadata, source_session_id))
+                session_stats[source_session_id] = session_stats.get(source_session_id, 0) + 1
 
         if cursor == 0:
             break
@@ -1042,9 +1001,7 @@ async def find_session_orphan_facts(
 
     chat_manager = get_chat_history_manager(req)
     if chat_manager is None:
-        raise HTTPException(
-            status_code=500, detail="Chat history manager not available"
-        )
+        raise HTTPException(status_code=500, detail="Chat history manager not available")
 
     existing_sessions = await chat_manager.list_sessions_fast()
     existing_session_ids = {s["id"] for s in existing_sessions}
@@ -1059,9 +1016,7 @@ async def find_session_orphan_facts(
         total_with_session,
         orphaned_facts,
         session_stats,
-    ) = await asyncio.to_thread(
-        _scan_redis_for_session_orphans, kb.redis_client, existing_session_ids
-    )
+    ) = await asyncio.to_thread(_scan_redis_for_session_orphans, kb.redis_client, existing_session_ids)
 
     logger.info(
         "Session-orphan scan: checked %d facts, %d with session tracking, %d orphans found",
@@ -1081,9 +1036,7 @@ async def find_session_orphan_facts(
     }
 
 
-async def _delete_orphan_facts(
-    kb, orphaned_facts: list, preserve_important: bool
-) -> tuple:
+async def _delete_orphan_facts(kb, orphaned_facts: list, preserve_important: bool) -> tuple:
     """
     Delete orphan facts with optional preservation (Issue #665: extracted helper).
 
@@ -1097,9 +1050,7 @@ async def _delete_orphan_facts(
     for fact in orphaned_facts:
         if preserve_important and (fact.get("important") or fact.get("preserve")):
             preserved_count += 1
-            preserved_facts.append(
-                {"fact_id": fact["fact_id"], "reason": "marked as important/preserve"}
-            )
+            preserved_facts.append({"fact_id": fact["fact_id"], "reason": "marked as important/preserve"})
             continue
 
         try:
@@ -1128,9 +1079,7 @@ async def cleanup_session_orphan_facts(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
     dry_run: bool = Query(True, description="If True, only report without deleting"),
-    preserve_important: bool = Query(
-        True, description="Keep facts marked as important"
-    ),
+    preserve_important: bool = Query(True, description="Keep facts marked as important"),
 ):
     """
     Remove facts from deleted chat sessions.
@@ -1283,9 +1232,7 @@ async def export_knowledge(
     date_from = filters.date_from if filters else None
     date_to = filters.date_to if filters else None
 
-    logger.info(
-        f"Export request: format={request.format.value}, include_metadata={request.include_metadata}"
-    )
+    logger.info(f"Export request: format={request.format.value}, include_metadata={request.include_metadata}")
 
     result = await kb.export_facts(
         format=request.format.value,
@@ -1346,9 +1293,7 @@ async def import_knowledge(
             detail="Knowledge base not initialized",
         )
 
-    logger.info(
-        f"Import request: format={request.format.value}, validate_only={request.validate_only}"
-    )
+    logger.info(f"Import request: format={request.format.value}, validate_only={request.validate_only}")
 
     result = await kb.import_facts(
         data=data,
@@ -1481,13 +1426,9 @@ async def update_fact(
 
     content_status = "provided" if request.content else "unchanged"
     metadata_status = "provided" if request.metadata else "unchanged"
-    logger.info(
-        f"Updating fact {fact_id}: content={content_status}, metadata={metadata_status}"
-    )
+    logger.info(f"Updating fact {fact_id}: content={content_status}, metadata={metadata_status}")
 
-    result = await kb.update_fact(
-        fact_id=fact_id, content=request.content, metadata=request.metadata
-    )
+    result = await kb.update_fact(fact_id=fact_id, content=request.content, metadata=request.metadata)
 
     return _handle_update_fact_result(result, fact_id)
 
@@ -1642,9 +1583,7 @@ async def bulk_update_category(
             detail="Knowledge base not initialized",
         )
 
-    logger.info(
-        f"Bulk category update: {len(request.fact_ids)} facts → {request.new_category}"
-    )
+    logger.info(f"Bulk category update: {len(request.fact_ids)} facts → {request.new_category}")
 
     result = await kb.bulk_update_category(
         fact_ids=request.fact_ids,
@@ -1747,10 +1686,7 @@ async def create_backup(
             detail="Knowledge base not initialized",
         )
 
-    logger.info(
-        f"Backup request: embeddings={request.include_embeddings}, "
-        f"compression={request.compression}"
-    )
+    logger.info(f"Backup request: embeddings={request.include_embeddings}, " f"compression={request.compression}")
 
     result = await kb.create_backup(
         include_embeddings=request.include_embeddings,

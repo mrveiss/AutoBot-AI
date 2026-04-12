@@ -13,10 +13,9 @@ import logging
 import uuid
 from typing import Dict, List, Optional
 
+from constants.ttl_constants import TTL_1_HOUR
 from services.command_approval_manager import AgentRole
 from type_defs.common import Metadata
-
-from constants.ttl_constants import TTL_1_HOUR
 
 from .models import AgentSessionState, AgentTerminalSession
 
@@ -42,9 +41,7 @@ def _find_latest_approval_request(messages: List[Dict]) -> Optional[Dict]:
     return None
 
 
-def _is_approval_already_responded(
-    messages: List[Dict], request_timestamp: float
-) -> bool:
+def _is_approval_already_responded(messages: List[Dict], request_timestamp: float) -> bool:
     """
     Check if approval request was already responded to (Issue #665: extracted helper).
 
@@ -104,10 +101,7 @@ def _apply_restored_approval_state(
             f"command='{command}', risk={metadata.get('risk_level')}"
         )
     else:
-        logger.warning(
-            f"Found approval request but no command in metadata "
-            f"for conversation {conversation_id}"
-        )
+        logger.warning(f"Found approval request but no command in metadata " f"for conversation {conversation_id}")
 
 
 class SessionManager:
@@ -126,9 +120,7 @@ class SessionManager:
         self.sessions: Dict[str, AgentTerminalSession] = {}
         self._sessions_lock = asyncio.Lock()  # Protect concurrent session access
 
-    def _create_or_reuse_pty_session(
-        self, pty_session_id: str, session_id: str
-    ) -> Optional[str]:
+    def _create_or_reuse_pty_session(self, pty_session_id: str, session_id: str) -> Optional[str]:
         """
         Create a new PTY session or reuse an existing alive one.
 
@@ -149,34 +141,22 @@ class SessionManager:
         if not existing_pty or not existing_pty.is_alive():
             if existing_pty and not existing_pty.is_alive():
                 logger.warning(
-                    f"PTY session {pty_session_id} exists but is dead "
-                    f"(killed during restart). Recreating..."
+                    f"PTY session {pty_session_id} exists but is dead " f"(killed during restart). Recreating..."
                 )
                 simple_pty_manager.close_session(pty_session_id)
 
-            pty = simple_pty_manager.create_session(
-                pty_session_id, initial_cwd=str(PATH.PROJECT_ROOT)
-            )
+            pty = simple_pty_manager.create_session(pty_session_id, initial_cwd=str(PATH.PROJECT_ROOT))
             if pty:
-                logger.info(
-                    f"Created PTY session {pty_session_id} for agent terminal {session_id}"
-                )
+                logger.info(f"Created PTY session {pty_session_id} for agent terminal {session_id}")
                 return pty_session_id
             else:
-                logger.warning(
-                    f"Failed to create PTY session for agent terminal {session_id}"
-                )
+                logger.warning(f"Failed to create PTY session for agent terminal {session_id}")
                 return None
         else:
-            logger.info(
-                f"Reusing existing ALIVE PTY session {pty_session_id} "
-                f"for agent terminal {session_id}"
-            )
+            logger.info(f"Reusing existing ALIVE PTY session {pty_session_id} " f"for agent terminal {session_id}")
             return pty_session_id
 
-    def _register_pty_with_terminal_manager(
-        self, pty_session_id: str, conversation_id: str
-    ) -> None:
+    def _register_pty_with_terminal_manager(self, pty_session_id: str, conversation_id: str) -> None:
         """
         Register PTY session with terminal session_manager for WebSocket logging.
 
@@ -194,8 +174,7 @@ class SessionManager:
                 "conversation_id": conversation_id,
             }
             logger.info(
-                f"Registered PTY session {pty_session_id} with "
-                f"conversation_id {conversation_id} for logging"
+                f"Registered PTY session {pty_session_id} with " f"conversation_id {conversation_id} for logging"
             )
         except Exception as e:
             logger.error(f"Failed to register PTY session with session_manager: {e}")
@@ -218,13 +197,9 @@ class SessionManager:
         """
         try:
             desired_pty_id = conversation_id or session_id
-            pty_session_id = self._create_or_reuse_pty_session(
-                desired_pty_id, session_id
-            )
+            pty_session_id = self._create_or_reuse_pty_session(desired_pty_id, session_id)
             if pty_session_id and conversation_id:
-                self._register_pty_with_terminal_manager(
-                    pty_session_id, conversation_id
-                )
+                self._register_pty_with_terminal_manager(pty_session_id, conversation_id)
             return pty_session_id
         except Exception as e:
             logger.error("Error creating PTY session: %s", e)
@@ -308,9 +283,7 @@ class SessionManager:
         if self.redis_client:
             try:
                 key = f"agent_terminal:session:{session_id}"
-                session_json = await asyncio.wait_for(
-                    self.redis_client.get(key), timeout=2.0
-                )
+                session_json = await asyncio.wait_for(self.redis_client.get(key), timeout=2.0)
 
                 if session_json:
                     session_data = json.loads(session_json)
@@ -412,16 +385,12 @@ class SessionManager:
 
             json_data = json.dumps(session_data)
             await self.redis_client.setex(key, TTL_1_HOUR, json_data)  # 1 hour TTL
-            logger.debug(
-                f"Persisted session {session.session_id} to Redis with key {key}"
-            )
+            logger.debug(f"Persisted session {session.session_id} to Redis with key {key}")
 
         except Exception as e:
             logger.error("Failed to persist session to Redis: %s", e)
 
-    async def _restore_pending_approval(
-        self, session: AgentTerminalSession, conversation_id: str
-    ):
+    async def _restore_pending_approval(self, session: AgentTerminalSession, conversation_id: str):
         """
         Restore pending approval from chat history (survives backend restarts).
 
@@ -440,39 +409,29 @@ class SessionManager:
 
         try:
             # Get recent messages from chat history (last 50 messages)
-            messages = await self.chat_history_manager.get_session_messages(
-                session_id=conversation_id, limit=50
-            )
+            messages = await self.chat_history_manager.get_session_messages(session_id=conversation_id, limit=50)
 
             if not messages:
-                logger.debug(
-                    f"No messages found for conversation {conversation_id}, "
-                    f"skipping approval restoration"
-                )
+                logger.debug(f"No messages found for conversation {conversation_id}, " f"skipping approval restoration")
                 return
 
             # Search for most recent command_approval_request (Issue #665: uses helper)
             approval_request = _find_latest_approval_request(messages)
 
             if not approval_request:
-                logger.debug(
-                    f"No pending approval requests found in conversation {conversation_id}"
-                )
+                logger.debug(f"No pending approval requests found in conversation {conversation_id}")
                 return
 
             # Check if this approval was already responded to (Issue #665: uses helper)
             request_timestamp = approval_request.get("timestamp", 0)
             if _is_approval_already_responded(messages, request_timestamp):
                 logger.info(
-                    f"Approval request already responded to in "
-                    f"conversation {conversation_id}, skipping restoration"
+                    f"Approval request already responded to in " f"conversation {conversation_id}, skipping restoration"
                 )
                 return
 
             # Approval is still pending! Restore state (Issue #665: uses helper)
-            _apply_restored_approval_state(
-                session, approval_request, conversation_id, request_timestamp
-            )
+            _apply_restored_approval_state(session, approval_request, conversation_id, request_timestamp)
 
         except Exception as e:
             logger.error("Failed to restore pending approval from chat history: %s", e)

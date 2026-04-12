@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import with_error_handling
-from autobot_shared.redis_client import get_redis_client, get_async_redis_client
+from autobot_shared.redis_client import get_async_redis_client, get_redis_client
 from autobot_shared.ssot_config import config
 from plugin_sdk.base import PluginRegistry
 from plugin_sdk.loader import PluginLoader

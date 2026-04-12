@@ -13,10 +13,10 @@ import threading
 from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
-from constants.error_constants import ERR_WORKFLOW_NOT_FOUND
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from constants.error_constants import ERR_WORKFLOW_NOT_FOUND
 from services.notification_service import NotificationConfig
 
 from .manager import WorkflowAutomationManager
@@ -112,9 +112,7 @@ async def create_workflow(
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
 @router.post("/start_workflow/{workflow_id}")
-async def start_workflow(
-    workflow_id: str, current_user: dict = Depends(get_current_user)
-):
+async def start_workflow(workflow_id: str, current_user: dict = Depends(get_current_user)):
     """Start executing automated workflow"""
     try:
         success = await get_workflow_manager().start_workflow_execution(workflow_id)
@@ -149,14 +147,10 @@ async def control_workflow(
         if success:
             return {
                 "success": True,
-                "message": (
-                    f"Workflow control action '{request.action}' executed successfully"
-                ),
+                "message": (f"Workflow control action '{request.action}' executed successfully"),
             }
         else:
-            raise HTTPException(
-                status_code=404, detail="Workflow not found or action failed"
-            )
+            raise HTTPException(status_code=404, detail="Workflow not found or action failed")
 
     except Exception as e:
         logger.error("Failed to control workflow: %s", e)
@@ -169,9 +163,7 @@ async def control_workflow(
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
 @router.get("/workflow_status/{workflow_id}")
-async def get_workflow_status(
-    workflow_id: str, current_user: dict = Depends(get_current_user)
-):
+async def get_workflow_status(workflow_id: str, current_user: dict = Depends(get_current_user)):
     """Get current workflow status"""
     try:
         status = get_workflow_manager().get_workflow_status(workflow_id)
@@ -238,9 +230,7 @@ async def get_completed_workflows(
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
 @router.post("/create_from_chat")
-async def create_workflow_from_chat(
-    request: dict, current_user: dict = Depends(get_current_user)
-):
+async def create_workflow_from_chat(request: dict, current_user: dict = Depends(get_current_user)):
     """
     Create workflow from natural language chat request.
 
@@ -256,13 +246,9 @@ async def create_workflow_from_chat(
         approval_mode = request.get("approval_mode", "full_plan")
 
         if not user_request or not session_id:
-            raise HTTPException(
-                status_code=400, detail="user_request and session_id are required"
-            )
+            raise HTTPException(status_code=400, detail="user_request and session_id are required")
 
-        workflow_id = await get_workflow_manager().create_workflow_from_chat_request(
-            user_request, session_id
-        )
+        workflow_id = await get_workflow_manager().create_workflow_from_chat_request(user_request, session_id)
 
         if workflow_id:
             # Issue #390: Support both modes for backward compatibility
@@ -277,9 +263,7 @@ async def create_workflow_from_chat(
                     "workflow_id": workflow_id,
                     "message": "Workflow plan presented for approval",
                     "status": "awaiting_approval",
-                    "plan": (
-                        plan_approval.to_presentation_dict() if plan_approval else None
-                    ),
+                    "plan": (plan_approval.to_presentation_dict() if plan_approval else None),
                 }
             else:
                 # Legacy behavior: auto-start immediately (backward compatible default)
@@ -358,9 +342,7 @@ def _validate_approval_request(workflow_id: str) -> None:
     if not get_workflow_manager().get_workflow_status(workflow_id):
         raise HTTPException(status_code=404, detail=ERR_WORKFLOW_NOT_FOUND)
     if not get_workflow_manager().get_pending_approval(workflow_id):
-        raise HTTPException(
-            status_code=404, detail="No pending approval for this workflow"
-        )
+        raise HTTPException(status_code=404, detail="No pending approval for this workflow")
 
 
 async def _execute_approval_outcome(request: PlanApprovalResponse) -> dict:
@@ -419,9 +401,7 @@ async def approve_plan(
         )
 
         if not success:
-            raise HTTPException(
-                status_code=400, detail="Failed to process approval response"
-            )
+            raise HTTPException(status_code=400, detail="Failed to process approval response")
 
         return await _execute_approval_outcome(request)
 
@@ -438,9 +418,7 @@ async def approve_plan(
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
 @router.get("/pending_approval/{workflow_id}")
-async def get_pending_approval(
-    workflow_id: str, current_user: dict = Depends(get_current_user)
-):
+async def get_pending_approval(workflow_id: str, current_user: dict = Depends(get_current_user)):
     """
     Get pending plan approval status for a workflow.
 
@@ -628,12 +606,8 @@ async def workflow_websocket(websocket: WebSocket, session_id: str):
                 workflow_id = message.get("workflow_id")
 
                 if workflow_id and action:
-                    control_request = WorkflowControlRequest(
-                        workflow_id=workflow_id, action=action
-                    )
-                    await get_workflow_manager().handle_workflow_control(
-                        control_request
-                    )
+                    control_request = WorkflowControlRequest(workflow_id=workflow_id, action=action)
+                    await get_workflow_manager().handle_workflow_control(control_request)
 
     except WebSocketDisconnect:
         # Clean up on disconnect

@@ -106,9 +106,7 @@ class KeywordSearcher:
 
             cursor = b"0"
             while True:
-                cursor, keys = await self.redis_client.scan(
-                    cursor=cursor, match="fact:*", count=100
-                )
+                cursor, keys = await self.redis_client.scan(cursor=cursor, match="fact:*", count=100)
                 if keys:
                     pipeline = self.redis_client.pipeline()
                     for key in keys:
@@ -118,9 +116,7 @@ class KeywordSearcher:
                     for fact_data in facts_data:
                         if not fact_data:
                             continue
-                        content = fact_data.get(b"content", b"") or fact_data.get(
-                            "content", ""
-                        )
+                        content = fact_data.get(b"content", b"") or fact_data.get("content", "")
                         if isinstance(content, bytes):
                             content = content.decode("utf-8", errors="replace")
                         tokens = content.lower().split()
@@ -138,9 +134,7 @@ class KeywordSearcher:
                 "avg_doc_length": avg_len,
                 "doc_frequencies": doc_freq,
             }
-            await self.redis_client.set(
-                _CORPUS_STATS_KEY, json.dumps(stats, ensure_ascii=False)
-            )
+            await self.redis_client.set(_CORPUS_STATS_KEY, json.dumps(stats, ensure_ascii=False))
             self._invalidate_bm25_cache()
             logger.info(
                 "BM25 corpus stats recomputed: %d docs, avg_len=%.1f, vocab=%d",
@@ -196,9 +190,7 @@ class KeywordSearcher:
     # Search entry point
     # ------------------------------------------------------------------
 
-    async def search(
-        self, query: str, limit: int, category: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+    async def search(self, query: str, limit: int, category: Optional[str] = None) -> List[Dict[str, Any]]:
         """Perform BM25 keyword search using Redis (Issue #1720 upgrade)."""
         try:
             if not self.redis_client:
@@ -215,15 +207,11 @@ class KeywordSearcher:
             max_scan = 10000
 
             while scanned < max_scan:
-                cursor, keys = await self.redis_client.scan(
-                    cursor=cursor, match="fact:*", count=100
-                )
+                cursor, keys = await self.redis_client.scan(cursor=cursor, match="fact:*", count=100)
                 scanned += len(keys)
 
                 if keys:
-                    batch_results = await self.process_keyword_batch(
-                        keys, query_terms, category, bm25
-                    )
+                    batch_results = await self.process_keyword_batch(keys, query_terms, category, bm25)
                     results.extend(batch_results)
 
                 if cursor == b"0":

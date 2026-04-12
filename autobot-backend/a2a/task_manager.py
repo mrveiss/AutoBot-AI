@@ -191,9 +191,7 @@ class TaskManager:
             # No running event loop (e.g. unit tests using sync calls).
             # Eviction will not be scheduled — the store still bounds itself
             # via explicit get_task() returning None after eviction in async use.
-            logger.debug(
-                "A2A task eviction skipped (no event loop): %s", task_id
-            )
+            logger.debug("A2A task eviction skipped (no event loop): %s", task_id)
 
     def get_audit_log(self, task_id: str) -> Optional[List[Dict[str, Any]]]:
         """Return the full trace event log for a task, or None if not found."""

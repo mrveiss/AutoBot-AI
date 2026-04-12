@@ -135,9 +135,7 @@ async def test_get_mcp_tools_prompt_falls_back_to_stale_cache_on_refresh_error()
     def _make_dispatcher_with_error_and_stale_tools() -> MagicMock:
         """Dispatcher that errors on refresh but has stale tool data."""
         dispatcher = MagicMock()
-        dispatcher._ensure_cache_fresh = AsyncMock(
-            side_effect=Exception("registry down")
-        )
+        dispatcher._ensure_cache_fresh = AsyncMock(side_effect=Exception("registry down"))
         dispatcher.get_tool_definitions = MagicMock(return_value=[_SAMPLE_TOOL_DEF])
         return dispatcher
 

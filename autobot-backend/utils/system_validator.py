@@ -78,19 +78,11 @@ class SystemValidator:
         # Validation configuration
         self.timeout_seconds = config.get("validation.timeout_seconds", 30)
         self.critical_thresholds = {
-            "response_time_ms": config.get(
-                "validation.thresholds.response_time_ms", 5000
-            ),
+            "response_time_ms": config.get("validation.thresholds.response_time_ms", 5000),
             "cache_hit_rate": config.get("validation.thresholds.cache_hit_rate", 50.0),
-            "memory_usage_percent": config.get(
-                "validation.thresholds.memory_usage_percent", 90.0
-            ),
-            "cpu_usage_percent": config.get(
-                "validation.thresholds.cpu_usage_percent", 95.0
-            ),
-            "error_rate_percent": config.get(
-                "validation.thresholds.error_rate_percent", 5.0
-            ),
+            "memory_usage_percent": config.get("validation.thresholds.memory_usage_percent", 90.0),
+            "cpu_usage_percent": config.get("validation.thresholds.cpu_usage_percent", 95.0),
+            "error_rate_percent": config.get("validation.thresholds.error_rate_percent", 5.0),
         }
 
         # Service endpoints
@@ -125,9 +117,7 @@ class SystemValidator:
         self.results.append(result)
         return result
 
-    def _get_severity_for_response_time(
-        self, response_time_ms: float, base_success: bool = True
-    ) -> ValidationSeverity:
+    def _get_severity_for_response_time(self, response_time_ms: float, base_success: bool = True) -> ValidationSeverity:
         """Get severity based on response time (Issue #333 - extracted helper)."""
         if not base_success:
             return ValidationSeverity.WARNING
@@ -223,9 +213,7 @@ class SystemValidator:
                 f"Knowledge base integration error: {str(e)}",
             )
 
-    def _validate_cache_initialization(
-        self, component: str, cache, init_time: float
-    ) -> bool:
+    def _validate_cache_initialization(self, component: str, cache, init_time: float) -> bool:
         """
         Validate cache system initialization (Issue #620: extracted helper).
 
@@ -329,9 +317,7 @@ class SystemValidator:
 
         return self._get_component_results(component)
 
-    def _validate_hybrid_search_results(
-        self, component: str, search_results: List, search_time: float
-    ) -> None:
+    def _validate_hybrid_search_results(self, component: str, search_results: List, search_time: float) -> None:
         """Validate hybrid search results (Issue #333 - extracted helper)."""
         if not search_results:
             self._add_result(
@@ -402,13 +388,9 @@ class SystemValidator:
                 f"Search explanation error: {str(e)}",
             )
 
-    def _validate_system_metrics_result(
-        self, component: str, system_metrics: Dict, collection_time: float
-    ) -> None:
+    def _validate_system_metrics_result(self, component: str, system_metrics: Dict, collection_time: float) -> None:
         """Validate system metrics collection result (Issue #380: use module constant)."""
-        found_metrics = [
-            name for name in _EXPECTED_SYSTEM_METRICS if name in system_metrics
-        ]
+        found_metrics = [name for name in _EXPECTED_SYSTEM_METRICS if name in system_metrics]
 
         if len(found_metrics) != len(_EXPECTED_SYSTEM_METRICS):
             self._add_result(
@@ -424,11 +406,7 @@ class SystemValidator:
             )
             return
 
-        severity = (
-            ValidationSeverity.SUCCESS
-            if collection_time < 1000
-            else ValidationSeverity.WARNING
-        )
+        severity = ValidationSeverity.SUCCESS if collection_time < 1000 else ValidationSeverity.WARNING
         self._add_result(
             component,
             "System Metrics",
@@ -442,9 +420,7 @@ class SystemValidator:
             collection_time,
         )
 
-    def _validate_service_health_result(
-        self, component: str, health_metrics: Dict, health_time: float
-    ) -> None:
+    def _validate_service_health_result(self, component: str, health_metrics: Dict, health_time: float) -> None:
         """Validate service health collection result (Issue #333 - extracted helper)."""
         service_count = len([k for k in health_metrics.keys() if "health" in k])
 
@@ -509,11 +485,7 @@ class SystemValidator:
                 return
 
             health_score = summary["overall_health"].get("value", 0)
-            severity = (
-                ValidationSeverity.SUCCESS
-                if health_score > 80
-                else ValidationSeverity.WARNING
-            )
+            severity = ValidationSeverity.SUCCESS if health_score > 80 else ValidationSeverity.WARNING
             self._add_result(
                 component,
                 "Health Summary",
@@ -534,9 +506,7 @@ class SystemValidator:
                 f"Health summary error: {str(e)}",
             )
 
-    def _validate_model_discovery_result(
-        self, component: str, models: List, discovery_time: float
-    ) -> bool:
+    def _validate_model_discovery_result(self, component: str, models: List, discovery_time: float) -> bool:
         """Validate model discovery result (Issue #333 - extracted helper).
 
         Returns:
@@ -581,9 +551,7 @@ class SystemValidator:
         )
         return False
 
-    def _validate_complexity_analysis(
-        self, component: str, optimizer, TaskComplexity, TaskRequest
-    ) -> None:
+    def _validate_complexity_analysis(self, component: str, optimizer, TaskComplexity, TaskRequest) -> None:
         """Validate task complexity analysis (Issue #333 - extracted helper)."""
         test_cases = [
             ("What is 2+2?", TaskComplexity.SIMPLE),
@@ -599,9 +567,7 @@ class SystemValidator:
                 correct_classifications += 1
 
         accuracy = (correct_classifications / len(test_cases)) * 100
-        severity = (
-            ValidationSeverity.SUCCESS if accuracy >= 66 else ValidationSeverity.WARNING
-        )
+        severity = ValidationSeverity.SUCCESS if accuracy >= 66 else ValidationSeverity.WARNING
         self._add_result(
             component,
             "Complexity Analysis",
@@ -615,9 +581,7 @@ class SystemValidator:
             },
         )
 
-    async def _validate_model_selection(
-        self, component: str, optimizer, TaskRequest
-    ) -> str | None:
+    async def _validate_model_selection(self, component: str, optimizer, TaskRequest) -> str | None:
         """Validate model selection (Issue #333 - extracted helper).
 
         Returns:
@@ -652,9 +616,7 @@ class SystemValidator:
             )
         return selected_model
 
-    async def _validate_performance_tracking(
-        self, component: str, optimizer, model_name: str
-    ) -> None:
+    async def _validate_performance_tracking(self, component: str, optimizer, model_name: str) -> None:
         """Validate performance tracking (Issue #333 - extracted helper)."""
         try:
             await optimizer.track_model_performance(
@@ -679,9 +641,7 @@ class SystemValidator:
                 f"Performance tracking error: {str(e)}",
             )
 
-    async def _validate_optimization_suggestions(
-        self, component: str, optimizer
-    ) -> None:
+    async def _validate_optimization_suggestions(self, component: str, optimizer) -> None:
         """Validate optimization suggestions (Issue #333 - extracted helper)."""
         try:
             suggestions = await optimizer.get_optimization_suggestions()
@@ -702,9 +662,7 @@ class SystemValidator:
                 f"Optimization suggestions error: {str(e)}",
             )
 
-    def _record_endpoint_error_response(
-        self, component: str, name: str, status: int, response_time: float
-    ) -> None:
+    def _record_endpoint_error_response(self, component: str, name: str, status: int, response_time: float) -> None:
         """
         Record an API endpoint error response (Issue #620: extracted helper).
 
@@ -723,9 +681,7 @@ class SystemValidator:
             {"response_time_ms": response_time, "status_code": status},
         )
 
-    async def _record_endpoint_success(
-        self, component: str, name: str, response, response_time: float
-    ) -> None:
+    async def _record_endpoint_success(self, component: str, name: str, response, response_time: float) -> None:
         """
         Record a successful API endpoint response (Issue #620: extracted helper).
 
@@ -751,29 +707,21 @@ class SystemValidator:
             response_time,
         )
 
-    async def _validate_single_endpoint(
-        self, component: str, http_client, method: str, url: str, name: str
-    ) -> None:
+    async def _validate_single_endpoint(self, component: str, http_client, method: str, url: str, name: str) -> None:
         """Validate a single API endpoint (Issue #333, #620 - uses extracted helpers)."""
         start_time = time.time()
         try:
             if method != "GET":
                 return  # Only GET supported in this validator
 
-            async with await http_client.get(
-                url, timeout=aiohttp.ClientTimeout(total=10)
-            ) as response:
+            async with await http_client.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
                 response_time = (time.time() - start_time) * 1000
 
                 if response.status != 200:
-                    self._record_endpoint_error_response(
-                        component, name, response.status, response_time
-                    )
+                    self._record_endpoint_error_response(component, name, response.status, response_time)
                     return
 
-                await self._record_endpoint_success(
-                    component, name, response, response_time
-                )
+                await self._record_endpoint_success(component, name, response, response_time)
 
         except asyncio.TimeoutError:
             self._add_result(
@@ -809,9 +757,7 @@ class SystemValidator:
             )
             return
 
-        severity = (
-            ValidationSeverity.SUCCESS if cpu_percent < 70 else ValidationSeverity.INFO
-        )
+        severity = ValidationSeverity.SUCCESS if cpu_percent < 70 else ValidationSeverity.INFO
         self._add_result(
             component,
             "CPU Usage",
@@ -840,11 +786,7 @@ class SystemValidator:
             )
             return
 
-        severity = (
-            ValidationSeverity.SUCCESS
-            if memory.percent < 80
-            else ValidationSeverity.INFO
-        )
+        severity = ValidationSeverity.SUCCESS if memory.percent < 80 else ValidationSeverity.INFO
         self._add_result(
             component,
             "Memory Usage",
@@ -864,11 +806,7 @@ class SystemValidator:
         disk_percent = (disk.used / disk.total) * 100
 
         if disk_percent >= 85:
-            severity = (
-                ValidationSeverity.CRITICAL
-                if disk_percent > 95
-                else ValidationSeverity.WARNING
-            )
+            severity = ValidationSeverity.CRITICAL if disk_percent > 95 else ValidationSeverity.WARNING
             self._add_result(
                 component,
                 "Disk Usage",
@@ -879,9 +817,7 @@ class SystemValidator:
             )
             return
 
-        severity = (
-            ValidationSeverity.SUCCESS if disk_percent < 70 else ValidationSeverity.INFO
-        )
+        severity = ValidationSeverity.SUCCESS if disk_percent < 70 else ValidationSeverity.INFO
         self._add_result(
             component,
             "Disk Usage",
@@ -1033,9 +969,7 @@ class SystemValidator:
 
             # Test 3: Hybrid search execution (uses helper)
             start_time = time.time()
-            search_results = await hybrid_engine.search(
-                "Python programming tutorial", top_k=5
-            )
+            search_results = await hybrid_engine.search("Python programming tutorial", top_k=5)
             search_time = (time.time() - start_time) * 1000
             self._validate_hybrid_search_results(component, search_results, search_time)
 
@@ -1053,9 +987,7 @@ class SystemValidator:
 
         return self._get_component_results(component)
 
-    def _validate_collector_init(
-        self, component: str, collector, init_time: float
-    ) -> None:
+    def _validate_collector_init(self, component: str, collector, init_time: float) -> None:
         """
         Record metrics collector initialization result.
 
@@ -1099,9 +1031,7 @@ class SystemValidator:
         all_metrics = await collector.collect_all_metrics()
         storage_success = await collector.store_metrics(all_metrics)
         storage_time = (time.time() - start_time) * 1000
-        self._validate_metrics_storage_result(
-            component, storage_success, all_metrics, storage_time
-        )
+        self._validate_metrics_storage_result(component, storage_success, all_metrics, storage_time)
 
         # Test 5: Metrics summary
         await self._validate_health_summary(component, collector)
@@ -1133,9 +1063,7 @@ class SystemValidator:
 
         return self._get_component_results(component)
 
-    def _validate_optimizer_init(
-        self, component: str, optimizer, init_time: float
-    ) -> None:
+    def _validate_optimizer_init(self, component: str, optimizer, init_time: float) -> None:
         """
         Record optimizer initialization result (Issue #620: extracted helper).
 
@@ -1193,20 +1121,14 @@ class SystemValidator:
                 return self._get_component_results(component)
 
             # Test 3: Task complexity analysis (uses helper)
-            self._validate_complexity_analysis(
-                component, optimizer, TaskComplexity, TaskRequest
-            )
+            self._validate_complexity_analysis(component, optimizer, TaskComplexity, TaskRequest)
 
             # Test 4: Model selection (uses helper)
-            selected_model = await self._validate_model_selection(
-                component, optimizer, TaskRequest
-            )
+            selected_model = await self._validate_model_selection(component, optimizer, TaskRequest)
 
             # Test 5: Performance tracking (uses helper)
             if selected_model:
-                await self._validate_performance_tracking(
-                    component, optimizer, selected_model
-                )
+                await self._validate_performance_tracking(component, optimizer, selected_model)
 
             # Test 6: Optimization suggestions (uses helper)
             await self._validate_optimization_suggestions(component, optimizer)
@@ -1266,9 +1188,7 @@ class SystemValidator:
         try:
             http_client = get_http_client()
             for method, url, name in endpoints:
-                await self._validate_single_endpoint(
-                    component, http_client, method, url, name
-                )
+                await self._validate_single_endpoint(component, http_client, method, url, name)
 
         except Exception as e:
             self._add_result(
@@ -1321,16 +1241,8 @@ class SystemValidator:
         """
         total_tests = len(self.results)
         passed_tests = sum(1 for r in self.results if r.status)
-        critical_issues = sum(
-            1
-            for r in self.results
-            if r.severity == ValidationSeverity.CRITICAL and not r.status
-        )
-        warnings = sum(
-            1
-            for r in self.results
-            if r.severity == ValidationSeverity.WARNING and not r.status
-        )
+        critical_issues = sum(1 for r in self.results if r.severity == ValidationSeverity.CRITICAL and not r.status)
+        warnings = sum(1 for r in self.results if r.severity == ValidationSeverity.WARNING and not r.status)
         return {
             "total_tests": total_tests,
             "passed_tests": passed_tests,
@@ -1367,9 +1279,7 @@ class SystemValidator:
             Dict with timing metrics
         """
         valid_durations = [r.duration_ms for r in self.results if r.duration_ms > 0]
-        avg_response_time = (
-            sum(valid_durations) / len(valid_durations) if valid_durations else 0
-        )
+        avg_response_time = sum(valid_durations) / len(valid_durations) if valid_durations else 0
         return {
             "total_validation_time_seconds": round(total_duration, 2),
             "average_response_time_ms": round(avg_response_time, 2),
@@ -1437,11 +1347,7 @@ class SystemValidator:
 
         Finds critical validation failures and adds deployment warnings. Issue #620.
         """
-        critical_results = [
-            r
-            for r in self.results
-            if r.severity == ValidationSeverity.CRITICAL and not r.status
-        ]
+        critical_results = [r for r in self.results if r.severity == ValidationSeverity.CRITICAL and not r.status]
         if critical_results:
             recommendations.append(
                 f"CRITICAL: Address {len(critical_results)} critical issues before production deployment"
@@ -1455,16 +1361,10 @@ class SystemValidator:
 
         Identifies operations exceeding response time threshold. Issue #620.
         """
-        slow_tests = [
-            r
-            for r in self.results
-            if r.duration_ms > self.critical_thresholds["response_time_ms"]
-        ]
+        slow_tests = [r for r in self.results if r.duration_ms > self.critical_thresholds["response_time_ms"]]
         if slow_tests:
             threshold = self.critical_thresholds["response_time_ms"]
-            recommendations.append(
-                f"PERFORMANCE: {len(slow_tests)} operations are slower than {threshold}ms"
-            )
+            recommendations.append(f"PERFORMANCE: {len(slow_tests)} operations are slower than {threshold}ms")
 
     def _build_component_recommendations(self, recommendations: List[str]) -> None:
         """
@@ -1476,9 +1376,7 @@ class SystemValidator:
         for result in self.results:
             if not result.status:
                 component = result.component
-                failed_by_component[component] = (
-                    failed_by_component.get(component, 0) + 1
-                )
+                failed_by_component[component] = failed_by_component.get(component, 0) + 1
 
         if failed_by_component:
             worst_component = max(failed_by_component.items(), key=lambda x: x[1])
@@ -1494,9 +1392,7 @@ class SystemValidator:
         """
         success_count = sum(1 for r in self.results if r.status)
         if success_count > 0:
-            recommendations.append(
-                f"POSITIVE: {success_count} tests are passing successfully"
-            )
+            recommendations.append(f"POSITIVE: {success_count} tests are passing successfully")
 
     def _generate_recommendations(self) -> List[str]:
         """Generate actionable recommendations based on validation results."""

@@ -518,9 +518,7 @@ async def _process_pattern_matches(
     Issue #508: Optimized by precompiling regex pattern once instead of
     per-iteration compilation.
     """
-    search_results = await search_codebase(
-        query=pattern, search_type="regex", max_results=1000
-    )
+    search_results = await search_codebase(query=pattern, search_type="regex", max_results=1000)
 
     # Issue #508: Precompile pattern once - O(1) instead of O(n) compilations
     compiled_pattern = re.compile(pattern, re.MULTILINE)
@@ -542,9 +540,7 @@ async def _process_pattern_matches(
 async def _count_usages(declaration_stats: dict) -> None:
     """Count usages for all declarations (Issue #315)."""
     for name in list(declaration_stats.keys()):
-        usage_results = await search_codebase(
-            query=name, search_type="exact", max_results=500
-        )
+        usage_results = await search_codebase(query=name, search_type="exact", max_results=500)
         declaration_stats[name]["usage_count"] = len(usage_results)
 
 
@@ -574,17 +570,9 @@ def _build_reusability_insights(analysis_results: dict) -> dict:
     """Build reusability insights from analysis results (Issue #315)."""
     all_items = [item for results in analysis_results.values() for item in results]
     return {
-        "highly_reusable": [
-            item for item in all_items if item["reusability_score"] > 5
-        ][:20],
-        "underutilized": [
-            item
-            for item in all_items
-            if item["definition_count"] > 1 and item["usage_count"] < 3
-        ][:20],
-        "potential_duplicates": [
-            item for item in all_items if item["definition_count"] > 3
-        ][:20],
+        "highly_reusable": [item for item in all_items if item["reusability_score"] > 5][:20],
+        "underutilized": [item for item in all_items if item["definition_count"] > 1 and item["usage_count"] < 3][:20],
+        "potential_duplicates": [item for item in all_items if item["definition_count"] > 3][:20],
     }
 
 
@@ -604,11 +592,7 @@ def _build_similar_block_entry(result) -> dict:
     return {
         "file_path": result.file_path,
         "line_number": result.line_number,
-        "content": (
-            result.content[:200] + "..."
-            if len(result.content) > 200
-            else result.content
-        ),
+        "content": (result.content[:200] + "..." if len(result.content) > 200 else result.content),
         "confidence": result.confidence,
         "context": result.context_lines[:3],  # First 3 context lines
     }
@@ -619,18 +603,14 @@ _REFACTOR_SUGGESTIONS = (
     {
         "type": "Extract Utility Functions",
         "priority": "high",
-        "description": (
-            "Functions with high usage but multiple definitions " "can be centralized"
-        ),
+        "description": ("Functions with high usage but multiple definitions " "can be centralized"),
         "impact": "Reduces code duplication and improves maintainability",
         "effort": "medium",
     },
     {
         "type": "Create Base Classes",
         "priority": "medium",
-        "description": (
-            "Similar classes can be refactored to use inheritance " "or composition"
-        ),
+        "description": ("Similar classes can be refactored to use inheritance " "or composition"),
         "impact": "Improves code organization and reduces repetition",
         "effort": "high",
     },
@@ -685,9 +665,7 @@ async def _search_pattern_for_duplicates(pattern: str) -> Optional[dict]:
     Returns:
         Duplicate candidate dict if multiple similar blocks found, None otherwise
     """
-    results = await search_codebase(
-        query=pattern, search_type="semantic", max_results=20
-    )
+    results = await search_codebase(query=pattern, search_type="semantic", max_results=20)
 
     if len(results) <= 1:
         return None
@@ -710,12 +688,8 @@ def _build_duplicates_response(patterns_count: int, duplicate_candidates: list) 
         "summary": {
             "patterns_analyzed": patterns_count,
             "duplicate_candidates_found": len(duplicate_candidates),
-            "total_similar_blocks": sum(
-                len(c["similar_blocks"]) for c in duplicate_candidates
-            ),
-            "highest_priority_pattern": (
-                duplicate_candidates[0]["pattern"] if duplicate_candidates else None
-            ),
+            "total_similar_blocks": sum(len(c["similar_blocks"]) for c in duplicate_candidates),
+            "highest_priority_pattern": (duplicate_candidates[0]["pattern"] if duplicate_candidates else None),
         },
         "duplicate_candidates": duplicate_candidates[:10],
         "recommendations": [
@@ -746,9 +720,7 @@ def _build_duplicate_candidate(pattern: str, similar_blocks: list) -> dict:
         "pattern": pattern,
         "similar_blocks": similar_blocks,
         "potential_savings": (f"Could refactor {len(similar_blocks)} similar blocks"),
-        "refactor_priority": (
-            len(similar_blocks) * max(block["confidence"] for block in similar_blocks)
-        ),
+        "refactor_priority": (len(similar_blocks) * max(block["confidence"] for block in similar_blocks)),
     }
 
 
@@ -790,9 +762,7 @@ async def _analyze_all_pattern_types() -> dict:
         for pattern in pattern_list:
             await _process_pattern_matches(pattern, declaration_stats)
         await _count_usages(declaration_stats)
-        analysis_results[pattern_type] = _build_type_results(
-            declaration_stats, pattern_type
-        )
+        analysis_results[pattern_type] = _build_type_results(declaration_stats, pattern_type)
     return analysis_results
 
 
@@ -866,9 +836,7 @@ async def find_code_duplicates(request: AnalyticsRequest):
         # Build response (Issue #665: uses helper)
         return JSONResponse(
             status_code=200,
-            content=_build_duplicates_response(
-                len(_DUPLICATE_DETECTION_PATTERNS), duplicate_candidates
-            ),
+            content=_build_duplicates_response(len(_DUPLICATE_DETECTION_PATTERNS), duplicate_candidates),
         )
 
     except Exception as e:
@@ -921,19 +889,13 @@ async def get_codebase_statistics():
         # Add performance recommendations
         total_files = index_status.get("total_files", 0)
         if total_files > 1000:
-            stats["recommendations"].append(
-                "Large codebase detected - NPU acceleration recommended"
-            )
+            stats["recommendations"].append("Large codebase detected - NPU acceleration recommended")
         if total_files > 5000:
-            stats["recommendations"].append(
-                "Very large codebase - consider incremental indexing"
-            )
+            stats["recommendations"].append("Very large codebase - consider incremental indexing")
 
         language_dist = index_status.get("language_distribution", {})
         if len(language_dist) > 5:
-            stats["recommendations"].append(
-                "Multi-language codebase - use language filters for targeted searches"
-            )
+            stats["recommendations"].append("Multi-language codebase - use language filters for targeted searches")
 
         return JSONResponse(status_code=200, content=stats)
 
@@ -960,9 +922,7 @@ def _build_refactor_response(root_path: str, suggestions: list) -> dict:
         "analysis_summary": {
             "root_path": root_path,
             "suggestion_count": len(suggestions),
-            "high_priority_count": sum(
-                1 for s in suggestions if s["priority"] == "high"
-            ),
+            "high_priority_count": sum(1 for s in suggestions if s["priority"] == "high"),
         },
         "next_steps": list(_REFACTOR_NEXT_STEPS),
     }

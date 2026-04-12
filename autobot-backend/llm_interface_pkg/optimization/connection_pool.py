@@ -116,9 +116,7 @@ class ConnectionPoolManager:
 
         async with self._lock:
             if provider_name not in self._clients:
-                self._clients[provider_name] = await self._create_client(
-                    provider_name, base_url, headers, config
-                )
+                self._clients[provider_name] = await self._create_client(provider_name, base_url, headers, config)
                 self._metrics[provider_name] = PoolMetrics()
 
             return self._clients[provider_name]
@@ -198,8 +196,7 @@ class ConnectionPoolManager:
             # Update response time (rolling average)
             response_time_ms = (time.time() - start_time) * 1000
             metrics.avg_response_time_ms = (
-                metrics.avg_response_time_ms * (metrics.requests_sent - 1)
-                + response_time_ms
+                metrics.avg_response_time_ms * (metrics.requests_sent - 1) + response_time_ms
             ) / metrics.requests_sent
 
             return response

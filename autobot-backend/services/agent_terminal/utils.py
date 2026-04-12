@@ -37,9 +37,7 @@ def map_risk_to_level(risk: CommandRisk) -> RiskLevel:
         CommandRisk.MODERATE: RiskLevel.MEDIUM,  # Moderate commands → Medium risk
         CommandRisk.HIGH: RiskLevel.HIGH,  # High risk commands → High risk
         CommandRisk.CRITICAL: RiskLevel.CRITICAL,  # Critical commands → Critical risk
-        CommandRisk.FORBIDDEN: (
-            RiskLevel.CRITICAL
-        ),  # Forbidden commands → Critical risk (blocked)
+        CommandRisk.FORBIDDEN: (RiskLevel.CRITICAL),  # Forbidden commands → Critical risk (blocked)
     }
     return risk_mapping.get(risk, RiskLevel.MEDIUM)
 
@@ -135,9 +133,7 @@ INTERACTIVE_COMMAND_PATTERNS = [
 ]
 
 # Compile patterns for performance
-_INTERACTIVE_PATTERNS_COMPILED = [
-    re.compile(pattern, re.IGNORECASE) for pattern in INTERACTIVE_COMMAND_PATTERNS
-]
+_INTERACTIVE_PATTERNS_COMPILED = [re.compile(pattern, re.IGNORECASE) for pattern in INTERACTIVE_COMMAND_PATTERNS]
 
 
 def is_interactive_command(command: str) -> tuple[bool, list[str]]:

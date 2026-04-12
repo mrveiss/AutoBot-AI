@@ -18,16 +18,12 @@ logger = logging.getLogger(__name__)
 class MeshDB(Protocol):
     """Protocol for mesh database operations required by NodePromoter."""
 
-    async def get_promotion_candidates(
-        self, min_access: int, min_edges: int
-    ) -> list[dict]:
+    async def get_promotion_candidates(self, min_access: int, min_edges: int) -> list[dict]:
         """Return nodes eligible for promotion: access_count >= min_access and
         edge_count >= min_edges, not already anchors."""
         ...
 
-    async def get_stale_anchors(
-        self, max_access: int, inactive_days: int
-    ) -> list[dict]:
+    async def get_stale_anchors(self, max_access: int, inactive_days: int) -> list[dict]:
         """Return anchor nodes with access_count <= max_access inactive for >= inactive_days."""
         ...
 
@@ -156,9 +152,7 @@ class NodePromoter:
             collection="mesh_anchors",
             ids=[f"anchor_{node['id']}"],
             documents=[summary],
-            metadatas=[
-                {"node_id": str(node["id"]), "neighborhood_size": len(neighborhood)}
-            ],
+            metadatas=[{"node_id": str(node["id"]), "neighborhood_size": len(neighborhood)}],
         )
         await self.db.promote_to_anchor(node["id"])
         report.nodes_promoted.append(node["id"])
@@ -181,8 +175,7 @@ class NodePromoter:
     async def _summarize_neighborhood(self, neighborhood: list[dict]) -> str:
         """Call LLM to produce a 2-3 sentence theme summary of the neighborhood."""
         texts = [n.get("content", "")[:200] for n in neighborhood[:10]]
-        prompt = (
-            "Summarize the theme of these related knowledge chunks "
-            "in 2-3 sentences:\n\n" + "\n---\n".join(texts)
+        prompt = "Summarize the theme of these related knowledge chunks " "in 2-3 sentences:\n\n" + "\n---\n".join(
+            texts
         )
         return await self.llm(prompt)

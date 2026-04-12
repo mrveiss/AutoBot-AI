@@ -49,14 +49,10 @@ def _calculate_agent_suitability_score(
     # Calculate workload and performance factors
     current_workload = getattr(agent, current_workload_attr, 0)
     max_concurrent = getattr(agent, max_concurrent_tasks_attr, 3)
-    workload_factor = (
-        1.0 - (current_workload / max_concurrent) if max_concurrent > 0 else 1.0
-    )
+    workload_factor = 1.0 - (current_workload / max_concurrent) if max_concurrent > 0 else 1.0
     performance_factor = getattr(agent, success_rate_attr, 1.0)
 
-    return (
-        (task_match_score * 0.4) + (workload_factor * 0.3) + (performance_factor * 0.3)
-    )
+    return (task_match_score * 0.4) + (workload_factor * 0.3) + (performance_factor * 0.3)
 
 
 def _is_agent_eligible(
@@ -117,10 +113,7 @@ def _select_best_agent_from_candidates(
     suitable_agents.sort(key=lambda x: x[1], reverse=True)
     best_agent_id = suitable_agents[0][0]
 
-    logger.debug(
-        f"Selected agent {best_agent_id} for task {task_type} "
-        f"(score: {suitable_agents[0][1]:.2f})"
-    )
+    logger.debug(f"Selected agent {best_agent_id} for task {task_type} " f"(score: {suitable_agents[0][1]:.2f})")
     return best_agent_id
 
 
@@ -311,19 +304,13 @@ def update_agent_performance(
         return False
 
     agent = agent_registry[agent_id]
-    new_success_rate = _update_success_rate(
-        agent, success, performance_metrics_attr, success_rate_attr
-    )
-    new_avg_time = _update_average_completion_time(
-        agent, execution_time, average_completion_time_attr
-    )
+    new_success_rate = _update_success_rate(agent, success, performance_metrics_attr, success_rate_attr)
+    new_avg_time = _update_average_completion_time(agent, execution_time, average_completion_time_attr)
     _log_performance_update(agent_id, new_success_rate, new_avg_time)
     return True
 
 
-def _log_performance_update(
-    agent_id: str, success_rate: float, avg_time: float
-) -> None:
+def _log_performance_update(agent_id: str, success_rate: float, avg_time: float) -> None:
     """Log agent performance update details. Issue #620."""
     logger.debug(
         "Updated agent %s performance: success_rate=%.2f, avg_time=%.2fs",

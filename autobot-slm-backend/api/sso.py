@@ -47,24 +47,18 @@ async def list_providers(
     db: AsyncSession = Depends(get_slm_db),
 ) -> SSOProviderListResponse:
     """List SSO providers."""
-    logger.info(
-        "Listing SSO providers (org_id=%s, active_only=%s)", org_id, active_only
-    )
+    logger.info("Listing SSO providers (org_id=%s, active_only=%s)", org_id, active_only)
     context = TenantContext(is_platform_admin=True)
     sso_service = SSOService(db, context)
 
-    providers, total = await sso_service.list_providers(
-        org_id=org_id, active_only=active_only
-    )
+    providers, total = await sso_service.list_providers(org_id=org_id, active_only=active_only)
     return SSOProviderListResponse(
         providers=[SSOProviderResponse.model_validate(p) for p in providers],
         total=total,
     )
 
 
-@router.post(
-    "", response_model=SSOProviderResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("", response_model=SSOProviderResponse, status_code=status.HTTP_201_CREATED)
 async def create_provider(
     provider_data: SSOProviderCreate,
     current_user: dict = Depends(require_admin),

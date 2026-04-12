@@ -89,9 +89,7 @@ class ManagerStats:
     @property
     def overall_success_rate(self) -> float:
         """Calculate overall success rate across all databases."""
-        total_success = sum(
-            s.successful_operations for s in self.database_stats.values()
-        )
+        total_success = sum(s.successful_operations for s in self.database_stats.values())
         total_failed = sum(s.failed_operations for s in self.database_stats.values())
         total = total_success + total_failed
         if total == 0:

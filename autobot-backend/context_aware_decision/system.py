@@ -45,9 +45,7 @@ class ContextAwareDecisionSystem:
 
         logger.info("Context-Aware Decision System initialized")
 
-    async def make_contextual_decision(
-        self, decision_type: DecisionType, primary_goal: str
-    ) -> Decision:
+    async def make_contextual_decision(self, decision_type: DecisionType, primary_goal: str) -> Decision:
         """Make a decision considering comprehensive context."""
 
         async with task_tracker.track_task(
@@ -59,10 +57,8 @@ class ContextAwareDecisionSystem:
         ) as task_context:
             try:
                 # Collect comprehensive context
-                decision_context = (
-                    await self.context_collector.collect_comprehensive_context(
-                        decision_type, primary_goal
-                    )
+                decision_context = await self.context_collector.collect_comprehensive_context(
+                    decision_type, primary_goal
                 )
 
                 # Make decision based on context
@@ -77,9 +73,7 @@ class ContextAwareDecisionSystem:
                 task_context.set_outputs(
                     {
                         "decision_id": decision.decision_id,
-                        "chosen_action": decision.chosen_action.get(
-                            "action", "unknown"
-                        ),
+                        "chosen_action": decision.chosen_action.get("action", "unknown"),
                         "confidence": decision.confidence,
                         "requires_approval": decision.requires_approval,
                     }
@@ -102,18 +96,13 @@ class ContextAwareDecisionSystem:
         if len(self.decision_history) > self.max_history:
             self.decision_history = self.decision_history[-self.max_history :]
 
-    async def _store_decision_in_memory(
-        self, decision: Decision, context: DecisionContext
-    ) -> None:
+    async def _store_decision_in_memory(self, decision: Decision, context: DecisionContext) -> None:
         """Store decision and context in enhanced memory system."""
         try:
             # Create memory task record for the decision
             task_id = self.memory_manager.create_task_record(
                 task_name=f"Decision: {decision.decision_type.value}",
-                description=(
-                    f"Contextual decision making: "
-                    f"{decision.chosen_action.get('action', 'unknown')}"
-                ),
+                description=(f"Contextual decision making: " f"{decision.chosen_action.get('action', 'unknown')}"),
                 priority=TaskPriority.MEDIUM,
                 agent_type="context_aware_decision_system",
                 inputs={
@@ -162,14 +151,10 @@ class ContextAwareDecisionSystem:
             "total_decisions": len(self.decision_history),
             "recent_decisions_count": len(recent_decisions),
             "average_confidence": (
-                float(np.mean([d.confidence for d in recent_decisions]))
-                if recent_decisions
-                else 0.0
+                float(np.mean([d.confidence for d in recent_decisions])) if recent_decisions else 0.0
             ),
             "approval_required_rate": (
-                float(np.mean([d.requires_approval for d in recent_decisions]))
-                if recent_decisions
-                else 0.0
+                float(np.mean([d.requires_approval for d in recent_decisions])) if recent_decisions else 0.0
             ),
             "most_common_decision_type": (
                 max(

@@ -353,9 +353,7 @@ class ComplexityAnalyzer:
             class_name=result.classname if hasattr(result, "classname") else None,
         )
 
-    def _analyze_with_radon(
-        self, source: str, file_path: str, tree: ast.AST
-    ) -> ModuleComplexity:
+    def _analyze_with_radon(self, source: str, file_path: str, tree: ast.AST) -> ModuleComplexity:
         """Analyze using radon metrics.
 
         Args:
@@ -383,22 +381,16 @@ class ComplexityAnalyzer:
         cc_results = cc_visit(source)
 
         for result in cc_results:
-            func_complexity = self._build_function_complexity_from_cc_result(
-                result, file_path, tree
-            )
+            func_complexity = self._build_function_complexity_from_cc_result(result, file_path, tree)
             module.functions.append(func_complexity)
 
         # Calculate average complexity
         if module.functions:
-            module.average_complexity = sum(
-                f.cyclomatic_complexity for f in module.functions
-            ) / len(module.functions)
+            module.average_complexity = sum(f.cyclomatic_complexity for f in module.functions) / len(module.functions)
 
         return module
 
-    def _analyze_fallback(
-        self, source: str, file_path: str, tree: ast.AST
-    ) -> ModuleComplexity:
+    def _analyze_fallback(self, source: str, file_path: str, tree: ast.AST) -> ModuleComplexity:
         """Fallback analysis without radon.
 
         Args:
@@ -425,9 +417,7 @@ class ComplexityAnalyzer:
 
         # Calculate metrics
         if module.functions:
-            module.average_complexity = sum(
-                f.cyclomatic_complexity for f in module.functions
-            ) / len(module.functions)
+            module.average_complexity = sum(f.cyclomatic_complexity for f in module.functions) / len(module.functions)
 
         # Estimate MI (simplified formula)
         if module.code_lines > 0:
@@ -436,10 +426,7 @@ class ComplexityAnalyzer:
                 0,
                 min(
                     100,
-                    171
-                    - 5.2 * (module.code_lines / 100)
-                    - 0.23 * avg_cc
-                    - 16.2 * (module.code_lines / 100),
+                    171 - 5.2 * (module.code_lines / 100) - 0.23 * avg_cc - 16.2 * (module.code_lines / 100),
                 ),
             )
 
@@ -486,9 +473,7 @@ class ComplexityAnalyzer:
             + (1 if args.kwarg else 0)
         )
 
-    def _analyze_function_fallback(
-        self, node: ast.AST, file_path: str
-    ) -> FunctionComplexity:
+    def _analyze_function_fallback(self, node: ast.AST, file_path: str) -> FunctionComplexity:
         """Analyze a function without radon.
 
         Args:
@@ -599,9 +584,7 @@ class ComplexityAnalyzer:
         # Sort by severity (cyclomatic complexity)
         return sorted(hotspots, key=lambda x: x.cyclomatic_complexity, reverse=True)
 
-    def _create_hotspot(
-        self, func: FunctionComplexity, module: ModuleComplexity
-    ) -> ComplexityHotspot:
+    def _create_hotspot(self, func: FunctionComplexity, module: ModuleComplexity) -> ComplexityHotspot:
         """Create a ComplexityHotspot from function metrics.
 
         Args:
@@ -660,9 +643,7 @@ class ComplexityAnalyzer:
         # High cyclomatic complexity
         if func.cyclomatic_complexity > 15:
             suggestions.append("Extract conditional branches into separate methods")
-            suggestions.append(
-                "Consider using strategy pattern for multiple conditions"
-            )
+            suggestions.append("Consider using strategy pattern for multiple conditions")
 
         if func.cyclomatic_complexity > 10:
             suggestions.append("Break down into smaller, focused functions")
@@ -706,21 +687,11 @@ class ComplexityAnalyzer:
         Returns:
             Tuple of (average_cc, average_mi)
         """
-        avg_cc = (
-            sum(f.cyclomatic_complexity for f in all_functions) / len(all_functions)
-            if all_functions
-            else 0
-        )
-        avg_mi = (
-            sum(m.maintainability_index for m in modules) / len(modules)
-            if modules
-            else 100
-        )
+        avg_cc = sum(f.cyclomatic_complexity for f in all_functions) / len(all_functions) if all_functions else 0
+        avg_mi = sum(m.maintainability_index for m in modules) / len(modules) if modules else 100
         return avg_cc, avg_mi
 
-    def _build_complexity_distribution(
-        self, all_functions: List[FunctionComplexity]
-    ) -> Dict[str, int]:
+    def _build_complexity_distribution(self, all_functions: List[FunctionComplexity]) -> Dict[str, int]:
         """Build complexity rank distribution from functions. Issue #620.
 
         Args:
@@ -734,9 +705,7 @@ class ComplexityAnalyzer:
             cc_dist[func.complexity_rank] += 1
         return cc_dist
 
-    def _format_worst_functions(
-        self, all_functions: List[FunctionComplexity], limit: int = 10
-    ) -> List[Dict[str, Any]]:
+    def _format_worst_functions(self, all_functions: List[FunctionComplexity], limit: int = 10) -> List[Dict[str, Any]]:
         """Format worst complexity offenders for report. Issue #620.
 
         Args:
@@ -746,9 +715,7 @@ class ComplexityAnalyzer:
         Returns:
             List of formatted function dictionaries
         """
-        worst_functions = sorted(
-            all_functions, key=lambda x: x.cyclomatic_complexity, reverse=True
-        )[:limit]
+        worst_functions = sorted(all_functions, key=lambda x: x.cyclomatic_complexity, reverse=True)[:limit]
         return [
             {
                 "name": f.name,
@@ -790,9 +757,7 @@ class ComplexityAnalyzer:
             "hotspots_count": len(hotspots),
             "average_complexity": round(avg_cc, 2),
             "average_maintainability": round(avg_mi, 2),
-            "complexity_distribution": self._build_complexity_distribution(
-                all_functions
-            ),
+            "complexity_distribution": self._build_complexity_distribution(all_functions),
             "worst_functions": self._format_worst_functions(all_functions),
             "hotspots": [h.to_dict() for h in hotspots[:10]],
         }

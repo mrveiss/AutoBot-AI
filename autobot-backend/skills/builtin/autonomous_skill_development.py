@@ -63,9 +63,7 @@ class AutonomousSkillDevelopmentSkill(BaseSkill):
 
         mode = await _get_governance_mode()
         if mode == "locked":
-            logger.info(
-                "Autonomous skill dev blocked by LOCKED governance: %s", capability
-            )
+            logger.info("Autonomous skill dev blocked by LOCKED governance: %s", capability)
             return {
                 "success": False,
                 "state": "locked",
@@ -97,9 +95,7 @@ async def _get_governance_mode() -> str:
     return "semi_auto"
 
 
-async def _run_development_pipeline(
-    capability: str, requested_by: str, mode: str
-) -> Dict[str, Any]:
+async def _run_development_pipeline(capability: str, requested_by: str, mode: str) -> Dict[str, Any]:
     """Execute the generate → persist → govern → (optionally) promote pipeline.
 
     Helper for AutonomousSkillDevelopmentSkill.execute (Issue #951).
@@ -113,9 +109,7 @@ async def _run_development_pipeline(
         return {"success": False, "state": "generation_failed", "message": str(exc)}
 
     skill_id = await _save_draft(pkg, requested_by, capability)
-    approval_id = await _request_governance(
-        pkg, skill_id, requested_by, capability, mode
-    )
+    approval_id = await _request_governance(pkg, skill_id, requested_by, capability, mode)
 
     if mode == "full_auto":
         promoted = await _promote_and_reload(pkg, skill_id)

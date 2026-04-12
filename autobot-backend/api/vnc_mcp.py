@@ -216,9 +216,7 @@ class VNCObservationRequest(BaseModel):
     """Request model for VNC observations"""
 
     vnc_type: str = Field("browser", description="VNC type: 'desktop' or 'browser'")
-    duration_seconds: int = Field(
-        5, description="How many seconds of recent activity to return"
-    )
+    duration_seconds: int = Field(5, description="How many seconds of recent activity to return")
 
 
 @with_error_handling(
@@ -240,8 +238,7 @@ async def get_vnc_mcp_tools() -> List[MCPTool]:
     - Get real-time status of what humans are viewing
     """
     return [
-        MCPTool(name=name, description=desc, input_schema=schema)
-        for name, desc, schema in VNC_MCP_TOOL_DEFINITIONS
+        MCPTool(name=name, description=desc, input_schema=schema) for name, desc, schema in VNC_MCP_TOOL_DEFINITIONS
     ]
 
 
@@ -258,9 +255,7 @@ async def check_vnc_status_mcp(request: VNCStatusRequest) -> Metadata:
     Check if specified VNC connection is active and accessible
     """
     vnc_type = request.vnc_type
-    backend_url = (
-        f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
-    )
+    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
 
     try:
         http_client = get_http_client()
@@ -276,9 +271,7 @@ async def check_vnc_status_mcp(request: VNCStatusRequest) -> Metadata:
                 "accessible": status_data.get("accessible", False),
                 "endpoint": status_data.get("endpoint"),
                 "status_code": response.status,
-                "message": (
-                    f"VNC {vnc_type} is {'accessible' if status_data.get('accessible') else 'not accessible'}"
-                ),
+                "message": (f"VNC {vnc_type} is {'accessible' if status_data.get('accessible') else 'not accessible'}"),
             }
     except aiohttp.ClientError as e:
         logger.error("HTTP error checking VNC status for %s: %s", vnc_type, e)
@@ -330,8 +323,7 @@ async def observe_vnc_activity_mcp(request: VNCObservationRequest) -> Metadata:
     filtered_activity = [
         obs
         for obs in recent_activity
-        if obs.get("timestamp")
-        and datetime.fromisoformat(obs["timestamp"]) > cutoff_time
+        if obs.get("timestamp") and datetime.fromisoformat(obs["timestamp"]) > cutoff_time
     ]
 
     return {
@@ -341,9 +333,7 @@ async def observe_vnc_activity_mcp(request: VNCObservationRequest) -> Metadata:
         "observation_count": len(filtered_activity),
         "observations": filtered_activity,
         "last_check": last_check.isoformat() if last_check else None,
-        "message": (
-            f"Retrieved {len(filtered_activity)} VNC observations from last {duration}s"
-        ),
+        "message": (f"Retrieved {len(filtered_activity)} VNC observations from last {duration}s"),
     }
 
 
@@ -355,9 +345,7 @@ async def observe_vnc_activity_mcp(request: VNCObservationRequest) -> Metadata:
 @router.post("/mcp/get_browser_vnc_context")
 async def get_browser_vnc_context_mcp() -> Metadata:
     """Get comprehensive browser VNC context: Playwright state + VNC activity. Ref: #1088."""
-    backend_url = (
-        f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
-    )
+    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
     browser_vm_url = f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}"
 
     context = {
@@ -377,9 +365,7 @@ async def get_browser_vnc_context_mcp() -> Metadata:
                 playwright_data = await response.json()
                 context["playwright_state"] = {
                     "healthy": playwright_data.get("status") == "healthy",
-                    "browser_connected": playwright_data.get(
-                        "browser_connected", False
-                    ),
+                    "browser_connected": playwright_data.get("browser_connected", False),
                 }
     except aiohttp.ClientError as e:
         logger.warning("HTTP error getting Playwright state: %s", e)
@@ -440,14 +426,10 @@ async def record_vnc_observation(vnc_type: str, observation: Metadata):
 
         # Append to recent activity (keep last 100)
         vnc_observations[vnc_type]["recent_activity"].append(observation)
-        vnc_observations[vnc_type]["recent_activity"] = vnc_observations[vnc_type][
-            "recent_activity"
-        ][-100:]
+        vnc_observations[vnc_type]["recent_activity"] = vnc_observations[vnc_type]["recent_activity"][-100:]
         vnc_observations[vnc_type]["last_check"] = datetime.now(tz=timezone.utc)
 
-    logger.debug(
-        "Recorded VNC observation for %s: %s", vnc_type, observation.get("type")
-    )
+    logger.debug("Recorded VNC observation for %s: %s", vnc_type, observation.get("type"))
 
     return {"success": True, "recorded": True}
 
@@ -498,9 +480,7 @@ async def desktop_mouse_click_mcp(request: DesktopMouseClickRequest) -> Metadata
     button_map = {"left": "1", "middle": "2", "right": "3"}
     button_num = button_map.get(request.button, "1")
 
-    result = _run_xdotool_cmd(
-        ["mousemove", str(request.x), str(request.y), "click", button_num]
-    )
+    result = _run_xdotool_cmd(["mousemove", str(request.x), str(request.y), "click", button_num])
 
     return {
         "success": result["status"] == "success",

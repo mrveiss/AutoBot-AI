@@ -27,22 +27,16 @@ class TestUnifiedConfigTimeouts:
     def test_get_timeout_for_env_production(self):
         """Test environment-specific timeout retrieval for production"""
         # No timeouts section in config.yaml, falls back to default=60.0
-        timeout = self.config.get_timeout_for_env(
-            "redis.operations", "get", environment="production"
-        )
+        timeout = self.config.get_timeout_for_env("redis.operations", "get", environment="production")
         assert timeout == 60.0
 
     def test_get_timeout_for_env_development(self):
         """Test environment-specific timeout retrieval for development"""
         # No timeouts section in config.yaml, falls back to default
-        timeout = self.config.get_timeout_for_env(
-            "redis.operations", "get", environment="development"
-        )
+        timeout = self.config.get_timeout_for_env("redis.operations", "get", environment="development")
         assert timeout == 60.0
 
-        timeout = self.config.get_timeout_for_env(
-            "redis.operations", "scan_iter", environment="development"
-        )
+        timeout = self.config.get_timeout_for_env("redis.operations", "scan_iter", environment="development")
         assert timeout == 60.0
 
     def test_get_timeout_for_env_base_values(self):
@@ -79,9 +73,7 @@ class TestUnifiedConfigTimeouts:
 
     def test_get_timeout_group_with_environment(self):
         """Test batch timeout retrieval with environment"""
-        timeouts = self.config.get_timeout_group(
-            "redis.operations", environment="production"
-        )
+        timeouts = self.config.get_timeout_group("redis.operations", environment="production")
         assert isinstance(timeouts, dict)
         assert timeouts == {}
 

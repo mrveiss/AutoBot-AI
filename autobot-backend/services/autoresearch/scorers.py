@@ -100,9 +100,7 @@ class ValBpbScorer(PromptScorer):
         baseline_val_bpb: float,
     ) -> None:
         if baseline_val_bpb <= 0:
-            raise ValueError(
-                f"baseline_val_bpb must be positive, got {baseline_val_bpb}"
-            )
+            raise ValueError(f"baseline_val_bpb must be positive, got {baseline_val_bpb}")
         self._runner = runner
         self._baseline = baseline_val_bpb
 
@@ -134,31 +132,19 @@ class ValBpbScorer(PromptScorer):
 
         experiment = await self._runner.run_experiment(experiment)
 
-        val_bpb = (
-            experiment.result.val_bpb
-            if experiment.result and experiment.result.val_bpb is not None
-            else None
-        )
+        val_bpb = experiment.result.val_bpb if experiment.result and experiment.result.val_bpb is not None else None
 
         if val_bpb is None:
             return ScorerResult(
                 score=0.0,
                 raw_score=None,
-                metadata={
-                    "error": (
-                        experiment.result.error_message
-                        if experiment.result
-                        else "no result"
-                    )
-                },
+                metadata={"error": (experiment.result.error_message if experiment.result else "no result")},
                 scorer_name=self.name,
             )
 
         # Normalize: improvement as fraction of baseline, clamped 0-1
         improvement = self._baseline - val_bpb
-        normalized = (
-            max(0.0, improvement / self._baseline) if self._baseline > 0 else 0.0
-        )
+        normalized = max(0.0, improvement / self._baseline) if self._baseline > 0 else 0.0
 
         return ScorerResult(
             score=normalized,
@@ -300,9 +286,7 @@ class HumanReviewScorer(PromptScorer):
     def _validate_key_component(value: str, name: str) -> str:
         """Validate a string is safe for use in Redis key patterns."""
         if not _KEY_COMPONENT_PATTERN.match(value):
-            raise ValueError(
-                f"{name} must be alphanumeric/hyphens/underscores (1-64 chars), got {value!r}"
-            )
+            raise ValueError(f"{name} must be alphanumeric/hyphens/underscores (1-64 chars), got {value!r}")
         return value
 
     async def score(
@@ -313,19 +297,13 @@ class HumanReviewScorer(PromptScorer):
     ) -> ScorerResult:
         # subset_fraction: HumanReviewScorer queues the variant for a human;
         # sub-sampling does not apply — parameter accepted for interface compat.
-        session_id = self._validate_key_component(
-            context.get("session_id", "unknown"), "session_id"
-        )
-        variant_id = self._validate_key_component(
-            context.get("variant_id", "unknown"), "variant_id"
-        )
+        session_id = self._validate_key_component(context.get("session_id", "unknown"), "session_id")
+        variant_id = self._validate_key_component(context.get("variant_id", "unknown"), "variant_id")
 
         redis = await self._get_redis()
 
         # Store pending review — only safe fields, not raw context
-        pending_key = self._PENDING_KEY.format(
-            session_id=session_id, variant_id=variant_id
-        )
+        pending_key = self._PENDING_KEY.format(session_id=session_id, variant_id=variant_id)
         await redis.set(
             pending_key,
             json.dumps(
@@ -338,12 +316,8 @@ class HumanReviewScorer(PromptScorer):
             ex=self._TTL_SECONDS,
         )
 
-        review_key = self._REVIEW_KEY.format(
-            session_id=session_id, variant_id=variant_id
-        )
-        notify_key = self._NOTIFY_KEY.format(
-            session_id=session_id, variant_id=variant_id
-        )
+        review_key = self._REVIEW_KEY.format(session_id=session_id, variant_id=variant_id)
+        notify_key = self._NOTIFY_KEY.format(session_id=session_id, variant_id=variant_id)
 
         # Check if the result was already written before we start waiting —
         # avoids a race where the human submits between SET and BLPOP.
@@ -371,8 +345,7 @@ class HumanReviewScorer(PromptScorer):
         if raw is None:
             # Notify key fired but result key is missing — treat as timeout.
             logger.warning(
-                "HumanReviewScorer: notify fired but review key absent "
-                "for session=%s variant=%s",
+                "HumanReviewScorer: notify fired but review key absent " "for session=%s variant=%s",
                 session_id,
                 variant_id,
             )

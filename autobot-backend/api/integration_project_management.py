@@ -68,9 +68,7 @@ class IssueCreateRequest(BaseModel):
 
     title: str = Field(..., description="Issue title/name")
     description: Optional[str] = Field(None, description="Description")
-    project_key: Optional[str] = Field(
-        None, description="Project key (Jira) or ID (Trello/Asana)"
-    )
+    project_key: Optional[str] = Field(None, description="Project key (Jira) or ID (Trello/Asana)")
     issue_type: Optional[str] = Field("Task", description="Issue type (Jira)")
     list_id: Optional[str] = Field(None, description="List ID (Trello)")
     workspace_gid: Optional[str] = Field(None, description="Workspace GID (Asana)")
@@ -154,8 +152,7 @@ def _validate_provider(provider: str) -> None:
     if provider not in SUPPORTED_PROVIDERS:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported provider: {provider}. "
-            f"Supported: {list(SUPPORTED_PROVIDERS.keys())}",
+            detail=f"Unsupported provider: {provider}. " f"Supported: {list(SUPPORTED_PROVIDERS.keys())}",
         )
 
 
@@ -234,9 +231,7 @@ async def list_projects(
         return await integration.execute_action("list_boards", {})
     elif provider == "asana":
         if workspace_gid:
-            return await integration.execute_action(
-                "list_projects", {"workspace_gid": workspace_gid}
-            )
+            return await integration.execute_action("list_projects", {"workspace_gid": workspace_gid})
         return await integration.execute_action("list_workspaces", {})
 
 
@@ -274,14 +269,10 @@ async def list_issues(
     if provider == "jira":
         if not project_key:
             raise HTTPException(status_code=400, detail="project_key required for Jira")
-        return await integration.execute_action(
-            "list_issues", {"project_key": project_key}
-        )
+        return await integration.execute_action("list_issues", {"project_key": project_key})
     elif provider == "trello":
         if board_id:
-            return await integration.execute_action(
-                "list_lists", {"board_id": board_id}
-            )
+            return await integration.execute_action("list_lists", {"board_id": board_id})
         if not list_id:
             raise HTTPException(
                 status_code=400,
@@ -290,12 +281,8 @@ async def list_issues(
         return await integration.execute_action("list_cards", {"list_id": list_id})
     elif provider == "asana":
         if not project_gid:
-            raise HTTPException(
-                status_code=400, detail="project_gid required for Asana"
-            )
-        return await integration.execute_action(
-            "list_tasks", {"project_gid": project_gid}
-        )
+            raise HTTPException(status_code=400, detail="project_gid required for Asana")
+        return await integration.execute_action("list_tasks", {"project_gid": project_gid})
 
 
 def _build_create_params(provider: str, request: IssueCreateRequest) -> tuple:
@@ -325,9 +312,7 @@ def _build_create_params(provider: str, request: IssueCreateRequest) -> tuple:
         return "create_card", params
     else:  # asana
         if not request.workspace_gid:
-            raise HTTPException(
-                status_code=400, detail="workspace_gid required for Asana"
-            )
+            raise HTTPException(status_code=400, detail="workspace_gid required for Asana")
         params = {
             "workspace_gid": request.workspace_gid,
             "name": request.title,
@@ -365,9 +350,7 @@ async def create_issue(
     return await integration.execute_action(action, params)
 
 
-def _build_update_params(
-    provider: str, issue_id: str, request: IssueUpdateRequest
-) -> tuple:
+def _build_update_params(provider: str, issue_id: str, request: IssueUpdateRequest) -> tuple:
     """Build update action and params for provider.
 
     Helper for update_issue (Issue #61).
@@ -377,9 +360,7 @@ def _build_update_params(
     """
     if provider == "jira":
         if not request.transition_id:
-            raise HTTPException(
-                status_code=400, detail="transition_id required for Jira"
-            )
+            raise HTTPException(status_code=400, detail="transition_id required for Jira")
         return "update_issue_status", {
             "issue_key": issue_id,
             "transition_id": request.transition_id,

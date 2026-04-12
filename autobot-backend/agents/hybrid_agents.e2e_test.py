@@ -19,9 +19,7 @@ from agents.classification_agent import ClassificationAgent
 from agents.enhanced_system_commands_agent import get_enhanced_system_commands_agent
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +49,7 @@ async def test_local_agents():
         )
 
         response = await chat_agent.process_request(request)
-        logger.info(
-            f"Chat response: {response.status} - {response.result.get('response_text', 'No response')[:100]}"
-        )
+        logger.info(f"Chat response: {response.status} - {response.result.get('response_text', 'No response')[:100]}")
 
     except Exception as e:
         logger.error(f"Chat Agent test failed: {e}")
@@ -77,9 +73,7 @@ async def test_local_agents():
         logger.info(f"Classification response: {response.status}")
         if response.status == "success":
             result = response.result
-            logger.info(
-                f"Complexity: {result['complexity']}, Confidence: {result['confidence']}"
-            )
+            logger.info(f"Complexity: {result['complexity']}, Confidence: {result['confidence']}")
 
     except Exception as e:
         logger.error(f"Classification Agent test failed: {e}")
@@ -103,9 +97,7 @@ async def test_local_agents():
         logger.info(f"System Commands response: {response.status}")
         if response.status == "success":
             commands = response.result.get("commands", [])
-            logger.info(
-                f"Generated commands: {commands[:3] if commands else 'None'}"
-            )  # Show first 3
+            logger.info(f"Generated commands: {commands[:3] if commands else 'None'}")  # Show first 3
 
     except Exception as e:
         logger.error(f"System Commands Agent test failed: {e}")
@@ -151,9 +143,7 @@ async def test_agent_client():
 
         # Get performance stats
         stats = client.get_performance_stats()
-        logger.info(
-            f"Performance stats available for: {list(stats['client_stats'].keys())}"
-        )
+        logger.info(f"Performance stats available for: {list(stats['client_stats'].keys())}")
 
         await client.cleanup()
 
@@ -181,16 +171,12 @@ async def test_container_discovery():
             health_status = await client.get_agent_health_status()
             logger.info(f"Container agents health: {health_status}")
         else:
-            logger.info(
-                "No container agents discovered (containers may not be running)"
-            )
+            logger.info("No container agents discovered (containers may not be running)")
 
         await client.cleanup()
 
     except Exception as e:
-        logger.warning(
-            f"Container discovery test failed (expected if containers not running): {e}"
-        )
+        logger.warning(f"Container discovery test failed (expected if containers not running): {e}")
 
 
 async def run_tests():

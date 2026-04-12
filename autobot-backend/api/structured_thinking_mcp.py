@@ -70,32 +70,18 @@ class ProcessThoughtRequest(BaseModel):
     """Request model for processing a thought in structured framework"""
 
     thought: str = Field(..., description="The content of the thought")
-    thought_number: int = Field(
-        ..., ge=1, description="Position in the thinking sequence"
-    )
-    total_thoughts: int = Field(
-        ..., ge=1, description="Expected total number of thoughts"
-    )
-    next_thought_needed: bool = Field(
-        ..., description="Whether more thoughts will follow"
-    )
+    thought_number: int = Field(..., ge=1, description="Position in the thinking sequence")
+    total_thoughts: int = Field(..., ge=1, description="Expected total number of thoughts")
+    next_thought_needed: bool = Field(..., description="Whether more thoughts will follow")
     stage: ThinkingStage = Field(..., description="Cognitive stage for this thought")
 
     # Optional metadata
-    tags: Optional[List[str]] = Field(
-        None, description="Keywords or categories for this thought"
-    )
-    axioms_used: Optional[List[str]] = Field(
-        None, description="Fundamental principles applied"
-    )
-    assumptions_challenged: Optional[List[str]] = Field(
-        None, description="Assumptions being questioned"
-    )
+    tags: Optional[List[str]] = Field(None, description="Keywords or categories for this thought")
+    axioms_used: Optional[List[str]] = Field(None, description="Fundamental principles applied")
+    assumptions_challenged: Optional[List[str]] = Field(None, description="Assumptions being questioned")
 
     # Session management
-    session_id: Optional[str] = Field(
-        "default", description="Thinking session identifier"
-    )
+    session_id: Optional[str] = Field("default", description="Thinking session identifier")
 
     # === Issue #372: Feature Envy Reduction Methods ===
 
@@ -127,10 +113,7 @@ class ProcessThoughtRequest(BaseModel):
 
     def get_progress_message(self) -> str:
         """Get formatted progress message (Issue #372 - reduces feature envy)."""
-        return (
-            f"Processed thought {self.thought_number}/{self.total_thoughts} "
-            f"in {self.stage.value} stage"
-        )
+        return f"Processed thought {self.thought_number}/{self.total_thoughts} " f"in {self.stage.value} stage"
 
 
 class GenerateSummaryRequest(BaseModel):
@@ -154,9 +137,7 @@ def _calculate_stage_distribution(session_thoughts: List[Metadata]) -> Dict[str,
     """Calculate the distribution of thoughts across cognitive stages (Issue #665: extracted helper)."""
     stage_counts = {}
     for stage in ThinkingStage:
-        stage_counts[stage.value] = sum(
-            1 for t in session_thoughts if t["stage"] == stage.value
-        )
+        stage_counts[stage.value] = sum(1 for t in session_thoughts if t["stage"] == stage.value)
     return stage_counts
 
 
@@ -178,9 +159,7 @@ def _collect_thought_metadata(session_thoughts: List[Metadata]) -> Dict[str, set
     }
 
 
-def _find_related_thoughts(
-    request_tags: List[str], session_thoughts: List[Metadata]
-) -> List[Metadata]:
+def _find_related_thoughts(request_tags: List[str], session_thoughts: List[Metadata]) -> List[Metadata]:
     """Find thoughts with matching tags (Issue #665: extracted helper)."""
     related_thoughts = []
     for t in session_thoughts[:-1]:  # Exclude current thought
@@ -189,17 +168,13 @@ def _find_related_thoughts(
                 {
                     "thought_number": t["thought_number"],
                     "stage": t["stage"],
-                    "common_tags": [
-                        tag for tag in request_tags if tag in t.get("tags", [])
-                    ],
+                    "common_tags": [tag for tag in request_tags if tag in t.get("tags", [])],
                 }
             )
     return related_thoughts
 
 
-def _build_completion_summary(
-    session_thoughts: List[Metadata], stage_counts: Dict[str, int]
-) -> Metadata:
+def _build_completion_summary(session_thoughts: List[Metadata], stage_counts: Dict[str, int]) -> Metadata:
     """Build completion summary when thinking is complete (Issue #665: extracted helper)."""
     metadata = _collect_thought_metadata(session_thoughts)
     return {
@@ -222,11 +197,7 @@ def _build_stage_progression(
             stage_thoughts[stage.value] = [
                 {
                     "thought_number": t["thought_number"],
-                    "thought": (
-                        t["thought"][:100] + "..."
-                        if len(t["thought"]) > 100
-                        else t["thought"]
-                    ),
+                    "thought": (t["thought"][:100] + "..." if len(t["thought"]) > 100 else t["thought"]),
                 }
                 for t in thoughts_in_stage
             ]
@@ -416,9 +387,7 @@ async def process_thought_mcp(request: ProcessThoughtRequest) -> Metadata:
 
     # Issue #665: Use extracted helper for completion summary
     if thinking_complete:
-        response["completion_summary"] = _build_completion_summary(
-            session_thoughts, stage_counts
-        )
+        response["completion_summary"] = _build_completion_summary(session_thoughts, stage_counts)
         logger.info(
             "Structured thinking session '%s' completed with %d thoughts",
             session_id,
@@ -447,9 +416,7 @@ async def generate_summary_mcp(request: GenerateSummaryRequest) -> Metadata:
 
     async with _structured_sessions_lock:
         if session_id not in structured_sessions:
-            raise HTTPException(
-                status_code=404, detail=f"Session '{session_id}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
         session_thoughts = list(structured_sessions[session_id])
 
     if not session_thoughts:
@@ -507,9 +474,7 @@ async def clear_history_mcp(request: ClearHistoryRequest) -> Metadata:
 
     async with _structured_sessions_lock:
         if session_id not in structured_sessions:
-            raise HTTPException(
-                status_code=404, detail=f"Session '{session_id}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
 
         thought_count = len(structured_sessions[session_id])
         del structured_sessions[session_id]
@@ -532,9 +497,7 @@ async def get_structured_session(session_id: str) -> Metadata:
     """Get complete structured thinking session"""
     async with _structured_sessions_lock:
         if session_id not in structured_sessions:
-            raise HTTPException(
-                status_code=404, detail=f"Session '{session_id}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
 
         # Create a copy of thoughts for processing outside the lock
         thoughts = list(structured_sessions[session_id])
@@ -555,9 +518,7 @@ async def get_structured_session(session_id: str) -> Metadata:
         "stage_analysis": stage_analysis,
         "started_at": thoughts[0]["timestamp"] if thoughts else None,
         "last_thought_at": thoughts[-1]["timestamp"] if thoughts else None,
-        "complete": (
-            not thoughts[-1].get("next_thought_needed", True) if thoughts else False
-        ),
+        "complete": (not thoughts[-1].get("next_thought_needed", True) if thoughts else False),
     }
 
 
@@ -575,9 +536,7 @@ async def list_structured_sessions() -> Metadata:
             # Calculate stage distribution
             stage_counts = {}
             for stage in ThinkingStage:
-                stage_counts[stage.value] = sum(
-                    1 for t in thoughts if t["stage"] == stage.value
-                )
+                stage_counts[stage.value] = sum(1 for t in thoughts if t["stage"] == stage.value)
 
             sessions.append(
                 {
@@ -586,11 +545,7 @@ async def list_structured_sessions() -> Metadata:
                     "stage_distribution": stage_counts,
                     "started_at": thoughts[0]["timestamp"] if thoughts else None,
                     "last_thought_at": thoughts[-1]["timestamp"] if thoughts else None,
-                    "complete": (
-                        not thoughts[-1].get("next_thought_needed", True)
-                        if thoughts
-                        else False
-                    ),
+                    "complete": (not thoughts[-1].get("next_thought_needed", True) if thoughts else False),
                 }
             )
 

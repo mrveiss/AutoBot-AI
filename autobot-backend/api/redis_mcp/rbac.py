@@ -86,9 +86,7 @@ def check_tool_permission(tool_name: str, is_admin: bool) -> tuple[bool, Optiona
     return True, None
 
 
-def validate_key_namespace(
-    key: str, is_admin: bool, access: ToolAccess
-) -> tuple[bool, Optional[str]]:
+def validate_key_namespace(key: str, is_admin: bool, access: ToolAccess) -> tuple[bool, Optional[str]]:
     """Validate that a key write is within the allowed namespace.
 
     Scoped-write users can only write to keys prefixed with autobot:agent:*.
@@ -99,7 +97,6 @@ def validate_key_namespace(
     if access == ToolAccess.SCOPED_WRITE and not is_admin:
         if not key.startswith(AGENT_NAMESPACE_PREFIX):
             return False, (
-                f"Write denied: key '{key}' is outside the "
-                f"allowed namespace '{AGENT_NAMESPACE_PREFIX}*'"
+                f"Write denied: key '{key}' is outside the " f"allowed namespace '{AGENT_NAMESPACE_PREFIX}*'"
             )
     return True, None

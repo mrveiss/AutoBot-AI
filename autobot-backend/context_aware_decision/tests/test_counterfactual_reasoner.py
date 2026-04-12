@@ -155,9 +155,7 @@ class TestEmpiricalPrediction:
     """Tests for history-based empirical predictions."""
 
     @pytest.mark.asyncio
-    async def test_empirical_prediction_with_history(
-        self, sample_context, sample_execution_history, mock_redis
-    ):
+    async def test_empirical_prediction_with_history(self, sample_context, sample_execution_history, mock_redis):
         """Verify empirical prediction aggregates historical outcomes correctly."""
         reasoner = CounterfactualReasoner()
         reasoner.redis = mock_redis
@@ -193,9 +191,7 @@ class TestEmpiricalPrediction:
         assert outcome is None
 
     @pytest.mark.asyncio
-    async def test_empirical_prediction_insufficient_samples(
-        self, sample_context, mock_redis
-    ):
+    async def test_empirical_prediction_insufficient_samples(self, sample_context, mock_redis):
         """Verify empirical prediction requires minimum sample size."""
         reasoner = CounterfactualReasoner()
         reasoner.redis = mock_redis
@@ -218,9 +214,7 @@ class TestEmpiricalPrediction:
         assert outcome is None  # Too few samples
 
     @pytest.mark.asyncio
-    async def test_empirical_prediction_temporal_decay(
-        self, sample_context, mock_redis
-    ):
+    async def test_empirical_prediction_temporal_decay(self, sample_context, mock_redis):
         """Verify empirical prediction applies temporal decay to old data."""
         reasoner = CounterfactualReasoner()
         reasoner.redis = mock_redis
@@ -261,9 +255,7 @@ class TestEmpiricalPrediction:
         assert outcome.predicted_success_rate > 0.7
 
     @pytest.mark.asyncio
-    async def test_empirical_side_effect_aggregation(
-        self, sample_context, sample_execution_history, mock_redis
-    ):
+    async def test_empirical_side_effect_aggregation(self, sample_context, sample_execution_history, mock_redis):
         """Verify empirical prediction correctly aggregates side effects."""
         reasoner = CounterfactualReasoner()
         reasoner.redis = mock_redis
@@ -278,9 +270,7 @@ class TestEmpiricalPrediction:
         assert "latency_increase" in effect_types
 
     @pytest.mark.asyncio
-    async def test_empirical_latency_averaging(
-        self, sample_context, sample_execution_history, mock_redis
-    ):
+    async def test_empirical_latency_averaging(self, sample_context, sample_execution_history, mock_redis):
         """Verify empirical prediction averages latency correctly."""
         reasoner = CounterfactualReasoner()
         reasoner.redis = mock_redis
@@ -304,9 +294,7 @@ class TestCausalPrediction:
     """Tests for causal pattern-based predictions."""
 
     @pytest.mark.asyncio
-    async def test_causal_prediction_pattern_match(
-        self, sample_context, sample_causal_patterns, mock_redis
-    ):
+    async def test_causal_prediction_pattern_match(self, sample_context, sample_causal_patterns, mock_redis):
         """Verify causal prediction matches and applies patterns correctly."""
         reasoner = CounterfactualReasoner()
         reasoner.redis = mock_redis
@@ -315,9 +303,7 @@ class TestCausalPrediction:
         sample_context.context_elements[0].context_type = ContextType.SYSTEM_STATE
         sample_context.context_elements[0].metadata = {"type": "network"}
 
-        patterns_key = CounterfactualReasoner.CAUSAL_PATTERNS_KEY.format(
-            action_type="retry"
-        )
+        patterns_key = CounterfactualReasoner.CAUSAL_PATTERNS_KEY.format(action_type="retry")
         mock_redis.get.return_value = json.dumps(sample_causal_patterns)
 
         outcome = await reasoner._predict_causal("retry", sample_context, mock_redis)
@@ -342,9 +328,7 @@ class TestCausalPrediction:
         assert outcome is None
 
     @pytest.mark.asyncio
-    async def test_causal_prediction_pattern_conditions(
-        self, sample_context, mock_redis
-    ):
+    async def test_causal_prediction_pattern_conditions(self, sample_context, mock_redis):
         """Verify causal prediction evaluates pattern conditions correctly."""
         reasoner = CounterfactualReasoner()
 
@@ -363,9 +347,7 @@ class TestCausalPrediction:
         assert not reasoner._pattern_matches_context(pattern, sample_context)
 
     @pytest.mark.asyncio
-    async def test_causal_prediction_multiple_patterns(
-        self, sample_context, mock_redis
-    ):
+    async def test_causal_prediction_multiple_patterns(self, sample_context, mock_redis):
         """Verify causal prediction aggregates multiple matching patterns."""
         reasoner = CounterfactualReasoner()
         reasoner.redis = mock_redis
@@ -385,9 +367,7 @@ class TestCausalPrediction:
             },
         ]
 
-        patterns_key = CounterfactualReasoner.CAUSAL_PATTERNS_KEY.format(
-            action_type="retry"
-        )
+        patterns_key = CounterfactualReasoner.CAUSAL_PATTERNS_KEY.format(action_type="retry")
         mock_redis.get.return_value = json.dumps(patterns)
 
         outcome = await reasoner._predict_causal("retry", sample_context, mock_redis)
@@ -411,9 +391,7 @@ class TestHeuristicPrediction:
         """Verify heuristic prediction for retry option."""
         reasoner = CounterfactualReasoner()
 
-        outcome = reasoner._predict_heuristic(
-            "retry", sample_context, {"confidence": 0.6}
-        )
+        outcome = reasoner._predict_heuristic("retry", sample_context, {"confidence": 0.6})
 
         assert outcome.option == "retry"
         assert outcome.prediction_source == "heuristic"
@@ -428,9 +406,7 @@ class TestHeuristicPrediction:
         """Verify heuristic prediction for escalation option."""
         reasoner = CounterfactualReasoner()
 
-        outcome = reasoner._predict_heuristic(
-            "escalate", sample_context, {"confidence": 0.9}
-        )
+        outcome = reasoner._predict_heuristic("escalate", sample_context, {"confidence": 0.9})
 
         assert outcome.option == "escalate"
         assert outcome.predicted_success_rate == 0.9
@@ -445,9 +421,7 @@ class TestHeuristicPrediction:
         """Verify heuristic prediction for automation option."""
         reasoner = CounterfactualReasoner()
 
-        outcome = reasoner._predict_heuristic(
-            "automate", sample_context, {"confidence": 0.7}
-        )
+        outcome = reasoner._predict_heuristic("automate", sample_context, {"confidence": 0.7})
 
         assert outcome.option == "automate"
         assert outcome.predicted_success_rate == 0.7
@@ -459,9 +433,7 @@ class TestHeuristicPrediction:
         """Verify heuristic prediction for wait option."""
         reasoner = CounterfactualReasoner()
 
-        outcome = reasoner._predict_heuristic(
-            "wait", sample_context, {"confidence": 0.5}
-        )
+        outcome = reasoner._predict_heuristic("wait", sample_context, {"confidence": 0.5})
 
         assert outcome.option == "wait"
         assert outcome.fallback_risk == "missed_deadline"
@@ -472,13 +444,9 @@ class TestHeuristicPrediction:
         reasoner = CounterfactualReasoner()
 
         # Add high-risk factors
-        sample_context.risk_factors = [
-            {"risk_type": "critical_error", "severity": "high"}
-        ]
+        sample_context.risk_factors = [{"risk_type": "critical_error", "severity": "high"}]
 
-        outcome = reasoner._predict_heuristic(
-            "retry", sample_context, {"confidence": 0.8}
-        )
+        outcome = reasoner._predict_heuristic("retry", sample_context, {"confidence": 0.8})
 
         # Success rate should be reduced due to high risk
         # 0.8 * 0.7 = 0.56
@@ -494,9 +462,7 @@ class TestPredictionTierSelection:
     """Tests for three-tier prediction (empirical -> causal -> heuristic)."""
 
     @pytest.mark.asyncio
-    async def test_tier_1_empirical_preferred(
-        self, sample_context, sample_execution_history, mock_redis
-    ):
+    async def test_tier_1_empirical_preferred(self, sample_context, sample_execution_history, mock_redis):
         """Verify empirical prediction is preferred when available."""
         reasoner = CounterfactualReasoner()
         reasoner.redis = mock_redis
@@ -517,17 +483,13 @@ class TestPredictionTierSelection:
         assert mock_redis.get.call_count == 1
 
     @pytest.mark.asyncio
-    async def test_tier_2_causal_fallback(
-        self, sample_context, sample_causal_patterns, mock_redis
-    ):
+    async def test_tier_2_causal_fallback(self, sample_context, sample_causal_patterns, mock_redis):
         """Verify causal prediction is used when empirical unavailable."""
         reasoner = CounterfactualReasoner()
         reasoner.redis = mock_redis
 
         # Setup: empirical fails, causal exists
-        patterns_key = CounterfactualReasoner.CAUSAL_PATTERNS_KEY.format(
-            action_type="retry"
-        )
+        patterns_key = CounterfactualReasoner.CAUSAL_PATTERNS_KEY.format(action_type="retry")
         mock_redis.get.side_effect = [
             None,  # Empirical returns nothing
             json.dumps(sample_causal_patterns),  # Causal has data
@@ -602,23 +564,17 @@ class TestSideEffectDetection:
         """Verify retry option includes latency side effect."""
         reasoner = CounterfactualReasoner()
 
-        outcome = reasoner._predict_heuristic(
-            "retry", sample_context, {"confidence": 0.6}
-        )
+        outcome = reasoner._predict_heuristic("retry", sample_context, {"confidence": 0.6})
 
         assert any(e["type"] == "latency_increase" for e in outcome.side_effects)
-        latency_effect = next(
-            e for e in outcome.side_effects if e["type"] == "latency_increase"
-        )
+        latency_effect = next(e for e in outcome.side_effects if e["type"] == "latency_increase")
         assert latency_effect["severity"] == "medium"
 
     def test_escalation_side_effects(self, sample_context):
         """Verify escalation option includes notification and wait side effects."""
         reasoner = CounterfactualReasoner()
 
-        outcome = reasoner._predict_heuristic(
-            "escalate", sample_context, {"confidence": 0.9}
-        )
+        outcome = reasoner._predict_heuristic("escalate", sample_context, {"confidence": 0.9})
 
         effect_types = {e["type"] for e in outcome.side_effects}
         assert "user_notification" in effect_types

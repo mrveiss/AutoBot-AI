@@ -78,9 +78,7 @@ class TestUpdateEdge:
 
         await adapter.update_edge(_EDGE_ID, weight=0.75, co_access_count=5)
 
-        mock_db.update_edge.assert_awaited_once_with(
-            _EDGE_ID, weight=0.75, co_access_count=5
-        )
+        mock_db.update_edge.assert_awaited_once_with(_EDGE_ID, weight=0.75, co_access_count=5)
 
 
 class TestCreateEdge:

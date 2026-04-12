@@ -102,9 +102,7 @@ class TrainResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-async def _resolve_db_url(
-    db_secret_id: Optional[str], request: Request
-) -> Optional[str]:
+async def _resolve_db_url(db_secret_id: Optional[str], request: Request) -> Optional[str]:
     """
     Resolve a database URL from a secret ID.
 

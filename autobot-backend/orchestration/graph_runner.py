@@ -121,9 +121,7 @@ class NodeRunner(Protocol[StateT]):
         Partial state update dict.
     """
 
-    async def __call__(
-        self, state: StateT, **kwargs: Any
-    ) -> Dict[str, Any]: ...
+    async def __call__(self, state: StateT, **kwargs: Any) -> Dict[str, Any]: ...
 
 
 #: Type alias for a sync or async conditional-edge router.
@@ -192,9 +190,7 @@ class StepEventEmitter:
         )
         for result in results:
             if isinstance(result, Exception):
-                logger.warning(
-                    "StepEventSink raised (suppressed): %s", result
-                )
+                logger.warning("StepEventSink raised (suppressed): %s", result)
 
 
 # ---------------------------------------------------------------------------
@@ -227,9 +223,7 @@ class NodeRetryConfig:
     backoff_mode: BackoffMode = BackoffMode.FIXED
     base_delay_s: float = 1.0
     max_delay_s: float = 60.0
-    retryable_exceptions: Tuple[Type[Exception], ...] = field(
-        default_factory=tuple
-    )
+    retryable_exceptions: Tuple[Type[Exception], ...] = field(default_factory=tuple)
 
     def delay_for(self, attempt: int) -> float:
         """Return the delay (seconds) before *attempt* (1-indexed)."""
@@ -316,9 +310,7 @@ class _CheckpointAdapter:
                 output=output,
             )
             loop = asyncio.get_event_loop()
-            await loop.run_in_executor(
-                None, self._manager.save, self._graph_id, checkpoint
-            )
+            await loop.run_in_executor(None, self._manager.save, self._graph_id, checkpoint)
         except Exception as exc:
             logger.warning(
                 "GraphRunner: checkpoint save failed for %s/%s: %s",
@@ -333,12 +325,8 @@ class _CheckpointAdapter:
             return {}
         try:
             loop = asyncio.get_event_loop()
-            checkpoints = await loop.run_in_executor(
-                None, self._manager.load_all, self._graph_id
-            )
-            return {
-                name: cp.output for name, cp in (checkpoints or {}).items()
-            }
+            checkpoints = await loop.run_in_executor(None, self._manager.load_all, self._graph_id)
+            return {name: cp.output for name, cp in (checkpoints or {}).items()}
         except Exception as exc:
             logger.warning(
                 "GraphRunner: checkpoint load failed for %s: %s",
@@ -353,9 +341,7 @@ class _CheckpointAdapter:
             return
         try:
             loop = asyncio.get_event_loop()
-            await loop.run_in_executor(
-                None, self._manager.clear, self._graph_id
-            )
+            await loop.run_in_executor(None, self._manager.clear, self._graph_id)
         except Exception as exc:
             logger.warning(
                 "GraphRunner: checkpoint clear failed for %s: %s",
@@ -445,9 +431,7 @@ class AutoBotGraph(Generic[StateT]):
             self (fluent API).
         """
         if name in (START, END):
-            raise ValueError(
-                f"'{name}' is a reserved sentinel and cannot be used as a node name."
-            )
+            raise ValueError(f"'{name}' is a reserved sentinel and cannot be used as a node name.")
         if name in self._nodes:
             raise ValueError(f"Node '{name}' is already registered.")
         self._nodes[name] = _NodeEntry(
@@ -507,22 +491,15 @@ class AutoBotGraph(Generic[StateT]):
                         edges referencing unknown nodes, etc.).
         """
         if not self._entry_point:
-            raise ValueError(
-                "Graph has no entry point. "
-                "Call set_entry_point() or add_edge(START, '<node>')."
-            )
+            raise ValueError("Graph has no entry point. " "Call set_entry_point() or add_edge(START, '<node>').")
 
         # Validate edge sources/targets reference known nodes or sentinels.
         known = set(self._nodes.keys()) | {START, END}
         for edge in self._edges:
             if edge.source not in known:
-                raise ValueError(
-                    f"Edge source '{edge.source}' is not a registered node."
-                )
+                raise ValueError(f"Edge source '{edge.source}' is not a registered node.")
             if edge.target is not None and edge.target not in known:
-                raise ValueError(
-                    f"Edge target '{edge.target}' is not a registered node."
-                )
+                raise ValueError(f"Edge target '{edge.target}' is not a registered node.")
 
         structure = _CompiledStructure(
             nodes=dict(self._nodes),
@@ -576,11 +553,7 @@ class GraphRunner(Generic[StateT]):
         self._graph = graph
         self._graph_id = graph_id
         self._emitter = emitter or StepEventEmitter()
-        self._checkpoint = (
-            _CheckpointAdapter(graph_id)
-            if enable_checkpoints and graph_id
-            else None
-        )
+        self._checkpoint = _CheckpointAdapter(graph_id) if enable_checkpoints and graph_id else None
         self._configurable = configurable or {}
 
     # ------------------------------------------------------------------
@@ -639,9 +612,7 @@ class GraphRunner(Generic[StateT]):
                     self._graph_id,
                     current_node,
                 )
-                current_node = await self._resolve_next(
-                    current_node, state, structure
-                )
+                current_node = await self._resolve_next(current_node, state, structure)
                 continue
 
             node_entry = structure.nodes[current_node]
@@ -653,9 +624,7 @@ class GraphRunner(Generic[StateT]):
                 if self._checkpoint:
                     await self._checkpoint.save(current_node, partial_update)
 
-            current_node = await self._resolve_next(
-                current_node, state, structure
-            )
+            current_node = await self._resolve_next(current_node, state, structure)
 
         # Clear checkpoints on clean completion.
         if self._checkpoint and not state.get("error"):

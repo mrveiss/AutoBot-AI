@@ -70,21 +70,14 @@ class AnalysisReport:
     @property
     def has_critical_issues(self) -> bool:
         """Check if report contains any critical severity issues."""
-        return any(
-            p.severity == AntiPatternSeverity.CRITICAL for p in self.anti_patterns
-        )
+        return any(p.severity == AntiPatternSeverity.CRITICAL for p in self.anti_patterns)
 
     @property
     def has_high_issues(self) -> bool:
         """Check if report contains any high severity issues."""
-        return any(
-            p.severity in (AntiPatternSeverity.CRITICAL, AntiPatternSeverity.HIGH)
-            for p in self.anti_patterns
-        )
+        return any(p.severity in (AntiPatternSeverity.CRITICAL, AntiPatternSeverity.HIGH) for p in self.anti_patterns)
 
-    def filter_by_severity(
-        self, min_severity: AntiPatternSeverity
-    ) -> List[AntiPatternResult]:
+    def filter_by_severity(self, min_severity: AntiPatternSeverity) -> List[AntiPatternResult]:
         """Filter anti-patterns by minimum severity level."""
         severity_order = [
             AntiPatternSeverity.INFO,
@@ -94,15 +87,9 @@ class AnalysisReport:
             AntiPatternSeverity.CRITICAL,
         ]
         min_index = severity_order.index(min_severity)
-        return [
-            p
-            for p in self.anti_patterns
-            if severity_order.index(p.severity) >= min_index
-        ]
+        return [p for p in self.anti_patterns if severity_order.index(p.severity) >= min_index]
 
-    def filter_by_type(
-        self, pattern_types: List[AntiPatternType]
-    ) -> List[AntiPatternResult]:
+    def filter_by_type(self, pattern_types: List[AntiPatternType]) -> List[AntiPatternResult]:
         """Filter anti-patterns by type."""
         type_set = set(pattern_types)
         return [p for p in self.anti_patterns if p.pattern_type in type_set]

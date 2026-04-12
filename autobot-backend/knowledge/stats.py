@@ -103,9 +103,7 @@ class StatsMixin:
                         result[key] = int(value)
                     except (ValueError, TypeError):
                         # Log and skip fields that can't be converted to int
-                        logger.warning(
-                            "Stats field '%s' has non-integer value: %r", key, value
-                        )
+                        logger.warning("Stats field '%s' has non-integer value: %r", key, value)
                         continue
                 return result
             except Exception as e:
@@ -124,9 +122,7 @@ class StatsMixin:
                 "initialized_at": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
-        logger.info(
-            "Stats counters initialized: facts=%d, vectors=%d", fact_count, vector_count
-        )
+        logger.info("Stats counters initialized: facts=%d, vectors=%d", fact_count, vector_count)
 
     async def _initialize_stats_counters(self) -> None:
         """Initialize stats counters from existing data (Issue #398: refactored)."""
@@ -174,9 +170,7 @@ class StatsMixin:
             logger.debug("Could not get actual vector count: %s", e)
             return 0
 
-    async def _correct_stats_drift(
-        self, actual_facts: int, actual_vectors: int
-    ) -> None:
+    async def _correct_stats_drift(self, actual_facts: int, actual_vectors: int) -> None:
         """Correct stats counters to actual values (Issue #398: extracted)."""
         await self.aioredis_client.hset(
             self._stats_key,
@@ -201,11 +195,7 @@ class StatsMixin:
         fact_drift = actual_facts - stored_facts
         vector_drift = actual_vectors - stored_vectors
         return {
-            "status": (
-                "consistent"
-                if fact_drift == 0 and vector_drift == 0
-                else "drift_detected"
-            ),
+            "status": ("consistent" if fact_drift == 0 and vector_drift == 0 else "drift_detected"),
             "stored_facts": stored_facts,
             "actual_facts": actual_facts,
             "fact_drift": fact_drift,
@@ -229,9 +219,7 @@ class StatsMixin:
             actual_facts = await self._count_actual_facts()
             actual_vectors = self._count_actual_vectors()
 
-            result = self._build_consistency_result(
-                stored_facts, actual_facts, stored_vectors, actual_vectors
-            )
+            result = self._build_consistency_result(stored_facts, actual_facts, stored_vectors, actual_vectors)
             is_consistent = result.pop("is_consistent")
 
             if not is_consistent:
@@ -304,9 +292,7 @@ class StatsMixin:
         try:
             stat_counters = await self._get_all_stats()
             if stat_counters:
-                return stat_counters.get("total_facts", 0), stat_counters.get(
-                    "total_vectors", 0
-                )
+                return stat_counters.get("total_facts", 0), stat_counters.get("total_vectors", 0)
         except Exception as e:
             logger.warning("Error getting stats counters: %s", e)
 
@@ -326,9 +312,7 @@ class StatsMixin:
         """Sample fact keys for category extraction (Issue #315)."""
         fact_keys = []
         try:
-            async for key in self.aioredis_client.scan_iter(
-                match="fact:*", count=limit
-            ):
+            async for key in self.aioredis_client.scan_iter(match="fact:*", count=limit):
                 fact_keys.append(key)
                 if len(fact_keys) >= limit:
                     break
@@ -368,9 +352,7 @@ class StatsMixin:
     async def _populate_redis_stats(self, stats: Dict[str, Any]) -> None:
         """Populate stats from Redis data (Issue #398: extracted)."""
         fact_count, vector_count = await self._get_counts_with_fallback()
-        logger.debug(
-            "O(1) stats lookup: facts=%d, vectors=%d", fact_count, vector_count
-        )
+        logger.debug("O(1) stats lookup: facts=%d, vectors=%d", fact_count, vector_count)
 
         stats["total_facts"] = fact_count
         stats["total_documents"] = vector_count
@@ -421,9 +403,7 @@ class StatsMixin:
             info = await asyncio.to_thread(self.redis_client.info, "memory")
             return {
                 "memory_usage_mb": round(info.get("used_memory", 0) / (1024 * 1024), 2),
-                "peak_memory_mb": round(
-                    info.get("used_memory_peak", 0) / (1024 * 1024), 2
-                ),
+                "peak_memory_mb": round(info.get("used_memory_peak", 0) / (1024 * 1024), 2),
             }
         except Exception as e:
             logger.warning("Could not get memory stats: %s", e)
@@ -512,9 +492,7 @@ class StatsMixin:
                 "error": "Failed to generate detailed stats",
             }
 
-    async def _calc_all_quality_dimensions(
-        self, facts: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+    async def _calc_all_quality_dimensions(self, facts: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Calculate all quality dimensions (Issue #398: extracted helper)."""
         return {
             "completeness": await self._calc_completeness_score(facts),
@@ -535,18 +513,12 @@ class StatsMixin:
         }
         return round(sum(dimensions[dim]["score"] * weights[dim] for dim in weights), 1)
 
-    def _build_quality_summary(
-        self, facts: List[Dict[str, Any]], issues: List[Dict]
-    ) -> Dict[str, Any]:
+    def _build_quality_summary(self, facts: List[Dict[str, Any]], issues: List[Dict]) -> Dict[str, Any]:
         """Build quality metrics summary (Issue #398: extracted helper)."""
         return {
             "total_facts": len(facts),
-            "facts_with_issues": len(
-                set(i.get("fact_id") for i in issues if i.get("fact_id"))
-            ),
-            "critical_issues": len(
-                [i for i in issues if i.get("severity") == "critical"]
-            ),
+            "facts_with_issues": len(set(i.get("fact_id") for i in issues if i.get("fact_id"))),
+            "critical_issues": len([i for i in issues if i.get("severity") == "critical"]),
             "warnings": len([i for i in issues if i.get("severity") == "warning"]),
         }
 
@@ -569,9 +541,7 @@ class StatsMixin:
                 return metrics
 
             metrics["dimensions"] = await self._calc_all_quality_dimensions(facts)
-            metrics["overall_score"] = self._calc_overall_quality_score(
-                metrics["dimensions"]
-            )
+            metrics["overall_score"] = self._calc_overall_quality_score(metrics["dimensions"])
 
             for dim_data in metrics["dimensions"].values():
                 metrics["issues"].extend(dim_data.get("issues", []))
@@ -635,9 +605,7 @@ class StatsMixin:
             )
             return "incomplete"
 
-    async def _calc_completeness_score(
-        self, facts: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+    async def _calc_completeness_score(self, facts: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Calculate completeness score (Issue #398: refactored)."""
         issues: List[Dict] = []
         complete_count = partial_count = 0
@@ -671,9 +639,7 @@ class StatsMixin:
             "recommendations": recommendations,
         }
 
-    def _analyze_category_consistency(
-        self, facts: List[Dict[str, Any]], issues: List[Dict]
-    ) -> Dict[str, int]:
+    def _analyze_category_consistency(self, facts: List[Dict[str, Any]], issues: List[Dict]) -> Dict[str, int]:
         """Analyze category consistency (Issue #398: extracted)."""
         categories: Dict[str, int] = {}
         for fact in facts:
@@ -685,28 +651,22 @@ class StatsMixin:
                 {
                     "type": "category_fragmentation",
                     "severity": "warning",
-                    "message": "Too many categories (%d), consider consolidating"
-                    % len(categories),
+                    "message": "Too many categories (%d), consider consolidating" % len(categories),
                 }
             )
 
-        small_categories = [
-            c for c, n in categories.items() if n < 3 and c != "uncategorized"
-        ]
+        small_categories = [c for c, n in categories.items() if n < 3 and c != "uncategorized"]
         if small_categories:
             issues.append(
                 {
                     "type": "sparse_categories",
                     "severity": "info",
-                    "message": "%d categories have fewer than 3 facts"
-                    % len(small_categories),
+                    "message": "%d categories have fewer than 3 facts" % len(small_categories),
                 }
             )
         return categories
 
-    def _analyze_tag_consistency(
-        self, facts: List[Dict[str, Any]], issues: List[Dict]
-    ) -> List[str]:
+    def _analyze_tag_consistency(self, facts: List[Dict[str, Any]], issues: List[Dict]) -> List[str]:
         """Analyze tag consistency (Issue #398: extracted)."""
         all_tags: List[str] = []
         inconsistent_tags = 0
@@ -727,9 +687,7 @@ class StatsMixin:
             )
         return all_tags
 
-    async def _calc_consistency_score(
-        self, facts: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+    async def _calc_consistency_score(self, facts: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Calculate consistency score (Issue #398: refactored)."""
         issues: List[Dict] = []
 
@@ -771,16 +729,12 @@ class StatsMixin:
 
     def _parse_fact_timestamp(self, fact: Dict[str, Any]) -> Optional[datetime]:
         """Parse timestamp from a fact (Issue #398: extracted)."""
-        timestamp_str = fact.get("timestamp") or fact.get("metadata", {}).get(
-            "created_at"
-        )
+        timestamp_str = fact.get("timestamp") or fact.get("metadata", {}).get("created_at")
         if not timestamp_str or not isinstance(timestamp_str, str):
             return None
         try:
             if "T" in timestamp_str:
-                dt = datetime.fromisoformat(
-                    timestamp_str.replace("Z", "+00:00").split("+")[0]
-                )
+                dt = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00").split("+")[0])
             else:
                 dt = datetime.strptime(timestamp_str, "%Y-%m-%d")
             if dt.tzinfo is None:
@@ -810,9 +764,7 @@ class StatsMixin:
                 buckets[bucket] += 1
         return buckets
 
-    async def _calc_freshness_score(
-        self, facts: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+    async def _calc_freshness_score(self, facts: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Calculate freshness score (Issue #398: refactored)."""
         age_buckets = self._compute_age_buckets(facts)
         total = len(facts)
@@ -825,11 +777,7 @@ class StatsMixin:
                 "recommendations": [],
             }
 
-        recent = (
-            age_buckets["last_day"]
-            + age_buckets["last_week"]
-            + age_buckets["last_month"]
-        )
+        recent = age_buckets["last_day"] + age_buckets["last_week"] + age_buckets["last_month"]
         score = (recent / total * 80) + ((total - age_buckets["older"]) / total * 20)
 
         issues = []
@@ -867,9 +815,7 @@ class StatsMixin:
             "recommendations": recommendations,
         }
 
-    async def _calc_uniqueness_score(
-        self, facts: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+    async def _calc_uniqueness_score(self, facts: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Calculate uniqueness score - how unique is the data (no duplicates)."""
         issues = []
 
@@ -987,8 +933,7 @@ class StatsMixin:
             recommendations.append(
                 {
                     "action": "fix_invalid_facts",
-                    "description": "Fix %d facts with validation issues"
-                    % invalid_count,
+                    "description": "Fix %d facts with validation issues" % invalid_count,
                     "priority": "critical" if invalid_count > 10 else "high",
                 }
             )

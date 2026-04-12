@@ -123,9 +123,7 @@ class EntityOperationsMixin:
         Issue #620.
         """
         if entity_type not in ENTITY_TYPES:
-            raise ValueError(
-                f"Invalid entity_type: {entity_type}. Must be one of {ENTITY_TYPES}"
-            )
+            raise ValueError(f"Invalid entity_type: {entity_type}. Must be one of {ENTITY_TYPES}")
 
         if not name or not name.strip():
             raise ValueError("Entity name cannot be empty")
@@ -163,9 +161,7 @@ class EntityOperationsMixin:
         try:
             entity_id = str(uuid.uuid4())
             entity_metadata = self._prepare_entity_metadata(metadata, tags)
-            entity = self._build_entity_document(
-                entity_id, entity_type, name, observations, entity_metadata
-            )
+            entity = self._build_entity_document(entity_id, entity_type, name, observations, entity_metadata)
 
             await self._store_entity_in_redis(entity_id, entity)
             logger.info(
@@ -242,10 +238,7 @@ class EntityOperationsMixin:
         Uses asyncio.gather for parallel appends. Issue #620.
         """
         await asyncio.gather(
-            *[
-                self.redis_client.json().arrappend(entity_key, "$.observations", obs)
-                for obs in observations
-            ]
+            *[self.redis_client.json().arrappend(entity_key, "$.observations", obs) for obs in observations]
         )
         await self.redis_client.json().set(
             entity_key, "$.updated_at", int(datetime.now(tz=timezone.utc).timestamp() * 1000)
@@ -297,9 +290,7 @@ class EntityOperationsMixin:
             await self._refresh_entity_embedding(entity_id, entity_key)
 
             self.search_cache.clear()
-            logger.info(
-                "Added %d observations to entity: %s", len(observations), entity_name
-            )
+            logger.info("Added %d observations to entity: %s", len(observations), entity_name)
             return await self.redis_client.json().get(entity_key)
 
         except Exception as e:
@@ -407,17 +398,13 @@ class EntityOperationsMixin:
             observations = entity.get("observations", [])
 
             # Weighted text (name: 0.3, type: 0.1, observations: 0.6)
-            embedding_text = (
-                f"{name} {name} {name} {entity_type} {' '.join(observations * 6)}"
-            )
+            embedding_text = f"{name} {name} {name} {entity_type} {' '.join(observations * 6)}"
 
             self.embedding_cache[entity_id] = embedding_text
 
         except Exception as e:
             # CodeQL: false positive — entity_id is a UUID, not sensitive
-            logger.warning(
-                "Failed to generate embedding for entity %s: %s", entity_id, e
-            )
+            logger.warning("Failed to generate embedding for entity %s: %s", entity_id, e)
 
     def _prepare_conversation_data(
         self: AutoBotMemoryGraphCore,

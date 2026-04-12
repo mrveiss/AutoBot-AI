@@ -84,9 +84,7 @@ class TestDependencyInjection:
         mock_config = Mock(spec=ConfigManager)
         mock_config.get_nested.return_value = None
         mock_config.get_llm_config.return_value = {
-            "unified": {
-                "embedding": {"providers": {"ollama": {"selected_model": "test_embed"}}}
-            }
+            "unified": {"embedding": {"providers": {"ollama": {"selected_model": "test_embed"}}}}
         }
         mock_config.get.return_value = {"redis": {"host": "test_host", "port": 6379}}
 
@@ -142,9 +140,7 @@ class TestDependencyInjection:
             }.get(key, default)
 
             # Create diagnostics with injected dependencies
-            diagnostics = Diagnostics(
-                config_manager=mock_config, llm_interface=mock_llm
-            )
+            diagnostics = Diagnostics(config_manager=mock_config, llm_interface=mock_llm)
 
             # Verify dependencies are properly injected
             assert diagnostics.config_manager is mock_config

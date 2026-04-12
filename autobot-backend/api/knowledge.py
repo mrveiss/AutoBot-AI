@@ -65,16 +65,10 @@ from utils.path_validation import contains_path_traversal
 class AddFactsRequest(BaseModel):
     """Request model for adding text content to knowledge base."""
 
-    content: str = Field(
-        ..., min_length=1, max_length=100000, description="Text content"
-    )
+    content: str = Field(..., min_length=1, max_length=100000, description="Text content")
     title: str = Field(default="", max_length=500, description="Document title")
-    source: str = Field(
-        default="Manual Entry", max_length=500, description="Content source"
-    )
-    category: str = Field(
-        default=CategoryDefaults.GENERAL, max_length=100, description="Category"
-    )
+    source: str = Field(default="Manual Entry", max_length=500, description="Content source")
+    category: str = Field(default=CategoryDefaults.GENERAL, max_length=100, description="Category")
     tags: List[str] = Field(default_factory=list, description="Tags for the content")
 
     @field_validator("tags")
@@ -90,9 +84,7 @@ class AddUrlRequest(BaseModel):
 
     url: str = Field(..., min_length=1, max_length=2000, description="URL to fetch")
     title: str = Field(default="", max_length=500, description="Document title")
-    method: str = Field(
-        default="fetch", pattern="^(fetch|raw)$", description="Fetch method"
-    )
+    method: str = Field(default="fetch", pattern="^(fetch|raw)$", description="Fetch method")
     category: str = Field(default="web", max_length=100, description="Category")
     tags: List[str] = Field(default_factory=list, description="Tags")
 
@@ -124,9 +116,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 # Cache TTL constants (seconds)
-CATEGORY_CACHE_TTL = (
-    3600  # 1 hour for category counts (expensive to compute with 5k+ facts)
-)
+CATEGORY_CACHE_TTL = 3600  # 1 hour for category counts (expensive to compute with 5k+ facts)
 
 # Performance optimization: O(1) lookup for metadata types (Issue #326)
 MANUAL_PAGE_TYPES = {"manual_page", "system_command"}
@@ -148,9 +138,7 @@ def _get_fact_source(fact: dict) -> str:
     return source
 
 
-async def _compute_category_counts(
-    all_facts: list, get_category_for_source, category_counts: dict
-) -> None:
+async def _compute_category_counts(all_facts: list, get_category_for_source, category_counts: dict) -> None:
     """Compute category counts from facts (Issue #315: extracted).
 
     Args:
@@ -338,9 +326,7 @@ def _get_category_cache_keys(KnowledgeCategory) -> dict:
     }
 
 
-async def _get_or_compute_category_counts(
-    kb, cache_keys: dict, get_category_for_source, category_counts: dict
-) -> None:
+async def _get_or_compute_category_counts(kb, cache_keys: dict, get_category_for_source, category_counts: dict) -> None:
     """Get cached counts or compute from facts (Issue #398: extracted)."""
     cached_values = await kb.aioredis_client.mget(list(cache_keys.values()))
     if all(v is not None for v in cached_values):
@@ -353,15 +339,11 @@ async def _get_or_compute_category_counts(
         logger.info("Cache miss - computing category counts from all facts")
         all_facts = await kb.get_all_facts()
         logger.info("Categorizing %s facts into main categories", len(all_facts))
-        await _compute_category_counts(
-            all_facts, get_category_for_source, category_counts
-        )
+        await _compute_category_counts(all_facts, get_category_for_source, category_counts)
         logger.info("Category counts: %s", category_counts)
         # Cache for 1 hour
         for cat_id, cache_key in cache_keys.items():
-            await kb.aioredis_client.set(
-                cache_key, category_counts[cat_id], ex=CATEGORY_CACHE_TTL
-            )
+            await kb.aioredis_client.set(cache_key, category_counts[cat_id], ex=CATEGORY_CACHE_TTL)
 
 
 def _build_main_categories(CATEGORY_METADATA, category_counts: dict) -> list:
@@ -403,9 +385,7 @@ async def get_main_categories(
 
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     has_redis = kb.aioredis_client is not None if kb else False
-    logger.info(
-        "get_main_categories - kb: %s, has_redis: %s", kb is not None, has_redis
-    )
+    logger.info("get_main_categories - kb: %s, has_redis: %s", kb is not None, has_redis)
 
     category_counts = {
         KnowledgeCategory.AUTOBOT_DOCUMENTATION: 0,
@@ -417,9 +397,7 @@ async def get_main_categories(
         logger.info("Attempting to get cached category counts...")
         try:
             cache_keys = _get_category_cache_keys(KnowledgeCategory)
-            await _get_or_compute_category_counts(
-                kb, cache_keys, get_category_for_source, category_counts
-            )
+            await _get_or_compute_category_counts(kb, cache_keys, get_category_for_source, category_counts)
         except Exception as e:
             logger.error("Error categorizing facts: %s", e)
 
@@ -452,9 +430,7 @@ async def get_knowledge_categories(
 
     # Get all facts to count by category - async redis operation
     try:
-        all_facts_data = await asyncio.to_thread(
-            kb_to_use.redis_client.hgetall, "knowledge_base:facts"
-        )
+        all_facts_data = await asyncio.to_thread(kb_to_use.redis_client.hgetall, "knowledge_base:facts")
     except Exception as redis_err:
         logger.debug("Redis error getting facts: %s", redis_err)
         all_facts_data = {}
@@ -470,10 +446,7 @@ async def get_knowledge_categories(
             continue
 
     # Format for frontend with counts
-    categories = [
-        {"name": cat, "count": category_counts.get(cat, 0), "id": cat}
-        for cat in categories_list
-    ]
+    categories = [{"name": cat, "count": category_counts.get(cat, 0), "id": cat} for cat in categories_list]
 
     return {"categories": categories, "total": len(categories)}
 
@@ -502,8 +475,7 @@ def _extract_add_text_fields(request: dict) -> tuple:
     if not text:
         raise ValueError("Text content is required")
     logger.info(
-        "Adding text to knowledge: title='%s', source='%s', "
-        "access_level='%s', visibility='%s', length=%d",
+        "Adding text to knowledge: title='%s', source='%s', " "access_level='%s', visibility='%s', length=%d",
         title,
         source,
         access_level,
@@ -579,9 +551,7 @@ async def add_text_to_knowledge(
     """
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb_to_use is None:
-        raise InternalError(
-            "Knowledge base not initialized - please check logs for errors"
-        )
+        raise InternalError("Knowledge base not initialized - please check logs for errors")
 
     (
         text,
@@ -829,13 +799,9 @@ async def add_facts_to_knowledge(
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
-        raise InternalError(
-            "Knowledge base not initialized - please check logs for errors"
-        )
+        raise InternalError("Knowledge base not initialized - please check logs for errors")
 
-    logger.info(
-        f"Adding fact: title='{request.title}', source='{request.source}', len={len(request.content)}"
-    )
+    logger.info(f"Adding fact: title='{request.title}', source='{request.source}', len={len(request.content)}")
 
     fact_id = await _store_fact_in_kb(
         kb_to_use,
@@ -852,18 +818,12 @@ async def add_facts_to_knowledge(
         "success": True,
         "document_id": fact_id,
         "title": request.title,
-        "content": (
-            request.content[:100] + "..."
-            if len(request.content) > 100
-            else request.content
-        ),
+        "content": (request.content[:100] + "..." if len(request.content) > 100 else request.content),
         "message": "Document added successfully",
     }
 
 
-async def _fetch_and_extract_url(
-    validated_url: str, fallback_title: str
-) -> "tuple[str, str]":
+async def _fetch_and_extract_url(validated_url: str, fallback_title: str) -> "tuple[str, str]":
     """Fetch HTML from a validated URL and return (content, title). Ref: #2735.
 
     Raises HTTPException on HTTP error or connection failure.
@@ -879,9 +839,7 @@ async def _fetch_and_extract_url(
                 allow_redirects=False,  # Prevent SSRF via redirect (#1721)
             ) as response:
                 if response.status != 200:
-                    raise HTTPException(
-                        status_code=400, detail=f"HTTP {response.status}"
-                    )
+                    raise HTTPException(status_code=400, detail=f"HTTP {response.status}")
                 html_content = await response.text()
                 # Use safe HTML parser instead of regex (Issue #549 Code Review)
                 content, extracted_title = _sanitize_html_content(html_content)
@@ -976,9 +934,7 @@ def _extract_pdf_content(filename: str, file_content: bytes) -> str:
         pdf_reader = pypdf.PdfReader(io.BytesIO(file_content))
         return "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
     except ImportError:
-        raise HTTPException(
-            status_code=400, detail="PDF support requires pypdf library"
-        )
+        raise HTTPException(status_code=400, detail="PDF support requires pypdf library")
     except Exception as e:
         logger.error("PDF parse error for %s: %s", filename, e)
         raise HTTPException(status_code=400, detail="Failed to parse PDF file")
@@ -1008,9 +964,7 @@ def _extract_docx_content(filename: str, file_content: bytes) -> str:
         doc = docx.Document(io.BytesIO(file_content))
         return "\n".join(para.text for para in doc.paragraphs)
     except ImportError:
-        raise HTTPException(
-            status_code=400, detail="DOCX support requires python-docx library"
-        )
+        raise HTTPException(status_code=400, detail="DOCX support requires python-docx library")
     except Exception as e:
         logger.error("DOCX parse error for %s: %s", filename, e)
         raise HTTPException(status_code=400, detail="Failed to parse DOCX file")
@@ -1111,9 +1065,7 @@ async def upload_file_to_knowledge(
 
     content = _extract_file_content(filename, file_content)
     if not content.strip():
-        raise HTTPException(
-            status_code=400, detail="No text content could be extracted from file"
-        )
+        raise HTTPException(status_code=400, detail="No text content could be extracted from file")
 
     logger.info("Uploading file: filename='%s', size=%d", filename, len(file_content))
 
@@ -1181,9 +1133,7 @@ async def get_knowledge_health(
         try:
             rag_agent = get_rag_agent()
             # Verify RAG agent is properly initialized by checking key attributes
-            if hasattr(rag_agent, "is_rag_appropriate") and callable(
-                rag_agent.is_rag_appropriate
-            ):
+            if hasattr(rag_agent, "is_rag_appropriate") and callable(rag_agent.is_rag_appropriate):
                 rag_status = "healthy"
             else:
                 rag_status = "unhealthy: missing required methods"
@@ -1251,9 +1201,7 @@ async def get_knowledge_entries(
     try:
 
         def _hscan():
-            return kb.redis_client.hscan(
-                "knowledge_base:facts", cursor=current_cursor, count=limit * 2
-            )
+            return kb.redis_client.hscan("knowledge_base:facts", cursor=current_cursor, count=limit * 2)
 
         next_cursor, items = await asyncio.to_thread(_hscan)
         entries = _parse_and_filter_facts(items, category, limit)
@@ -1347,15 +1295,11 @@ async def get_detailed_stats(
 
     basic_stats = await kb.get_stats()
     try:
-        all_facts_data = await asyncio.to_thread(
-            kb.redis_client.hgetall, "knowledge_base:facts"
-        )
+        all_facts_data = await asyncio.to_thread(kb.redis_client.hgetall, "knowledge_base:facts")
     except Exception:
         all_facts_data = {}
 
-    cat_counts, src_counts, type_counts, sizes = _analyze_facts_for_stats(
-        all_facts_data
-    )
+    cat_counts, src_counts, type_counts, sizes = _analyze_facts_for_stats(all_facts_data)
     return {
         "status": "online" if basic_stats.get("initialized") else "offline",
         "basic_stats": basic_stats,
@@ -1448,9 +1392,7 @@ async def get_man_pages_summary(
 
     # Get all facts and count man pages - async operation
     try:
-        all_facts_data = await asyncio.to_thread(
-            kb_to_use.redis_client.hgetall, "knowledge_base:facts"
-        )
+        all_facts_data = await asyncio.to_thread(kb_to_use.redis_client.hgetall, "knowledge_base:facts")
 
         man_page_count = 0
         system_command_count = 0
@@ -1522,9 +1464,7 @@ async def initialize_machine_knowledge(
 
     return {
         "status": "success",
-        "message": (
-            f"Machine knowledge initialized. Added {commands_added} system commands."
-        ),
+        "message": (f"Machine knowledge initialized. Added {commands_added} system commands."),
         "items_added": commands_added,
         "components": {
             "system_commands": commands_added,
@@ -1618,9 +1558,7 @@ async def _clear_kb_via_redis(kb) -> int:
     """Clear knowledge base via Redis fallback (Issue #398: extracted)."""
     if not (hasattr(kb, "redis") and kb.redis):
         logger.error("No clear method available for knowledge base implementation")
-        raise HTTPException(
-            status_code=500, detail="Knowledge base clearing not supported"
-        )
+        raise HTTPException(status_code=500, detail="Knowledge base clearing not supported")
 
     keys = await kb.redis.keys("fact:*")
     if keys:
@@ -1654,9 +1592,7 @@ async def clear_all_knowledge(
             "message": "Knowledge base not initialized - please check logs for errors",
         }
 
-    logger.warning(
-        "Starting DESTRUCTIVE operation: clearing all knowledge base entries"
-    )
+    logger.warning("Starting DESTRUCTIVE operation: clearing all knowledge base entries")
     try:
         stats_before = await kb.get_stats()
         items_before = stats_before.get("total_facts", 0)
@@ -1738,21 +1674,14 @@ async def _check_facts_cache(kb, category: Optional[str], limit: int) -> tuple:
     cached_result = await asyncio.to_thread(kb.redis_client.get, cache_key)
 
     if cached_result:
-        logger.debug(
-            f"Cache HIT for facts_by_category (category={category}, limit={limit})"
-        )
+        logger.debug(f"Cache HIT for facts_by_category (category={category}, limit={limit})")
         return (
-            json.loads(
-                cached_result.decode("utf-8")
-                if isinstance(cached_result, bytes)
-                else cached_result
-            ),
+            json.loads(cached_result.decode("utf-8") if isinstance(cached_result, bytes) else cached_result),
             cache_key,
         )
 
     logger.info(
-        f"Cache MISS for facts_by_category - using category index lookup "
-        f"(category={category}, limit={limit})"
+        f"Cache MISS for facts_by_category - using category index lookup " f"(category={category}, limit={limit})"
     )
     return None, cache_key
 
@@ -1762,14 +1691,9 @@ async def _fetch_category_fact_ids(kb, categories_to_fetch: list, limit: int) ->
     category_fact_ids = {}
     for cat in categories_to_fetch:
         index_key = f"category:index:{cat}"
-        fact_ids = await asyncio.to_thread(
-            kb.redis_client.srandmember, index_key, limit
-        )
+        fact_ids = await asyncio.to_thread(kb.redis_client.srandmember, index_key, limit)
         if fact_ids:
-            decoded_ids = [
-                fid.decode("utf-8") if isinstance(fid, bytes) else fid
-                for fid in fact_ids
-            ]
+            decoded_ids = [fid.decode("utf-8") if isinstance(fid, bytes) else fid for fid in fact_ids]
             category_fact_ids[cat] = decoded_ids
             logger.debug(f"Category index {cat}: fetched {len(decoded_ids)} fact IDs")
     return category_fact_ids
@@ -1803,19 +1727,13 @@ def _process_fact_data(fact_data: dict, cat: str, fact_key: str) -> Optional[dic
     try:
         # Extract metadata
         metadata_raw = fact_data.get(b"metadata") or fact_data.get("metadata", b"{}")
-        metadata_str = (
-            metadata_raw.decode("utf-8")
-            if isinstance(metadata_raw, bytes)
-            else str(metadata_raw)
-        )
+        metadata_str = metadata_raw.decode("utf-8") if isinstance(metadata_raw, bytes) else str(metadata_raw)
         metadata = json.loads(metadata_str) if metadata_str else {}
 
         # Extract content
         content_raw = fact_data.get(b"content") or fact_data.get("content", b"")
         content = (
-            content_raw.decode("utf-8")
-            if isinstance(content_raw, bytes)
-            else str(content_raw) if content_raw else ""
+            content_raw.decode("utf-8") if isinstance(content_raw, bytes) else str(content_raw) if content_raw else ""
         )
 
         fact_title = metadata.get("title", metadata.get("command", "Untitled"))
@@ -1840,9 +1758,7 @@ async def _cache_facts_result(kb, cache_key: str, result: dict) -> None:
     import json
 
     try:
-        await asyncio.to_thread(
-            kb.redis_client.setex, cache_key, 60, json.dumps(result)
-        )
+        await asyncio.to_thread(kb.redis_client.setex, cache_key, 60, json.dumps(result))
         logger.debug("Cached facts_by_category result")
     except Exception as cache_error:
         logger.warning("Failed to cache facts_by_category: %s", cache_error)
@@ -1899,14 +1815,10 @@ async def get_facts_by_category(
 
     from knowledge_categories import KnowledgeCategory
 
-    categories_to_fetch = (
-        [category] if category else [c.value for c in KnowledgeCategory]
-    )
+    categories_to_fetch = [category] if category else [c.value for c in KnowledgeCategory]
 
     try:
-        category_fact_ids = await _fetch_category_fact_ids(
-            kb, categories_to_fetch, limit
-        )
+        category_fact_ids = await _fetch_category_fact_ids(kb, categories_to_fetch, limit)
         if not category_fact_ids:
             logger.warning("No category indexes - falling back to SCAN method")
             return await _get_facts_by_category_legacy(kb, category, limit)
@@ -1934,9 +1846,7 @@ async def _scan_all_fact_keys(kb) -> list:
     all_fact_keys = []
     cursor = 0
     while True:
-        cursor, keys = await asyncio.to_thread(
-            kb.redis_client.scan, cursor, match="fact:*", count=1000
-        )
+        cursor, keys = await asyncio.to_thread(kb.redis_client.scan, cursor, match="fact:*", count=1000)
         all_fact_keys.extend(keys)
         if cursor == 0:
             break
@@ -1963,9 +1873,7 @@ def _decode_bytes(raw, default: str = "") -> str:
     return str(raw) if raw else default
 
 
-def _parse_fact_entry(
-    fact_key_bytes, fact_data, get_category_for_source
-) -> Optional[tuple]:
+def _parse_fact_entry(fact_key_bytes, fact_data, get_category_for_source) -> Optional[tuple]:
     """Parse a single fact entry (Issue #398: extracted).
 
     Returns:
@@ -2043,11 +1951,7 @@ def _extract_fact_metadata(fact_data: dict) -> dict:
         Parsed metadata dictionary
     """
     metadata_str = fact_data.get("metadata") or fact_data.get(b"metadata", b"{}")
-    return json.loads(
-        metadata_str.decode("utf-8")
-        if isinstance(metadata_str, bytes)
-        else metadata_str
-    )
+    return json.loads(metadata_str.decode("utf-8") if isinstance(metadata_str, bytes) else metadata_str)
 
 
 def _extract_fact_content(fact_data: dict) -> str:
@@ -2064,11 +1968,7 @@ def _extract_fact_content(fact_data: dict) -> str:
         Content string
     """
     content_raw = fact_data.get("content") or fact_data.get(b"content", b"")
-    return (
-        content_raw.decode("utf-8")
-        if isinstance(content_raw, bytes)
-        else str(content_raw) if content_raw else ""
-    )
+    return content_raw.decode("utf-8") if isinstance(content_raw, bytes) else str(content_raw) if content_raw else ""
 
 
 def _extract_fact_created_at(fact_data: dict) -> str:
@@ -2117,9 +2017,7 @@ async def get_fact_by_key(
     Issue #744: Requires admin authentication.
     """
     if contains_path_traversal(fact_key):
-        raise HTTPException(
-            status_code=400, detail="Invalid fact_key: path traversal not allowed"
-        )
+        raise HTTPException(status_code=400, detail="Invalid fact_key: path traversal not allowed")
 
     kb = await get_or_create_knowledge_base(req.app)
     fact_data = await asyncio.to_thread(kb.redis_client.hgetall, fact_key)
@@ -2216,9 +2114,7 @@ class DocsBrowseRequest(BaseModel):
         pattern="^(indexed_at|title|category|file_path)$",
         description="Sort field",
     )
-    sort_order: str = Field(
-        default="desc", pattern="^(asc|desc)$", description="Sort order"
-    )
+    sort_order: str = Field(default="desc", pattern="^(asc|desc)$", description="Sort order")
 
 
 async def _get_indexed_docs_from_redis(kb) -> list:
@@ -2230,9 +2126,7 @@ async def _get_indexed_docs_from_redis(kb) -> list:
     docs = []
     cursor = 0
     while True:
-        cursor, keys = await asyncio.to_thread(
-            kb.redis_client.scan, cursor, match="doc_hash:*", count=500
-        )
+        cursor, keys = await asyncio.to_thread(kb.redis_client.scan, cursor, match="doc_hash:*", count=500)
         if keys:
             # Batch fetch document data
             values = await asyncio.to_thread(kb.redis_client.mget, keys)
@@ -2263,8 +2157,7 @@ def _filter_docs(docs: list, request: DocsBrowseRequest) -> list:
         filtered = [
             d
             for d in filtered
-            if category_lower in d.get("file_path", "").lower()
-            or d.get("category", "").lower() == category_lower
+            if category_lower in d.get("file_path", "").lower() or d.get("category", "").lower() == category_lower
         ]
 
     # Filter by doc_type
@@ -2288,8 +2181,7 @@ def _filter_docs(docs: list, request: DocsBrowseRequest) -> list:
         filtered = [
             d
             for d in filtered
-            if query_lower in d.get("title", "").lower()
-            or query_lower in d.get("file_path", "").lower()
+            if query_lower in d.get("title", "").lower() or query_lower in d.get("file_path", "").lower()
         ]
 
     return filtered
@@ -2342,9 +2234,7 @@ async def browse_documentation(
     sorted_docs = _sort_docs(filtered_docs, request.sort_by, request.sort_order)
 
     # Paginate
-    paginated, total, total_pages = _paginate_docs(
-        sorted_docs, request.page, request.page_size
-    )
+    paginated, total, total_pages = _paginate_docs(sorted_docs, request.page, request.page_size)
 
     return {
         "success": True,
@@ -2468,9 +2358,7 @@ async def get_documentation_stats(
             "total_indexed_entries": len(all_docs),
             "total_chunks": total_chunks,
             "latest_indexed": latest_indexed,
-            "categories_count": len(
-                set(doc.get("category", "general") for doc in all_docs)
-            ),
+            "categories_count": len(set(doc.get("category", "general") for doc in all_docs)),
         },
     }
 
@@ -2589,9 +2477,7 @@ router.include_router(maintenance_router)
 try:
     from api.knowledge_ai_stack import router as ai_stack_router
 
-    router.include_router(
-        ai_stack_router, prefix="/ai-stack", tags=["knowledge-enhanced", "ai-stack"]
-    )
+    router.include_router(ai_stack_router, prefix="/ai-stack", tags=["knowledge-enhanced", "ai-stack"])
 except ImportError as e:
     logging.warning("AI Stack knowledge router not available: %s", e)
 

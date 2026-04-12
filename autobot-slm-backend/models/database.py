@@ -425,9 +425,7 @@ class Service(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Composite unique constraint - one service record per node
-    __table_args__ = (
-        UniqueConstraint("node_id", "service_name", name="uq_node_service"),
-    )
+    __table_args__ = (UniqueConstraint("node_id", "service_name", name="uq_node_service"),)
 
 
 class NodeConfig(Base):
@@ -468,11 +466,7 @@ class ServiceConflict(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    __table_args__ = (
-        UniqueConstraint(
-            "service_name_a", "service_name_b", name="uq_service_conflict"
-        ),
-    )
+    __table_args__ = (UniqueConstraint("service_name_a", "service_name_b", name="uq_service_conflict"),)
 
 
 class Agent(Base):
@@ -520,9 +514,7 @@ class MaintenanceWindow(Base):
     auto_drain = Column(Boolean, default=False)  # drain services before maintenance
     suppress_alerts = Column(Boolean, default=True)  # suppress alerts during window
     suppress_remediation = Column(Boolean, default=True)  # suppress auto-remediation
-    status = Column(
-        String(20), default="scheduled"
-    )  # scheduled, active, completed, cancelled
+    status = Column(String(20), default="scheduled")  # scheduled, active, completed, cancelled
     created_by = Column(String(64), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -572,23 +564,15 @@ class BlueGreenDeployment(Base):
     purge_on_complete = Column(Boolean, default=True)  # Clean slate on completion
 
     # Deployment configuration
-    deployment_type = Column(
-        String(32), default="upgrade"
-    )  # upgrade, migration, failover
+    deployment_type = Column(String(32), default="upgrade")  # upgrade, migration, failover
     health_check_url = Column(String(512), nullable=True)  # Optional health endpoint
     health_check_interval = Column(Integer, default=10)  # Seconds between checks
-    health_check_timeout = Column(
-        Integer, default=300
-    )  # Max time for health verification
+    health_check_timeout = Column(Integer, default=300)  # Max time for health verification
     auto_rollback = Column(Boolean, default=True)  # Rollback on health failure
 
     # Post-deployment health monitoring (Issue #726 Phase 3)
-    post_deploy_monitor_duration = Column(
-        Integer, default=1800
-    )  # 30 min monitoring after switch
-    health_failure_threshold = Column(
-        Integer, default=3
-    )  # Consecutive failures before rollback
+    post_deploy_monitor_duration = Column(Integer, default=1800)  # 30 min monitoring after switch
+    health_failure_threshold = Column(Integer, default=3)  # Consecutive failures before rollback
     health_failures = Column(Integer, default=0)  # Current consecutive failure count
     monitoring_started_at = Column(DateTime, nullable=True)  # When monitoring started
 
@@ -688,11 +672,7 @@ class NodeCredential(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Composite unique constraint - one credential per node/type/name combo
-    __table_args__ = (
-        UniqueConstraint(
-            "node_id", "credential_type", "name", name="uq_node_cred_type_name"
-        ),
-    )
+    __table_args__ = (UniqueConstraint("node_id", "credential_type", "name", name="uq_node_cred_type_name"),)
 
 
 # =============================================================================
@@ -846,9 +826,7 @@ class SecurityPolicy(Base):
     # Policy identification
     name = Column(String(128), nullable=False)
     description = Column(Text, nullable=True)
-    category = Column(
-        String(64), nullable=False
-    )  # authentication, access_control, network, etc.
+    category = Column(String(64), nullable=False)  # authentication, access_control, network, etc.
 
     # Policy configuration
     policy_type = Column(String(32), default="custom")  # builtin, custom
@@ -911,9 +889,7 @@ class UpdateSchedule(Base):
     target_nodes = Column(JSON, nullable=True)  # List of node_ids or tag names
 
     # Sync options
-    restart_strategy = Column(
-        String(20), default="graceful"
-    )  # graceful, immediate, manual
+    restart_strategy = Column(String(20), default="graceful")  # graceful, immediate, manual
     restart_after_sync = Column(Boolean, default=True)
 
     # Execution tracking
@@ -995,9 +971,7 @@ class NodeCodeVersion(Base):
     cache_path = Column(String(512), nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    __table_args__ = (
-        UniqueConstraint("node_id", "role_name", name="uq_node_code_version"),
-    )
+    __table_args__ = (UniqueConstraint("node_id", "role_name", name="uq_node_code_version"),)
 
 
 class CodeSource(Base):

@@ -129,16 +129,10 @@ class ConversationFileManager:
                 str(_PROJECT_ROOT / "data" / "conversation_files"),
             )
         )
-        db = Path(
-            os.getenv(
-                "AUTOBOT_DB_PATH", str(_PROJECT_ROOT / "data" / "conversation_files.db")
-            )
-        )
+        db = Path(os.getenv("AUTOBOT_DB_PATH", str(_PROJECT_ROOT / "data" / "conversation_files.db")))
         return storage, db
 
-    def _init_redis_config(
-        self, redis_host: Optional[str], redis_port: Optional[int]
-    ) -> None:
+    def _init_redis_config(self, redis_host: Optional[str], redis_port: Optional[int]) -> None:
         """Initialize Redis configuration from params or unified config."""
         redis_config = unified_config_manager.get_redis_config()
         self.redis_host = redis_host or redis_config.get("host")
@@ -212,14 +206,10 @@ class ConversationFileManager:
         session_dir = self.get_session_dir(session_id)
         full_path = (session_dir / relative_path).resolve()
         if not full_path.is_relative_to(session_dir.resolve()):
-            raise ValueError(
-                "Path traversal attempt blocked: path escapes session directory"
-            )
+            raise ValueError("Path traversal attempt blocked: path escapes session directory")
         return full_path
 
-    async def cleanup_session(
-        self, session_id: str, hard_delete: bool = True
-    ) -> Dict[str, Any]:
+    async def cleanup_session(self, session_id: str, hard_delete: bool = True) -> Dict[str, Any]:
         """Clean up all files for a session (Issue #70).
 
         Args:
@@ -229,9 +219,7 @@ class ConversationFileManager:
         Returns:
             Dict with cleanup statistics
         """
-        deleted_count = await self.delete_session_files(
-            session_id, hard_delete=hard_delete
-        )
+        deleted_count = await self.delete_session_files(session_id, hard_delete=hard_delete)
         # Remove session directory if empty
         session_dir = self.storage_dir / self.SESSION_DIR_PREFIX / session_id
         if await asyncio.to_thread(session_dir.exists):
@@ -300,9 +288,7 @@ class ConversationFileManager:
             raise RuntimeError("File not found")
         return row
 
-    async def rename_file(
-        self, session_id: str, file_id: str, new_filename: str
-    ) -> Dict[str, Any]:
+    async def rename_file(self, session_id: str, file_id: str, new_filename: str) -> Dict[str, Any]:
         """Rename a file in a session (Issue #70)."""
         async with self._lock:
             connection = await self._get_async_db_connection()
@@ -371,9 +357,7 @@ class ConversationFileManager:
         finally:
             await connection.close()
 
-    async def _write_and_update_file(
-        self, connection, row, content: str, session_id: str
-    ) -> Dict[str, Any]:
+    async def _write_and_update_file(self, connection, row, content: str, session_id: str) -> Dict[str, Any]:
         """Write content to disk and update DB metadata.
 
         Helper for update_file_content (Issue #70).
@@ -397,17 +381,13 @@ class ConversationFileManager:
             "size": len(encoded),
         }
 
-    async def update_file_content(
-        self, session_id: str, file_id: str, content: str
-    ) -> Dict[str, Any]:
+    async def update_file_content(self, session_id: str, file_id: str, content: str) -> Dict[str, Any]:
         """Update the content of a text file (Issue #70)."""
         async with self._lock:
             connection = await self._get_async_db_connection()
             try:
                 row = await self._lookup_session_file(connection, session_id, file_id)
-                return await self._write_and_update_file(
-                    connection, row, content, session_id
-                )
+                return await self._write_and_update_file(connection, row, content, session_id)
             except RuntimeError:
                 raise
             except Exception as e:
@@ -417,9 +397,7 @@ class ConversationFileManager:
             finally:
                 await connection.close()
 
-    async def copy_file(
-        self, session_id: str, file_id: str, new_filename: Optional[str] = None
-    ) -> Dict[str, Any]:
+    async def copy_file(self, session_id: str, file_id: str, new_filename: Optional[str] = None) -> Dict[str, Any]:
         """Copy a file within a session (Issue #70).
 
         Args:
@@ -537,9 +515,7 @@ class ConversationFileManager:
             RuntimeError: If Redis connection cannot be established
         """
         if self._redis_sessions is None:
-            self._redis_sessions = await get_redis_manager(
-                async_client=True, database="sessions"
-            )
+            self._redis_sessions = await get_redis_manager(async_client=True, database="sessions")
 
         return self._redis_sessions
 
@@ -611,9 +587,7 @@ class ConversationFileManager:
             row = await cursor.fetchone()
             if row[0] != 1:
                 await connection.close()
-                raise RuntimeError(
-                    "Failed to enable foreign keys - data integrity cannot be guaranteed."
-                )
+                raise RuntimeError("Failed to enable foreign keys - data integrity cannot be guaranteed.")
 
         # Performance optimizations
         await connection.execute("PRAGMA journal_mode = WAL")
@@ -660,9 +634,7 @@ class ConversationFileManager:
 
         return f"{hash_prefix}_{unique_id}_{safe_filename}"
 
-    async def _cache_session_files(
-        self, session_id: str, file_list: List[Dict[str, Any]]
-    ) -> None:
+    async def _cache_session_files(self, session_id: str, file_list: List[Dict[str, Any]]) -> None:
         """
         Cache session file list in Redis for fast lookups.
 
@@ -680,9 +652,7 @@ class ConversationFileManager:
             logger.debug("Cached %d files for session %s", len(file_list), session_id)
 
         except (RedisConnectionError, RedisTimeoutError) as e:
-            logger.warning(
-                "Redis connection/timeout error caching session files: %s", e
-            )
+            logger.warning("Redis connection/timeout error caching session files: %s", e)
             # Non-critical failure, continue without cache
         except RedisError as e:
             logger.warning("Redis error caching session files: %s", e)
@@ -716,10 +686,7 @@ class ConversationFileManager:
         """Validate file size and return size in bytes."""
         file_size = len(file_content)
         if file_size > self.MAX_FILE_SIZE:
-            raise ValueError(
-                f"File size ({file_size} bytes) exceeds maximum "
-                f"({self.MAX_FILE_SIZE} bytes)"
-            )
+            raise ValueError(f"File size ({file_size} bytes) exceeds maximum " f"({self.MAX_FILE_SIZE} bytes)")
         return file_size
 
     async def _check_existing_file(self, connection, file_hash: str):
@@ -753,9 +720,7 @@ class ConversationFileManager:
             (session_id, file_id, message_id, association_type),
         )
 
-    async def _handle_deduplicated_file(
-        self, connection, existing_file, file_info: FileInfo
-    ) -> Dict[str, Any]:
+    async def _handle_deduplicated_file(self, connection, existing_file, file_info: FileInfo) -> Dict[str, Any]:
         """Handle case where file already exists (Issue #375: uses FileInfo dataclass)."""
         existing_file_id = existing_file["file_id"]
         existing_path = Path(existing_file["file_path"])
@@ -817,15 +782,11 @@ class ConversationFileManager:
             file_info.to_db_tuple(),
         )
 
-    async def _insert_file_metadata(
-        self, connection, file_id: str, metadata: Dict[str, Any]
-    ) -> None:
+    async def _insert_file_metadata(self, connection, file_id: str, metadata: Dict[str, Any]) -> None:
         """Insert file metadata records into database."""
         # Issue #397: Fix N+1 pattern - use executemany for batch insert
         if metadata:
-            metadata_records = [
-                (file_id, key, str(value)) for key, value in metadata.items()
-            ]
+            metadata_records = [(file_id, key, str(value)) for key, value in metadata.items()]
             await connection.executemany(
                 """
                 INSERT INTO file_metadata (file_id, metadata_key, metadata_value)
@@ -838,14 +799,10 @@ class ConversationFileManager:
         """Build standard file response dictionary (Issue #375: uses FileInfo dataclass)."""
         return file_info.to_response_dict()
 
-    async def _store_new_file(
-        self, connection, file_info: FileInfo, file_content: bytes
-    ) -> Dict[str, Any]:
+    async def _store_new_file(self, connection, file_info: FileInfo, file_content: bytes) -> Dict[str, Any]:
         """Store a new file to disk and database (Issue #375: uses FileInfo dataclass)."""
         await self._write_file_to_disk(file_info.file_path, file_content)
-        logger.info(
-            "Stored file: %s (%d bytes)", file_info.stored_filename, file_info.file_size
-        )
+        logger.info("Stored file: %s (%d bytes)", file_info.stored_filename, file_info.file_size)
 
         await self._insert_file_record(connection, file_info)
         await self._create_file_association(
@@ -857,9 +814,7 @@ class ConversationFileManager:
         )
 
         if file_info.metadata:
-            await self._insert_file_metadata(
-                connection, file_info.file_id, file_info.metadata
-            )
+            await self._insert_file_metadata(connection, file_info.file_id, file_info.metadata)
 
         await connection.commit()
         logger.info(
@@ -873,9 +828,7 @@ class ConversationFileManager:
 
         return self._build_file_response(file_info)
 
-    def _prepare_file_info(
-        self, session_id: str, file_content: bytes, original_filename: str, **kwargs
-    ) -> FileInfo:
+    def _prepare_file_info(self, session_id: str, file_content: bytes, original_filename: str, **kwargs) -> FileInfo:
         """Prepare FileInfo for add_file.
 
         Helper for add_file (Issue #70, #375).
@@ -924,13 +877,9 @@ class ConversationFileManager:
 
             connection = await self._get_async_db_connection()
             try:
-                existing_file = await self._check_existing_file(
-                    connection, file_info.file_hash
-                )
+                existing_file = await self._check_existing_file(connection, file_info.file_hash)
                 if existing_file:
-                    return await self._handle_deduplicated_file(
-                        connection, existing_file, file_info
-                    )
+                    return await self._handle_deduplicated_file(connection, existing_file, file_info)
                 return await self._store_new_file(connection, file_info, file_content)
             except Exception as e:
                 await connection.rollback()
@@ -955,9 +904,7 @@ class ConversationFileManager:
             totals = await cursor.fetchone()
         return totals["total"], totals["total_size"]
 
-    async def _get_paginated_files(
-        self, connection, session_id: str, page_size: int, offset: int
-    ) -> List[Dict]:
+    async def _get_paginated_files(self, connection, session_id: str, page_size: int, offset: int) -> List[Dict]:
         """Get paginated files for a session."""
         async with connection.execute(
             """
@@ -979,9 +926,7 @@ class ConversationFileManager:
             rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
-    async def list_files(
-        self, session_id: str, page: int = 1, page_size: int = 50
-    ) -> Dict[str, Any]:
+    async def list_files(self, session_id: str, page: int = 1, page_size: int = 50) -> Dict[str, Any]:
         """
         List files for a session with pagination support.
 
@@ -996,13 +941,9 @@ class ConversationFileManager:
         connection = await self._get_async_db_connection()
 
         try:
-            total_files, total_size = await self._get_session_file_totals(
-                connection, session_id
-            )
+            total_files, total_size = await self._get_session_file_totals(connection, session_id)
             offset = (page - 1) * page_size
-            files = await self._get_paginated_files(
-                connection, session_id, page_size, offset
-            )
+            files = await self._get_paginated_files(connection, session_id, page_size, offset)
 
             logger.info(
                 "Listed %d files for session %s (page %d/%d)",
@@ -1025,9 +966,7 @@ class ConversationFileManager:
         finally:
             await connection.close()
 
-    async def _try_get_cached_files(
-        self, session_id: str
-    ) -> Optional[List[Dict[str, Any]]]:
+    async def _try_get_cached_files(self, session_id: str) -> Optional[List[Dict[str, Any]]]:
         """Try to get cached files from Redis, return None on miss or error."""
         try:
             redis_db = await self._get_redis_sessions()
@@ -1066,9 +1005,7 @@ class ConversationFileManager:
             rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
-    async def get_session_files(
-        self, session_id: str, include_deleted: bool = False
-    ) -> List[Dict[str, Any]]:
+    async def get_session_files(self, session_id: str, include_deleted: bool = False) -> List[Dict[str, Any]]:
         """Get all files associated with a chat session (cache-first with DB fallback)."""
         cached = await self._try_get_cached_files(session_id)
         if cached is not None:
@@ -1076,9 +1013,7 @@ class ConversationFileManager:
 
         connection = await self._get_async_db_connection()
         try:
-            files = await self._query_session_files_from_db(
-                connection, session_id, include_deleted
-            )
+            files = await self._query_session_files_from_db(connection, session_id, include_deleted)
             if not include_deleted:
                 await self._cache_session_files(session_id, files)
             logger.info("Retrieved %d files for session %s", len(files), session_id)
@@ -1089,13 +1024,9 @@ class ConversationFileManager:
         finally:
             await connection.close()
 
-    async def _hard_delete_file(
-        self, connection, file_id: str, file_path: Path
-    ) -> None:
+    async def _hard_delete_file(self, connection, file_id: str, file_path: Path) -> None:
         """Permanently delete a file (Issue #315 - extracted helper)."""
-        await connection.execute(
-            "DELETE FROM conversation_files WHERE file_id = ?", (file_id,)
-        )
+        await connection.execute("DELETE FROM conversation_files WHERE file_id = ?", (file_id,))
         # Issue #358 - avoid blocking
         if await asyncio.to_thread(file_path.exists):
             await asyncio.to_thread(file_path.unlink)
@@ -1126,9 +1057,7 @@ class ConversationFileManager:
         ) as cursor:
             return await cursor.fetchall()
 
-    async def _delete_files_batch(
-        self, connection, files: List, hard_delete: bool
-    ) -> int:
+    async def _delete_files_batch(self, connection, files: List, hard_delete: bool) -> int:
         """Delete a batch of files, returning count deleted.
 
         Issue #397: Optimized to use batch SQL operations instead of N+1 pattern.
@@ -1168,17 +1097,13 @@ class ConversationFileManager:
 
         return len(file_ids)
 
-    async def delete_session_files(
-        self, session_id: str, hard_delete: bool = False
-    ) -> int:
+    async def delete_session_files(self, session_id: str, hard_delete: bool = False) -> int:
         """Delete all files associated with a session."""
         async with self._lock:
             connection = await self._get_async_db_connection()
             try:
                 files = await self._get_session_file_ids(connection, session_id)
-                deleted_count = await self._delete_files_batch(
-                    connection, files, hard_delete
-                )
+                deleted_count = await self._delete_files_batch(connection, files, hard_delete)
                 await connection.commit()
                 await self._invalidate_session_cache(session_id)
                 logger.info(
@@ -1250,12 +1175,8 @@ class ConversationFileManager:
             logger.info("Initializing conversation files database...")
 
             # Dynamic import to handle numeric module name
-            migration_module = importlib.import_module(
-                "database.migrations.001_create_conversation_files"
-            )
-            ConversationFilesMigration = getattr(
-                migration_module, "ConversationFilesMigration"
-            )
+            migration_module = importlib.import_module("database.migrations.001_create_conversation_files")
+            ConversationFilesMigration = getattr(migration_module, "ConversationFilesMigration")
 
             # Resolve schema directory relative to project root (no hardcoded absolute paths)
             default_schema_dir = _PROJECT_ROOT / "database" / "schemas"
@@ -1277,9 +1198,7 @@ class ConversationFileManager:
 
             # Verify schema version
             version = await self.get_schema_version()
-            logger.info(
-                "Conversation files database initialized (schema version: %s)", version
-            )
+            logger.info("Conversation files database initialized (schema version: %s)", version)
 
         except Exception as e:
             logger.error("Failed to initialize conversation files database: %s", e)
@@ -1294,14 +1213,10 @@ class ConversationFileManager:
         )
         cursor = connection.cursor()
         try:
-            cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'"
-            )
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'")
             if not cursor.fetchone():
                 return "unknown"
-            cursor.execute(
-                "SELECT version FROM schema_migrations ORDER BY migration_id DESC LIMIT 1"
-            )
+            cursor.execute("SELECT version FROM schema_migrations ORDER BY migration_id DESC LIMIT 1")
             result = cursor.fetchone()
             return result[0] if result else "unknown"
         finally:

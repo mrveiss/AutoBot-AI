@@ -35,9 +35,7 @@ class TestRetryApproach:
 
 class TestTaskRetryStrategy:
     def test_build_retry_prompt_contains_goal(self, strategy):
-        prompt = strategy._build_retry_prompt(
-            "code_gen", "my goal", "direct", "incomplete", 0.3
-        )
+        prompt = strategy._build_retry_prompt("code_gen", "my goal", "direct", "incomplete", 0.3)
         assert "my goal" in prompt
         assert "0.30" in prompt
         assert "code_gen" in prompt
@@ -56,9 +54,7 @@ class TestTaskRetryStrategy:
             "rationale": "more focused",
             "confidence": 0.8,
         }
-        result = strategy._parse_retry_response(
-            json.dumps(data), "t", "g", "old", "reason"
-        )
+        result = strategy._parse_retry_response(json.dumps(data), "t", "g", "old", "reason")
         assert result.suggested_prompt == "better prompt"
         assert result.confidence == 0.8
         assert result.tool_sequence == ["grep", "edit"]

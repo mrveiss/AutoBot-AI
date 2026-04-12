@@ -38,9 +38,7 @@ def test_imports():
 
 def test_system_resources_dataclass():
     """Test SystemResources dataclass with Tell Don't Ask methods"""
-    resources = SystemResources(
-        cpu_percent=50.0, memory_percent=60.0, available_memory_gb=16.0
-    )
+    resources = SystemResources(cpu_percent=50.0, memory_percent=60.0, available_memory_gb=16.0)
 
     # Test behavior methods
     assert resources.allows_large_models() is True  # Low CPU/memory
@@ -53,9 +51,7 @@ def test_system_resources_dataclass():
     assert resources_dict["available_memory_gb"] == 16.0
 
     # Test high load scenario
-    high_load = SystemResources(
-        cpu_percent=85.0, memory_percent=80.0, available_memory_gb=3.0
-    )
+    high_load = SystemResources(cpu_percent=85.0, memory_percent=80.0, available_memory_gb=3.0)
     assert high_load.allows_large_models() is False
     assert high_load.get_max_model_size_gb() == 4.0
 
@@ -76,21 +72,12 @@ def test_task_request_analyze_complexity():
     assert simple_task.analyze_complexity(complexity_keywords) == ModelCapabilityTier.SIMPLE
 
     # Complex query
-    complex_task = TaskRequest(
-        query="Design a scalable microservices architecture", task_type="code"
-    )
-    assert (
-        complex_task.analyze_complexity(complexity_keywords) == ModelCapabilityTier.COMPLEX
-    )
+    complex_task = TaskRequest(query="Design a scalable microservices architecture", task_type="code")
+    assert complex_task.analyze_complexity(complexity_keywords) == ModelCapabilityTier.COMPLEX
 
     # Specialized query
-    specialized_task = TaskRequest(
-        query="Write a research paper on quantum computing", task_type="writing"
-    )
-    assert (
-        specialized_task.analyze_complexity(complexity_keywords)
-        == ModelCapabilityTier.SPECIALIZED
-    )
+    specialized_task = TaskRequest(query="Write a research paper on quantum computing", task_type="writing")
+    assert specialized_task.analyze_complexity(complexity_keywords) == ModelCapabilityTier.SPECIALIZED
 
     print("✅ TaskRequest.analyze_complexity() works correctly")  # noqa: print
 
@@ -107,9 +94,7 @@ def test_model_info_fits_resource_constraints():
     )
 
     # Test with SystemResources (new API)
-    resources = SystemResources(
-        cpu_percent=50.0, memory_percent=60.0, available_memory_gb=10.0
-    )
+    resources = SystemResources(cpu_percent=50.0, memory_percent=60.0, available_memory_gb=10.0)
     assert model.fits_resource_constraints(resources) is True
 
     # Test with dict (backward compatibility)
@@ -121,9 +106,7 @@ def test_model_info_fits_resource_constraints():
     assert model.fits_resource_constraints(resources_dict) is True
 
     # Test resource constraints
-    low_resources = SystemResources(
-        cpu_percent=85.0, memory_percent=80.0, available_memory_gb=3.0
-    )
+    low_resources = SystemResources(cpu_percent=85.0, memory_percent=80.0, available_memory_gb=3.0)
     assert model.fits_resource_constraints(low_resources) is False
 
     print("✅ ModelInfo.fits_resource_constraints() backward compatible")  # noqa: print
@@ -257,9 +240,7 @@ def test_model_selector_methods():
     assert filtered[0].name == "advanced"
 
     # Test filter_by_resources
-    resources = SystemResources(
-        cpu_percent=50.0, memory_percent=60.0, available_memory_gb=6.0
-    )
+    resources = SystemResources(cpu_percent=50.0, memory_percent=60.0, available_memory_gb=6.0)
     filtered = selector.filter_by_resources(models, resources)
     assert len(filtered) == 2  # Lightweight and standard fit
     assert "advanced" not in [m.name for m in filtered]
@@ -274,9 +255,7 @@ def test_model_selector_methods():
 
 
 if __name__ == "__main__":
-    print(  # noqa: print
-        "\n=== Running Model Optimizer Refactoring Tests (Issue #353) ===\n"
-    )  # noqa: print
+    print("\n=== Running Model Optimizer Refactoring Tests (Issue #353) ===\n")  # noqa: print  # noqa: print
 
     test_imports()
     test_system_resources_dataclass()
@@ -288,6 +267,4 @@ if __name__ == "__main__":
     test_global_optimizer_singleton()
     test_model_selector_methods()
 
-    print(  # noqa: print
-        "\n✅ All tests passed! Feature Envy refactoring successful with full backward compatibility."
-    )
+    print("\n✅ All tests passed! Feature Envy refactoring successful with full backward compatibility.")  # noqa: print

@@ -75,9 +75,7 @@ _JS_API_PATH_RE = re.compile(r'[\'"`](/api/[^\'"` ]+)[\'"`]')
 # Issue #380: Module-level frozensets for file operation safety patterns
 _LOG_INDICATORS = frozenset({"log", "logs", ".log", "logging", "debug", "trace"})
 # nosec B108 - These are string patterns for detection, not actual temp directory usage
-_TEMP_INDICATORS = frozenset(
-    {"tmp", "temp", "tempfile", "temporary", "/tmp/"}
-)  # nosec B108
+_TEMP_INDICATORS = frozenset({"tmp", "temp", "tempfile", "temporary", "/tmp/"})  # nosec B108
 _SAFE_FILE_TYPES = frozenset(
     {
         ".pid",
@@ -185,9 +183,7 @@ def _is_mutable_constructor(value: ast.AST) -> bool:
     Returns:
         True if the value creates a mutable type
     """
-    if isinstance(
-        value, _COLLECTION_AST_TYPES
-    ):  # Issue #380: Use module-level constant
+    if isinstance(value, _COLLECTION_AST_TYPES):  # Issue #380: Use module-level constant
         return True
 
     if not isinstance(value, ast.Call):
@@ -211,9 +207,7 @@ def _is_mutable_constructor(value: ast.AST) -> bool:
     return func_name in mutable_constructors
 
 
-def _process_assign_node(
-    node: ast.Assign, global_vars: Dict[str, int], global_mutables: Set[str]
-) -> None:
+def _process_assign_node(node: ast.Assign, global_vars: Dict[str, int], global_mutables: Set[str]) -> None:
     """Process Assign node for global state extraction. (Issue #315 - extracted)"""
     for target in node.targets:
         if isinstance(target, ast.Name):
@@ -222,9 +216,7 @@ def _process_assign_node(
                 global_mutables.add(target.id)
 
 
-def _process_ann_assign_node(
-    node: ast.AnnAssign, global_vars: Dict[str, int], global_mutables: Set[str]
-) -> None:
+def _process_ann_assign_node(node: ast.AnnAssign, global_vars: Dict[str, int], global_mutables: Set[str]) -> None:
     """Process AnnAssign node for global state extraction. (Issue #315 - extracted)"""
     if not node.target or not isinstance(node.target, ast.Name):
         return
@@ -309,8 +301,7 @@ def _check_subscript_modification(
         return _create_race_condition_problem(
             lineno=stmt.lineno,
             description=(
-                f"Unprotected modification of global '{var_name}' "
-                f"in {async_prefix}function '{func_name}'"
+                f"Unprotected modification of global '{var_name}' " f"in {async_prefix}function '{func_name}'"
             ),
             suggestion=f"Use {lock_type} to protect concurrent access to '{var_name}'",
         )
@@ -369,8 +360,7 @@ def _check_mutating_method_call(
     return _create_race_condition_problem(
         lineno=stmt.lineno,
         description=(
-            f"Unprotected '{method_name}()' on global '{var_name}' "
-            f"in {async_prefix}function '{func_name}'"
+            f"Unprotected '{method_name}()' on global '{var_name}' " f"in {async_prefix}function '{func_name}'"
         ),
         suggestion=f"Use {lock_type} to protect concurrent modifications",
     )
@@ -525,9 +515,7 @@ def _is_safe_file_write_context(
     return False
 
 
-def _check_file_write_without_lock(
-    stmt: ast.With, file_path: str = "", func_name: str = ""
-) -> Optional[Dict]:
+def _check_file_write_without_lock(stmt: ast.With, file_path: str = "", func_name: str = "") -> Optional[Dict]:
     """
     Check for file writes without explicit locking.
 
@@ -572,10 +560,7 @@ def _check_file_write_without_lock(
         # This is a potentially risky file write - flag it
         return _create_race_condition_problem(
             lineno=stmt.lineno,
-            description=(
-                "File opened for writing without explicit locking - "
-                "concurrent writes may corrupt data"
-            ),
+            description=("File opened for writing without explicit locking - " "concurrent writes may corrupt data"),
             suggestion="Use file locking (fcntl.flock) or a separate lock for file access",
             severity="medium",
         )
@@ -799,9 +784,7 @@ def _check_hardcoded_ip(ip: str, line_num: int, line_content: str) -> Optional[D
     }
 
 
-def _check_hardcoded_port(
-    port: str, line_num: int, line_content: str
-) -> Optional[Dict]:
+def _check_hardcoded_port(port: str, line_num: int, line_content: str) -> Optional[Dict]:
     """Check if port is a known infrastructure port."""
     known_ports = [
         str(NetworkConstants.BACKEND_PORT),
@@ -837,9 +820,7 @@ def _detect_hardcodes_in_line(line_num: int, line: str) -> List[Dict]:
     # Check for URLs
     url_matches = _URL_IN_QUOTES_RE.findall(line)
     for url in url_matches:
-        hardcodes.append(
-            {"type": "url", "value": url, "line": line_num, "context": line.strip()}
-        )
+        hardcodes.append({"type": "url", "value": url, "line": line_num, "context": line.strip()})
 
     # Check for ports
     port_matches = _PORT_NUMBER_RE.findall(line)
@@ -851,9 +832,7 @@ def _detect_hardcodes_in_line(line_num: int, line: str) -> List[Dict]:
     return hardcodes
 
 
-def _detect_technical_debt_in_line(
-    line_num: int, line: str, file_path: str
-) -> Tuple[List[Dict], List[Dict]]:
+def _detect_technical_debt_in_line(line_num: int, line: str, file_path: str) -> Tuple[List[Dict], List[Dict]]:
     """Detect technical debt markers in a line. Returns (debt_items, problem_items)."""
     debt_patterns = [
         # Require colon after keyword to avoid false positives (Issue #617)
@@ -1161,9 +1140,7 @@ def _count_js_vue_line_types(content: str) -> Dict[str, int]:
 
     for line in lines:
         stripped = line.strip()
-        line_type, in_multiline_comment = _classify_js_line(
-            stripped, in_multiline_comment
-        )
+        line_type, in_multiline_comment = _classify_js_line(stripped, in_multiline_comment)
         if line_type == "blank":
             blank_lines += 1
         elif line_type == "comment":
@@ -1188,9 +1165,7 @@ async def _merge_llm_results(
 ) -> None:
     """Merge LLM analysis results into existing hardcodes and technical debt lists."""
     try:
-        llm_results = await detect_hardcodes_and_debt_with_llm(
-            content, file_path, language="python"
-        )
+        llm_results = await detect_hardcodes_and_debt_with_llm(content, file_path, language="python")
 
         # Merge LLM hardcodes (avoid duplicates)
         existing_values = {h.get("value") for h in hardcodes}
@@ -1244,9 +1219,7 @@ def _analyze_ast_nodes(
     return functions, classes, imports, problems
 
 
-def _analyze_content_lines(
-    content: str, file_path: str
-) -> Tuple[List[Dict], List[Dict], List[Dict]]:
+def _analyze_content_lines(content: str, file_path: str) -> Tuple[List[Dict], List[Dict], List[Dict]]:
     """
     Analyze content line-by-line for hardcodes and technical debt.
 
@@ -1310,9 +1283,7 @@ async def detect_hardcodes_and_debt_with_llm(
         return empty_result
 
 
-def _check_async_global_state_issue(
-    node: ast.AsyncFunctionDef, has_async_lock_import: bool
-) -> Optional[Dict]:
+def _check_async_global_state_issue(node: ast.AsyncFunctionDef, has_async_lock_import: bool) -> Optional[Dict]:
     """
     Check if async function uses global state without lock import.
 
@@ -1322,13 +1293,8 @@ def _check_async_global_state_issue(
     if uses_global and not has_async_lock_import:
         return _create_race_condition_problem(
             lineno=node.lineno,
-            description=(
-                f"Async function '{node.name}' uses global state "
-                f"but no asyncio.Lock imported"
-            ),
-            suggestion=(
-                "Consider using asyncio.Lock() to protect shared state in async context"
-            ),
+            description=(f"Async function '{node.name}' uses global state " f"but no asyncio.Lock imported"),
+            suggestion=("Consider using asyncio.Lock() to protect shared state in async context"),
             severity="medium",
         )
     return None
@@ -1350,11 +1316,7 @@ def _analyze_function_for_race_conditions(
     problems = []
 
     # Check for global state modifications
-    problems.extend(
-        _detect_global_state_modifications(
-            node, global_vars, global_mutables, lock_protected_vars
-        )
-    )
+    problems.extend(_detect_global_state_modifications(node, global_vars, global_mutables, lock_protected_vars))
 
     # Check for thread-unsafe singleton patterns
     problems.extend(_detect_singleton_patterns(node, global_vars))
@@ -1448,9 +1410,7 @@ def _extract_js_hardcodes(line: str, line_num: int) -> List[Dict]:
     context = line.strip()
     # URLs
     for url in _URL_IN_QUOTES_RE.findall(line):
-        hardcodes.append(
-            {"type": "url", "value": url, "line": line_num, "context": context}
-        )
+        hardcodes.append({"type": "url", "value": url, "line": line_num, "context": context})
     # API paths
     for api_path in _JS_API_PATH_RE.findall(line):
         hardcodes.append(
@@ -1464,9 +1424,7 @@ def _extract_js_hardcodes(line: str, line_num: int) -> List[Dict]:
     # IP addresses (only VM/local IPs)
     for ip in _IP_ADDRESS_RE.findall(line):
         if ip.startswith(NetworkConstants.PRIVATE_IP_PREFIXES):
-            hardcodes.append(
-                {"type": "ip", "value": ip, "line": line_num, "context": context}
-            )
+            hardcodes.append({"type": "ip", "value": ip, "line": line_num, "context": context})
     return hardcodes
 
 
@@ -1518,9 +1476,7 @@ def _create_parse_error_result(error_msg: str) -> Metadata:
     return result
 
 
-async def _run_analysis_phases(
-    file_path: str, content: str, tree: ast.AST, use_llm: bool
-) -> Metadata:
+async def _run_analysis_phases(file_path: str, content: str, tree: ast.AST, use_llm: bool) -> Metadata:
     """
     Execute all analysis phases on parsed Python content.
 
@@ -1530,9 +1486,7 @@ async def _run_analysis_phases(
     functions, classes, imports, problems = _analyze_ast_nodes(tree)
 
     # Phase 2: Line-by-line content analysis (hardcodes, technical debt)
-    hardcodes, technical_debt, line_problems = _analyze_content_lines(
-        content, file_path
-    )
+    hardcodes, technical_debt, line_problems = _analyze_content_lines(content, file_path)
     problems.extend(line_problems)
 
     # Phase 3: LLM semantic analysis (optional)
@@ -1548,9 +1502,7 @@ async def _run_analysis_phases(
 
     # Phase 5: Code intelligence analyzers
     # Issue #711: Run in thread pool to prevent event loop blocking.
-    code_intel_problems = await asyncio.to_thread(
-        _run_code_intelligence_analyzers, file_path
-    )
+    code_intel_problems = await asyncio.to_thread(_run_code_intelligence_analyzers, file_path)
     problems.extend(code_intel_problems)
 
     # Phase 6: Count line types (Issue #368)

@@ -50,11 +50,7 @@ async def assert_no_running_sync(db) -> None:
     # Acquire a transaction-scoped advisory lock before reading.  This
     # serialises all concurrent callers regardless of whether any rows exist
     # in the table, closing the zero-row TOCTOU window identified in #2401.
-    await db.execute(
-        text("SELECT pg_advisory_xact_lock(:lock_id)").bindparams(
-            lock_id=_FLEET_SYNC_ADVISORY_LOCK_ID
-        )
-    )
+    await db.execute(text("SELECT pg_advisory_xact_lock(:lock_id)").bindparams(lock_id=_FLEET_SYNC_ADVISORY_LOCK_ID))
 
     running_result = await db.execute(
         select(FleetSyncJobModel)

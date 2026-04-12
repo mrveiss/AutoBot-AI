@@ -119,9 +119,7 @@ async def get_default_agent(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> AgentResponse:
     """Get the default agent."""
-    result = await db.execute(
-        select(Agent).where(Agent.is_default.is_(True), Agent.is_active.is_(True))
-    )
+    result = await db.execute(select(Agent).where(Agent.is_default.is_(True), Agent.is_active.is_(True)))
     agent = result.scalar_one_or_none()
 
     if not agent:
@@ -186,9 +184,7 @@ async def get_agent_llm_config(
 
 async def _clear_default_agents(db: AsyncSession) -> None:
     """Helper for create_agent and update_agent. Ref: #1088."""
-    current_default_result = await db.execute(
-        select(Agent).where(Agent.is_default.is_(True))
-    )
+    current_default_result = await db.execute(select(Agent).where(Agent.is_default.is_(True)))
     for default_agent in current_default_result.scalars():
         default_agent.is_default = False
 
@@ -226,9 +222,7 @@ async def create_agent(
     if request.is_default:
         await _clear_default_agents(db)
 
-    encrypted_key = (
-        _encrypt_api_key(request.llm_api_key) if request.llm_api_key else None
-    )
+    encrypted_key = _encrypt_api_key(request.llm_api_key) if request.llm_api_key else None
 
     agent = Agent(
         agent_id=request.agent_id,

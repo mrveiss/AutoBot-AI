@@ -55,9 +55,7 @@ sys.modules.setdefault("utils.gpu_vector_search", _gpu_mod)
 
 # knowledge.facts (for GPUBackend embedding generation)
 _facts_mod = types.ModuleType("knowledge.facts")
-_facts_mod._generate_embedding_with_npu_fallback = AsyncMock(
-    return_value=[0.1, 0.2, 0.3]
-)
+_facts_mod._generate_embedding_with_npu_fallback = AsyncMock(return_value=[0.1, 0.2, 0.3])
 sys.modules.setdefault("knowledge.facts", _facts_mod)
 
 # ---------------------------------------------------------------------------
@@ -78,9 +76,7 @@ import knowledge.vector_search_engine as vse  # noqa: E402
 
 
 def _make_engine_result(text="hello", score=0.9, metadata=None, source="doc1"):
-    return vse.SearchResult(
-        text=text, score=score, metadata=metadata or {}, source=source
-    )
+    return vse.SearchResult(text=text, score=score, metadata=metadata or {}, source=source)
 
 
 def _cpu_backend_returning(results):
@@ -116,9 +112,7 @@ class TestSearchResult:
         assert r.source == ""
 
     def test_explicit_fields(self):
-        r = vse.SearchResult(
-            text="abc", score=0.8, metadata={"k": "v"}, source="fact-42"
-        )
+        r = vse.SearchResult(text="abc", score=0.8, metadata={"k": "v"}, source="fact-42")
         assert r.metadata["k"] == "v"
         assert r.source == "fact-42"
 
@@ -152,22 +146,25 @@ class TestHardwareSelection:
 
     def test_auto_prefers_npu_when_enabled(self):
         engine = self._engine()
-        with patch.object(vse, "_npu_enabled", return_value=True), patch.object(
-            vse, "_gpu_available", return_value=True
+        with (
+            patch.object(vse, "_npu_enabled", return_value=True),
+            patch.object(vse, "_gpu_available", return_value=True),
         ):
             assert engine._select_backend("auto") is engine._npu
 
     def test_auto_falls_to_gpu_when_npu_disabled(self):
         engine = self._engine()
-        with patch.object(vse, "_npu_enabled", return_value=False), patch.object(
-            vse, "_gpu_available", return_value=True
+        with (
+            patch.object(vse, "_npu_enabled", return_value=False),
+            patch.object(vse, "_gpu_available", return_value=True),
         ):
             assert engine._select_backend("auto") is engine._gpu
 
     def test_auto_falls_to_cpu_when_neither_available(self):
         engine = self._engine()
-        with patch.object(vse, "_npu_enabled", return_value=False), patch.object(
-            vse, "_gpu_available", return_value=False
+        with (
+            patch.object(vse, "_npu_enabled", return_value=False),
+            patch.object(vse, "_gpu_available", return_value=False),
         ):
             assert engine._select_backend("auto") is engine._cpu
 
@@ -187,8 +184,9 @@ class TestSearchResultStandardization:
             _make_engine_result(text="mid", score=0.6),
         ]
         engine._cpu = _cpu_backend_returning(unsorted)
-        with patch.object(vse, "_npu_enabled", return_value=False), patch.object(
-            vse, "_gpu_available", return_value=False
+        with (
+            patch.object(vse, "_npu_enabled", return_value=False),
+            patch.object(vse, "_gpu_available", return_value=False),
         ):
             results = await engine.search("query", top_k=10, hardware_backend="auto")
         assert [r.score for r in results] == [0.9, 0.6, 0.3]
@@ -201,9 +199,7 @@ class TestSearchResultStandardization:
 
     @pytest.mark.asyncio
     async def test_correct_fields_forwarded(self):
-        result = _make_engine_result(
-            text="content", score=0.75, metadata={"cat": "test"}, source="fact-1"
-        )
+        result = _make_engine_result(text="content", score=0.75, metadata={"cat": "test"}, source="fact-1")
         engine = vse.VectorSearchEngine()
         engine._npu = _npu_backend_returning([result])
         with patch.object(vse, "_npu_enabled", return_value=True):
@@ -221,13 +217,12 @@ class TestSearchResultStandardization:
         engine = vse.VectorSearchEngine()
         engine._cpu = backend
         filters = {"category": "docs"}
-        with patch.object(vse, "_npu_enabled", return_value=False), patch.object(
-            vse, "_gpu_available", return_value=False
+        with (
+            patch.object(vse, "_npu_enabled", return_value=False),
+            patch.object(vse, "_gpu_available", return_value=False),
         ):
             await engine.search("q", top_k=5, filters=filters)
-        backend.search.assert_awaited_once_with(
-            query="q", top_k=5, filters=filters
-        )
+        backend.search.assert_awaited_once_with(query="q", top_k=5, filters=filters)
 
 
 # ---------------------------------------------------------------------------
@@ -245,8 +240,9 @@ class TestReranking:
         engine = vse.VectorSearchEngine()
         engine._cpu = _cpu_backend_returning(results)
 
-        with patch.object(vse, "_npu_enabled", return_value=False), patch.object(
-            vse, "_gpu_available", return_value=False
+        with (
+            patch.object(vse, "_npu_enabled", return_value=False),
+            patch.object(vse, "_gpu_available", return_value=False),
         ):
             out = await engine.search("q", reranker=reranker)
 
@@ -262,8 +258,9 @@ class TestReranking:
         engine = vse.VectorSearchEngine()
         engine._cpu = _cpu_backend_returning(results)
 
-        with patch.object(vse, "_npu_enabled", return_value=False), patch.object(
-            vse, "_gpu_available", return_value=False
+        with (
+            patch.object(vse, "_npu_enabled", return_value=False),
+            patch.object(vse, "_gpu_available", return_value=False),
         ):
             out = await engine.search("q", reranker=reranker)
 
@@ -276,8 +273,9 @@ class TestReranking:
         engine = vse.VectorSearchEngine()
         engine._cpu = _cpu_backend_returning([])
 
-        with patch.object(vse, "_npu_enabled", return_value=False), patch.object(
-            vse, "_gpu_available", return_value=False
+        with (
+            patch.object(vse, "_npu_enabled", return_value=False),
+            patch.object(vse, "_gpu_available", return_value=False),
         ):
             out = await engine.search("q", reranker=reranker)
 

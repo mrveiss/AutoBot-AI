@@ -78,9 +78,7 @@ class IssueDetector:
 
         return issues
 
-    def _detect_structural_issues(
-        self, components: List[ArchitecturalComponent]
-    ) -> List[ArchitecturalIssue]:
+    def _detect_structural_issues(self, components: List[ArchitecturalComponent]) -> List[ArchitecturalIssue]:
         """Detect god-class, tight-coupling, and low-cohesion structural issues.
 
         Issue #1183: Extracted from identify_issues() to reduce function length.
@@ -89,8 +87,7 @@ class IssueDetector:
         god_classes = [
             c
             for c in components
-            if c.component_type == "class"
-            and c.complexity_score > self.GOD_CLASS_COMPLEXITY_THRESHOLD
+            if c.component_type == "class" and c.complexity_score > self.GOD_CLASS_COMPLEXITY_THRESHOLD
         ]
         if god_classes:
             issues.append(
@@ -104,9 +101,7 @@ class IssueDetector:
                     pattern_violation="Single Responsibility Principle",
                 )
             )
-        high_coupling = [
-            c for c in components if c.coupling_score > self.HIGH_COUPLING_THRESHOLD
-        ]
+        high_coupling = [c for c in components if c.coupling_score > self.HIGH_COUPLING_THRESHOLD]
         if high_coupling:
             issues.append(
                 ArchitecturalIssue(
@@ -120,10 +115,7 @@ class IssueDetector:
                 )
             )
         low_cohesion = [
-            c
-            for c in components
-            if c.component_type == "class"
-            and c.cohesion_score < self.LOW_COHESION_THRESHOLD
+            c for c in components if c.component_type == "class" and c.cohesion_score < self.LOW_COHESION_THRESHOLD
         ]
         if low_cohesion:
             issues.append(
@@ -168,10 +160,7 @@ class IssueDetector:
         ) = self._calculate_intermediate_scores(components, issues)
 
         architecture_score = (
-            coupling_score * 0.25
-            + cohesion_score * 0.25
-            + pattern_adherence * 0.3
-            + maintainability * 0.2
+            coupling_score * 0.25 + cohesion_score * 0.25 + pattern_adherence * 0.3 + maintainability * 0.2
         )
 
         return ArchitecturalMetrics(
@@ -200,9 +189,7 @@ class IssueDetector:
         coupling_score = max(0, 100 - (avg_coupling * 5))
         class_components = [c for c in components if c.component_type == "class"]
         avg_cohesion = (
-            sum(c.cohesion_score for c in class_components) / len(class_components)
-            if class_components
-            else 0
+            sum(c.cohesion_score for c in class_components) / len(class_components) if class_components else 0
         )
         cohesion_score = avg_cohesion * 100
         critical_issues = len([i for i in issues if i.severity == "critical"])
@@ -210,13 +197,9 @@ class IssueDetector:
         pattern_adherence = max(0, 100 - (critical_issues * 20 + high_issues * 10))
         avg_complexity = sum(c.complexity_score for c in components) / len(components)
         maintainability = max(0, 100 - (avg_complexity * 2))
-        abstract_classes = len(
-            [c for c in components if c.component_type == "class" and c.is_abstract]
-        )
+        abstract_classes = len([c for c in components if c.component_type == "class" and c.is_abstract])
         total_classes = len([c for c in components if c.component_type == "class"])
-        abstraction_score = (
-            (abstract_classes / total_classes * 100) if total_classes > 0 else 0
-        )
+        abstraction_score = (abstract_classes / total_classes * 100) if total_classes > 0 else 0
         instability_score = min(100, avg_coupling * 10)
         return (
             coupling_score,
@@ -227,9 +210,7 @@ class IssueDetector:
             instability_score,
         )
 
-    async def generate_recommendations(
-        self, issues: List[ArchitecturalIssue]
-    ) -> List[str]:
+    async def generate_recommendations(self, issues: List[ArchitecturalIssue]) -> List[str]:
         """
         Generate architectural improvement recommendations.
 
@@ -250,24 +231,16 @@ class IssueDetector:
 
         # Generate specific recommendations
         if "god_class" in by_type:
-            recommendations.append(
-                "Break down God classes using Single Responsibility Principle"
-            )
+            recommendations.append("Break down God classes using Single Responsibility Principle")
 
         if "tight_coupling" in by_type:
-            recommendations.append(
-                "Reduce coupling through dependency injection and interface segregation"
-            )
+            recommendations.append("Reduce coupling through dependency injection and interface segregation")
 
         if "low_cohesion" in by_type:
-            recommendations.append(
-                "Increase cohesion by grouping related functionality together"
-            )
+            recommendations.append("Increase cohesion by grouping related functionality together")
 
         if "circular_dependency" in by_type:
-            recommendations.append(
-                "Eliminate circular dependencies using dependency inversion"
-            )
+            recommendations.append("Eliminate circular dependencies using dependency inversion")
 
         # General recommendations
         recommendations.extend(

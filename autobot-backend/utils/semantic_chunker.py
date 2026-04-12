@@ -142,9 +142,7 @@ class AutoBotSemanticChunker:
             batch_sentences = sentences[i : i + batch_size]
 
             # Run embedding computation in thread pool to avoid blocking event loop
-            with concurrent.futures.ThreadPoolExecutor(
-                max_workers=max_workers
-            ) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
                 embeddings = await asyncio.get_running_loop().run_in_executor(
                     executor,
                     lambda: self._embedding_model.encode(
@@ -249,9 +247,7 @@ class AutoBotSemanticChunker:
         try:
             param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
             if param_count == 0:
-                logger.warning(
-                    "Model parameters not properly loaded, skipping precision conversion"
-                )
+                logger.warning("Model parameters not properly loaded, skipping precision conversion")
                 return model
 
             has_meta_tensors = any(p.device.type == "meta" for p in model.parameters())
@@ -285,9 +281,7 @@ class AutoBotSemanticChunker:
         for attempt in range(max_retries):
             try:
                 if attempt > 0:
-                    logger.info(
-                        f"Model loading attempt {attempt + 1}/{max_retries} after {retry_delay}s delay..."
-                    )
+                    logger.info(f"Model loading attempt {attempt + 1}/{max_retries} after {retry_delay}s delay...")
                     time.sleep(retry_delay)
                     retry_delay *= 2
 
@@ -295,11 +289,7 @@ class AutoBotSemanticChunker:
 
             except Exception as load_error:
                 error_str = str(load_error).lower()
-                is_rate_limit = (
-                    "429" in error_str
-                    or "rate limit" in error_str
-                    or "http error" in error_str
-                )
+                is_rate_limit = "429" in error_str or "rate limit" in error_str or "http error" in error_str
 
                 if not is_rate_limit:
                     raise
@@ -368,17 +358,11 @@ class AutoBotSemanticChunker:
                     "Loading embedding model '%s' in background thread...",
                     self.embedding_model_name,
                 )
-                self._embedding_model = (
-                    await asyncio.get_running_loop().run_in_executor(
-                        executor, load_model
-                    )
-                )
+                self._embedding_model = await asyncio.get_running_loop().run_in_executor(executor, load_model)
                 logger.info("Embedding model loading completed")
 
         except Exception as e:
-            logger.error(
-                "Failed to load embedding model %s: %s", self.embedding_model_name, e
-            )
+            logger.error("Failed to load embedding model %s: %s", self.embedding_model_name, e)
             await self._try_fallback_models()
 
     async def _try_fallback_models(self):
@@ -394,9 +378,7 @@ class AutoBotSemanticChunker:
                 logger.warning("Fallback to %s embedding model on CPU", model_name)
                 return
             except Exception as fallback_error:
-                logger.error(
-                    "Failed to load fallback model %s: %s", model_name, fallback_error
-                )
+                logger.error("Failed to load fallback model %s: %s", model_name, fallback_error)
 
         raise RuntimeError("Could not initialize any embedding model")
 
@@ -408,19 +390,13 @@ class AutoBotSemanticChunker:
 
         if device == "cuda":
             try:
-                has_meta_tensors = any(
-                    p.device.type == "meta" for p in self._embedding_model.parameters()
-                )
+                has_meta_tensors = any(p.device.type == "meta" for p in self._embedding_model.parameters())
                 if has_meta_tensors:
-                    self._embedding_model = self._embedding_model.to_empty(
-                        device=device
-                    )
+                    self._embedding_model = self._embedding_model.to_empty(device=device)
                 else:
                     self._embedding_model = self._embedding_model.to(device)
             except Exception as device_error:
-                logger.warning(
-                    "Failed to move model to GPU: %s, using CPU", device_error
-                )
+                logger.warning("Failed to move model to GPU: %s, using CPU", device_error)
                 device = "cpu"
 
         logger.warning("Fallback to all-mpnet-base-v2 embedding model on %s", device)
@@ -434,9 +410,7 @@ class AutoBotSemanticChunker:
             from sentence_transformers import SentenceTransformer
 
             device = self._detect_device()
-            self._embedding_model = SentenceTransformer(
-                self.embedding_model_name, device=device
-            )
+            self._embedding_model = SentenceTransformer(self.embedding_model_name, device=device)
 
             actual_device = next(self._embedding_model.parameters()).device
             logger.info(
@@ -445,14 +419,10 @@ class AutoBotSemanticChunker:
                 actual_device,
             )
 
-            self._embedding_model = self._apply_gpu_precision(
-                self._embedding_model, device
-            )
+            self._embedding_model = self._apply_gpu_precision(self._embedding_model, device)
 
         except Exception as e:
-            logger.error(
-                "Failed to load embedding model %s: %s", self.embedding_model_name, e
-            )
+            logger.error("Failed to load embedding model %s: %s", self.embedding_model_name, e)
             try:
                 import torch
 
@@ -500,9 +470,7 @@ class AutoBotSemanticChunker:
 
         return sentences
 
-    async def _compute_sentence_embeddings_async(
-        self, sentences: List[str]
-    ) -> np.ndarray:
+    async def _compute_sentence_embeddings_async(self, sentences: List[str]) -> np.ndarray:
         """Compute embeddings for sentences asynchronously (Issue #665: refactored to <50 lines)."""
         # Ensure model is loaded before use
         await self._initialize_model()
@@ -512,9 +480,7 @@ class AutoBotSemanticChunker:
             cpu_count, cpu_load, has_gpu = self._get_system_info_for_batching()
 
             # Get adaptive batch parameters (Issue #281)
-            max_workers, batch_size = self._get_adaptive_batch_params(
-                len(sentences), cpu_load, cpu_count, has_gpu
-            )
+            max_workers, batch_size = self._get_adaptive_batch_params(len(sentences), cpu_load, cpu_count, has_gpu)
 
             logger.info(
                 f"Processing {len(sentences)} sentences with {max_workers} workers, "
@@ -522,9 +488,7 @@ class AutoBotSemanticChunker:
             )
 
             # Process batches using extracted helper (Issue #665)
-            all_embeddings = await self._process_embedding_batches(
-                sentences, batch_size, max_workers
-            )
+            all_embeddings = await self._process_embedding_batches(sentences, batch_size, max_workers)
 
             # Combine all batch results
             if len(all_embeddings) == 1:
@@ -551,18 +515,13 @@ class AutoBotSemanticChunker:
             asyncio.get_running_loop()
             # A running loop exists — we're in an async context; sync method should not block
             logger.warning(
-                "Using sync embedding method in async context. "
-                "Use _compute_sentence_embeddings_async instead."
+                "Using sync embedding method in async context. " "Use _compute_sentence_embeddings_async instead."
             )
-            logger.warning(
-                "WARNING: Model initialization may block event loop - use async method instead"
-            )
+            logger.warning("WARNING: Model initialization may block event loop - use async method instead")
             # Fall back to direct computation (blocking)
             if self._embedding_model is None:
                 self._sync_initialize_model()
-            embeddings = self._embedding_model.encode(
-                sentences, convert_to_tensor=False
-            )
+            embeddings = self._embedding_model.encode(sentences, convert_to_tensor=False)
             return np.array(embeddings)
         except RuntimeError:
             # No running loop — run the async version synchronously
@@ -586,9 +545,7 @@ class AutoBotSemanticChunker:
         distances = []
         for i in range(len(embeddings) - 1):
             # Compute cosine similarity between consecutive sentences
-            similarity = cosine_similarity(
-                embeddings[i].reshape(1, -1), embeddings[i + 1].reshape(1, -1)
-            )[0][0]
+            similarity = cosine_similarity(embeddings[i].reshape(1, -1), embeddings[i + 1].reshape(1, -1))[0][0]
             # Convert similarity to distance
             distance = 1 - similarity
             distances.append(distance)
@@ -672,17 +629,9 @@ class AutoBotSemanticChunker:
             elif len(chunk_content) > self.max_chunk_size:
                 chunks.extend(self._split_large_chunk(chunk_sentences, start_idx))
             else:
-                chunks.append(
-                    self._create_regular_chunk(
-                        chunk_content, chunk_sentences, start_idx, boundary
-                    )
-                )
+                chunks.append(self._create_regular_chunk(chunk_content, chunk_sentences, start_idx, boundary))
 
-            start_idx = (
-                boundary - self.overlap_sentences
-                if self.overlap_sentences > 0
-                else boundary
-            )
+            start_idx = boundary - self.overlap_sentences if self.overlap_sentences > 0 else boundary
 
         return chunks
 
@@ -717,9 +666,7 @@ class AutoBotSemanticChunker:
             metadata=metadata,
         )
 
-    def _apply_overlap_reset(
-        self, current_sentences: List[str]
-    ) -> tuple[List[str], int]:
+    def _apply_overlap_reset(self, current_sentences: List[str]) -> tuple[List[str], int]:
         """
         Reset sentence accumulator with overlap for next chunk.
 
@@ -735,9 +682,7 @@ class AutoBotSemanticChunker:
             return new_sentences, sum(len(s) for s in new_sentences)
         return [], 0
 
-    def _split_large_chunk(
-        self, sentences: List[str], start_idx: int
-    ) -> List[SemanticChunk]:
+    def _split_large_chunk(self, sentences: List[str], start_idx: int) -> List[SemanticChunk]:
         """
         Split a chunk that exceeds maximum size into smaller chunks.
 
@@ -756,26 +701,17 @@ class AutoBotSemanticChunker:
         for sentence in sentences:
             sentence_len = len(sentence)
 
-            if (
-                current_length + sentence_len > self.max_chunk_size
-                and current_sentences
-            ):
-                chunk = self._create_size_constrained_chunk(
-                    current_sentences, sentence_idx
-                )
+            if current_length + sentence_len > self.max_chunk_size and current_sentences:
+                chunk = self._create_size_constrained_chunk(current_sentences, sentence_idx)
                 chunks.append(chunk)
-                current_sentences, current_length = self._apply_overlap_reset(
-                    current_sentences
-                )
+                current_sentences, current_length = self._apply_overlap_reset(current_sentences)
 
             current_sentences.append(sentence)
             current_length += sentence_len
             sentence_idx += 1
 
         if current_sentences:
-            chunk = self._create_size_constrained_chunk(
-                current_sentences, sentence_idx, is_final=True
-            )
+            chunk = self._create_size_constrained_chunk(current_sentences, sentence_idx, is_final=True)
             chunks.append(chunk)
 
         return chunks
@@ -804,9 +740,7 @@ class AutoBotSemanticChunker:
             similarities = []
             for i in range(len(embeddings)):
                 for j in range(i + 1, len(embeddings)):
-                    similarity = cosine_similarity(
-                        embeddings[i].reshape(1, -1), embeddings[j].reshape(1, -1)
-                    )[0][0]
+                    similarity = cosine_similarity(embeddings[i].reshape(1, -1), embeddings[j].reshape(1, -1))[0][0]
                     similarities.append(similarity)
 
             return np.mean(similarities) if similarities else 1.0
@@ -837,9 +771,7 @@ class AutoBotSemanticChunker:
             metadata=metadata or {"single_sentence": True},
         )
 
-    def _enrich_chunks_with_metadata(
-        self, chunks: List[SemanticChunk], metadata: Optional[Dict[str, Any]]
-    ) -> None:
+    def _enrich_chunks_with_metadata(self, chunks: List[SemanticChunk], metadata: Optional[Dict[str, Any]]) -> None:
         """
         Add metadata to all chunks including index and model info. Issue #620.
 
@@ -859,9 +791,7 @@ class AutoBotSemanticChunker:
                 }
             )
 
-    async def chunk_text(
-        self, text: str, metadata: Optional[Dict[str, Any]] = None
-    ) -> List[SemanticChunk]:
+    async def chunk_text(self, text: str, metadata: Optional[Dict[str, Any]] = None) -> List[SemanticChunk]:
         """
         Chunk text using semantic analysis. Issue #620: Refactored with helpers.
 
@@ -887,9 +817,7 @@ class AutoBotSemanticChunker:
 
             logger.debug("Found %d semantic boundaries", len(boundaries))
 
-            chunks = self._create_chunks_with_boundaries(
-                sentences, boundaries, distances
-            )
+            chunks = self._create_chunks_with_boundaries(sentences, boundaries, distances)
             self._enrich_chunks_with_metadata(chunks, metadata)
 
             avg_coherence = np.mean([c.semantic_score for c in chunks])
@@ -923,9 +851,7 @@ class AutoBotSemanticChunker:
             metadata={"fallback_chunking": True, **(metadata or {})},
         )
 
-    async def _fallback_chunking(
-        self, text: str, metadata: Optional[Dict[str, Any]] = None
-    ) -> List[SemanticChunk]:
+    async def _fallback_chunking(self, text: str, metadata: Optional[Dict[str, Any]] = None) -> List[SemanticChunk]:
         """
         Fallback chunking method when semantic analysis fails.
 
@@ -946,13 +872,8 @@ class AutoBotSemanticChunker:
         for i, sentence in enumerate(sentences):
             sentence_len = len(sentence)
 
-            if (
-                current_length + sentence_len > self.max_chunk_size
-                and current_sentences
-            ):
-                chunk = self._create_fallback_chunk(
-                    current_sentences, i - len(current_sentences), i, metadata
-                )
+            if current_length + sentence_len > self.max_chunk_size and current_sentences:
+                chunk = self._create_fallback_chunk(current_sentences, i - len(current_sentences), i, metadata)
                 chunks.append(chunk)
                 current_sentences = []
                 current_length = 0
@@ -971,9 +892,7 @@ class AutoBotSemanticChunker:
 
         return chunks
 
-    async def chunk_document(
-        self, content: str, metadata: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
+    async def chunk_document(self, content: str, metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
         Main interface method compatible with LlamaIndex Document format.
 

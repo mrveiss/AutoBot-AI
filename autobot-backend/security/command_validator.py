@@ -24,9 +24,7 @@ class CommandValidator:
     def __init__(self, config_path: str = None):
         """Initialize the command validator with a config file."""
         if config_path is None:
-            config_path = os.path.join(
-                os.path.dirname(__file__), "../../config/allowed_commands.json"
-            )
+            config_path = os.path.join(os.path.dirname(__file__), "../../config/allowed_commands.json")
 
         self.allowed_commands = self._load_config(config_path)
         self.blocked_patterns = self.allowed_commands.get("blocked_patterns", [])
@@ -81,9 +79,7 @@ class CommandValidator:
         # Security check - ensure command is not blocked
         is_blocked, reason = self.is_command_blocked(command)
         if is_blocked:
-            logger.warning(
-                "Allowed command blocked by safety check: %s - %s", command, reason
-            )
+            logger.warning("Allowed command blocked by safety check: %s - %s", command, reason)
             return None
 
         return {
@@ -91,9 +87,7 @@ class CommandValidator:
             "command": command,
             "description": config["description"],
             "risk_level": config["risk_level"],
-            "alternatives": (
-                config["commands"][1:] if len(config["commands"]) > 1 else []
-            ),
+            "alternatives": (config["commands"][1:] if len(config["commands"]) > 1 else []),
         }
 
     def detect_query_type(self, message: str) -> Optional[str]:

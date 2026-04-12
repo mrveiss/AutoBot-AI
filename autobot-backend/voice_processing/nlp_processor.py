@@ -200,10 +200,7 @@ class NaturalLanguageProcessor:
                 "actions_count": len(suggested_actions),
             }
         )
-        logger.info(
-            f"Voice command analyzed: {command_type.value} - {intent} "
-            f"(confidence: {confidence:.2f})"
-        )
+        logger.info(f"Voice command analyzed: {command_type.value} - {intent} " f"(confidence: {confidence:.2f})")
 
     async def _run_analysis_pipeline(
         self,
@@ -217,9 +214,7 @@ class NaturalLanguageProcessor:
         extract parameters, finalize checks) and returns a VoiceCommandAnalysis.
         """
         # Step 1: Classify command type (required for subsequent steps)
-        command_type, classification_confidence = await self._classify_command_type(
-            transcription
-        )
+        command_type, classification_confidence = await self._classify_command_type(transcription)
 
         # Step 2: Extract intent and entities in parallel
         intent, entities = await asyncio.gather(
@@ -228,17 +223,13 @@ class NaturalLanguageProcessor:
         )
 
         # Step 3: Extract parameters (depends on entities from step 2)
-        parameters = await self._extract_parameters(
-            transcription, command_type, entities
-        )
+        parameters = await self._extract_parameters(transcription, command_type, entities)
 
         # Step 4: Run final checks in parallel
         requires_confirmation, context_needed, suggested_actions = await asyncio.gather(
             self._requires_confirmation(command_type, intent, parameters),
             self._needs_context(command_type, intent, parameters, context),
-            self._generate_suggested_actions(
-                command_type, intent, entities, parameters
-            ),
+            self._generate_suggested_actions(command_type, intent, entities, parameters),
         )
 
         confidence = classification_confidence * 0.8
@@ -275,17 +266,13 @@ class NaturalLanguageProcessor:
             inputs={"transcription": transcription, "has_context": context is not None},
         ) as task_context:
             try:
-                return await self._run_analysis_pipeline(
-                    transcription, context, task_context
-                )
+                return await self._run_analysis_pipeline(transcription, context, task_context)
             except Exception as e:
                 task_context.set_outputs({"error": "Voice command analysis failed"})
                 logger.error("Voice command analysis failed: %s", e)
                 raise
 
-    async def _classify_command_type(
-        self, transcription: str
-    ) -> Tuple[VoiceCommand, float]:
+    async def _classify_command_type(self, transcription: str) -> Tuple[VoiceCommand, float]:
         """Classify the type of voice command"""
         max_confidence = 0.0
         best_command = VoiceCommand.UNKNOWN
@@ -298,9 +285,7 @@ class NaturalLanguageProcessor:
         for command_name, command_data in self.command_patterns.items():
             patterns = command_data["patterns"]
             pattern_counts[command_name] = len(patterns)
-            match_counts[command_name] = sum(
-                1 for pattern in patterns if re.search(pattern, transcription)
-            )
+            match_counts[command_name] = sum(1 for pattern in patterns if re.search(pattern, transcription))
 
         # Find best command based on confidence
         for command_name, count in match_counts.items():
@@ -312,34 +297,24 @@ class NaturalLanguageProcessor:
 
         return best_command, max_confidence
 
-    async def _extract_intent(
-        self, transcription: str, command_type: VoiceCommand
-    ) -> str:
+    async def _extract_intent(self, transcription: str, command_type: VoiceCommand) -> str:
         """Extract specific intent from transcription (Issue #315 - refactored)."""
         # Use dispatch tables to reduce nesting
         if command_type == VoiceCommand.AUTOMATION:
-            return match_intent_from_patterns(
-                transcription, AUTOMATION_INTENT_PATTERNS, "automation_action"
-            )
+            return match_intent_from_patterns(transcription, AUTOMATION_INTENT_PATTERNS, "automation_action")
 
         if command_type == VoiceCommand.NAVIGATION:
-            return match_intent_from_patterns(
-                transcription, NAVIGATION_INTENT_PATTERNS, "navigation_action"
-            )
+            return match_intent_from_patterns(transcription, NAVIGATION_INTENT_PATTERNS, "navigation_action")
 
         if command_type == VoiceCommand.QUERY:
-            return match_intent_from_patterns(
-                transcription, QUERY_INTENT_PATTERNS, "information_query"
-            )
+            return match_intent_from_patterns(transcription, QUERY_INTENT_PATTERNS, "information_query")
 
         if command_type == VoiceCommand.TAKEOVER:
             return "request_manual_control"
 
         return "unknown_intent"
 
-    async def _extract_entities(
-        self, transcription: str, command_type: VoiceCommand
-    ) -> Dict[str, Any]:
+    async def _extract_entities(self, transcription: str, command_type: VoiceCommand) -> Dict[str, Any]:
         """Extract entities and parameters from transcription"""
         entities = {}
 
@@ -399,9 +374,7 @@ class NaturalLanguageProcessor:
 
         return parameters
 
-    async def _requires_confirmation(
-        self, command_type: VoiceCommand, intent: str, parameters: Dict[str, Any]
-    ) -> bool:
+    async def _requires_confirmation(self, command_type: VoiceCommand, intent: str, parameters: Dict[str, Any]) -> bool:
         """Determine if command requires user confirmation"""
 
         # Issue #380: Use module-level frozenset for O(1) lookup
@@ -448,13 +421,9 @@ class NaturalLanguageProcessor:
 
         if command_type == VoiceCommand.AUTOMATION:
             if intent == "click_element":
-                actions.extend(
-                    ["identify_target_element", "perform_click", "verify_click_result"]
-                )
+                actions.extend(["identify_target_element", "perform_click", "verify_click_result"])
             elif intent == "type_text":
-                actions.extend(
-                    ["find_input_field", "focus_field", "type_text", "verify_input"]
-                )
+                actions.extend(["find_input_field", "focus_field", "type_text", "verify_input"])
             elif intent == "scroll_page":
                 actions.extend(
                     [
@@ -466,9 +435,7 @@ class NaturalLanguageProcessor:
 
         elif command_type == VoiceCommand.NAVIGATION:
             if intent == "navigate_to":
-                actions.extend(
-                    ["validate_target", "perform_navigation", "verify_navigation"]
-                )
+                actions.extend(["validate_target", "perform_navigation", "verify_navigation"])
 
         elif command_type == VoiceCommand.QUERY:
             actions.extend(["gather_information", "format_response", "provide_answer"])

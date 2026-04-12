@@ -47,9 +47,7 @@ class KnowledgeBaseInitializer:
     _initialization_error: Optional[Exception] = None
 
     @classmethod
-    async def get_instance(
-        cls, force_reinit: bool = False
-    ) -> Optional["KnowledgeBase"]:
+    async def get_instance(cls, force_reinit: bool = False) -> Optional["KnowledgeBase"]:
         """Get or create knowledge base instance with proper async initialization"""
 
         # If we already have an instance and don't need to reinitialize
@@ -58,9 +56,7 @@ class KnowledgeBaseInitializer:
 
         # If initialization failed before and we're not forcing reinit
         if cls._initialization_failed and not force_reinit:
-            logger.warning(
-                f"Knowledge base initialization previously failed: {cls._initialization_error}"
-            )
+            logger.warning(f"Knowledge base initialization previously failed: {cls._initialization_error}")
             return None
 
         async with cls._initialization_lock:
@@ -100,9 +96,7 @@ class KnowledgeBaseInitializer:
                 return None
 
     @classmethod
-    async def wait_for_initialization(
-        cls, timeout: float = TimingConstants.SHORT_TIMEOUT
-    ) -> Optional["KnowledgeBase"]:
+    async def wait_for_initialization(cls, timeout: float = TimingConstants.SHORT_TIMEOUT) -> Optional["KnowledgeBase"]:
         """Wait for initialization to complete with timeout"""
         try:
             await asyncio.wait_for(cls._initialization_complete.wait(), timeout=timeout)
@@ -122,9 +116,7 @@ class KnowledgeBaseInitializer:
         return {
             "initialized": cls.is_initialized(),
             "failed": cls._initialization_failed,
-            "error": (
-                str(cls._initialization_error) if cls._initialization_error else None
-            ),
+            "error": (str(cls._initialization_error) if cls._initialization_error else None),
             "instance_exists": cls._instance is not None,
         }
 
@@ -154,9 +146,7 @@ def get_knowledge_base_sync() -> Optional["KnowledgeBase"]:
     if KnowledgeBaseInitializer.is_initialized():
         return KnowledgeBaseInitializer._instance
     else:
-        logger.warning(
-            "Knowledge base not initialized - use async get_knowledge_base() for initialization"
-        )
+        logger.warning("Knowledge base not initialized - use async get_knowledge_base() for initialization")
         return None
 
 
@@ -209,9 +199,7 @@ async def health_check() -> Dict[str, Any]:
         try:
             kb = KnowledgeBaseInitializer._instance
             # Test basic operations
-            redis_status = (
-                await kb.ping_redis() if hasattr(kb, "ping_redis") else "unknown"
-            )
+            redis_status = await kb.ping_redis() if hasattr(kb, "ping_redis") else "unknown"
             vector_store_status = "healthy" if kb.vector_store else "unavailable"
 
             status.update(

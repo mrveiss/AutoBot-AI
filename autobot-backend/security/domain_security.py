@@ -180,25 +180,17 @@ class DomainSecurityManager:
         self.whitelist_patterns = []
 
         # Compile blacklist patterns
-        for pattern in self.config.config.get("domain_security", {}).get(
-            "blacklist", []
-        ):
+        for pattern in self.config.config.get("domain_security", {}).get("blacklist", []):
             # Split on wildcards, escape each literal part, rejoin with .*
             parts = pattern.split("*")
             regex_pattern = ".*".join(re.escape(p) for p in parts)
-            self.blacklist_patterns.append(
-                re.compile(f"^{regex_pattern}$", re.IGNORECASE)
-            )
+            self.blacklist_patterns.append(re.compile(f"^{regex_pattern}$", re.IGNORECASE))
 
         # Compile whitelist patterns
-        for pattern in self.config.config.get("domain_security", {}).get(
-            "whitelist", []
-        ):
+        for pattern in self.config.config.get("domain_security", {}).get("whitelist", []):
             parts = pattern.split("*")
             regex_pattern = ".*".join(re.escape(p) for p in parts)
-            self.whitelist_patterns.append(
-                re.compile(f"^{regex_pattern}$", re.IGNORECASE)
-            )
+            self.whitelist_patterns.append(re.compile(f"^{regex_pattern}$", re.IGNORECASE))
 
     async def __aenter__(self):
         """Async context manager entry - uses singleton HTTP client"""
@@ -241,17 +233,13 @@ class DomainSecurityManager:
         cache_key = f"domain_{domain}"
         if cache_key in self.domain_cache:
             cached = self.domain_cache[cache_key]
-            cache_duration = self.config.config.get("domain_security", {}).get(
-                "cache_duration", 3600
-            )
+            cache_duration = self.config.config.get("domain_security", {}).get("cache_duration", 3600)
             if time.time() - cached["timestamp"] < cache_duration:
                 logger.debug("Using cached domain validation for %s", domain)
                 return cached["result"]
         return None
 
-    async def _check_network_access(
-        self, parsed, result: Dict, cache_key: str
-    ) -> Dict[str, Any]:
+    async def _check_network_access(self, parsed, result: Dict, cache_key: str) -> Dict[str, Any]:
         """Check network access. Returns error result if blocked, None if allowed."""
         network_result = await self._validate_network_access(parsed)
         if not network_result["allowed"]:
@@ -265,9 +253,7 @@ class DomainSecurityManager:
             return result
         return None
 
-    def _check_whitelist_match(
-        self, domain: str, result: Dict, cache_key: str
-    ) -> Dict[str, Any]:
+    def _check_whitelist_match(self, domain: str, result: Dict, cache_key: str) -> Dict[str, Any]:
         """Check if domain is whitelisted. Returns result if whitelisted, None otherwise."""
         if self._is_whitelisted(domain):
             result.update(
@@ -282,9 +268,7 @@ class DomainSecurityManager:
             return result
         return None
 
-    def _check_blacklist_match(
-        self, domain: str, result: Dict, cache_key: str
-    ) -> Dict[str, Any]:
+    def _check_blacklist_match(self, domain: str, result: Dict, cache_key: str) -> Dict[str, Any]:
         """Check if domain is blacklisted. Returns result if blacklisted, None otherwise."""
         blacklist_result = self._check_blacklist(domain)
         if blacklist_result["blocked"]:
@@ -303,9 +287,7 @@ class DomainSecurityManager:
             return result
         return None
 
-    async def _check_threat_intelligence_match(
-        self, domain: str, result: Dict, cache_key: str
-    ) -> Dict[str, Any]:
+    async def _check_threat_intelligence_match(self, domain: str, result: Dict, cache_key: str) -> Dict[str, Any]:
         """Check threat intelligence. Returns result if threat found, None otherwise."""
         await self._update_threat_intelligence()
         if domain in self.threat_intelligence:
@@ -321,9 +303,7 @@ class DomainSecurityManager:
             return result
         return None
 
-    async def _make_final_safety_decision(
-        self, domain: str, result: Dict, cache_key: str
-    ) -> Dict[str, Any]:
+    async def _make_final_safety_decision(self, domain: str, result: Dict, cache_key: str) -> Dict[str, Any]:
         """Make final safety decision based on reputation. Returns updated result."""
         reputation_score = await self._check_reputation_services(domain)
         result["reputation_score"] = reputation_score
@@ -393,9 +373,7 @@ class DomainSecurityManager:
                 return blacklisted
 
             # Step 4: Threat intelligence check
-            if threat := await self._check_threat_intelligence_match(
-                domain, result, cache_key
-            ):
+            if threat := await self._check_threat_intelligence_match(domain, result, cache_key):
                 return threat
 
             # Step 5-6: Reputation check and final decision
@@ -415,9 +393,7 @@ class DomainSecurityManager:
     def _check_port_allowed(self, port: int) -> Dict[str, Any]:
         """Check if port is allowed. Returns error result if blocked, None if allowed."""
         allowed_ports = (
-            self.config.config.get("domain_security", {})
-            .get("network_validation", {})
-            .get("allowed_ports", [80, 443])
+            self.config.config.get("domain_security", {}).get("network_validation", {}).get("allowed_ports", [80, 443])
         )
         if port not in allowed_ports:
             return {"allowed": False, "reason": f"Port {port} not in allowed ports"}
@@ -436,9 +412,7 @@ class DomainSecurityManager:
                 {"allowed": False, "reason": f"DNS resolution failed: {e}"},
             )
 
-    def _check_ip_restrictions(
-        self, ip_addr: str, ip_obj, network_config: dict
-    ) -> Dict[str, Any]:
+    def _check_ip_restrictions(self, ip_addr: str, ip_obj, network_config: dict) -> Dict[str, Any]:
         """Check IP restrictions. Returns error result if blocked, None if allowed."""
         if network_config.get("block_private_ips", True) and ip_obj.is_private:
             return {"allowed": False, "reason": f"Private IP access blocked: {ip_addr}"}
@@ -455,9 +429,7 @@ class DomainSecurityManager:
                 }
         return None
 
-    def _check_blocked_ip_ranges(
-        self, ip_addr: str, ip_obj, network_config: dict
-    ) -> Dict[str, Any]:
+    def _check_blocked_ip_ranges(self, ip_addr: str, ip_obj, network_config: dict) -> Dict[str, Any]:
         """Check if IP is in blocked ranges. Returns error result if blocked, None if allowed."""
         blocked_ranges = network_config.get("blocked_ip_ranges", [])
         for range_str in blocked_ranges:
@@ -482,9 +454,7 @@ class DomainSecurityManager:
             if error:
                 return error
 
-            network_config = self.config.config.get("domain_security", {}).get(
-                "network_validation", {}
-            )
+            network_config = self.config.config.get("domain_security", {}).get("network_validation", {})
             if error := self._check_ip_restrictions(ip_addr, ip_obj, network_config):
                 return error
             if error := self._check_blocked_ip_ranges(ip_addr, ip_obj, network_config):
@@ -499,9 +469,7 @@ class DomainSecurityManager:
         """Check if domain matches whitelist patterns"""
         for pattern in self.whitelist_patterns:
             if pattern.match(domain):
-                logger.debug(
-                    "Domain %s matched whitelist pattern: %s", domain, pattern.pattern
-                )
+                logger.debug("Domain %s matched whitelist pattern: %s", domain, pattern.pattern)
                 return True
         return False
 
@@ -509,9 +477,7 @@ class DomainSecurityManager:
         """Check if domain matches blacklist patterns"""
         for pattern in self.blacklist_patterns:
             if pattern.match(domain):
-                logger.warning(
-                    "Domain %s matched blacklist pattern: %s", domain, pattern.pattern
-                )
+                logger.warning("Domain %s matched blacklist pattern: %s", domain, pattern.pattern)
                 return {
                     "blocked": True,
                     "reason": "Domain matches blacklist pattern",
@@ -527,9 +493,7 @@ class DomainSecurityManager:
         if current_time - self.last_threat_update < update_interval:
             return  # Too soon to update
 
-        threat_feeds = self.config.config.get("domain_security", {}).get(
-            "threat_feeds", []
-        )
+        threat_feeds = self.config.config.get("domain_security", {}).get("threat_feeds", [])
 
         for feed_config in threat_feeds:
             if not feed_config.get("enabled", False):
@@ -540,30 +504,20 @@ class DomainSecurityManager:
 
                 async with await self._http_client.get(
                     feed_config["url"],
-                    timeout=aiohttp.ClientTimeout(
-                        total=feed_config.get("timeout", 10.0)
-                    ),
+                    timeout=aiohttp.ClientTimeout(total=feed_config.get("timeout", 10.0)),
                 ) as response:
                     if response.status == 200:
                         content = await response.text()
-                        domains = self._parse_threat_feed(
-                            content, feed_config["format"]
-                        )
+                        domains = self._parse_threat_feed(content, feed_config["format"])
                         self.threat_intelligence.update(domains)
-                        logger.info(
-                            f"Updated {len(domains)} threat domains from {feed_config['name']}"
-                        )
+                        logger.info(f"Updated {len(domains)} threat domains from {feed_config['name']}")
                     else:
-                        logger.warning(
-                            f"Failed to fetch threat feed {feed_config['name']}: HTTP {response.status}"
-                        )
+                        logger.warning(f"Failed to fetch threat feed {feed_config['name']}: HTTP {response.status}")
 
             except asyncio.TimeoutError:
                 logger.warning("Timeout fetching threat feed %s", feed_config["name"])
             except Exception as e:
-                logger.error(
-                    "Error fetching threat feed %s: %s", feed_config["name"], e
-                )
+                logger.error("Error fetching threat feed %s: %s", feed_config["name"], e)
 
         self.last_threat_update = current_time
 
@@ -624,14 +578,11 @@ class DomainSecurityManager:
         Returns:
             Reputation score from 0.0 (malicious) to 1.0 (safe)
         """
-        reputation_services = self.config.config.get("domain_security", {}).get(
-            "reputation_services", {}
-        )
+        reputation_services = self.config.config.get("domain_security", {}).get("reputation_services", {})
 
         # Check if any external services are configured and enabled
         external_services_enabled = any(
-            service_config.get("enabled", False)
-            for service_config in reputation_services.values()
+            service_config.get("enabled", False) for service_config in reputation_services.values()
         )
 
         if external_services_enabled:
@@ -658,9 +609,7 @@ class DomainSecurityManager:
                         domain,
                     )
             except Exception as e:
-                logger.warning(
-                    "External threat intelligence check failed for %s: %s", domain, e
-                )
+                logger.warning("External threat intelligence check failed for %s: %s", domain, e)
 
         # Fall back to heuristic-based reputation
         return self._calculate_basic_reputation(domain)
@@ -712,14 +661,8 @@ class DomainSecurityManager:
 
         # Clean old cache entries (simple cleanup)
         if len(self.domain_cache) > 1000:
-            cutoff_time = time.time() - self.config.config.get(
-                "domain_security", {}
-            ).get("cache_duration", 3600)
-            self.domain_cache = {
-                k: v
-                for k, v in self.domain_cache.items()
-                if v["timestamp"] > cutoff_time
-            }
+            cutoff_time = time.time() - self.config.config.get("domain_security", {}).get("cache_duration", 3600)
+            self.domain_cache = {k: v for k, v in self.domain_cache.items() if v["timestamp"] > cutoff_time}
 
     async def validate_url_safety(self, url: str) -> Dict[str, Any]:
         """High-level URL safety validation (wrapper for domain validation)"""
@@ -734,18 +677,10 @@ class DomainSecurityManager:
             "whitelist_patterns": len(self.whitelist_patterns),
             "blacklist_patterns": len(self.blacklist_patterns),
             "security_config": {
-                "enabled": (
-                    self.config.config.get("domain_security", {}).get("enabled", False)
-                ),
-                "whitelist_mode": (
-                    self.config.config.get("domain_security", {}).get(
-                        "whitelist_mode", False
-                    )
-                ),
+                "enabled": (self.config.config.get("domain_security", {}).get("enabled", False)),
+                "whitelist_mode": (self.config.config.get("domain_security", {}).get("whitelist_mode", False)),
                 "reputation_threshold": (
-                    self.config.config.get("domain_security", {}).get(
-                        "reputation_threshold", 0.7
-                    )
+                    self.config.config.get("domain_security", {}).get("reputation_threshold", 0.7)
                 ),
             },
             "threat_intelligence_services": {
@@ -770,9 +705,7 @@ class DomainSecurityManager:
 
 
 # Convenience function for easy access
-async def validate_url_safety(
-    url: str, config: Optional[DomainSecurityConfig] = None
-) -> Dict[str, Any]:
+async def validate_url_safety(url: str, config: Optional[DomainSecurityConfig] = None) -> Dict[str, Any]:
     """Standalone function to validate URL safety"""
     async with DomainSecurityManager(config) as manager:
         return await manager.validate_url_safety(url)

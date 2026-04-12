@@ -360,19 +360,13 @@ class VueAnalyzer(BaseLanguageAnalyzer):
         lines = section["lines"]
 
         # Security patterns
-        self._check_patterns_in_section(
-            lines, base_line, TEMPLATE_SECURITY_PATTERNS, "template-security"
-        )
+        self._check_patterns_in_section(lines, base_line, TEMPLATE_SECURITY_PATTERNS, "template-security")
 
         # Quality patterns
-        self._check_patterns_in_section(
-            lines, base_line, TEMPLATE_QUALITY_PATTERNS, "template-quality"
-        )
+        self._check_patterns_in_section(lines, base_line, TEMPLATE_QUALITY_PATTERNS, "template-quality")
 
         # Performance patterns
-        self._check_patterns_in_section(
-            lines, base_line, TEMPLATE_PERFORMANCE_PATTERNS, "template-performance"
-        )
+        self._check_patterns_in_section(lines, base_line, TEMPLATE_PERFORMANCE_PATTERNS, "template-performance")
 
         # Special check: v-for without key (multi-line aware)
         self._check_vfor_key(content, base_line)
@@ -385,24 +379,16 @@ class VueAnalyzer(BaseLanguageAnalyzer):
         attributes = section["attributes"]
 
         # Determine if TypeScript (for future TypeScript-specific checks)
-        _is_typescript = (  # noqa: F841
-            'lang="ts"' in attributes or "lang='ts'" in attributes
-        )
+        _is_typescript = 'lang="ts"' in attributes or "lang='ts'" in attributes  # noqa: F841
 
         # Security patterns
-        self._check_patterns_in_section(
-            lines, base_line, SCRIPT_SECURITY_PATTERNS, "script-security"
-        )
+        self._check_patterns_in_section(lines, base_line, SCRIPT_SECURITY_PATTERNS, "script-security")
 
         # Quality patterns
-        self._check_patterns_in_section(
-            lines, base_line, SCRIPT_QUALITY_PATTERNS, "script-quality"
-        )
+        self._check_patterns_in_section(lines, base_line, SCRIPT_QUALITY_PATTERNS, "script-quality")
 
         # Performance patterns
-        self._check_patterns_in_section(
-            lines, base_line, SCRIPT_PERFORMANCE_PATTERNS, "script-performance"
-        )
+        self._check_patterns_in_section(lines, base_line, SCRIPT_PERFORMANCE_PATTERNS, "script-performance")
 
         # Check for Composition API vs Options API mixing
         self._check_api_consistency(content, base_line)
@@ -438,9 +424,7 @@ class VueAnalyzer(BaseLanguageAnalyzer):
             )
 
         # Quality patterns
-        self._check_patterns_in_section(
-            lines, base_line, STYLE_QUALITY_PATTERNS, "style-quality"
-        )
+        self._check_patterns_in_section(lines, base_line, STYLE_QUALITY_PATTERNS, "style-quality")
 
     def _is_comment_line(self, line: str) -> bool:
         """Check if line is a comment (Issue #315 - extracted helper)."""
@@ -479,9 +463,7 @@ class VueAnalyzer(BaseLanguageAnalyzer):
         category: "IssueCategory",
     ) -> "AnalysisIssue":
         """Create AnalysisIssue from Vue pattern match (Issue #315 - extracted helper)."""
-        recommendation, confidence, rule_id, severity = self._parse_pattern_data(
-            pattern_data
-        )
+        recommendation, confidence, rule_id, severity = self._parse_pattern_data(pattern_data)
         return AnalysisIssue(
             issue_id=self._generate_issue_id(prefix),
             category=category,
@@ -498,9 +480,7 @@ class VueAnalyzer(BaseLanguageAnalyzer):
             current_code=line.strip(),
             confidence=confidence,
             potential_false_positive=confidence < 0.75,
-            false_positive_reason=(
-                "" if confidence >= 0.75 else "Context may make this acceptable"
-            ),
+            false_positive_reason=("" if confidence >= 0.75 else "Context may make this acceptable"),
             rule_id=rule_id,
             tags=["vue", prefix.split("-")[0], category.value],
         )
@@ -517,9 +497,7 @@ class VueAnalyzer(BaseLanguageAnalyzer):
         """Check single Vue pattern on a line (Issue #315 - extracted helper)."""
         match = re.search(pattern, line, re.IGNORECASE)
         if match:
-            issue = self._create_vue_pattern_issue(
-                line_num, line, match, pattern_data, prefix, category
-            )
+            issue = self._create_vue_pattern_issue(line_num, line, match, pattern_data, prefix, category)
             self.issues.append(issue)
 
     def _check_patterns_in_section(
@@ -538,9 +516,7 @@ class VueAnalyzer(BaseLanguageAnalyzer):
 
             line_num = base_line + i
             for pattern, pattern_data in patterns.items():
-                self._check_vue_pattern_on_line(
-                    line_num, line, pattern, pattern_data, prefix, category
-                )
+                self._check_vue_pattern_on_line(line_num, line, pattern, pattern_data, prefix, category)
 
     def _check_vfor_key(self, content: str, base_line: int) -> None:
         """Check for v-for directives without :key attribute.
@@ -574,8 +550,7 @@ class VueAnalyzer(BaseLanguageAnalyzer):
                         title="v-for without :key",
                         description=f"v-for on <{element_tag}> should have a :key attribute for optimal DOM updates",
                         recommendation=f"Add :key attribute with unique identifier from '{vfor_value}'",
-                        current_code=match.group(0)[:100]
-                        + ("..." if len(match.group(0)) > 100 else ""),
+                        current_code=match.group(0)[:100] + ("..." if len(match.group(0)) > 100 else ""),
                         confidence=0.92,
                         potential_false_positive=False,
                         rule_id="VUE-QUAL001",

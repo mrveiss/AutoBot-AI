@@ -49,9 +49,7 @@ class MCPTransport(ABC):
     async def close(self) -> None:
         """Tear down the underlying channel."""
 
-    async def request(
-        self, method: str, params: Optional[Dict[str, Any]] = None, req_id: int = 1
-    ) -> Dict[str, Any]:
+    async def request(self, method: str, params: Optional[Dict[str, Any]] = None, req_id: int = 1) -> Dict[str, Any]:
         """Send a request and return its response (convenience wrapper)."""
         payload: Dict[str, Any] = {"jsonrpc": _JSONRPC, "id": req_id, "method": method}
         if params is not None:
@@ -115,13 +113,9 @@ class StdioTransport(MCPTransport):
             raise RuntimeError("StdioTransport not connected")
         async with self._recv_lock:
             try:
-                raw = await asyncio.wait_for(
-                    self._proc.stdout.readline(), timeout=self._timeout
-                )
+                raw = await asyncio.wait_for(self._proc.stdout.readline(), timeout=self._timeout)
             except asyncio.TimeoutError:
-                raise TimeoutError(
-                    f"StdioTransport: no response within {self._timeout}s"
-                )
+                raise TimeoutError(f"StdioTransport: no response within {self._timeout}s")
         if not raw:
             raise EOFError("StdioTransport: subprocess closed stdout")
         return json.loads(raw.decode("utf-8"))
@@ -176,9 +170,7 @@ class SSETransport(MCPTransport):
         url = f"{self._base_url}/sse"
         headers = {"Accept": "text/event-stream", "Cache-Control": "no-cache"}
         try:
-            async with self._session.get(
-                url, headers=headers, timeout=aiohttp.ClientTimeout(total=None)
-            ) as resp:
+            async with self._session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=None)) as resp:
                 if resp.status != 200:
                     logger.error("SSETransport: GET %s returned %s", url, resp.status)
                     return
@@ -201,13 +193,9 @@ class SSETransport(MCPTransport):
         if self._session is None:
             raise RuntimeError("SSETransport not connected")
         url = f"{self._base_url}/message"
-        async with self._session.post(
-            url, json=request, timeout=aiohttp.ClientTimeout(total=self._timeout)
-        ) as resp:
+        async with self._session.post(url, json=request, timeout=aiohttp.ClientTimeout(total=self._timeout)) as resp:
             if resp.status not in (200, 202):
-                raise aiohttp.ClientResponseError(
-                    resp.request_info, resp.history, status=resp.status
-                )
+                raise aiohttp.ClientResponseError(resp.request_info, resp.history, status=resp.status)
         logger.debug("SSETransport: sent method=%s", request.get("method"))
 
     async def receive(self) -> Dict[str, Any]:
@@ -268,9 +256,7 @@ class HTTPTransport(MCPTransport):
                 timeout=aiohttp.ClientTimeout(total=self._timeout),
             ) as resp:
                 if resp.status != 200:
-                    raise aiohttp.ClientResponseError(
-                        resp.request_info, resp.history, status=resp.status
-                    )
+                    raise aiohttp.ClientResponseError(resp.request_info, resp.history, status=resp.status)
                 self._pending = await resp.json()
         logger.debug("HTTPTransport: sent method=%s", request.get("method"))
 

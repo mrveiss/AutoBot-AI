@@ -19,7 +19,5 @@ class ThreatAnalyzer(ABC):
     """Abstract base class for threat analyzers"""
 
     @abstractmethod
-    async def analyze(
-        self, event: SecurityEvent, context: AnalysisContext
-    ) -> Optional[ThreatEvent]:
+    async def analyze(self, event: SecurityEvent, context: AnalysisContext) -> Optional[ThreatEvent]:
         """Analyze event for specific threat type"""

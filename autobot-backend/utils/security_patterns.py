@@ -34,9 +34,7 @@ HARDCODED_PATTERNS: dict[str, re.Pattern[str]] = {
         r"\b(?:(?:\d{1,3}\.){3}\d{1,3}|localhost|127\.0\.0\.1|0\.0\.0\.0)\b",
         re.IGNORECASE | re.MULTILINE,
     ),
-    "urls": re.compile(
-        r'(?:https?|ftp|wss?)://[^\s"\'<>]+', re.IGNORECASE | re.MULTILINE
-    ),
+    "urls": re.compile(r'(?:https?|ftp|wss?)://[^\s"\'<>]+', re.IGNORECASE | re.MULTILINE),
     "passwords": re.compile(
         r'(?:password|pwd|secret)\s*[:=]\s*["\']([^"\']+)["\']',
         re.IGNORECASE | re.MULTILINE,
@@ -53,16 +51,12 @@ HARDCODED_PATTERNS: dict[str, re.Pattern[str]] = {
         r'(?:(?:/[^/\s"\'<>]+){2,}|[C-Z]:\\[^\s"\'<>\\]+(?:\\[^\s"\'<>\\]+)+|~/[^\s"\'<>]+)',
         re.IGNORECASE | re.MULTILINE,
     ),
-    "private_keys": re.compile(
-        r"-----BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY-----", re.IGNORECASE | re.MULTILINE
-    ),
+    "private_keys": re.compile(r"-----BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY-----", re.IGNORECASE | re.MULTILINE),
     "aws_credentials": re.compile(
         r'(?:AKIA[0-9A-Z]{16}|aws[_-]?(?:access|secret)[_-]?key\s*[:=]\s*["\']([^"\']+)["\'])',
         re.IGNORECASE | re.MULTILINE,
     ),
-    "jwt_tokens": re.compile(
-        r"eyJ[a-zA-Z0-9_-]+\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+", re.MULTILINE
-    ),
+    "jwt_tokens": re.compile(r"eyJ[a-zA-Z0-9_-]+\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+", re.MULTILINE),
     # Issue #1733: ReDoS fix - removed '.' from domain character class to prevent
     # ambiguous backtracking between [a-zA-Z0-9.-]+ and \.[a-zA-Z]{2,}
     "email_addresses": re.compile(
@@ -177,9 +171,7 @@ def find_hardcoded_values(
     # Filter to requested categories if specified
     patterns_to_check = HARDCODED_PATTERNS
     if categories:
-        patterns_to_check = {
-            k: v for k, v in HARDCODED_PATTERNS.items() if k in categories
-        }
+        patterns_to_check = {k: v for k, v in HARDCODED_PATTERNS.items() if k in categories}
 
     for category, pattern in patterns_to_check.items():
         for match in pattern.finditer(text):
@@ -208,9 +200,7 @@ def find_hardcoded_values(
     return results
 
 
-def iter_hardcoded_values(
-    text: str, categories: list[str] | None = None
-) -> Iterator[tuple[str, re.Match[str]]]:
+def iter_hardcoded_values(text: str, categories: list[str] | None = None) -> Iterator[tuple[str, re.Match[str]]]:
     """Memory-efficient iterator for hardcoded value matches.
 
     Yields (category, match) tuples for each finding.
@@ -224,9 +214,7 @@ def iter_hardcoded_values(
     """
     patterns_to_check = HARDCODED_PATTERNS
     if categories:
-        patterns_to_check = {
-            k: v for k, v in HARDCODED_PATTERNS.items() if k in categories
-        }
+        patterns_to_check = {k: v for k, v in HARDCODED_PATTERNS.items() if k in categories}
 
     for category, pattern in patterns_to_check.items():
         for match in pattern.finditer(text):

@@ -133,23 +133,17 @@ class CommandApprovalPayload(BaseModel):
 class EnhancedGoalPayload(BaseModel):
     """Enhanced goal payload with AI Stack integration (Issue #708 consolidation)."""
 
-    goal: str = Field(
-        ..., min_length=1, max_length=10000, description="Goal description"
-    )
+    goal: str = Field(..., min_length=1, max_length=10000, description="Goal description")
     agents: Optional[List[str]] = Field(None, description="Specific agents to use")
     coordination_mode: str = Field(
         "intelligent",
         description="Coordination mode (parallel, sequential, intelligent)",
     )
-    priority: str = Field(
-        "normal", description="Task priority (low, normal, high, urgent)"
-    )
+    priority: str = Field("normal", description="Task priority (low, normal, high, urgent)")
     context: Optional[str] = Field(None, description="Additional context")
     use_knowledge_base: bool = Field(True, description="Use knowledge base for context")
     include_reasoning: bool = Field(False, description="Include reasoning steps")
-    max_execution_time: int = Field(
-        300, ge=30, le=1800, description="Max execution time in seconds"
-    )
+    max_execution_time: int = Field(300, ge=30, le=1800, description="Max execution time in seconds")
 
 
 class MultiAgentTaskPayload(BaseModel):
@@ -159,9 +153,7 @@ class MultiAgentTaskPayload(BaseModel):
     agents: List[str] = Field(..., min_items=1, description="Agents to coordinate")
     coordination_strategy: str = Field("adaptive", description="Coordination strategy")
     subtasks: Optional[List[Metadata]] = Field(None, description="Predefined subtasks")
-    dependencies: Optional[List[Dict[str, str]]] = Field(
-        None, description="Task dependencies"
-    )
+    dependencies: Optional[List[Dict[str, str]]] = Field(None, description="Task dependencies")
 
 
 class AgentAnalysisRequest(BaseModel):
@@ -170,9 +162,7 @@ class AgentAnalysisRequest(BaseModel):
     analysis_type: str = Field("comprehensive", description="Analysis type")
     target_path: Optional[str] = Field(None, description="Specific path to analyze")
     include_performance: bool = Field(True, description="Include performance analysis")
-    include_optimization: bool = Field(
-        True, description="Include optimization suggestions"
-    )
+    include_optimization: bool = Field(True, description="Include optimization suggestions")
 
 
 class ResearchTaskRequest(BaseModel):
@@ -198,9 +188,7 @@ async def _kill_timed_out_process(
         pass  # Process already terminated
 
 
-def _validate_command_request(
-    command: Optional[str], security_layer, user_role: str
-) -> Optional[JSONResponse]:
+def _validate_command_request(command: Optional[str], security_layer, user_role: str) -> Optional[JSONResponse]:
     """
     Validate command request: check if command provided and user has permission.
 
@@ -221,13 +209,9 @@ def _validate_command_request(
             "failure",
             {"command": command, "reason": "no_command_provided"},
         )
-        return JSONResponse(
-            status_code=400, content={"message": "No command provided."}
-        )
+        return JSONResponse(status_code=400, content={"message": "No command provided."})
 
-    if not security_layer.check_permission(
-        user_role, "allow_shell_execute", resource=command
-    ):
+    if not security_layer.check_permission(user_role, "allow_shell_execute", resource=command):
         security_layer.audit_log(
             "execute_command",
             user_role,
@@ -289,9 +273,7 @@ async def _run_subprocess(command: str, security_layer, user_role: str) -> tuple
         return stdout, stderr, process.returncode
     except asyncio.TimeoutError:
         await _kill_timed_out_process(process)
-        logger.error(
-            f"Command timed out after {TimingConstants.VERY_LONG_TIMEOUT}s: {command[:100]}..."
-        )
+        logger.error(f"Command timed out after {TimingConstants.VERY_LONG_TIMEOUT}s: {command[:100]}...")
         security_layer.audit_log(
             "execute_command",
             user_role,
@@ -321,9 +303,7 @@ async def _run_subprocess(command: str, security_layer, user_role: str) -> tuple
         ) from e
 
 
-def _build_success_response(
-    command: str, output: str, security_layer, user_role: str
-) -> dict:
+def _build_success_response(command: str, output: str, security_layer, user_role: str) -> dict:
     """
     Build success response and audit log.
 
@@ -373,10 +353,7 @@ def _build_error_response(
     Returns:
         JSONResponse with error details
     """
-    message = (
-        f"Command failed with exit code {returncode}."
-        f"\nError:\n{error}\nOutput:\n{output}"
-    )
+    message = f"Command failed with exit code {returncode}." f"\nError:\n{error}\nOutput:\n{output}"
     security_layer.audit_log(
         "execute_command",
         user_role,
@@ -395,9 +372,7 @@ def _build_error_response(
     )
 
 
-def _check_approval_permission(
-    security_layer, user_role: str, task_id: str, approved: bool
-) -> Optional[JSONResponse]:
+def _check_approval_permission(security_layer, user_role: str, task_id: str, approved: bool) -> Optional[JSONResponse]:
     """
     Check if user has permission to approve/deny commands.
 
@@ -517,9 +492,7 @@ async def _handle_command_result(
         )
         return response
 
-    response = _build_error_response(
-        command, output, error, returncode, security_layer, user_role
-    )
+    response = _build_error_response(command, output, error, returncode, security_layer, user_role)
     await _publish_event_safe(
         event_manager,
         "command_execution_end",
@@ -550,9 +523,7 @@ def _process_tool_result(result_dict: dict) -> tuple:
     # Handle respond_conversationally tool
     if tool_name == "respond_conversationally":
         default_text = "No response text provided."
-        response_message = result_dict.get("response_text") or tool_args.get(
-            "response_text", default_text
-        )
+        response_message = result_dict.get("response_text") or tool_args.get("response_text", default_text)
         return response_message, None, tool_name
 
     # Handle execute_system_command tool
@@ -562,23 +533,18 @@ def _process_tool_result(result_dict: dict) -> tuple:
         command_status = tool_args.get("status", "unknown")
 
         if command_status == "success":
-            response_message = (
-                f"Command executed successfully.\nOutput:\n{command_output}"
-            )
+            response_message = f"Command executed successfully.\nOutput:\n{command_output}"
             return response_message, command_output, tool_name
         else:
             response_message = (
-                f"Command failed ({command_status}).\nError:\n{command_error}"
-                f"\nOutput:\n{command_output}"
+                f"Command failed ({command_status}).\nError:\n{command_error}" f"\nOutput:\n{command_output}"
             )
             tool_output = f"ERROR: {command_error}\nOUTPUT: {command_output}"
             return response_message, tool_output, tool_name
 
     # Handle other named tools
     if tool_name:
-        tool_output_content = tool_args.get(
-            "output", tool_args.get("message", str(tool_args))
-        )
+        tool_output_content = tool_args.get("output", tool_args.get("message", str(tool_args)))
         response_message = f"Tool Used: {tool_name}\nOutput: {tool_output_content}"
         return response_message, tool_output_content, tool_name
 
@@ -611,9 +577,7 @@ def _record_goal_metrics(task_start_time: float, status: str) -> None:
     )
 
 
-def _check_goal_permission(
-    security_layer, user_role: str, goal: str
-) -> Optional[JSONResponse]:
+def _check_goal_permission(security_layer, user_role: str, goal: str) -> Optional[JSONResponse]:
     """
     Check if user has permission to submit a goal.
 
@@ -634,9 +598,7 @@ def _check_goal_permission(
             "denied",
             {"goal": goal, "reason": "permission_denied"},
         )
-        return JSONResponse(
-            status_code=403, content={"message": "Permission denied to submit goal"}
-        )
+        return JSONResponse(status_code=403, content={"message": "Permission denied to submit goal"})
     return None
 
 
@@ -652,9 +614,7 @@ async def _publish_goal_events(event_manager, goal: str, use_phi2: bool) -> None
         use_phi2: Whether to use Phi-2 model
     """
     await _publish_event_safe(event_manager, "user_message", {"message": goal})
-    await _publish_event_safe(
-        event_manager, "goal_received", {"goal": goal, "use_phi2": use_phi2}
-    )
+    await _publish_event_safe(event_manager, "goal_received", {"goal": goal, "use_phi2": use_phi2})
 
 
 async def _handle_goal_result(
@@ -684,9 +644,7 @@ async def _handle_goal_result(
     response_message, tool_output_content, tool_name = _process_tool_result(result_dict)
 
     if tool_output_content and tool_name != "respond_conversationally":
-        await _publish_event_safe(
-            event_manager, "tool_output", {"output": tool_output_content}
-        )
+        await _publish_event_safe(event_manager, "tool_output", {"output": tool_output_content})
 
     security_layer.audit_log(
         "submit_goal",
@@ -695,18 +653,14 @@ async def _handle_goal_result(
         {"goal": goal, "result": response_message},
     )
 
-    await _publish_event_safe(
-        event_manager, "goal_completed", {"goal": goal, "result": response_message}
-    )
+    await _publish_event_safe(event_manager, "goal_completed", {"goal": goal, "result": response_message})
 
     _record_goal_metrics(task_start_time, "success")
 
     return {"message": response_message}
 
 
-async def _execute_goal_with_error_handling(
-    orchestrator, goal: str, task_start_time: float
-) -> dict:
+async def _execute_goal_with_error_handling(orchestrator, goal: str, task_start_time: float) -> dict:
     """
     Execute goal with comprehensive error handling.
 
@@ -724,9 +678,7 @@ async def _execute_goal_with_error_handling(
         InternalError: On timeout, network, or general execution errors
     """
     try:
-        orchestrator_result = await orchestrator.execute_goal(
-            goal, [{"role": "user", "content": goal}]
-        )
+        orchestrator_result = await orchestrator.execute_goal(goal, [{"role": "user", "content": goal}])
     except asyncio.TimeoutError as e:
         logger.error("Goal execution timed out: %s...", goal[:100])
         _record_goal_metrics(task_start_time, "timeout")
@@ -811,14 +763,10 @@ async def receive_goal(
     task_start_time = time.time()
 
     # Execute goal (Issue #281: uses helper)
-    result_dict = await _execute_goal_with_error_handling(
-        orchestrator, goal, task_start_time
-    )
+    result_dict = await _execute_goal_with_error_handling(orchestrator, goal, task_start_time)
 
     # Process and return result (Issue #620: uses helper)
-    return await _handle_goal_result(
-        event_manager, security_layer, user_role, goal, result_dict, task_start_time
-    )
+    return await _handle_goal_result(event_manager, security_layer, user_role, goal, result_dict, task_start_time)
 
 
 @with_error_handling(
@@ -848,20 +796,14 @@ async def pause_agent_api(
             detail="Orchestrator not available - application not fully initialized",
         )
     if not security_layer.check_permission(user_role, "allow_agent_control"):
-        security_layer.audit_log(
-            "agent_pause", user_role, "denied", {"reason": "permission_denied"}
-        )
-        return JSONResponse(
-            status_code=403, content={"message": "Permission denied to pause agent."}
-        )
+        security_layer.audit_log("agent_pause", user_role, "denied", {"reason": "permission_denied"})
+        return JSONResponse(status_code=403, content={"message": "Permission denied to pause agent."})
 
     try:
         await orchestrator.pause_agent()
     except Exception as e:
         logger.error("Failed to pause agent: %s", e, exc_info=True)
-        security_layer.audit_log(
-            "agent_pause", user_role, "failure", {"error": "Internal server error"}
-        )
+        security_layer.audit_log("agent_pause", user_role, "failure", {"error": "Internal server error"})
         raise InternalError(
             message="Failed to pause agent",
             details={"error_type": type(e).__name__},
@@ -870,9 +812,7 @@ async def pause_agent_api(
     security_layer.audit_log("agent_pause", user_role, "success", {})
     # Publish event (non-critical)
     try:
-        await event_manager.publish(
-            "agent_paused", {"message": "Agent operation paused."}
-        )
+        await event_manager.publish("agent_paused", {"message": "Agent operation paused."})
     except Exception as e:
         logger.warning("Failed to publish agent_paused event: %s", e)
     return {"message": "Agent paused successfully."}
@@ -905,20 +845,14 @@ async def resume_agent_api(
             detail="Orchestrator not available - application not fully initialized",
         )
     if not security_layer.check_permission(user_role, "allow_agent_control"):
-        security_layer.audit_log(
-            "agent_resume", user_role, "denied", {"reason": "permission_denied"}
-        )
-        return JSONResponse(
-            status_code=403, content={"message": "Permission denied to resume agent."}
-        )
+        security_layer.audit_log("agent_resume", user_role, "denied", {"reason": "permission_denied"})
+        return JSONResponse(status_code=403, content={"message": "Permission denied to resume agent."})
 
     try:
         await orchestrator.resume_agent()
     except Exception as e:
         logger.error("Failed to resume agent: %s", e, exc_info=True)
-        security_layer.audit_log(
-            "agent_resume", user_role, "failure", {"error": "Internal server error"}
-        )
+        security_layer.audit_log("agent_resume", user_role, "failure", {"error": "Internal server error"})
         raise InternalError(
             message="Failed to resume agent",
             details={"error_type": type(e).__name__},
@@ -927,9 +861,7 @@ async def resume_agent_api(
     security_layer.audit_log("agent_resume", user_role, "success", {})
     # Publish event (non-critical)
     try:
-        await event_manager.publish(
-            "agent_resumed", {"message": "Agent operation resumed."}
-        )
+        await event_manager.publish("agent_resumed", {"message": "Agent operation resumed."})
     except Exception as e:
         logger.warning("Failed to publish agent_resumed event: %s", e)
     return {"message": "Agent resumed successfully."}
@@ -960,17 +892,13 @@ async def command_approval(
     user_role = payload.user_role
 
     # Check permission (Issue #620: uses helper)
-    permission_error = _check_approval_permission(
-        security_layer, user_role, task_id, approved
-    )
+    permission_error = _check_approval_permission(security_layer, user_role, task_id, approved)
     if permission_error:
         return permission_error
 
     # Process approval via Redis (Issue #620: uses helper)
     if main_redis_client:
-        return await _publish_approval_to_redis(
-            main_redis_client, security_layer, user_role, task_id, approved
-        )
+        return await _publish_approval_to_redis(main_redis_client, security_layer, user_role, task_id, approved)
 
     error_message = "Redis client not initialized. Cannot process command approval."
     logging.error(error_message)
@@ -1025,20 +953,14 @@ async def execute_command(
         return validation_error
 
     # Publish start event (Issue #281: uses helper)
-    await _publish_event_safe(
-        event_manager, "command_execution_start", {"command": command}
-    )
+    await _publish_event_safe(event_manager, "command_execution_start", {"command": command})
     logging.info(f"Executing command: {command}")
 
     # Execute subprocess (Issue #281: uses helper)
-    stdout, stderr, returncode = await _run_subprocess(
-        command, security_layer, user_role
-    )
+    stdout, stderr, returncode = await _run_subprocess(command, security_layer, user_role)
 
     # Handle result and publish completion event (Issue #620: uses helper)
-    return await _handle_command_result(
-        event_manager, security_layer, user_role, command, stdout, stderr, returncode
-    )
+    return await _handle_command_result(event_manager, security_layer, user_role, command, stdout, stderr, returncode)
 
 
 # ====================================================================
@@ -1046,9 +968,7 @@ async def execute_command(
 # ====================================================================
 
 
-async def get_optimal_agents_for_goal(
-    goal: str, available_agents: List[str]
-) -> List[str]:
+async def get_optimal_agents_for_goal(goal: str, available_agents: List[str]) -> List[str]:
     """
     Intelligently select optimal agents for a given goal.
 
@@ -1079,9 +999,7 @@ async def get_optimal_agents_for_goal(
                 agent_scores[agent] = score
 
     # Select top agents (max 3 for efficiency)
-    selected_agents = sorted(
-        agent_scores.keys(), key=lambda x: agent_scores[x], reverse=True
-    )[:3]
+    selected_agents = sorted(agent_scores.keys(), key=lambda x: agent_scores[x], reverse=True)[:3]
 
     # Ensure we have at least one agent
     if not selected_agents and available_agents:
@@ -1136,9 +1054,7 @@ async def _enhance_context_with_kb(payload, knowledge_base) -> str | None:
     try:
         kb_results = await knowledge_base.search(query=payload.goal, top_k=5)
         if kb_results:
-            kb_context = "\n".join(
-                [f"- {item.get('content', '')[:200]}..." for item in kb_results[:3]]
-            )
+            kb_context = "\n".join([f"- {item.get('content', '')[:200]}..." for item in kb_results[:3]])
             return f"{payload.context or ''}\n\nRelevant knowledge:\n{kb_context}"
     except Exception as e:
         logger.warning("Knowledge base context enhancement failed: %s", e)
@@ -1191,9 +1107,7 @@ async def execute_enhanced_goal(
         available_agents = list(_FALLBACK_AGENTS)
 
     # Issue #398: Use extracted helpers
-    selected_agents = await _select_agents_for_goal(
-        ai_client, payload, available_agents
-    )
+    selected_agents = await _select_agents_for_goal(ai_client, payload, available_agents)
     enhanced_context = await _enhance_context_with_kb(payload, knowledge_base)
     coordination_mode = _determine_coordination_mode(payload, selected_agents)
 
@@ -1252,9 +1166,7 @@ async def coordinate_multi_agent_task(
         agents_info = await ai_client.list_available_agents()
         available_agents = agents_info.get("agents", [])
 
-        unavailable_agents = [
-            agent for agent in payload.agents if agent not in available_agents
-        ]
+        unavailable_agents = [agent for agent in payload.agents if agent not in available_agents]
         if unavailable_agents:
             raise HTTPException(
                 status_code=400,
@@ -1281,9 +1193,7 @@ async def coordinate_multi_agent_task(
                 "coordination_strategy": payload.coordination_strategy,
                 "coordination_time": coordination_time,
                 "subtasks_count": len(payload.subtasks) if payload.subtasks else 0,
-                "dependencies_count": (
-                    len(payload.dependencies) if payload.dependencies else 0
-                ),
+                "dependencies_count": (len(payload.dependencies) if payload.dependencies else 0),
                 "result": coordination_result,
                 "timestamp": coordination_end.isoformat(),
             }
@@ -1322,17 +1232,10 @@ async def comprehensive_research_task(
         enhanced_query = request_data.research_query
         if knowledge_base:
             try:
-                kb_results = await knowledge_base.search(
-                    query=request_data.research_query, top_k=3
-                )
+                kb_results = await knowledge_base.search(query=request_data.research_query, top_k=3)
                 if kb_results:
-                    kb_context = "\n".join(
-                        [f"- {item.get('content', '')[:150]}..." for item in kb_results]
-                    )
-                    enhanced_query = (
-                        f"{request_data.research_query}\n\nExisting"
-                        f"knowledge:\n{kb_context}"
-                    )
+                    kb_context = "\n".join([f"- {item.get('content', '')[:150]}..." for item in kb_results])
+                    enhanced_query = f"{request_data.research_query}\n\nExisting" f"knowledge:\n{kb_context}"
 
             except Exception as e:
                 logger.warning("KB context failed: %s", e)
@@ -1472,13 +1375,8 @@ async def get_agents_status():
                 "available_agents": agents_info.get("agents", []),
                 "multi_agent_coordination": True,
                 "npu_acceleration": "npu_code_search" in agents_info.get("agents", []),
-                "research_capabilities": any(
-                    agent in agents_info.get("agents", [])
-                    for agent in RESEARCH_AGENT_NAMES
-                ),
-                "development_tools": (
-                    "development_speedup" in agents_info.get("agents", [])
-                ),
+                "research_capabilities": any(agent in agents_info.get("agents", []) for agent in RESEARCH_AGENT_NAMES),
+                "development_tools": ("development_speedup" in agents_info.get("agents", [])),
             }
         )
 

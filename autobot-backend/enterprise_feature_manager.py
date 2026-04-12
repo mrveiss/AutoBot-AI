@@ -66,9 +66,7 @@ class EnterpriseFeatureManager:
             "AUTOBOT_BASE_DIR",
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         )
-        self.config_path = (
-            config_path or Path(base_dir) / "config" / "enterprise_features.json"
-        )
+        self.config_path = config_path or Path(base_dir) / "config" / "enterprise_features.json"
         self.features: Dict[str, EnterpriseFeature] = {}
         self.vm_topology = self._initialize_vm_topology()
         self.resource_pools = self._initialize_resource_pools()
@@ -107,9 +105,7 @@ class EnterpriseFeatureManager:
                 "AUTOBOT_*_PORT environment variables must be set"
             )
 
-    def _get_core_vm_configs(
-        self, cfg: Dict[str, Optional[str]]
-    ) -> Dict[str, Dict[str, Any]]:
+    def _get_core_vm_configs(self, cfg: Dict[str, Optional[str]]) -> Dict[str, Dict[str, Any]]:
         """
         Get main machine and frontend VM configurations.
 
@@ -132,9 +128,7 @@ class EnterpriseFeatureManager:
             },
         }
 
-    def _get_processing_vm_configs(
-        self, cfg: Dict[str, Optional[str]]
-    ) -> Dict[str, Dict[str, Any]]:
+    def _get_processing_vm_configs(self, cfg: Dict[str, Optional[str]]) -> Dict[str, Dict[str, Any]]:
         """
         Get NPU worker and AI stack VM configurations.
 
@@ -169,9 +163,7 @@ class EnterpriseFeatureManager:
             },
         }
 
-    def _get_service_vm_configs(
-        self, cfg: Dict[str, Optional[str]]
-    ) -> Dict[str, Dict[str, Any]]:
+    def _get_service_vm_configs(self, cfg: Dict[str, Optional[str]]) -> Dict[str, Dict[str, Any]]:
         """
         Get Redis and browser VM configurations.
 
@@ -194,9 +186,7 @@ class EnterpriseFeatureManager:
             },
         }
 
-    def _build_vm_topology(
-        self, cfg: Dict[str, Optional[str]]
-    ) -> Dict[str, Dict[str, Any]]:
+    def _build_vm_topology(self, cfg: Dict[str, Optional[str]]) -> Dict[str, Dict[str, Any]]:
         """
         Build VM topology dictionary from environment configuration.
 
@@ -464,10 +454,7 @@ class EnterpriseFeatureManager:
         """
         missing_deps = []
         for dep in feature.dependencies:
-            if (
-                dep not in self.features
-                or self.features[dep].status != FeatureStatus.ENABLED
-            ):
+            if dep not in self.features or self.features[dep].status != FeatureStatus.ENABLED:
                 missing_deps.append(dep)
         return missing_deps
 
@@ -487,9 +474,7 @@ class EnterpriseFeatureManager:
             "configuration": feature.configuration,
         }
 
-    def _build_error_response(
-        self, feature_name: str, error_message: str
-    ) -> Dict[str, Any]:
+    def _build_error_response(self, feature_name: str, error_message: str) -> Dict[str, Any]:
         """
         Build error response dictionary for feature enablement failure.
 
@@ -510,9 +495,7 @@ class EnterpriseFeatureManager:
         missing_deps = self._check_feature_dependencies(feature)
 
         if missing_deps:
-            return self._build_error_response(
-                feature_name, f"Missing dependencies: {missing_deps}"
-            )
+            return self._build_error_response(feature_name, f"Missing dependencies: {missing_deps}")
 
         try:
             feature.status = FeatureStatus.ENABLING
@@ -538,9 +521,7 @@ class EnterpriseFeatureManager:
         except Exception as e:
             feature.status = FeatureStatus.ERROR
             logger.error("Exception enabling feature %s: %s", feature_name, e)
-            return self._build_error_response(
-                feature_name, f"Exception enabling {feature_name}: {str(e)}"
-            )
+            return self._build_error_response(feature_name, f"Exception enabling {feature_name}: {str(e)}")
 
     def _get_feature_enablers(self) -> Dict[str, Any]:
         """Get feature name to enabler method mapping (Issue #315 - dispatch table)."""
@@ -552,9 +533,7 @@ class EnterpriseFeatureManager:
             "graceful_degradation": self._enable_graceful_degradation,
         }
 
-    async def _enable_feature_implementation(
-        self, feature_name: str, feature: EnterpriseFeature
-    ) -> Dict[str, Any]:
+    async def _enable_feature_implementation(self, feature_name: str, feature: EnterpriseFeature) -> Dict[str, Any]:
         """Implement specific feature enablement logic (Issue #315 - refactored depth 5 to 2)."""
         enablers = self._get_feature_enablers()
 
@@ -564,9 +543,7 @@ class EnterpriseFeatureManager:
         # Generic feature enablement
         return {"success": True, "capabilities": [f"{feature_name}_enabled"]}
 
-    async def _enable_web_research_orchestration(
-        self, feature: EnterpriseFeature
-    ) -> Dict[str, Any]:
+    async def _enable_web_research_orchestration(self, feature: EnterpriseFeature) -> Dict[str, Any]:
         """Enable web research orchestration capabilities"""
         try:
             # Update chat workflow configuration to enable research
@@ -575,9 +552,7 @@ class EnterpriseFeatureManager:
                 "librarian_agents_enabled": True,
                 "mcp_integration_enabled": True,
                 "research_timeout": feature.configuration["research_timeout_seconds"],
-                "max_concurrent_research": feature.configuration[
-                    "max_concurrent_research"
-                ],
+                "max_concurrent_research": feature.configuration["max_concurrent_research"],
             }
 
             # Apply configuration to chat workflow
@@ -600,9 +575,7 @@ class EnterpriseFeatureManager:
             logger.error("Failed to enable advanced research capabilities: %s", e)
             return {"success": False, "error": "Feature enablement failed"}
 
-    async def _enable_cross_vm_load_balancing(
-        self, feature: EnterpriseFeature
-    ) -> Dict[str, Any]:
+    async def _enable_cross_vm_load_balancing(self, feature: EnterpriseFeature) -> Dict[str, Any]:
         """Enable cross-VM load balancing"""
         try:
             # Initialize load balancer
@@ -631,9 +604,7 @@ class EnterpriseFeatureManager:
             logger.error("Failed to enable cross-VM load balancing: %s", e)
             return {"success": False, "error": "Feature enablement failed"}
 
-    async def _enable_intelligent_task_routing(
-        self, feature: EnterpriseFeature
-    ) -> Dict[str, Any]:
+    async def _enable_intelligent_task_routing(self, feature: EnterpriseFeature) -> Dict[str, Any]:
         """Enable intelligent task routing between NPU/GPU/CPU"""
         try:
             # Initialize hardware detection
@@ -664,16 +635,12 @@ class EnterpriseFeatureManager:
             logger.error("Failed to enable intelligent task routing: %s", e)
             return {"success": False, "error": "Feature enablement failed"}
 
-    async def _enable_comprehensive_health_monitoring(
-        self, feature: EnterpriseFeature
-    ) -> Dict[str, Any]:
+    async def _enable_comprehensive_health_monitoring(self, feature: EnterpriseFeature) -> Dict[str, Any]:
         """Enable comprehensive health monitoring"""
         try:
             # Initialize health monitoring system
             monitoring_config = {
-                "vm_endpoints": {
-                    vm: data["ip"] for vm, data in self.vm_topology.items()
-                },
+                "vm_endpoints": {vm: data["ip"] for vm, data in self.vm_topology.items()},
                 "service_endpoints": self._get_all_service_endpoints(),
                 "check_interval": feature.configuration["health_check_interval"],
                 "alert_thresholds": {
@@ -700,9 +667,7 @@ class EnterpriseFeatureManager:
             logger.error("Failed to enable comprehensive health monitoring: %s", e)
             return {"success": False, "error": "Feature enablement failed"}
 
-    async def _enable_graceful_degradation(
-        self, feature: EnterpriseFeature
-    ) -> Dict[str, Any]:
+    async def _enable_graceful_degradation(self, feature: EnterpriseFeature) -> Dict[str, Any]:
         """Enable graceful degradation and failover"""
         try:
             # Initialize circuit breakers
@@ -719,9 +684,7 @@ class EnterpriseFeatureManager:
                 "recovery_strategies": feature.configuration["recovery_strategies"],
             }
 
-            await self._create_degradation_system(
-                circuit_breaker_config, fallback_config
-            )
+            await self._create_degradation_system(circuit_breaker_config, fallback_config)
 
             return {
                 "success": True,
@@ -758,22 +721,14 @@ class EnterpriseFeatureManager:
                 result = await self.enable_feature(feature_name)
                 if result["status"] == "success":
                     results["enabled_features"].append(feature_name)
-                    results["capabilities_unlocked"].extend(
-                        result.get("capabilities_unlocked", [])
-                    )
+                    results["capabilities_unlocked"].extend(result.get("capabilities_unlocked", []))
                 else:
-                    results["failed_features"].append(
-                        {"feature": feature_name, "error": result["message"]}
-                    )
+                    results["failed_features"].append({"feature": feature_name, "error": result["message"]})
             except Exception as e:
                 logger.error("Failed to enable feature %s: %s", feature_name, e)
-                results["failed_features"].append(
-                    {"feature": feature_name, "error": "Feature enablement failed"}
-                )
+                results["failed_features"].append({"feature": feature_name, "error": "Feature enablement failed"})
 
-        logger.info(
-            f"✅ Enterprise features enabled: {len(results['enabled_features'])}/{results['total_features']}"
-        )
+        logger.info(f"✅ Enterprise features enabled: {len(results['enabled_features'])}/{results['total_features']}")
         return results
 
     def _sort_features_by_dependencies(self) -> List[str]:
@@ -808,15 +763,9 @@ class EnterpriseFeatureManager:
         """
         return {
             "total_features": len(self.features),
-            "enabled_features": sum(
-                1 for f in self.features.values() if f.status == FeatureStatus.ENABLED
-            ),
-            "degraded_features": sum(
-                1 for f in self.features.values() if f.status == FeatureStatus.DEGRADED
-            ),
-            "failed_features": sum(
-                1 for f in self.features.values() if f.status == FeatureStatus.ERROR
-            ),
+            "enabled_features": sum(1 for f in self.features.values() if f.status == FeatureStatus.ENABLED),
+            "degraded_features": sum(1 for f in self.features.values() if f.status == FeatureStatus.DEGRADED),
+            "failed_features": sum(1 for f in self.features.values() if f.status == FeatureStatus.ERROR),
         }
 
     def _build_capabilities_status(self) -> Dict[str, Any]:
@@ -834,9 +783,7 @@ class EnterpriseFeatureManager:
             "failover_recovery": self._check_failover_capabilities(),
         }
 
-    async def _build_feature_detail(
-        self, name: str, feature: "EnterpriseFeature"
-    ) -> Dict[str, Any]:
+    async def _build_feature_detail(self, name: str, feature: "EnterpriseFeature") -> Dict[str, Any]:
         """
         Build detailed status for a single feature.
 
@@ -845,14 +792,10 @@ class EnterpriseFeatureManager:
         return {
             "status": feature.status.value,
             "category": feature.category.value,
-            "enabled_at": (
-                feature.enabled_at.isoformat() if feature.enabled_at else None
-            ),
+            "enabled_at": (feature.enabled_at.isoformat() if feature.enabled_at else None),
             "description": feature.description,
             "health_check": (
-                await self._check_feature_health(name)
-                if feature.status == FeatureStatus.ENABLED
-                else None
+                await self._check_feature_health(name) if feature.status == FeatureStatus.ENABLED else None
             ),
         }
 
@@ -903,17 +846,11 @@ class EnterpriseFeatureManager:
         """Create health monitoring system"""
         logger.info("Creating health monitoring system: %s", config)
 
-    async def _create_degradation_system(
-        self, circuit_config: Dict[str, Any], fallback_config: Dict[str, Any]
-    ):
+    async def _create_degradation_system(self, circuit_config: Dict[str, Any], fallback_config: Dict[str, Any]):
         """Create graceful degradation system"""
-        logger.info(
-            f"Creating degradation system: circuit={circuit_config}, fallback={fallback_config}"
-        )
+        logger.info(f"Creating degradation system: circuit={circuit_config}, fallback={fallback_config}")
 
-    async def _start_health_monitoring(
-        self, feature_name: str, feature: EnterpriseFeature
-    ):
+    async def _start_health_monitoring(self, feature_name: str, feature: EnterpriseFeature):
         """Start health monitoring for a feature"""
         logger.info("Starting health monitoring for %s", feature_name)
 

@@ -9,10 +9,9 @@ import signal
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 import requests
-import sys
-from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from tests.test_helpers import get_test_backend_url
@@ -44,9 +43,7 @@ async def test_security_endpoints():
                 response = requests.get(get_test_backend_url() + "/api/hello", timeout=2)
                 if response.status_code == 200:
                     server_ready = True
-                    print(
-                        f"✅ Server ready after {attempt + 1} attempts"
-                    )  # noqa: print
+                    print(f"✅ Server ready after {attempt + 1} attempts")  # noqa: print
                     break
             except Exception:
                 pass
@@ -59,30 +56,18 @@ async def test_security_endpoints():
         # Test security status endpoint
         print("\n🔍 Testing security status endpoint...")  # noqa: print
         try:
-            response = requests.get(
-                get_test_backend_url() + "/api/security/status", timeout=5
-            )
+            response = requests.get(get_test_backend_url() + "/api/security/status", timeout=5)
             print(f"   Status code: {response.status_code}")  # noqa: print
 
             if response.status_code == 200:
                 data = response.json()
                 print("✅ Security status endpoint working")  # noqa: print
-                print(  # noqa: print
-                    f"   - Security enabled: {data.get('security_enabled')}"
-                )  # noqa: print
-                print(  # noqa: print
-                    f"   - Command security enabled: {data.get('command_security_enabled')}"
-                )
-                print(  # noqa: print
-                    f"   - Docker sandbox enabled: {data.get('docker_sandbox_enabled')}"
-                )
-                print(  # noqa: print
-                    f"   - Pending approvals: {len(data.get('pending_approvals', []))}"
-                )
+                print(f"   - Security enabled: {data.get('security_enabled')}")  # noqa: print  # noqa: print
+                print(f"   - Command security enabled: {data.get('command_security_enabled')}")  # noqa: print
+                print(f"   - Docker sandbox enabled: {data.get('docker_sandbox_enabled')}")  # noqa: print
+                print(f"   - Pending approvals: {len(data.get('pending_approvals', []))}")  # noqa: print
             else:
-                print(  # noqa: print
-                    f"❌ Security status endpoint failed: {response.status_code}"
-                )  # noqa: print
+                print(f"❌ Security status endpoint failed: {response.status_code}")  # noqa: print  # noqa: print
                 print(f"   Response: {response.text}")  # noqa: print
 
         except Exception as e:
@@ -91,9 +76,7 @@ async def test_security_endpoints():
         # Test command history endpoint
         print("\n📋 Testing command history endpoint...")  # noqa: print
         try:
-            response = requests.get(
-                get_test_backend_url() + "/api/security/command-history", timeout=5
-            )
+            response = requests.get(get_test_backend_url() + "/api/security/command-history", timeout=5)
             print(f"   Status code: {response.status_code}")  # noqa: print
 
             if response.status_code == 200:
@@ -103,13 +86,9 @@ async def test_security_endpoints():
                 if data.get("count", 0) > 0:
                     print("   - Sample entries:")  # noqa: print
                     for entry in data.get("command_history", [])[:3]:
-                        print(  # noqa: print
-                            f"     * {entry.get('timestamp', 'N/A')} - {entry.get('action', 'N/A')}"
-                        )
+                        print(f"     * {entry.get('timestamp', 'N/A')} - {entry.get('action', 'N/A')}")  # noqa: print
             else:
-                print(  # noqa: print
-                    f"❌ Command history endpoint failed: {response.status_code}"
-                )  # noqa: print
+                print(f"❌ Command history endpoint failed: {response.status_code}")  # noqa: print  # noqa: print
                 print(f"   Response: {response.text}")  # noqa: print
 
         except Exception as e:
@@ -118,9 +97,7 @@ async def test_security_endpoints():
         # Test pending approvals endpoint
         print("\n⏳ Testing pending approvals endpoint...")  # noqa: print
         try:
-            response = requests.get(
-                get_test_backend_url() + "/api/security/pending-approvals", timeout=5
-            )
+            response = requests.get(get_test_backend_url() + "/api/security/pending-approvals", timeout=5)
             print(f"   Status code: {response.status_code}")  # noqa: print
 
             if response.status_code == 200:
@@ -128,9 +105,7 @@ async def test_security_endpoints():
                 print("✅ Pending approvals endpoint working")  # noqa: print
                 print(f"   - Pending count: {data.get('count', 0)}")  # noqa: print
             else:
-                print(  # noqa: print
-                    f"❌ Pending approvals endpoint failed: {response.status_code}"
-                )  # noqa: print
+                print(f"❌ Pending approvals endpoint failed: {response.status_code}")  # noqa: print  # noqa: print
                 print(f"   Response: {response.text}")  # noqa: print
 
         except Exception as e:
@@ -139,9 +114,7 @@ async def test_security_endpoints():
         # Test audit log endpoint
         print("\n📜 Testing audit log endpoint...")  # noqa: print
         try:
-            response = requests.get(
-                get_test_backend_url() + "/api/security/audit-log", timeout=5
-            )
+            response = requests.get(get_test_backend_url() + "/api/security/audit-log", timeout=5)
             print(f"   Status code: {response.status_code}")  # noqa: print
 
             if response.status_code == 200:
@@ -149,9 +122,7 @@ async def test_security_endpoints():
                 print("✅ Audit log endpoint working")  # noqa: print
                 print(f"   - Audit entries: {data.get('count', 0)}")  # noqa: print
             else:
-                print(  # noqa: print
-                    f"❌ Audit log endpoint failed: {response.status_code}"
-                )  # noqa: print
+                print(f"❌ Audit log endpoint failed: {response.status_code}")  # noqa: print  # noqa: print
                 print(f"   Response: {response.text}")  # noqa: print
 
         except Exception as e:
@@ -165,9 +136,7 @@ async def test_security_endpoints():
 
             ws_url = get_test_backend_url().replace("http://", "ws://") + "/api/terminal/ws/secure/test_session"
             print(f"   WebSocket URL: {ws_url}")  # noqa: print
-            print(  # noqa: print
-                "   ℹ️  WebSocket functionality requires separate testing"
-            )  # noqa: print
+            print("   ℹ️  WebSocket functionality requires separate testing")  # noqa: print  # noqa: print
         except Exception as e:
             print(f"   ℹ️  WebSocket test skipped: {e}")  # noqa: print
 

@@ -121,9 +121,7 @@ class GitTracker:
             return None
         try:
             async with db_service.session() as db:
-                result = await db.execute(
-                    select(Setting).where(Setting.key == "slm_agent_latest_commit")
-                )
+                result = await db.execute(select(Setting).where(Setting.key == "slm_agent_latest_commit"))
                 setting = result.scalar_one_or_none()
                 return setting.value if setting else None
         except Exception as e:
@@ -186,11 +184,7 @@ class GitTracker:
         if remote_commit is None:
             remote_commit = await self._get_commit_from_db()
 
-        has_update = (
-            local_commit is not None
-            and remote_commit is not None
-            and local_commit != remote_commit
-        )
+        has_update = local_commit is not None and remote_commit is not None and local_commit != remote_commit
 
         if remote_commit:
             self.latest_commit = remote_commit
@@ -268,9 +262,7 @@ async def _get_active_code_source_config() -> Tuple[str, str]:
         return DEFAULT_REPO_PATH, DEFAULT_BRANCH
     try:
         async with db_service.session() as db:
-            result = await db.execute(
-                select(CodeSource).where(CodeSource.is_active.is_(True))
-            )
+            result = await db.execute(select(CodeSource).where(CodeSource.is_active.is_(True)))
             source = result.scalar_one_or_none()
             if source:
                 return source.repo_path, source.branch
@@ -290,9 +282,7 @@ async def update_latest_version_setting(
         db: Database session
         commit_hash: The latest commit hash to store
     """
-    result = await db.execute(
-        select(Setting).where(Setting.key == "slm_agent_latest_commit")
-    )
+    result = await db.execute(select(Setting).where(Setting.key == "slm_agent_latest_commit"))
     setting = result.scalar_one_or_none()
 
     if setting:
@@ -337,11 +327,7 @@ async def version_check_task(
                 if result["has_update"]:
                     logger.info(
                         "Update available: local=%s, remote=%s",
-                        (
-                            result["local_commit"][:12]
-                            if result["local_commit"]
-                            else "unknown"
-                        ),
+                        (result["local_commit"][:12] if result["local_commit"] else "unknown"),
                         result["remote_commit"][:12],
                     )
             else:

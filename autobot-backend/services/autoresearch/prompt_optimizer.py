@@ -345,9 +345,7 @@ class PromptOptimizer:
         adding all entries to the archive.
         """
         # 1. Mutate
-        prompt_texts = await self._mutate_prompt(
-            current_best_prompt, target.mutation_count
-        )
+        prompt_texts = await self._mutate_prompt(current_best_prompt, target.mutation_count)
 
         # 2. Benchmark each variant
         variants: List[PromptVariant] = []
@@ -391,9 +389,7 @@ class PromptOptimizer:
         for tier_idx, scorer_name in enumerate(target.scorer_chain):
             scorer = self._scorers.get(scorer_name)
             if scorer is None:
-                logger.warning(
-                    "PromptOptimizer: scorer %r not found, skipping", scorer_name
-                )
+                logger.warning("PromptOptimizer: scorer %r not found, skipping", scorer_name)
                 continue
 
             subset_frac = self._config.staged_eval_fraction if tier_idx == 0 else None
@@ -411,8 +407,7 @@ class PromptOptimizer:
             gated_out = len(candidates) - len(passed)
             if gated_out:
                 logger.info(
-                    "PromptOptimizer: staged gate after %r — %d variant(s) below "
-                    "threshold %.2f (kept %d)",
+                    "PromptOptimizer: staged gate after %r — %d variant(s) below " "threshold %.2f (kept %d)",
                     scorer_name,
                     gated_out,
                     threshold,
@@ -421,9 +416,7 @@ class PromptOptimizer:
             candidates = passed
 
             if not candidates:
-                logger.info(
-                    "PromptOptimizer: no candidates passed gate after %r", scorer_name
-                )
+                logger.info("PromptOptimizer: no candidates passed gate after %r", scorer_name)
                 break
 
         return failed_ids

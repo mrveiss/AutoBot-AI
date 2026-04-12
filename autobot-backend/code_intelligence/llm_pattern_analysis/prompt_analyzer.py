@@ -121,9 +121,7 @@ class PromptAnalyzer:
         return list(variables)
 
     @classmethod
-    def suggest_improvements(
-        cls, prompt: str, issues: List[PromptIssueType]
-    ) -> List[str]:
+    def suggest_improvements(cls, prompt: str, issues: List[PromptIssueType]) -> List[str]:
         """
         Suggest improvements for detected issues.
 

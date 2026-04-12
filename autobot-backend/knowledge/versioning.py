@@ -53,14 +53,10 @@ class VersioningMixin:
 
     async def _get_next_version_number(self, version_meta_key: str) -> int:
         """Get next version number for a fact (Issue #398: extracted)."""
-        current_version = await asyncio.to_thread(
-            self.redis_client.hget, version_meta_key, "current_version"
-        )
+        current_version = await asyncio.to_thread(self.redis_client.hget, version_meta_key, "current_version")
         return int(current_version) + 1 if current_version else 1
 
-    async def _store_version_data(
-        self, fact_id: str, version_data: Dict, version_num: int
-    ) -> None:
+    async def _store_version_data(self, fact_id: str, version_data: Dict, version_num: int) -> None:
         """Store version data in Redis (Issue #398: extracted)."""
         version_list_key = f"{self.VERSION_PREFIX}{fact_id}"
         version_meta_key = f"{self.VERSION_META}{fact_id}"
@@ -68,12 +64,8 @@ class VersioningMixin:
         # Issue #619: lpush + ltrim must be sequential (ltrim depends on lpush),
         # but hset can run in parallel with them
         async def list_operations():
-            await asyncio.to_thread(
-                self.redis_client.lpush, version_list_key, json.dumps(version_data)
-            )
-            await asyncio.to_thread(
-                self.redis_client.ltrim, version_list_key, 0, MAX_VERSIONS - 1
-            )
+            await asyncio.to_thread(self.redis_client.lpush, version_list_key, json.dumps(version_data))
+            await asyncio.to_thread(self.redis_client.ltrim, version_list_key, 0, MAX_VERSIONS - 1)
 
         async def meta_operation():
             await asyncio.to_thread(
@@ -121,9 +113,7 @@ class VersioningMixin:
 
     async def _find_version_by_number(self, version_list_key: str, version: int) -> str:
         """Find specific version JSON by version number (Issue #398: extracted)."""
-        all_versions = await asyncio.to_thread(
-            self.redis_client.lrange, version_list_key, 0, -1
-        )
+        all_versions = await asyncio.to_thread(self.redis_client.lrange, version_list_key, 0, -1)
         for v in all_versions:
             v_str = v.decode() if isinstance(v, bytes) else v
             v_data = json.loads(v_str)
@@ -137,13 +127,9 @@ class VersioningMixin:
             version_list_key = f"{self.VERSION_PREFIX}{fact_id}"
 
             if version is None:
-                version_json = await asyncio.to_thread(
-                    self.redis_client.lindex, version_list_key, 0
-                )
+                version_json = await asyncio.to_thread(self.redis_client.lindex, version_list_key, 0)
             else:
-                version_json = await self._find_version_by_number(
-                    version_list_key, version
-                )
+                version_json = await self._find_version_by_number(version_list_key, version)
 
             if not version_json:
                 return {
@@ -183,18 +169,14 @@ class VersioningMixin:
         if meta:
             total_str = meta.get(b"total_versions") or meta.get("total_versions")
             if total_str:
-                return int(
-                    total_str.decode() if isinstance(total_str, bytes) else total_str
-                )
+                return int(total_str.decode() if isinstance(total_str, bytes) else total_str)
         return 0
 
     async def list_versions(self, fact_id: str, limit: int = 10) -> Dict[str, Any]:
         """List version history for a fact (Issue #398: refactored)."""
         try:
             version_list_key = f"{self.VERSION_PREFIX}{fact_id}"
-            versions_raw = await asyncio.to_thread(
-                self.redis_client.lrange, version_list_key, 0, limit - 1
-            )
+            versions_raw = await asyncio.to_thread(self.redis_client.lrange, version_list_key, 0, limit - 1)
 
             versions = [self._parse_version_summary(v) for v in versions_raw]
             total_versions = await self._get_total_version_count(fact_id)
@@ -214,9 +196,7 @@ class VersioningMixin:
                 "versions": [],
             }
 
-    async def _apply_version_to_fact(
-        self, fact_id: str, target_version: Dict[str, Any]
-    ) -> bool:
+    async def _apply_version_to_fact(self, fact_id: str, target_version: Dict[str, Any]) -> bool:
         """Apply version content to fact (Issue #398: extracted)."""
         fact_key = f"fact:{fact_id}"
         exists = await asyncio.to_thread(self.redis_client.exists, fact_key)
@@ -232,9 +212,7 @@ class VersioningMixin:
         )
         return True
 
-    async def revert_to_version(
-        self, fact_id: str, version: int, created_by: str = None
-    ) -> Dict[str, Any]:
+    async def revert_to_version(self, fact_id: str, version: int, created_by: str = None) -> Dict[str, Any]:
         """Revert a fact to a previous version (Issue #398: refactored)."""
         try:
             result = await self.get_version(fact_id, version)
@@ -273,9 +251,7 @@ class VersioningMixin:
         """Compare metadata between two versions (Issue #398: extracted)."""
         added_keys = set(meta_b.keys()) - set(meta_a.keys())
         removed_keys = set(meta_a.keys()) - set(meta_b.keys())
-        modified_keys = {
-            k for k in meta_a.keys() & meta_b.keys() if meta_a[k] != meta_b[k]
-        }
+        modified_keys = {k for k in meta_a.keys() & meta_b.keys() if meta_a[k] != meta_b[k]}
         return {
             "metadata_added": list(added_keys),
             "metadata_removed": list(removed_keys),
@@ -288,9 +264,7 @@ class VersioningMixin:
         """Build comparison result structure (Issue #398: extracted)."""
         content_a = v_a.get("content", "")
         content_b = v_b.get("content", "")
-        meta_changes = self._compare_metadata(
-            v_a.get("metadata", {}), v_b.get("metadata", {})
-        )
+        meta_changes = self._compare_metadata(v_a.get("metadata", {}), v_b.get("metadata", {}))
         return {
             "status": "success",
             "fact_id": fact_id,
@@ -311,9 +285,7 @@ class VersioningMixin:
             },
         }
 
-    async def compare_versions(
-        self, fact_id: str, version_a: int, version_b: int
-    ) -> Dict[str, Any]:
+    async def compare_versions(self, fact_id: str, version_a: int, version_b: int) -> Dict[str, Any]:
         """Compare two versions of a fact (Issue #398: refactored)."""
         try:
             # Issue #619: Parallelize independent version fetches
@@ -364,9 +336,7 @@ class VersioningMixin:
             count = await self.get_version_count(fact_id)
 
             # Delete version list and metadata
-            await asyncio.to_thread(
-                self.redis_client.delete, version_list_key, version_meta_key
-            )
+            await asyncio.to_thread(self.redis_client.delete, version_list_key, version_meta_key)
 
             logger.info("Deleted %d versions for fact %s", count, fact_id)
             return {

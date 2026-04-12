@@ -127,65 +127,26 @@ class TestAPIErrorResponse:
     def test_get_status_code_for_category(self):
         """Test status code mapping for all categories"""
         # HTTP-aligned categories
-        assert (
-            APIErrorResponse.get_status_code_for_category(ErrorCategory.VALIDATION)
-            == 400
-        )
-        assert (
-            APIErrorResponse.get_status_code_for_category(ErrorCategory.AUTHENTICATION)
-            == 401
-        )
-        assert (
-            APIErrorResponse.get_status_code_for_category(ErrorCategory.AUTHORIZATION)
-            == 403
-        )
-        assert (
-            APIErrorResponse.get_status_code_for_category(ErrorCategory.NOT_FOUND)
-            == 404
-        )
-        assert (
-            APIErrorResponse.get_status_code_for_category(ErrorCategory.CONFLICT) == 409
-        )
-        assert (
-            APIErrorResponse.get_status_code_for_category(ErrorCategory.RATE_LIMIT)
-            == 429
-        )
-        assert (
-            APIErrorResponse.get_status_code_for_category(ErrorCategory.SERVER_ERROR)
-            == 500
-        )
-        assert (
-            APIErrorResponse.get_status_code_for_category(
-                ErrorCategory.EXTERNAL_SERVICE
-            )
-            == 502
-        )
-        assert (
-            APIErrorResponse.get_status_code_for_category(
-                ErrorCategory.SERVICE_UNAVAILABLE
-            )
-            == 503
-        )
+        assert APIErrorResponse.get_status_code_for_category(ErrorCategory.VALIDATION) == 400
+        assert APIErrorResponse.get_status_code_for_category(ErrorCategory.AUTHENTICATION) == 401
+        assert APIErrorResponse.get_status_code_for_category(ErrorCategory.AUTHORIZATION) == 403
+        assert APIErrorResponse.get_status_code_for_category(ErrorCategory.NOT_FOUND) == 404
+        assert APIErrorResponse.get_status_code_for_category(ErrorCategory.CONFLICT) == 409
+        assert APIErrorResponse.get_status_code_for_category(ErrorCategory.RATE_LIMIT) == 429
+        assert APIErrorResponse.get_status_code_for_category(ErrorCategory.SERVER_ERROR) == 500
+        assert APIErrorResponse.get_status_code_for_category(ErrorCategory.EXTERNAL_SERVICE) == 502
+        assert APIErrorResponse.get_status_code_for_category(ErrorCategory.SERVICE_UNAVAILABLE) == 503
 
         # System-level categories (default to 500)
-        assert (
-            APIErrorResponse.get_status_code_for_category(ErrorCategory.SYSTEM) == 500
-        )
-        assert (
-            APIErrorResponse.get_status_code_for_category(ErrorCategory.DATABASE) == 500
-        )
+        assert APIErrorResponse.get_status_code_for_category(ErrorCategory.SYSTEM) == 500
+        assert APIErrorResponse.get_status_code_for_category(ErrorCategory.DATABASE) == 500
         assert APIErrorResponse.get_status_code_for_category(ErrorCategory.LLM) == 500
 
         # Network -> 503
-        assert (
-            APIErrorResponse.get_status_code_for_category(ErrorCategory.NETWORK) == 503
-        )
+        assert APIErrorResponse.get_status_code_for_category(ErrorCategory.NETWORK) == 503
 
         # User input -> 400
-        assert (
-            APIErrorResponse.get_status_code_for_category(ErrorCategory.USER_INPUT)
-            == 400
-        )
+        assert APIErrorResponse.get_status_code_for_category(ErrorCategory.USER_INPUT) == 400
 
 
 class TestWithErrorHandlingDecorator:
@@ -266,9 +227,7 @@ class TestWithErrorHandlingDecorator:
     async def test_decorator_generates_trace_id(self):
         """Test that decorator generates trace IDs for errors"""
 
-        @with_error_handling(
-            category=ErrorCategory.SERVER_ERROR, operation="test_operation"
-        )
+        @with_error_handling(category=ErrorCategory.SERVER_ERROR, operation="test_operation")
         async def failing_operation():
             raise RuntimeError("Test error")
 
@@ -301,8 +260,7 @@ class TestErrorHandlingIntegration:
         for category, expected_code in categories_and_codes:
             status_code = APIErrorResponse.get_status_code_for_category(category)
             assert status_code == expected_code, (
-                f"Category {category} should map to {expected_code}, "
-                f"got {status_code}"
+                f"Category {category} should map to {expected_code}, " f"got {status_code}"
             )
 
     def test_error_response_serialization_roundtrip(self):

@@ -285,9 +285,7 @@ class TestDoubleCheckedLocking:
         assert "if cls._instance is None:" in source
         assert "with cls._lock:" in source
         # Should have two None checks (outer and inner)
-        assert (
-            source.count("_instance is None") >= 2
-        ), "Double-checked locking not implemented"
+        assert source.count("_instance is None") >= 2, "Double-checked locking not implemented"
 
 
 if __name__ == "__main__":

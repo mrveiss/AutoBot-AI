@@ -29,9 +29,7 @@ _llama_index = types.ModuleType("llama_index")
 sys.modules.setdefault("llama_index", _llama_index)
 sys.modules.setdefault("llama_index.core", _llama_core)
 sys.modules.setdefault("llama_index.vector_stores", types.ModuleType("llama_index.vector_stores"))
-sys.modules.setdefault(
-    "llama_index.vector_stores.chroma", types.ModuleType("llama_index.vector_stores.chroma")
-)
+sys.modules.setdefault("llama_index.vector_stores.chroma", types.ModuleType("llama_index.vector_stores.chroma"))
 sys.modules.setdefault("chromadb", types.ModuleType("chromadb"))
 sys.modules.setdefault("redis", types.ModuleType("redis"))
 sys.modules.setdefault("aioredis", types.ModuleType("aioredis"))
@@ -116,18 +114,19 @@ class TestFindDuplicate:
         """Distance giving similarity >= threshold returns existing metadata."""
         # similarity = 1 - 0.10/2 = 0.95 >= 0.92
         chroma_collection = MagicMock()
-        chroma_collection.query = MagicMock(
-            return_value=_chroma_result(distance=0.10, fact_id="dup-42")
-        )
+        chroma_collection.query = MagicMock(return_value=_chroma_result(distance=0.10, fact_id="dup-42"))
         vector_store = MagicMock()
         vector_store._collection = chroma_collection
         kb = _FakeKB(vector_store=vector_store)
 
-        with patch.object(
-            facts_module,
-            "_generate_embedding_with_npu_fallback",
-            new=AsyncMock(return_value=[0.1] * 768),
-        ), patch("knowledge.facts.asyncio.to_thread", side_effect=lambda f, *a, **k: f(*a, **k)):
+        with (
+            patch.object(
+                facts_module,
+                "_generate_embedding_with_npu_fallback",
+                new=AsyncMock(return_value=[0.1] * 768),
+            ),
+            patch("knowledge.facts.asyncio.to_thread", side_effect=lambda f, *a, **k: f(*a, **k)),
+        ):
             result = await kb._find_duplicate("duplicate content", threshold=_THRESHOLD)
 
         assert result is not None
@@ -138,18 +137,19 @@ class TestFindDuplicate:
         """Distance giving similarity < threshold returns None."""
         # similarity = 1 - 0.30/2 = 0.85 < 0.92
         chroma_collection = MagicMock()
-        chroma_collection.query = MagicMock(
-            return_value=_chroma_result(distance=0.30, fact_id="not-dup")
-        )
+        chroma_collection.query = MagicMock(return_value=_chroma_result(distance=0.30, fact_id="not-dup"))
         vector_store = MagicMock()
         vector_store._collection = chroma_collection
         kb = _FakeKB(vector_store=vector_store)
 
-        with patch.object(
-            facts_module,
-            "_generate_embedding_with_npu_fallback",
-            new=AsyncMock(return_value=[0.1] * 768),
-        ), patch("knowledge.facts.asyncio.to_thread", side_effect=lambda f, *a, **k: f(*a, **k)):
+        with (
+            patch.object(
+                facts_module,
+                "_generate_embedding_with_npu_fallback",
+                new=AsyncMock(return_value=[0.1] * 768),
+            ),
+            patch("knowledge.facts.asyncio.to_thread", side_effect=lambda f, *a, **k: f(*a, **k)),
+        ):
             result = await kb._find_duplicate("distinct content", threshold=_THRESHOLD)
 
         assert result is None
@@ -170,11 +170,14 @@ class TestFindDuplicate:
         vector_store._collection = chroma_collection
         kb = _FakeKB(vector_store=vector_store)
 
-        with patch.object(
-            facts_module,
-            "_generate_embedding_with_npu_fallback",
-            new=AsyncMock(return_value=[0.1] * 768),
-        ), patch("knowledge.facts.asyncio.to_thread", side_effect=lambda f, *a, **k: f(*a, **k)):
+        with (
+            patch.object(
+                facts_module,
+                "_generate_embedding_with_npu_fallback",
+                new=AsyncMock(return_value=[0.1] * 768),
+            ),
+            patch("knowledge.facts.asyncio.to_thread", side_effect=lambda f, *a, **k: f(*a, **k)),
+        ):
             result = await kb._find_duplicate("any content", threshold=_THRESHOLD)
 
         assert result is None
@@ -188,11 +191,14 @@ class TestFindDuplicate:
         vector_store._collection = chroma_collection
         kb = _FakeKB(vector_store=vector_store)
 
-        with patch.object(
-            facts_module,
-            "_generate_embedding_with_npu_fallback",
-            new=AsyncMock(return_value=[0.1] * 768),
-        ), patch("knowledge.facts.asyncio.to_thread", side_effect=lambda f, *a, **k: f(*a, **k)):
+        with (
+            patch.object(
+                facts_module,
+                "_generate_embedding_with_npu_fallback",
+                new=AsyncMock(return_value=[0.1] * 768),
+            ),
+            patch("knowledge.facts.asyncio.to_thread", side_effect=lambda f, *a, **k: f(*a, **k)),
+        ):
             result = await kb._find_duplicate("brand new content", threshold=_THRESHOLD)
 
         assert result is None
@@ -213,9 +219,7 @@ class TestStoreFact:
 
     def _make_kb(self, chroma_distance: float, fact_id: str = "existing-001"):
         chroma_collection = MagicMock()
-        chroma_collection.query = MagicMock(
-            return_value=_chroma_result(distance=chroma_distance, fact_id=fact_id)
-        )
+        chroma_collection.query = MagicMock(return_value=_chroma_result(distance=chroma_distance, fact_id=fact_id))
         vector_store = MagicMock()
         vector_store._collection = chroma_collection
         kb = _FakeKB(vector_store=vector_store)
@@ -232,19 +236,19 @@ class TestStoreFact:
         """store_fact with near-duplicate content returns existing ID without writing."""
         kb = self._make_kb(chroma_distance=0.10)  # sim=0.95 > 0.92
 
-        with patch.object(
-            facts_module,
-            "_generate_embedding_with_npu_fallback",
-            new=AsyncMock(return_value=[0.1] * 768),
-        ), patch(
-            "knowledge.facts.asyncio.to_thread",
-            side_effect=lambda f, *a, **k: f(*a, **k),
-        ), patch(
-            "autobot_shared.ssot_config.config", self._make_config_mock()
+        with (
+            patch.object(
+                facts_module,
+                "_generate_embedding_with_npu_fallback",
+                new=AsyncMock(return_value=[0.1] * 768),
+            ),
+            patch(
+                "knowledge.facts.asyncio.to_thread",
+                side_effect=lambda f, *a, **k: f(*a, **k),
+            ),
+            patch("autobot_shared.ssot_config.config", self._make_config_mock()),
         ):
-            result = await kb.store_fact(
-                "This is a near-duplicate fact", metadata={"category": "test"}
-            )
+            result = await kb.store_fact("This is a near-duplicate fact", metadata={"category": "test"})
 
         assert result["status"] == "duplicate"
         assert result["fact_id"] == "existing-001"
@@ -254,23 +258,21 @@ class TestStoreFact:
         """store_fact with distinct content (similarity < threshold) proceeds to write."""
         kb = self._make_kb(chroma_distance=0.30)  # sim=0.85 < 0.92
 
-        with patch.object(
-            facts_module,
-            "_generate_embedding_with_npu_fallback",
-            new=AsyncMock(return_value=[0.1] * 768),
-        ), patch(
-            "knowledge.facts.asyncio.to_thread",
-            side_effect=lambda f, *a, **k: f(*a, **k),
-        ), patch(
-            "autobot_shared.ssot_config.config", self._make_config_mock()
-        ), patch.object(
-            FactsMixin, "_vectorize_fact_in_chromadb", new=AsyncMock()
-        ), patch.object(
-            FactsMixin, "_store_fact_in_redis", new=AsyncMock()
+        with (
+            patch.object(
+                facts_module,
+                "_generate_embedding_with_npu_fallback",
+                new=AsyncMock(return_value=[0.1] * 768),
+            ),
+            patch(
+                "knowledge.facts.asyncio.to_thread",
+                side_effect=lambda f, *a, **k: f(*a, **k),
+            ),
+            patch("autobot_shared.ssot_config.config", self._make_config_mock()),
+            patch.object(FactsMixin, "_vectorize_fact_in_chromadb", new=AsyncMock()),
+            patch.object(FactsMixin, "_store_fact_in_redis", new=AsyncMock()),
         ):
-            result = await kb.store_fact(
-                "Completely different content", metadata={"category": "test"}
-            )
+            result = await kb.store_fact("Completely different content", metadata={"category": "test"})
 
         assert result["status"] == "success"
         assert "fact_id" in result
@@ -290,15 +292,17 @@ class TestStoreFact:
 
         kb.redis_client.get = MagicMock(side_effect=fake_redis_get)
 
-        with patch.object(
-            facts_module,
-            "_generate_embedding_with_npu_fallback",
-            new=AsyncMock(return_value=[0.1] * 768),
-        ), patch(
-            "knowledge.facts.asyncio.to_thread",
-            side_effect=lambda f, *a, **k: f(*a, **k),
-        ), patch(
-            "autobot_shared.ssot_config.config", self._make_config_mock()
+        with (
+            patch.object(
+                facts_module,
+                "_generate_embedding_with_npu_fallback",
+                new=AsyncMock(return_value=[0.1] * 768),
+            ),
+            patch(
+                "knowledge.facts.asyncio.to_thread",
+                side_effect=lambda f, *a, **k: f(*a, **k),
+            ),
+            patch("autobot_shared.ssot_config.config", self._make_config_mock()),
         ):
             result = await kb.store_fact(exact_content, metadata={})
 
@@ -319,19 +323,19 @@ class TestStoreFact:
         kb.redis_client.sadd = MagicMock()
         kb.aioredis_client.get = AsyncMock(return_value=None)
 
-        with patch.object(
-            facts_module,
-            "_generate_embedding_with_npu_fallback",
-            new=AsyncMock(return_value=[0.1] * 768),
-        ), patch(
-            "knowledge.facts.asyncio.to_thread",
-            side_effect=lambda f, *a, **k: f(*a, **k),
-        ), patch(
-            "autobot_shared.ssot_config.config", self._make_config_mock()
-        ), patch.object(
-            FactsMixin, "_vectorize_fact_in_chromadb", new=AsyncMock()
-        ), patch.object(
-            FactsMixin, "_store_fact_in_redis", new=AsyncMock()
+        with (
+            patch.object(
+                facts_module,
+                "_generate_embedding_with_npu_fallback",
+                new=AsyncMock(return_value=[0.1] * 768),
+            ),
+            patch(
+                "knowledge.facts.asyncio.to_thread",
+                side_effect=lambda f, *a, **k: f(*a, **k),
+            ),
+            patch("autobot_shared.ssot_config.config", self._make_config_mock()),
+            patch.object(FactsMixin, "_vectorize_fact_in_chromadb", new=AsyncMock()),
+            patch.object(FactsMixin, "_store_fact_in_redis", new=AsyncMock()),
         ):
             result = await kb.store_fact("Brand new fact", metadata={})
 

@@ -27,9 +27,7 @@ class KBAddFileHandler(TaskHandler):
         file_type = ctx.require_payload_value("file_type")
         metadata = ctx.get_payload_value("metadata")
 
-        result = await ctx.worker.knowledge_base.add_file(
-            file_path, file_type, metadata
-        )
+        result = await ctx.worker.knowledge_base.add_file(file_path, file_type, metadata)
 
         ctx.audit_log(
             "kb_add_file",

@@ -466,9 +466,7 @@ def _should_exclude(file_path: str) -> bool:
     return False
 
 
-def _discover_files(
-    root_dir: Path, tier: Optional[int] = None
-) -> List[Tuple[str, int]]:
+def _discover_files(root_dir: Path, tier: Optional[int] = None) -> List[Tuple[str, int]]:
     """Discover markdown files to index by tier."""
     files: List[Tuple[str, int]] = []
 
@@ -598,9 +596,7 @@ class DocIndexerService:
             from utils.chromadb_client import get_chromadb_client
 
             chromadb_path = self._root_dir / "data" / "chromadb"
-            self._client = await asyncio.to_thread(
-                get_chromadb_client, str(chromadb_path)
-            )
+            self._client = await asyncio.to_thread(get_chromadb_client, str(chromadb_path))
 
             self._collection = self._client.get_or_create_collection(
                 name=self.COLLECTION_NAME,
@@ -608,14 +604,11 @@ class DocIndexerService:
             )
 
             ollama_url = get_ollama_url()
-            self._embed_model = OllamaEmbedding(
-                model_name="nomic-embed-text", base_url=ollama_url
-            )
+            self._embed_model = OllamaEmbedding(model_name="nomic-embed-text", base_url=ollama_url)
 
             doc_count = self._collection.count()
             logger.info(
-                "DocIndexerService initialized: collection='%s', "
-                "existing_vectors=%d, ollama=%s",
+                "DocIndexerService initialized: collection='%s', " "existing_vectors=%d, ollama=%s",
                 self.COLLECTION_NAME,
                 doc_count,
                 ollama_url,
@@ -672,9 +665,7 @@ class DocIndexerService:
     ) -> bool:
         """Index a single chunk into ChromaDB. Returns True on success."""
         priority_map = {1: "critical", 2: "high", 3: "medium"}
-        chunk_id = hashlib.md5(
-            f"{rel_path}:{chunk['section']}:{chunk_index}".encode()
-        ).hexdigest()[:12]
+        chunk_id = hashlib.md5(f"{rel_path}:{chunk['section']}:{chunk_index}".encode()).hexdigest()[:12]
 
         metadata: Dict[str, Any] = {
             "source": "autobot_documentation",
@@ -722,9 +713,7 @@ class DocIndexerService:
         _save_hash_cache(cache)
         return False
 
-    async def _index_file_chunks(
-        self, file_str: str, content: str, rel_path: str, tier: int
-    ) -> tuple[int, int]:
+    async def _index_file_chunks(self, file_str: str, content: str, rel_path: str, tier: int) -> tuple[int, int]:
         """Chunk content and index all chunks; return (success_count, chunk_count). Issue #2735.
 
         Extracted from index_file to keep parent under 65 lines.
@@ -740,16 +729,12 @@ class DocIndexerService:
         file_tags = list(dict.fromkeys(fm_tags + fm_aliases + file_tags))[:20]
         indexed = 0
         for i, chunk in enumerate(chunks):
-            ok = await asyncio.to_thread(
-                self._index_chunk, chunk, i, len(chunks), rel_path, file_tags, tier
-            )
+            ok = await asyncio.to_thread(self._index_chunk, chunk, i, len(chunks), rel_path, file_tags, tier)
             if ok:
                 indexed += 1
         return indexed, len(chunks)
 
-    async def index_file(
-        self, file_path: Path, tier: int = 3, force: bool = False
-    ) -> IndexResult:
+    async def index_file(self, file_path: Path, tier: int = 3, force: bool = False) -> IndexResult:
         """Index a single documentation file into ChromaDB.
 
         Args:
@@ -782,9 +767,7 @@ class DocIndexerService:
                 return result
 
             rel_path = os.path.relpath(file_str, self._root_dir)
-            indexed, total_chunks = await self._index_file_chunks(
-                file_str, content, rel_path, tier
-            )
+            indexed, total_chunks = await self._index_file_chunks(file_str, content, rel_path, tier)
 
             if total_chunks == 0:
                 result.skipped = 1
@@ -800,9 +783,7 @@ class DocIndexerService:
             result.errors.append(f"{file_str}: {e}")
             return result
 
-    async def _index_single_file_content(
-        self, file_path: str, tier: int, result: IndexResult
-    ) -> None:
+    async def _index_single_file_content(self, file_path: str, tier: int, result: IndexResult) -> None:
         """Read, chunk, and index a single file. Helper for index_all (#1385)."""
         import asyncio
 
@@ -897,9 +878,7 @@ class DocIndexerService:
         # Incremental mode: filter to changed files
         new_hashes: Dict[str, str] = {}
         if not force:
-            files, new_hashes, early = self._apply_incremental_filter(
-                files, total_result, start_time
-            )
+            files, new_hashes, early = self._apply_incremental_filter(files, total_result, start_time)
             if early:
                 return total_result
 

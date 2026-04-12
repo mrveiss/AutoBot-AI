@@ -101,9 +101,7 @@ class EntityExtractor(BaseCognifier):
             return self.mode
         return "nlp" if len(chunks) > self.nlp_threshold else "llm"
 
-    def _nlp_extract(
-        self, chunks: List[ProcessedChunk], document_id: Optional[UUID]
-    ) -> List[Entity]:
+    def _nlp_extract(self, chunks: List[ProcessedChunk], document_id: Optional[UUID]) -> List[Entity]:
         """
         Extract entities from chunks using spaCy NER + noun phrases (Issue #2025).
 
@@ -223,9 +221,7 @@ class EntityExtractor(BaseCognifier):
         logger.info("Extracted %s entities", len(merged_entities))
         return context
 
-    async def _llm_process(
-        self, chunks: List[ProcessedChunk], context: PipelineContext
-    ) -> List[Entity]:
+    async def _llm_process(self, chunks: List[ProcessedChunk], context: PipelineContext) -> List[Entity]:
         """Run LLM-based extraction over all chunks in batches."""
         all_entities: List[Entity] = []
         for i in range(0, len(chunks), self.batch_size):
@@ -234,9 +230,7 @@ class EntityExtractor(BaseCognifier):
             all_entities.extend(batch_entities)
         return self._merge_entities(all_entities)
 
-    async def _process_batch(
-        self, chunks: List[ProcessedChunk], context: PipelineContext
-    ) -> List[Entity]:
+    async def _process_batch(self, chunks: List[ProcessedChunk], context: PipelineContext) -> List[Entity]:
         """Process a batch of chunks."""
         entities = []
         for chunk in chunks:
@@ -244,15 +238,11 @@ class EntityExtractor(BaseCognifier):
             entities.extend(chunk_entities)
         return entities
 
-    async def _extract_from_chunk(
-        self, chunk: ProcessedChunk, context: PipelineContext
-    ) -> List[Entity]:
+    async def _extract_from_chunk(self, chunk: ProcessedChunk, context: PipelineContext) -> List[Entity]:
         """Extract entities from a single chunk."""
         try:
             prompt = ENTITY_EXTRACTION_PROMPT.format(text=chunk.content)
-            response = await self.llm.chat_completion(
-                messages=[{"role": "user", "content": prompt}]
-            )
+            response = await self.llm.chat_completion(messages=[{"role": "user", "content": prompt}])
             parsed = parse_llm_json_response(response.content)
             raw_entities = parsed if isinstance(parsed, list) else []
             return self._convert_to_entities(raw_entities, chunk, context.document_id)

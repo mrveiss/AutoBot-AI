@@ -18,10 +18,10 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from chat_workflow.llm_handler import _emit_full_prompt_ready, _emit_system_prompt_ready
 from extensions.base import Extension, HookContext
 from extensions.hooks import HookPoint
 from extensions.manager import ExtensionManager, reset_extension_manager
-from chat_workflow.llm_handler import _emit_system_prompt_ready, _emit_full_prompt_ready
 
 
 class _SystemPromptWatcher(Extension):
@@ -178,9 +178,7 @@ class TestEmitFullPromptReady:
 
         get_extension_manager().register(watcher)
 
-        result = await _emit_full_prompt_ready(
-            "System prompt\n\nUser: hello\n\nAssistant:", {}, {}
-        )
+        result = await _emit_full_prompt_ready("System prompt\n\nUser: hello\n\nAssistant:", {}, {})
         assert result == modified
 
     @pytest.mark.asyncio

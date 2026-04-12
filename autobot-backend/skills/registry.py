@@ -212,10 +212,7 @@ class SkillRegistry:
 
         Raises DependencyCycleError if cycles are detected.
         """
-        deps = {
-            name: skill.get_manifest().dependencies
-            for name, skill in self._skills.items()
-        }
+        deps = {name: skill.get_manifest().dependencies for name, skill in self._skills.items()}
         return resolve_dependencies(deps)
 
     def discover_builtin_skills(self) -> int:
@@ -235,11 +232,7 @@ class SkillRegistry:
                 module = importlib.import_module(f"skills.builtin.{modname}")
                 for attr_name in dir(module):
                     attr = getattr(module, attr_name)
-                    if (
-                        isinstance(attr, type)
-                        and issubclass(attr, BaseSkill)
-                        and attr is not BaseSkill
-                    ):
+                    if isinstance(attr, type) and issubclass(attr, BaseSkill) and attr is not BaseSkill:
                         self.register(attr)
                         count += 1
             except Exception:
@@ -263,9 +256,7 @@ class SkillRegistry:
         return {s.get_manifest().category for s in self._skills.values()}
 
 
-def _get_disabled_deps(
-    skills: Dict[str, BaseSkill], manifest: SkillManifest
-) -> List[str]:
+def _get_disabled_deps(skills: Dict[str, BaseSkill], manifest: SkillManifest) -> List[str]:
     """Find dependencies that exist but are not enabled.
 
     Helper for enable_skill (Issue #731).

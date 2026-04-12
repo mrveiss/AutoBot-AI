@@ -134,11 +134,7 @@ class TakeoverManager:
         Returns:
             Configured TakeoverRequest object
         """
-        timeout = (
-            timedelta(minutes=timeout_minutes)
-            if timeout_minutes
-            else self.default_timeout
-        )
+        timeout = timedelta(minutes=timeout_minutes) if timeout_minutes else self.default_timeout
         expires_at = datetime.now(tz=timezone.utc) + timeout
 
         return TakeoverRequest(
@@ -206,9 +202,7 @@ class TakeoverManager:
             TakeoverTrigger.SECURITY_CONCERN,
         }
 
-    async def _handle_post_request_actions(
-        self, request: TakeoverRequest, request_id: str
-    ) -> None:
+    async def _handle_post_request_actions(self, request: TakeoverRequest, request_id: str) -> None:
         """Handle actions after takeover request is created. Issue #620.
 
         Args:
@@ -257,9 +251,7 @@ class TakeoverManager:
             auto_approve,
         )
 
-        memory_task_id = self._record_takeover_in_memory(
-            trigger, reason, priority, requesting_agent, affected_tasks
-        )
+        memory_task_id = self._record_takeover_in_memory(trigger, reason, priority, requesting_agent, affected_tasks)
         # Store the mapping so _get_task_id_for_request can complete/fail the task
         # when the request is approved or expires. Issue #2869.
         self._request_task_ids[request_id] = memory_task_id
@@ -315,9 +307,7 @@ class TakeoverManager:
     ) -> str:
         """Approve a takeover request and start session"""
         request = await self._validate_takeover_request(request_id)
-        session = await self._create_takeover_session(
-            request_id, request, human_operator
-        )
+        session = await self._create_takeover_session(request_id, request, human_operator)
 
         await self._pause_affected_tasks(request.affected_tasks)
 
@@ -332,9 +322,7 @@ class TakeoverManager:
         # Clean up the mapping now that the task is closed. Issue #2869.
         self._request_task_ids.pop(request_id, None)
 
-        logger.info(
-            f"Takeover approved and session started: {session.session_id} by {human_operator}"
-        )
+        logger.info(f"Takeover approved and session started: {session.session_id} by {human_operator}")
         await self._notify_state_change("session_started", session.session_id)
 
         return session.session_id
@@ -366,9 +354,7 @@ class TakeoverManager:
         action_record["result"] = result
         session.actions_taken.append(action_record)
 
-        logger.info(
-            "Takeover action executed: %s in session %s", action_type, session_id
-        )
+        logger.info("Takeover action executed: %s in session %s", action_type, session_id)
 
         return result
 
@@ -525,9 +511,7 @@ class TakeoverManager:
         # Create completion record
         completion_data = {
             "session_id": session_id,
-            "duration_minutes": (
-                (session.ended_at - session.started_at).total_seconds() / 60
-            ),
+            "duration_minutes": ((session.ended_at - session.started_at).total_seconds() / 60),
             "actions_count": len(session.actions_taken),
             "resolution": resolution,
             "handback_notes": handback_notes,
@@ -584,9 +568,7 @@ class TakeoverManager:
                     "cpu_percent": psutil.cpu_percent(),
                     "memory_percent": psutil.virtual_memory().percent,
                     "disk_usage": psutil.disk_usage("/").percent,
-                    "load_average": (
-                        psutil.getloadavg() if hasattr(psutil, "getloadavg") else None
-                    ),
+                    "load_average": (psutil.getloadavg() if hasattr(psutil, "getloadavg") else None),
                 },
                 "active_processes": len(psutil.pids()),
                 "paused_tasks_count": len(self.paused_tasks),
@@ -618,12 +600,8 @@ class TakeoverManager:
     async def _auto_approve_request(self, request_id: str):
         """Automatically approve a takeover request"""
         try:
-            session_id = await self.approve_takeover(
-                request_id, human_operator="system_auto_approval"
-            )
-            logger.info(
-                "Auto-approved takeover request: %s -> %s", request_id, session_id
-            )
+            session_id = await self.approve_takeover(request_id, human_operator="system_auto_approval")
+            logger.info("Auto-approved takeover request: %s -> %s", request_id, session_id)
         except Exception as e:
             logger.error("Auto-approval failed for %s: %s", request_id, e)
 
@@ -717,9 +695,7 @@ class TakeoverManager:
             "max_concurrent_sessions": self.max_concurrent_sessions,
             "default_timeout_minutes": int(self.default_timeout.total_seconds() / 60),
             "available_triggers": [trigger.value for trigger in TakeoverTrigger],
-            "auto_approve_triggers": [
-                trigger.value for trigger in self.auto_approve_triggers
-            ],
+            "auto_approve_triggers": [trigger.value for trigger in self.auto_approve_triggers],
         }
 
 

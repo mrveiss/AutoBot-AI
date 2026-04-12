@@ -65,9 +65,7 @@ class RedisCompatibilityWrapper:
                 )
             except Exception as e:
                 logger.error("Failed to create sync Redis client: %s", e)
-                raise ConnectionError(
-                    f"Unable to create Redis client for {self.database_name}"
-                )
+                raise ConnectionError(f"Unable to create Redis client for {self.database_name}")
 
         return self._sync_client
 
@@ -144,9 +142,7 @@ class RedisCompatibilityWrapper:
             logger.error("Redis ahget failed for hash '%s', key '%s': %s", name, key, e)
             raise
 
-    async def ahset(
-        self, name: str, key: str, value: Union[str, bytes, int, float]
-    ) -> int:
+    async def ahset(self, name: str, key: str, value: Union[str, bytes, int, float]) -> int:
         """Async set hash field value"""
         try:
             db = await self._get_async_db()
@@ -316,9 +312,7 @@ def get_sessions_redis_compat() -> RedisCompatibilityWrapper:
     return get_redis_client_compat("sessions")
 
 
-async def _run_migration_tests(
-    compat: RedisCompatibilityWrapper, test_key: str, test_value: str
-) -> dict:
+async def _run_migration_tests(compat: RedisCompatibilityWrapper, test_key: str, test_value: str) -> dict:
     """
     Run individual async Redis operation tests with timing.
 

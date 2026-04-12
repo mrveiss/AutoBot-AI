@@ -70,9 +70,7 @@ class AIStackError(Exception):
         super().__init__(message)
 
 
-async def _process_ai_stack_response(
-    response, url: str, attempt: int, retry_attempts: int
-) -> tuple:
+async def _process_ai_stack_response(response, url: str, attempt: int, retry_attempts: int) -> tuple:
     """Process AI Stack HTTP response (Issue #315: extracted).
 
     Returns:
@@ -228,9 +226,7 @@ class AIStackClient:
 
         for attempt in range(self.retry_attempts):
             try:
-                logger.debug(
-                    f"AI Stack request: {method} {url} (attempt {attempt + 1})"
-                )
+                logger.debug(f"AI Stack request: {method} {url} (attempt {attempt + 1})")
 
                 async with await self.http_client.request(
                     method=method,
@@ -270,9 +266,7 @@ class AIStackClient:
 
         raise AIStackError("All retry attempts failed")
 
-    async def _agent_request(
-        self, agent_type: str, action: str, payload: Metadata
-    ) -> Metadata:
+    async def _agent_request(self, agent_type: str, action: str, payload: Metadata) -> Metadata:
         """Send a properly-formatted AgentRequest to an agent endpoint."""
         endpoint = self.agent_endpoints.get(agent_type)
         if not endpoint:
@@ -359,9 +353,7 @@ class AIStackClient:
 
         return await self._agent_request("rag", "document_query", payload)
 
-    async def reformulate_query(
-        self, query: str, context: Optional[str] = None
-    ) -> Metadata:
+    async def reformulate_query(self, query: str, context: Optional[str] = None) -> Metadata:
         """
         Reformulate query for better retrieval results.
 
@@ -388,9 +380,7 @@ class AIStackClient:
         Returns:
             Document analysis and synthesis results
         """
-        return await self._agent_request(
-            "rag", "analyze_documents", {"documents": documents}
-        )
+        return await self._agent_request("rag", "analyze_documents", {"documents": documents})
 
     # ====================================================================
     # Chat Agent Integration
@@ -445,9 +435,7 @@ class AIStackClient:
             "max_results": max_results,
         }
 
-        return await self._agent_request(
-            "enhanced_kb_librarian", "enhanced_search", payload
-        )
+        return await self._agent_request("enhanced_kb_librarian", "enhanced_search", payload)
 
     async def extract_knowledge(
         self,
@@ -472,9 +460,7 @@ class AIStackClient:
             "extraction_mode": extraction_mode,
         }
 
-        return await self._agent_request(
-            "knowledge_extraction", "extract_knowledge", payload
-        )
+        return await self._agent_request("knowledge_extraction", "extract_knowledge", payload)
 
     async def retrieve_knowledge(
         self,
@@ -497,9 +483,7 @@ class AIStackClient:
         if knowledge_types:
             payload["knowledge_types"] = knowledge_types
 
-        return await self._agent_request(
-            "knowledge_retrieval", "retrieve_knowledge", payload
-        )
+        return await self._agent_request("knowledge_retrieval", "retrieve_knowledge", payload)
 
     # ====================================================================
     # Research Agents Integration
@@ -528,9 +512,7 @@ class AIStackClient:
 
         return await self._agent_request("research", "research", payload)
 
-    async def web_research(
-        self, query: str, max_pages: int = 10, include_analysis: bool = True
-    ) -> Metadata:
+    async def web_research(self, query: str, max_pages: int = 10, include_analysis: bool = True) -> Metadata:
         """
         Perform web research with analysis.
 
@@ -548,17 +530,13 @@ class AIStackClient:
             "include_analysis": include_analysis,
         }
 
-        return await self._agent_request(
-            "web_research_assistant", "web_research", payload
-        )
+        return await self._agent_request("web_research_assistant", "web_research", payload)
 
     # ====================================================================
     # Development & Code Analysis Integration
     # ====================================================================
 
-    async def search_code(
-        self, query: str, search_scope: str = "codebase", include_npu: bool = True
-    ) -> Metadata:
+    async def search_code(self, query: str, search_scope: str = "codebase", include_npu: bool = True) -> Metadata:
         """
         Search codebase using NPU acceleration.
 
@@ -595,17 +573,13 @@ class AIStackClient:
         if code_path:
             payload["code_path"] = code_path
 
-        return await self._agent_request(
-            "development_speedup", "analyze_speedup", payload
-        )
+        return await self._agent_request("development_speedup", "analyze_speedup", payload)
 
     # ====================================================================
     # Content Classification Integration
     # ====================================================================
 
-    async def classify_content(
-        self, content: str, classification_types: Optional[List[str]] = None
-    ) -> Metadata:
+    async def classify_content(self, content: str, classification_types: Optional[List[str]] = None) -> Metadata:
         """
         Classify content using AI classification agent.
 
@@ -626,9 +600,7 @@ class AIStackClient:
     # System Knowledge Management
     # ====================================================================
 
-    async def get_system_knowledge(
-        self, knowledge_category: Optional[str] = None
-    ) -> Metadata:
+    async def get_system_knowledge(self, knowledge_category: Optional[str] = None) -> Metadata:
         """
         Get system-wide knowledge insights.
 
@@ -642,9 +614,7 @@ class AIStackClient:
         if knowledge_category:
             payload["knowledge_category"] = knowledge_category
 
-        return await self._agent_request(
-            "system_knowledge_manager", "get_system_knowledge", payload
-        )
+        return await self._agent_request("system_knowledge_manager", "get_system_knowledge", payload)
 
     async def update_system_knowledge(self, knowledge_update: Metadata) -> Metadata:
         """

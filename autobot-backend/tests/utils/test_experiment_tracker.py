@@ -81,9 +81,7 @@ class TestExperimentTracker:
     @pytest.mark.asyncio
     async def test_list_experiments(self, mock_redis_factory, tracker):
         mock_client = AsyncMock()
-        mock_client.lrange.return_value = [
-            json.dumps({"name": "exp1", "result": "kept"}).encode()
-        ]
+        mock_client.lrange.return_value = [json.dumps({"name": "exp1", "result": "kept"}).encode()]
         mock_redis_factory.side_effect = _async_return(mock_client)
         results = await tracker.list_experiments()
         assert len(results) == 1

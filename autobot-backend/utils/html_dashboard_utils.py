@@ -338,9 +338,7 @@ def get_light_theme_css() -> str:
     return f"{base_styles}\n{header_styles}\n{component_styles}\n    "
 
 
-def create_metric_card(
-    title: str, value: str, change: Optional[str] = None, card_id: Optional[str] = None
-) -> str:
+def create_metric_card(title: str, value: str, change: Optional[str] = None, card_id: Optional[str] = None) -> str:
     """
     Generate a metric card HTML component.
 
@@ -368,9 +366,7 @@ def create_metric_card(
                 </div>"""
 
 
-def create_chart_container(
-    chart_id: str, title: Optional[str] = None, description: Optional[str] = None
-) -> str:
+def create_chart_container(chart_id: str, title: Optional[str] = None, description: Optional[str] = None) -> str:
     """
     Generate a chart container HTML component.
 
@@ -418,9 +414,7 @@ def get_plotly_dark_config() -> Dict[str, Any]:
         "plot_bgcolor": "#161b22",
         "font": {
             "color": "#c9d1d9",
-            "family": (
-                "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-            ),
+            "family": ("-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"),
         },
         "xaxis": {"gridcolor": "#30363d", "linecolor": "#30363d"},
         "yaxis": {"gridcolor": "#30363d", "linecolor": "#30363d"},
@@ -449,9 +443,7 @@ def get_plotly_light_config() -> Dict[str, Any]:
         "plot_bgcolor": "white",
         "font": {
             "color": "#333",
-            "family": (
-                "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-            ),
+            "family": ("-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"),
         },
         "xaxis": {"gridcolor": "#e2e8f0", "linecolor": "#cbd5e0"},
         "yaxis": {"gridcolor": "#e2e8f0", "linecolor": "#cbd5e0"},
@@ -520,14 +512,7 @@ def create_metrics_grid(metrics: List[Dict[str, str]]) -> str:
         ... ]
         >>> create_metrics_grid(metrics)
     """
-    cards = "\n".join(
-        [
-            create_metric_card(
-                m["title"], m["value"], m.get("change"), m.get("card_id")
-            )
-            for m in metrics
-        ]
-    )
+    cards = "\n".join([create_metric_card(m["title"], m["value"], m.get("change"), m.get("card_id")) for m in metrics])
 
     return f"""
             <div class="metrics-grid">

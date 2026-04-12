@@ -139,10 +139,11 @@ class TestVideoPipelineCv2:
             4: 1080.0,  # CAP_PROP_FRAME_HEIGHT
         }.get(prop, 0.0)
 
-        with patch("media.video.pipeline.cv2.CAP_PROP_FPS", 5), patch(
-            "media.video.pipeline.cv2.CAP_PROP_FRAME_COUNT", 7
-        ), patch("media.video.pipeline.cv2.CAP_PROP_FRAME_WIDTH", 3), patch(
-            "media.video.pipeline.cv2.CAP_PROP_FRAME_HEIGHT", 4
+        with (
+            patch("media.video.pipeline.cv2.CAP_PROP_FPS", 5),
+            patch("media.video.pipeline.cv2.CAP_PROP_FRAME_COUNT", 7),
+            patch("media.video.pipeline.cv2.CAP_PROP_FRAME_WIDTH", 3),
+            patch("media.video.pipeline.cv2.CAP_PROP_FRAME_HEIGHT", 4),
         ):
             info = pipe._read_video_info(mock_cap)
 
@@ -180,9 +181,10 @@ class TestVideoPipelineCv2:
 
         deleted = []
 
-        with patch(
-            "media.video.pipeline.cv2.VideoCapture", return_value=mock_cap
-        ), patch("os.unlink", side_effect=lambda p: deleted.append(p)):
+        with (
+            patch("media.video.pipeline.cv2.VideoCapture", return_value=mock_cap),
+            patch("os.unlink", side_effect=lambda p: deleted.append(p)),
+        ):
             pipe._extract_with_cv2(_FAKE_MP4_MAGIC, "video/mp4", "mp4", {})
 
         mock_cap.release.assert_called_once()
@@ -210,8 +212,9 @@ class TestVideoPipelineAsync:
         pipe = VideoPipeline()
         media_input = _make_input(_FAKE_MP4_MAGIC)
 
-        with patch("media.video.pipeline._CV2_AVAILABLE", True), patch.object(
-            pipe, "_extract_with_cv2", side_effect=RuntimeError("cv2 error")
+        with (
+            patch("media.video.pipeline._CV2_AVAILABLE", True),
+            patch.object(pipe, "_extract_with_cv2", side_effect=RuntimeError("cv2 error")),
         ):
             result = await pipe._process_impl(media_input)
 

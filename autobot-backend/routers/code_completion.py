@@ -57,9 +57,7 @@ class ExtractionRequest(BaseModel):
         default=["python", "typescript", "vue"],
         description="Languages to extract patterns from",
     )
-    cache_hot_patterns: bool = Field(
-        default=True, description="Cache top patterns to Redis"
-    )
+    cache_hot_patterns: bool = Field(default=True, description="Cache top patterns to Redis")
 
 
 class ExtractionResponse(BaseModel):
@@ -164,8 +162,7 @@ async def extract_patterns(request: ExtractionRequest):
             status="success",
             patterns_extracted=sum(stats.values()),
             statistics=stats,
-            message=f"Extracted {sum(stats.values())} patterns, "
-            f"stored {total_stored} new patterns",
+            message=f"Extracted {sum(stats.values())} patterns, " f"stored {total_stored} new patterns",
         )
 
     except Exception as e:
@@ -280,9 +277,7 @@ async def search_patterns(request: PatternSearchRequest):
         query = query.filter(CodePattern.signature.ilike(search_term))
 
         # Order by relevance (frequency * acceptance_rate)
-        query = query.order_by(
-            desc(CodePattern.frequency * CodePattern.acceptance_rate)
-        )
+        query = query.order_by(desc(CodePattern.frequency * CodePattern.acceptance_rate))
 
         total = query.count()
         patterns = query.limit(request.limit).all()
@@ -316,26 +311,17 @@ async def get_statistics():
         stats = {
             "total_patterns": db.query(CodePattern).count(),
             "by_language": dict(
-                db.query(CodePattern.language, func.count(CodePattern.id))
-                .group_by(CodePattern.language)
-                .all()
+                db.query(CodePattern.language, func.count(CodePattern.id)).group_by(CodePattern.language).all()
             ),
             "by_type": dict(
-                db.query(CodePattern.pattern_type, func.count(CodePattern.id))
-                .group_by(CodePattern.pattern_type)
-                .all()
+                db.query(CodePattern.pattern_type, func.count(CodePattern.id)).group_by(CodePattern.pattern_type).all()
             ),
             "by_category": dict(
-                db.query(CodePattern.category, func.count(CodePattern.id))
-                .group_by(CodePattern.category)
-                .all()
+                db.query(CodePattern.category, func.count(CodePattern.id)).group_by(CodePattern.category).all()
             ),
             "top_patterns": [
                 {"signature": p.signature, "frequency": p.frequency}
-                for p in db.query(CodePattern)
-                .order_by(desc(CodePattern.frequency))
-                .limit(10)
-                .all()
+                for p in db.query(CodePattern).order_by(desc(CodePattern.frequency)).limit(10).all()
             ],
         }
         return stats

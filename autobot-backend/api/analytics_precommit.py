@@ -354,9 +354,7 @@ def run_check(check: CheckDefinition, filepath: str, content: str) -> list[Check
                 start = max(0, i - 2)
                 end = min(len(lines), i + 1)
                 snippet_lines = lines[start:end]
-                snippet = "\n".join(
-                    f"{start + j + 1}: {l}" for j, l in enumerate(snippet_lines)
-                )
+                snippet = "\n".join(f"{start + j + 1}: {l}" for j, l in enumerate(snippet_lines))
 
                 results.append(
                     CheckResult(
@@ -390,23 +388,15 @@ def _filter_enabled_checks(fast_mode: bool) -> dict:
     Returns:
         Dictionary of enabled check IDs to PreCommitCheck objects
     """
-    enabled_checks = {
-        k: v
-        for k, v in BUILTIN_CHECKS.items()
-        if v.enabled and k not in _hook_config.disabled_checks
-    }
+    enabled_checks = {k: v for k, v in BUILTIN_CHECKS.items() if v.enabled and k not in _hook_config.disabled_checks}
 
     # If specific checks enabled, filter to those
     if _hook_config.enabled_checks:
-        enabled_checks = {
-            k: v for k, v in enabled_checks.items() if k in _hook_config.enabled_checks
-        }
+        enabled_checks = {k: v for k, v in enabled_checks.items() if k in _hook_config.enabled_checks}
 
     # Skip expensive checks in fast mode (Issue #380: use module-level constant)
     if fast_mode:
-        enabled_checks = {
-            k: v for k, v in enabled_checks.items() if k not in _EXPENSIVE_CHECKS
-        }
+        enabled_checks = {k: v for k, v in enabled_checks.items() if k not in _EXPENSIVE_CHECKS}
 
     return enabled_checks
 
@@ -433,9 +423,7 @@ def _calculate_check_statistics(
     """
     duration_ms = (datetime.now(tz=timezone.utc) - start_time).total_seconds() * 1000
     blocked = any(r.severity == CheckSeverity.BLOCK and not r.passed for r in results)
-    warnings = sum(
-        1 for r in results if r.severity == CheckSeverity.WARN and not r.passed
-    )
+    warnings = sum(1 for r in results if r.severity == CheckSeverity.WARN and not r.passed)
     failed = sum(1 for r in results if not r.passed)
 
     return {
@@ -485,9 +473,7 @@ async def check_staged_files(
             results.extend(run_check(check, filepath, content))
 
     # Calculate statistics (Issue #620)
-    stats = _calculate_check_statistics(
-        results, enabled_checks, staged_files, start_time
-    )
+    stats = _calculate_check_statistics(results, enabled_checks, staged_files, start_time)
 
     result = CommitCheckResult(
         passed=not stats["blocked"],

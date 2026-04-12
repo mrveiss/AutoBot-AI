@@ -87,8 +87,7 @@ def _import_transformers() -> Any:
         return transformers
     except ImportError as exc:
         raise ImportError(
-            "transformers is required for model inspection. "
-            "Install with: pip install transformers"
+            "transformers is required for model inspection. " "Install with: pip install transformers"
         ) from exc
 
 
@@ -100,8 +99,7 @@ def _import_accelerate() -> Any:
         return accelerate
     except ImportError as exc:
         raise ImportError(
-            "accelerate is required for empty-weight model inspection. "
-            "Install with: pip install accelerate"
+            "accelerate is required for empty-weight model inspection. " "Install with: pip install accelerate"
         ) from exc
 
 
@@ -132,9 +130,7 @@ def _cache_put(model_name: str, info: ModelInfo) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _extract_from_config(
-    cfg: Any, param_count_override: Optional[int] = None
-) -> ModelInfo:
+def _extract_from_config(cfg: Any, param_count_override: Optional[int] = None) -> ModelInfo:
     """
     Build a ModelInfo from a transformers PretrainedConfig object.
 
@@ -152,14 +148,9 @@ def _extract_from_config(
         or 0
     )
     hidden_size = (
-        getattr(cfg, "hidden_size", None)
-        or getattr(cfg, "d_model", None)
-        or getattr(cfg, "n_embd", None)
-        or 0
+        getattr(cfg, "hidden_size", None) or getattr(cfg, "d_model", None) or getattr(cfg, "n_embd", None) or 0
     )
-    num_attention_heads = (
-        getattr(cfg, "num_attention_heads", None) or getattr(cfg, "n_head", None) or 0
-    )
+    num_attention_heads = getattr(cfg, "num_attention_heads", None) or getattr(cfg, "n_head", None) or 0
     vocab_size = getattr(cfg, "vocab_size", 0) or 0
 
     if param_count_override is not None:
@@ -195,9 +186,7 @@ def _estimate_param_count(num_layers: int, hidden_size: int, vocab_size: int) ->
     return embedding_params + num_layers * per_layer_params
 
 
-def _count_params_via_skeleton(
-    cfg: Any, transformers: Any, accelerate: Any
-) -> Optional[int]:
+def _count_params_via_skeleton(cfg: Any, transformers: Any, accelerate: Any) -> Optional[int]:
     """
     Instantiate an empty-weight model skeleton and return its exact param count.
 
@@ -269,9 +258,7 @@ def _inspect_via_config(model_name: str) -> Optional[ModelInfo]:
         transformers = _import_transformers()
         accelerate = _import_accelerate()
     except ImportError as exc:
-        logger.warning(
-            "model_inspector: dependency missing for %s — %s", model_name, exc
-        )
+        logger.warning("model_inspector: dependency missing for %s — %s", model_name, exc)
         return None
 
     try:

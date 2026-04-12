@@ -66,9 +66,7 @@ async def _send_error(ws: WebSocket, message: str) -> None:
         pass
 
 
-async def _handle_subscribe(
-    ws: WebSocket, channel: str, user_payload: dict | None
-) -> None:
+async def _handle_subscribe(ws: WebSocket, channel: str, user_payload: dict | None) -> None:
     """Process a subscribe action from the client."""
     if user_payload and channel.startswith("agent:"):
         claimed_id = channel.split(":", 1)[1]

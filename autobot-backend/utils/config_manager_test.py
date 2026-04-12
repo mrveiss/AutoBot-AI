@@ -72,9 +72,7 @@ redis:
             },
         ):
             # Test that empty config values fall back to environment
-            assert (
-                cm.get("llm.openai.api_key") == "env_test_key"
-            )  # Empty string should fallback
+            assert cm.get("llm.openai.api_key") == "env_test_key"  # Empty string should fallback
 
             # Test environment fallback for non-existent keys
             assert cm.get("nonexistent.var") == "env_nonexistent_value"
@@ -113,9 +111,7 @@ redis:
         # Test existing nested values
         assert cm.get("llm.ollama.model") == "llama3.2"
         assert cm.get("multimodal.vision.confidence_threshold") == 0.7
-        assert (
-            cm.get("hardware.environment_variables.cuda_device_order") == "PCI_BUS_ID"
-        )
+        assert cm.get("hardware.environment_variables.cuda_device_order") == "PCI_BUS_ID"
 
         # Test non-existent path returns default
         assert cm.get("non.existent.path", "default_value") == "default_value"

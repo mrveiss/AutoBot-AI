@@ -150,9 +150,7 @@ class EdgeDiscoverer:
 
     async def _classify_relationship(self, edge: dict) -> str:
         """Ask the LLM to name the relationship between two chunk texts (#2117)."""
-        content_a = _truncate(
-            edge.get("from_content", "") or edge.get("from_chunk_id", "")
-        )
+        content_a = _truncate(edge.get("from_content", "") or edge.get("from_chunk_id", ""))
         content_b = _truncate(edge.get("to_content", "") or edge.get("to_chunk_id", ""))
         prompt = _build_classification_prompt(content_a, content_b)
         result = await self.llm(prompt)

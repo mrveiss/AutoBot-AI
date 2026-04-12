@@ -37,9 +37,7 @@ ProcessType = asyncio.subprocess.Process
 logger = logging.getLogger(__name__)
 
 # Performance optimization: O(1) lookup for VNC process keys (Issue #326)
-ALL_VNC_PROCESS_KEYS: frozenset[str] = frozenset(
-    {"novnc_process", "vnc_process", "xvfb_process"}
-)
+ALL_VNC_PROCESS_KEYS: frozenset[str] = frozenset({"novnc_process", "vnc_process", "xvfb_process"})
 CORE_VNC_PROCESS_KEYS: frozenset[str] = frozenset({"xvfb_process", "vnc_process"})
 
 
@@ -95,9 +93,7 @@ class VNCSessionData:
         }
 
 
-def _terminate_process_safely(
-    process: Optional[subprocess.Popen[bytes]], process_key: str
-) -> bool:
+def _terminate_process_safely(process: Optional[subprocess.Popen[bytes]], process_key: str) -> bool:
     """
     Terminate a process safely with fallback to kill.
 
@@ -124,9 +120,7 @@ def _terminate_process_safely(
         return False
 
 
-async def _terminate_async_process_safely(
-    process: Optional[ProcessType], process_key: str
-) -> bool:
+async def _terminate_async_process_safely(process: Optional[ProcessType], process_key: str) -> bool:
     """
     Terminate an async subprocess safely.
 
@@ -292,9 +286,7 @@ class VNCServerManager:
                 "resolution": resolution,
             },
         ) as task_context:
-            return await self._create_session_impl(
-                session_id, user_id, resolution, depth, task_context
-            )
+            return await self._create_session_impl(session_id, user_id, resolution, depth, task_context)
 
     async def _create_session_impl(
         self,
@@ -340,13 +332,9 @@ class VNCServerManager:
             )
             self.active_sessions[session_id] = self._build_session_data(vnc_session)
 
-            outputs = self._build_session_output(
-                session_id, display_num, vnc_port, novnc_port
-            )
+            outputs = self._build_session_output(session_id, display_num, vnc_port, novnc_port)
             task_context.set_outputs(outputs)
-            logger.info(
-                "VNC session created: %s on display :%d", session_id, display_num
-            )
+            logger.info("VNC session created: %s on display :%d", session_id, display_num)
             return outputs
 
         except Exception as e:
@@ -383,11 +371,7 @@ class VNCServerManager:
         """
         xvfb_process = await self._start_xvfb(display_num, resolution, depth)
         vnc_process = await self._start_vnc_server(display_num, vnc_port)
-        novnc_process = (
-            await self._start_novnc(vnc_port, novnc_port)
-            if self.novnc_available
-            else None
-        )
+        novnc_process = await self._start_novnc(vnc_port, novnc_port) if self.novnc_available else None
 
         return VNCSessionData(
             session_id=session_id,
@@ -425,9 +409,7 @@ class VNCServerManager:
 
         return None
 
-    async def _start_novnc(
-        self, vnc_port: int, novnc_port: int
-    ) -> Optional[ProcessType]:
+    async def _start_novnc(self, vnc_port: int, novnc_port: int) -> Optional[ProcessType]:
         """
         Start NoVNC web proxy.
 
@@ -490,9 +472,7 @@ class VNCServerManager:
 
         raise RuntimeError("No available X display numbers")
 
-    async def _start_xvfb(
-        self, display_num: int, resolution: str, depth: int
-    ) -> ProcessType:
+    async def _start_xvfb(self, display_num: int, resolution: str, depth: int) -> ProcessType:
         """
         Start Xvfb virtual display.
 
@@ -577,9 +557,7 @@ class VNCServerManager:
         """
         return session_data.to_dict()
 
-    def _build_session_output(
-        self, session_id: str, display_num: int, vnc_port: int, novnc_port: int
-    ) -> SessionDict:
+    def _build_session_output(self, session_id: str, display_num: int, vnc_port: int, novnc_port: int) -> SessionDict:
         """
         Build session output dictionary.
 
@@ -600,9 +578,7 @@ class VNCServerManager:
             "novnc_port": novnc_port if self.novnc_available else None,
             "display": f":{display_num}",
             "vnc_url": f"vnc://localhost:{vnc_port}",
-            "web_url": (
-                f"http://localhost:{novnc_port}" if self.novnc_available else None
-            ),
+            "web_url": (f"http://localhost:{novnc_port}" if self.novnc_available else None),
         }
 
     async def terminate_session(self, session_id: str) -> bool:
@@ -733,9 +709,7 @@ class DesktopStreamingManager:
 
         logger.info("Desktop Streaming Manager initialized")
 
-    async def create_streaming_session(
-        self, user_id: str, session_config: Optional[SessionDict] = None
-    ) -> SessionDict:
+    async def create_streaming_session(self, user_id: str, session_config: Optional[SessionDict] = None) -> SessionDict:
         """
         Create a new desktop streaming session.
 
@@ -766,9 +740,7 @@ class DesktopStreamingManager:
             "websocket_endpoint": f"/ws/desktop/{session_id}",
         }
 
-    async def handle_websocket_client(
-        self, websocket: websockets.WebSocketServerProtocol, path: str
-    ) -> None:
+    async def handle_websocket_client(self, websocket: websockets.WebSocketServerProtocol, path: str) -> None:
         """
         Handle WebSocket connections for desktop streaming.
 
@@ -794,9 +766,7 @@ class DesktopStreamingManager:
 
             # Register client
             client_id = self._register_client(websocket, session_id)
-            logger.info(
-                "WebSocket client connected: %s to session %s", client_id, session_id
-            )
+            logger.info("WebSocket client connected: %s to session %s", client_id, session_id)
 
             # Send initial session info
             await self._send_session_info(websocket, session_id)
@@ -840,9 +810,7 @@ class DesktopStreamingManager:
         """
         return session_id in self.session_clients
 
-    def _register_client(
-        self, websocket: websockets.WebSocketServerProtocol, session_id: str
-    ) -> str:
+    def _register_client(self, websocket: websockets.WebSocketServerProtocol, session_id: str) -> str:
         """
         Register a WebSocket client.
 
@@ -873,9 +841,7 @@ class DesktopStreamingManager:
             if client_id in clients:
                 clients.remove(client_id)
 
-    async def _send_session_info(
-        self, websocket: websockets.WebSocketServerProtocol, session_id: str
-    ) -> None:
+    async def _send_session_info(self, websocket: websockets.WebSocketServerProtocol, session_id: str) -> None:
         """
         Send initial session info to client.
 
@@ -885,13 +851,9 @@ class DesktopStreamingManager:
         """
         session_info = self.vnc_manager.get_session_info(session_id)
         if session_info:
-            await websocket.send(
-                json.dumps({"type": "session_info", "data": session_info})
-            )
+            await websocket.send(json.dumps({"type": "session_info", "data": session_info}))
 
-    async def _handle_client_message(
-        self, client_id: str, session_id: str, message: str
-    ) -> None:
+    async def _handle_client_message(self, client_id: str, session_id: str, message: str) -> None:
         """
         Handle messages from WebSocket clients.
 
@@ -926,9 +888,7 @@ class DesktopStreamingManager:
         """
         screenshot_data = await self._get_session_screenshot(session_id)
         if screenshot_data and client_id in self.websocket_clients:
-            await self.websocket_clients[client_id].send(
-                json.dumps({"type": "screenshot", "data": screenshot_data})
-            )
+            await self.websocket_clients[client_id].send(json.dumps({"type": "screenshot", "data": screenshot_data}))
 
     async def _send_session_status(self, client_id: str, session_id: str) -> None:
         """
@@ -940,13 +900,9 @@ class DesktopStreamingManager:
         """
         if client_id in self.websocket_clients:
             status = self.vnc_manager.get_session_info(session_id)
-            await self.websocket_clients[client_id].send(
-                json.dumps({"type": "session_status", "data": status})
-            )
+            await self.websocket_clients[client_id].send(json.dumps({"type": "session_status", "data": status}))
 
-    async def _handle_control_request(
-        self, session_id: str, control_data: SessionDict
-    ) -> None:
+    async def _handle_control_request(self, session_id: str, control_data: SessionDict) -> None:
         """
         Handle desktop control requests.
 
@@ -970,15 +926,11 @@ class DesktopStreamingManager:
         elif control_type == "type_text":
             await self._handle_type_text(display, control_data)
 
-    async def _handle_mouse_click(
-        self, display: int, control_data: SessionDict
-    ) -> None:
+    async def _handle_mouse_click(self, display: int, control_data: SessionDict) -> None:
         """Handle mouse click control."""
         x, y = control_data.get("x", 0), control_data.get("y", 0)
         button = control_data.get("button", 1)
-        await _run_xdotool_command(
-            display, "mousemove", "--sync", str(x), str(y), "click", str(button)
-        )
+        await _run_xdotool_command(display, "mousemove", "--sync", str(x), str(y), "click", str(button))
 
     async def _handle_key_press(self, display: int, control_data: SessionDict) -> None:
         """Handle key press control."""
@@ -1059,9 +1011,7 @@ class DesktopStreamingManager:
         Args:
             session_id: Terminated session.
         """
-        termination_msg = json.dumps(
-            {"type": "session_terminated", "data": {"session_id": session_id}}
-        )
+        termination_msg = json.dumps({"type": "session_terminated", "data": {"session_id": session_id}})
         for client_id in self.session_clients[session_id].copy():
             await self._notify_client_and_close(client_id, termination_msg)
 

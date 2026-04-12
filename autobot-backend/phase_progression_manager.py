@@ -60,13 +60,9 @@ class PhaseProgressionManager:
         self.config = {
             "auto_progression_enabled": True,
             "minimum_phase_duration": 3600,  # 1 hour minimum between progressions
-            "validation_threshold": (
-                95.0
-            ),  # Minimum completion percentage for progression
+            "validation_threshold": (95.0),  # Minimum completion percentage for progression
             "rollback_threshold": 75.0,  # Below this, consider rollback
-            "max_concurrent_phases": (
-                3
-            ),  # Maximum phases that can be active simultaneously
+            "max_concurrent_phases": (3),  # Maximum phases that can be active simultaneously
             "progression_cooldown": 1800,  # 30 minutes between progression attempts
         }
 
@@ -434,16 +430,11 @@ class PhaseProgressionManager:
         rules.update(self._get_future_phase_rules())
         return rules
 
-    def _get_completed_phases(
-        self, validation_results: Dict[str, Any], eligibility_results: Dict[str, Any]
-    ) -> set:
+    def _get_completed_phases(self, validation_results: Dict[str, Any], eligibility_results: Dict[str, Any]) -> set:
         """Extract completed phases from validation results."""
         completed_phases = set()
         for phase_name, phase_data in validation_results["phases"].items():
-            if (
-                phase_data["completion_percentage"]
-                >= self.config["validation_threshold"]
-            ):
+            if phase_data["completion_percentage"] >= self.config["validation_threshold"]:
                 completed_phases.add(phase_name)
                 eligibility_results["completed_phases"].append(
                     {
@@ -462,9 +453,7 @@ class PhaseProgressionManager:
         eligibility_results: Dict[str, Any],
     ) -> None:
         """Check eligibility for a single phase and update results."""
-        prerequisites_met = all(
-            prereq in completed_phases for prereq in rules.get("prerequisites", [])
-        )
+        prerequisites_met = all(prereq in completed_phases for prereq in rules.get("prerequisites", []))
         if prerequisites_met and rules.get("auto_progression", False):
             eligibility_results["eligible_phases"].append(
                 {
@@ -480,9 +469,7 @@ class PhaseProgressionManager:
                 {
                     "phase": phase_name,
                     "missing_prerequisites": [
-                        prereq
-                        for prereq in rules.get("prerequisites", [])
-                        if prereq not in completed_phases
+                        prereq for prereq in rules.get("prerequisites", []) if prereq not in completed_phases
                     ],
                 }
             )
@@ -498,14 +485,10 @@ class PhaseProgressionManager:
             "completed_phases": [],
             "recommendations": [],
         }
-        completed_phases = self._get_completed_phases(
-            validation_results, eligibility_results
-        )
+        completed_phases = self._get_completed_phases(validation_results, eligibility_results)
         for phase_name, rules in self.progression_rules.items():
             if phase_name not in completed_phases:
-                self._check_phase_eligibility(
-                    phase_name, rules, completed_phases, eligibility_results
-                )
+                self._check_phase_eligibility(phase_name, rules, completed_phases, eligibility_results)
         return eligibility_results
 
     def _record_successful_progression(
@@ -516,12 +499,8 @@ class PhaseProgressionManager:
     ) -> None:
         """Record a successful phase progression."""
         progression_results["progressions_successful"].append(phase_name)
-        progression_results["capabilities_unlocked"].extend(
-            progression_result.get("capabilities_unlocked", [])
-        )
-        progression_results["system_changes"].extend(
-            progression_result.get("system_changes", [])
-        )
+        progression_results["capabilities_unlocked"].extend(progression_result.get("capabilities_unlocked", []))
+        progression_results["system_changes"].extend(progression_result.get("system_changes", []))
         self.progression_history.append(
             {
                 "phase": phase_name,
@@ -570,9 +549,7 @@ class PhaseProgressionManager:
         for phase_info in eligibility["eligible_phases"]:
             phase_name = phase_info["phase"]
             logger.info("📈 Attempting progression to %s...", phase_name)
-            progression_result = await self._attempt_phase_progression(
-                phase_name, phase_info
-            )
+            progression_result = await self._attempt_phase_progression(phase_name, phase_info)
             progression_results["progressions_attempted"].append(
                 {
                     "phase": phase_name,
@@ -581,13 +558,9 @@ class PhaseProgressionManager:
                 }
             )
             if progression_result["status"] == PhasePromotionStatus.PROMOTED:
-                self._record_successful_progression(
-                    phase_name, progression_result, progression_results
-                )
+                self._record_successful_progression(phase_name, progression_result, progression_results)
             else:
-                self._record_failed_progression(
-                    phase_name, progression_result, progression_results
-                )
+                self._record_failed_progression(phase_name, progression_result, progression_results)
 
         self.last_progression_check = datetime.now(tz=timezone.utc)
         return progression_results
@@ -611,16 +584,12 @@ class PhaseProgressionManager:
         capabilities = rules.get("capabilities_unlocked", [])
         self.current_capabilities.update(capabilities)
         progression_result["capabilities_unlocked"] = capabilities
-        progression_result["system_changes"] = await self._apply_phase_changes(
-            phase_name, rules
-        )
+        progression_result["system_changes"] = await self._apply_phase_changes(phase_name, rules)
         await self._update_project_state(phase_name, PhasePromotionStatus.PROMOTED)
         progression_result["status"] = PhasePromotionStatus.PROMOTED
         progression_result["reason"] = "Phase progression completed successfully"
 
-    async def _attempt_phase_progression(
-        self, phase_name: str, phase_info: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _attempt_phase_progression(self, phase_name: str, phase_info: Dict[str, Any]) -> Dict[str, Any]:
         """Attempt to progress to a specific phase."""
         progression_result = {
             "status": PhasePromotionStatus.BLOCKED,
@@ -632,9 +601,7 @@ class PhaseProgressionManager:
             rules = self.progression_rules.get(phase_name, {})
             prerequisites_met, _ = await self._validate_prerequisites(rules)
             if not prerequisites_met:
-                progression_result["reason"] = (
-                    f"Prerequisites not met: {rules.get('prerequisites', [])}"
-                )
+                progression_result["reason"] = f"Prerequisites not met: {rules.get('prerequisites', [])}"
                 return progression_result
 
             if await self._create_phase_infrastructure(phase_name, rules):
@@ -648,17 +615,11 @@ class PhaseProgressionManager:
 
         return progression_result
 
-    async def _create_phase_infrastructure(
-        self, phase_name: str, rules: Dict[str, Any]
-    ) -> bool:
+    async def _create_phase_infrastructure(self, phase_name: str, rules: Dict[str, Any]) -> bool:
         """Create necessary infrastructure for a new phase"""
         try:
             # Create phase-specific directories
-            phase_dir = (
-                self.project_root
-                / "phases"
-                / phase_name.lower().replace(" ", "_").replace(":", "")
-            )
+            phase_dir = self.project_root / "phases" / phase_name.lower().replace(" ", "_").replace(":", "")
             # Issue #358 - avoid blocking
             await asyncio.to_thread(phase_dir.mkdir, parents=True, exist_ok=True)
 
@@ -686,9 +647,7 @@ class PhaseProgressionManager:
             logger.error("Failed to create infrastructure for %s: %s", phase_name, e)
             return False
 
-    async def _apply_phase_changes(
-        self, phase_name: str, rules: Dict[str, Any]
-    ) -> List[str]:
+    async def _apply_phase_changes(self, phase_name: str, rules: Dict[str, Any]) -> List[str]:
         """Apply system changes required for the new phase"""
         changes = []
 
@@ -703,9 +662,7 @@ class PhaseProgressionManager:
 
             # Create phase-specific API endpoints if needed
             if "api_endpoints" in rules:
-                endpoint_changes = await self._create_phase_endpoints(
-                    phase_name, rules["api_endpoints"]
-                )
+                endpoint_changes = await self._create_phase_endpoints(phase_name, rules["api_endpoints"])
                 changes.extend(endpoint_changes)
 
         except Exception as e:
@@ -759,14 +716,11 @@ class PhaseProgressionManager:
                 if not outcomes:
                     continue
                 outcome_dicts = [o.__dict__ for o in outcomes]
-                low_score_count = sum(
-                    1 for o in outcome_dicts if o.get("score", 1.0) < 0.6
-                )
+                low_score_count = sum(1 for o in outcome_dicts if o.get("score", 1.0) < 0.6)
                 if low_score_count > 0:
                     await learner.learn_from_outcomes(task_type, outcome_dicts)
                     logger.info(
-                        "Self-improvement: learned from %d outcomes "
-                        "(%d low-score) for task type '%s'",
+                        "Self-improvement: learned from %d outcomes " "(%d low-score) for task type '%s'",
                         len(outcome_dicts),
                         low_score_count,
                         task_type,
@@ -800,9 +754,7 @@ class PhaseProgressionManager:
         # Implementation would go here
         logger.info("⚡ OpenVINO acceleration capability enabled")
 
-    async def _create_phase_endpoints(
-        self, phase_name: str, endpoints: List[str]
-    ) -> List[str]:
+    async def _create_phase_endpoints(self, phase_name: str, endpoints: List[str]) -> List[str]:
         """Create API endpoints for a new phase"""
         changes = []
         # Implementation for creating new API endpoints
@@ -810,9 +762,7 @@ class PhaseProgressionManager:
             changes.append(f"Created API endpoint: {endpoint}")
         return changes
 
-    async def _update_project_state(
-        self, phase_name: str, status: PhasePromotionStatus
-    ):
+    async def _update_project_state(self, phase_name: str, status: PhasePromotionStatus):
         """Update project state with phase progression"""
         try:
             await self.project_state.update_phase_status(phase_name, status.value)
@@ -832,23 +782,15 @@ class PhaseProgressionManager:
         return {
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "active_capabilities": list(self.current_capabilities),
-            "progression_history": self.progression_history[
-                -10:
-            ],  # Last 10 progressions
+            "progression_history": self.progression_history[-10:],  # Last 10 progressions
             "last_progression_check": (
-                self.last_progression_check.isoformat()
-                if self.last_progression_check
-                else None
+                self.last_progression_check.isoformat() if self.last_progression_check else None
             ),
             "auto_progression_enabled": self.config["auto_progression_enabled"],
-            "system_maturity": (
-                len(self.current_capabilities) * 10
-            ),  # Rough maturity score
+            "system_maturity": (len(self.current_capabilities) * 10),  # Rough maturity score
         }
 
-    async def trigger_manual_progression(
-        self, phase_name: str, user_id: str = "system"
-    ) -> Dict[str, Any]:
+    async def trigger_manual_progression(self, phase_name: str, user_id: str = "system") -> Dict[str, Any]:
         """Manually trigger progression to a specific phase"""
         logger.info("🔧 Manual progression triggered for %s by %s", phase_name, user_id)
 
@@ -864,9 +806,7 @@ class PhaseProgressionManager:
             "trigger": ProgressionTrigger.USER_REQUEST,
         }
 
-        progression_result = await self._attempt_phase_progression(
-            phase_name, phase_info
-        )
+        progression_result = await self._attempt_phase_progression(phase_name, phase_info)
 
         # Record manual progression in history
         self.progression_history.append(
@@ -880,15 +820,9 @@ class PhaseProgressionManager:
         )
 
         return {
-            "status": (
-                "success"
-                if progression_result["status"] == PhasePromotionStatus.PROMOTED
-                else "failed"
-            ),
+            "status": ("success" if progression_result["status"] == PhasePromotionStatus.PROMOTED else "failed"),
             "message": progression_result["reason"],
-            "capabilities_unlocked": progression_result.get(
-                "capabilities_unlocked", []
-            ),
+            "capabilities_unlocked": progression_result.get("capabilities_unlocked", []),
             "system_changes": progression_result.get("system_changes", []),
         }
 

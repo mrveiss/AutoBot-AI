@@ -107,8 +107,7 @@ def create_reddit_monitor_reply_template() -> WorkflowTemplate:
         id="reddit_monitor_reply",
         name="Reddit Monitor & Reply",
         description=(
-            "Search subreddits for relevant posts, draft replies with the local LLM, "
-            "and post after human approval."
+            "Search subreddits for relevant posts, draft replies with the local LLM, " "and post after human approval."
         ),
         category=TemplateCategory.COMMUNITY,
         complexity=TaskComplexity.COMPLEX,
@@ -222,8 +221,7 @@ def _build_blast_posting_steps() -> List[WorkflowStep]:
             agent_type="community_growth",
             action="twitter_post",
             description=(
-                "Publish the approved tweet via Twitter API v2. "
-                "Requires a TWITTER_BEARER_TOKEN with write access."
+                "Publish the approved tweet via Twitter API v2. " "Requires a TWITTER_BEARER_TOKEN with write access."
             ),
             dependencies=["review_content"],
             inputs={"dry_run": False},
@@ -256,11 +254,7 @@ def _get_blast_variables() -> Dict[str, str]:
 
 def create_release_announcement_blast_template() -> WorkflowTemplate:
     """Create Release Announcement Blast workflow template."""
-    steps = (
-        _build_blast_fetch_draft_steps()
-        + _build_blast_review_step()
-        + _build_blast_posting_steps()
-    )
+    steps = _build_blast_fetch_draft_steps() + _build_blast_review_step() + _build_blast_posting_steps()
     return WorkflowTemplate(
         id="release_announcement_blast",
         name="Release Announcement Blast",

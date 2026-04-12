@@ -63,9 +63,7 @@ class TestSignRequestHelper:
         timestamp = 1700001234
 
         headers = sign_request(service_id, service_key, method, path, timestamp)
-        expected = self._expected_signature(
-            service_id, service_key, method, path, timestamp
-        )
+        expected = self._expected_signature(service_id, service_key, method, path, timestamp)
         assert headers["X-Service-Signature"] == expected
 
     def test_signature_is_hex_string(self):
@@ -77,12 +75,8 @@ class TestSignRequestHelper:
 
     def test_different_methods_produce_different_signatures(self):
         args = ("svc", "key", "/path", 1700000000)
-        get_sig = sign_request(*("svc", "key", "GET", "/path", 1700000000))[
-            "X-Service-Signature"
-        ]
-        post_sig = sign_request(*("svc", "key", "POST", "/path", 1700000000))[
-            "X-Service-Signature"
-        ]
+        get_sig = sign_request(*("svc", "key", "GET", "/path", 1700000000))["X-Service-Signature"]
+        post_sig = sign_request(*("svc", "key", "POST", "/path", 1700000000))["X-Service-Signature"]
         assert get_sig != post_sig
 
     def test_different_timestamps_produce_different_signatures(self):
@@ -106,12 +100,8 @@ class TestSignRequestHelper:
         timestamp = 1700005000
 
         auth_mgr = ServiceAuthManager(redis_client=None)
-        expected = auth_mgr.generate_signature(
-            service_id, service_key, method, path, timestamp
-        )
-        actual = sign_request(service_id, service_key, method, path, timestamp)[
-            "X-Service-Signature"
-        ]
+        expected = auth_mgr.generate_signature(service_id, service_key, method, path, timestamp)
+        actual = sign_request(service_id, service_key, method, path, timestamp)["X-Service-Signature"]
         assert actual == expected
 
 
@@ -133,9 +123,7 @@ class TestServiceHTTPClientSignRequest:
         client = self._make_service_client()
         url = "http://10.0.0.5:8080/api/inference"
 
-        with patch(
-            "utils.service_client._sign_request", wraps=sign_request
-        ) as mock_helper:
+        with patch("utils.service_client._sign_request", wraps=sign_request) as mock_helper:
             headers = client._sign_request("POST", url)
 
         mock_helper.assert_called_once()
@@ -164,9 +152,7 @@ class TestServiceHTTPClientSignRequest:
         timestamp = int(headers["X-Service-Timestamp"])
 
         # Recompute expected signature using path only
-        expected_headers = sign_request(
-            "test-service", "deadcafe" * 8, "POST", "/api/process", timestamp
-        )
+        expected_headers = sign_request("test-service", "deadcafe" * 8, "POST", "/api/process", timestamp)
         assert headers["X-Service-Signature"] == expected_headers["X-Service-Signature"]
 
     def test_timestamp_is_recent(self):

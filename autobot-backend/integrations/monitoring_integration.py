@@ -143,9 +143,7 @@ class DatadogIntegration(BaseIntegration):
             ),
         ]
 
-    async def execute_action(
-        self, action: str, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a Datadog action.
 
         Args:
@@ -188,9 +186,7 @@ class DatadogIntegration(BaseIntegration):
         """Query metrics from Datadog."""
         query = params.get("query", "")
         to_time = params.get("to_time", int(datetime.now(tz=timezone.utc).timestamp()))
-        from_time = params.get(
-            "from_time", int((datetime.now(tz=timezone.utc) - timedelta(hours=1)).timestamp())
-        )
+        from_time = params.get("from_time", int((datetime.now(tz=timezone.utc) - timedelta(hours=1)).timestamp()))
 
         async with aiohttp.ClientSession() as session:
             async with session.get(
@@ -220,9 +216,7 @@ class DatadogIntegration(BaseIntegration):
     async def _get_events(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Get recent events from Datadog."""
         end = params.get("end", int(datetime.now(tz=timezone.utc).timestamp()))
-        start = params.get(
-            "start", int((datetime.now(tz=timezone.utc) - timedelta(hours=1)).timestamp())
-        )
+        start = params.get("start", int((datetime.now(tz=timezone.utc) - timedelta(hours=1)).timestamp()))
 
         async with aiohttp.ClientSession() as session:
             async with session.get(
@@ -359,9 +353,7 @@ class NewRelicIntegration(BaseIntegration):
             ),
         ]
 
-    async def execute_action(
-        self, action: str, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a New Relic action.
 
         Args:
@@ -433,13 +425,7 @@ class NewRelicIntegration(BaseIntegration):
             ) as response:
                 response.raise_for_status()
                 data = await response.json()
-                results = (
-                    data.get("data", {})
-                    .get("actor", {})
-                    .get("account", {})
-                    .get("nrql", {})
-                    .get("results", [])
-                )
+                results = data.get("data", {}).get("actor", {}).get("account", {}).get("nrql", {}).get("results", [])
                 return {"results": results, "count": len(results)}
 
     async def _list_alerts(self, params: Dict[str, Any]) -> Dict[str, Any]:

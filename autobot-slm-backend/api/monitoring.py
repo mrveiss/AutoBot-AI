@@ -191,8 +191,7 @@ async def _fetch_prometheus_node_metrics(
         return {}
     re_filter = "|".join(f"{ip}:9100" for ip in node_ips)
     cpu_q = (
-        f'100 - (avg by (instance) (rate(node_cpu_seconds_total{{mode="idle",'
-        f'instance=~"{re_filter}"}}[2m])) * 100)'
+        f'100 - (avg by (instance) (rate(node_cpu_seconds_total{{mode="idle",' f'instance=~"{re_filter}"}}[2m])) * 100)'
     )
     mem_q = (
         f'100 * (1 - node_memory_MemAvailable_bytes{{instance=~"{re_filter}"}}'
@@ -250,9 +249,9 @@ def _empty_fleet_metrics() -> FleetMetricsResponse:
 async def _get_services_by_node(db: AsyncSession) -> Dict[str, Dict[str, int]]:
     """Query and aggregate service counts by node. Related to Issue #729."""
     services_result = await db.execute(
-        select(
-            Service.node_id, Service.status, func.count(Service.id).label("count")
-        ).group_by(Service.node_id, Service.status)
+        select(Service.node_id, Service.status, func.count(Service.id).label("count")).group_by(
+            Service.node_id, Service.status
+        )
     )
     services_by_node: Dict[str, Dict[str, int]] = {}
     for row in services_result:
@@ -269,17 +268,11 @@ def _calculate_node_status_counts(nodes: List[Node]) -> tuple:
     """Calculate online, degraded, offline node counts. Related to Issue #729."""
     online = sum(1 for n in nodes if n.status == NodeStatus.ONLINE.value)
     degraded = sum(1 for n in nodes if n.status == NodeStatus.DEGRADED.value)
-    offline = sum(
-        1
-        for n in nodes
-        if n.status in [NodeStatus.OFFLINE.value, NodeStatus.ERROR.value]
-    )
+    offline = sum(1 for n in nodes if n.status in [NodeStatus.OFFLINE.value, NodeStatus.ERROR.value])
     return online, degraded, offline
 
 
-def _calculate_resource_averages(
-    nodes: List[Node], prom_data: Optional[Dict[str, Any]] = None
-) -> tuple:
+def _calculate_resource_averages(nodes: List[Node], prom_data: Optional[Dict[str, Any]] = None) -> tuple:
     """Calculate average CPU, memory, disk percentages. Related to Issue #729.
 
     Falls back to Prometheus data for nodes missing heartbeat metrics (Issue #997).
@@ -359,16 +352,11 @@ async def get_fleet_metrics(
 
     # Calculate service totals
     total_svc = sum(
-        services_by_node.get(n.node_id, {}).get("running", 0)
-        + services_by_node.get(n.node_id, {}).get("failed", 0)
+        services_by_node.get(n.node_id, {}).get("running", 0) + services_by_node.get(n.node_id, {}).get("failed", 0)
         for n in nodes
     )
-    running_svc = sum(
-        services_by_node.get(n.node_id, {}).get("running", 0) for n in nodes
-    )
-    failed_svc = sum(
-        services_by_node.get(n.node_id, {}).get("failed", 0) for n in nodes
-    )
+    running_svc = sum(services_by_node.get(n.node_id, {}).get("running", 0) for n in nodes)
+    failed_svc = sum(services_by_node.get(n.node_id, {}).get("failed", 0) for n in nodes)
 
     return FleetMetricsResponse(
         total_nodes=len(nodes),
@@ -434,9 +422,7 @@ MAX_ALERTS_RETURNED = 100
 MAX_RECENT_ERRORS = 20
 
 
-async def _get_node_hostname_map(
-    db: AsyncSession, node_ids: List[str]
-) -> Dict[str, str]:
+async def _get_node_hostname_map(db: AsyncSession, node_ids: List[str]) -> Dict[str, str]:
     """Get mapping of node_id to hostname. Related to Issue #729."""
     if not node_ids:
         return {}
@@ -447,11 +433,7 @@ async def _get_node_hostname_map(
 def _get_hostname(nodes: Dict[str, Any], node_id: str) -> str:
     """Get hostname from nodes dict with fallback. Related to Issue #729."""
     node = nodes.get(node_id)
-    return (
-        node.hostname
-        if hasattr(node, "hostname")
-        else node if isinstance(node, str) else "unknown"
-    )
+    return node.hostname if hasattr(node, "hostname") else node if isinstance(node, str) else "unknown"
 
 
 def _events_to_alerts(events: List[Any], nodes: Dict[str, Any]) -> List[AlertItem]:
@@ -498,23 +480,15 @@ async def get_alerts(
     events = result.scalars().all()
 
     node_ids = list(set(e.node_id for e in events))
-    nodes_result = (
-        await db.execute(select(Node).where(Node.node_id.in_(node_ids)))
-        if node_ids
-        else None
-    )
+    nodes_result = await db.execute(select(Node).where(Node.node_id.in_(node_ids))) if node_ids else None
     nodes = {n.node_id: n for n in nodes_result.scalars().all()} if nodes_result else {}
 
     alerts = _events_to_alerts(events, nodes)
 
     return AlertsResponse(
         total_count=len(alerts),
-        critical_count=sum(
-            1 for a in alerts if a.severity == EventSeverity.CRITICAL.value
-        ),
-        warning_count=sum(
-            1 for a in alerts if a.severity == EventSeverity.WARNING.value
-        ),
+        critical_count=sum(1 for a in alerts if a.severity == EventSeverity.CRITICAL.value),
+        warning_count=sum(1 for a in alerts if a.severity == EventSeverity.WARNING.value),
         info_count=sum(1 for a in alerts if a.severity == EventSeverity.INFO.value),
         alerts=alerts[:MAX_ALERTS_RETURNED],
     )
@@ -559,9 +533,7 @@ COMPONENT_SCORES = {
 }
 
 
-def _assess_fleet_health(
-    nodes: List[Node], online: List[Node], degraded: List[Node], offline: List[Node]
-) -> tuple:
+def _assess_fleet_health(nodes: List[Node], online: List[Node], degraded: List[Node], offline: List[Node]) -> tuple:
     """Assess fleet component health and issues. Related to Issue #729."""
     issues = []
     if len(online) == len(nodes):
@@ -673,26 +645,18 @@ async def get_system_health(
     # Categorize nodes
     online = [n for n in nodes if n.status == NodeStatus.ONLINE.value]
     degraded = [n for n in nodes if n.status == NodeStatus.DEGRADED.value]
-    offline = [
-        n
-        for n in nodes
-        if n.status in [NodeStatus.OFFLINE.value, NodeStatus.ERROR.value]
-    ]
+    offline = [n for n in nodes if n.status in [NodeStatus.OFFLINE.value, NodeStatus.ERROR.value]]
 
     issues: List[str] = []
     components: Dict[str, str] = {}
 
     # Assess fleet health
-    components["fleet"], fleet_issues = _assess_fleet_health(
-        nodes, online, degraded, offline
-    )
+    components["fleet"], fleet_issues = _assess_fleet_health(nodes, online, degraded, offline)
     issues.extend(fleet_issues)
 
     # Assess services health
     svc_result = await db.execute(
-        select(Service.status, func.count(Service.id).label("count")).group_by(
-            Service.status
-        )
+        select(Service.status, func.count(Service.id).label("count")).group_by(Service.status)
     )
     service_stats = {row.status: row.count for row in svc_result}
     components["services"], svc_issues = _assess_services_health(service_stats)
@@ -728,9 +692,7 @@ async def get_dashboard_overview(
 
     # Count recent deployments (last 24 hours)
     cutoff = datetime.utcnow() - timedelta(hours=24)
-    deploy_result = await db.execute(
-        select(func.count(Deployment.id)).where(Deployment.created_at >= cutoff)
-    )
+    deploy_result = await db.execute(select(func.count(Deployment.id)).where(Deployment.created_at >= cutoff))
     recent_deployments = deploy_result.scalar() or 0
 
     # Count active maintenance
@@ -753,9 +715,7 @@ async def get_dashboard_overview(
     )
 
 
-def _apply_log_filters(
-    query, node_id: Optional[str], event_type: Optional[str], severity: Optional[str]
-):
+def _apply_log_filters(query, node_id: Optional[str], event_type: Optional[str], severity: Optional[str]):
     """Apply optional filters to log query. Related to Issue #729."""
     if node_id:
         query = query.where(NodeEvent.node_id == node_id)
@@ -807,21 +767,13 @@ async def get_logs(
     total = count_result.scalar() or 0
 
     # Paginate and execute
-    query = (
-        query.order_by(NodeEvent.created_at.desc())
-        .offset((page - 1) * per_page)
-        .limit(per_page)
-    )
+    query = query.order_by(NodeEvent.created_at.desc()).offset((page - 1) * per_page).limit(per_page)
     result = await db.execute(query)
     events = result.scalars().all()
 
     # Get node hostnames
     node_ids = list(set(e.node_id for e in events))
-    nodes_result = (
-        await db.execute(select(Node).where(Node.node_id.in_(node_ids)))
-        if node_ids
-        else None
-    )
+    nodes_result = await db.execute(select(Node).where(Node.node_id.in_(node_ids))) if node_ids else None
     nodes = {n.node_id: n for n in nodes_result.scalars().all()} if nodes_result else {}
 
     return LogsResponse(
@@ -842,9 +794,7 @@ def _group_errors_by_type_and_node(errors: List[Any]) -> tuple:
     return by_type, by_node
 
 
-def _format_recent_errors(
-    errors: List[Any], nodes: Dict[str, str]
-) -> List[Dict[str, Any]]:
+def _format_recent_errors(errors: List[Any], nodes: Dict[str, str]) -> List[Dict[str, Any]]:
     """Format recent errors for response. Related to Issue #729."""
     return [
         {
@@ -880,9 +830,7 @@ async def get_errors(
         select(NodeEvent)
         .where(
             NodeEvent.created_at >= cutoff,
-            NodeEvent.severity.in_(
-                [EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]
-            ),
+            NodeEvent.severity.in_([EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]),
         )
         .order_by(NodeEvent.created_at.desc())
     )

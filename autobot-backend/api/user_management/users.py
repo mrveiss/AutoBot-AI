@@ -112,9 +112,7 @@ class UserSearchResponse(BaseModel):
 )
 async def list_users(
     pagination: PaginationParams = Depends(),
-    search: Optional[str] = Query(
-        None, description="Search by email, username, or name"
-    ),
+    search: Optional[str] = Query(None, description="Search by email, username, or name"),
     include_inactive: bool = Query(False, description="Include inactive users"),
     user_service: UserService = Depends(get_user_service),
 ):
@@ -159,9 +157,7 @@ async def search_users_for_sharing(
     config = get_deployment_config()
 
     if config.mode == DeploymentMode.SINGLE_USER:
-        logger.debug(
-            "search_users_for_sharing: single_user mode, returning unavailable"
-        )
+        logger.debug("search_users_for_sharing: single_user mode, returning unavailable")
         return UserSearchResponse(
             users=[],
             available=False,
@@ -169,9 +165,7 @@ async def search_users_for_sharing(
         )
 
     if not config.postgres_enabled:
-        logger.debug(
-            "search_users_for_sharing: postgres disabled, returning unavailable"
-        )
+        logger.debug("search_users_for_sharing: postgres disabled, returning unavailable")
         return UserSearchResponse(
             users=[],
             available=False,
@@ -209,9 +203,7 @@ async def _search_users_from_db(q: str, limit: int) -> UserSearchResponse:
                 )
                 for user in users
             ]
-            logger.debug(
-                "search_users_for_sharing: found %d results for %r", len(results), q
-            )
+            logger.debug("search_users_for_sharing: found %d results for %r", len(results), q)
             return UserSearchResponse(
                 users=results,
                 available=True,
@@ -323,8 +315,7 @@ async def get_current_user_profile(
         is_active=True,
         is_verified=True,
         mfa_enabled=False,
-        is_platform_admin=current_user.get("role") == "admin"
-        or current_user.get("is_platform_admin", False),
+        is_platform_admin=current_user.get("role") == "admin" or current_user.get("is_platform_admin", False),
         preferences={},
         roles=[],
         created_at=None,

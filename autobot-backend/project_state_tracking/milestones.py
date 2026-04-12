@@ -63,9 +63,7 @@ def define_default_milestones() -> Dict[str, ProjectMilestone]:
     }
 
 
-def evaluate_milestone_criteria(
-    milestone: ProjectMilestone, snapshot: StateSnapshot
-) -> Tuple[bool, List[str]]:
+def evaluate_milestone_criteria(milestone: ProjectMilestone, snapshot: StateSnapshot) -> Tuple[bool, List[str]]:
     """Evaluate if milestone criteria are met and collect evidence"""
     criteria_met = True
     evidence = []
@@ -80,9 +78,7 @@ def evaluate_milestone_criteria(
     return criteria_met, evidence
 
 
-def check_single_criterion(
-    criterion: str, target: Any, snapshot: StateSnapshot
-) -> Tuple[bool, str]:
+def check_single_criterion(criterion: str, target: Any, snapshot: StateSnapshot) -> Tuple[bool, str]:
     """Check a single milestone criterion"""
     if criterion == "phases_completed":
         actual = snapshot.system_metrics.get(TrackingMetric.PHASE_COMPLETION, 0)

@@ -9,9 +9,7 @@ import subprocess  # nosec B404 - required for system commands
 from typing import Any, Dict, List, Optional
 
 import aiohttp  # Import aiohttp for async web fetching
-from markdownify import (
-    markdownify as md,  # Import markdownify for HTML to Markdown conversion
-)
+from markdownify import markdownify as md  # Import markdownify for HTML to Markdown conversion
 
 from autobot_shared.http_client import get_http_client
 
@@ -215,9 +213,7 @@ class SystemIntegration:
         if action not in VALID_SERVICE_ACTIONS:
             return {
                 "status": "error",
-                "message": (
-                    "Invalid service action. Must be 'start', " "'stop', or 'restart'."
-                ),
+                "message": ("Invalid service action. Must be 'start', " "'stop', or 'restart'."),
             }
 
         if self.os_type == "Windows":
@@ -258,10 +254,7 @@ class SystemIntegration:
         result = self._run_command(cmd)
 
         # Check if permission denied - try elevation
-        if (
-            result.get("status") == "error"
-            and "permission denied" in result.get("error", "").lower()
-        ):
+        if result.get("status") == "error" and "permission denied" in result.get("error", "").lower():
             return self._manage_linux_service_elevated(service_name, action)
 
         if result["status"] == "success":
@@ -271,9 +264,7 @@ class SystemIntegration:
             }
         return result
 
-    def _manage_linux_service_elevated(
-        self, service_name: str, action: str
-    ) -> Dict[str, Any]:
+    def _manage_linux_service_elevated(self, service_name: str, action: str) -> Dict[str, Any]:
         """Manage Linux service with elevation (Issue #665: extracted helper)."""
         import asyncio
 
@@ -283,10 +274,7 @@ class SystemIntegration:
             execute_with_elevation(
                 f"systemctl {action} {service_name}",
                 operation=f"Manage service: {service_name}",
-                reason=(
-                    f"Need administrator privileges to {action} the {service_name} "
-                    f"service"
-                ),
+                reason=(f"Need administrator privileges to {action} the {service_name} " f"service"),
                 risk_level="MEDIUM",
             )
         )
@@ -298,9 +286,7 @@ class SystemIntegration:
             }
         return {
             "status": "error",
-            "message": elevation_result.get(
-                "error", "Failed to manage service with elevation"
-            ),
+            "message": elevation_result.get("error", "Failed to manage service with elevation"),
         }
 
     def execute_system_command(self, command: str) -> Dict[str, Any]:
@@ -308,13 +294,9 @@ class SystemIntegration:
         # This is similar to execute_shell_command in worker_node,
         # but kept here for abstraction and potential future OS-specific
         # enhancements (e.g., direct API calls instead of shell)
-        return self._run_command(
-            [command], shell=True
-        )  # nosec B604 - internal command execution
+        return self._run_command([command], shell=True)  # nosec B604 - internal command execution
 
-    def get_process_info(
-        self, process_name: Optional[str] = None, pid: Optional[int] = None
-    ) -> Dict[str, Any]:
+    def get_process_info(self, process_name: Optional[str] = None, pid: Optional[int] = None) -> Dict[str, Any]:
         """
         Retrieves information about running processes.
         If no arguments, lists all processes.
@@ -338,9 +320,7 @@ class SystemIntegration:
             return False
 
         processes_info = []
-        for proc in psutil.process_iter(
-            ["pid", "name", "username", "cpu_percent", "memory_percent"]
-        ):
+        for proc in psutil.process_iter(["pid", "name", "username", "cpu_percent", "memory_percent"]):
             try:
                 pinfo = proc.info
                 if _matches_search_criteria(pinfo):
@@ -355,10 +335,7 @@ class SystemIntegration:
         if not processes_info and (process_name or pid):
             return {
                 "status": "error",
-                "message": (
-                    f"No process found matching name '{process_name}' "
-                    f"or PID '{pid}'."
-                ),
+                "message": (f"No process found matching name '{process_name}' " f"or PID '{pid}'."),
             }
 
         return {"status": "success", "processes": processes_info}
@@ -379,10 +356,7 @@ class SystemIntegration:
         except psutil.AccessDenied:
             return {
                 "status": "error",
-                "message": (
-                    "Access denied to terminate process with PID "
-                    f"{pid}. Requires elevated privileges."
-                ),
+                "message": ("Access denied to terminate process with PID " f"{pid}. Requires elevated privileges."),
             }
         except Exception as e:
             return {
@@ -400,9 +374,7 @@ class SystemIntegration:
             return "https://" + url
         return url
 
-    def _process_web_content(
-        self, url: str, content_type: str, content: str
-    ) -> Dict[str, Any]:
+    def _process_web_content(self, url: str, content_type: str, content: str) -> Dict[str, Any]:
         """
         Process web content based on its content type.
 
@@ -425,10 +397,7 @@ class SystemIntegration:
         else:
             return {
                 "status": "error",
-                "message": (
-                    "Unsupported content type for direct text "
-                    f"extraction: {content_type}"
-                ),
+                "message": ("Unsupported content type for direct text " f"extraction: {content_type}"),
                 "url": url,
             }
 
@@ -439,9 +408,7 @@ class SystemIntegration:
         try:
             url = self._normalize_url(url)
             http_client = get_http_client()
-            async with await http_client.get(
-                url, timeout=aiohttp.ClientTimeout(total=10)
-            ) as response:
+            async with await http_client.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
                 response.raise_for_status()
                 content_type = response.headers.get("Content-Type", "").lower()
                 content = await response.text()
@@ -472,24 +439,18 @@ if __name__ == "__main__":
     # This might require elevated privileges on Windows or sudo on Linux for full list
     print(si.list_services())  # noqa: print
 
-    print(  # noqa: print
-        "\n--- Manage Service (Example: SSH on Linux, Spooler on Windows) ---"
-    )  # noqa: print
+    print("\n--- Manage Service (Example: SSH on Linux, Spooler on Windows) ---")  # noqa: print  # noqa: print
     # On Linux, try: print(si.manage_service("ssh", "restart"))  # noqa: print
     # On Windows, try: print(si.manage_service("Spooler", "stop"))  # noqa: print
     # print(si.manage_service("nonexistent_service", "start"))  # noqa: print
 
     print("\n--- Execute System Command ---")  # noqa: print
-    print(  # noqa: print
-        si.execute_system_command("echo Hello from system integration!")
-    )  # noqa: print
+    print(si.execute_system_command("echo Hello from system integration!"))  # noqa: print  # noqa: print
     print(si.execute_system_command("ls -l /tmp"))  # Linux example  # noqa: print
     print(si.execute_system_command("dir C:\\"))  # Windows example  # noqa: print
 
     print("\n--- Get Process Info ---")  # noqa: print
-    print(  # noqa: print
-        si.get_process_info(process_name="python")
-    )  # Find Python processes  # noqa: print
+    print(si.get_process_info(process_name="python"))  # noqa: print  # Find Python processes  # noqa: print
     # print(si.get_process_info(pid=1234)) # Find a specific PID  # noqa: print
 
     print("\n--- Terminate Process (DANGEROUS - use with caution!) ---")  # noqa: print

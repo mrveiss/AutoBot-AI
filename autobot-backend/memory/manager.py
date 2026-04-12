@@ -114,9 +114,7 @@ class UnifiedMemoryManager:
         self._general_storage = general_storage or GeneralStorage(self.db_path)
 
         # Optional components
-        self._cache = cache_manager or (
-            LRUCacheManager(max_size=cache_size) if enable_cache else None
-        )
+        self._cache = cache_manager or (LRUCacheManager(max_size=cache_size) if enable_cache else None)
         self._monitor = monitor or (MemoryMonitor() if enable_monitoring else None)
 
         # Database initialization flag and lock (thread-safe lazy initialization)
@@ -203,9 +201,7 @@ class UnifiedMemoryManager:
             # No running loop - safe to use asyncio.run
             return asyncio.run(self.log_task(record))
 
-    async def update_task_status(
-        self, task_id: str, status: TaskStatus, **kwargs
-    ) -> bool:
+    async def update_task_status(self, task_id: str, status: TaskStatus, **kwargs) -> bool:
         """
         Update task status and optional fields
 

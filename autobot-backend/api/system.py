@@ -54,9 +54,7 @@ async def _check_conversation_files_db(request: Request, health_status: dict) ->
         health_status["status"] = "degraded"
 
 
-async def _check_detailed_conversation_db(
-    request: Request, detailed_components: dict
-) -> None:
+async def _check_detailed_conversation_db(request: Request, detailed_components: dict) -> None:
     """Check conversation files database for detailed health (Issue #315 - extracted)."""
     if not hasattr(request.app.state, "conversation_file_manager"):
         detailed_components["conversation_files_db"] = "not_configured"
@@ -129,9 +127,7 @@ def _build_frontend_meta_config() -> dict:
             "font_size": config.get("ui.font_size", "medium"),
         },
         "defaults": {
-            "welcome_message": config.get(
-                "chat.default_welcome_message", "Hello! How can I assist you today?"
-            ),
+            "welcome_message": config.get("chat.default_welcome_message", "Hello! How can I assist you today?"),
             "model_name": config.get(
                 "backend.llm.local.providers.ollama.selected_model",
                 ModelConsts.DEFAULT_OLLAMA_MODEL,
@@ -201,9 +197,7 @@ async def get_system_health(
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "initialization": {
                 "status": app_state.get("initialization_status", "unknown"),
-                "message": app_state.get(
-                    "initialization_message", "Status unavailable"
-                ),
+                "message": app_state.get("initialization_message", "Status unavailable"),
             },
             "components": {
                 "backend": "healthy",
@@ -247,9 +241,7 @@ async def get_system_info(admin_check: bool = Depends(check_admin_permission)):
 
     Issue #744: Requires admin authentication.
     """
-    python_version = (
-        f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-    )
+    python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
 
     system_info = {
         "name": "AutoBot Backend",
@@ -375,9 +367,7 @@ async def dynamic_import(
 
     # Security check - only allow specific modules (Issue #380: use module-level constant)
     if not any(module_name.startswith(allowed) for allowed in _ALLOWED_IMPORT_MODULES):
-        raise HTTPException(
-            status_code=403, detail="Module import not allowed for security reasons"
-        )
+        raise HTTPException(status_code=403, detail="Module import not allowed for security reasons")
 
     # Attempt import
     try:
@@ -405,9 +395,7 @@ async def dynamic_import(
 )
 @router.get("/health/detailed")
 @cache_response(cache_key="system_health_detailed", ttl=30)  # Cache for 30 seconds
-async def get_detailed_health(
-    request: Request, admin_check: bool = Depends(check_admin_permission)
-):
+async def get_detailed_health(request: Request, admin_check: bool = Depends(check_admin_permission)):
     """Get detailed system health status including all components (Issue #665: refactored).
 
     Issue #744: Requires admin authentication.
@@ -526,11 +514,7 @@ def _add_resource_metrics(components: dict, health_status: dict) -> None:
 
 def _determine_overall_health_status(health_status: dict) -> None:
     """Determine overall health status from components (Issue #665: extracted helper)."""
-    error_components = [
-        comp
-        for comp, status in health_status["components"].items()
-        if "error" in str(status).lower()
-    ]
+    error_components = [comp for comp, status in health_status["components"].items() if "error" in str(status).lower()]
     if error_components:
         health_status["status"] = "degraded"
         health_status["errors"] = error_components
@@ -677,9 +661,7 @@ async def get_cache_activity(admin_check: bool = Depends(check_admin_permission)
             await cache_manager._ensure_redis_client()
 
             # Get all cache keys
-            cache_keys = await cache_manager._redis_client.keys(
-                f"{cache_manager.cache_prefix}*"
-            )
+            cache_keys = await cache_manager._redis_client.keys(f"{cache_manager.cache_prefix}*")
             activity_response["activity"]["total_keys"] = len(cache_keys)
 
             # Get recent keys using helper (Issue #315)
@@ -802,9 +784,7 @@ async def get_cache_coordinator_stats(
         return coordinator.get_unified_stats()
     except Exception as e:
         logger.error("Error getting cache coordinator stats: %s", str(e))
-        raise HTTPException(
-            status_code=500, detail="Error getting cache coordinator stats"
-        )
+        raise HTTPException(status_code=500, detail="Error getting cache coordinator stats")
 
 
 @with_error_handling(
@@ -843,9 +823,7 @@ async def trigger_cache_eviction(admin_check: bool = Depends(check_admin_permiss
     error_code_prefix="SYSTEM",
 )
 @router.post("/api/cache/clear/{cache_name}")
-async def clear_cache(
-    cache_name: str, admin_check: bool = Depends(check_admin_permission)
-):
+async def clear_cache(cache_name: str, admin_check: bool = Depends(check_admin_permission)):
     """
     Clear a specific cache by name.
 

@@ -121,9 +121,7 @@ class TestScenarioTimeoutFailure:
             assert root_cause_report["confidence"] >= 0.7, "Confidence too low"
 
             # Step 3: Verify causal prompt was used (Capability #3)
-            causal_reasoning_used = "BECAUSE" in str(
-                root_cause_report.get("explanations", [])
-            )
+            causal_reasoning_used = "BECAUSE" in str(root_cause_report.get("explanations", []))
             assert causal_reasoning_used, "Causal prompts not used (Capability #3)"
 
             # Step 4: Test counterfactual predictions (Capability #5)
@@ -132,33 +130,23 @@ class TestScenarioTimeoutFailure:
             scenario.prediction_duration_ms = (time.time() - prediction_duration) * 1000
 
             assert len(interventions) >= 2, "Insufficient intervention predictions"
-            assert any(
-                i["name"] == "Retry with Exponential Backoff" for i in interventions
-            ), "No backoff intervention"
-            assert all(
-                0 <= i["success_rate"] <= 1.0 for i in interventions
-            ), "Invalid success rates"
+            assert any(i["name"] == "Retry with Exponential Backoff" for i in interventions), "No backoff intervention"
+            assert all(0 <= i["success_rate"] <= 1.0 for i in interventions), "Invalid success rates"
 
             # Step 5: Test error recovery (Capability #9)
             recovery_duration = time.time()
-            recovery_plan = await self._generate_recovery_plan(
-                root_cause_report, interventions
-            )
+            recovery_plan = await self._generate_recovery_plan(root_cause_report, interventions)
             scenario.recovery_duration_ms = (time.time() - recovery_duration) * 1000
 
             assert recovery_plan["primary_action"], "No primary recovery action"
             assert recovery_plan["primary_action"]["score"] >= 0.4, "Recovery action score too low"
 
             # Verify SLAs
-            assert (
-                scenario.engine_duration_ms < 500
-            ), f"Engine SLA exceeded: {scenario.engine_duration_ms}ms"
+            assert scenario.engine_duration_ms < 500, f"Engine SLA exceeded: {scenario.engine_duration_ms}ms"
             assert (
                 scenario.prediction_duration_ms < 100
             ), f"Prediction SLA exceeded: {scenario.prediction_duration_ms}ms"
-            assert (
-                scenario.recovery_duration_ms < 250
-            ), f"Recovery SLA exceeded: {scenario.recovery_duration_ms}ms"
+            assert scenario.recovery_duration_ms < 250, f"Recovery SLA exceeded: {scenario.recovery_duration_ms}ms"
 
             scenario.passed = True
             scenario.output_summary = (
@@ -253,9 +241,7 @@ class TestScenarioTimeoutFailure:
             "analysis_status": "success",
         }
 
-    async def _predict_timeout_interventions(
-        self, root_cause_report: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
+    async def _predict_timeout_interventions(self, root_cause_report: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Simulate counterfactual prediction for interventions."""
         await asyncio.sleep(0.03)  # Simulate prediction I/O
         return [
@@ -306,9 +292,7 @@ class TestScenarioTimeoutFailure:
             "error_type": "timeout",
             "root_cause": root_cause["root_cause"]["name"],
             "primary_action": primary,
-            "fallback_actions": sorted(scored, key=lambda x: x["score"], reverse=True)[
-                1:
-            ],
+            "fallback_actions": sorted(scored, key=lambda x: x["score"], reverse=True)[1:],
             "confidence": 0.85,
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
@@ -368,28 +352,20 @@ class TestScenarioDatabasePoolExhaustion:
             # Step 3: Confounder detection (Capability #6)
             confounders = root_cause_report["confounders"]
             assert len(confounders) >= 1, "No confounders detected"
-            assert any(
-                "request_volume" in c["name"] for c in confounders
-            ), "Request volume confounder missing"
+            assert any("request_volume" in c["name"] for c in confounders), "Request volume confounder missing"
 
             # Step 4: Stratified comparison (Capability #6)
             comparison_start = time.time()
-            stratified_result = await self._stratified_comparison_load_effect(
-                root_cause_report
-            )
+            stratified_result = await self._stratified_comparison_load_effect(root_cause_report)
             scenario.prediction_duration_ms = (time.time() - comparison_start) * 1000
 
             assert stratified_result["confounded_effect"], "Confounding not detected"
-            assert (
-                stratified_result["true_effect"] > 0.6
-            ), "True effect low after controlling confounders"
+            assert stratified_result["true_effect"] > 0.6, "True effect low after controlling confounders"
 
             # Step 5: Counterfactual predictions (Capability #5)
             interventions = await self._predict_pool_interventions(root_cause_report)
             assert len(interventions) >= 2, "Insufficient interventions predicted"
-            optimize_option = next(
-                (i for i in interventions if "optimize" in i["name"].lower()), None
-            )
+            optimize_option = next((i for i in interventions if "optimize" in i["name"].lower()), None)
             assert optimize_option, "No optimize option found in interventions"
             assert optimize_option["success_rate"] > 0.8, "Optimize success rate too low"
 
@@ -400,15 +376,13 @@ class TestScenarioDatabasePoolExhaustion:
 
             # Step 7: Recovery plan (Capability #9)
             recovery_start = time.time()
-            recovery_plan = await self._generate_pool_recovery_plan(
-                root_cause_report, interventions
-            )
+            recovery_plan = await self._generate_pool_recovery_plan(root_cause_report, interventions)
             scenario.recovery_duration_ms = (time.time() - recovery_start) * 1000
 
             primary_action = recovery_plan.get("primary_action")
             assert primary_action, "No primary action in recovery plan"
-            assert (
-                "Optim" in primary_action.get("name", "")
+            assert "Optim" in primary_action.get(
+                "name", ""
             ), f"Expected optimization intervention, got {primary_action.get('name')}"
 
             # Verify SLAs
@@ -418,8 +392,7 @@ class TestScenarioDatabasePoolExhaustion:
 
             scenario.passed = True
             scenario.output_summary = (
-                f"N+1 query + load spike → pool exhaustion → "
-                f"Recommend: {recovery_plan['primary_action']['name']}"
+                f"N+1 query + load spike → pool exhaustion → " f"Recommend: {recovery_plan['primary_action']['name']}"
             )
 
         except AssertionError as e:
@@ -535,9 +508,7 @@ class TestScenarioDatabasePoolExhaustion:
             "analysis_status": "success",
         }
 
-    async def _stratified_comparison_load_effect(
-        self, root_cause: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _stratified_comparison_load_effect(self, root_cause: Dict[str, Any]) -> Dict[str, Any]:
         """Simulate stratified analysis controlling for request volume."""
         await asyncio.sleep(0.04)
         return {
@@ -570,9 +541,7 @@ class TestScenarioDatabasePoolExhaustion:
             "interpretation": "After controlling for request volume, optimized code shows 65% improvement",
         }
 
-    async def _predict_pool_interventions(
-        self, root_cause: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
+    async def _predict_pool_interventions(self, root_cause: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Simulate counterfactual predictions for pool exhaustion."""
         await asyncio.sleep(0.05)
         return [
@@ -651,11 +620,7 @@ class TestScenarioDatabasePoolExhaustion:
                 "success_rate": primary.get("success_rate", 0.92),
                 "cost": primary.get("cost", 0.3),
                 "risk": primary.get("risk", 0.05),
-                "score": (
-                    primary.get("success_rate", 0.92)
-                    - primary.get("cost", 0.3)
-                    - primary.get("risk", 0.05)
-                )
+                "score": (primary.get("success_rate", 0.92) - primary.get("cost", 0.3) - primary.get("risk", 0.05))
                 * primary.get("confidence", 0.95),
                 "timeframe": "immediate",
             },
@@ -730,9 +695,7 @@ class TestScenarioWorkflowCascade:
 
             # Step 6: Recovery recommendations (Capability #9)
             recovery_start = time.time()
-            recovery = await self._generate_cascade_recovery(
-                root_cause, dag_validation
-            )
+            recovery = await self._generate_cascade_recovery(root_cause, dag_validation)
             scenario.recovery_duration_ms = (time.time() - recovery_start) * 1000
 
             assert "Restructure" in recovery["recommendations"][0]
@@ -742,8 +705,7 @@ class TestScenarioWorkflowCascade:
 
             scenario.passed = True
             scenario.output_summary = (
-                f"Cascade: {' → '.join(dag_validation['cascade_chain'])} → "
-                f"Root: {root_cause['root_cause']['step']}"
+                f"Cascade: {' → '.join(dag_validation['cascade_chain'])} → " f"Root: {root_cause['root_cause']['step']}"
             )
 
         except AssertionError as e:
@@ -781,9 +743,7 @@ class TestScenarioWorkflowCascade:
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
-    async def _validate_cascade_workflow(
-        self, event: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _validate_cascade_workflow(self, event: Dict[str, Any]) -> Dict[str, Any]:
         """Simulate DAG validation."""
         await asyncio.sleep(0.06)
         return {
@@ -838,9 +798,7 @@ class TestScenarioWorkflowCascade:
             ],
         }
 
-    async def _analyze_cascade_root_cause(
-        self, event: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _analyze_cascade_root_cause(self, event: Dict[str, Any]) -> Dict[str, Any]:
         """Simulate root-cause analysis for cascade."""
         await asyncio.sleep(0.05)
         return {
@@ -956,9 +914,7 @@ class TestScenarioAgentBenchmark:
 
             assert stratified["confounded_effect"], "Confounding not detected"
             assert abs(stratified["true_effect"] - 0.03) < 0.01, "True effect calculation wrong"
-            assert (
-                stratified["confounding_strength"] > 0.4
-            ), "Confounding strength underestimated"
+            assert stratified["confounding_strength"] > 0.4, "Confounding strength underestimated"
 
             # Step 3: Counterfactual predictions (Capability #5)
             prediction_start = time.time()
@@ -979,8 +935,7 @@ class TestScenarioAgentBenchmark:
 
             scenario.passed = True
             scenario.output_summary = (
-                "RAG raw: 82% vs Semantic: 75% (7% advantage) → "
-                "True effect after controlling query_complexity: 3%"
+                "RAG raw: 82% vs Semantic: 75% (7% advantage) → " "True effect after controlling query_complexity: 3%"
             )
 
         except AssertionError as e:
@@ -1014,9 +969,7 @@ class TestScenarioAgentBenchmark:
             "total_tasks": 1000,
         }
 
-    async def _stratified_agent_comparison(
-        self, metrics: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _stratified_agent_comparison(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
         """Simulate stratified analysis."""
         await asyncio.sleep(0.07)
         return {
@@ -1046,9 +999,7 @@ class TestScenarioAgentBenchmark:
             "interpretation": "RAG got easier tasks (more low-complexity queries); true advantage only 3% not 7%",
         }
 
-    async def _predict_agent_performance(
-        self, stratified: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _predict_agent_performance(self, stratified: Dict[str, Any]) -> Dict[str, Any]:
         """Simulate counterfactual prediction."""
         await asyncio.sleep(0.03)
         return {

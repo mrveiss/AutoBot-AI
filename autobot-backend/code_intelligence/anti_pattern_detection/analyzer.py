@@ -43,9 +43,7 @@ except ImportError:
 # Issue #607: Import shared caches for performance optimization
 try:
     from code_intelligence.shared.ast_cache import get_ast_with_content
-    from code_intelligence.shared.file_cache import (
-        get_python_files as get_cached_python_files,
-    )
+    from code_intelligence.shared.file_cache import get_python_files as get_cached_python_files
 
     HAS_SHARED_CACHE = True
 except ImportError:
@@ -106,9 +104,7 @@ class AntiPatternDetector(SemanticAnalysisMixin):
         self.exclude_dirs = exclude_dirs or DEFAULT_IGNORE_PATTERNS
         self.detect_circular = detect_circular
         self.detect_naming = detect_naming
-        self.use_semantic_analysis = (
-            use_semantic_analysis and HAS_ANALYTICS_INFRASTRUCTURE
-        )
+        self.use_semantic_analysis = use_semantic_analysis and HAS_ANALYTICS_INFRASTRUCTURE
         self.use_shared_cache = use_shared_cache and HAS_SHARED_CACHE
 
         # Initialize specialized detectors
@@ -130,9 +126,7 @@ class AntiPatternDetector(SemanticAnalysisMixin):
                 redis_database="analytics",
             )
 
-    def _analyze_single_file(
-        self, file_path: str, patterns: List[AntiPatternResult]
-    ) -> None:
+    def _analyze_single_file(self, file_path: str, patterns: List[AntiPatternResult]) -> None:
         """
         Analyze a single file and append detected patterns.
 
@@ -186,9 +180,7 @@ class AntiPatternDetector(SemanticAnalysisMixin):
 
         return self._create_analysis_report(directory, python_files, patterns)
 
-    def _parse_file_source(
-        self, file_path: str
-    ) -> tuple[Optional[ast.AST], List[str], Optional[str]]:
+    def _parse_file_source(self, file_path: str) -> tuple[Optional[ast.AST], List[str], Optional[str]]:
         """Parse file and return AST tree and lines. Issue #620.
 
         Args:
@@ -233,9 +225,7 @@ class AntiPatternDetector(SemanticAnalysisMixin):
                 patterns.extend(self._analyze_class(node, file_path, lines))
             elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 parent_is_class = any(
-                    isinstance(p, ast.ClassDef)
-                    for p in ast.walk(tree)
-                    if node in getattr(p, "body", [])
+                    isinstance(p, ast.ClassDef) for p in ast.walk(tree) if node in getattr(p, "body", [])
                 )
                 if not parent_is_class:
                     functions += 1
@@ -277,9 +267,7 @@ class AntiPatternDetector(SemanticAnalysisMixin):
             if result:
                 patterns.append(result)
 
-            classes, functions, node_patterns = self._analyze_file_nodes(
-                tree, file_path, lines
-            )
+            classes, functions, node_patterns = self._analyze_file_nodes(tree, file_path, lines)
             patterns.extend(node_patterns)
             patterns.extend(self._run_file_level_detections(tree, file_path))
 
@@ -331,9 +319,7 @@ class AntiPatternDetector(SemanticAnalysisMixin):
         class_lines = self._bloater.calculate_class_size(node)
 
         # God class detection
-        god_class_result = self._bloater.check_god_class(
-            node, file_path, method_count, class_lines
-        )
+        god_class_result = self._bloater.check_god_class(node, file_path, method_count, class_lines)
         if god_class_result:
             patterns.append(god_class_result)
 
@@ -620,9 +606,7 @@ class AntiPatternDetector(SemanticAnalysisMixin):
 
         # Run semantic analysis if enabled
         if self.use_semantic_analysis and find_semantic_duplicates:
-            semantic_dups = await self._find_semantic_anti_pattern_duplicates(
-                report.anti_patterns
-            )
+            semantic_dups = await self._find_semantic_anti_pattern_duplicates(report.anti_patterns)
             result["semantic_duplicates"] = semantic_dups
             result["infrastructure_metrics"] = self._get_infrastructure_metrics()
 
@@ -655,9 +639,7 @@ class AntiPatternDetector(SemanticAnalysisMixin):
                     "line_start": "line_start",
                     "description": "description",
                 },
-                min_similarity=(
-                    SIMILARITY_MEDIUM if HAS_ANALYTICS_INFRASTRUCTURE else 0.7
-                ),
+                min_similarity=(SIMILARITY_MEDIUM if HAS_ANALYTICS_INFRASTRUCTURE else 0.7),
             )
         except Exception as e:
             logger.warning("Semantic duplicate detection failed: %s", e)

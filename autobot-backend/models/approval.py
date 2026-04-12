@@ -88,11 +88,7 @@ class Approval(Base, TimestampMixin):
     )
 
     def __repr__(self) -> str:
-        return (
-            f"<Approval id={self.id} "
-            f"type={self.approval_type} "
-            f"status={self.status}>"
-        )
+        return f"<Approval id={self.id} " f"type={self.approval_type} " f"status={self.status}>"
 
 
 class ApprovalComment(Base, TimestampMixin):
@@ -163,8 +159,4 @@ class TaskApprovalLink(Base):
     )
 
     def __repr__(self) -> str:
-        return (
-            f"<TaskApprovalLink "
-            f"task={self.task_id} "
-            f"approval={self.approval_id}>"
-        )
+        return f"<TaskApprovalLink " f"task={self.task_id} " f"approval={self.approval_id}>"

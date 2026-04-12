@@ -130,16 +130,12 @@ class NPUWorkerManager(AsyncInitializable):
         try:
             # Ensure config directory exists
             # Issue #358 - avoid blocking
-            await asyncio.to_thread(
-                self.config_file.parent.mkdir, parents=True, exist_ok=True
-            )
+            await asyncio.to_thread(self.config_file.parent.mkdir, parents=True, exist_ok=True)
 
             # Prepare data - use mode='json' to serialize enums as strings
             # This prevents !!python/object tags that yaml.safe_load() cannot parse
             data = {
-                "workers": [
-                    worker.model_dump(mode="json") for worker in self._workers.values()
-                ],
+                "workers": [worker.model_dump(mode="json") for worker in self._workers.values()],
                 "load_balancing": self._load_balancing_config.model_dump(mode="json"),
             }
 
@@ -233,9 +229,7 @@ class NPUWorkerManager(AsyncInitializable):
     def _record_worker_failure(self, worker_id: str) -> None:
         """Record a health check failure and schedule next check with backoff (Issue #699)."""
         # Increment failure count
-        self._worker_failure_counts[worker_id] = (
-            self._worker_failure_counts.get(worker_id, 0) + 1
-        )
+        self._worker_failure_counts[worker_id] = self._worker_failure_counts.get(worker_id, 0) + 1
         # Calculate next check time with backoff
         multiplier = self._get_backoff_multiplier(worker_id)
         interval = self._load_balancing_config.health_check_interval * multiplier
@@ -264,9 +258,7 @@ class NPUWorkerManager(AsyncInitializable):
         while self._running:
             try:
                 # Issue #699: Check all enabled workers with exponential backoff
-                enabled_workers = [
-                    wid for wid, cfg in self._workers.items() if cfg.enabled
-                ]
+                enabled_workers = [wid for wid, cfg in self._workers.items() if cfg.enabled]
                 for worker_id in enabled_workers:
                     # Skip workers still in backoff period
                     if not self._should_check_worker(worker_id):
@@ -280,9 +272,7 @@ class NPUWorkerManager(AsyncInitializable):
                 break
             except Exception as e:
                 # Issue #699: Log at DEBUG for health check loop errors (NPU is optional)
-                logger.debug(
-                    "Health check loop error: %s (NPU workers are optional)", e
-                )
+                logger.debug("Health check loop error: %s (NPU workers are optional)", e)
                 # Error recovery delay before retry
                 await asyncio.sleep(TimingConstants.LONG_DELAY)
 
@@ -341,34 +331,22 @@ class NPUWorkerManager(AsyncInitializable):
                 worker_id,
                 e,
             )
-            status = NPUWorkerStatus(
-                id=worker_id, status=WorkerStatus.ERROR, error_message=str(e)
-            )
+            status = NPUWorkerStatus(id=worker_id, status=WorkerStatus.ERROR, error_message=str(e))
             await self._store_and_emit_status(worker_id, status, prev_status_value)
 
             # Issue #699: Apply exponential backoff for consecutive failures
             self._record_worker_failure(worker_id)
 
-    def _build_healthy_status(
-        self, worker_id: str, health_data: Dict[str, Any]
-    ) -> NPUWorkerStatus:
+    def _build_healthy_status(self, worker_id: str, health_data: Dict[str, Any]) -> NPUWorkerStatus:
         """Build worker status from health check data (Issue #665: extracted helper)."""
         return NPUWorkerStatus(
             id=worker_id,
-            status=(
-                WorkerStatus.ONLINE
-                if health_data.get("status") == "healthy"
-                else WorkerStatus.ERROR
-            ),
+            status=(WorkerStatus.ONLINE if health_data.get("status") == "healthy" else WorkerStatus.ERROR),
             current_load=health_data.get("current_load", 0),
             total_tasks_completed=health_data.get("total_tasks", 0),
             uptime_seconds=health_data.get("uptime_seconds", 0.0),
             last_heartbeat=datetime.utcnow(),
-            error_message=(
-                health_data.get("error")
-                if health_data.get("status") != "healthy"
-                else None
-            ),
+            error_message=(health_data.get("error") if health_data.get("status") != "healthy" else None),
         )
 
     async def _store_and_emit_status(
@@ -402,9 +380,7 @@ class NPUWorkerManager(AsyncInitializable):
         except Exception as e:
             logger.error("Failed to store worker status in Redis: %s", e)
 
-    async def _emit_worker_event(
-        self, event_type: str, worker_details: NPUWorkerDetails
-    ):
+    async def _emit_worker_event(self, event_type: str, worker_details: NPUWorkerDetails):
         """Emit worker event via event_manager (Issue #372 - refactored)"""
         try:
             event_data = {
@@ -422,9 +398,7 @@ class NPUWorkerManager(AsyncInitializable):
                 event_data["worker"] = worker_details.to_event_dict()
 
             await event_manager.publish(f"npu.{event_type}", event_data)
-            logger.debug(
-                f"Emitted event {event_type} for worker {worker_details.config.id}"
-            )
+            logger.debug(f"Emitted event {event_type} for worker {worker_details.config.id}")
 
         except Exception as e:
             logger.error("Failed to emit worker event: %s", e, exc_info=True)
@@ -493,9 +467,7 @@ class NPUWorkerManager(AsyncInitializable):
         # Validate worker by testing connection
         test_result = await self.test_worker_connection(worker_config)
         if not test_result.success:
-            raise ValueError(
-                f"Worker connection test failed: {test_result.error_message}"
-            )
+            raise ValueError(f"Worker connection test failed: {test_result.error_message}")
 
         # Add to registry
         self._workers[worker_config.id] = worker_config
@@ -512,9 +484,7 @@ class NPUWorkerManager(AsyncInitializable):
 
         return worker_details
 
-    async def update_worker(
-        self, worker_id: str, worker_config: NPUWorkerConfig
-    ) -> NPUWorkerDetails:
+    async def update_worker(self, worker_id: str, worker_config: NPUWorkerConfig) -> NPUWorkerDetails:
         """Update existing worker configuration"""
         if worker_id not in self._workers:
             raise ValueError(f"Worker with ID '{worker_id}' not found")
@@ -526,9 +496,7 @@ class NPUWorkerManager(AsyncInitializable):
         # Test new configuration
         test_result = await self.test_worker_connection(worker_config)
         if not test_result.success:
-            raise ValueError(
-                f"Worker connection test failed: {test_result.error_message}"
-            )
+            raise ValueError(f"Worker connection test failed: {test_result.error_message}")
 
         # Update configuration
         self._workers[worker_id] = worker_config
@@ -561,11 +529,7 @@ class NPUWorkerManager(AsyncInitializable):
         # Create status from heartbeat
         status = NPUWorkerStatus(
             id=worker_id,
-            status=(
-                WorkerStatus.ONLINE
-                if heartbeat.status == "online"
-                else WorkerStatus.ERROR
-            ),
+            status=(WorkerStatus.ONLINE if heartbeat.status == "online" else WorkerStatus.ERROR),
             current_load=heartbeat.current_load,
             total_tasks_completed=heartbeat.total_tasks_completed,
             total_tasks_failed=heartbeat.total_tasks_failed,
@@ -621,9 +585,7 @@ class NPUWorkerManager(AsyncInitializable):
             },
         )
 
-    async def test_worker_connection(
-        self, worker_config: NPUWorkerConfig
-    ) -> WorkerTestResult:
+    async def test_worker_connection(self, worker_config: NPUWorkerConfig) -> WorkerTestResult:
         """Test connection to a worker"""
         client = NPUWorkerClient(worker_config.url)
 
@@ -655,9 +617,7 @@ class NPUWorkerManager(AsyncInitializable):
             )
 
         except Exception as e:
-            return WorkerTestResult(
-                worker_id=worker_config.id, success=False, error_message=str(e)
-            )
+            return WorkerTestResult(worker_id=worker_config.id, success=False, error_message=str(e))
 
         finally:
             await client.close()
@@ -697,9 +657,7 @@ class NPUWorkerManager(AsyncInitializable):
             # ttl == -2 means key does not exist; ttl == -1 means no expiry (treat as alive)
             return ttl == -2
         except Exception as e:
-            logger.error(
-                "Failed to check heartbeat TTL for worker %s: %s", worker_id, e
-            )
+            logger.error("Failed to check heartbeat TTL for worker %s: %s", worker_id, e)
             return False
 
     async def _migrate_running_task(
@@ -763,9 +721,7 @@ class NPUWorkerManager(AsyncInitializable):
         """
         return f"{queue_name}:worker:{worker_id}:tasks"
 
-    async def assign_task_to_worker(
-        self, queue_name: str, worker_id: str, task_id: str
-    ) -> None:
+    async def assign_task_to_worker(self, queue_name: str, worker_id: str, task_id: str) -> None:
         """Record that task_id is now running on worker_id (#2496).
 
         Call this whenever a task is dispatched to a specific worker so that
@@ -783,17 +739,13 @@ class NPUWorkerManager(AsyncInitializable):
             await self.redis_client.sadd(key, task_id)
             logger.debug("Assigned task %s to worker %s", task_id, worker_id)
         except Exception as e:
-            logger.error(
-                "Failed to assign task %s to worker %s: %s", task_id, worker_id, e
-            )
+            logger.error("Failed to assign task %s to worker %s: %s", task_id, worker_id, e)
             # Re-raise so the caller (_worker_loop) does not process the task
             # without tracking.  An untracked task would be invisible to failover
             # and could be silently lost on worker failure (#2985).
             raise
 
-    async def release_worker_task(
-        self, queue_name: str, worker_id: str, task_id: str
-    ) -> None:
+    async def release_worker_task(self, queue_name: str, worker_id: str, task_id: str) -> None:
         """Remove task_id from the worker's task set on completion or cancellation (#2496).
 
         Call this when a task finishes (success or failure) so the per-worker
@@ -811,9 +763,7 @@ class NPUWorkerManager(AsyncInitializable):
             await self.redis_client.srem(key, task_id)
             logger.debug("Released task %s from worker %s", task_id, worker_id)
         except Exception as e:
-            logger.error(
-                "Failed to release task %s from worker %s: %s", task_id, worker_id, e
-            )
+            logger.error("Failed to release task %s from worker %s: %s", task_id, worker_id, e)
 
     async def _failover_dead_worker(
         self,
@@ -910,9 +860,7 @@ class NPUWorkerManager(AsyncInitializable):
                             "Failover: worker %s heartbeat expired, starting failover",
                             worker_id,
                         )
-                        await self._failover_dead_worker(
-                            worker_id, queue_name, max_retries
-                        )
+                        await self._failover_dead_worker(worker_id, queue_name, max_retries)
             except Exception:
                 logger.exception("Failover monitor encountered an unexpected error")
             await asyncio.sleep(check_interval)

@@ -250,22 +250,16 @@ def _validate_git_command(git_args: List[str]) -> None:
     # Check against blocked commands first
     if git_subcommand in BLOCKED_GIT_COMMANDS:
         logger.warning("Blocked dangerous git command: %s", git_subcommand)
-        raise HTTPException(
-            status_code=403, detail=f"Git command '{git_subcommand}' is blocked"
-        )
+        raise HTTPException(status_code=403, detail=f"Git command '{git_subcommand}' is blocked")
 
     # Verify command is in safe list
     if git_subcommand not in SAFE_GIT_COMMANDS:
         logger.warning("Blocked unsafe git command: %s", git_subcommand)
-        raise HTTPException(
-            status_code=403, detail=f"Git command '{git_subcommand}' is not allowed"
-        )
+        raise HTTPException(status_code=403, detail=f"Git command '{git_subcommand}' is not allowed")
 
     # Validate ALL arguments for dangerous patterns
     if not sanitize_git_args(git_args):
-        raise HTTPException(
-            status_code=400, detail="Git command contains unsafe arguments"
-        )
+        raise HTTPException(status_code=400, detail="Git command contains unsafe arguments")
 
 
 async def _run_git_process(cmd: List[str], repo_path: str, timeout: int) -> Metadata:
@@ -303,9 +297,7 @@ async def _run_git_process(cmd: List[str], repo_path: str, timeout: int) -> Meta
     }
 
 
-async def execute_git_command(
-    repo_path: str, git_args: List[str], timeout: int = 30
-) -> Metadata:
+async def execute_git_command(repo_path: str, git_args: List[str], timeout: int = 30) -> Metadata:
     """
     Execute git command safely with output capture (Issue #665: uses extracted helpers).
 
@@ -370,9 +362,7 @@ class GitLogRequest(BaseModel):
         description=f"Maximum number of commits (1-{MAX_LOG_ENTRIES})",
     )
     oneline: Optional[bool] = Field(default=False, description="Use one-line format")
-    file_path: Optional[str] = Field(
-        default=None, description="Filter log to specific file"
-    )
+    file_path: Optional[str] = Field(default=None, description="Filter log to specific file")
 
     @field_validator("file_path")
     @classmethod
@@ -405,13 +395,9 @@ class GitDiffRequest(BaseModel):
         default=DEFAULT_REPO_PATH,
         description="Repository path",
     )
-    staged: Optional[bool] = Field(
-        default=False, description="Show staged changes only"
-    )
+    staged: Optional[bool] = Field(default=False, description="Show staged changes only")
     file_path: Optional[str] = Field(default=None, description="Diff specific file")
-    commit: Optional[str] = Field(
-        default=None, description="Compare with specific commit"
-    )
+    commit: Optional[str] = Field(default=None, description="Compare with specific commit")
 
     @field_validator("file_path")
     @classmethod
@@ -452,9 +438,7 @@ class GitBranchRequest(BaseModel):
         default=DEFAULT_REPO_PATH,
         description="Repository path",
     )
-    all_branches: Optional[bool] = Field(
-        default=False, description="Show remote branches too"
-    )
+    all_branches: Optional[bool] = Field(default=False, description="Show remote branches too")
 
 
 class GitBlameRequest(BaseModel):
@@ -465,12 +449,8 @@ class GitBlameRequest(BaseModel):
         description="Repository path",
     )
     file_path: str = Field(..., description="File to blame")
-    line_start: Optional[int] = Field(
-        default=None, ge=1, description="Starting line number"
-    )
-    line_end: Optional[int] = Field(
-        default=None, ge=1, description="Ending line number"
-    )
+    line_start: Optional[int] = Field(default=None, ge=1, description="Starting line number")
+    line_end: Optional[int] = Field(default=None, ge=1, description="Ending line number")
 
     @field_validator("file_path")
     @classmethod
@@ -502,9 +482,7 @@ class GitShowRequest(BaseModel):
         default=DEFAULT_REPO_PATH,
         description="Repository path",
     )
-    ref: str = Field(
-        default="HEAD", description="Commit or ref to show (default: HEAD)"
-    )
+    ref: str = Field(default="HEAD", description="Commit or ref to show (default: HEAD)")
 
     @field_validator("ref")
     @classmethod
@@ -540,9 +518,7 @@ def _get_git_status_tools() -> List[MCPTool]:
                 "properties": {
                     "repo_path": {
                         "type": "string",
-                        "description": (
-                            f"Repository path (default: {DEFAULT_REPO_PATH})"
-                        ),
+                        "description": (f"Repository path (default: {DEFAULT_REPO_PATH})"),
                         "default": DEFAULT_REPO_PATH,
                     },
                     "short": {
@@ -582,10 +558,7 @@ def _get_git_history_tools() -> List[MCPTool]:
     return [
         MCPTool(
             name="git_log",
-            description=(
-                "Get commit history with optional filtering. Shows author, date,"
-                "and message."
-            ),
+            description=("Get commit history with optional filtering. Shows author, date," "and message."),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -641,10 +614,7 @@ def _make_git_blame_tool() -> MCPTool:
     """Helper for _get_git_change_tools. Ref: #1088."""
     return MCPTool(
         name="git_blame",
-        description=(
-            "Show line-by-line authorship of a file. Useful for"
-            "understanding code history."
-        ),
+        description=("Show line-by-line authorship of a file. Useful for" "understanding code history."),
         input_schema={
             "type": "object",
             "properties": {
@@ -679,8 +649,7 @@ def _get_git_change_tools() -> List[MCPTool]:
         MCPTool(
             name="git_diff",
             description=(
-                "Show changes between working directory and index,"
-                "or between commits. Useful for code review."
+                "Show changes between working directory and index," "or between commits. Useful for code review."
             ),
             input_schema={
                 "type": "object",
@@ -701,9 +670,7 @@ def _get_git_change_tools() -> List[MCPTool]:
                     },
                     "commit": {
                         "type": "string",
-                        "description": (
-                            "Compare with specific commit (e.g., HEAD~1, abc123)"
-                        ),
+                        "description": ("Compare with specific commit (e.g., HEAD~1, abc123)"),
                     },
                 },
                 "required": [],
@@ -750,9 +717,7 @@ async def git_status_mcp(request: GitStatusRequest) -> Metadata:
     """
     # Security checks
     if not await check_rate_limit():
-        raise HTTPException(
-            status_code=429, detail="Rate limit exceeded. Try again later."
-        )
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_repository_allowed(request.repo_path):
         raise HTTPException(status_code=403, detail="Repository not in whitelist")
@@ -789,9 +754,7 @@ async def git_log_mcp(request: GitLogRequest) -> Metadata:
     """
     # Security checks
     if not await check_rate_limit():
-        raise HTTPException(
-            status_code=429, detail="Rate limit exceeded. Try again later."
-        )
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_repository_allowed(request.repo_path):
         raise HTTPException(status_code=403, detail="Repository not in whitelist")
@@ -836,9 +799,7 @@ async def git_diff_mcp(request: GitDiffRequest) -> Metadata:
     """
     # Security checks
     if not await check_rate_limit():
-        raise HTTPException(
-            status_code=429, detail="Rate limit exceeded. Try again later."
-        )
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_repository_allowed(request.repo_path):
         raise HTTPException(status_code=403, detail="Repository not in whitelist")
@@ -887,9 +848,7 @@ async def git_branch_mcp(request: GitBranchRequest) -> Metadata:
     """
     # Security checks
     if not await check_rate_limit():
-        raise HTTPException(
-            status_code=429, detail="Rate limit exceeded. Try again later."
-        )
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_repository_allowed(request.repo_path):
         raise HTTPException(status_code=403, detail="Repository not in whitelist")
@@ -940,9 +899,7 @@ async def git_blame_mcp(request: GitBlameRequest) -> Metadata:
     """
     # Security checks
     if not await check_rate_limit():
-        raise HTTPException(
-            status_code=429, detail="Rate limit exceeded. Try again later."
-        )
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_repository_allowed(request.repo_path):
         raise HTTPException(status_code=403, detail="Repository not in whitelist")
@@ -984,9 +941,7 @@ async def git_show_mcp(request: GitShowRequest) -> Metadata:
     """
     # Security checks
     if not await check_rate_limit():
-        raise HTTPException(
-            status_code=429, detail="Rate limit exceeded. Try again later."
-        )
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_repository_allowed(request.repo_path):
         raise HTTPException(status_code=403, detail="Repository not in whitelist")
@@ -1017,9 +972,7 @@ async def get_git_repo_info() -> Metadata:
     """
     # Security check
     if not await check_rate_limit():
-        raise HTTPException(
-            status_code=429, detail="Rate limit exceeded. Try again later."
-        )
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     logger.info("Getting git repository info")
 
@@ -1041,15 +994,11 @@ async def get_git_repo_info() -> Metadata:
         if repo_info["is_git_repo"]:
             try:
                 # Get current branch
-                result = await execute_git_command(
-                    repo_path, ["rev-parse", "--abbrev-ref", "HEAD"]
-                )
+                result = await execute_git_command(repo_path, ["rev-parse", "--abbrev-ref", "HEAD"])
                 repo_info["current_branch"] = result["stdout"].strip()
 
                 # Get last commit
-                result = await execute_git_command(
-                    repo_path, ["log", "-1", "--oneline"]
-                )
+                result = await execute_git_command(repo_path, ["log", "-1", "--oneline"])
                 repo_info["last_commit"] = result["stdout"].strip()
 
             except Exception as e:
@@ -1086,8 +1035,7 @@ async def get_git_mcp_status() -> Metadata:
         current_rate = git_counter["count"]
         time_until_reset = max(
             0,
-            60
-            - (datetime.now(timezone.utc) - git_counter["reset_time"]).total_seconds(),
+            60 - (datetime.now(timezone.utc) - git_counter["reset_time"]).total_seconds(),
         )
 
     return {

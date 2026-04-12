@@ -79,21 +79,15 @@ async def test_chunker_optimization():
 
         if len(chunks) > 0:
             sentences_estimated = len(test_text.split("."))
-            sentences_per_sec = (
-                sentences_estimated / processing_time if processing_time > 0 else 0
-            )
-            print(
-                f"    - Performance: {sentences_per_sec:.1f} sentences/sec"
-            )  # noqa: print
+            sentences_per_sec = sentences_estimated / processing_time if processing_time > 0 else 0
+            print(f"    - Performance: {sentences_per_sec:.1f} sentences/sec")  # noqa: print
 
             # Show first chunk as example
             first_chunk = chunks[0]
             print("  📝 Sample chunk:")  # noqa: print
             print(f"    - Content: {first_chunk.content[:100]}...")  # noqa: print
             if hasattr(first_chunk, "metadata"):
-                optimization_info = first_chunk.metadata.get(
-                    "optimization_version", "none"
-                )
+                optimization_info = first_chunk.metadata.get("optimization_version", "none")
                 print(f"    - Optimization: {optimization_info}")  # noqa: print
 
         return True
@@ -119,15 +113,9 @@ async def test_kb_stats():
         print("  📈 Knowledge Base Stats:")  # noqa: print
         print(f"    - Total Vectors: {stats.get('total_vectors', 0)}")  # noqa: print
         print(f"    - Total Chunks: {stats.get('total_chunks', 0)}")  # noqa: print
-        print(
-            f"    - Total Documents: {stats.get('total_documents', 0)}"
-        )  # noqa: print
-        print(
-            f"    - Redis Connected: {stats.get('redis_connected', False)}"
-        )  # noqa: print
-        print(
-            f"    - Index Available: {stats.get('index_available', False)}"
-        )  # noqa: print
+        print(f"    - Total Documents: {stats.get('total_documents', 0)}")  # noqa: print
+        print(f"    - Redis Connected: {stats.get('redis_connected', False)}")  # noqa: print
+        print(f"    - Index Available: {stats.get('index_available', False)}")  # noqa: print
 
         return stats.get("total_vectors", 0) > 0
 
@@ -166,16 +154,12 @@ if __name__ == "__main__":
         overall_success = chunker_success and stats_success
 
         if overall_success:
-            print(
-                "\n🎉 SUCCESS: GPU optimization integration is working!"
-            )  # noqa: print
+            print("\n🎉 SUCCESS: GPU optimization integration is working!")  # noqa: print
             print("  - GPU-optimized semantic chunker active")  # noqa: print
             print("  - Knowledge base connected and functional")  # noqa: print
             print("  - Phase 9 hardware optimization deployed")  # noqa: print
         else:
-            print(
-                "\n⚠️  PARTIAL SUCCESS: Some components may need attention"
-            )  # noqa: print
+            print("\n⚠️  PARTIAL SUCCESS: Some components may need attention")  # noqa: print
 
         return overall_success
 

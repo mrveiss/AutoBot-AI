@@ -11,8 +11,8 @@ import logging
 import uuid
 from typing import Dict, List, Optional
 
-from orchestrator import get_orchestrator_sync as get_orchestrator
 from orchestrator import Orchestrator
+from orchestrator import get_orchestrator_sync as get_orchestrator
 from services.notification_service import NotificationService
 from type_defs.common import Metadata
 
@@ -46,9 +46,7 @@ class WorkflowAutomationManager:
         self.messenger = WorkflowMessenger()
         # Issue #3101: Wire notification service into executor.
         self._notification_service = NotificationService()
-        self.executor = WorkflowExecutor(
-            self.messenger, notification_service=self._notification_service
-        )
+        self.executor = WorkflowExecutor(self.messenger, notification_service=self._notification_service)
         # Issue #1367: Archive finished workflows to completed history
         self.executor.on_workflow_finished = self.archive_completed_workflow
         self.controller = WorkflowController(self.messenger, self.executor)
@@ -63,9 +61,7 @@ class WorkflowAutomationManager:
         """Expose terminal sessions from messenger for WebSocket management"""
         return self.messenger.terminal_sessions
 
-    async def create_workflow_from_chat_request(
-        self, user_request: str, session_id: str
-    ) -> Optional[str]:
+    async def create_workflow_from_chat_request(self, user_request: str, session_id: str) -> Optional[str]:
         """Create automated workflow from natural language chat request"""
         try:
             # Use orchestrator to analyze request and create workflow steps
@@ -81,11 +77,7 @@ class WorkflowAutomationManager:
                     description=step.action,
                     explanation=f"This step is part of: {user_request}",
                     requires_confirmation=step.user_approval_required,
-                    dependencies=[
-                        f"step_{j+1}"
-                        for j in range(i)
-                        if base_steps[j].id in (step.dependencies or [])
-                    ],
+                    dependencies=[f"step_{j+1}" for j in range(i) if base_steps[j].id in (step.dependencies or [])],
                 )
                 workflow_steps.append(workflow_step)
 
@@ -155,9 +147,7 @@ class WorkflowAutomationManager:
         logger.info("Created automated workflow %s: %s", workflow_id, name)
         return workflow_id
 
-    async def start_workflow_execution(
-        self, workflow_id: str, trigger_payload: Optional[dict] = None
-    ) -> bool:
+    async def start_workflow_execution(self, workflow_id: str, trigger_payload: Optional[dict] = None) -> bool:
         """Start executing automated workflow.
 
         Args:
@@ -175,13 +165,9 @@ class WorkflowAutomationManager:
             workflow.trigger_payload = trigger_payload
         return await self.executor.start_execution(workflow, self.active_workflows)
 
-    async def handle_workflow_control(
-        self, control_request: WorkflowControlRequest
-    ) -> bool:
+    async def handle_workflow_control(self, control_request: WorkflowControlRequest) -> bool:
         """Handle workflow control actions from user"""
-        return await self.controller.handle_control(
-            control_request, self.active_workflows
-        )
+        return await self.controller.handle_control(control_request, self.active_workflows)
 
     def get_workflow_status(self, workflow_id: str) -> Optional[Metadata]:
         """Get workflow status from active or completed (#372, #1367)."""
@@ -192,9 +178,7 @@ class WorkflowAutomationManager:
             return None
         return workflow.to_status_dict()
 
-    def get_template_workflow(
-        self, template_name: str, session_id: str
-    ) -> List[WorkflowStep]:
+    def get_template_workflow(self, template_name: str, session_id: str) -> List[WorkflowStep]:
         """Get workflow steps from a template"""
         return self.template_manager.get_template(template_name, session_id)
 
@@ -251,9 +235,7 @@ class WorkflowAutomationManager:
             return None
 
         workflow = self.active_workflows[workflow_id]
-        return await self.executor.present_plan_for_approval(
-            workflow, approval_mode, timeout_seconds
-        )
+        return await self.executor.present_plan_for_approval(workflow, approval_mode, timeout_seconds)
 
     async def wait_for_plan_approval(
         self,
@@ -273,9 +255,7 @@ class WorkflowAutomationManager:
             PlanApprovalRequest with final status, or None on error
         """
         try:
-            return await self.executor.wait_for_plan_approval(
-                workflow_id, timeout_seconds
-            )
+            return await self.executor.wait_for_plan_approval(workflow_id, timeout_seconds)
         except ValueError as e:
             logger.error("Error waiting for plan approval: %s", e)
             return None
@@ -301,9 +281,7 @@ class WorkflowAutomationManager:
         Returns:
             True if response was processed successfully
         """
-        return self.executor.handle_plan_approval_response(
-            workflow_id, approved, modifications, reason
-        )
+        return self.executor.handle_plan_approval_response(workflow_id, approved, modifications, reason)
 
     def get_pending_approval(self, workflow_id: str) -> Optional[PlanApprovalRequest]:
         """

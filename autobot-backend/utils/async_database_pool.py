@@ -102,9 +102,7 @@ class AsyncSQLiteConnectionPool:
                 self._created_connections += 1
                 self._stats.connections_created += 1
 
-            logger.debug(
-                "Created new async SQLite connection #%s", self._created_connections
-            )
+            logger.debug("Created new async SQLite connection #%s", self._created_connections)
             return conn
         except aiosqlite.Error as e:
             logger.error("Failed to create async SQLite connection: %s", e)
@@ -249,10 +247,7 @@ class AsyncSQLiteConnectionPool:
             "current_pool_size": self._pool.qsize(),
             "total_connections_created": self._created_connections,
             "average_wait_time": (
-                self._stats.total_wait_time
-                / max(
-                    1, self._stats.connections_reused + self._stats.connections_created
-                )
+                self._stats.total_wait_time / max(1, self._stats.connections_reused + self._stats.connections_created)
             ),
         }
 
@@ -262,9 +257,7 @@ _async_connection_pools: Dict[str, AsyncSQLiteConnectionPool] = {}
 _async_pools_lock = asyncio.Lock()
 
 
-async def get_async_connection_pool(
-    db_path: str, pool_size: int | None = None
-) -> AsyncSQLiteConnectionPool:
+async def get_async_connection_pool(db_path: str, pool_size: int | None = None) -> AsyncSQLiteConnectionPool:
     """
     Get or create an async connection pool for a database.
 
@@ -376,14 +369,12 @@ async def optimize_async_knowledge_base_queries():
             ("docs",),
             {
                 "tags": (
-                    "SELECT * FROM tags WHERE entry_id IN "
-                    "(SELECT id FROM entries WHERE category = ?)",
+                    "SELECT * FROM tags WHERE entry_id IN " "(SELECT id FROM entries WHERE category = ?)",
                     ("docs",),
                     "entry_id",
                 ),
                 "metadata": (
-                    "SELECT * FROM metadata WHERE entry_id IN "
-                    "(SELECT id FROM entries WHERE category = ?)",
+                    "SELECT * FROM metadata WHERE entry_id IN " "(SELECT id FROM entries WHERE category = ?)",
                     ("docs",),
                     "entry_id",
                 ),
@@ -441,9 +432,7 @@ def _validate_sql_identifier(name: str, label: str = "identifier") -> str:
         ValueError: If the name contains characters outside the allowed set.
     """
     if not _SQL_IDENTIFIER_RE.match(name):
-        raise ValueError(
-            f"Invalid SQL {label} '{name}': only letters, digits, and underscores allowed"
-        )
+        raise ValueError(f"Invalid SQL {label} '{name}': only letters, digits, and underscores allowed")
     return name
 
 
@@ -479,9 +468,7 @@ class AsyncBatchOperations:
         for i in range(0, len(data), batch_size):
             batch = data[i : i + batch_size]
             await conn.executemany(query, batch)
-            logger.debug(
-                "Inserted batch %s: %s records", i // batch_size + 1, len(batch)
-            )
+            logger.debug("Inserted batch %s: %s records", i // batch_size + 1, len(batch))
 
     @staticmethod
     async def batch_update(
@@ -508,13 +495,9 @@ class AsyncBatchOperations:
             _validate_sql_identifier(col, "column name")
         _validate_sql_identifier(where_column, "column name")
         set_clause = ", ".join([f"{col} = ?" for col in set_columns])
-        query = (
-            f"UPDATE {table} SET {set_clause} WHERE {where_column} = ?"  # nosec B608
-        )
+        query = f"UPDATE {table} SET {set_clause} WHERE {where_column} = ?"  # nosec B608
 
         for i in range(0, len(data), batch_size):
             batch = data[i : i + batch_size]
             await conn.executemany(query, batch)
-            logger.debug(
-                "Updated batch %s: %s records", i // batch_size + 1, len(batch)
-            )
+            logger.debug("Updated batch %s: %s records", i // batch_size + 1, len(batch))

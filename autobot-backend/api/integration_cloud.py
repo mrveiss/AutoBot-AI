@@ -46,9 +46,7 @@ class ConnectionTestRequest(BaseModel):
     api_key: Optional[str] = Field(None, description="API key or access key")
     api_secret: Optional[str] = Field(None, description="API secret key")
     token: Optional[str] = Field(None, description="Access token")
-    extra: Dict[str, Any] = Field(
-        default_factory=dict, description="Provider-specific config"
-    )
+    extra: Dict[str, Any] = Field(default_factory=dict, description="Provider-specific config")
 
 
 class ResourceListRequest(BaseModel):
@@ -59,9 +57,7 @@ class ResourceListRequest(BaseModel):
     api_secret: Optional[str] = None
     token: Optional[str] = None
     extra: Dict[str, Any] = Field(default_factory=dict)
-    resource_type: str = Field(
-        ..., description="Type of resource (instances, vms, storage)"
-    )
+    resource_type: str = Field(..., description="Type of resource (instances, vms, storage)")
 
 
 @router.get("/providers", response_model=List[CloudProviderInfo])
@@ -136,9 +132,7 @@ async def list_resources(
 ):
     """List compute resources (instances/VMs) for a cloud provider."""
     try:
-        extra = _build_extra_params(
-            region, subscription_id, tenant_id, project_id, zone
-        )
+        extra = _build_extra_params(region, subscription_id, tenant_id, project_id, zone)
         integration = _create_integration(provider, api_key, api_secret, token, extra)
 
         action_map = {
@@ -174,9 +168,7 @@ async def list_storage(
 ):
     """List storage resources (buckets/accounts) for a cloud provider."""
     try:
-        extra = _build_extra_params(
-            region, subscription_id, tenant_id, project_id, None
-        )
+        extra = _build_extra_params(region, subscription_id, tenant_id, project_id, None)
         integration = _create_integration(provider, api_key, api_secret, token, extra)
 
         action_map = {
@@ -212,9 +204,7 @@ async def get_account_info(
 ):
     """Get account/subscription/project information for a cloud provider."""
     try:
-        extra = _build_extra_params(
-            region, subscription_id, tenant_id, project_id, None
-        )
+        extra = _build_extra_params(region, subscription_id, tenant_id, project_id, None)
         integration = _create_integration(provider, api_key, api_secret, token, extra)
 
         action_map = {

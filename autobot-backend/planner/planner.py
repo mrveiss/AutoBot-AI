@@ -42,9 +42,7 @@ class PlannerConfig:
 
     max_steps_per_plan: int = 20  # Plan-specific, no constant needed
     plan_ttl_seconds: int = TimingConstants.HOURLY_INTERVAL * 24  # 86400 = 24 hours
-    llm_temperature: float = (
-        LLMDefaults.DEFAULT_TEMPERATURE - 0.4
-    )  # 0.3 for planning precision
+    llm_temperature: float = LLMDefaults.DEFAULT_TEMPERATURE - 0.4  # 0.3 for planning precision
     enable_parallel_steps: bool = True
     max_parallel_steps: int = BatchConfig.SMALL_BATCH // 2  # 5 parallel steps
     auto_retry_failed_steps: bool = True
@@ -199,11 +197,7 @@ Output ONLY valid JSON in this format:
             if k not in ("task_id",):  # Skip internal keys
                 context_items.append(f"- {k}: {v}")
 
-        return (
-            "\n".join(context_items)
-            if context_items
-            else "No additional context provided."
-        )
+        return "\n".join(context_items) if context_items else "No additional context provided."
 
     def _populate_plan_steps(self, plan: ExecutionPlan, plan_data: dict) -> None:
         """
@@ -232,9 +226,7 @@ Output ONLY valid JSON in this format:
             step = plan.get_step_by_number(step_num)
             if step:
                 step.depends_on = [
-                    step_id_map[dep_num]
-                    for dep_num in step_data.get("depends_on", [])
-                    if dep_num in step_id_map
+                    step_id_map[dep_num] for dep_num in step_data.get("depends_on", []) if dep_num in step_id_map
                 ]
 
     async def _publish_plan_event(
@@ -269,9 +261,7 @@ Output ONLY valid JSON in this format:
         )
         await self.event_stream.publish(event)
 
-    async def _get_plan_and_step(
-        self, plan_id: str, step_id: str
-    ) -> tuple[ExecutionPlan, PlanStep]:
+    async def _get_plan_and_step(self, plan_id: str, step_id: str) -> tuple[ExecutionPlan, PlanStep]:
         """
         Retrieve plan and step by IDs, raising errors if not found. Issue #620.
 
@@ -474,9 +464,7 @@ Output ONLY valid JSON in this format:
             step.tools_used = tools_used
 
         if step.started_at:
-            step.actual_duration_ms = (
-                step.completed_at - step.started_at
-            ).total_seconds() * 1000
+            step.actual_duration_ms = (step.completed_at - step.started_at).total_seconds() * 1000
 
     def _check_plan_completion(self, plan: ExecutionPlan) -> None:
         """
@@ -523,9 +511,7 @@ Output ONLY valid JSON in this format:
             reflection=reflection,
         )
 
-        logger.warning(
-            "Failed step %d: %s - %s", step.step_number, step.description[:40], error
-        )
+        logger.warning("Failed step %d: %s - %s", step.step_number, step.description[:40], error)
         return step
 
     def _finalize_step_failure(
@@ -549,9 +535,7 @@ Output ONLY valid JSON in this format:
         step.reflection = reflection or f"Failed: {error}"
 
         if step.started_at:
-            step.actual_duration_ms = (
-                step.completed_at - step.started_at
-            ).total_seconds() * 1000
+            step.actual_duration_ms = (step.completed_at - step.started_at).total_seconds() * 1000
 
         plan.update_metrics()
 
@@ -590,9 +574,7 @@ Output ONLY valid JSON in this format:
         plan.update_metrics()
         await self._store_plan(plan)
 
-        logger.info(
-            "Skipped step %d: %s - %s", step.step_number, step.description[:40], reason
-        )
+        logger.info("Skipped step %d: %s - %s", step.step_number, step.description[:40], reason)
         return step
 
     async def update_plan(
@@ -649,9 +631,7 @@ Output ONLY valid JSON in this format:
         )
         plan.version += 1
 
-    async def _replan_remaining_steps(
-        self, plan: ExecutionPlan, new_context: dict
-    ) -> None:
+    async def _replan_remaining_steps(self, plan: ExecutionPlan, new_context: dict) -> None:
         """
         Re-plan remaining steps based on new context. Issue #620.
 
@@ -659,11 +639,7 @@ Output ONLY valid JSON in this format:
             plan: The plan to update
             new_context: New context for replanning
         """
-        remaining = [
-            s
-            for s in plan.steps
-            if s.status in (StepStatus.PENDING, StepStatus.BLOCKED)
-        ]
+        remaining = [s for s in plan.steps if s.status in (StepStatus.PENDING, StepStatus.BLOCKED)]
 
         if not remaining:
             return

@@ -39,10 +39,10 @@ if "agents" not in sys.modules:
 from agents.base_agent import AgentRequest  # noqa: E402
 from agents.standardized_agent import ActionHandler, StandardizedAgent  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Minimal concrete agent for testing
 # ---------------------------------------------------------------------------
+
 
 class _MinimalAgent(StandardizedAgent):
     """Minimal StandardizedAgent subclass used in unit tests."""
@@ -80,6 +80,7 @@ def _make_request(action: str = "echo", payload: dict = None, context: dict = No
 # ---------------------------------------------------------------------------
 # Hook call-order tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_before_process_called_before_handler():
@@ -157,6 +158,7 @@ async def test_full_hook_order():
 # Hook failure isolation tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_before_process_failure_does_not_crash_agent():
     """A raised exception in _before_process must not prevent handler from running."""
@@ -211,6 +213,7 @@ async def test_both_hooks_failing_does_not_crash_agent():
 # ---------------------------------------------------------------------------
 # Default no-op hook behaviour
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_default_before_process_returns_context_unchanged():

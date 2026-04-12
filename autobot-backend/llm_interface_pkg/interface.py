@@ -156,16 +156,10 @@ class LLMInterface:
         Initialize configuration values from unified config.
         """
         self.ollama_host = ssot_config.ollama_url
-        self.openai_api_key = config.get(
-            "openai.api_key", os.getenv("OPENAI_API_KEY", "")
-        )
-        self.ollama_models = config.get(
-            "llm.fallback_models", [ModelConstants.DEFAULT_OLLAMA_MODEL]
-        )
+        self.openai_api_key = config.get("openai.api_key", os.getenv("OPENAI_API_KEY", ""))
+        self.ollama_models = config.get("llm.fallback_models", [ModelConstants.DEFAULT_OLLAMA_MODEL])
 
-        selected_model = config.get(
-            "llm.fallback_models.0", ModelConstants.DEFAULT_OLLAMA_MODEL
-        )
+        selected_model = config.get("llm.fallback_models.0", ModelConstants.DEFAULT_OLLAMA_MODEL)
         self.orchestrator_llm_alias = f"ollama_{selected_model}"
         self.task_llm_alias = f"ollama_{selected_model}"
 
@@ -309,12 +303,8 @@ class LLMInterface:
         """
         return OptimizationRouter(
             OptimizationConfig(
-                speculation_enabled=opt_config.get("local", {}).get(
-                    "speculation_enabled", False
-                ),
-                prompt_compression_enabled=opt_config.get("prompt_compression", {}).get(
-                    "enabled", True
-                ),
+                speculation_enabled=opt_config.get("local", {}).get("speculation_enabled", False),
+                prompt_compression_enabled=opt_config.get("prompt_compression", {}).get("enabled", True),
                 cache_enabled=opt_config.get("cache", {}).get("enabled", True),
             )
         )
@@ -334,9 +324,7 @@ class LLMInterface:
                 enabled=compression_config.get("enabled", True),
                 target_ratio=compression_config.get("target_ratio", 0.7),
                 min_length_to_compress=compression_config.get("min_length", 100),
-                preserve_code_blocks=compression_config.get(
-                    "preserve_code_blocks", True
-                ),
+                preserve_code_blocks=compression_config.get("preserve_code_blocks", True),
             )
         )
 
@@ -380,9 +368,7 @@ class LLMInterface:
 
         self._optimization_router = self._create_optimization_router(opt_config)
         self._prompt_compressor = self._create_prompt_compressor(compression_config)
-        self._rate_limiter, self._connection_pool = self._create_cloud_handlers(
-            cloud_config
-        )
+        self._rate_limiter, self._connection_pool = self._create_cloud_handlers(cloud_config)
 
         self._optimization_metrics = {
             "prompts_compressed": 0,
@@ -408,8 +394,7 @@ class LLMInterface:
             self._tier_router = TieredModelRouter(tier_config)
 
             logger.info(
-                "Tiered routing initialized: enabled=%s, threshold=%.1f, "
-                "simple=%s, complex=%s",
+                "Tiered routing initialized: enabled=%s, threshold=%.1f, " "simple=%s, complex=%s",
                 tier_config.enabled,
                 tier_config.complexity_threshold,
                 tier_config.models.simple,
@@ -419,9 +404,7 @@ class LLMInterface:
             logger.warning("Failed to initialize tiered routing, disabled: %s", e)
             self._tier_router = None
 
-    def _apply_tiered_routing(
-        self, messages: list, provider: str, current_model: str
-    ) -> str:
+    def _apply_tiered_routing(self, messages: list, provider: str, current_model: str) -> str:
         """
         Issue #748: Apply tiered model routing based on request complexity.
 
@@ -445,9 +428,7 @@ class LLMInterface:
             return current_model
 
         try:
-            routed_model, complexity_result = self._tier_router.route(
-                messages, current_model
-            )
+            routed_model, complexity_result = self._tier_router.route(messages, current_model)
 
             if routed_model != current_model:
                 logger.info(
@@ -464,9 +445,7 @@ class LLMInterface:
             logger.warning("Tiered routing failed, using default model: %s", e)
             return current_model
 
-    async def switch_provider(
-        self, provider: str, model: str = "", validate: bool = False
-    ) -> dict[str, Any]:
+    async def switch_provider(self, provider: str, model: str = "", validate: bool = False) -> dict[str, Any]:
         """Switch the active LLM provider at runtime (#536).
 
         Args:
@@ -523,11 +502,7 @@ class LLMInterface:
                 else (
                     ProviderType.VLLM
                     if provider_lower == "vllm"
-                    else (
-                        ProviderType.TRANSFORMERS
-                        if provider_lower == "transformers"
-                        else ProviderType.LOCAL
-                    )
+                    else (ProviderType.TRANSFORMERS if provider_lower == "transformers" else ProviderType.LOCAL)
                 )
             )
         elif provider_lower == "openai":
@@ -536,18 +511,14 @@ class LLMInterface:
             return ProviderType.ANTHROPIC
         return ProviderType.OLLAMA  # Default
 
-    async def _apply_prompt_compression(
-        self, messages: list, provider_type: ProviderType
-    ) -> tuple:
+    async def _apply_prompt_compression(self, messages: list, provider_type: ProviderType) -> tuple:
         """
         Apply prompt compression if enabled for provider.
 
         Returns:
             Tuple of (compressed_messages, tokens_saved)
         """
-        if not self._optimization_router.should_apply(
-            OptimizationCategory.PROMPT_COMPRESSION, provider_type
-        ):
+        if not self._optimization_router.should_apply(OptimizationCategory.PROMPT_COMPRESSION, provider_type):
             return messages, 0
 
         total_saved = 0
@@ -580,9 +551,7 @@ class LLMInterface:
     def reload_ollama_configuration(self):
         """Runtime reload of Ollama configuration."""
         self.ollama_host = ssot_config.ollama_url
-        logger.info(
-            f"LLMInterface: Runtime config reload - Ollama URL: {self.ollama_host}"
-        )
+        logger.info(f"LLMInterface: Runtime config reload - Ollama URL: {self.ollama_host}")
         return self.ollama_host
 
     def _load_prompt_with_fallback(
@@ -698,9 +667,7 @@ class LLMInterface:
             if os.path.exists(included_path):
                 with open(included_path, "r", encoding="utf-8") as f:
                     included_content = f.read()
-                return self._resolve_includes(
-                    included_content, os.path.dirname(included_path)
-                )
+                return self._resolve_includes(included_content, os.path.dirname(included_path))
             else:
                 logger.warning("Included file not found: %s", included_path)
                 return f"<!-- MISSING: {included_file} -->"
@@ -718,9 +685,7 @@ class LLMInterface:
             logger.error("Base prompt file not found: %s", base_file_path)
             return ""
         except Exception as e:
-            logger.error(
-                "Error loading composite prompt from %s: %s", base_file_path, e
-            )
+            logger.error("Error loading composite prompt from %s: %s", base_file_path, e)
             return ""
 
     @error_boundary(component="llm_interface", function="check_ollama_connection")
@@ -793,9 +758,7 @@ class LLMInterface:
         self._metrics["cache_misses"] += 1
         return None, cache_key
 
-    async def _store_in_cache(
-        self, cache_key: str, response: LLMResponse, request_id: str
-    ) -> None:
+    async def _store_in_cache(self, cache_key: str, response: LLMResponse, request_id: str) -> None:
         """Store successful response in cache."""
         await self._response_cache.set(
             cache_key,
@@ -923,9 +886,7 @@ class LLMInterface:
         Returns:
             LLMResponse object
         """
-        provider, model_name, messages, _ = await self._prepare_request_context(
-            messages, llm_type, **kwargs
-        )
+        provider, model_name, messages, _ = await self._prepare_request_context(messages, llm_type, **kwargs)
 
         cache_key = None
         if not skip_cache and not kwargs.get("stream", False):
@@ -935,9 +896,7 @@ class LLMInterface:
             if cached_response:
                 return cached_response
 
-        request = self._build_llm_request(
-            messages, llm_type, provider, model_name, request_id, **kwargs
-        )
+        request = self._build_llm_request(messages, llm_type, provider, model_name, request_id, **kwargs)
         response = await self._execute_with_fallback(request, provider)
 
         return await self._finalize_response(
@@ -952,9 +911,7 @@ class LLMInterface:
         )
 
     # Main chat completion method
-    async def chat_completion(
-        self, messages: list, llm_type: str = "orchestrator", **kwargs
-    ) -> LLMResponse:
+    async def chat_completion(self, messages: list, llm_type: str = "orchestrator", **kwargs) -> LLMResponse:
         """
         Enhanced chat completion with multi-provider support and intelligent routing.
 
@@ -1007,20 +964,14 @@ class LLMInterface:
                     error=str(e),
                 )
 
-    def _mark_fallback_response(
-        self, response: LLMResponse, provider_name: str, primary_provider: str
-    ) -> None:
+    def _mark_fallback_response(self, response: LLMResponse, provider_name: str, primary_provider: str) -> None:
         """Mark response as using fallback provider. Issue #620."""
         if provider_name != primary_provider:
             response.fallback_used = True
             self._metrics["fallback_count"] += 1
-            logger.info(
-                f"Fallback to {provider_name} succeeded (primary: {primary_provider})"
-            )
+            logger.info(f"Fallback to {provider_name} succeeded (primary: {primary_provider})")
 
-    def _build_all_providers_failed_response(
-        self, request_id: str, last_error: str | None
-    ) -> LLMResponse:
+    def _build_all_providers_failed_response(self, request_id: str, last_error: str | None) -> LLMResponse:
         """Build error response when all providers fail. Issue #620."""
         logger.error(f"All providers failed. Last error: {last_error}")
         return LLMResponse(
@@ -1032,9 +983,7 @@ class LLMInterface:
             error=f"All providers failed. Last error: {last_error}",
         )
 
-    async def _execute_with_fallback(
-        self, request: LLMRequest, primary_provider: str
-    ) -> LLMResponse:
+    async def _execute_with_fallback(self, request: LLMRequest, primary_provider: str) -> LLMResponse:
         """
         Execute request with provider fallback chain. Issue #620.
 
@@ -1097,17 +1046,13 @@ class LLMInterface:
                 provider_name, timeout=2.0, use_cache=True
             )
             if health_result.status == ProviderStatus.UNAVAILABLE:
-                logger.debug(
-                    f"Skipping unavailable provider {provider_name}: {health_result.message}"
-                )
+                logger.debug(f"Skipping unavailable provider {provider_name}: {health_result.message}")
                 return False, f"{provider_name} unavailable: {health_result.message}"
         except Exception as health_err:
             logger.debug(f"Health check for {provider_name} failed: {health_err}")
         return True, None
 
-    async def _execute_provider_request(
-        self, request: LLMRequest, provider_name: str
-    ) -> LLMResponse:
+    async def _execute_provider_request(self, request: LLMRequest, provider_name: str) -> LLMResponse:
         """
         Execute request on provider with rate limiting if applicable.
 
@@ -1122,9 +1067,7 @@ class LLMInterface:
 
             handler = self.provider_routing[provider_name]
             provider_type = self._get_provider_type_enum(provider_name)
-            if self._optimization_router.should_apply(
-                OptimizationCategory.RATE_LIMIT_HANDLING, provider_type
-            ):
+            if self._optimization_router.should_apply(OptimizationCategory.RATE_LIMIT_HANDLING, provider_type):
                 return await self._rate_limiter.execute_with_retry(
                     lambda h=handler, r=request: h(r),
                     provider=provider_name,
@@ -1197,15 +1140,11 @@ class LLMInterface:
             provider_metrics["failures"] += 1
 
         old_avg = provider_metrics["avg_time"]
-        new_avg = (
-            old_avg * (provider_metrics["requests"] - 1) + processing_time
-        ) / provider_metrics["requests"]
+        new_avg = (old_avg * (provider_metrics["requests"] - 1) + processing_time) / provider_metrics["requests"]
         provider_metrics["avg_time"] = new_avg
 
         self._metrics["total_response_time"] += processing_time
-        self._metrics["avg_response_time"] = (
-            self._metrics["total_response_time"] / self._metrics["total_requests"]
-        )
+        self._metrics["avg_response_time"] = self._metrics["total_response_time"] / self._metrics["total_requests"]
 
     async def _track_llm_usage(
         self,
@@ -1220,9 +1159,7 @@ class LLMInterface:
             return
 
         try:
-            prompt_content = " ".join(
-                m.get("content", "") for m in messages if m.get("role") != "system"
-            )
+            prompt_content = " ".join(m.get("content", "") for m in messages if m.get("role") != "system")
 
             usage = response.usage if hasattr(response, "usage") else {}
             input_tokens = usage.get("prompt_tokens", 0)
@@ -1318,9 +1255,7 @@ class LLMInterface:
             **self._optimization_metrics,
             "rate_limiter": self._rate_limiter.get_metrics(),
             "connection_pools": self._connection_pool.get_metrics(),
-            "router_summary": self._optimization_router.get_optimization_summary(
-                ProviderType.OLLAMA
-            ),
+            "router_summary": self._optimization_router.get_optimization_summary(ProviderType.OLLAMA),
         }
         # Issue #748: Include tiered routing metrics
         if self._tier_router:
@@ -1414,9 +1349,7 @@ class LLMInterface:
         # falls to the else branch and returns the Ollama default model name, causing
         # cache-key collisions between Ollama and vLLM calls.  Use the same config key
         # that VLLMProviderHandler._ensure_initialized() uses.
-        model_name = config.get(
-            "llm.vllm.default_model", "meta-llama/Llama-3.2-3B-Instruct"
-        )
+        model_name = config.get("llm.vllm.default_model", "meta-llama/Llama-3.2-3B-Instruct")
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -1463,9 +1396,7 @@ class LLMInterface:
         """Get Ollama host URL from environment variables."""
         return self._ollama_provider.get_host_from_env()
 
-    def _build_ollama_request_data(
-        self, request: LLMRequest, model: str, use_streaming: bool
-    ) -> dict:
+    def _build_ollama_request_data(self, request: LLMRequest, model: str, use_streaming: bool) -> dict:
         """Build Ollama API request data dictionary."""
         return self._ollama_provider.build_request_data(request, model, use_streaming)
 

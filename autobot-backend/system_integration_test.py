@@ -31,9 +31,7 @@ class TestAutoBootSystemIntegration:
             response = self.client.get(endpoint)
             # Should either work (200) or be found but have issues (4xx/5xx)
             # 404 would indicate routing problem
-            assert (
-                response.status_code != 404
-            ), f"Endpoint {endpoint} not found (routing issue)"
+            assert response.status_code != 404, f"Endpoint {endpoint} not found (routing issue)"
 
     def test_system_component_initialization(self):
         """Test that core system components are initialized"""
@@ -183,14 +181,8 @@ class TestDataFlowIntegration:
         for i in range(1, len(responses)):
             # Key settings should be the same
             assert responses[i]["security_enabled"] == responses[0]["security_enabled"]
-            assert (
-                responses[i]["command_security_enabled"]
-                == responses[0]["command_security_enabled"]
-            )
-            assert (
-                responses[i]["docker_sandbox_enabled"]
-                == responses[0]["docker_sandbox_enabled"]
-            )
+            assert responses[i]["command_security_enabled"] == responses[0]["command_security_enabled"]
+            assert responses[i]["docker_sandbox_enabled"] == responses[0]["docker_sandbox_enabled"]
 
 
 class TestSystemResilience:
@@ -209,9 +201,7 @@ class TestSystemResilience:
         if hasattr(self.app.state, "enhanced_security_layer"):
             # Temporarily break audit logging
             original_audit_file = self.app.state.enhanced_security_layer.audit_log_file
-            self.app.state.enhanced_security_layer.audit_log_file = (
-                "/invalid/path/audit.log"
-            )
+            self.app.state.enhanced_security_layer.audit_log_file = "/invalid/path/audit.log"
 
             # System should still respond
             response = self.client.get("/api/security/status")
@@ -292,9 +282,7 @@ class TestSystemPerformance:
 
             # API calls should be fast (under 1 second)
             assert duration < 1.0, f"Endpoint {endpoint} took {duration:.2f}s"
-            assert (
-                response.status_code == 200
-            ), f"Endpoint {endpoint} failed with {response.status_code}"
+            assert response.status_code == 200, f"Endpoint {endpoint} failed with {response.status_code}"
 
     def test_memory_usage_stability(self):
         """Test memory usage doesn't grow excessively"""

@@ -44,8 +44,7 @@ def _import_torch() -> Any:
         return torch
     except ImportError as exc:
         raise ImportError(
-            "torch is required for attention backend selection. "
-            "Install with: pip install torch>=2.0.0"
+            "torch is required for attention backend selection. " "Install with: pip install torch>=2.0.0"
         ) from exc
 
 
@@ -278,9 +277,7 @@ class AttentionBackendSelector:
                 return None
             if hasattr(model, "to"):
                 # Trigger SDPA path via model config when available
-                if hasattr(model, "config") and hasattr(
-                    model.config, "attn_implementation"
-                ):
+                if hasattr(model, "config") and hasattr(model.config, "attn_implementation"):
                     model.config.attn_implementation = "sdpa"
                 logger.info("SDPA attention implementation selected")
                 return model

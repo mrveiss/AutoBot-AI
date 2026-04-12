@@ -95,9 +95,7 @@ class UIElementCollection:
         interactive_elements = self.find_interactive_elements()
         high_confidence_elements = self.filter_by_confidence(0.8)
 
-        readiness_score = (
-            len(high_confidence_elements) / max(len(self.elements), 1)
-        ) * 100
+        readiness_score = (len(high_confidence_elements) / max(len(self.elements), 1)) * 100
 
         return {
             "readiness_score": readiness_score,
@@ -106,9 +104,7 @@ class UIElementCollection:
             "recommendation": "ready" if readiness_score > 70 else "needs_improvement",
         }
 
-    def find_automation_opportunities(
-        self, context_analysis: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
+    def find_automation_opportunities(self, context_analysis: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Find automation opportunities based on elements and context
 
         Feature Envy fix: Uses UIElement.get_automation_opportunity() instead of
@@ -184,11 +180,7 @@ class ProcessingResultExtractor:
         """Convert processing results to multimodal analysis format"""
         return [
             {
-                "modality": (
-                    r.modality_type.value
-                    if hasattr(r.modality_type, "value")
-                    else str(r.modality_type)
-                ),
+                "modality": (r.modality_type.value if hasattr(r.modality_type, "value") else str(r.modality_type)),
                 "confidence": r.confidence,
                 "data": r.result_data,
                 "success": r.success,

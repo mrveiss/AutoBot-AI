@@ -171,10 +171,7 @@ class Secret(Base, TimestampMixin):
 
     def __repr__(self) -> str:
         """String representation."""
-        return (
-            f"<Secret(id={self.id}, name={self.name}, "
-            f"owner_id={self.owner_id}, scope={self.scope})>"
-        )
+        return f"<Secret(id={self.id}, name={self.name}, " f"owner_id={self.owner_id}, scope={self.scope})>"
 
     @property
     def is_expired(self) -> bool:

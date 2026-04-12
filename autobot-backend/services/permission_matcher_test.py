@@ -30,39 +30,29 @@ class TestPermissionRule:
 
     def test_glob_wildcard(self):
         """Glob-style * wildcard matches any characters."""
-        rule = PermissionRule(
-            tool="Bash", pattern="ls *", action=PermissionAction.ALLOW
-        )
+        rule = PermissionRule(tool="Bash", pattern="ls *", action=PermissionAction.ALLOW)
         assert rule.matches("Bash", "ls -la") is True
         assert rule.matches("Bash", "ls /home/user") is True
 
     def test_no_match_different_command(self):
         """Non-matching command returns False."""
-        rule = PermissionRule(
-            tool="Bash", pattern="ls *", action=PermissionAction.ALLOW
-        )
+        rule = PermissionRule(tool="Bash", pattern="ls *", action=PermissionAction.ALLOW)
         assert rule.matches("Bash", "cat file.txt") is False
 
     def test_tool_case_insensitive(self):
         """Tool matching is case-insensitive."""
-        rule = PermissionRule(
-            tool="Bash", pattern="ls *", action=PermissionAction.ALLOW
-        )
+        rule = PermissionRule(tool="Bash", pattern="ls *", action=PermissionAction.ALLOW)
         assert rule.matches("bash", "ls -la") is True
         assert rule.matches("BASH", "ls -la") is True
 
     def test_tool_mismatch(self):
         """Different tool returns False."""
-        rule = PermissionRule(
-            tool="Bash", pattern="ls *", action=PermissionAction.ALLOW
-        )
+        rule = PermissionRule(tool="Bash", pattern="ls *", action=PermissionAction.ALLOW)
         assert rule.matches("Read", "ls -la") is False
 
     def test_question_mark_wildcard(self):
         """? wildcard matches single character."""
-        rule = PermissionRule(
-            tool="Bash", pattern="cat ?.txt", action=PermissionAction.ALLOW
-        )
+        rule = PermissionRule(tool="Bash", pattern="cat ?.txt", action=PermissionAction.ALLOW)
         assert rule.matches("Bash", "cat a.txt") is True
         assert rule.matches("Bash", "cat ab.txt") is False
 
@@ -90,42 +80,28 @@ class TestPermissionMatcherPrecedence:
 
     def test_deny_over_allow(self, matcher):
         """DENY takes precedence over ALLOW."""
-        matcher.allow_rules = [
-            PermissionRule(tool="Bash", pattern="rm *", action=PermissionAction.ALLOW)
-        ]
-        matcher.deny_rules = [
-            PermissionRule(tool="Bash", pattern="rm *", action=PermissionAction.DENY)
-        ]
+        matcher.allow_rules = [PermissionRule(tool="Bash", pattern="rm *", action=PermissionAction.ALLOW)]
+        matcher.deny_rules = [PermissionRule(tool="Bash", pattern="rm *", action=PermissionAction.DENY)]
         result, rule = matcher.match("Bash", "rm -rf /")
         assert result == MatchResult.DENY
 
     def test_deny_over_ask(self, matcher):
         """DENY takes precedence over ASK."""
-        matcher.ask_rules = [
-            PermissionRule(tool="Bash", pattern="rm *", action=PermissionAction.ASK)
-        ]
-        matcher.deny_rules = [
-            PermissionRule(tool="Bash", pattern="rm *", action=PermissionAction.DENY)
-        ]
+        matcher.ask_rules = [PermissionRule(tool="Bash", pattern="rm *", action=PermissionAction.ASK)]
+        matcher.deny_rules = [PermissionRule(tool="Bash", pattern="rm *", action=PermissionAction.DENY)]
         result, rule = matcher.match("Bash", "rm -rf /tmp/test")
         assert result == MatchResult.DENY
 
     def test_ask_over_allow(self, matcher):
         """ASK takes precedence over ALLOW."""
-        matcher.allow_rules = [
-            PermissionRule(tool="Bash", pattern="git *", action=PermissionAction.ALLOW)
-        ]
-        matcher.ask_rules = [
-            PermissionRule(tool="Bash", pattern="git *", action=PermissionAction.ASK)
-        ]
+        matcher.allow_rules = [PermissionRule(tool="Bash", pattern="git *", action=PermissionAction.ALLOW)]
+        matcher.ask_rules = [PermissionRule(tool="Bash", pattern="git *", action=PermissionAction.ASK)]
         result, rule = matcher.match("Bash", "git push origin main")
         assert result == MatchResult.ASK
 
     def test_allow_returns_allow(self, matcher):
         """ALLOW rule returns ALLOW when no higher-precedence match."""
-        matcher.allow_rules = [
-            PermissionRule(tool="Bash", pattern="ls *", action=PermissionAction.ALLOW)
-        ]
+        matcher.allow_rules = [PermissionRule(tool="Bash", pattern="ls *", action=PermissionAction.ALLOW)]
         result, rule = matcher.match("Bash", "ls -la")
         assert result == MatchResult.ALLOW
         assert rule is not None
@@ -191,11 +167,7 @@ class TestPermissionMatcherModeOverrides:
     def test_dont_ask_mode_still_denies(self, admin_matcher):
         """DONT_ASK mode still enforces DENY rules for admin."""
         admin_matcher.mode = PermissionMode.DONT_ASK
-        admin_matcher.deny_rules = [
-            PermissionRule(
-                tool="Bash", pattern="rm -rf /*", action=PermissionAction.DENY
-            )
-        ]
+        admin_matcher.deny_rules = [PermissionRule(tool="Bash", pattern="rm -rf /*", action=PermissionAction.DENY)]
         result, rule = admin_matcher.match("Bash", "rm -rf /home")
         assert result == MatchResult.DENY
 
@@ -208,9 +180,7 @@ class TestPermissionMatcherModeOverrides:
     def test_plan_mode_falls_through(self, admin_matcher):
         """PLAN mode falls through to normal rules."""
         admin_matcher.mode = PermissionMode.PLAN
-        admin_matcher.allow_rules = [
-            PermissionRule(tool="Bash", pattern="ls *", action=PermissionAction.ALLOW)
-        ]
+        admin_matcher.allow_rules = [PermissionRule(tool="Bash", pattern="ls *", action=PermissionAction.ALLOW)]
         result, rule = admin_matcher.match("Bash", "ls -la")
         assert result == MatchResult.ALLOW
 
@@ -222,9 +192,7 @@ class TestPermissionMatcherModeOverrides:
 
     def test_default_mode_uses_rules(self, admin_matcher):
         """DEFAULT mode uses normal rule matching."""
-        admin_matcher.allow_rules = [
-            PermissionRule(tool="Bash", pattern="ls *", action=PermissionAction.ALLOW)
-        ]
+        admin_matcher.allow_rules = [PermissionRule(tool="Bash", pattern="ls *", action=PermissionAction.ALLOW)]
         result, rule = admin_matcher.match("Bash", "ls -la")
         assert result == MatchResult.ALLOW
 
@@ -248,9 +216,7 @@ class TestPermissionMatcherRuleCRUD:
 
     def test_add_allow_rule_admin(self, matcher):
         """Admin can add ALLOW rules."""
-        result = matcher.add_rule(
-            "Bash", "echo *", PermissionAction.ALLOW, "Echo commands"
-        )
+        result = matcher.add_rule("Bash", "echo *", PermissionAction.ALLOW, "Echo commands")
         assert result is True
         assert len(matcher.allow_rules) == 1
         assert matcher.allow_rules[0].pattern == "echo *"
@@ -439,9 +405,7 @@ default_rules:
             mock_config.permission.rules_file = str(rules_yaml)
             mock_config.permission.is_admin_only_mode.return_value = False
 
-            matcher = PermissionMatcher(
-                rules_file=str(rules_yaml), mode=PermissionMode.DEFAULT
-            )
+            matcher = PermissionMatcher(rules_file=str(rules_yaml), mode=PermissionMode.DEFAULT)
 
         assert len(matcher.allow_rules) == 1
         assert len(matcher.ask_rules) == 1
@@ -474,9 +438,7 @@ default_rules:
             mock_config.permission.rules_file = str(rules_yaml)
             mock_config.permission.is_admin_only_mode.return_value = False
 
-            matcher = PermissionMatcher(
-                rules_file=str(rules_yaml), mode=PermissionMode.DEFAULT
-            )
+            matcher = PermissionMatcher(rules_file=str(rules_yaml), mode=PermissionMode.DEFAULT)
 
         assert len(matcher.allow_rules) == 0
 

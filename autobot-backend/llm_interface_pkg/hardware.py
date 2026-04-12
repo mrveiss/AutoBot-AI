@@ -95,9 +95,7 @@ class HardwareDetector:
 
         return "cpu"
 
-    def _try_backend_selection(
-        self, priority: str, detected_hardware: Set[str]
-    ) -> Optional[str]:
+    def _try_backend_selection(self, priority: str, detected_hardware: Set[str]) -> Optional[str]:
         """
         Try to select a specific backend.
 
@@ -195,8 +193,7 @@ class HardwareDetector:
             vram_gb = self.get_available_vram_gb()
             if model_info.estimated_size_gb > vram_gb:
                 logger.warning(
-                    "Model %s requires ~%.1f GB but only %.1f GB VRAM free — "
-                    "falling back to cpu",
+                    "Model %s requires ~%.1f GB but only %.1f GB VRAM free — " "falling back to cpu",
                     model_name,
                     model_info.estimated_size_gb,
                     vram_gb,

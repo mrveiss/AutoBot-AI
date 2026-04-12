@@ -43,13 +43,9 @@ def migrate(db_url: str) -> None:
                 UNIQUE(node_id, service_name)
             )
         """)
-        create_index_if_not_exists(
-            cursor, "idx_services_node_id", "services", "node_id"
-        )
+        create_index_if_not_exists(cursor, "idx_services_node_id", "services", "node_id")
         create_index_if_not_exists(cursor, "idx_services_status", "services", "status")
-        create_index_if_not_exists(
-            cursor, "idx_services_name", "services", "service_name"
-        )
+        create_index_if_not_exists(cursor, "idx_services_name", "services", "service_name")
         logger.info("Created services table with indexes")
     else:
         logger.info("services table already exists")

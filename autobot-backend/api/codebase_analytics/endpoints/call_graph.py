@@ -119,11 +119,7 @@ async def _get_python_files(project_root) -> List:
         get_analytics_executor(),
         lambda: list(project_root.rglob("*.py")),
     )
-    return [
-        f
-        for f in python_files
-        if not any(excluded in f.parts for excluded in EXCLUDED_DIRS)
-    ]
+    return [f for f in python_files if not any(excluded in f.parts for excluded in EXCLUDED_DIRS)]
 
 
 def _get_connected_func_ids(call_edges: List[Dict]) -> set:
@@ -220,13 +216,9 @@ def _calculate_metrics(unique_edges: List[Dict]) -> tuple:
     outgoing_calls = {}
     incoming_calls = {}
     for edge in unique_edges:
-        outgoing_calls[edge["from"]] = (
-            outgoing_calls.get(edge["from"], 0) + edge["count"]
-        )
+        outgoing_calls[edge["from"]] = outgoing_calls.get(edge["from"], 0) + edge["count"]
         if edge["resolved"]:
-            incoming_calls[edge["to"]] = (
-                incoming_calls.get(edge["to"], 0) + edge["count"]
-            )
+            incoming_calls[edge["to"]] = incoming_calls.get(edge["to"], 0) + edge["count"]
 
     top_callers = sorted(
         [{"function": k, "calls": v} for k, v in outgoing_calls.items()],
@@ -445,9 +437,7 @@ def _build_function_info(
     }
 
 
-def _compute_func_identity(
-    node_name: str, module_path: str, current_class: Optional[str]
-) -> tuple:
+def _compute_func_identity(node_name: str, module_path: str, current_class: Optional[str]) -> tuple:
     """
     Compute function ID and full display name.
 
@@ -544,9 +534,7 @@ class FunctionCallVisitor(ast.NodeVisitor):
 
     def _process_function(self, node):
         """Process function node and register it with its call relationships."""
-        func_id, full_name = _compute_func_identity(
-            node.name, self.module_path, self.current_class
-        )
+        func_id, full_name = _compute_func_identity(node.name, self.module_path, self.current_class)
         self.functions[func_id] = _build_function_info(
             node,
             func_id,
@@ -594,9 +582,7 @@ class FunctionCallVisitor(ast.NodeVisitor):
                 }
             )
         else:
-            self.call_edges.append(
-                _build_call_edge(self.current_function, callee_name, callee_id, line)
-            )
+            self.call_edges.append(_build_call_edge(self.current_function, callee_name, callee_id, line))
 
 
 # =============================================================================
@@ -721,9 +707,7 @@ def _build_call_graph_response(
             "unresolved_calls": unresolved_count,
             # Issue #713: New metrics for external calls
             "external_library_calls": external_calls_count,
-            "resolution_rate": round(
-                resolved_count / max(resolved_count + unresolved_count, 1) * 100, 1
-            ),
+            "resolution_rate": round(resolved_count / max(resolved_count + unresolved_count, 1) * 100, 1),
             "top_callers": top_callers,
             "most_called": top_called,
         },
@@ -739,9 +723,7 @@ def _build_call_graph_response(
 )
 async def get_call_graph(
     refresh: bool = Query(False, description="Force refresh, bypass cache"),
-    source_id: Optional[str] = Query(
-        None, description="#1772: source_id for API consistency"
-    ),
+    source_id: Optional[str] = Query(None, description="#1772: source_id for API consistency"),
 ):
     """Get function call graph.
 
@@ -761,9 +743,7 @@ async def get_call_graph(
     call_edges: List[Dict] = []
     external_calls: List[Dict] = []  # Issue #713: Track external library calls
 
-    await _analyze_python_files(
-        python_files, project_root, functions, call_edges, external_calls
-    )
+    await _analyze_python_files(python_files, project_root, functions, call_edges, external_calls)
 
     nodes = _build_connected_nodes(functions, call_edges)
     orphaned_nodes = _build_orphaned_nodes(functions, call_edges)

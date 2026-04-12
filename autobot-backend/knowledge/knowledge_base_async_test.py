@@ -90,12 +90,10 @@ class TestInitRedisConnections:
         ):
             await kb._init_redis_connections()
 
-        assert kb.aioredis_client is mock_async_redis, (
-            "aioredis_client should be the Redis instance, not a coroutine"
-        )
-        assert not inspect.iscoroutine(kb.aioredis_client), (
-            "aioredis_client must not be a coroutine after _init_redis_connections"
-        )
+        assert kb.aioredis_client is mock_async_redis, "aioredis_client should be the Redis instance, not a coroutine"
+        assert not inspect.iscoroutine(
+            kb.aioredis_client
+        ), "aioredis_client must not be a coroutine after _init_redis_connections"
 
     @pytest.mark.asyncio
     async def test_ping_called_on_async_client(self, mock_async_redis):
@@ -125,9 +123,7 @@ class TestInitRedisConnections:
             patch(_SYNC_CLIENT_PATH, return_value=sync_client),
             patch(_ASYNC_CLIENT_PATH, new=AsyncMock(return_value=None)),
         ):
-            with pytest.raises(
-                Exception, match="Async Redis client initialization returned None"
-            ):
+            with pytest.raises(Exception, match="Async Redis client initialization returned None"):
                 await kb._init_redis_connections()
 
     @pytest.mark.asyncio
@@ -136,9 +132,7 @@ class TestInitRedisConnections:
         kb = self._make_kb()
 
         with patch(_SYNC_CLIENT_PATH, return_value=None):
-            with pytest.raises(
-                Exception, match="Redis client initialization returned None"
-            ):
+            with pytest.raises(Exception, match="Redis client initialization returned None"):
                 await kb._init_redis_connections()
 
     @pytest.mark.asyncio

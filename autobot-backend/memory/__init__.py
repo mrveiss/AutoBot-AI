@@ -31,29 +31,11 @@ For backward compatibility, all exports from the original unified_memory_manager
 are re-exported here.
 """
 
-# Enums
-from .enums import MemoryCategory, StorageStrategy, TaskPriority, TaskStatus
-
-# Data Models
-from .models import MemoryEntry, TaskExecutionRecord
-
-# Protocols
-from .protocols import ICacheManager, IGeneralStorage, ITaskStorage
-
-# Storage Components
-from .storage import GeneralStorage, TaskStorage
+# Memory Subsystems (exposed via UnifiedMemoryManager properties)
+from .agent_diary import AgentDiaryService
 
 # Cache and Monitor
 from .cache import LRUCacheManager
-from .monitor import MemoryMonitor
-
-# Memory Subsystems (exposed via UnifiedMemoryManager properties)
-from .agent_diary import AgentDiaryService
-from .essential_story import EssentialStoryGenerator
-from .working_memory import WorkingMemoryService
-
-# Main Manager (composes all subsystems above)
-from .manager import UnifiedMemoryManager
 
 # Backward Compatibility Wrappers
 from .compat import (
@@ -62,6 +44,24 @@ from .compat import (
     get_enhanced_memory_manager,
     get_long_term_memory_manager,
 )
+
+# Enums
+from .enums import MemoryCategory, StorageStrategy, TaskPriority, TaskStatus
+from .essential_story import EssentialStoryGenerator
+
+# Main Manager (composes all subsystems above)
+from .manager import UnifiedMemoryManager
+
+# Data Models
+from .models import MemoryEntry, TaskExecutionRecord
+from .monitor import MemoryMonitor
+
+# Protocols
+from .protocols import ICacheManager, IGeneralStorage, ITaskStorage
+
+# Storage Components
+from .storage import GeneralStorage, TaskStorage
+from .working_memory import WorkingMemoryService
 
 __all__ = [
     # Memory subsystems

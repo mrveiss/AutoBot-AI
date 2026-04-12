@@ -54,9 +54,7 @@ def migrate(db_url: str) -> None:
 
         # Create indexes
         create_index_if_not_exists(cursor, "idx_agents_agent_id", "agents", "agent_id")
-        create_index_if_not_exists(
-            cursor, "idx_agents_is_default", "agents", "is_default"
-        )
+        create_index_if_not_exists(cursor, "idx_agents_is_default", "agents", "is_default")
         logger.info("Created indexes")
 
         # Seed default agent

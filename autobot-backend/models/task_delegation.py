@@ -54,7 +54,4 @@ class TaskDelegation(Base, TimestampMixin):
     result = Column(JSONB, nullable=True)
 
     def __repr__(self) -> str:
-        return (
-            f"<TaskDelegation {self.delegator_id}->{self.assignee_id} "
-            f"status={self.status!r}>"
-        )
+        return f"<TaskDelegation {self.delegator_id}->{self.assignee_id} " f"status={self.status!r}>"

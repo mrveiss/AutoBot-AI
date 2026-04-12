@@ -52,9 +52,7 @@ async def get_slm_db():
         yield session
 
 
-@router.post(
-    "", response_model=APIKeyCreateResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("", response_model=APIKeyCreateResponse, status_code=status.HTTP_201_CREATED)
 async def create_api_key(
     request: APIKeyCreate,
     current_user: Annotated[dict, Depends(get_current_user)],

@@ -97,9 +97,7 @@ class TerminalSecretsService:
             self._agent_secrets = get_agent_secrets_integration()
         return self._agent_secrets
 
-    def _create_session_state(
-        self, session_id: str, chat_id: Optional[str]
-    ) -> SessionKeyState:
+    def _create_session_state(self, session_id: str, chat_id: Optional[str]) -> SessionKeyState:
         """Helper for setup_ssh_keys. Ref: #1088."""
         state = SessionKeyState(session_id=session_id, chat_id=chat_id)
         safe_id = "".join(c if c.isalnum() or c in "-_" else "_" for c in session_id)
@@ -121,9 +119,7 @@ class TerminalSecretsService:
             "session_id": session_id,
         }
 
-    def _filter_keys_by_name(
-        self, ssh_keys: List[Dict], specific_key_names: Optional[List[str]]
-    ) -> List[Dict]:
+    def _filter_keys_by_name(self, ssh_keys: List[Dict], specific_key_names: Optional[List[str]]) -> List[Dict]:
         """
         Filter SSH keys by specific names if provided.
 
@@ -319,9 +315,7 @@ class TerminalSecretsService:
             logger.debug("Could not get key fingerprint: %s", e)
             return None
 
-    def _find_key_by_name(
-        self, session_state: SessionKeyState, key_name: str
-    ) -> Optional[SSHKeyInfo]:
+    def _find_key_by_name(self, session_state: SessionKeyState, key_name: str) -> Optional[SSHKeyInfo]:
         """
         Find an SSH key by name in session state.
 
@@ -426,9 +420,7 @@ class TerminalSecretsService:
                 env["DISPLAY"] = ":0"  # Required for SSH_ASKPASS
 
             # Run ssh-add (Issue #665: uses _run_ssh_add helper)
-            result = await self._run_ssh_add(
-                key_info.key_path, env, passphrase if askpass_script else None
-            )
+            result = await self._run_ssh_add(key_info.key_path, env, passphrase if askpass_script else None)
 
             # Cleanup askpass script if created
             if askpass_script:
@@ -442,9 +434,7 @@ class TerminalSecretsService:
                 logger.info("Added key '%s' to ssh-agent", key_name)
                 return True
             else:
-                logger.error(
-                    "Failed to add key '%s' to agent: %s", key_name, result.stderr
-                )
+                logger.error("Failed to add key '%s' to agent: %s", key_name, result.stderr)
                 return False
 
         except Exception as e:

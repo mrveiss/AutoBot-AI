@@ -38,9 +38,7 @@ from utils.path_validation import contains_injection_patterns
 
 # Issue #756: Consolidated from utils/request_utils.py
 from utils.request_utils import generate_request_id
-from utils.response_helpers import (
-    create_error_response as _canonical_create_error_response,
-)
+from utils.response_helpers import create_error_response as _canonical_create_error_response
 
 logger = logging.getLogger(__name__)
 
@@ -307,9 +305,7 @@ def get_chat_history_manager(request: Request):
     from chat_history import ChatHistoryManager
     from utils.lazy_singleton import lazy_init_singleton
 
-    return lazy_init_singleton(
-        request.app.state, "chat_history_manager", ChatHistoryManager
-    )
+    return lazy_init_singleton(request.app.state, "chat_history_manager", ChatHistoryManager)
 
 
 # =============================================================================
@@ -317,9 +313,7 @@ def get_chat_history_manager(request: Request):
 # =============================================================================
 
 
-def log_chat_error(
-    error: Exception, context: str = "chat", request_id: str = "unknown"
-) -> None:
+def log_chat_error(error: Exception, context: str = "chat", request_id: str = "unknown") -> None:
     """
     Log chat-related errors with consistent formatting.
 

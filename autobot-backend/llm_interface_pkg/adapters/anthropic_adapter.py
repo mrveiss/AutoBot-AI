@@ -16,6 +16,7 @@ import time
 from typing import List, Optional
 
 from constants.model_constants import ANTHROPIC_CLAUDE_OPUS4_6, ANTHROPIC_CLAUDE_SONNET4_6
+
 from ..models import LLMRequest, LLMResponse
 from .base import (
     AdapterBase,
@@ -52,12 +53,8 @@ class AnthropicAdapter(AdapterBase):
         if self._provider is None:
             from llm_providers.anthropic_provider import AnthropicProvider
 
-            api_key = self.config.settings.get("api_key") or os.getenv(
-                "ANTHROPIC_API_KEY", ""
-            )
-            self._provider = AnthropicProvider(
-                settings={"api_key": api_key} if api_key else {}
-            )
+            api_key = self.config.settings.get("api_key") or os.getenv("ANTHROPIC_API_KEY", "")
+            self._provider = AnthropicProvider(settings={"api_key": api_key} if api_key else {})
         return self._provider
 
     async def execute(self, request: LLMRequest) -> LLMResponse:

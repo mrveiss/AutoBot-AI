@@ -28,9 +28,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 # Issue #380: Pre-compiled patterns for detection
-_STRING_METHOD_NAMES = frozenset(
-    {"replace", "strip", "lstrip", "rstrip", "split", "find", "startswith", "endswith"}
-)
+_STRING_METHOD_NAMES = frozenset({"replace", "strip", "lstrip", "rstrip", "split", "find", "startswith", "endswith"})
 
 # Patterns that indicate multiple string operations that could be consolidated
 _CONSOLIDATION_PATTERNS = {
@@ -86,9 +84,7 @@ class StringOperationChain:
             return True
 
         # Check for strip chains
-        strip_count = sum(
-            1 for op in self.operations if op in ("strip", "lstrip", "rstrip")
-        )
+        strip_count = sum(1 for op in self.operations if op in ("strip", "lstrip", "rstrip"))
         if strip_count >= 2:
             return True
 
@@ -269,9 +265,7 @@ class RegexPatternDetector:
                     opportunities.append(opportunity)
 
             # Also check for pattern-based detections
-            pattern_opportunities = self._detect_patterns_in_source(
-                source, file_path, lines
-            )
+            pattern_opportunities = self._detect_patterns_in_source(source, file_path, lines)
             opportunities.extend(pattern_opportunities)
 
         except SyntaxError as e:
@@ -303,9 +297,7 @@ class RegexPatternDetector:
 
         return opportunities
 
-    def _determine_optimization_details(
-        self, chain: StringOperationChain
-    ) -> tuple[str, str, str]:
+    def _determine_optimization_details(self, chain: StringOperationChain) -> tuple[str, str, str]:
         """Determine optimization description, regex, and performance gain.
 
         Analyzes the chain operations to provide appropriate optimization
@@ -319,9 +311,7 @@ class RegexPatternDetector:
             Tuple of (description, suggested_regex, performance_gain)
         """
         replace_count = sum(1 for op in chain.operations if op == "replace")
-        strip_count = sum(
-            1 for op in chain.operations if op in ("strip", "lstrip", "rstrip")
-        )
+        strip_count = sum(1 for op in chain.operations if op in ("strip", "lstrip", "rstrip"))
 
         if replace_count >= 2:
             return (
@@ -360,9 +350,7 @@ class RegexPatternDetector:
             return PatternSeverity.MEDIUM
         return PatternSeverity.LOW
 
-    def _chain_to_opportunity(
-        self, chain: StringOperationChain
-    ) -> Optional[RegexOpportunity]:
+    def _chain_to_opportunity(self, chain: StringOperationChain) -> Optional[RegexOpportunity]:
         """Convert a string operation chain to a RegexOpportunity.
 
         Issue #620: Refactored with extracted helper methods.
@@ -432,9 +420,7 @@ class RegexPatternDetector:
 
         return "re.sub(r'pattern', 'replacement', text)"
 
-    def _detect_patterns_in_source(
-        self, source: str, file_path: str, lines: List[str]
-    ) -> List[RegexOpportunity]:
+    def _detect_patterns_in_source(self, source: str, file_path: str, lines: List[str]) -> List[RegexOpportunity]:
         """Detect patterns using regex on source code.
 
         This catches patterns that AST analysis might miss.
@@ -518,9 +504,7 @@ class RegexPatternDetector:
         sorted_opps = sorted(
             opportunities,
             key=lambda x: (
-                {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0}.get(
-                    x.severity.value, 0
-                ),
+                {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0}.get(x.severity.value, 0),
                 len(x.operations_replaced),
             ),
             reverse=True,

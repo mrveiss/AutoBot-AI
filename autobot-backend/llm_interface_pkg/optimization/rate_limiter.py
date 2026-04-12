@@ -218,9 +218,7 @@ class RateLimitHandler:
                 await self._record_success(metrics, attempt)
                 return result
             except Exception as e:
-                last_error = await self._handle_attempt_error(
-                    e, metrics, provider, attempt, max_attempts
-                )
+                last_error = await self._handle_attempt_error(e, metrics, provider, attempt, max_attempts)
                 if last_error is None:
                     raise  # Non-rate-limit error or exhausted retries
 
@@ -285,9 +283,7 @@ class RateLimitHandler:
         await self._record_rate_limit_hit(metrics)
 
         if attempt < max_attempts - 1:
-            await self._wait_and_retry(
-                metrics, provider, attempt, max_attempts, retry_after
-            )
+            await self._wait_and_retry(metrics, provider, attempt, max_attempts, retry_after)
             return error
 
         async with self._lock:
@@ -322,9 +318,7 @@ class RateLimitHandler:
                 "total_retry_attempts": metrics.total_retry_attempts,
                 "total_wait_time_seconds": round(metrics.total_wait_time_seconds, 2),
                 "rate_limits_hit": metrics.rate_limits_hit,
-                "success_rate": (
-                    metrics.successful_requests / max(metrics.total_requests, 1)
-                ),
+                "success_rate": (metrics.successful_requests / max(metrics.total_requests, 1)),
                 "last_rate_limit_at": metrics.last_rate_limit_at,
             }
 

@@ -20,9 +20,7 @@ from .base import ThreatAnalyzer
 class CommandInjectionAnalyzer(ThreatAnalyzer):
     """Analyzes events for command injection threats"""
 
-    async def analyze(
-        self, event: SecurityEvent, context: AnalysisContext
-    ) -> Optional[ThreatEvent]:
+    async def analyze(self, event: SecurityEvent, context: AnalysisContext) -> Optional[ThreatEvent]:
         """Detect command injection attempts (Issue #315 - refactored)."""
         command_content = event.get_command_content()
 

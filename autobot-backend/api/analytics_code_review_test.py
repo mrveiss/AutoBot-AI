@@ -13,13 +13,15 @@ Tests the following functionality:
 
 import sys
 import types
-import pytest
 from pathlib import Path
 from unittest.mock import patch
+
+import pytest
 
 
 def _make_shared_mock(return_path=None):
     """Build a fake api.codebase_analytics.endpoints.shared module."""
+
     async def fake_resolve(source_id):
         if source_id is None:
             return None
@@ -44,13 +46,7 @@ class TestParseDiff:
         """A single-file diff should produce one entry."""
         from api.analytics_code_review import parse_diff
 
-        diff = (
-            "diff --git a/foo.py b/foo.py\n"
-            "@@ -1,2 +1,3 @@\n"
-            " existing_line\n"
-            "+new_line\n"
-            "-removed_line\n"
-        )
+        diff = "diff --git a/foo.py b/foo.py\n" "@@ -1,2 +1,3 @@\n" " existing_line\n" "+new_line\n" "-removed_line\n"
         result = parse_diff(diff)
         assert len(result) == 1
         assert result[0]["path"] == "foo.py"
@@ -85,10 +81,10 @@ class TestCalculateReviewScore:
     def test_critical_comment_reduces_score(self):
         """A critical comment should reduce the score significantly."""
         from api.analytics_code_review import (
-            calculate_review_score,
+            ReviewCategory,
             ReviewComment,
             ReviewSeverity,
-            ReviewCategory,
+            calculate_review_score,
         )
 
         comment = ReviewComment(
@@ -106,10 +102,10 @@ class TestCalculateReviewScore:
     def test_score_clamped_to_zero(self):
         """Score should not go below 0."""
         from api.analytics_code_review import (
-            calculate_review_score,
+            ReviewCategory,
             ReviewComment,
             ReviewSeverity,
-            ReviewCategory,
+            calculate_review_score,
         )
 
         comments = [

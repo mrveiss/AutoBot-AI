@@ -67,9 +67,7 @@ class TestAtomicFactsExtraction:
             content=self.test_content["technical"], source="test_technical"
         )
 
-        print(  # noqa: print
-            f"✓ Extracted {result.total_facts} facts in {result.processing_time:.2f}s"
-        )
+        print(f"✓ Extracted {result.total_facts} facts in {result.processing_time:.2f}s")  # noqa: print
         print(f"  Average confidence: {result.average_confidence:.3f}")  # noqa: print
 
         # Validate results
@@ -87,12 +85,8 @@ class TestAtomicFactsExtraction:
         # Display some extracted facts
         print("  Sample extracted facts:")  # noqa: print
         for i, fact in enumerate(result.facts[:3]):
-            print(  # noqa: print
-                f"    {i+1}. {fact.subject} {fact.predicate} {fact.object}"
-            )  # noqa: print
-            print(  # noqa: print
-                f"       Type: {fact.fact_type.value}, Temporal: {fact.temporal_type.value}"
-            )
+            print(f"    {i+1}. {fact.subject} {fact.predicate} {fact.object}")  # noqa: print  # noqa: print
+            print(f"       Type: {fact.fact_type.value}, Temporal: {fact.temporal_type.value}")  # noqa: print
             print(f"       Confidence: {fact.confidence:.3f}")  # noqa: print
 
         return result
@@ -105,9 +99,7 @@ class TestAtomicFactsExtraction:
             content=self.test_content["mixed_temporal"], source="test_temporal"
         )
 
-        print(  # noqa: print
-            f"✓ Extracted {result.total_facts} facts for temporal analysis"
-        )  # noqa: print
+        print(f"✓ Extracted {result.total_facts} facts for temporal analysis")  # noqa: print  # noqa: print
 
         # Check for different temporal types
         temporal_counts = result.temporal_type_distribution
@@ -119,9 +111,7 @@ class TestAtomicFactsExtraction:
         # Check specific facts
         dynamic_facts = result.facts_by_temporal_type(TemporalType.DYNAMIC)
         static_facts = result.facts_by_temporal_type(TemporalType.STATIC)
-        temporal_bound_facts = result.facts_by_temporal_type(
-            TemporalType.TEMPORAL_BOUND
-        )
+        temporal_bound_facts = result.facts_by_temporal_type(TemporalType.TEMPORAL_BOUND)
 
         print(f"  Dynamic facts: {len(dynamic_facts)}")  # noqa: print
         print(f"  Static facts: {len(static_facts)}")  # noqa: print
@@ -137,9 +127,7 @@ class TestAtomicFactsExtraction:
             content=self.test_content["opinion_based"], source="test_opinion"
         )
 
-        print(  # noqa: print
-            f"✓ Extracted {result.total_facts} facts for type analysis"
-        )  # noqa: print
+        print(f"✓ Extracted {result.total_facts} facts for type analysis")  # noqa: print  # noqa: print
 
         # Check for different fact types
         fact_type_counts = result.fact_type_distribution
@@ -156,9 +144,7 @@ class TestAtomicFactsExtraction:
         if opinion_facts:
             print("  Sample opinion facts:")  # noqa: print
             for fact in opinion_facts[:2]:
-                print(  # noqa: print
-                    f"    - {fact.subject} {fact.predicate} {fact.object}"
-                )  # noqa: print
+                print(f"    - {fact.subject} {fact.predicate} {fact.object}")  # noqa: print  # noqa: print
 
         return result
 
@@ -194,12 +180,8 @@ class TestAtomicFactsExtraction:
         print("\nTesting confidence scoring...")  # noqa: print
 
         # Test with clear, factual content
-        clear_content = (
-            "AutoBot uses Python programming language. Redis is a caching system."
-        )
-        result1 = await self.extraction_agent.extract_facts_from_text(
-            content=clear_content, source="test_clear"
-        )
+        clear_content = "AutoBot uses Python programming language. Redis is a caching system."
+        result1 = await self.extraction_agent.extract_facts_from_text(content=clear_content, source="test_clear")
 
         # Test with ambiguous content
         ambiguous_content = "Someone mentioned that something might work somehow."
@@ -211,15 +193,11 @@ class TestAtomicFactsExtraction:
         avg_confidence_ambiguous = result2.average_confidence if result2.facts else 0
 
         print(f"  Clear content confidence: {avg_confidence_clear:.3f}")  # noqa: print
-        print(  # noqa: print
-            f"  Ambiguous content confidence: {avg_confidence_ambiguous:.3f}"
-        )  # noqa: print
+        print(f"  Ambiguous content confidence: {avg_confidence_ambiguous:.3f}")  # noqa: print  # noqa: print
 
         # Clear content should have higher confidence
         if result2.facts:
-            assert (
-                avg_confidence_clear > avg_confidence_ambiguous
-            ), "Clear content should have higher confidence"
+            assert avg_confidence_clear > avg_confidence_ambiguous, "Clear content should have higher confidence"
 
         print("✓ Confidence scoring appears reasonable")  # noqa: print
 
@@ -243,9 +221,7 @@ class TestAtomicFactsExtraction:
             },
         ]
 
-        result = await self.extraction_agent.extract_facts_from_chunks(
-            chunks=chunks, source="test_chunks"
-        )
+        result = await self.extraction_agent.extract_facts_from_chunks(chunks=chunks, source="test_chunks")
 
         print(f"✓ Processed {len(chunks)} chunks")  # noqa: print
         print(f"  Extracted {result.total_facts} total facts")  # noqa: print
@@ -273,21 +249,15 @@ class TestAtomicFactsExtraction:
         print(f"  Total facts before filtering: {len(all_facts)}")  # noqa: print
 
         # Test filtering by fact type
-        factual_only = self.extraction_agent.filter_facts(
-            all_facts, fact_types=[FactType.FACT]
-        )
+        factual_only = self.extraction_agent.filter_facts(all_facts, fact_types=[FactType.FACT])
         print(f"  Factual facts only: {len(factual_only)}")  # noqa: print
 
         # Test filtering by temporal type
-        dynamic_only = self.extraction_agent.filter_facts(
-            all_facts, temporal_types=[TemporalType.DYNAMIC]
-        )
+        dynamic_only = self.extraction_agent.filter_facts(all_facts, temporal_types=[TemporalType.DYNAMIC])
         print(f"  Dynamic facts only: {len(dynamic_only)}")  # noqa: print
 
         # Test filtering by confidence
-        high_confidence = self.extraction_agent.filter_facts(
-            all_facts, min_confidence=0.8
-        )
+        high_confidence = self.extraction_agent.filter_facts(all_facts, min_confidence=0.8)
         print(f"  High confidence facts (>0.8): {len(high_confidence)}")  # noqa: print
 
         # Test combined filtering
@@ -342,9 +312,7 @@ class TestAtomicFactsExtraction:
         print(f"  Facts are contradictory: {is_contradictory}")  # noqa: print
         print(f"  Should invalidate: {should_invalidate}")  # noqa: print
 
-        assert (
-            is_contradictory
-        ), "Facts with same subject/predicate but different objects should be contradictory"
+        assert is_contradictory, "Facts with same subject/predicate but different objects should be contradictory"
 
         # Test non-contradictory facts
         fact3 = AtomicFact(
@@ -360,9 +328,7 @@ class TestAtomicFactsExtraction:
         )
 
         not_contradictory = fact1.is_contradictory_to(fact3)
-        assert (
-            not not_contradictory
-        ), "Facts about different subjects should not be contradictory"
+        assert not not_contradictory, "Facts about different subjects should not be contradictory"
 
         print("✓ Contradiction detection working correctly")  # noqa: print
 
@@ -403,24 +369,14 @@ class TestAtomicFactsExtraction:
             print("✅ All Atomic Facts Extraction Tests Passed!")  # noqa: print
             print("=" * 70)  # noqa: print
             print("Summary:")  # noqa: print
-            print(  # noqa: print
-                f"  - Basic extraction: {basic_result.total_facts} facts"
-            )  # noqa: print
+            print(f"  - Basic extraction: {basic_result.total_facts} facts")  # noqa: print  # noqa: print
             print(  # noqa: print
                 f"  - Temporal classification: {len(temporal_result.temporal_type_distribution)} types"
             )
-            print(  # noqa: print
-                f"  - Fact type classification: {len(type_result.fact_type_distribution)} types"
-            )
-            print(  # noqa: print
-                f"  - Entity extraction: {len(entities)} unique entities"
-            )  # noqa: print
-            print(  # noqa: print
-                f"  - Confidence scoring: Clear={conf_clear:.3f}, Ambiguous={conf_amb:.3f}"
-            )
-            print(  # noqa: print
-                f"  - Chunk processing: {chunk_result.total_facts} facts from chunks"
-            )  # noqa: print
+            print(f"  - Fact type classification: {len(type_result.fact_type_distribution)} types")  # noqa: print
+            print(f"  - Entity extraction: {len(entities)} unique entities")  # noqa: print  # noqa: print
+            print(f"  - Confidence scoring: Clear={conf_clear:.3f}, Ambiguous={conf_amb:.3f}")  # noqa: print
+            print(f"  - Chunk processing: {chunk_result.total_facts} facts from chunks")  # noqa: print  # noqa: print
             print(f"  - Filtering capabilities: {filter_stats}")  # noqa: print
             print("  - Contradiction detection: Working ✓")  # noqa: print
 
@@ -440,9 +396,7 @@ async def main():
     success = await tester.run_all_tests()
 
     if success:
-        print(  # noqa: print
-            "\n🎉 Atomic facts extraction implementation is working correctly!"
-        )  # noqa: print
+        print("\n🎉 Atomic facts extraction implementation is working correctly!")  # noqa: print  # noqa: print
         return 0
     else:
         print("\n💥 Atomic facts extraction tests failed!")  # noqa: print

@@ -60,9 +60,7 @@ async def get_time_config(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> TimeConfig:
     """Get NTP and timezone configuration."""
-    result = await db.execute(
-        select(Setting).where(Setting.key.in_(["time_timezone", "time_ntp_servers"]))
-    )
+    result = await db.execute(select(Setting).where(Setting.key.in_(["time_timezone", "time_ntp_servers"])))
     rows = {s.key: s.value for s in result.scalars().all()}
 
     ntp_raw = rows.get("time_ntp_servers")
@@ -94,9 +92,7 @@ async def put_time_config(
     _: Annotated[dict, Depends(require_admin)],
 ) -> TimeConfig:
     """Save NTP and timezone configuration (admin only)."""
-    await _upsert_setting(
-        db, "time_timezone", config.timezone, "Default system timezone"
-    )
+    await _upsert_setting(db, "time_timezone", config.timezone, "Default system timezone")
     await _upsert_setting(
         db,
         "time_ntp_servers",
@@ -104,9 +100,7 @@ async def put_time_config(
         "NTP server list (JSON array)",
     )
     await db.commit()
-    logger.info(
-        "Time config updated: tz=%s ntp=%s", config.timezone, config.ntp_servers
-    )
+    logger.info("Time config updated: tz=%s ntp=%s", config.timezone, config.ntp_servers)
     return config
 
 
@@ -118,9 +112,7 @@ async def sync_time(
 ) -> TimeSyncResult:
     """Trigger Ansible time_sync role on fleet nodes (admin only)."""
     # Load current time config
-    result = await db.execute(
-        select(Setting).where(Setting.key.in_(["time_timezone", "time_ntp_servers"]))
-    )
+    result = await db.execute(select(Setting).where(Setting.key.in_(["time_timezone", "time_ntp_servers"])))
     rows = {s.key: s.value for s in result.scalars().all()}
     timezone = rows.get("time_timezone", "UTC")
     ntp_raw = rows.get("time_ntp_servers")
@@ -130,9 +122,7 @@ async def sync_time(
     limit: Optional[List[str]] = None
     node_count = 0
     if request.node_ids:
-        node_result = await db.execute(
-            select(Node).where(Node.node_id.in_(request.node_ids))
-        )
+        node_result = await db.execute(select(Node).where(Node.node_id.in_(request.node_ids)))
         nodes = node_result.scalars().all()
         limit = [n.node_id for n in nodes]
         node_count = len(limit)
@@ -233,9 +223,7 @@ async def update_setting(
     return SettingResponse.model_validate(setting)
 
 
-@router.post(
-    "/{key}", response_model=SettingResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("/{key}", response_model=SettingResponse, status_code=status.HTTP_201_CREATED)
 async def create_setting(
     key: str,
     setting_data: SettingUpdate,

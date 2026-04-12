@@ -224,8 +224,7 @@ async def set_permission_mode(
         except ValueError:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid mode: {request.mode}. "
-                f"Valid modes: {[m.value for m in PermissionMode]}",
+                detail=f"Invalid mode: {request.mode}. " f"Valid modes: {[m.value for m in PermissionMode]}",
             )
 
         # Check admin requirement
@@ -322,8 +321,7 @@ async def add_permission_rule(
         except ValueError:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid action: {request.action}. "
-                f"Valid actions: {[a.value for a in PermissionAction]}",
+                detail=f"Invalid action: {request.action}. " f"Valid actions: {[a.value for a in PermissionAction]}",
             )
 
         matcher = get_permission_matcher(is_admin=is_admin)
@@ -351,9 +349,7 @@ async def add_permission_rule(
 
 
 @router.delete("/rules")
-async def remove_permission_rule(
-    request: RemoveRuleRequest, admin_check: bool = Depends(check_admin_permission)
-):
+async def remove_permission_rule(request: RemoveRuleRequest, admin_check: bool = Depends(check_admin_permission)):
     """
     Remove a permission rule.
 

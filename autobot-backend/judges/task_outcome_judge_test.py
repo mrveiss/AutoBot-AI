@@ -92,9 +92,7 @@ class TestTaskOutcomeJudge:
     async def test_clear_outcomes(self, judge, mock_redis):
         judge._redis_client = mock_redis
         await judge.clear_outcomes("mytype")
-        mock_redis.delete.assert_awaited_once_with(
-            REDIS_OUTCOMES_KEY.format(task_type="mytype")
-        )
+        mock_redis.delete.assert_awaited_once_with(REDIS_OUTCOMES_KEY.format(task_type="mytype"))
 
     @pytest.mark.asyncio
     async def test_persist_outcome_trims_list(self, judge, mock_redis):

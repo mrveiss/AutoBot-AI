@@ -124,9 +124,7 @@ class SessionOwnershipValidator:
         await self.redis.sadd(team_key, session_id)
         await self.redis.expire(team_key, 2592000)  # 30 days
 
-    async def _store_session_context(
-        self, session_id: str, org_id: str | None, team_id: str | None
-    ) -> None:
+    async def _store_session_context(self, session_id: str, org_id: str | None, team_id: str | None) -> None:
         """Store org/team context for a session (#684)."""
         ctx_key = self._get_session_context_key(session_id)
         context = {}
@@ -178,9 +176,7 @@ class SessionOwnershipValidator:
         user_data = auth_middleware.get_user_from_request(request)
 
         if not user_data:
-            logger.warning(
-                f"Unauthenticated access attempt to session {session_id[:8]}..."
-            )
+            logger.warning(f"Unauthenticated access attempt to session {session_id[:8]}...")
             raise HTTPException(
                 status_code=401,
                 detail="Authentication required to access conversations",
@@ -278,9 +274,7 @@ class SessionOwnershipValidator:
         except Exception as e:
             logger.error("Failed to record violation metrics: %s", e)
 
-    def _audit_log_success(
-        self, username: str, session_id: str, request: Request, enforcement_mode: str
-    ) -> None:
+    def _audit_log_success(self, username: str, session_id: str, request: Request, enforcement_mode: str) -> None:
         """
         Audit log successful session access.
 
@@ -403,12 +397,8 @@ class SessionOwnershipValidator:
         )
 
         # Always audit log and record metrics
-        self._audit_log_violation(
-            username, session_id, stored_owner, request, enforcement_mode
-        )
-        await self._record_violation_metrics(
-            session_id, username, stored_owner, request, enforcement_mode
-        )
+        self._audit_log_violation(username, session_id, stored_owner, request, enforcement_mode)
+        await self._record_violation_metrics(session_id, username, stored_owner, request, enforcement_mode)
 
         # Mode-specific behavior
         if enforcement_mode == "log_only":
@@ -444,9 +434,7 @@ class SessionOwnershipValidator:
         that the caller should proceed to the full ownership check.
         """
         if user_data.get("auth_disabled") or not auth_middleware.enable_auth:
-            logger.debug(
-                f"Auth disabled - allowing access to session {session_id[:8]}..."
-            )
+            logger.debug(f"Auth disabled - allowing access to session {session_id[:8]}...")
             return {
                 "authorized": True,
                 "user_data": user_data,
@@ -456,9 +444,7 @@ class SessionOwnershipValidator:
         enforcement_mode = await self._get_enforcement_mode()
 
         if enforcement_mode == "disabled":
-            logger.debug(
-                f"[DISABLED MODE] Skipping ownership validation for session {session_id[:8]}..."
-            )
+            logger.debug(f"[DISABLED MODE] Skipping ownership validation for session {session_id[:8]}...")
             return {
                 "authorized": True,
                 "user_data": user_data,
@@ -495,9 +481,7 @@ class SessionOwnershipValidator:
         stored_owner = await self.get_session_owner(session_id)
 
         if not stored_owner:
-            logger.warning(
-                "Session %s... has no owner (legacy session)", session_id[:8]
-            )
+            logger.warning("Session %s... has no owner (legacy session)", session_id[:8])
             await self.set_session_owner(
                 session_id,
                 username,
@@ -552,9 +536,7 @@ class SessionOwnershipValidator:
             return fast_path_result
 
         enforcement_mode = await self._get_enforcement_mode()
-        return await self._resolve_ownership(
-            session_id, username, user_data, request, enforcement_mode
-        )
+        return await self._resolve_ownership(session_id, username, user_data, request, enforcement_mode)
 
     async def get_user_sessions(self, username: str) -> list[str]:
         """
@@ -678,9 +660,7 @@ class SessionOwnershipValidator:
             if not context:
                 return {}
             return {
-                (k.decode() if isinstance(k, bytes) else k): (
-                    v.decode() if isinstance(v, bytes) else v
-                )
+                (k.decode() if isinstance(k, bytes) else k): (v.decode() if isinstance(v, bytes) else v)
                 for k, v in context.items()
             }
         except Exception as e:
@@ -741,8 +721,6 @@ async def validate_session_ownership(session_id: str, request: Request) -> Dict:
         metrics_service = None
 
     # Create validator with all dependencies
-    validator = SessionOwnershipValidator(
-        redis, feature_flags=feature_flags, metrics_service=metrics_service
-    )
+    validator = SessionOwnershipValidator(redis, feature_flags=feature_flags, metrics_service=metrics_service)
 
     return await validator.validate_ownership(session_id, request)

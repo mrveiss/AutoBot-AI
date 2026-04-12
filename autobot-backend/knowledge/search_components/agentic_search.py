@@ -189,9 +189,7 @@ class AgenticSearchTool:
             if not rewritten:
                 logger.warning("LLM returned empty rewrite; using original query")
                 return original_query
-            logger.debug(
-                "Query rewritten: %r -> %r", original_query[:80], rewritten[:80]
-            )
+            logger.debug("Query rewritten: %r -> %r", original_query[:80], rewritten[:80])
             return rewritten
         except Exception as exc:
             logger.warning("Query rewrite failed (%s); using original query", exc)
@@ -266,9 +264,7 @@ class AgenticSearchTool:
                 }
 
             if iteration < max_iter:
-                current_query = await self._refine_query(
-                    query, current_query, context_text
-                )
+                current_query = await self._refine_query(query, current_query, context_text)
                 queries_used.append(current_query)
 
         logger.info(
@@ -387,9 +383,7 @@ class AgenticSearchTool:
             if hasattr(r, "source_path") and r.source_path:
                 source = f" [{r.source_path}]"
             elif hasattr(r, "metadata") and isinstance(r.metadata, dict):
-                source = (
-                    f" [{r.metadata.get('source', r.metadata.get('source_path', ''))}]"
-                )
+                source = f" [{r.metadata.get('source', r.metadata.get('source_path', ''))}]"
             content = r.content if hasattr(r, "content") else str(r)
             parts.append(f"[{i}]{source}\n{content}")
 

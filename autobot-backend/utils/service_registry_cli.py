@@ -78,9 +78,7 @@ async def cmd_health(args):
             if health.status == ServiceStatus.HEALTHY:
                 print_status("success", f"{service:15} → {health.status.value}")
                 if hasattr(health, "response_time") and health.response_time > 0:
-                    print(  # noqa: print
-                        f"{'':18}Response time: {health.response_time:.3f}s"
-                    )  # noqa: print
+                    print(f"{'':18}Response time: {health.response_time:.3f}s")  # noqa: print  # noqa: print
                 healthy_count += 1
             elif health.status == ServiceStatus.CIRCUIT_OPEN:
                 print_status("error", f"{service:15} → Circuit breaker OPEN")
@@ -94,9 +92,7 @@ async def cmd_health(args):
             print_status("success", "All services are healthy!")
             return 0
         else:
-            print_status(
-                "warning", f"{total_count - healthy_count} services have issues"
-            )
+            print_status("warning", f"{total_count - healthy_count} services have issues")
             return 1
 
     except Exception as e:
@@ -133,9 +129,7 @@ def cmd_config(args):
             print(f"   Scheme: {config.scheme}")  # noqa: print
             print(f"   Health Endpoint: {config.health_endpoint}")  # noqa: print
             print(f"   Timeout: {config.timeout}s")  # noqa: print
-            print(  # noqa: print
-                f"   Circuit Breaker Threshold: {config.circuit_breaker_threshold}"
-            )  # noqa: print
+            print(f"   Circuit Breaker Threshold: {config.circuit_breaker_threshold}")  # noqa: print  # noqa: print
         else:
             print_status("error", "Service not found")
             return 1

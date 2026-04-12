@@ -72,9 +72,7 @@ class ProcessInfo:
 class StreamingCommandExecutor:
     """Real-time streaming command executor with intelligent commentary."""
 
-    def __init__(
-        self, llm_interface: LLMInterface, command_validator: CommandValidator
-    ):
+    def __init__(self, llm_interface: LLMInterface, command_validator: CommandValidator):
         """
         Initialize the streaming executor.
 
@@ -100,17 +98,12 @@ class StreamingCommandExecutor:
             return StreamChunk(
                 timestamp=self._get_timestamp(),
                 chunk_type=ChunkType.ERROR,
-                content=(
-                    "❌ Maximum number of concurrent processes "
-                    f"({self._max_processes}) reached"
-                ),
+                content=("❌ Maximum number of concurrent processes " f"({self._max_processes}) reached"),
                 metadata={"process_limit_reached": True},
             )
         return None
 
-    def _parse_command_safe(
-        self, command: str
-    ) -> tuple[Optional[List[str]], Optional[StreamChunk]]:
+    def _parse_command_safe(self, command: str) -> tuple[Optional[List[str]], Optional[StreamChunk]]:
         """Parse command safely, return (parts, error_chunk). (Issue #315 - extracted)"""
         try:
             return shlex.split(command), None
@@ -122,9 +115,7 @@ class StreamingCommandExecutor:
                 metadata={"parse_error": True},
             )
 
-    def _build_completion_chunk(
-        self, return_code: int, execution_time: float, process_id: str
-    ) -> StreamChunk:
+    def _build_completion_chunk(self, return_code: int, execution_time: float, process_id: str) -> StreamChunk:
         """Build a process completion chunk. (Issue #315 - extracted)"""
         if return_code == 0:
             return StreamChunk(
@@ -150,9 +141,7 @@ class StreamingCommandExecutor:
             },
         )
 
-    def _yield_text_lines_as_chunks(
-        self, text: str, chunk_type: ChunkType, process_id: str
-    ) -> List[StreamChunk]:
+    def _yield_text_lines_as_chunks(self, text: str, chunk_type: ChunkType, process_id: str) -> List[StreamChunk]:
         """Convert text lines to stream chunks. (Issue #315 - extracted)"""
         chunks = []
         for line in text.split("\n"):
@@ -167,9 +156,7 @@ class StreamingCommandExecutor:
                 )
         return chunks
 
-    async def _terminate_process_safely(
-        self, process: asyncio.subprocess.Process
-    ) -> None:
+    async def _terminate_process_safely(self, process: asyncio.subprocess.Process) -> None:
         """Terminate process with graceful fallback to kill. (Issue #315 - extracted)"""
         try:
             process.terminate()
@@ -200,9 +187,7 @@ class StreamingCommandExecutor:
                 yield parse_error
                 return
 
-            process = await self._start_process_and_track(
-                cmd_parts, command, user_goal, process_id, start_time
-            )
+            process = await self._start_process_and_track(cmd_parts, command, user_goal, process_id, start_time)
             async for chunk in self._execute_and_stream_output(
                 process,
                 process_id,
@@ -234,9 +219,7 @@ class StreamingCommandExecutor:
         """
         try:
             await asyncio.wait_for(
-                self._stream_process_output(
-                    process, process_id, user_goal, provide_commentary
-                ),
+                self._stream_process_output(process, process_id, user_goal, provide_commentary),
                 timeout=timeout,
             )
             return_code = await process.wait()
@@ -244,9 +227,7 @@ class StreamingCommandExecutor:
             yield self._build_completion_chunk(return_code, execution_time, process_id)
 
             if provide_commentary and return_code == 0:
-                async for chunk in self._provide_completion_commentary(
-                    command, user_goal, execution_time
-                ):
+                async for chunk in self._provide_completion_commentary(command, user_goal, execution_time):
                     yield chunk
         except asyncio.TimeoutError:
             yield self._create_timeout_error_chunk(timeout)
@@ -269,16 +250,10 @@ class StreamingCommandExecutor:
         tasks = [
             asyncio.create_task(
                 self._collect_chunks(
-                    self._read_stdout_stream(
-                        process, process_id, user_goal, provide_commentary, stream_ctx
-                    )
+                    self._read_stdout_stream(process, process_id, user_goal, provide_commentary, stream_ctx)
                 )
             ),
-            asyncio.create_task(
-                self._collect_chunks(
-                    self._read_stderr_stream(process, process_id, stream_ctx)
-                )
-            ),
+            asyncio.create_task(self._collect_chunks(self._read_stderr_stream(process, process_id, stream_ctx))),
         ]
 
         # Process completed tasks and yield chunks
@@ -306,18 +281,14 @@ class StreamingCommandExecutor:
                 text = data.decode("utf-8", errors="replace")
                 stream_ctx["stdout_buffer"] += text
 
-                for chunk in self._yield_text_lines_as_chunks(
-                    text, ChunkType.STDOUT, process_id
-                ):
+                for chunk in self._yield_text_lines_as_chunks(text, ChunkType.STDOUT, process_id):
                     yield chunk
 
                 # Provide periodic commentary
                 stream_ctx["commentary_counter"] += len(text)
                 if provide_commentary and stream_ctx["commentary_counter"] > 500:
                     stream_ctx["commentary_counter"] = 0
-                    async for chunk in self._provide_progress_commentary(
-                        stream_ctx["stdout_buffer"][-200:], user_goal
-                    ):
+                    async for chunk in self._provide_progress_commentary(stream_ctx["stdout_buffer"][-200:], user_goal):
                         yield chunk
 
             except Exception as e:
@@ -343,18 +314,14 @@ class StreamingCommandExecutor:
                 text = data.decode("utf-8", errors="replace")
                 stream_ctx["stderr_buffer"] += text
 
-                for chunk in self._yield_text_lines_as_chunks(
-                    text, ChunkType.STDERR, process_id
-                ):
+                for chunk in self._yield_text_lines_as_chunks(text, ChunkType.STDERR, process_id):
                     yield chunk
 
             except Exception as e:
                 logger.warning("Error reading stderr: %s", e)
                 break
 
-    async def _process_stream_tasks(
-        self, tasks: List[asyncio.Task]
-    ) -> AsyncGenerator[StreamChunk, None]:
+    async def _process_stream_tasks(self, tasks: List[asyncio.Task]) -> AsyncGenerator[StreamChunk, None]:
         """Process stream tasks and yield chunks. (Issue #315 - extracted)
 
         Issue #509: Optimized O(n²) list.remove() to O(1) set operations.
@@ -367,9 +334,7 @@ class StreamingCommandExecutor:
         remaining_tasks = set(tasks)
         try:
             while remaining_tasks:
-                done, pending = await asyncio.wait(
-                    remaining_tasks, return_when=asyncio.FIRST_COMPLETED
-                )
+                done, pending = await asyncio.wait(remaining_tasks, return_when=asyncio.FIRST_COMPLETED)
                 for task in done:
                     chunks = await self._safe_get_task_chunks(task)
                     for chunk in chunks:
@@ -493,9 +458,7 @@ class StreamingCommandExecutor:
             )
 
             # Get LLM commentary
-            response = await self.llm_interface.generate_response(
-                prompt, temperature=0.7, max_tokens=50
-            )
+            response = await self.llm_interface.generate_response(prompt, temperature=0.7, max_tokens=50)
 
             # Skip if LLM suggests it
             if response.strip().upper() == "SKIP":
@@ -528,9 +491,7 @@ class StreamingCommandExecutor:
                 "Use emojis when appropriate."
             )
 
-            response = await self.llm_interface.generate_response(
-                prompt, temperature=0.7, max_tokens=75
-            )
+            response = await self.llm_interface.generate_response(prompt, temperature=0.7, max_tokens=75)
 
             yield StreamChunk(
                 timestamp=self._get_timestamp(),
@@ -670,9 +631,7 @@ if __name__ == "__main__":
             logger.info("-" * 50)
 
             chunk_count = 0
-            async for chunk in executor.execute_with_streaming(
-                command, goal, timeout=10
-            ):
+            async for chunk in executor.execute_with_streaming(command, goal, timeout=10):
                 timestamp = chunk.timestamp.split("T")[1][:8]
                 chunk_type = chunk.chunk_type.value.upper()
                 content = chunk.content

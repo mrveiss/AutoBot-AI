@@ -146,9 +146,7 @@ class AdaptiveMemoryManager:
                 logger.debug("Memory usage normal: %.1f%%", memory.percent)
                 return
 
-            logger.warning(
-                f"Memory usage high: {memory.percent:.1f}%, starting cleanup"
-            )
+            logger.warning(f"Memory usage high: {memory.percent:.1f}%, starting cleanup")
 
             # Clean up LRU caches using helper
             total_cleaned = self._cleanup_all_caches()

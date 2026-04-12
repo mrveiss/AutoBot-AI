@@ -38,27 +38,17 @@ class ModelPerformanceTracker:
 
             if perf_data:
                 model_info.avg_tokens_per_second = float(
-                    perf_data.get(b"avg_tokens_per_second")
-                    or perf_data.get("avg_tokens_per_second", 0)
+                    perf_data.get(b"avg_tokens_per_second") or perf_data.get("avg_tokens_per_second", 0)
                 )
                 model_info.avg_response_time = float(
-                    perf_data.get(b"avg_response_time")
-                    or perf_data.get("avg_response_time", 0)
+                    perf_data.get(b"avg_response_time") or perf_data.get("avg_response_time", 0)
                 )
-                model_info.success_rate = float(
-                    perf_data.get(b"success_rate") or perf_data.get("success_rate", 1.0)
-                )
-                model_info.last_used = float(
-                    perf_data.get(b"last_used") or perf_data.get("last_used", 0)
-                )
-                model_info.use_count = int(
-                    perf_data.get(b"use_count") or perf_data.get("use_count", 0)
-                )
+                model_info.success_rate = float(perf_data.get(b"success_rate") or perf_data.get("success_rate", 1.0))
+                model_info.last_used = float(perf_data.get(b"last_used") or perf_data.get("last_used", 0))
+                model_info.use_count = int(perf_data.get(b"use_count") or perf_data.get("use_count", 0))
 
         except Exception as e:
-            self._logger.error(
-                f"Error loading performance history for {model_info.name}: {e}"
-            )
+            self._logger.error(f"Error loading performance history for {model_info.name}: {e}")
 
     async def save_performance(self, model_info: "ModelInfo") -> None:
         """Save performance metrics from ModelInfo to Redis."""
@@ -82,9 +72,7 @@ class ModelPerformanceTracker:
             await self._redis_client.expire(key, self._cache_ttl)
 
         except Exception as e:
-            self._logger.error(
-                "Error saving performance for %s: %s", model_info.name, e
-            )
+            self._logger.error("Error saving performance for %s: %s", model_info.name, e)
 
     async def update_and_save(
         self,
@@ -102,12 +90,8 @@ class ModelPerformanceTracker:
             await self.save_performance(model)
         else:
             # Model not in cache - update Redis directly
-            self._logger.warning(
-                f"Model {model_name} not in cache, updating Redis only"
-            )
-            await self._update_redis_directly(
-                model_name, response_time, tokens_per_second, success
-            )
+            self._logger.warning(f"Model {model_name} not in cache, updating Redis only")
+            await self._update_redis_directly(model_name, response_time, tokens_per_second, success)
 
     def _parse_existing_redis_metrics(self, existing: Dict) -> tuple:
         """
@@ -117,16 +101,9 @@ class ModelPerformanceTracker:
         Returns tuple of (avg_response, avg_tokens, success_rate, use_count).
         Issue #620.
         """
-        prev_avg_response = float(
-            existing.get(b"avg_response_time") or existing.get("avg_response_time", 0)
-        )
-        prev_avg_tokens = float(
-            existing.get(b"avg_tokens_per_second")
-            or existing.get("avg_tokens_per_second", 0)
-        )
-        prev_success_rate = float(
-            existing.get(b"success_rate") or existing.get("success_rate", 1.0)
-        )
+        prev_avg_response = float(existing.get(b"avg_response_time") or existing.get("avg_response_time", 0))
+        prev_avg_tokens = float(existing.get(b"avg_tokens_per_second") or existing.get("avg_tokens_per_second", 0))
+        prev_success_rate = float(existing.get(b"success_rate") or existing.get("success_rate", 1.0))
         use_count = int(existing.get(b"use_count") or existing.get("use_count", 0))
         return prev_avg_response, prev_avg_tokens, prev_success_rate, use_count
 
@@ -151,15 +128,9 @@ class ModelPerformanceTracker:
                 use_count,
             ) = self._parse_existing_redis_metrics(existing)
             new_count = use_count + 1
-            new_avg_response = (
-                prev_avg_response * use_count + response_time
-            ) / new_count
-            new_avg_tokens = (
-                prev_avg_tokens * use_count + tokens_per_second
-            ) / new_count
-            new_success_rate = (
-                prev_success_rate * use_count + (1.0 if success else 0.0)
-            ) / new_count
+            new_avg_response = (prev_avg_response * use_count + response_time) / new_count
+            new_avg_tokens = (prev_avg_tokens * use_count + tokens_per_second) / new_count
+            new_success_rate = (prev_success_rate * use_count + (1.0 if success else 0.0)) / new_count
         else:
             new_count = 1
             new_avg_response = response_time
@@ -188,9 +159,7 @@ class ModelPerformanceTracker:
                 new_avg_tokens,
                 new_success_rate,
                 new_count,
-            ) = self._calculate_updated_metrics(
-                existing, response_time, tokens_per_second, success
-            )
+            ) = self._calculate_updated_metrics(existing, response_time, tokens_per_second, success)
 
             await self._redis_client.hset(
                 key,

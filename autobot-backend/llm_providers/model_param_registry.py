@@ -49,9 +49,7 @@ _FALLBACK_KWARGS: Dict[str, Any] = {
 
 # OpenAI reasoning models reject the ``temperature`` parameter with HTTP 400.
 # These canonical display_names must never receive the temperature fallback.
-_NO_TEMPERATURE_MODELS: frozenset[str] = frozenset(
-    {"o1", "o1-mini", "o3", "o3-mini", "o4-mini"}
-)
+_NO_TEMPERATURE_MODELS: frozenset[str] = frozenset({"o1", "o1-mini", "o3", "o3-mini", "o4-mini"})
 
 
 # ---------------------------------------------------------------------------

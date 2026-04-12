@@ -44,9 +44,7 @@ class AutoBotSystemValidator:
         self.redis_host = "10.0.0.23"
         self.redis_port = 6379
 
-    def log_result(
-        self, test_name: str, status: str, message: str, details: Optional[Dict] = None
-    ):
+    def log_result(self, test_name: str, status: str, message: str, details: Optional[Dict] = None):
         """Log a test result"""
         result = TestResult(
             test_name=test_name,
@@ -65,9 +63,7 @@ class AutoBotSystemValidator:
             for key, value in details.items():
                 print(f"    {key}: {value}")  # noqa: print
 
-    def check_port_connectivity(
-        self, host: str, port: int, service_name: str, timeout: int = 3
-    ) -> bool:
+    def check_port_connectivity(self, host: str, port: int, service_name: str, timeout: int = 3) -> bool:
         """Check if a port is accessible"""
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -151,9 +147,7 @@ class AutoBotSystemValidator:
         base_url = f"http://{self.backend_host}:{self.backend_port}"
 
         # Check if backend is running first
-        if not self.check_port_connectivity(
-            self.backend_host, self.backend_port, "Backend API"
-        ):
+        if not self.check_port_connectivity(self.backend_host, self.backend_port, "Backend API"):
             self.log_result(
                 "API Endpoint Tests",
                 "skip",
@@ -249,16 +243,8 @@ class AutoBotSystemValidator:
             from api.registry import registry
 
             enabled = registry.get_enabled_routers()
-            disabled = {
-                k: v
-                for k, v in registry.routers.items()
-                if v.status.value == "disabled"
-            }
-            lazy_load = {
-                k: v
-                for k, v in registry.routers.items()
-                if v.status.value == "lazy_load"
-            }
+            disabled = {k: v for k, v in registry.routers.items() if v.status.value == "disabled"}
+            lazy_load = {k: v for k, v in registry.routers.items() if v.status.value == "lazy_load"}
 
             self.log_result(
                 "Router Registry - Enabled",
@@ -320,9 +306,7 @@ class AutoBotSystemValidator:
         print("\n=== KNOWLEDGE BASE VALIDATION ===")  # noqa: print
 
         # Check if backend is accessible
-        if not self.check_port_connectivity(
-            self.backend_host, self.backend_port, "Backend API", timeout=2
-        ):
+        if not self.check_port_connectivity(self.backend_host, self.backend_port, "Backend API", timeout=2):
             self.log_result(
                 "Knowledge Base Tests",
                 "skip",
@@ -424,9 +408,7 @@ class AutoBotSystemValidator:
         print("\n=== LLM INTEGRATION VALIDATION ===")  # noqa: print
 
         # Check if backend is accessible
-        if not self.check_port_connectivity(
-            self.backend_host, self.backend_port, "Backend API", timeout=2
-        ):
+        if not self.check_port_connectivity(self.backend_host, self.backend_port, "Backend API", timeout=2):
             self.log_result(
                 "LLM Integration Tests",
                 "skip",
@@ -438,9 +420,7 @@ class AutoBotSystemValidator:
             import requests
 
             # Test LLM status
-            status_url = (
-                f"http://{self.backend_host}:{self.backend_port}/api/llm/status"
-            )
+            status_url = f"http://{self.backend_host}:{self.backend_port}/api/llm/status"
             response = requests.get(status_url, timeout=10)
 
             if response.status_code == 200:
@@ -478,9 +458,7 @@ class AutoBotSystemValidator:
                 )
 
             # Test model availability
-            models_url = (
-                f"http://{self.backend_host}:{self.backend_port}/api/llm/models"
-            )
+            models_url = f"http://{self.backend_host}:{self.backend_port}/api/llm/models"
             response = requests.get(models_url, timeout=10)
 
             if response.status_code == 200:
@@ -518,9 +496,7 @@ class AutoBotSystemValidator:
             if result.returncode == 0:
                 lines = result.stdout.split("\n")
                 cpu_line = next((line for line in lines if "Cpu" in line), None)
-                mem_line = next(
-                    (line for line in lines if "Mem" in line or "KiB Mem" in line), None
-                )
+                mem_line = next((line for line in lines if "Mem" in line or "KiB Mem" in line), None)
 
                 if cpu_line:
                     self.log_result(
@@ -539,9 +515,7 @@ class AutoBotSystemValidator:
                     )
 
             # Disk usage
-            disk_result = subprocess.run(
-                ["df", "-h", "/"], capture_output=True, text=True
-            )
+            disk_result = subprocess.run(["df", "-h", "/"], capture_output=True, text=True)
             if disk_result.returncode == 0:
                 disk_lines = disk_result.stdout.strip().split("\n")
                 if len(disk_lines) > 1:
@@ -588,9 +562,7 @@ class AutoBotSystemValidator:
                     )
 
                     # Check for AutoBot-specific containers
-                    autobot_containers = [
-                        line for line in container_lines if "autobot" in line.lower()
-                    ]
+                    autobot_containers = [line for line in container_lines if "autobot" in line.lower()]
                     if autobot_containers:
                         self.log_result(
                             "AutoBot Docker Containers",
@@ -652,18 +624,14 @@ class AutoBotSystemValidator:
                 "failed": failed,
                 "warnings": warnings,
                 "skipped": skipped,
-                "success_rate": (
-                    f"{(passed/total_tests*100):.1f}%" if total_tests > 0 else "0%"
-                ),
+                "success_rate": (f"{(passed/total_tests*100):.1f}%" if total_tests > 0 else "0%"),
             },
             "execution_info": {
                 "total_duration": f"{total_duration:.2f}s",
                 "timestamp": datetime.now().isoformat(),
                 "hostname": os.uname().nodename,
             },
-            "critical_issues": [
-                r.test_name for r in self.results if r.status == "fail"
-            ],
+            "critical_issues": [r.test_name for r in self.results if r.status == "fail"],
             "warnings": [r.test_name for r in self.results if r.status == "warning"],
         }
 
@@ -672,9 +640,7 @@ class AutoBotSystemValidator:
     def run_comprehensive_validation(self):
         """Run complete system validation suite"""
         print("🚀 AutoBot Phase 9 Comprehensive System Validation")  # noqa: print
-        print(  # noqa: print
-            f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-        )  # noqa: print
+        print(f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")  # noqa: print  # noqa: print
         print("=" * 60)  # noqa: print
 
         # Run all test categories
@@ -719,9 +685,7 @@ class AutoBotSystemValidator:
 
     def save_results(self, summary: Dict):
         """Save detailed test results to file"""
-        results_dir = Path(
-            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results"
-        )
+        results_dir = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results")
         results_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -788,14 +752,10 @@ def main():
 
         # Exit code based on results
         if summary["test_summary"]["failed"] > 0:
-            print(  # noqa: print
-                f"\n❌ Validation completed with {summary['test_summary']['failed']} critical issues"
-            )
+            print(f"\n❌ Validation completed with {summary['test_summary']['failed']} critical issues")  # noqa: print
             sys.exit(1)
         elif summary["test_summary"]["warnings"] > 0:
-            print(  # noqa: print
-                f"\n⚠️ Validation completed with {summary['test_summary']['warnings']} warnings"
-            )
+            print(f"\n⚠️ Validation completed with {summary['test_summary']['warnings']} warnings")  # noqa: print
             sys.exit(2)
         else:
             print("\n✅ All validation tests passed successfully!")  # noqa: print

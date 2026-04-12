@@ -45,7 +45,7 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-from constants.ttl_constants import TTL_24_HOURS, TTL_7_DAYS
+from constants.ttl_constants import TTL_7_DAYS, TTL_24_HOURS
 
 from .config import AutoResearchConfig
 from .models import Experiment, ExperimentResult, HyperParams
@@ -118,9 +118,7 @@ class ImprovementMetrics:
 
     @property
     def improved(self) -> bool:
-        return (
-            self.improvement is not None and self.improvement > _PLATEAU_NO_IMPROVEMENT
-        )
+        return self.improvement is not None and self.improvement > _PLATEAU_NO_IMPROVEMENT
 
     def to_dict(self) -> Dict[str, Any]:
         return dataclasses.asdict(self)
@@ -193,9 +191,7 @@ class ApprovalGate:
             )
         return self._redis
 
-    def check_approval_needed(
-        self, improvement_pct: Optional[float], threshold: float
-    ) -> bool:
+    def check_approval_needed(self, improvement_pct: Optional[float], threshold: float) -> bool:
         """Return True when improvement_pct meets or exceeds threshold.
 
         Args:
@@ -229,12 +225,8 @@ class ApprovalGate:
             The Redis status key so callers can poll for a decision.
         """
         redis = await self._get_redis()
-        pending_key = self._PENDING_KEY_TEMPLATE.format(
-            session_id=session_id, exp_id=experiment_id
-        )
-        status_key = self._STATUS_KEY_TEMPLATE.format(
-            session_id=session_id, exp_id=experiment_id
-        )
+        pending_key = self._PENDING_KEY_TEMPLATE.format(session_id=session_id, exp_id=experiment_id)
+        status_key = self._STATUS_KEY_TEMPLATE.format(session_id=session_id, exp_id=experiment_id)
         payload = json.dumps(
             {
                 "session_id": session_id,
@@ -255,9 +247,7 @@ class ApprovalGate:
     async def get_approval_status(self, session_id: str, experiment_id: str) -> str:
         """Return current approval status: 'pending', 'approved', or 'rejected'."""
         redis = await self._get_redis()
-        status_key = self._STATUS_KEY_TEMPLATE.format(
-            session_id=session_id, exp_id=experiment_id
-        )
+        status_key = self._STATUS_KEY_TEMPLATE.format(session_id=session_id, exp_id=experiment_id)
         raw = await redis.get(status_key)
         if raw is None:
             return "unknown"
@@ -304,9 +294,7 @@ class ApprovalGate:
 # ---------------------------------------------------------------------------
 
 
-async def _search_arxiv(
-    client: httpx.AsyncClient, query: str, max_results: int
-) -> List[SearchResult]:
+async def _search_arxiv(client: httpx.AsyncClient, query: str, max_results: int) -> List[SearchResult]:
     """Query the arXiv Atom API and return structured results.
 
     Args:
@@ -325,9 +313,7 @@ async def _search_arxiv(
         "sortOrder": "descending",
     }
     try:
-        response = await client.get(
-            _ARXIV_SEARCH_URL, params=params, timeout=_DEFAULT_HTTP_TIMEOUT
-        )
+        response = await client.get(_ARXIV_SEARCH_URL, params=params, timeout=_DEFAULT_HTTP_TIMEOUT)
         response.raise_for_status()
         return _parse_arxiv_atom(response.text)
     except httpx.HTTPError as exc:
@@ -358,9 +344,7 @@ def _parse_arxiv_atom(xml_text: str) -> List[SearchResult]:
     return results
 
 
-async def _search_github(
-    client: httpx.AsyncClient, query: str, max_results: int
-) -> List[SearchResult]:
+async def _search_github(client: httpx.AsyncClient, query: str, max_results: int) -> List[SearchResult]:
     """Query the GitHub repository search API and return structured results.
 
     Args:
@@ -479,9 +463,7 @@ class AutoResearchAgent:
         )
         self._cancel_event.clear()
 
-        logger.info(
-            "AutoResearchAgent: starting session %s for topic %r", session.id, topic
-        )
+        logger.info("AutoResearchAgent: starting session %s for topic %r", session.id, topic)
         await self._save_session(session)
 
         try:
@@ -514,8 +496,7 @@ class AutoResearchAgent:
 
                     if not self._should_continue(session, plateau_window):
                         logger.info(
-                            "AutoResearchAgent: session %s stopping early at iteration %d "
-                            "(plateau detected)",
+                            "AutoResearchAgent: session %s stopping early at iteration %d " "(plateau detected)",
                             session.id,
                             iteration,
                         )
@@ -673,9 +654,7 @@ class AutoResearchAgent:
     # Private: experiment execution
     # ------------------------------------------------------------------
 
-    def _build_experiment(
-        self, hypothesis: ResearchHypothesis, session: ExperimentSession
-    ) -> Experiment:
+    def _build_experiment(self, hypothesis: ResearchHypothesis, session: ExperimentSession) -> Experiment:
         """Construct an Experiment from a hypothesis.
 
         Args:
@@ -686,9 +665,7 @@ class AutoResearchAgent:
             Experiment ready to be passed to ExperimentRunner.
         """
         hp = HyperParams()
-        known_fields = {
-            f.name for f in dataclasses.fields(HyperParams) if f.name != "extra"
-        }
+        known_fields = {f.name for f in dataclasses.fields(HyperParams) if f.name != "extra"}
         extra: Dict[str, Any] = {}
         for key, value in hypothesis.suggested_hyperparams.items():
             if key in known_fields:
@@ -797,9 +774,7 @@ class AutoResearchAgent:
             "topic": session.topic,
             "iteration": session.iterations_completed,
             "metrics": metrics.to_dict(),
-            "hypothesis": (
-                session.hypotheses[-1].to_dict() if session.hypotheses else {}
-            ),
+            "hypothesis": (session.hypotheses[-1].to_dict() if session.hypotheses else {}),
         }
         status_key = await self.approval_gate.request_approval(
             session_id=session.id,

@@ -1,5 +1,6 @@
 # AutoBot - AI-Powered Automation Platform
 import uuid
+
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
@@ -96,9 +97,7 @@ class SentimentAnalysisAgent(StandardizedAgent):
         )
         return await self.process_query(prompt)
 
-    async def process_query(
-        self, request_text: str, context: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    async def process_query(self, request_text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Process a sentiment analysis query using the vLLM-optimised API (Issue #3389)."""
         try:
             logger.info("Sentiment Analysis Agent processing: %s...", request_text[:50])
@@ -120,17 +119,12 @@ class SentimentAnalysisAgent(StandardizedAgent):
                 "response_text": response_text,
                 "agent_type": "sentiment_analysis",
                 "model_used": self.model_name,
-                "token_usage": (
-                    response.get("usage", {}) if isinstance(response, dict) else {}
-                ),
+                "token_usage": (response.get("usage", {}) if isinstance(response, dict) else {}),
             }
             diary_entry = (
-                f"SESSION:{session_id}|ACTION:sentiment_analysis"
-                f"|OUTCOME:{result['status']}|TOPIC:sentiment"
+                f"SESSION:{session_id}|ACTION:sentiment_analysis" f"|OUTCOME:{result['status']}|TOPIC:sentiment"
             )
-            await self.memory_manager.agent_diary.write(
-                self.AGENT_ID, session_id, diary_entry, topic="sentiment"
-            )
+            await self.memory_manager.agent_diary.write(self.AGENT_ID, session_id, diary_entry, topic="sentiment")
             return result
         except Exception as e:
             logger.error("Sentiment Analysis Agent error: %s", e)
@@ -146,9 +140,7 @@ class SentimentAnalysisAgent(StandardizedAgent):
         """Inject cached session sentiment history into context."""
         session_id = context.get("session_id")
         if session_id:
-            history = await self.memory_manager.working_memory.get(
-                session_id, "sentiment_history"
-            )
+            history = await self.memory_manager.working_memory.get(session_id, "sentiment_history")
             if history:
                 context["sentiment_history"] = history
         return context
@@ -162,9 +154,7 @@ class SentimentAnalysisAgent(StandardizedAgent):
             return
         sentiment = result.get("response", "") if isinstance(result, dict) else ""
         if sentiment:
-            await self.memory_manager.working_memory.store(
-                session_id, "sentiment_history", sentiment
-            )
+            await self.memory_manager.working_memory.store(session_id, "sentiment_history", sentiment)
 
     def _get_system_prompt(self) -> str:
         """Get system prompt for sentiment analysis tasks."""

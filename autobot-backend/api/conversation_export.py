@@ -67,16 +67,12 @@ class ConversationImportRequest(BaseModel):
     document: dict = Field(
         ...,
         description=(
-            "AutoBot conversation export document produced by the export endpoint "
-            "(format: autobot-conversation-v1)."
+            "AutoBot conversation export document produced by the export endpoint " "(format: autobot-conversation-v1)."
         ),
     )
     on_conflict: str = Field(
         default="skip",
-        description=(
-            "Conflict resolution strategy when session_id already exists. "
-            "One of: skip, replace, rename."
-        ),
+        description=("Conflict resolution strategy when session_id already exists. " "One of: skip, replace, rename."),
     )
 
 
@@ -89,9 +85,7 @@ def _validate_format_or_raise(export_format: str) -> None:
     """Raise ValidationError when the requested format is not supported."""
     if export_format not in _VALID_EXPORT_FORMATS:
         _, _, _, ValidationError, _ = get_exceptions_lazy()
-        raise ValidationError(
-            f"Invalid format {export_format!r}. Supported: json, markdown"
-        )
+        raise ValidationError(f"Invalid format {export_format!r}. Supported: json, markdown")
 
 
 def _validate_session_id_or_raise(session_id: str) -> None:
@@ -105,9 +99,7 @@ def _validate_on_conflict_or_raise(on_conflict: str) -> None:
     """Raise ValidationError when on_conflict value is not recognised."""
     if on_conflict not in _VALID_ON_CONFLICT:
         _, _, _, ValidationError, _ = get_exceptions_lazy()
-        raise ValidationError(
-            f"Invalid on_conflict {on_conflict!r}. Supported: skip, replace, rename"
-        )
+        raise ValidationError(f"Invalid on_conflict {on_conflict!r}. Supported: skip, replace, rename")
 
 
 # ---------------------------------------------------------------------------
@@ -133,19 +125,13 @@ async def _run_export(
     return result
 
 
-def _build_export_response(
-    content: str, session_id: str, export_format: str
-) -> Response:
+def _build_export_response(content: str, session_id: str, export_format: str) -> Response:
     """Wrap export content in a download Response with correct headers."""
     ext = _FILE_EXTENSIONS[export_format]
     return Response(
         content=content.encode("utf-8"),
         media_type=_CONTENT_TYPES[export_format],
-        headers={
-            "Content-Disposition": (
-                f"attachment; filename=conversation_{session_id}.{ext}"
-            )
-        },
+        headers={"Content-Disposition": (f"attachment; filename=conversation_{session_id}.{ext}")},
     )
 
 
@@ -216,9 +202,7 @@ async def export_all_conversations(
     return Response(
         content=archive.encode("utf-8"),
         media_type="application/json",
-        headers={
-            "Content-Disposition": "attachment; filename=conversations_export.json"
-        },
+        headers={"Content-Disposition": "attachment; filename=conversations_export.json"},
     )
 
 

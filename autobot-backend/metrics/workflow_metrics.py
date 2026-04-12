@@ -181,26 +181,17 @@ class WorkflowMetricsCollector:
                     }
                 )
 
-    def end_step_timing(
-        self, workflow_id: str, step_id: str, success: bool = True, error: str = None
-    ):
+    def end_step_timing(self, workflow_id: str, step_id: str, success: bool = True, error: str = None):
         """End timing a workflow step and record metrics. Issue #620."""
         try:
-            if (
-                workflow_id not in self.step_timers
-                or step_id not in self.step_timers[workflow_id]
-            ):
-                logger.warning(
-                    f"No timer found for step {step_id} in workflow {workflow_id}"
-                )
+            if workflow_id not in self.step_timers or step_id not in self.step_timers[workflow_id]:
+                logger.warning(f"No timer found for step {step_id} in workflow {workflow_id}")
                 return
 
             step_data = self.step_timers[workflow_id][step_id]
             duration_ms = (time.time() - step_data["start_time"]) * 1000
 
-            self._update_workflow_step_tracking(
-                workflow_id, step_id, duration_ms, success, error
-            )
+            self._update_workflow_step_tracking(workflow_id, step_id, duration_ms, success, error)
             self._record_metric(
                 workflow_id=workflow_id,
                 metric_type=MetricType.TIMER.value,
@@ -221,9 +212,7 @@ class WorkflowMetricsCollector:
         """Record time spent waiting for user approval"""
         try:
             if workflow_id in self.active_workflows:
-                self.active_workflows[workflow_id]["approval_wait_times"].append(
-                    wait_time_ms
-                )
+                self.active_workflows[workflow_id]["approval_wait_times"].append(wait_time_ms)
 
             self._record_metric(
                 workflow_id=workflow_id,
@@ -247,9 +236,7 @@ class WorkflowMetricsCollector:
                     "disk_io": resource_data.get("disk_io", {}),
                     "network_io": resource_data.get("network_io", {}),
                 }
-                self.active_workflows[workflow_id]["resource_snapshots"].append(
-                    resource_snapshot
-                )
+                self.active_workflows[workflow_id]["resource_snapshots"].append(resource_snapshot)
 
             # Record resource metrics
             for metric_name, value in resource_data.items():
@@ -265,9 +252,7 @@ class WorkflowMetricsCollector:
         except Exception as e:
             logger.error("Failed to record resource usage: %s", e)
 
-    def _calculate_workflow_metrics(
-        self, workflow: Dict[str, Any], end_time: datetime
-    ) -> tuple:
+    def _calculate_workflow_metrics(self, workflow: Dict[str, Any], end_time: datetime) -> tuple:
         """
         Calculate duration, average step time, approval wait, and success rate.
 
@@ -281,17 +266,10 @@ class WorkflowMetricsCollector:
         """
         total_duration_ms = (end_time - workflow["start_time"]).total_seconds() * 1000
         step_durations = list(workflow["step_timings"].values())
-        avg_step_duration = (
-            sum(step_durations) / len(step_durations) if step_durations else 0
-        )
-        total_approval_wait = (
-            sum(workflow["approval_wait_times"])
-            if workflow["approval_wait_times"]
-            else 0
-        )
+        avg_step_duration = sum(step_durations) / len(step_durations) if step_durations else 0
+        total_approval_wait = sum(workflow["approval_wait_times"]) if workflow["approval_wait_times"] else 0
         success_rate = (
-            workflow["completed_steps"]
-            / max(workflow["completed_steps"] + workflow["failed_steps"], 1)
+            workflow["completed_steps"] / max(workflow["completed_steps"] + workflow["failed_steps"], 1)
         ) * 100
         return total_duration_ms, avg_step_duration, total_approval_wait, success_rate
 
@@ -331,9 +309,7 @@ class WorkflowMetricsCollector:
             approval_wait_time_ms=total_approval_wait,
             error_count=len(workflow["errors"]),
             success_rate=success_rate,
-            resource_usage=self._aggregate_resource_usage(
-                workflow["resource_snapshots"]
-            ),
+            resource_usage=self._aggregate_resource_usage(workflow["resource_snapshots"]),
             status=final_status,
         )
 
@@ -351,9 +327,7 @@ class WorkflowMetricsCollector:
             end_time = datetime.now(tz=timezone.utc)
 
             # Build stats using helper
-            stats = self._build_workflow_stats(
-                workflow_id, workflow, end_time, final_status
-            )
+            stats = self._build_workflow_stats(workflow_id, workflow, end_time, final_status)
 
             # Record final metrics
             self._record_metric(
@@ -414,9 +388,7 @@ class WorkflowMetricsCollector:
         except Exception as e:
             logger.error("Failed to record metric: %s", e)
 
-    def _aggregate_resource_usage(
-        self, snapshots: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+    def _aggregate_resource_usage(self, snapshots: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Aggregate resource usage from snapshots"""
         if not snapshots:
             return {}
@@ -426,13 +398,9 @@ class WorkflowMetricsCollector:
             memory_values = [s.get("memory_mb", 0) for s in snapshots]
 
             return {
-                "avg_cpu_percent": (
-                    sum(cpu_values) / len(cpu_values) if cpu_values else 0
-                ),
+                "avg_cpu_percent": (sum(cpu_values) / len(cpu_values) if cpu_values else 0),
                 "max_cpu_percent": max(cpu_values) if cpu_values else 0,
-                "avg_memory_mb": (
-                    sum(memory_values) / len(memory_values) if memory_values else 0
-                ),
+                "avg_memory_mb": (sum(memory_values) / len(memory_values) if memory_values else 0),
                 "max_memory_mb": max(memory_values) if memory_values else 0,
                 "snapshot_count": len(snapshots),
             }
@@ -452,13 +420,10 @@ class WorkflowMetricsCollector:
 
             # Update average duration
             total_duration = (
-                self.aggregated_stats["avg_duration_ms"]
-                * (self.aggregated_stats["total_workflows"] - 1)
+                self.aggregated_stats["avg_duration_ms"] * (self.aggregated_stats["total_workflows"] - 1)
                 + stats.total_duration_ms
             )
-            self.aggregated_stats["avg_duration_ms"] = (
-                total_duration / self.aggregated_stats["total_workflows"]
-            )
+            self.aggregated_stats["avg_duration_ms"] = total_duration / self.aggregated_stats["total_workflows"]
 
             # Update complexity distribution
             self.aggregated_stats["complexity_distribution"][stats.complexity] += 1
@@ -488,9 +453,7 @@ class WorkflowMetricsCollector:
             # Check if workflow is still active
             if workflow_id in self.active_workflows:
                 workflow = self.active_workflows[workflow_id]
-                current_duration = (
-                    datetime.now(tz=timezone.utc) - workflow["start_time"]
-                ).total_seconds() * 1000
+                current_duration = (datetime.now(tz=timezone.utc) - workflow["start_time"]).total_seconds() * 1000
 
                 return {
                     "workflow_id": workflow_id,
@@ -498,23 +461,14 @@ class WorkflowMetricsCollector:
                     "current_duration_ms": current_duration,
                     "completed_steps": workflow["completed_steps"],
                     "total_steps": workflow["total_steps"],
-                    "progress_percent": (
-                        (workflow["completed_steps"] / max(workflow["total_steps"], 1))
-                        * 100
-                    ),
+                    "progress_percent": ((workflow["completed_steps"] / max(workflow["total_steps"], 1)) * 100),
                     "current_step_timings": workflow["step_timings"],
                 }
 
             # Search completed workflows in history
-            workflow_metrics = [
-                m for m in self.metrics_history if m.workflow_id == workflow_id
-            ]
+            workflow_metrics = [m for m in self.metrics_history if m.workflow_id == workflow_id]
             if workflow_metrics:
-                duration_metrics = [
-                    m
-                    for m in workflow_metrics
-                    if m.metric_name == "workflow_total_duration_ms"
-                ]
+                duration_metrics = [m for m in workflow_metrics if m.metric_name == "workflow_total_duration_ms"]
                 if duration_metrics:
                     return {
                         "workflow_id": workflow_id,
@@ -533,16 +487,10 @@ class WorkflowMetricsCollector:
         """Get overall performance summary for specified time window"""
         try:
             cutoff_time = datetime.now(tz=timezone.utc) - timedelta(hours=time_window_hours)
-            recent_metrics = [
-                m for m in self.metrics_history if m.timestamp >= cutoff_time
-            ]
+            recent_metrics = [m for m in self.metrics_history if m.timestamp >= cutoff_time]
 
             # Calculate summary statistics
-            workflow_completions = [
-                m
-                for m in recent_metrics
-                if m.metric_name == "workflow_total_duration_ms"
-            ]
+            workflow_completions = [m for m in recent_metrics if m.metric_name == "workflow_total_duration_ms"]
 
             if not workflow_completions:
                 return {
@@ -551,11 +499,7 @@ class WorkflowMetricsCollector:
                 }
 
             durations = [m.value for m in workflow_completions]
-            success_rates = [
-                m.value
-                for m in recent_metrics
-                if m.metric_name == "workflow_success_rate"
-            ]
+            success_rates = [m.value for m in recent_metrics if m.metric_name == "workflow_success_rate"]
 
             complexity_counts = defaultdict(int)
             for metric in workflow_completions:
@@ -567,9 +511,7 @@ class WorkflowMetricsCollector:
                 "avg_duration_ms": sum(durations) / len(durations),
                 "min_duration_ms": min(durations),
                 "max_duration_ms": max(durations),
-                "avg_success_rate": (
-                    sum(success_rates) / len(success_rates) if success_rates else 0
-                ),
+                "avg_success_rate": (sum(success_rates) / len(success_rates) if success_rates else 0),
                 "complexity_distribution": dict(complexity_counts),
                 "metrics_collected": len(recent_metrics),
                 "active_workflows": len(self.active_workflows),

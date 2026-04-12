@@ -99,9 +99,7 @@ def _create_system_health_check_steps() -> List[WorkflowStep]:
 
     Combines collection and reporting phase steps into complete workflow.
     """
-    return (
-        _create_health_check_collection_steps() + _create_health_check_reporting_steps()
-    )
+    return _create_health_check_collection_steps() + _create_health_check_reporting_steps()
 
 
 def create_system_health_check_template() -> WorkflowTemplate:

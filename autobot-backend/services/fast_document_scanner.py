@@ -72,9 +72,7 @@ class FastDocumentScanner:
         # Remove section suffix (.1, .2, etc.)
         return command.rsplit(".", 1)[0]
 
-    def _scan_man_section(
-        self, section_dir: str, command_files: Dict[str, List[str]]
-    ) -> None:
+    def _scan_man_section(self, section_dir: str, command_files: Dict[str, List[str]]) -> None:
         """Scan a man section directory for pages. (Issue #315 - extracted)"""
         if not os.path.exists(section_dir):
             return
@@ -161,9 +159,7 @@ class FastDocumentScanner:
         """
         try:
             stat = os.stat(file_path)
-            return FileMetadata(
-                path=file_path, mtime=stat.st_mtime, size=stat.st_size, exists=True
-            )
+            return FileMetadata(path=file_path, mtime=stat.st_mtime, size=stat.st_size, exists=True)
         except (FileNotFoundError, PermissionError):
             return None
 
@@ -249,10 +245,7 @@ class FastDocumentScanner:
                         current_meta.mtime,
                     )
                 )
-            elif (
-                current_meta.mtime != cached_meta.mtime
-                or current_meta.size != cached_meta.size
-            ):
+            elif current_meta.mtime != cached_meta.mtime or current_meta.size != cached_meta.size:
                 changes["updated"].append(
                     self._create_document_change(
                         command,
@@ -295,9 +288,7 @@ class FastDocumentScanner:
         current_commands = set(current_files.keys())
 
         # Limit processing if requested
-        commands_to_check = (
-            list(current_commands)[:limit] if limit else current_commands
-        )
+        commands_to_check = list(current_commands)[:limit] if limit else current_commands
 
         # Check for new or updated documents (Issue #665: extracted helper)
         self._check_file_changes(commands_to_check, current_files, changes, limit)
@@ -325,9 +316,7 @@ class FastDocumentScanner:
         """Fast scan for document changes. Ref: #1088."""
         start_time = time.time()
 
-        logger.info(
-            f"Fast scan starting for {machine_id} (type={scan_type}, limit={limit})"
-        )
+        logger.info(f"Fast scan starting for {machine_id} (type={scan_type}, limit={limit})")
 
         # Get all man page files (FAST - filesystem scan only)
         command_files = self._get_man_page_paths()
@@ -357,11 +346,7 @@ class FastDocumentScanner:
                 "added": len(changes["added"]),
                 "updated": len(changes["updated"]),
                 "removed": len(changes["removed"]),
-                "unchanged": (
-                    (limit or total_available)
-                    - len(changes["added"])
-                    - len(changes["updated"])
-                ),
+                "unchanged": ((limit or total_available) - len(changes["added"]) - len(changes["updated"])),
             },
         }
 
@@ -423,18 +408,14 @@ class FastDocumentScanner:
                 if result.returncode == 0 and result.stdout:
                     return result.stdout
                 else:
-                    logger.warning(
-                        f"subprocess.run failed for 'man {command}': {result.stderr}"
-                    )
+                    logger.warning(f"subprocess.run failed for 'man {command}': {result.stderr}")
                     return None
 
             except subprocess.TimeoutExpired:
                 logger.warning("Timeout reading man page for %s", command)
                 return None
             except Exception as subprocess_error:
-                logger.error(
-                    f"Failed to read man page for {command}: {subprocess_error}"
-                )
+                logger.error(f"Failed to read man page for {command}: {subprocess_error}")
                 return None
 
     # =========================================================================

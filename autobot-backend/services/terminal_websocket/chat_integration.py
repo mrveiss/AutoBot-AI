@@ -32,9 +32,7 @@ class TerminalChatIntegrator:
     ):
         """Initialize chat integrator with conversation and history manager."""
         self.conversation_id = conversation_id
-        self.chat_history_manager = chat_history_manager or (
-            ChatHistoryManager() if conversation_id else None
-        )
+        self.chat_history_manager = chat_history_manager or (ChatHistoryManager() if conversation_id else None)
         self.data_dir = Path(data_dir)
 
         # Output buffering for chat integration
@@ -76,9 +74,7 @@ class TerminalChatIntegrator:
             # 2. Enough time has passed (>2 seconds) OR
             # 3. Output contains a newline (command completed)
             should_save = (
-                len(self._output_buffer) > 500
-                or (current_time - self._last_output_save_time) > 2.0
-                or "\n" in content
+                len(self._output_buffer) > 500 or (current_time - self._last_output_save_time) > 2.0 or "\n" in content
             )
 
             if should_save and self._output_buffer.strip():
@@ -110,8 +106,7 @@ class TerminalChatIntegrator:
         else:
             skip_reason = "terminal prompt" if is_prompt else "only ANSI codes"
             logger.debug(
-                f"[CHAT INTEGRATION] Skipping save - buffer is {skip_reason} "
-                f"({len(self._output_buffer)} chars)"
+                f"[CHAT INTEGRATION] Skipping save - buffer is {skip_reason} " f"({len(self._output_buffer)} chars)"
             )
 
         # Reset buffer

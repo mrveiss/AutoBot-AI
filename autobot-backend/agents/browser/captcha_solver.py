@@ -65,9 +65,7 @@ _HTML_CAPTCHA_KEYWORDS = frozenset(
     }
 )
 
-_RECAPTCHA_PATTERNS = frozenset(
-    {"g-recaptcha", "recaptcha", "grecaptcha", "recaptcha/api.js"}
-)
+_RECAPTCHA_PATTERNS = frozenset({"g-recaptcha", "recaptcha", "grecaptcha", "recaptcha/api.js"})
 _HCAPTCHA_PATTERNS = frozenset({"h-captcha", "hcaptcha", "hcaptcha.com"})
 _SLIDER_PATTERNS = frozenset({"slider", "slide-verify", "slidercaptcha", "drag"})
 
@@ -202,9 +200,7 @@ class CaptchaDetector:
         try:
             element = await page.query_selector(selector)
             if element is None:
-                logger.warning(
-                    "extract_captcha_image: selector %r matched no element", selector
-                )
+                logger.warning("extract_captcha_image: selector %r matched no element", selector)
                 return None
             image_bytes: bytes = await element.screenshot()
             logger.debug(
@@ -214,9 +210,7 @@ class CaptchaDetector:
             )
             return image_bytes
         except Exception as exc:
-            logger.error(
-                "extract_captcha_image failed for selector %r: %s", selector, exc
-            )
+            logger.error("extract_captcha_image failed for selector %r: %s", selector, exc)
             return None
 
     def _select_text_image_selector(self, page_source: str) -> str:
@@ -628,9 +622,7 @@ class CaptchaSolverPipeline:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    async def _solve_math_from_page(
-        self, page: Any, captcha_type: CaptchaType
-    ) -> SolveResult:
+    async def _solve_math_from_page(self, page: Any, captcha_type: CaptchaType) -> SolveResult:
         """Extract page text and attempt math solving.
 
         Args:
@@ -662,9 +654,7 @@ class CaptchaSolverPipeline:
             error="Math expression not found in page content",
         )
 
-    async def _extract_image(
-        self, page: Any, captcha_type: CaptchaType
-    ) -> Optional[bytes]:
+    async def _extract_image(self, page: Any, captcha_type: CaptchaType) -> Optional[bytes]:
         """Pick the right selector and extract the CAPTCHA image bytes.
 
         Args:
@@ -696,9 +686,7 @@ class CaptchaSolverPipeline:
         }
         return mapping.get(captcha_type, "#captcha")
 
-    async def _try_local_ml(
-        self, image_bytes: bytes, captcha_type: CaptchaType
-    ) -> SolveResult:
+    async def _try_local_ml(self, image_bytes: bytes, captcha_type: CaptchaType) -> SolveResult:
         """Run ONNX inference and return a SolveResult.
 
         Args:
@@ -728,9 +716,7 @@ class CaptchaSolverPipeline:
             error="ONNX inference returned no answer",
         )
 
-    async def _human_fallback(
-        self, page: Any, captcha_type: CaptchaType
-    ) -> SolveResult:
+    async def _human_fallback(self, page: Any, captcha_type: CaptchaType) -> SolveResult:
         """Delegate to the human-in-the-loop service.
 
         Args:

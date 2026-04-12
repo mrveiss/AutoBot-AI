@@ -146,9 +146,7 @@ class ServiceConfigMixin:
 
         defaults = {
             "server_host": NetworkConstants.BIND_ALL_INTERFACES,
-            "server_port": int(
-                os.getenv("AUTOBOT_BACKEND_PORT", str(NetworkConstants.BACKEND_PORT))
-            ),
+            "server_port": int(os.getenv("AUTOBOT_BACKEND_PORT", str(NetworkConstants.BACKEND_PORT))),
             "api_endpoint": (
                 f"http://localhost:{os.getenv('AUTOBOT_BACKEND_PORT', str(NetworkConstants.BACKEND_PORT))}"
             ),
@@ -201,9 +199,7 @@ class ServiceConfigMixin:
         ollama_port = self.get_port("ollama")
         if ollama_host and ollama_port:
             return f"http://{ollama_host}:{ollama_port}"
-        return (
-            f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}"
-        )
+        return f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}"
 
     def get_ollama_url_for_model(self, model_name: str) -> str:
         """Get Ollama URL routed by model name (#1070).

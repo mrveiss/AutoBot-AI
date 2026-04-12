@@ -38,9 +38,7 @@ class PatternExtractor:
         self.redis_client = get_redis_client(async_client=False, database="main")
         self.patterns: Dict[str, List[Dict]] = defaultdict(list)
 
-    def extract_from_codebase(
-        self, languages: Optional[List[str]] = None
-    ) -> Dict[str, List[Dict]]:
+    def extract_from_codebase(self, languages: Optional[List[str]] = None) -> Dict[str, List[Dict]]:
         """
         Extract patterns from entire codebase.
 
@@ -80,10 +78,7 @@ class PatternExtractor:
 
             for py_file in base_dir.rglob("*.py"):
                 # Skip test files, migrations, and venv
-                if any(
-                    skip in str(py_file)
-                    for skip in ["test", "venv", "migrations", "__pycache__"]
-                ):
+                if any(skip in str(py_file) for skip in ["test", "venv", "migrations", "__pycache__"]):
                     continue
 
                 try:
@@ -114,9 +109,7 @@ class PatternExtractor:
             if isinstance(node, ast.FunctionDef):
                 self._extract_api_pattern(node, file_path, content)
 
-    def _extract_function_pattern(
-        self, node: ast.FunctionDef, file_path: Path, content: str
-    ) -> None:
+    def _extract_function_pattern(self, node: ast.FunctionDef, file_path: Path, content: str) -> None:
         """Extract function signature and common implementation patterns."""
         # Get function signature
         args = []
@@ -179,19 +172,14 @@ class PatternExtractor:
 
             self.patterns["error_handling"].append(pattern)
 
-    def _extract_api_pattern(
-        self, node: ast.FunctionDef, file_path: Path, content: str
-    ) -> None:
+    def _extract_api_pattern(self, node: ast.FunctionDef, file_path: Path, content: str) -> None:
         """Extract FastAPI route patterns."""
         # Check if function is a FastAPI route
         route_decorators = []
         for decorator in node.decorator_list:
             if isinstance(decorator, ast.Call):
                 func_name = ast.unparse(decorator.func)
-                if any(
-                    method in func_name
-                    for method in ["get", "post", "put", "delete", "patch"]
-                ):
+                if any(method in func_name for method in ["get", "post", "put", "delete", "patch"]):
                     route_decorators.append(ast.unparse(decorator))
 
         if not route_decorators:
@@ -226,9 +214,7 @@ class PatternExtractor:
         # Framework-specific patterns
         if "redis" in file_str or "redis" in func_name:
             return "redis"
-        if "fastapi" in file_str or any(
-            d for d in node.decorator_list if "router" in ast.unparse(d).lower()
-        ):
+        if "fastapi" in file_str or any(d for d in node.decorator_list if "router" in ast.unparse(d).lower()):
             return "fastapi"
         if "pydantic" in file_str or "BaseModel" in ast.unparse(node):
             return "pydantic"
@@ -276,9 +262,7 @@ class PatternExtractor:
             content = f.read()
 
         # Extract composable functions
-        composable_pattern = (
-            r"export\s+function\s+(use[A-Z]\w+)\s*\([^)]*\)\s*:\s*(\{[^}]+\})"
-        )
+        composable_pattern = r"export\s+function\s+(use[A-Z]\w+)\s*\([^)]*\)\s*:\s*(\{[^}]+\})"
         for match in re.finditer(composable_pattern, content):
             func_name, return_type = match.groups()
             pattern = {
@@ -342,9 +326,7 @@ class PatternExtractor:
         """Cache most frequent patterns to Redis for fast lookup."""
         for pattern_type, patterns in self.patterns.items():
             # Sort by frequency and take top N
-            sorted_patterns = sorted(
-                patterns, key=lambda p: p.get("frequency", 1), reverse=True
-            )[:top_n]
+            sorted_patterns = sorted(patterns, key=lambda p: p.get("frequency", 1), reverse=True)[:top_n]
 
             # Cache to Redis
             redis_key = f"hot_patterns:{pattern_type}"
@@ -358,7 +340,4 @@ class PatternExtractor:
 
     def get_statistics(self) -> Dict[str, int]:
         """Get extraction statistics."""
-        return {
-            pattern_type: len(patterns)
-            for pattern_type, patterns in self.patterns.items()
-        }
+        return {pattern_type: len(patterns) for pattern_type, patterns in self.patterns.items()}

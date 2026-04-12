@@ -20,10 +20,10 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from knowledge.search_components.retrieval_learner import (
+    _PATTERN_KEY_PREFIX,
+    GLOBAL_USER,
     RetrievalLearner,
     RetrievalPattern,
-    GLOBAL_USER,
-    _PATTERN_KEY_PREFIX,
     _compute_pattern_hash,
     get_retrieval_learner,
 )
@@ -70,9 +70,7 @@ def _make_pattern(
     )
 
 
-def _make_feedback_fields(
-    retrieved: list, ranked: list, complexity: str = "simple"
-) -> dict:
+def _make_feedback_fields(retrieved: list, ranked: list, complexity: str = "simple") -> dict:
     return {
         "retrieved_chunk_ids": json.dumps(retrieved),
         "final_ranked_ids": json.dumps(ranked),
@@ -191,9 +189,7 @@ class TestGetMatchingPatternUserScoped:
         redis.hgetall = AsyncMock(side_effect=fake_hgetall)
         learner = _make_learner(redis)
 
-        result = await learner.get_matching_pattern(
-            query="test", complexity="simple", user_id=_USER_A
-        )
+        result = await learner.get_matching_pattern(query="test", complexity="simple", user_id=_USER_A)
 
         assert result is not None
         assert result.pattern_hash == ph
@@ -214,9 +210,7 @@ class TestGetMatchingPatternUserScoped:
         redis.hgetall = AsyncMock(side_effect=fake_hgetall)
         learner = _make_learner(redis)
 
-        result = await learner.get_matching_pattern(
-            query="test", complexity="simple", user_id=_USER_A
-        )
+        result = await learner.get_matching_pattern(query="test", complexity="simple", user_id=_USER_A)
 
         assert result is not None
         assert result.pattern_hash == ph
@@ -242,9 +236,7 @@ class TestGetMatchingPatternUserScoped:
         redis.hgetall = AsyncMock(side_effect=fake_hgetall)
         learner = _make_learner(redis)
 
-        result = await learner.get_matching_pattern(
-            query="test", complexity="simple", user_id=_USER_A
-        )
+        result = await learner.get_matching_pattern(query="test", complexity="simple", user_id=_USER_A)
 
         # Should return the user-scoped pattern even though global has higher rate.
         assert result is not None
@@ -257,9 +249,7 @@ class TestGetMatchingPatternUserScoped:
         redis.hgetall = AsyncMock(return_value={})
         learner = _make_learner(redis)
 
-        result = await learner.get_matching_pattern(
-            query="test", complexity="simple", user_id=_USER_A
-        )
+        result = await learner.get_matching_pattern(query="test", complexity="simple", user_id=_USER_A)
 
         assert result is None
 
@@ -300,9 +290,7 @@ class TestGetMatchingPatternUserScoped:
         redis.hgetall = AsyncMock(side_effect=fake_hgetall)
         learner = _make_learner(redis)
 
-        result = await learner.get_matching_pattern(
-            query="", complexity="moderate", user_id=_USER_A
-        )
+        result = await learner.get_matching_pattern(query="", complexity="moderate", user_id=_USER_A)
 
         # Should fall back to the global pattern.
         assert result is not None
@@ -373,9 +361,7 @@ class TestEndToEndUserScopedLearning:
             ranked=["x", "y", "z", "a", "b"],
             complexity="complex",
         )
-        redis.xrange = AsyncMock(
-            side_effect=[[("1000-0", fields)], []]
-        )
+        redis.xrange = AsyncMock(side_effect=[[("1000-0", fields)], []])
 
         # Simulate that hgetall returns {} on write (no existing pattern),
         # then returns the written pattern on read.
@@ -393,9 +379,7 @@ class TestEndToEndUserScopedLearning:
         learner = _make_learner(redis)
 
         # Step 1: consume stream for user A.
-        count = await learner.consume_feedback_stream(
-            date_key="2026-01-01", user_id=_USER_A
-        )
+        count = await learner.consume_feedback_stream(date_key="2026-01-01", user_id=_USER_A)
         assert count == 1
 
         # Manually set usage_count and success_rate so the pattern passes thresholds.
@@ -407,9 +391,7 @@ class TestEndToEndUserScopedLearning:
             mapping["success_rate"] = "0.8"
 
         # Step 2: query-time lookup for user A returns the distilled pattern.
-        result = await learner.get_matching_pattern(
-            query="complex query", complexity="complex", user_id=_USER_A
-        )
+        result = await learner.get_matching_pattern(query="complex query", complexity="complex", user_id=_USER_A)
 
         assert result is not None
         assert result.query_type == "complex"

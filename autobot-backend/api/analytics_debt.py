@@ -31,9 +31,7 @@ from autobot_shared.redis_client import get_redis_client
 from constants.ttl_constants import TTL_30_DAYS
 
 logger = logging.getLogger(__name__)
-router = APIRouter(
-    tags=["technical-debt", "analytics"]
-)  # Prefix set in router_registry
+router = APIRouter(tags=["technical-debt", "analytics"])  # Prefix set in router_registry
 
 # Redis key prefix
 DEBT_PREFIX = "debt:"
@@ -120,9 +118,7 @@ class DebtCalculationRequest(BaseModel):
 
     target_path: str = Field(default=".", description="Path to analyze")
     hourly_rate: float = Field(default=75.0, description="Developer hourly rate in USD")
-    include_categories: List[str] = Field(
-        default=[], description="Categories to include (empty = all)"
-    )
+    include_categories: List[str] = Field(default=[], description="Categories to include (empty = all)")
 
 
 class DebtSummary(BaseModel):
@@ -166,9 +162,7 @@ def get_debt_redis():
     return get_redis_client(database="analytics")
 
 
-async def calculate_debt_from_analysis(
-    analysis_data: Dict[str, Any], hourly_rate: float = 75.0
-) -> Dict[str, Any]:
+async def calculate_debt_from_analysis(analysis_data: Dict[str, Any], hourly_rate: float = 75.0) -> Dict[str, Any]:
     """
     Calculate technical debt from codebase analysis data.
     Issue #281: Refactored from 163 lines to use extracted helper methods.
@@ -278,8 +272,7 @@ def _process_anti_patterns(anti_patterns: List[Dict[str, Any]]) -> List[DebtItem
                 file_path=pattern.get("file_path", "unknown"),
                 line_number=pattern.get("line_number"),
                 description=pattern.get("description", "Anti-pattern detected"),
-                estimated_hours=DEBT_HOURS_ESTIMATE[DebtCategory.ANTI_PATTERNS]
-                * SEVERITY_WEIGHTS[severity],
+                estimated_hours=DEBT_HOURS_ESTIMATE[DebtCategory.ANTI_PATTERNS] * SEVERITY_WEIGHTS[severity],
                 fix_complexity=_get_fix_complexity(pattern.get("type")),
                 business_impact=_get_business_impact(severity),
                 recommendation=pattern.get("recommendation", "Refactor to fix pattern"),
@@ -302,8 +295,7 @@ def _process_problems(problems: List[Dict[str, Any]]) -> List[DebtItem]:
                 file_path=problem.get("file_path", "unknown"),
                 line_number=problem.get("line_number"),
                 description=problem.get("description", "Code issue detected"),
-                estimated_hours=DEBT_HOURS_ESTIMATE.get(category, 1.0)
-                * SEVERITY_WEIGHTS[severity],
+                estimated_hours=DEBT_HOURS_ESTIMATE.get(category, 1.0) * SEVERITY_WEIGHTS[severity],
                 fix_complexity=problem.get("fix_complexity", "medium"),
                 business_impact=_get_business_impact(severity),
                 recommendation=problem.get("suggestion", "Fix the issue"),
@@ -351,8 +343,7 @@ def _process_complexity(complexity_data: Dict[str, Any]) -> List[DebtItem]:
                     file_path=file_path,
                     line_number=None,
                     description=f"High cyclomatic complexity: {complexity}",
-                    estimated_hours=DEBT_HOURS_ESTIMATE[DebtCategory.CODE_COMPLEXITY]
-                    * SEVERITY_WEIGHTS[severity],
+                    estimated_hours=DEBT_HOURS_ESTIMATE[DebtCategory.CODE_COMPLEXITY] * SEVERITY_WEIGHTS[severity],
                     fix_complexity="hard",
                     business_impact=_get_business_impact(severity),
                     recommendation="Refactor into smaller, focused functions",
@@ -362,9 +353,7 @@ def _process_complexity(complexity_data: Dict[str, Any]) -> List[DebtItem]:
     return debt_items
 
 
-def _calculate_debt_aggregations(
-    debt_items: List[DebtItem], hourly_rate: float
-) -> Dict[str, Any]:
+def _calculate_debt_aggregations(debt_items: List[DebtItem], hourly_rate: float) -> Dict[str, Any]:
     """Calculate totals, category/severity groupings, and top files (Issue #281: extracted)."""
     total_hours = sum(item.estimated_hours for item in debt_items)
     total_cost = total_hours * hourly_rate
@@ -384,15 +373,10 @@ def _calculate_debt_aggregations(
     # Find top files by debt
     file_debt: Dict[str, float] = {}
     for item in debt_items:
-        file_debt[item.file_path] = (
-            file_debt.get(item.file_path, 0) + item.estimated_hours
-        )
+        file_debt[item.file_path] = file_debt.get(item.file_path, 0) + item.estimated_hours
 
     top_files = sorted(
-        [
-            {"file": f, "hours": h, "cost_usd": h * hourly_rate}
-            for f, h in file_debt.items()
-        ],
+        [{"file": f, "hours": h, "cost_usd": h * hourly_rate} for f, h in file_debt.items()],
         key=lambda x: x["hours"],
         reverse=True,
     )[:10]
@@ -437,9 +421,7 @@ def _extract_problem_from_meta(meta: Dict[str, Any]) -> Dict[str, Any]:
         "type": meta.get("problem_type", "unknown"),
         "severity": meta.get("severity", "medium"),
         "file_path": meta.get("file_path", "unknown"),
-        "line_number": (
-            int(meta.get("line_number", 0)) if meta.get("line_number") else None
-        ),
+        "line_number": (int(meta.get("line_number", 0)) if meta.get("line_number") else None),
         "description": meta.get("description", ""),
         "suggestion": meta.get("suggestion", ""),
     }
@@ -450,14 +432,10 @@ def _get_problems_from_chromadb(code_collection) -> List[Dict[str, Any]]:
     if not code_collection:
         return []
     try:
-        problems_result = code_collection.get(
-            where={"type": "problem"}, include=["metadatas"]
-        )
+        problems_result = code_collection.get(where={"type": "problem"}, include=["metadatas"])
         if not problems_result.get("metadatas"):
             return []
-        return [
-            _extract_problem_from_meta(meta) for meta in problems_result["metadatas"]
-        ]
+        return [_extract_problem_from_meta(meta) for meta in problems_result["metadatas"]]
     except Exception as e:
         logger.warning("ChromaDB query failed: %s", e)
         return []
@@ -469,9 +447,7 @@ async def _get_antipatterns_from_redis(redis_client) -> List[Dict[str, Any]]:
         return []
     try:
         # Issue #361 - avoid blocking
-        ap_data = await asyncio.to_thread(
-            redis_client.get, "antipattern:latest_results"
-        )
+        ap_data = await asyncio.to_thread(redis_client.get, "antipattern:latest_results")
         if not ap_data:
             return []
         if isinstance(ap_data, bytes):
@@ -549,9 +525,7 @@ async def calculate_technical_debt(
             "complexity": {},
         }
 
-        debt_result = await calculate_debt_from_analysis(
-            analysis_data, request.hourly_rate
-        )
+        debt_result = await calculate_debt_from_analysis(analysis_data, request.hourly_rate)
         _store_debt_result(debt_result)
 
         return JSONResponse(
@@ -597,9 +571,7 @@ async def get_debt_summary(admin_check: bool = Depends(check_admin_permission)):
         )
 
     # Return no_data response if no analysis exists (Issue #543)
-    return JSONResponse(
-        _no_data_response("No debt analysis found. Run POST /calculate first.")
-    )
+    return JSONResponse(_no_data_response("No debt analysis found. Run POST /calculate first."))
 
 
 @with_error_handling(
@@ -608,9 +580,7 @@ async def get_debt_summary(admin_check: bool = Depends(check_admin_permission)):
     error_code_prefix="DEBT",
 )
 @router.get("/by-category/{category}")
-async def get_debt_by_category(
-    category: str, admin_check: bool = Depends(check_admin_permission)
-):
+async def get_debt_by_category(category: str, admin_check: bool = Depends(check_admin_permission)):
     """
     Get technical debt items filtered by category (Issue #315 - refactored).
     Issue #744: Requires admin authentication.
@@ -621,9 +591,7 @@ async def get_debt_by_category(
     data = _get_latest_debt_data()
 
     if data:
-        items = [
-            item for item in data.get("items", []) if item.get("category") == category
-        ]
+        items = [item for item in data.get("items", []) if item.get("category") == category]
         return JSONResponse(
             {
                 "status": "success",
@@ -633,9 +601,7 @@ async def get_debt_by_category(
             }
         )
 
-    return JSONResponse(
-        {"status": "no_data", "message": "No debt analysis found", "items": []}
-    )
+    return JSONResponse({"status": "no_data", "message": "No debt analysis found", "items": []})
 
 
 def _get_debt_trend_data() -> List[Dict[str, Any]]:
@@ -694,11 +660,7 @@ def _calculate_trend_change(trend_data: List[Dict[str, Any]]) -> tuple:
         "hours": round(last["total_hours"] - first["total_hours"], 1),
         "cost": round(last["total_cost_usd"] - first["total_cost_usd"], 2),
     }
-    direction = (
-        "improving"
-        if change["items"] < 0
-        else "worsening" if change["items"] > 0 else "stable"
-    )
+    direction = "improving" if change["items"] < 0 else "worsening" if change["items"] > 0 else "stable"
     return change, direction
 
 
@@ -762,9 +724,7 @@ async def get_roi_priorities(
             }
         )
 
-    return JSONResponse(
-        {"status": "no_data", "message": "No debt analysis found", "priorities": []}
-    )
+    return JSONResponse({"status": "no_data", "message": "No debt analysis found", "priorities": []})
 
 
 def _build_debt_executive_summary(debt_data: dict) -> str:
@@ -790,26 +750,14 @@ def _build_debt_tables(debt_data: dict) -> str:
     summary = debt_data.get("summary", {})
 
     # Severity section
-    severity_rows = [
-        f"| {sev.capitalize()} | {count} |"
-        for sev, count in summary.get("by_severity", {}).items()
-    ]
-    result = (
-        "\n## Debt by Severity\n\n| Severity | Count |\n|----------|-------|\n"
-        + "\n".join(severity_rows)
-        + "\n"
-    )
+    severity_rows = [f"| {sev.capitalize()} | {count} |" for sev, count in summary.get("by_severity", {}).items()]
+    result = "\n## Debt by Severity\n\n| Severity | Count |\n|----------|-------|\n" + "\n".join(severity_rows) + "\n"
 
     # Category section
     category_rows = [
-        f"| {cat.replace('_', ' ').title()} | {count} |"
-        for cat, count in summary.get("by_category", {}).items()
+        f"| {cat.replace('_', ' ').title()} | {count} |" for cat, count in summary.get("by_category", {}).items()
     ]
-    result += (
-        "\n## Debt by Category\n\n| Category | Count |\n|----------|-------|\n"
-        + "\n".join(category_rows)
-        + "\n"
-    )
+    result += "\n## Debt by Category\n\n| Category | Count |\n|----------|-------|\n" + "\n".join(category_rows) + "\n"
 
     # Top files section
     file_rows = [
@@ -817,9 +765,7 @@ def _build_debt_tables(debt_data: dict) -> str:
         for f in debt_data.get("top_files", [])[:10]
     ]
     result += (
-        "\n## Top Files by Debt\n\n| File | Hours | Cost |\n|------|-------|------|\n"
-        + "\n".join(file_rows)
-        + "\n"
+        "\n## Top Files by Debt\n\n| File | Hours | Cost |\n|------|-------|------|\n" + "\n".join(file_rows) + "\n"
     )
 
     # ROI priorities section
@@ -853,11 +799,7 @@ def _build_debt_recommendations() -> str:
 
 def _generate_markdown_report(debt_data: dict) -> str:
     """Generate complete markdown debt report (Issue #398: extracted)."""
-    return (
-        _build_debt_executive_summary(debt_data)
-        + _build_debt_tables(debt_data)
-        + _build_debt_recommendations()
-    )
+    return _build_debt_executive_summary(debt_data) + _build_debt_tables(debt_data) + _build_debt_recommendations()
 
 
 @with_error_handling(

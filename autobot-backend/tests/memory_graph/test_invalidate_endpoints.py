@@ -21,6 +21,7 @@ from fastapi.testclient import TestClient
 # Stub heavy dependencies so api/memory.py imports without a real Redis
 # ---------------------------------------------------------------------------
 
+
 def _register_stub(name: str, attrs: dict | None = None) -> types.ModuleType:
     mod = sys.modules.get(name)
     if mod is None:
@@ -50,10 +51,12 @@ _cfg = MagicMock()
 _cfg.vm.redis = "127.0.0.1"
 _register_stub("autobot_shared.ssot_config", {"config": _cfg})
 
+
 # error_boundaries stub — with_error_handling is a pass-through decorator
 def _with_error_handling(**_kw):
     def decorator(fn):
         return fn
+
     return decorator
 
 
@@ -122,10 +125,12 @@ def _make_client(fake_graph: _FakeMemoryGraph) -> TestClient:
         return fake_graph
 
     from api.memory import get_memory_graph
+
     app.dependency_overrides[get_memory_graph] = override_memory_graph
 
     # Bypass admin check
     from auth_middleware import check_admin_permission
+
     app.dependency_overrides[check_admin_permission] = lambda: True
 
     return TestClient(app)
@@ -134,6 +139,7 @@ def _make_client(fake_graph: _FakeMemoryGraph) -> TestClient:
 # ---------------------------------------------------------------------------
 # Tests — PATCH /memory/entities/{entity_id}/invalidate
 # ---------------------------------------------------------------------------
+
 
 class TestInvalidateEntityEndpoint:
     def _make_graph(self, invalidate_return: bool) -> _FakeMemoryGraph:
@@ -205,6 +211,7 @@ class TestInvalidateEntityEndpoint:
 # ---------------------------------------------------------------------------
 # Tests — PATCH /memory/relations/invalidate
 # ---------------------------------------------------------------------------
+
 
 class TestInvalidateRelationEndpoint:
     _VALID_BODY = {

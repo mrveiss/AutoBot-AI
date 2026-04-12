@@ -30,10 +30,6 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
 from autobot_shared.error_boundaries import error_boundary
 
-# Issue #3828: canonical vector search engine — SearchMixin.search() delegates here.
-from knowledge.vector_search_engine import SearchResult as _EngineSearchResult
-from knowledge.vector_search_engine import get_vector_search_engine
-
 # Import components from the search_components package
 from knowledge.search_components import (
     KeywordSearcher,
@@ -50,6 +46,10 @@ from knowledge.search_components.helpers import (
     score_fact_by_terms,
 )
 from knowledge.search_components.hybrid_search import HybridSearcher
+
+# Issue #3828: canonical vector search engine — SearchMixin.search() delegates here.
+from knowledge.vector_search_engine import SearchResult as _EngineSearchResult
+from knowledge.vector_search_engine import get_vector_search_engine
 from models.task_context import EnhancedSearchContext
 
 if TYPE_CHECKING:
@@ -112,9 +112,7 @@ class SearchMixin:
     def _get_keyword_searcher(self) -> KeywordSearcher:
         """Lazy initialization of keyword searcher."""
         if self._keyword_searcher is None:
-            self._keyword_searcher = KeywordSearcher(
-                getattr(self, "aioredis_client", None)
-            )
+            self._keyword_searcher = KeywordSearcher(getattr(self, "aioredis_client", None))
         return self._keyword_searcher
 
     def _get_hybrid_searcher(self) -> HybridSearcher:
@@ -143,9 +141,7 @@ class SearchMixin:
     ) -> List[Dict[str, Any]]:
         """Execute vector search and deduplicate results (Issue #398: extracted)."""
         query_embedding = await self._get_query_embedding(query)
-        results_data = await self._query_chromadb(
-            query_embedding, similarity_top_k, where=filters
-        )
+        results_data = await self._query_chromadb(query_embedding, similarity_top_k, where=filters)
         results = self._deduplicate_results(results_data, similarity_top_k)
         logger.info(
             "ChromaDB search returned %d unique documents for query: %s...",
@@ -206,9 +202,7 @@ class SearchMixin:
 
         # Fallback: original direct ChromaDB path
         try:
-            return await self._execute_vector_search(
-                query, similarity_top_k, filters=filters
-            )
+            return await self._execute_vector_search(query, similarity_top_k, filters=filters)
         except Exception as e:
             logger.error("Knowledge base search failed: %s", e)
             return []
@@ -255,52 +249,31 @@ class SearchMixin:
         except (ValueError, Exception) as exc:
             # ChromaDB raises ValueError when where filter matches fewer docs
             # than n_results. Fall back to unfiltered search.
-            logger.warning(
-                "ChromaDB where filter failed (%s), retrying without filter", exc
-            )
+            logger.warning("ChromaDB where filter failed (%s), retrying without filter", exc)
             kwargs.pop("where", None)
             return await asyncio.to_thread(chroma_collection.query, **kwargs)
 
-    def _deduplicate_results(
-        self, results_data: Dict[str, Any], similarity_top_k: int
-    ) -> List[Dict[str, Any]]:
+    def _deduplicate_results(self, results_data: Dict[str, Any], similarity_top_k: int) -> List[Dict[str, Any]]:
         """Deduplicate and format ChromaDB results. Issue #281: Extracted helper."""
         seen_documents: Dict[str, Dict[str, Any]] = {}
 
-        if not (
-            results_data
-            and "documents" in results_data
-            and results_data["documents"][0]
-        ):
+        if not (results_data and "documents" in results_data and results_data["documents"][0]):
             return []
 
         for i, doc in enumerate(results_data["documents"][0]):
             score = self._calculate_similarity_score(results_data, i)
-            metadata = (
-                results_data["metadatas"][0][i] if "metadatas" in results_data else {}
-            )
+            metadata = results_data["metadatas"][0][i] if "metadatas" in results_data else {}
             doc_key = self._get_document_key(metadata, i)
 
-            if (
-                doc_key not in seen_documents
-                or score > seen_documents[doc_key]["score"]
-            ):
-                seen_documents[doc_key] = self._build_result_dict(
-                    doc, score, metadata, results_data, i
-                )
+            if doc_key not in seen_documents or score > seen_documents[doc_key]["score"]:
+                seen_documents[doc_key] = self._build_result_dict(doc, score, metadata, results_data, i)
 
-        results = sorted(
-            seen_documents.values(), key=lambda x: x["score"], reverse=True
-        )
+        results = sorted(seen_documents.values(), key=lambda x: x["score"], reverse=True)
         return results[:similarity_top_k]
 
-    def _calculate_similarity_score(
-        self, results_data: Dict[str, Any], index: int
-    ) -> float:
+    def _calculate_similarity_score(self, results_data: Dict[str, Any], index: int) -> float:
         """Convert distance to similarity score. Issue #281: Extracted helper."""
-        distance = (
-            results_data["distances"][0][index] if "distances" in results_data else 1.0
-        )
+        distance = results_data["distances"][0][index] if "distances" in results_data else 1.0
         return max(0.0, 1.0 - (distance / 2.0))
 
     def _get_document_key(self, metadata: Dict[str, Any], index: int) -> str:
@@ -321,11 +294,7 @@ class SearchMixin:
         index: int,
     ) -> Dict[str, Any]:
         """Build result dictionary for a search result. Issue #281: Extracted helper."""
-        node_id = (
-            results_data["ids"][0][index]
-            if "ids" in results_data
-            else f"result_{index}"
-        )
+        node_id = results_data["ids"][0][index] if "ids" in results_data else f"result_{index}"
         return {
             "content": doc,
             "score": score,
@@ -343,9 +312,7 @@ class SearchMixin:
     ) -> List[Dict[str, Any]]:
         """Internal search implementation with timeout protection (V1 compatibility)"""
         # Delegate to main search method
-        return await self.search(
-            query, similarity_top_k=similarity_top_k, filters=filters, mode=mode
-        )
+        return await self.search(query, similarity_top_k=similarity_top_k, filters=filters, mode=mode)
 
     def _build_empty_query_response(self) -> Dict[str, Any]:
         """Build response for empty query. Issue #281: Extracted helper."""
@@ -365,9 +332,7 @@ class SearchMixin:
         self, tags: Optional[List[str]], tags_match_any: bool, processed_query: str
     ) -> tuple:
         """Get tag-filtered fact IDs. Returns (filtered_ids, early_return_response or None)."""
-        return await self._get_tag_filter().get_tag_filtered_ids(
-            tags, tags_match_any, processed_query
-        )
+        return await self._get_tag_filter().get_tag_filtered_ids(tags, tags_match_any, processed_query)
 
     async def _execute_search_by_mode(
         self, mode: str, processed_query: str, fetch_limit: int, category: Optional[str]
@@ -422,9 +387,7 @@ class SearchMixin:
             enable_reranking,
         )
 
-    def _calculate_fetch_limit(
-        self, limit: int, offset: int, tags: Optional[List[str]], min_score: float
-    ) -> int:
+    def _calculate_fetch_limit(self, limit: int, offset: int, tags: Optional[List[str]], min_score: float) -> int:
         """Calculate fetch limit based on filters (Issue #398: extracted)."""
         multiplier = 3 if tags or min_score > 0 else 1.5
         return min(int((limit + offset) * multiplier), 500)
@@ -440,9 +403,7 @@ class SearchMixin:
         enable_reranking: bool,
     ) -> List[Dict[str, Any]]:
         """Execute search pipeline with filtering and reranking (Issue #398: extracted)."""
-        results = await self._execute_search_by_mode(
-            mode, processed_query, fetch_limit, category
-        )
+        results = await self._execute_search_by_mode(mode, processed_query, fetch_limit, category)
         results = self._apply_post_search_filters(results, tag_filtered_ids, min_score)
         if enable_reranking and results:
             results = await self._rerank_results(processed_query, results)
@@ -468,9 +429,7 @@ class SearchMixin:
 
         try:
             processed_query = self._preprocess_query(query)
-            tag_filtered_ids, early_return = await self._get_tag_filtered_ids(
-                tags, tags_match_any, processed_query
-            )
+            tag_filtered_ids, early_return = await self._get_tag_filtered_ids(tags, tags_match_any, processed_query)
             if early_return:
                 return early_return
 
@@ -513,15 +472,11 @@ class SearchMixin:
         """Decode tag results from Redis to sets of fact IDs. Issue #281: Extracted helper."""
         return self._get_tag_filter().decode_tag_results(tag_results)
 
-    def _combine_tag_fact_sets(
-        self, tag_fact_sets: List[Set[str]], match_all: bool
-    ) -> Set[str]:
+    def _combine_tag_fact_sets(self, tag_fact_sets: List[Set[str]], match_all: bool) -> Set[str]:
         """Combine fact sets based on match_all flag. Issue #281: Extracted helper."""
         return self._get_tag_filter().combine_tag_fact_sets(tag_fact_sets, match_all)
 
-    async def _get_fact_ids_by_tags(
-        self, tags: List[str], match_all: bool = True
-    ) -> Dict[str, Any]:
+    async def _get_fact_ids_by_tags(self, tags: List[str], match_all: bool = True) -> Dict[str, Any]:
         """Get fact IDs matching specified tags (Issue #281 refactor)."""
         return await self._get_tag_filter().get_fact_ids_by_tags(tags, match_all)
 
@@ -529,13 +484,9 @@ class SearchMixin:
         self, keys: list, query_terms: Set[str], category: Optional[str]
     ) -> List[Dict[str, Any]]:
         """Process a batch of Redis keys for keyword search. Issue #281: Extracted helper."""
-        return await self._get_keyword_searcher().process_keyword_batch(
-            keys, query_terms, category
-        )
+        return await self._get_keyword_searcher().process_keyword_batch(keys, query_terms, category)
 
-    async def _keyword_search(
-        self, query: str, limit: int, category: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+    async def _keyword_search(self, query: str, limit: int, category: Optional[str] = None) -> List[Dict[str, Any]]:
         """Perform keyword-based search using Redis (Issue #281 refactor)."""
         return await self._get_keyword_searcher().search(query, limit, category)
 
@@ -548,9 +499,7 @@ class SearchMixin:
         prefix: str,
     ) -> None:
         """Process results for RRF scoring. Issue #281: Extracted helper."""
-        self._get_hybrid_searcher().process_rrf_results(
-            results, rrf_scores, result_map, k, prefix
-        )
+        self._get_hybrid_searcher().process_rrf_results(results, rrf_scores, result_map, k, prefix)
 
     def _build_rrf_results(
         self,
@@ -559,13 +508,9 @@ class SearchMixin:
         limit: int,
     ) -> List[Dict[str, Any]]:
         """Build final RRF-ranked results. Issue #281: Extracted helper."""
-        return self._get_hybrid_searcher().build_rrf_results(
-            rrf_scores, result_map, limit
-        )
+        return self._get_hybrid_searcher().build_rrf_results(rrf_scores, result_map, limit)
 
-    async def _hybrid_search(
-        self, query: str, limit: int, category: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+    async def _hybrid_search(self, query: str, limit: int, category: Optional[str] = None) -> List[Dict[str, Any]]:
         """Perform hybrid search combining semantic and keyword results."""
         return await self._get_hybrid_searcher().search(query, limit, category)
 
@@ -669,13 +614,9 @@ class SearchMixin:
         seen_ids: Set[str] = set()
 
         for search_query in queries:
-            query_results = await self._execute_search_by_mode(
-                mode, search_query, fetch_limit, category
-            )
+            query_results = await self._execute_search_by_mode(mode, search_query, fetch_limit, category)
             for result in query_results:
-                result_id = result.get("metadata", {}).get("fact_id") or result.get(
-                    "node_id", ""
-                )
+                result_id = result.get("metadata", {}).get("fact_id") or result.get("node_id", "")
                 if result_id not in seen_ids:
                     seen_ids.add(result_id)
                     result["matched_query"] = search_query
@@ -693,9 +634,7 @@ class SearchMixin:
     ) -> List[Dict[str, Any]]:
         """Apply all filters and reranking to results (Issue #398: extracted)."""
         # Apply tag and score filters
-        results = self._apply_post_search_filters(
-            results, tag_filtered_ids, params["min_score"]
-        )
+        results = self._apply_post_search_filters(results, tag_filtered_ids, params["min_score"])
         # Apply advanced filters
         results = self._apply_advanced_search_filters(
             results,
@@ -709,9 +648,7 @@ class SearchMixin:
             fetch_limit,
         )
         # Relevance scoring
-        results = self._apply_relevance_scoring(
-            results, processed_query, params["enable_relevance_scoring"]
-        )
+        results = self._apply_relevance_scoring(results, processed_query, params["enable_relevance_scoring"])
         # Reranking
         if params["enable_reranking"] and results:
             results = await self._rerank_results(processed_query, results)
@@ -764,9 +701,7 @@ class SearchMixin:
         )
 
     @error_boundary(component="knowledge_base", function="enhanced_search_v2_ctx")
-    async def enhanced_search_v2_ctx(
-        self, ctx: EnhancedSearchContext
-    ) -> Dict[str, Any]:
+    async def enhanced_search_v2_ctx(self, ctx: EnhancedSearchContext) -> Dict[str, Any]:
         """Enhanced search v2 using EnhancedSearchContext (Issue #398: refactored)."""
         self.ensure_initialized()
 
@@ -778,9 +713,7 @@ class SearchMixin:
 
         try:
             processed_query = self._preprocess_query(params["query"])
-            queries_to_search = self._expand_query_terms(
-                processed_query, params["enable_query_expansion"]
-            )
+            queries_to_search = self._expand_query_terms(processed_query, params["enable_query_expansion"])
 
             tag_filtered_ids, early_return = await self._get_tag_filtered_ids(
                 params["tags"], params["tags_match_any"], processed_query
@@ -788,16 +721,8 @@ class SearchMixin:
             if early_return:
                 return early_return
 
-            fetch_multiplier = (
-                3
-                if (
-                    params["tags"] or params["min_score"] > 0 or params["exclude_terms"]
-                )
-                else 1.5
-            )
-            fetch_limit = min(
-                int((params["limit"] + params["offset"]) * fetch_multiplier), 500
-            )
+            fetch_multiplier = 3 if (params["tags"] or params["min_score"] > 0 or params["exclude_terms"]) else 1.5
+            fetch_limit = min(int((params["limit"] + params["offset"]) * fetch_multiplier), 500)
 
             results = await self._execute_multi_query_search(
                 queries_to_search, params["mode"], fetch_limit, params["category"]
@@ -807,9 +732,7 @@ class SearchMixin:
             )
 
             duration_ms = int((time.time() - start_time) * 1000)
-            return self._finalize_search_response(
-                results, params, processed_query, len(queries_to_search), duration_ms
-            )
+            return self._finalize_search_response(results, params, processed_query, len(queries_to_search), duration_ms)
 
         except Exception as e:
             logger.error("Enhanced search v2 failed: %s", e)
@@ -885,9 +808,7 @@ class SearchMixin:
         for result in results:
             original_score = result.get("score", 0)
             result["original_score"] = original_score
-            result["score"] = scorer.calculate_relevance_score(
-                original_score, query, result
-            )
+            result["score"] = scorer.calculate_relevance_score(original_score, query, result)
         results.sort(key=lambda x: x.get("score", 0), reverse=True)
         return results
 
@@ -930,9 +851,7 @@ class SearchMixin:
         limit: int,
     ) -> tuple:
         """Cluster search results by topic."""
-        return self._response_builder.cluster_search_results(
-            results, enable_clustering, offset, limit
-        )
+        return self._response_builder.cluster_search_results(results, enable_clustering, offset, limit)
 
     def _build_enhanced_search_response(
         self,

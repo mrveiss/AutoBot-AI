@@ -14,7 +14,6 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from constants.api_constants import PATH_API_HEALTH, PATH_HEALTH
-
 from security.service_auth import validate_service_auth
 
 logger = structlog.get_logger()
@@ -89,9 +88,7 @@ class ServiceAuthLoggingMiddleware(BaseHTTPMiddleware):
                         if request.headers.get("X-Service-Signature")
                         else "missing"
                     ),
-                    "X-Service-Timestamp": request.headers.get(
-                        "X-Service-Timestamp", "missing"
-                    ),
+                    "X-Service-Timestamp": request.headers.get("X-Service-Timestamp", "missing"),
                 },
                 mode="logging_only",
             )
@@ -110,9 +107,7 @@ class ServiceAuthLoggingMiddleware(BaseHTTPMiddleware):
         # Skip authentication for health check, documentation, and frontend endpoints
         # Service auth is for service-to-service calls only, not browser-to-backend
         if self._is_exempt_path(request):
-            logger.debug(
-                f"Skipping auth check for {request.url.path} (matched exemption)"
-            )
+            logger.debug(f"Skipping auth check for {request.url.path} (matched exemption)")
             return await call_next(request)
 
         await self._log_auth_result(request)

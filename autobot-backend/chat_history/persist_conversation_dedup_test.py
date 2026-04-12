@@ -50,27 +50,19 @@ class TestPersistConversationDedup:
                 if llm_response not in existing_response:
                     last_entry["assistant"] = f"{existing_response}\n\n{llm_response}"
             else:
-                session.conversation_history.append(
-                    {"user": message, "assistant": llm_response}
-                )
+                session.conversation_history.append({"user": message, "assistant": llm_response})
         else:
-            session.conversation_history.append(
-                {"user": message, "assistant": llm_response}
-            )
+            session.conversation_history.append({"user": message, "assistant": llm_response})
 
         assert len(session.conversation_history) == 1
         assert session.conversation_history[0]["user"] == message
         assert session.conversation_history[0]["assistant"] == llm_response
 
     @pytest.mark.asyncio
-    async def test_different_user_message_creates_new_entry(
-        self, mock_workflow_manager
-    ):
+    async def test_different_user_message_creates_new_entry(self, mock_workflow_manager):
         """Test that a different user message creates a new entry."""
         session = MockWorkflowSession(
-            conversation_history=[
-                {"user": "previous question", "assistant": "previous answer"}
-            ]
+            conversation_history=[{"user": "previous question", "assistant": "previous answer"}]
         )
 
         message = "run ls command"
@@ -83,13 +75,9 @@ class TestPersistConversationDedup:
                 if llm_response not in existing_response:
                     last_entry["assistant"] = f"{existing_response}\n\n{llm_response}"
             else:
-                session.conversation_history.append(
-                    {"user": message, "assistant": llm_response}
-                )
+                session.conversation_history.append({"user": message, "assistant": llm_response})
         else:
-            session.conversation_history.append(
-                {"user": message, "assistant": llm_response}
-            )
+            session.conversation_history.append({"user": message, "assistant": llm_response})
 
         assert len(session.conversation_history) == 2
         assert session.conversation_history[0]["user"] == "previous question"
@@ -102,31 +90,21 @@ class TestPersistConversationDedup:
         message = "run ls command"
         first_response = "I'll run the ls command for you."
 
-        session = MockWorkflowSession(
-            conversation_history=[{"user": message, "assistant": first_response}]
-        )
+        session = MockWorkflowSession(conversation_history=[{"user": message, "assistant": first_response}])
 
         # Second response (e.g., from terminal interpretation)
-        second_response = (
-            "The command completed. Here are the results:\nfile1.txt\nfile2.txt"
-        )
+        second_response = "The command completed. Here are the results:\nfile1.txt\nfile2.txt"
 
         if session.conversation_history:
             last_entry = session.conversation_history[-1]
             if last_entry.get("user") == message:
                 existing_response = last_entry.get("assistant", "")
                 if second_response not in existing_response:
-                    last_entry["assistant"] = (
-                        f"{existing_response}\n\n{second_response}"
-                    )
+                    last_entry["assistant"] = f"{existing_response}\n\n{second_response}"
             else:
-                session.conversation_history.append(
-                    {"user": message, "assistant": second_response}
-                )
+                session.conversation_history.append({"user": message, "assistant": second_response})
         else:
-            session.conversation_history.append(
-                {"user": message, "assistant": second_response}
-            )
+            session.conversation_history.append({"user": message, "assistant": second_response})
 
         assert len(session.conversation_history) == 1
         assert session.conversation_history[0]["user"] == message
@@ -140,9 +118,7 @@ class TestPersistConversationDedup:
         message = "run ls command"
         response = "I'll run the ls command for you."
 
-        session = MockWorkflowSession(
-            conversation_history=[{"user": message, "assistant": response}]
-        )
+        session = MockWorkflowSession(conversation_history=[{"user": message, "assistant": response}])
 
         # Try to add the same response again
         if session.conversation_history:
@@ -153,13 +129,9 @@ class TestPersistConversationDedup:
                     last_entry["assistant"] = f"{existing_response}\n\n{response}"
                 # else: skipped (this is what we're testing)
             else:
-                session.conversation_history.append(
-                    {"user": message, "assistant": response}
-                )
+                session.conversation_history.append({"user": message, "assistant": response})
         else:
-            session.conversation_history.append(
-                {"user": message, "assistant": response}
-            )
+            session.conversation_history.append({"user": message, "assistant": response})
 
         assert len(session.conversation_history) == 1
         assert session.conversation_history[0]["assistant"] == response
@@ -167,17 +139,13 @@ class TestPersistConversationDedup:
         assert session.conversation_history[0]["assistant"].count(response) == 1
 
     @pytest.mark.asyncio
-    async def test_partial_duplicate_response_still_skipped(
-        self, mock_workflow_manager
-    ):
+    async def test_partial_duplicate_response_still_skipped(self, mock_workflow_manager):
         """Test that response already contained in existing is skipped."""
         message = "run ls command"
         first_response = "I'll run the ls command for you."
         combined_response = f"{first_response}\n\nThe command completed successfully."
 
-        session = MockWorkflowSession(
-            conversation_history=[{"user": message, "assistant": combined_response}]
-        )
+        session = MockWorkflowSession(conversation_history=[{"user": message, "assistant": combined_response}])
 
         # Try to add the first response again (it's already contained in combined)
         if session.conversation_history:
@@ -188,13 +156,9 @@ class TestPersistConversationDedup:
                     last_entry["assistant"] = f"{existing_response}\n\n{first_response}"
                 # else: skipped (first_response is already in combined_response)
             else:
-                session.conversation_history.append(
-                    {"user": message, "assistant": first_response}
-                )
+                session.conversation_history.append({"user": message, "assistant": first_response})
         else:
-            session.conversation_history.append(
-                {"user": message, "assistant": first_response}
-            )
+            session.conversation_history.append({"user": message, "assistant": first_response})
 
         assert len(session.conversation_history) == 1
         # Verify the response wasn't duplicated
@@ -227,13 +191,9 @@ class TestIssue177Scenario:
                 if interpretation not in existing_response:
                     last_entry["assistant"] = f"{existing_response}\n\n{interpretation}"
             else:
-                session.conversation_history.append(
-                    {"user": user_message, "assistant": interpretation}
-                )
+                session.conversation_history.append({"user": user_message, "assistant": interpretation})
         else:
-            session.conversation_history.append(
-                {"user": user_message, "assistant": interpretation}
-            )
+            session.conversation_history.append({"user": user_message, "assistant": interpretation})
 
         assert len(session.conversation_history) == 1
 
@@ -248,13 +208,9 @@ class TestIssue177Scenario:
                 if llm_response not in existing_response:
                     last_entry["assistant"] = f"{existing_response}\n\n{llm_response}"
             else:
-                session.conversation_history.append(
-                    {"user": user_message, "assistant": llm_response}
-                )
+                session.conversation_history.append({"user": user_message, "assistant": llm_response})
         else:
-            session.conversation_history.append(
-                {"user": user_message, "assistant": llm_response}
-            )
+            session.conversation_history.append({"user": user_message, "assistant": llm_response})
 
         # Verify: should still be only 1 entry with both responses combined
         assert len(session.conversation_history) == 1

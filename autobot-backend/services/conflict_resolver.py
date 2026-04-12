@@ -30,9 +30,6 @@ import logging
 import time
 from typing import Optional
 
-from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.ssot_config import config
-
 from api.knowledge_grounding_models import (
     Claim,
     Conflict,
@@ -45,6 +42,8 @@ from api.knowledge_grounding_models import (
     ReviewTicketStatus,
     SourceType,
 )
+from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.ssot_config import config
 
 logger = logging.getLogger(__name__)
 
@@ -97,9 +96,7 @@ class ConflictResolver:
             Redis async client connected to analytics database
         """
         if self._redis_client is None:
-            self._redis_client = await get_async_redis_client(
-                database=_REDIS_DATABASE
-            )
+            self._redis_client = await get_async_redis_client(database=_REDIS_DATABASE)
         return self._redis_client
 
     def _calculate_age_decay(self, fact: KBFact) -> float:
@@ -217,10 +214,7 @@ class ConflictResolver:
         Note:
             All I/O is async; never blocks on Redis operations.
         """
-        logger.debug(
-            f"Resolving conflict: KB='{kb_fact.fact_text[:50]}' vs "
-            f"Agent='{agent_claim.claim_text[:50]}'"
-        )
+        logger.debug(f"Resolving conflict: KB='{kb_fact.fact_text[:50]}' vs " f"Agent='{agent_claim.claim_text[:50]}'")
 
         # Calculate effective confidence for each source
         kb_confidence = self._calculate_effective_confidence(kb_fact)
@@ -228,15 +222,12 @@ class ConflictResolver:
         research_confidence = research_result.confidence if research_result else 0.0
 
         logger.debug(
-            f"Confidences: KB={kb_confidence:.2f}, Agent={agent_confidence:.2f}, "
-            f"Research={research_confidence:.2f}"
+            f"Confidences: KB={kb_confidence:.2f}, Agent={agent_confidence:.2f}, " f"Research={research_confidence:.2f}"
         )
 
         # Determine which source wins
-        resolution_type, winning_confidence, winning_source = (
-            self._determine_resolution_source(
-                kb_confidence, agent_confidence, research_confidence
-            )
+        resolution_type, winning_confidence, winning_source = self._determine_resolution_source(
+            kb_confidence, agent_confidence, research_confidence
         )
 
         # Select the claim text and metadata based on winner
@@ -284,10 +275,7 @@ class ConflictResolver:
             update_kb = True
             reasoning += " [RECOMMEND KB UPDATE: research found newer info]"
 
-        logger.info(
-            f"Resolved conflict: {winning_source} wins with confidence "
-            f"{winning_confidence:.2f}"
-        )
+        logger.info(f"Resolved conflict: {winning_source} wins with confidence " f"{winning_confidence:.2f}")
 
         # Build resolved claim
         resolved = ResolvedClaim(
@@ -318,9 +306,7 @@ class ConflictResolver:
 
         return resolved
 
-    async def update_kb_if_stale(
-        self, kb_fact: KBFact, research_result: ResearchResult
-    ) -> bool:
+    async def update_kb_if_stale(self, kb_fact: KBFact, research_result: ResearchResult) -> bool:
         """Update KB with research result if fact is stale.
 
         If KB fact is older than 30 days AND research found newer
@@ -339,17 +325,11 @@ class ConflictResolver:
             the new fact and maintain audit trails.
         """
         if not kb_fact.is_stale():
-            logger.debug(
-                f"KB fact is not stale ({kb_fact.age_days():.1f} days), "
-                "skipping update"
-            )
+            logger.debug(f"KB fact is not stale ({kb_fact.age_days():.1f} days), " "skipping update")
             return False
 
         if research_result.confidence < 0.75:
-            logger.debug(
-                f"Research confidence {research_result.confidence:.2f} too low "
-                "for KB update (min 0.75)"
-            )
+            logger.debug(f"Research confidence {research_result.confidence:.2f} too low " "for KB update (min 0.75)")
             return False
 
         logger.info(
@@ -460,10 +440,7 @@ class ConflictResolver:
             queue_key = f"review_queue:{priority.value}"
             await redis.lpush(queue_key, ticket.ticket_id)
 
-            logger.info(
-                f"Review ticket {ticket.ticket_id} persisted "
-                f"(priority={priority.value})"
-            )
+            logger.info(f"Review ticket {ticket.ticket_id} persisted " f"(priority={priority.value})")
 
         except Exception as e:
             logger.error(f"Failed to persist review ticket: {e}", exc_info=True)
@@ -497,10 +474,7 @@ class ConflictResolver:
             In production, this would be called by the human review UI
             after human has reviewed and decided.
         """
-        logger.info(
-            f"Resolving review ticket {ticket_id} "
-            f"(resolved_by={resolved_by})"
-        )
+        logger.info(f"Resolving review ticket {ticket_id} " f"(resolved_by={resolved_by})")
 
         try:
             redis = await self._get_redis_client()
@@ -534,9 +508,7 @@ class ConflictResolver:
             logger.error(f"Failed to resolve review ticket: {e}", exc_info=True)
             return None
 
-    async def dismiss_review_ticket(
-        self, ticket_id: str, dismissed_by: str, notes: str = ""
-    ) -> Optional[ReviewTicket]:
+    async def dismiss_review_ticket(self, ticket_id: str, dismissed_by: str, notes: str = "") -> Optional[ReviewTicket]:
         """Mark a review ticket as dismissed (false conflict).
 
         Updates ticket status to DISMISSED and records why the conflict
@@ -550,10 +522,7 @@ class ConflictResolver:
         Returns:
             ReviewTicket: Updated ticket with dismissal, or None if not found
         """
-        logger.info(
-            f"Dismissing review ticket {ticket_id} "
-            f"(dismissed_by={dismissed_by})"
-        )
+        logger.info(f"Dismissing review ticket {ticket_id} " f"(dismissed_by={dismissed_by})")
 
         try:
             redis = await self._get_redis_client()

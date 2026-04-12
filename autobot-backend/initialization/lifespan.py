@@ -143,12 +143,8 @@ async def _init_chat_history_manager(app: FastAPI) -> None:
         await update_app_state("chat_history_manager", chat_history_manager)
         logger.info("✅ [ 30%] Chat History: Manager initialized successfully")
     except Exception as chat_history_error:
-        logger.error(
-            f"❌ CRITICAL: Chat history manager initialization failed: {chat_history_error}"
-        )
-        raise RuntimeError(
-            f"Chat history manager initialization failed: {chat_history_error}"
-        )
+        logger.error(f"❌ CRITICAL: Chat history manager initialization failed: {chat_history_error}")
+        raise RuntimeError(f"Chat history manager initialization failed: {chat_history_error}")
 
 
 async def _init_conversation_file_manager(app: FastAPI) -> None:
@@ -168,13 +164,9 @@ async def _init_conversation_file_manager(app: FastAPI) -> None:
         await conversation_file_manager.initialize()
         app.state.conversation_file_manager = conversation_file_manager
         await update_app_state("conversation_file_manager", conversation_file_manager)
-        logger.info(
-            "✅ [ 40%] Conversation Files DB: Database initialized and verified"
-        )
+        logger.info("✅ [ 40%] Conversation Files DB: Database initialized and verified")
     except Exception as conv_file_error:
-        logger.error(
-            f"❌ CRITICAL: Conversation files database initialization failed: {conv_file_error}"
-        )
+        logger.error(f"❌ CRITICAL: Conversation files database initialization failed: {conv_file_error}")
         logger.error("Backend startup ABORTED - database must be operational")
         raise RuntimeError(f"Database initialization failed: {conv_file_error}")
 
@@ -196,9 +188,7 @@ async def _init_chat_workflow_manager(app: FastAPI) -> None:
         await update_app_state("chat_workflow_manager", chat_workflow_manager)
         logger.info("✅ [ 50%] Chat Workflow: Manager initialized with async Redis")
     except Exception as chat_error:
-        logger.error(
-            f"❌ CRITICAL: Chat workflow manager initialization failed: {chat_error}"
-        )
+        logger.error(f"❌ CRITICAL: Chat workflow manager initialization failed: {chat_error}")
         raise RuntimeError(f"Chat workflow manager initialization failed: {chat_error}")
 
 
@@ -217,8 +207,7 @@ async def _check_env_drift() -> None:
             logger.warning("env drift check skipped: %s", report.error)
         elif report.has_drift:
             logger.warning(
-                "env drift detected — run 'python -m autobot_shared.env_drift_detector' "
-                "for details (%s)",
+                "env drift detected — run 'python -m autobot_shared.env_drift_detector' " "for details (%s)",
                 report.summary(),
             )
         else:
@@ -243,9 +232,7 @@ async def _init_config(app: FastAPI) -> None:
     validation_result = config.validate_startup()
     if not validation_result.valid:
         error_summary = "; ".join(validation_result.errors)
-        raise RuntimeError(
-            f"Configuration validation failed at startup: {error_summary}"
-        )
+        raise RuntimeError(f"Configuration validation failed at startup: {error_summary}")
     if validation_result.warnings:
         logger.warning(
             "Config: %d override warning(s) detected — review logged warnings above",
@@ -323,9 +310,7 @@ async def _init_telemetry_and_redis() -> None:
 
     instrument_redis()
     instrument_aiohttp()
-    logger.info(
-        "✅ [ 20%] Redis: Using centralized Redis client management (src.utils.redis_client)"
-    )
+    logger.info("✅ [ 20%] Redis: Using centralized Redis client management (src.utils.redis_client)")
 
 
 async def _init_skills(app: FastAPI) -> None:
@@ -337,9 +322,7 @@ async def _init_skills(app: FastAPI) -> None:
         await _init_skills_tables()
         await _init_skills_discovery()
     except Exception as skills_db_error:
-        logger.warning(
-            "Skills initialization failed (non-critical): %s", skills_db_error
-        )
+        logger.warning("Skills initialization failed (non-critical): %s", skills_db_error)
 
 
 async def _init_builtin_extensions(app: FastAPI) -> None:
@@ -361,13 +344,9 @@ async def _init_builtin_extensions(app: FastAPI) -> None:
             app.state.extension_manager = manager
 
         manager.register(PermissionEnforcementExtension())
-        logger.info(
-            "Built-in extensions registered (permission_enforcement)"
-        )
+        logger.info("Built-in extensions registered (permission_enforcement)")
     except Exception as ext_error:
-        logger.warning(
-            "Built-in extension registration failed (non-critical): %s", ext_error
-        )
+        logger.warning("Built-in extension registration failed (non-critical): %s", ext_error)
 
 
 async def initialize_critical_services(app: FastAPI):
@@ -464,11 +443,7 @@ async def _init_knowledge_base(app: FastAPI):
         # Phase 1 initializes the manager before the KB is ready, leaving
         # knowledge_service=None. Re-wire here once the KB succeeds.
         mgr = getattr(app.state, "chat_workflow_manager", None)
-        if (
-            mgr is not None
-            and knowledge_base is not None
-            and mgr.knowledge_service is None
-        ):
+        if mgr is not None and knowledge_base is not None and mgr.knowledge_service is None:
             await mgr.set_knowledge_base(knowledge_base)
     except Exception as kb_error:
         logger.warning("Knowledge base initialization failed: %s", kb_error)
@@ -512,13 +487,9 @@ async def _warmup_npu_connection():
                 result.get("embedding_dimensions", 0),
             )
         elif result["status"] == "npu_unavailable":
-            logger.info(
-                "🔄 [ 82%] NPU Warmup: NPU unavailable, using fallback embeddings"
-            )
+            logger.info("🔄 [ 82%] NPU Warmup: NPU unavailable, using fallback embeddings")
         else:
-            logger.warning(
-                "⚠️ [ 82%] NPU Warmup: %s", result.get("message", "Unknown status")
-            )
+            logger.warning("⚠️ [ 82%] NPU Warmup: %s", result.get("message", "Unknown status"))
 
     except Exception as warmup_error:
         logger.warning("NPU warmup failed: %s", warmup_error)
@@ -604,16 +575,11 @@ async def _auto_index_documentation():
             return
 
         # Fire-and-forget: run indexing in background so startup continues
-        logger.info(
-            "✅ [ 85%] Doc Index: Collection empty, "
-            "scheduling background indexing..."
-        )
+        logger.info("✅ [ 85%] Doc Index: Collection empty, " "scheduling background indexing...")
         asyncio.create_task(_run_background_doc_indexing())
 
     except Exception as index_error:
-        logger.warning(
-            "Documentation auto-index failed (non-critical): %s", index_error
-        )
+        logger.warning("Documentation auto-index failed (non-critical): %s", index_error)
 
 
 async def _init_log_forwarding():
@@ -630,9 +596,7 @@ async def _init_log_forwarding():
         forwarder = await get_forwarder()
 
         if forwarder.auto_start and forwarder.destinations:
-            logger.info(
-                "✅ [ 86%] Log Forwarding: Auto-start enabled, starting service..."
-            )
+            logger.info("✅ [ 86%] Log Forwarding: Auto-start enabled, starting service...")
             success = forwarder.start()
             if success:
                 logger.info(
@@ -640,13 +604,9 @@ async def _init_log_forwarding():
                     len(forwarder.destinations),
                 )
             else:
-                logger.warning(
-                    "⚠️ [ 86%] Log Forwarding: Failed to start (non-critical)"
-                )
+                logger.warning("⚠️ [ 86%] Log Forwarding: Failed to start (non-critical)")
         elif forwarder.auto_start:
-            logger.info(
-                "✅ [ 86%] Log Forwarding: Auto-start enabled but no destinations configured"
-            )
+            logger.info("✅ [ 86%] Log Forwarding: Auto-start enabled but no destinations configured")
         else:
             logger.info("✅ [ 86%] Log Forwarding: Auto-start disabled, skipping")
 
@@ -743,9 +703,7 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
 
         if app.state.knowledge_base:
             rag_config = RAGConfig(enable_advanced_rag=True, timeout_seconds=10.0)
-            rag_service = RAGService(
-                knowledge_base=app.state.knowledge_base, config=rag_config
-            )
+            rag_service = RAGService(knowledge_base=app.state.knowledge_base, config=rag_config)
             await rag_service.initialize()
 
             graph_rag_service = GraphRAGService(
@@ -756,9 +714,7 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
             )
             app.state.graph_rag_service = graph_rag_service
             await update_app_state("graph_rag_service", graph_rag_service)
-            logger.info(
-                "✅ [ 87%] Graph-RAG: Graph-aware RAG service initialized successfully"
-            )
+            logger.info("✅ [ 87%] Graph-RAG: Graph-aware RAG service initialized successfully")
         else:
             logger.info("🔄 [ 87%] Graph-RAG: Skipped (knowledge base not available)")
     except Exception as graph_rag_error:
@@ -790,9 +746,7 @@ async def _init_entity_extractor(app: FastAPI, memory_graph):
         )
         app.state.entity_extractor = entity_extractor
         await update_app_state("entity_extractor", entity_extractor)
-        logger.info(
-            "✅ [ 88%] Entity Extractor: Entity extractor initialized successfully"
-        )
+        logger.info("✅ [ 88%] Entity Extractor: Entity extractor initialized successfully")
     except Exception as entity_error:
         logger.warning("Entity extractor initialization failed: %s", entity_error)
         app.state.entity_extractor = None
@@ -853,9 +807,7 @@ async def _init_slm_client():
         init_orchestrator(_get_slm_client())
         logger.info("✅ [ 89%] SLM Client: DeploymentOrchestrator initialised")
     except Exception as slm_error:
-        logger.warning(
-            "SLM client initialization failed (continuing without): %s", slm_error
-        )
+        logger.warning("SLM client initialization failed (continuing without): %s", slm_error)
 
 
 async def _init_metrics_collection():
@@ -1009,8 +961,7 @@ async def _ensure_agent_memory_index() -> None:
             logger.info("[ 93%%] Agent Memory Index: idx:agent_memory already exists")
         else:
             logger.info(
-                "[ 93%%] Agent Memory Index: idx:agent_memory created "
-                "(prefix=%s, dims=%d, metric=%s)",
+                "[ 93%%] Agent Memory Index: idx:agent_memory created " "(prefix=%s, dims=%d, metric=%s)",
                 result.get("prefix"),
                 result.get("dimensions"),
                 result.get("distance_metric"),
@@ -1057,13 +1008,9 @@ async def _wire_npu_task_queue() -> None:
         worker_manager = await get_worker_manager(redis_client=redis_client)
         task_queue = get_task_queue()
         task_queue.npu_worker_manager = worker_manager
-        logger.info(
-            "[ 98%%] NPU Task Queue: NPUWorkerManager wired — per-worker task tracking active"
-        )
+        logger.info("[ 98%%] NPU Task Queue: NPUWorkerManager wired — per-worker task tracking active")
     except Exception as e:
-        logger.warning(
-            "NPU task queue wiring failed (per-worker tracking disabled): %s", e
-        )
+        logger.warning("NPU task queue wiring failed (per-worker tracking disabled): %s", e)
 
 
 async def _init_voice_interface(app: FastAPI) -> None:
@@ -1081,8 +1028,7 @@ async def _init_voice_interface(app: FastAPI) -> None:
         logger.info("[ 99%%] Voice Interface: Initialized and attached to app.state")
     except Exception as e:
         logger.warning(
-            "Voice interface initialization failed (non-critical): %s — "
-            "voice endpoints will return 503",
+            "Voice interface initialization failed (non-critical): %s — " "voice endpoints will return 503",
             e,
         )
         app.state.voice_interface = None
@@ -1136,9 +1082,7 @@ async def _wire_scheduler_executor() -> None:
         workflow_scheduler.set_workflow_executor(_orchestration_executor)
         logger.info("[ 98%%] Scheduler: Orchestration executor wired")
     except Exception as e:
-        logger.warning(
-            "Scheduler executor wiring failed (template-only fallback active): %s", e
-        )
+        logger.warning("Scheduler executor wiring failed (template-only fallback active): %s", e)
 
 
 async def initialize_background_services(app: FastAPI):
@@ -1243,10 +1187,7 @@ async def cleanup_services(app: FastAPI):
         pass  # SLM reconciler now in slm-server
 
         # Issue #1748: Stop process adapter dispatcher
-        if (
-            hasattr(app.state, "process_adapter_service")
-            and app.state.process_adapter_service
-        ):
+        if hasattr(app.state, "process_adapter_service") and app.state.process_adapter_service:
             await app.state.process_adapter_service.stop()
             logger.info("✅ Process adapter stopped")
 
@@ -1286,14 +1227,10 @@ def create_lifespan_manager():
 
         # Create bounded thread pool executor to prevent thread explosion
         # This replaces the default unbounded asyncio executor
-        _executor = ThreadPoolExecutor(
-            max_workers=MAX_WORKER_THREADS, thread_name_prefix="autobot_worker"
-        )
+        _executor = ThreadPoolExecutor(max_workers=MAX_WORKER_THREADS, thread_name_prefix="autobot_worker")
         loop = asyncio.get_running_loop()
         loop.set_default_executor(_executor)
-        logger.info(
-            "🧵 Bounded thread pool configured (max %d workers)", MAX_WORKER_THREADS
-        )
+        logger.info("🧵 Bounded thread pool configured (max %d workers)", MAX_WORKER_THREADS)
 
         # Register the running event loop for sync-endpoint audit scheduling (#1568)
         from middleware.audit_middleware import set_main_event_loop

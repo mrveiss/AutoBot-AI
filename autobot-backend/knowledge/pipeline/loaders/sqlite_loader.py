@@ -61,9 +61,7 @@ ON pipeline_runs(document_id);
 class SQLiteLoader(BaseLoader):
     """Load facts, metadata, and pipeline run stats to SQLite."""
 
-    def __init__(
-        self, db_path: str = "data/knowledge/pipeline.db", run_id: Optional[str] = None
-    ) -> None:
+    def __init__(self, db_path: str = "data/knowledge/pipeline.db", run_id: Optional[str] = None) -> None:
         """
         Initialize SQLite loader.
 
@@ -147,9 +145,7 @@ class SQLiteLoader(BaseLoader):
             )
         return facts
 
-    def _build_relationship_facts(
-        self, context: PipelineContext
-    ) -> List[Dict[str, Any]]:
+    def _build_relationship_facts(self, context: PipelineContext) -> List[Dict[str, Any]]:
         """Build fact dicts from relationships.
 
         Helper for _save_facts (Issue #759).

@@ -100,9 +100,7 @@ class TestBuildWebActionPayload:
 
     def test_click_payload(self):
         """vision-click builds click action with selector."""
-        result = _build_web_action_payload(
-            "vision-click", {"action": "click"}, {"selector": "#btn"}
-        )
+        result = _build_web_action_payload("vision-click", {"action": "click"}, {"selector": "#btn"})
         assert result == {"action": "click", "selector": "#btn"}
 
     def test_type_text_payload(self):
@@ -137,9 +135,7 @@ class TestExecuteVisionStep:
         mock_response.json.return_value = {"analysis": "screen data"}
         mock_response.raise_for_status = MagicMock()
 
-        with patch(
-            "services.workflow_automation.vision_step_handler.httpx.AsyncClient"
-        ) as mock_client:
+        with patch("services.workflow_automation.vision_step_handler.httpx.AsyncClient") as mock_client:
             mock_instance = AsyncMock()
             mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
             mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
@@ -170,15 +166,11 @@ class TestExecuteVisionStep:
     @pytest.mark.asyncio
     async def test_error_handling(self):
         """Exception during execution returns success=False with timing."""
-        with patch(
-            "services.workflow_automation.vision_step_handler.httpx.AsyncClient"
-        ) as mock_client:
+        with patch("services.workflow_automation.vision_step_handler.httpx.AsyncClient") as mock_client:
             mock_instance = AsyncMock()
             mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
             mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
-            mock_instance.post = AsyncMock(
-                side_effect=httpx.ConnectError("Connection refused")
-            )
+            mock_instance.post = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
 
             result = await execute_vision_step(
                 "vision-ocr",
@@ -193,9 +185,7 @@ class TestExecuteVisionStep:
     @pytest.mark.asyncio
     async def test_default_target_is_vnc(self):
         """When no target specified, defaults to vnc."""
-        with patch(
-            "services.workflow_automation.vision_step_handler.httpx.AsyncClient"
-        ) as mock_client:
+        with patch("services.workflow_automation.vision_step_handler.httpx.AsyncClient") as mock_client:
             mock_instance = AsyncMock()
             mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
             mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
@@ -215,9 +205,7 @@ class TestGetBackendUrl:
 
     def test_get_backend_url_uses_ssot(self):
         """_get_backend_url delegates to ssot_config.backend_url."""
-        with patch(
-            "services.workflow_automation.vision_step_handler.ssot_config"
-        ) as mock_cfg:
+        with patch("services.workflow_automation.vision_step_handler.ssot_config") as mock_cfg:
             mock_cfg.backend_url = "https://192.0.2.1:8443"
             url = _get_backend_url()
         assert url == "https://192.0.2.1:8443"
@@ -230,11 +218,10 @@ class TestGetBackendUrl:
         mock_response.json.return_value = {}
         mock_response.raise_for_status = MagicMock()
 
-        with patch(
-            "services.workflow_automation.vision_step_handler.ssot_config"
-        ) as mock_cfg, patch(
-            "services.workflow_automation.vision_step_handler.httpx.AsyncClient"
-        ) as mock_client:
+        with (
+            patch("services.workflow_automation.vision_step_handler.ssot_config") as mock_cfg,
+            patch("services.workflow_automation.vision_step_handler.httpx.AsyncClient") as mock_client,
+        ):
             mock_cfg.backend_url = "https://192.0.2.20:8443"
             mock_instance = AsyncMock()
             mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
@@ -261,9 +248,7 @@ class TestWebOcrPipeline:
         ocr_resp.raise_for_status = MagicMock()
         ocr_resp.json.return_value = {"text": "Hello World", "confidence": 0.99}
 
-        with patch(
-            "services.workflow_automation.vision_step_handler.httpx.AsyncClient"
-        ) as mock_client:
+        with patch("services.workflow_automation.vision_step_handler.httpx.AsyncClient") as mock_client:
             mock_instance = AsyncMock()
             mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
             mock_client.return_value.__aexit__ = AsyncMock(return_value=False)

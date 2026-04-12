@@ -36,9 +36,7 @@ class DecisionEngine:
     def __init__(self):
         """Initialize decision engine with algorithm registry and time provider."""
         self.time_provider = TimeProvider()
-        self.decision_algorithms: Dict[
-            DecisionType, Callable[[DecisionContext], Decision]
-        ] = {
+        self.decision_algorithms: Dict[DecisionType, Callable[[DecisionContext], Decision]] = {
             DecisionType.AUTOMATION_ACTION: self._decide_automation_action,
             DecisionType.NAVIGATION_CHOICE: self._decide_navigation_choice,
             DecisionType.TASK_PRIORITIZATION: self._decide_task_prioritization,
@@ -65,23 +63,17 @@ class DecisionEngine:
         ) as task_context:
             try:
                 # Route to appropriate decision algorithm
-                decision_algorithm = self.decision_algorithms.get(
-                    decision_context.decision_type, self._decide_default
-                )
+                decision_algorithm = self.decision_algorithms.get(decision_context.decision_type, self._decide_default)
 
                 # Make the decision
                 decision = await decision_algorithm(decision_context)
 
                 # Validate decision
-                validated_decision = await self._validate_decision(
-                    decision, decision_context
-                )
+                validated_decision = await self._validate_decision(decision, decision_context)
 
                 task_context.set_outputs(
                     {
-                        "chosen_action": validated_decision.chosen_action.get(
-                            "action", "unknown"
-                        ),
+                        "chosen_action": validated_decision.chosen_action.get("action", "unknown"),
                         "confidence": validated_decision.confidence,
                         "confidence_level": validated_decision.confidence_level.value,
                         "requires_approval": validated_decision.requires_approval,
@@ -114,16 +106,11 @@ class DecisionEngine:
             List of (score, action) tuples sorted by score descending.
         """
         scores = await asyncio.gather(
-            *[
-                self._score_automation_action(action, context)
-                for action in automation_actions
-            ],
+            *[self._score_automation_action(action, context) for action in automation_actions],
             return_exceptions=True,
         )
         scored_actions = [
-            (score, action)
-            for score, action in zip(scores, automation_actions)
-            if not isinstance(score, Exception)
+            (score, action) for score, action in zip(scores, automation_actions) if not isinstance(score, Exception)
         ]
         scored_actions.sort(key=lambda x: x[0], reverse=True)
         return scored_actions
@@ -142,9 +129,7 @@ class DecisionEngine:
         """
         confidence = min(best_score, 1.0)
         confidence_level = self._determine_confidence_level(confidence)
-        requires_approval = await self._requires_approval(
-            best_action, context, confidence
-        )
+        requires_approval = await self._requires_approval(best_action, context, confidence)
 
         reasoning = f"Selected {best_action['action']} based on confidence score {best_score:.2f}"
         if requires_approval:
@@ -160,13 +145,9 @@ class DecisionEngine:
             reasoning=reasoning,
             supporting_evidence=[{"type": "context_analysis", "score": best_score}],
             risk_assessment=await self._assess_action_risk(best_action, context),
-            expected_outcomes=[
-                {"outcome": "action_completed", "probability": confidence}
-            ],
+            expected_outcomes=[{"outcome": "action_completed", "probability": confidence}],
             monitoring_criteria=["action_execution_status", "target_element_response"],
-            fallback_plan=(
-                {"action": "request_human_takeover"} if confidence < 0.6 else None
-            ),
+            fallback_plan=({"action": "request_human_takeover"} if confidence < 0.6 else None),
             requires_approval=requires_approval,
             timestamp=self.time_provider.current_timestamp(),
             metadata={
@@ -178,25 +159,17 @@ class DecisionEngine:
     async def _decide_automation_action(self, context: DecisionContext) -> Decision:
         """Decide on automation actions."""
         automation_actions = [
-            action
-            for action in context.available_actions
-            if action.get("action_type") == "automation"
+            action for action in context.available_actions if action.get("action_type") == "automation"
         ]
 
         if not automation_actions:
-            return await self._create_no_action_decision(
-                context, "No automation opportunities available"
-            )
+            return await self._create_no_action_decision(context, "No automation opportunities available")
 
         # Issue #370: Score actions in parallel instead of sequentially
-        scored_actions = await self._score_and_sort_automation_actions(
-            automation_actions, context
-        )
+        scored_actions = await self._score_and_sort_automation_actions(automation_actions, context)
 
         if not scored_actions:
-            return await self._create_no_action_decision(
-                context, "Failed to score automation actions"
-            )
+            return await self._create_no_action_decision(context, "Failed to score automation actions")
 
         best_score, best_action = scored_actions[0]
 
@@ -204,9 +177,7 @@ class DecisionEngine:
             context, best_score, best_action, scored_actions, len(automation_actions)
         )
 
-    async def _score_automation_action(
-        self, action: Dict[str, Any], context: DecisionContext
-    ) -> float:
+    async def _score_automation_action(self, action: Dict[str, Any], context: DecisionContext) -> float:
         """Score an automation action based on context."""
         base_confidence = action.get("confidence", 0.5)
 
@@ -219,9 +190,7 @@ class DecisionEngine:
             score_multipliers.append(1.2)
 
         # Risk factors penalty
-        high_risk_factors = [
-            rf for rf in context.risk_factors if rf.get("severity") == "high"
-        ]
+        high_risk_factors = [rf for rf in context.risk_factors if rf.get("severity") == "high"]
         if high_risk_factors:
             score_multipliers.append(0.7)
 
@@ -245,15 +214,11 @@ class DecisionEngine:
     async def _decide_navigation_choice(self, context: DecisionContext) -> Decision:
         """Decide on navigation choices."""
         navigation_actions = [
-            action
-            for action in context.available_actions
-            if action.get("action_type") == "navigation"
+            action for action in context.available_actions if action.get("action_type") == "navigation"
         ]
 
         if not navigation_actions:
-            return await self._create_no_action_decision(
-                context, "No navigation options available"
-            )
+            return await self._create_no_action_decision(context, "No navigation options available")
 
         # For navigation, prioritize by element text relevance to primary goal
         best_action = navigation_actions[0]  # Simplified selection
@@ -269,9 +234,7 @@ class DecisionEngine:
             reasoning="Selected navigation action based on element availability and relevance",
             supporting_evidence=[],
             risk_assessment={"risk_level": "low", "factors": []},
-            expected_outcomes=[
-                {"outcome": "navigation_completed", "probability": confidence}
-            ],
+            expected_outcomes=[{"outcome": "navigation_completed", "probability": confidence}],
             monitoring_criteria=["navigation_success", "page_load_status"],
             fallback_plan=None,
             requires_approval=False,
@@ -341,13 +304,9 @@ class DecisionEngine:
             confidence=confidence,
             confidence_level=confidence_level,
             reasoning=f"Prioritized based on urgency, importance, and dependencies (score: {best_score:.2f})",
-            supporting_evidence=[
-                {"type": "prioritization_analysis", "tasks_considered": task_count}
-            ],
+            supporting_evidence=[{"type": "prioritization_analysis", "tasks_considered": task_count}],
             risk_assessment={"risk_level": "low", "factors": []},
-            expected_outcomes=[
-                {"outcome": "task_prioritized", "probability": confidence}
-            ],
+            expected_outcomes=[{"outcome": "task_prioritized", "probability": confidence}],
             monitoring_criteria=["task_execution_progress", "deadline_adherence"],
             fallback_plan=None,
             requires_approval=False,
@@ -368,14 +327,10 @@ class DecisionEngine:
         ]
 
         if not task_actions:
-            return await self._create_no_action_decision(
-                context, "No tasks available for prioritization"
-            )
+            return await self._create_no_action_decision(context, "No tasks available for prioritization")
 
         # Score tasks based on urgency, importance, and context
-        scored_tasks = [
-            (self._score_task_for_prioritization(task), task) for task in task_actions
-        ]
+        scored_tasks = [(self._score_task_for_prioritization(task), task) for task in task_actions]
 
         # Sort by score (highest first)
         scored_tasks.sort(key=lambda x: x[0], reverse=True)
@@ -385,9 +340,7 @@ class DecisionEngine:
             context, best_score, prioritized_task, scored_tasks, len(task_actions)
         )
 
-    def _build_high_risk_decision(
-        self, context: DecisionContext, high_risk_factors: List[Dict[str, Any]]
-    ) -> Decision:
+    def _build_high_risk_decision(self, context: DecisionContext, high_risk_factors: List[Dict[str, Any]]) -> Decision:
         """Build decision for high-risk escalation. Issue #620.
 
         Args:
@@ -411,17 +364,10 @@ class DecisionEngine:
             alternative_actions=[],
             confidence=0.9,
             confidence_level=ConfidenceLevel.HIGH,
-            reasoning=(
-                f"High risk factors detected: "
-                f"{[rf['risk_type'] for rf in high_risk_factors]}"
-            ),
-            supporting_evidence=[
-                {"type": "risk_analysis", "high_risk_count": len(high_risk_factors)}
-            ],
+            reasoning=(f"High risk factors detected: " f"{[rf['risk_type'] for rf in high_risk_factors]}"),
+            supporting_evidence=[{"type": "risk_analysis", "high_risk_count": len(high_risk_factors)}],
             risk_assessment={"risk_level": "high", "factors": high_risk_factors},
-            expected_outcomes=[
-                {"outcome": "human_review_requested", "probability": 0.9}
-            ],
+            expected_outcomes=[{"outcome": "human_review_requested", "probability": 0.9}],
             monitoring_criteria=["human_response", "risk_mitigation_status"],
             fallback_plan=None,
             requires_approval=False,
@@ -429,9 +375,7 @@ class DecisionEngine:
             metadata={"algorithm": "risk_assessment"},
         )
 
-    def _build_acceptable_risk_decision(
-        self, context: DecisionContext, risk_factors: List[Dict[str, Any]]
-    ) -> Decision:
+    def _build_acceptable_risk_decision(self, context: DecisionContext, risk_factors: List[Dict[str, Any]]) -> Decision:
         """Build decision for acceptable risk levels. Issue #620.
 
         Args:
@@ -484,9 +428,7 @@ class DecisionEngine:
         urgency_factors = []
 
         # Check for active takeovers
-        if any(
-            "takeover" in ce.metadata.get("type", "") for ce in context.context_elements
-        ):
+        if any("takeover" in ce.metadata.get("type", "") for ce in context.context_elements):
             urgency_factors.append("existing_takeover")
 
         # Check for high risk factors
@@ -494,20 +436,13 @@ class DecisionEngine:
             urgency_factors.append("high_risk_detected")
 
         # Check for low confidence context (>40% of elements have low confidence)
-        low_confidence_count = sum(
-            1 for ce in context.context_elements if ce.confidence < 0.5
-        )
-        if (
-            context.context_elements
-            and low_confidence_count > len(context.context_elements) * 0.4
-        ):
+        low_confidence_count = sum(1 for ce in context.context_elements if ce.confidence < 0.5)
+        if context.context_elements and low_confidence_count > len(context.context_elements) * 0.4:
             urgency_factors.append("low_confidence_context")
 
         return urgency_factors
 
-    def _create_escalation_decision(
-        self, context: DecisionContext, urgency_factors: List[str]
-    ) -> Decision:
+    def _create_escalation_decision(self, context: DecisionContext, urgency_factors: List[str]) -> Decision:
         """Create decision for immediate escalation (Issue #398: extracted)."""
         escalation_action = {
             "action_type": "escalation",
@@ -525,13 +460,9 @@ class DecisionEngine:
             confidence=0.95,
             confidence_level=ConfidenceLevel.VERY_HIGH,
             reasoning=f"Immediate escalation required due to: {', '.join(urgency_factors)}",
-            supporting_evidence=[
-                {"type": "urgency_analysis", "factors": urgency_factors}
-            ],
+            supporting_evidence=[{"type": "urgency_analysis", "factors": urgency_factors}],
             risk_assessment={"risk_level": "high", "immediate_action_required": True},
-            expected_outcomes=[
-                {"outcome": "human_takeover_initiated", "probability": 0.95}
-            ],
+            expected_outcomes=[{"outcome": "human_takeover_initiated", "probability": 0.95}],
             monitoring_criteria=[
                 "takeover_response_time",
                 "human_operator_availability",
@@ -560,13 +491,9 @@ class DecisionEngine:
             confidence=0.8,
             confidence_level=ConfidenceLevel.HIGH,
             reasoning="No immediate escalation factors detected",
-            supporting_evidence=[
-                {"type": "escalation_analysis", "urgency_factors": []}
-            ],
+            supporting_evidence=[{"type": "escalation_analysis", "urgency_factors": []}],
             risk_assessment={"risk_level": "low", "escalation_needed": False},
-            expected_outcomes=[
-                {"outcome": "continued_autonomous_operation", "probability": 0.8}
-            ],
+            expected_outcomes=[{"outcome": "continued_autonomous_operation", "probability": 0.8}],
             monitoring_criteria=["context_changes", "risk_factor_evolution"],
             fallback_plan={"action": "request_human_review"},
             requires_approval=False,
@@ -577,9 +504,7 @@ class DecisionEngine:
     async def _decide_human_escalation(self, context: DecisionContext) -> Decision:
         """Decide whether to escalate to human (Issue #398: refactored to use helpers)."""
         escalation_actions = [
-            action
-            for action in context.available_actions
-            if action.get("action_type") == "escalation"
+            action for action in context.available_actions if action.get("action_type") == "escalation"
         ]
 
         urgency_factors = self._analyze_escalation_urgency(context)
@@ -587,9 +512,7 @@ class DecisionEngine:
         if urgency_factors:
             return self._create_escalation_decision(context, urgency_factors)
         else:
-            return self._create_continue_autonomous_decision(
-                context, escalation_actions
-            )
+            return self._create_continue_autonomous_decision(context, escalation_actions)
 
     def _score_optimization_action(self, opt: Dict[str, Any]) -> float:
         """Issue #665: Extracted from _decide_workflow_optimization to reduce function length.
@@ -639,9 +562,7 @@ class DecisionEngine:
         return Decision(
             decision_id=context.decision_id,
             decision_type=context.decision_type,
-            chosen_action=self._build_optimization_chosen_action(
-                best_optimization, best_score, confidence
-            ),
+            chosen_action=self._build_optimization_chosen_action(best_optimization, best_score, confidence),
             alternative_actions=[opt for _, opt in scored_optimizations[1:3]],
             confidence=confidence,
             confidence_level=confidence_level,
@@ -649,18 +570,14 @@ class DecisionEngine:
                 f"Selected workflow optimization based on efficiency, risk, "
                 f"and complexity analysis (score: {best_score:.2f})"
             ),
-            supporting_evidence=[
-                {"type": "workflow_analysis", "optimizations_found": optimization_count}
-            ],
+            supporting_evidence=[{"type": "workflow_analysis", "optimizations_found": optimization_count}],
             risk_assessment={
                 "risk_level": best_optimization.get("risk_level", "low"),
                 "factors": [],
             },
             expected_outcomes=self._build_optimization_expected_outcomes(confidence),
             monitoring_criteria=["workflow_performance", "efficiency_metrics"],
-            fallback_plan=(
-                {"action": "revert_optimization"} if best_score < 0.6 else None
-            ),
+            fallback_plan=({"action": "revert_optimization"} if best_score < 0.6 else None),
             requires_approval=best_score < 0.7,
             timestamp=self.time_provider.current_timestamp(),
             metadata={
@@ -684,9 +601,7 @@ class DecisionEngine:
             "confidence": confidence,
         }
 
-    def _build_optimization_expected_outcomes(
-        self, confidence: float
-    ) -> List[Dict[str, Any]]:
+    def _build_optimization_expected_outcomes(self, confidence: float) -> List[Dict[str, Any]]:
         """Build expected outcomes list for optimization decisions. Issue #620."""
         return [
             {"outcome": "workflow_optimized", "probability": confidence},
@@ -712,9 +627,7 @@ class DecisionEngine:
             optimization_actions = optimization_suggestions
 
         # Score optimization actions
-        scored_optimizations = [
-            (self._score_optimization_action(opt), opt) for opt in optimization_actions
-        ]
+        scored_optimizations = [(self._score_optimization_action(opt), opt) for opt in optimization_actions]
 
         # Sort by score
         scored_optimizations.sort(key=lambda x: x[0], reverse=True)
@@ -728,9 +641,7 @@ class DecisionEngine:
             len(optimization_actions),
         )
 
-    def _analyze_workflow_for_optimization(
-        self, context: DecisionContext
-    ) -> List[Dict[str, Any]]:
+    def _analyze_workflow_for_optimization(self, context: DecisionContext) -> List[Dict[str, Any]]:
         """Analyze context to find implicit optimization opportunities."""
         opportunities = []
 
@@ -774,9 +685,7 @@ class DecisionEngine:
             context, f"No algorithm available for {context.decision_type.value}"
         )
 
-    async def _create_no_action_decision(
-        self, context: DecisionContext, reason: str
-    ) -> Decision:
+    async def _create_no_action_decision(self, context: DecisionContext, reason: str) -> Decision:
         """Create a decision to take no action."""
         no_action = {
             "action_type": "none",
@@ -803,9 +712,7 @@ class DecisionEngine:
             metadata={"algorithm": "no_action"},
         )
 
-    async def _validate_decision(
-        self, decision: Decision, context: DecisionContext
-    ) -> Decision:
+    async def _validate_decision(self, decision: Decision, context: DecisionContext) -> Decision:
         """Validate and potentially modify decision before returning."""
 
         # Check for constraint violations
@@ -817,13 +724,10 @@ class DecisionEngine:
         if violated_constraints:
             # Modify decision to account for constraint violations
             decision.confidence *= 0.7  # Reduce confidence
-            decision.confidence_level = self._determine_confidence_level(
-                decision.confidence
-            )
+            decision.confidence_level = self._determine_confidence_level(decision.confidence)
             decision.requires_approval = True
             decision.reasoning += (
-                f" - Modified due to constraint violations: "
-                f"{[c['type'] for c in violated_constraints]}"
+                f" - Modified due to constraint violations: " f"{[c['type'] for c in violated_constraints]}"
             )
 
             # Add fallback plan if not present
@@ -832,9 +736,7 @@ class DecisionEngine:
 
         return decision
 
-    async def _violates_constraint(
-        self, action: Dict[str, Any], constraint: Dict[str, Any]
-    ) -> bool:
+    async def _violates_constraint(self, action: Dict[str, Any], constraint: Dict[str, Any]) -> bool:
         """Check if an action violates a constraint."""
         constraint_type = constraint.get("type")
         action_type = action.get("action_type")
@@ -849,16 +751,12 @@ class DecisionEngine:
             return True
 
         # O(1) lookup (Issue #326)
-        if constraint_type in HIGH_RESOURCE_CONSTRAINT_TYPES and action.get(
-            "resource_intensive", False
-        ):
+        if constraint_type in HIGH_RESOURCE_CONSTRAINT_TYPES and action.get("resource_intensive", False):
             return True
 
         return False
 
-    async def _requires_approval(
-        self, action: Dict[str, Any], context: DecisionContext, confidence: float
-    ) -> bool:
+    async def _requires_approval(self, action: Dict[str, Any], context: DecisionContext, confidence: float) -> bool:
         """Determine if an action requires human approval."""
 
         # Low confidence requires approval
@@ -879,9 +777,7 @@ class DecisionEngine:
 
         return False
 
-    async def _assess_action_risk(
-        self, action: Dict[str, Any], context: DecisionContext
-    ) -> Dict[str, Any]:
+    async def _assess_action_risk(self, action: Dict[str, Any], context: DecisionContext) -> Dict[str, Any]:
         """Assess risk of executing an action."""
         risk_level = "low"
         risk_factors = []
@@ -892,9 +788,7 @@ class DecisionEngine:
             risk_factors.append("low_action_confidence")
 
         # Check context risks
-        high_context_risks = [
-            rf for rf in context.risk_factors if rf.get("severity") == "high"
-        ]
+        high_context_risks = [rf for rf in context.risk_factors if rf.get("severity") == "high"]
         if high_context_risks:
             risk_level = "high"
             risk_factors.extend([rf["risk_type"] for rf in high_context_risks])

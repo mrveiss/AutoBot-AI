@@ -44,9 +44,7 @@ class WakeWordConfig:
     """Configuration for wake word detection"""
 
     enabled: bool = True
-    wake_words: List[str] = field(
-        default_factory=lambda: ["hey autobot", "ok autobot", "autobot"]
-    )
+    wake_words: List[str] = field(default_factory=lambda: ["hey autobot", "ok autobot", "autobot"])
     confidence_threshold: float = 0.7
     cooldown_seconds: float = 2.0
     max_false_positive_rate: float = 0.1
@@ -138,9 +136,7 @@ class WakeWordDetector:
 
         # Initialize adaptive thresholds
         for wake_word in self.config.wake_words:
-            self._adaptive_thresholds[wake_word.lower()] = (
-                self.config.confidence_threshold
-            )
+            self._adaptive_thresholds[wake_word.lower()] = self.config.confidence_threshold
 
         logger.info(
             "WakeWordDetector initialized with %d wake words",
@@ -153,9 +149,7 @@ class WakeWordDetector:
         wake_word_lower = wake_word.lower().strip()
         if wake_word_lower not in {w.lower() for w in self.config.wake_words}:
             self.config.wake_words.append(wake_word_lower)
-            self._adaptive_thresholds[wake_word_lower] = (
-                self.config.confidence_threshold
-            )
+            self._adaptive_thresholds[wake_word_lower] = self.config.confidence_threshold
             logger.info("Added wake word: %s", wake_word)
             return True
         return False
@@ -175,9 +169,7 @@ class WakeWordDetector:
         """Get list of current wake words"""
         return self.config.wake_words.copy()
 
-    def check_text_for_wake_word(
-        self, text: str, confidence: float = 1.0
-    ) -> Optional[WakeWordEvent]:
+    def check_text_for_wake_word(self, text: str, confidence: float = 1.0) -> Optional[WakeWordEvent]:
         """
         Check if text contains a wake word.
 
@@ -209,14 +201,10 @@ class WakeWordDetector:
             # Check if wake word is in the text
             if self._contains_wake_word(text_lower, wake_word_lower):
                 # Get adaptive threshold for this wake word
-                threshold = self._adaptive_thresholds.get(
-                    wake_word_lower, self.config.confidence_threshold
-                )
+                threshold = self._adaptive_thresholds.get(wake_word_lower, self.config.confidence_threshold)
 
                 # Calculate effective confidence
-                effective_confidence = self._calculate_effective_confidence(
-                    text_lower, wake_word_lower, confidence
-                )
+                effective_confidence = self._calculate_effective_confidence(text_lower, wake_word_lower, confidence)
 
                 if effective_confidence >= threshold:
                     event = WakeWordEvent(
@@ -304,9 +292,7 @@ class WakeWordDetector:
 
         return mishearings
 
-    def _calculate_effective_confidence(
-        self, text: str, wake_word: str, base_confidence: float
-    ) -> float:
+    def _calculate_effective_confidence(self, text: str, wake_word: str, base_confidence: float) -> float:
         """
         Calculate effective confidence considering multiple factors.
 
@@ -346,9 +332,7 @@ class WakeWordDetector:
 
         # Update running average confidence
         n = self.stats.total_detections
-        self.stats.average_confidence = (
-            self.stats.average_confidence * (n - 1) + event.confidence
-        ) / n
+        self.stats.average_confidence = (self.stats.average_confidence * (n - 1) + event.confidence) / n
 
         # Store recent detection
         self._recent_detections.append(event)
@@ -365,10 +349,7 @@ class WakeWordDetector:
             except Exception as e:
                 logger.error("Error in wake word callback: %s", e)
 
-        logger.info(
-            f"Wake word detected: '{event.wake_word}' "
-            f"(confidence: {event.confidence:.2f})"
-        )
+        logger.info(f"Wake word detected: '{event.wake_word}' " f"(confidence: {event.confidence:.2f})")
 
     def _enter_cooldown(self) -> None:
         """Enter cooldown state to prevent rapid re-triggering"""
@@ -399,8 +380,7 @@ class WakeWordDetector:
                 self._adapt_threshold(last_event.wake_word, increase=True)
 
             logger.info(
-                f"False positive reported for '{last_event.wake_word}'. "
-                f"Total FPs: {self.stats.false_positives}"
+                f"False positive reported for '{last_event.wake_word}'. " f"Total FPs: {self.stats.false_positives}"
             )
 
     def report_true_positive(self) -> None:
@@ -416,9 +396,7 @@ class WakeWordDetector:
     def _adapt_threshold(self, wake_word: str, increase: bool) -> None:
         """Adaptively adjust threshold based on false positive rate"""
         wake_word_lower = wake_word.lower()
-        current_threshold = self._adaptive_thresholds.get(
-            wake_word_lower, self.config.confidence_threshold
-        )
+        current_threshold = self._adaptive_thresholds.get(wake_word_lower, self.config.confidence_threshold)
 
         if increase:
             # Increase threshold to reduce false positives
@@ -432,10 +410,7 @@ class WakeWordDetector:
                 new_threshold = current_threshold
 
         self._adaptive_thresholds[wake_word_lower] = new_threshold
-        logger.debug(
-            f"Adapted threshold for '{wake_word}': "
-            f"{current_threshold:.2f} -> {new_threshold:.2f}"
-        )
+        logger.debug(f"Adapted threshold for '{wake_word}': " f"{current_threshold:.2f} -> {new_threshold:.2f}")
 
     def add_callback(self, callback: Callable[[WakeWordEvent], None]) -> None:
         """Add callback to be called when wake word is detected"""
@@ -492,9 +467,7 @@ class WakeWordDetector:
         if "wake_words" in updates:
             for wake_word in self.config.wake_words:
                 if wake_word.lower() not in self._adaptive_thresholds:
-                    self._adaptive_thresholds[wake_word.lower()] = (
-                        self.config.confidence_threshold
-                    )
+                    self._adaptive_thresholds[wake_word.lower()] = self.config.confidence_threshold
 
     def enable(self) -> None:
         """Enable wake word detection"""
@@ -559,9 +532,7 @@ class WakeWordDetector:
         self._listening_status.active = True
         self.state = WakeWordState.LISTENING
         self._listening_task = asyncio.create_task(self._listening_loop(audio_callback))
-        logger.info(
-            "Background listening started (max_cpu=%.1f%%)", self.config.max_cpu_percent
-        )
+        logger.info("Background listening started (max_cpu=%.1f%%)", self.config.max_cpu_percent)
 
     async def stop_listening(self) -> None:
         """Stop the always-on background listening loop."""
@@ -597,9 +568,7 @@ class WakeWordDetector:
             self._sample_cpu_percent()  # refresh stat before throttle decision
             sleep_ms = self._calculate_duty_sleep_ms()
             self._listening_status.sleep_ms = sleep_ms
-            self._listening_status.duty_cycle_ms = (
-                self.config.chunk_duration_ms + sleep_ms
-            )
+            self._listening_status.duty_cycle_ms = self.config.chunk_duration_ms + sleep_ms
             if sleep_ms > 0:
                 self._listening_status.throttle_events += 1
                 await asyncio.sleep(sleep_ms / 1000.0)

@@ -87,11 +87,7 @@ class MaliciousFileAnalyzer(ThreatAnalyzer):
             ThreatEvent for the detected threats
         """
         confidence = min(1.0, len(threats) * 0.3 + 0.4)
-        threat_level = (
-            ThreatLevel.CRITICAL
-            if any("malicious_content" in t for t in threats)
-            else ThreatLevel.HIGH
-        )
+        threat_level = ThreatLevel.CRITICAL if any("malicious_content" in t for t in threats) else ThreatLevel.HIGH
 
         # Issue #372: Use SecurityEvent methods to reduce feature envy
         base_fields = event.get_threat_base_fields()
@@ -167,9 +163,7 @@ class MaliciousFileAnalyzer(ThreatAnalyzer):
             )
         return threats
 
-    def _check_file_size_anomaly(
-        self, context: AnalysisContext, file_size: int
-    ) -> Optional[str]:
+    def _check_file_size_anomaly(self, context: AnalysisContext, file_size: int) -> Optional[str]:
         """
         Check if file size exceeds configured threshold.
 
@@ -182,18 +176,12 @@ class MaliciousFileAnalyzer(ThreatAnalyzer):
         Returns:
             Threat identifier if anomaly detected, None otherwise
         """
-        size_threshold = (
-            context.config.get("thresholds", {}).get("file_size_suspicious_mb", 100)
-            * 1024
-            * 1024
-        )
+        size_threshold = context.config.get("thresholds", {}).get("file_size_suspicious_mb", 100) * 1024 * 1024
         if file_size > size_threshold:
             return "unusually_large_file"
         return None
 
-    async def analyze(
-        self, event: SecurityEvent, context: AnalysisContext
-    ) -> Optional[ThreatEvent]:
+    async def analyze(self, event: SecurityEvent, context: AnalysisContext) -> Optional[ThreatEvent]:
         """Detect malicious file uploads"""
         if not event.is_file_operation():
             return None
@@ -211,8 +199,6 @@ class MaliciousFileAnalyzer(ThreatAnalyzer):
             threats.append(size_anomaly)
 
         if threats:
-            return self._build_threat_event(
-                event, threats, filename, file_size, file_content
-            )
+            return self._build_threat_event(event, threats, filename, file_size, file_content)
 
         return None

@@ -85,9 +85,7 @@ class ExecutionStrategyHandler:
             results[task.task_id] = result
 
             # Check if we should continue
-            if result.get("status") == "failed" and not task.metadata.get(
-                "optional", False
-            ):
+            if result.get("status") == "failed" and not task.metadata.get("optional", False):
                 logger.error("Required task %s failed, stopping workflow", task.task_id)
                 break
 
@@ -111,9 +109,7 @@ class ExecutionStrategyHandler:
             for task in ready_tasks:
                 if len(running_tasks) < self.max_parallel_tasks:
                     logger.info("Starting parallel task %s", task.task_id)
-                    task_future = asyncio.create_task(
-                        self._execute_single_task(task, results)
-                    )
+                    task_future = asyncio.create_task(self._execute_single_task(task, results))
                     running_tasks.append((task, task_future))
 
             # Wait for any task to complete
@@ -149,10 +145,7 @@ class ExecutionStrategyHandler:
 
             # Execute stage tasks in parallel
             stage_results = await asyncio.gather(
-                *[
-                    self._execute_single_task(task, {**results, **pipeline_data})
-                    for task in stage_tasks
-                ]
+                *[self._execute_single_task(task, {**results, **pipeline_data}) for task in stage_tasks]
             )
 
             # Collect results and prepare pipeline data for next stage
@@ -173,17 +166,13 @@ class ExecutionStrategyHandler:
         collab_channel = f"{self.coordination_prefix}collab:{plan.plan_id}"
 
         # Start collaboration coordinator
-        coordinator_task = asyncio.create_task(
-            self._coordinate_collaboration(plan, collab_channel)
-        )
+        coordinator_task = asyncio.create_task(self._coordinate_collaboration(plan, collab_channel))
 
         # Execute tasks with collaboration
         task_futures = []
         for task in plan.tasks:
             enhanced_task = self._enhance_task_for_collaboration(task, collab_channel)
-            future = asyncio.create_task(
-                self._execute_single_task(enhanced_task, results)
-            )
+            future = asyncio.create_task(self._execute_single_task(enhanced_task, results))
             task_futures.append((task, future))
 
         # Wait for all tasks
@@ -210,19 +199,13 @@ class ExecutionStrategyHandler:
 
         return current
 
-    async def _execute_parallel_batch(
-        self, pending_tasks: list, results: Dict[str, Any]
-    ) -> Tuple[int, int]:
+    async def _execute_parallel_batch(self, pending_tasks: list, results: Dict[str, Any]) -> Tuple[int, int]:
         """Execute tasks in parallel batch."""
         batch_size = min(self.max_parallel_tasks, len(pending_tasks))
         batch_tasks = pending_tasks[:batch_size]
 
         batch_results = await asyncio.gather(
-            *[
-                self._execute_single_task(task, results)
-                for task in batch_tasks
-                if self._dependencies_met(task, results)
-            ]
+            *[self._execute_single_task(task, results) for task in batch_tasks if self._dependencies_met(task, results)]
         )
 
         completed, failed = 0, 0
@@ -236,9 +219,7 @@ class ExecutionStrategyHandler:
 
         return completed, failed
 
-    async def _execute_sequential_step(
-        self, pending_tasks: list, results: Dict[str, Any]
-    ) -> Tuple[int, int]:
+    async def _execute_sequential_step(self, pending_tasks: list, results: Dict[str, Any]) -> Tuple[int, int]:
         """Execute one sequential task step."""
         for task in pending_tasks[:]:
             if not self._dependencies_met(task, results):
@@ -264,9 +245,7 @@ class ExecutionStrategyHandler:
         while pending_tasks:
             progress_ratio = completed_tasks / len(plan.tasks)
             failure_ratio = failed_tasks / max(completed_tasks, 1)
-            current_strategy = self._adapt_strategy(
-                progress_ratio, failure_ratio, current_strategy
-            )
+            current_strategy = self._adapt_strategy(progress_ratio, failure_ratio, current_strategy)
 
             if current_strategy == ExecutionStrategy.PARALLEL:
                 c, f = await self._execute_parallel_batch(pending_tasks, results)
@@ -278,9 +257,7 @@ class ExecutionStrategyHandler:
 
         return results
 
-    async def _wait_for_dependencies(
-        self, task: AgentTask, results: Dict[str, Any]
-    ) -> None:
+    async def _wait_for_dependencies(self, task: AgentTask, results: Dict[str, Any]) -> None:
         """Wait for task dependencies to complete."""
         while not self._dependencies_met(task, results):
             await asyncio.sleep(TimingConstants.SHORT_DELAY)

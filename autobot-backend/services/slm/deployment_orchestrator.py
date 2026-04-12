@@ -116,10 +116,7 @@ class SLMDeploymentOrchestrator:
                 {
                     "name": c.name,
                     "image": f"{c.image}:{c.tag}",
-                    "ports": [
-                        f"{p.host_port}:{p.container_port}/{p.protocol}"
-                        for p in c.ports
-                    ],
+                    "ports": [f"{p.host_port}:{p.container_port}/{p.protocol}" for p in c.ports],
                     "environment": c.environment,
                     "restart_policy": c.restart_policy,
                 }
@@ -127,9 +124,7 @@ class SLMDeploymentOrchestrator:
             ]
         }
 
-    async def deploy_docker(
-        self, request: DockerDeploymentRequest
-    ) -> DockerDeploymentStatus:
+    async def deploy_docker(self, request: DockerDeploymentRequest) -> DockerDeploymentStatus:
         """
         Trigger a Docker deployment on the target node via the SLM.
 
@@ -154,9 +149,7 @@ class SLMDeploymentOrchestrator:
         response = await self._client.get_deployment(deployment_id)
         return self._map_response(response)
 
-    async def list_deployments(
-        self, node_id: Optional[str] = None
-    ) -> list[DockerDeploymentStatus]:
+    async def list_deployments(self, node_id: Optional[str] = None) -> list[DockerDeploymentStatus]:
         """List deployments, optionally filtered by node_id."""
         response = await self._client.list_deployments(node_id=node_id)
         deployments = response.get("deployments", [])
@@ -239,9 +232,7 @@ class DeploymentOrchestrator:
                 extra: dict = {}
                 if ctx.playbook_path:
                     extra["playbook"] = ctx.playbook_path
-                await self._client.create_deployment(
-                    node_id=node_id, roles=[ctx.role_name], extra_data=extra
-                )
+                await self._client.create_deployment(node_id=node_id, roles=[ctx.role_name], extra_data=extra)
             ctx.status = DeploymentStatus.COMPLETED
             logger.info("Deployment completed: %s", deployment_id)
         except Exception as exc:

@@ -113,17 +113,13 @@ class RetryMechanism:
     def calculate_delay(self, attempt: int) -> float:
         """Calculate delay for the given attempt number"""
         if self.config.strategy == RetryStrategy.EXPONENTIAL_BACKOFF:
-            delay = self.config.base_delay * (
-                self.config.backoff_multiplier ** (attempt - 1)
-            )
+            delay = self.config.base_delay * (self.config.backoff_multiplier ** (attempt - 1))
         elif self.config.strategy == RetryStrategy.LINEAR_BACKOFF:
             delay = self.config.base_delay * attempt
         elif self.config.strategy == RetryStrategy.FIXED_DELAY:
             delay = self.config.base_delay
         elif self.config.strategy == RetryStrategy.JITTERED_BACKOFF:
-            delay = self.config.base_delay * (
-                self.config.backoff_multiplier ** (attempt - 1)
-            )
+            delay = self.config.base_delay * (self.config.backoff_multiplier ** (attempt - 1))
             # Add random jitter ±20%
             jitter_factor = 1.0 + (random.random() - 0.5) * 0.4
             delay *= jitter_factor
@@ -131,10 +127,7 @@ class RetryMechanism:
             delay = self.config.base_delay
 
         # Apply jitter if enabled and not using jittered backoff
-        if (
-            self.config.jitter
-            and self.config.strategy != RetryStrategy.JITTERED_BACKOFF
-        ):
+        if self.config.jitter and self.config.strategy != RetryStrategy.JITTERED_BACKOFF:
             jitter_factor = 1.0 + (random.random() - 0.5) * 0.2
             delay *= jitter_factor
 
@@ -193,9 +186,7 @@ class RetryMechanism:
             return await func(*args, **kwargs)
         return func(*args, **kwargs)
 
-    def _handle_retry_failure(
-        self, operation_name: str, attempt: int, exception: Exception
-    ) -> bool:
+    def _handle_retry_failure(self, operation_name: str, attempt: int, exception: Exception) -> bool:
         """Handle a failed attempt and determine if retry should continue. Issue #620.
 
         Args:
@@ -206,23 +197,15 @@ class RetryMechanism:
         Returns:
             True if should continue to next attempt, False if should stop
         """
-        logger.debug(
-            f"{operation_name} failed on attempt {attempt}: "
-            f"{type(exception).__name__}: {exception}"
-        )
+        logger.debug(f"{operation_name} failed on attempt {attempt}: " f"{type(exception).__name__}: {exception}")
 
         if not self.is_retryable_exception(exception):
-            logger.warning(
-                f"{operation_name} failed with non-retryable exception: "
-                f"{type(exception).__name__}"
-            )
+            logger.warning(f"{operation_name} failed with non-retryable exception: " f"{type(exception).__name__}")
             return False
 
         return True
 
-    async def execute_async(
-        self, func: Callable, *args, operation_name: str = None, **kwargs
-    ) -> Any:
+    async def execute_async(self, func: Callable, *args, operation_name: str = None, **kwargs) -> Any:
         """Execute an async function with retry mechanism (thread-safe)"""
         operation_name = operation_name or func.__name__
         last_exception = None
@@ -231,9 +214,7 @@ class RetryMechanism:
             self._update_stats_attempt()
 
             try:
-                logger.debug(
-                    f"Executing {operation_name}, attempt {attempt}/{self.config.max_attempts}"
-                )
+                logger.debug(f"Executing {operation_name}, attempt {attempt}/{self.config.max_attempts}")
                 result = await self._execute_function_async(func, *args, **kwargs)
 
                 if attempt > 1:
@@ -255,14 +236,10 @@ class RetryMechanism:
                 await asyncio.sleep(delay)
 
         self._update_stats_failure(operation_name)
-        logger.error(
-            f"{operation_name} failed after {self.config.max_attempts} attempts"
-        )
+        logger.error(f"{operation_name} failed after {self.config.max_attempts} attempts")
         raise RetryExhaustedError(self.config.max_attempts, last_exception)
 
-    def _execute_sync_attempt(
-        self, func: Callable, operation_name: str, attempt: int, *args, **kwargs
-    ) -> Any:
+    def _execute_sync_attempt(self, func: Callable, operation_name: str, attempt: int, *args, **kwargs) -> Any:
         """Execute a single sync attempt and return result on success. Issue #620.
 
         Args:
@@ -277,9 +254,7 @@ class RetryMechanism:
         Raises:
             Exception: Re-raises any exception from func
         """
-        logger.debug(
-            f"Executing {operation_name}, attempt {attempt}/{self.config.max_attempts}"
-        )
+        logger.debug(f"Executing {operation_name}, attempt {attempt}/{self.config.max_attempts}")
         result = func(*args, **kwargs)
 
         if attempt > 1:
@@ -299,9 +274,7 @@ class RetryMechanism:
         logger.debug("Retrying %s in %.2f seconds...", operation_name, delay)
         time.sleep(delay)
 
-    def execute_sync(
-        self, func: Callable, *args, operation_name: str = None, **kwargs
-    ) -> Any:
+    def execute_sync(self, func: Callable, *args, operation_name: str = None, **kwargs) -> Any:
         """Execute a synchronous function with retry mechanism (thread-safe)"""
         operation_name = operation_name or func.__name__
         last_exception = None
@@ -310,9 +283,7 @@ class RetryMechanism:
             self._update_stats_attempt()
 
             try:
-                return self._execute_sync_attempt(
-                    func, operation_name, attempt, *args, **kwargs
-                )
+                return self._execute_sync_attempt(func, operation_name, attempt, *args, **kwargs)
             except Exception as e:
                 last_exception = e
                 if not self._handle_retry_failure(operation_name, attempt, e):
@@ -322,9 +293,7 @@ class RetryMechanism:
                     self._handle_sync_retry_delay(operation_name, attempt)
 
         self._update_stats_failure(operation_name)
-        logger.error(
-            f"{operation_name} failed after {self.config.max_attempts} attempts"
-        )
+        logger.error(f"{operation_name} failed after {self.config.max_attempts} attempts")
         raise RetryExhaustedError(self.config.max_attempts, last_exception)
 
     def get_stats(self) -> Dict[str, Any]:
@@ -446,9 +415,7 @@ def retry_sync(
 
             retry_mechanism = RetryMechanism(config)
 
-            return retry_mechanism.execute_sync(
-                func, *args, operation_name=operation_name or func.__name__, **kwargs
-            )
+            return retry_mechanism.execute_sync(func, *args, operation_name=operation_name or func.__name__, **kwargs)
 
         return wrapper
 
@@ -475,17 +442,13 @@ def with_retry(config: "RetryConfig"):
         async def async_wrapper(*args, **kwargs):
             """Async wrapper that executes function with retry mechanism."""
             mechanism = RetryMechanism(config)
-            return await mechanism.execute_async(
-                func, *args, operation_name=func.__name__, **kwargs
-            )
+            return await mechanism.execute_async(func, *args, operation_name=func.__name__, **kwargs)
 
         @wraps(func)
         def sync_wrapper(*args, **kwargs):
             """Sync wrapper that executes function with retry mechanism."""
             mechanism = RetryMechanism(config)
-            return mechanism.execute_sync(
-                func, *args, operation_name=func.__name__, **kwargs
-            )
+            return mechanism.execute_sync(func, *args, operation_name=func.__name__, **kwargs)
 
         if asyncio.iscoroutinefunction(func):
             return async_wrapper
@@ -585,9 +548,7 @@ if __name__ == "__main__":
             logger.info("Network call failed: %s", e)
 
         # Example 2: Using retry mechanism directly
-        retry_mechanism = RetryMechanism(
-            RetryConfig(max_attempts=3, strategy=RetryStrategy.JITTERED_BACKOFF)
-        )
+        retry_mechanism = RetryMechanism(RetryConfig(max_attempts=3, strategy=RetryStrategy.JITTERED_BACKOFF))
 
         async def another_flaky_operation():
             """Example operation that may timeout randomly."""
@@ -598,9 +559,7 @@ if __name__ == "__main__":
             return "Operation completed"
 
         try:
-            result = await retry_mechanism.execute_async(
-                another_flaky_operation, operation_name="flaky_operation"
-            )
+            result = await retry_mechanism.execute_async(another_flaky_operation, operation_name="flaky_operation")
             logger.info("Operation result: %s", result)
         except RetryExhaustedError as e:
             logger.info("Operation failed: %s", e)

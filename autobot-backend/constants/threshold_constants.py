@@ -143,9 +143,7 @@ class TimingConstants:
     ERROR_RECOVERY_LONG_DELAY = 30.0  # Extended delay after errors in monitoring loops
 
     # Service lifecycle
-    SERVICE_STARTUP_DELAY = (
-        2.0  # Wait for service to initialize after start/stop/restart
-    )
+    SERVICE_STARTUP_DELAY = 2.0  # Wait for service to initialize after start/stop/restart
     KB_INIT_DELAY = 3.0  # Wait for knowledge base async initialization
 
 
@@ -253,9 +251,7 @@ class AnalyticsConfig:
 
     # Bug prediction timeouts (seconds)
     BUG_PREDICTION_TIMEOUT = 120.0  # Extended timeout for large codebases
-    DUPLICATE_DETECTION_TIMEOUT = (
-        120.0  # Timeout for duplicate code analysis (increased from 60s)
-    )
+    DUPLICATE_DETECTION_TIMEOUT = 120.0  # Timeout for duplicate code analysis (increased from 60s)
 
     # Analysis file limits (0 = no limit, scan all files)
     BUG_PREDICTION_FILE_LIMIT = 0  # No limit on files to analyze
@@ -508,8 +504,8 @@ class ProtocolDefaults:
     TCP: str = "tcp"
 
     # Health endpoints — imported from api_constants (Issue #3531)
-    from constants.api_constants import PATH_HEALTH as HEALTH_ENDPOINT  # noqa: F401
     from constants.api_constants import PATH_API_HEALTH as API_HEALTH_ENDPOINT  # noqa: F401
+    from constants.api_constants import PATH_HEALTH as HEALTH_ENDPOINT  # noqa: F401
 
     # API version
     API_VERSION: str = "1.0"

@@ -113,10 +113,7 @@ class AgentRouter:
             "strategy": "single_agent",
             "primary_agent": self._resolve_agent_type(strategy.best_approach),
             "confidence": strategy.confidence,
-            "reasoning": (
-                f"Learned strategy: {strategy.best_approach} "
-                f"(samples={strategy.sample_size})"
-            ),
+            "reasoning": (f"Learned strategy: {strategy.best_approach} " f"(samples={strategy.sample_size})"),
             "source": "learned",
         }
 
@@ -147,9 +144,7 @@ class AgentRouter:
             rl = self._get_rl_router()
             agent_id, confidence, state_key = await rl.select_agent(request, available)
             if confidence <= 0.6:
-                logger.debug(
-                    "RL confidence %.2f too low; falling back to LLM", confidence
-                )
+                logger.debug("RL confidence %.2f too low; falling back to LLM", confidence)
                 return None
             agent_type = self._resolve_agent_type(agent_id)
             logger.info(
@@ -258,9 +253,7 @@ class AgentRouter:
             }
         return None
 
-    def _check_system_command_patterns(
-        self, request_lower: str
-    ) -> Optional[Dict[str, Any]]:
+    def _check_system_command_patterns(self, request_lower: str) -> Optional[Dict[str, Any]]:
         """Check for system command patterns in request. Issue #620.
 
         Args:
@@ -339,9 +332,7 @@ class AgentRouter:
             "reasoning": "Complex request requiring orchestrator analysis",
         }
 
-    def _check_specialized_agent_patterns(
-        self, request_lower: str
-    ) -> Optional[Dict[str, Any]]:
+    def _check_specialized_agent_patterns(self, request_lower: str) -> Optional[Dict[str, Any]]:
         """Check for specialized agent patterns (Issue #60)."""
         pattern_agent_map = [
             (DATA_ANALYSIS_PATTERNS, AgentType.DATA_ANALYSIS, "Data analysis pattern"),
@@ -489,9 +480,7 @@ class AgentRouter:
                 parsed["primary_agent"] = AgentType(parsed["primary_agent"])
 
             if "secondary_agents" in parsed:
-                parsed["secondary_agents"] = [
-                    AgentType(agent) for agent in parsed["secondary_agents"]
-                ]
+                parsed["secondary_agents"] = [AgentType(agent) for agent in parsed["secondary_agents"]]
 
             return parsed
 

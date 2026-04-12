@@ -56,21 +56,15 @@ class WorkflowMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-    def record_execution(
-        self, workflow_type: str, status: str, duration: Optional[float] = None
-    ) -> None:
+    def record_execution(self, workflow_type: str, status: str, duration: Optional[float] = None) -> None:
         """Record a workflow execution."""
-        self.workflow_executions_total.labels(
-            workflow_type=workflow_type, status=status
-        ).inc()
+        self.workflow_executions_total.labels(workflow_type=workflow_type, status=status).inc()
         if duration is not None:
             self.workflow_duration.labels(workflow_type=workflow_type).observe(duration)
 
     def record_step(self, workflow_type: str, step_type: str, status: str) -> None:
         """Record a workflow step execution."""
-        self.workflow_steps_executed.labels(
-            workflow_type=workflow_type, step_type=step_type, status=status
-        ).inc()
+        self.workflow_steps_executed.labels(workflow_type=workflow_type, step_type=step_type, status=status).inc()
 
     def update_active_count(self, workflow_type: str, count: int) -> None:
         """Update active workflows count."""
@@ -78,9 +72,7 @@ class WorkflowMetricsRecorder(BaseMetricsRecorder):
 
     def record_approval(self, workflow_type: str, decision: str) -> None:
         """Record a workflow approval decision."""
-        self.workflow_approvals.labels(
-            workflow_type=workflow_type, decision=decision
-        ).inc()
+        self.workflow_approvals.labels(workflow_type=workflow_type, decision=decision).inc()
 
 
 __all__ = ["WorkflowMetricsRecorder"]

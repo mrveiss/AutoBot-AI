@@ -60,10 +60,7 @@ def _run_indexing_subprocess() -> dict:
             "message": "Knowledge refresh failed",
         }
     indexed_count, total_facts = _parse_indexing_output(result.stdout)
-    logger.info(
-        f"System knowledge refresh complete: {indexed_count} commands indexed, "
-        f"{total_facts} total facts"
-    )
+    logger.info(f"System knowledge refresh complete: {indexed_count} commands indexed, " f"{total_facts} total facts")
     return {
         "status": "success",
         "commands_indexed": indexed_count,
@@ -99,9 +96,7 @@ def refresh_system_knowledge(self) -> Metadata:
                 "status": "Starting system knowledge refresh...",
             },
         )
-        logger.info(
-            "Starting comprehensive system knowledge refresh (background task)..."
-        )
+        logger.info("Starting comprehensive system knowledge refresh (background task)...")
         return _run_indexing_subprocess()
 
     except Exception as e:
@@ -154,9 +149,7 @@ def reindex_knowledge_base(self) -> Metadata:
             # Get updated stats
             stats = loop.run_until_complete(kb.get_stats())
 
-            logger.info(
-                f"Knowledge base reindex complete: {stats.get('total_vectors', 0)} vectors"
-            )
+            logger.info(f"Knowledge base reindex complete: {stats.get('total_vectors', 0)} vectors")
 
             return {
                 "status": "success",
@@ -254,9 +247,7 @@ async def _store_scan_results_to_kb(kb, scan_result: dict) -> tuple:
     return items_added, items_failed
 
 
-async def _scan_man_page_changes_async(
-    machine_id: str, limit: int | None = None
-) -> dict:
+async def _scan_man_page_changes_async(machine_id: str, limit: int | None = None) -> dict:
     """
     Async implementation of man page change scanning.
 
@@ -414,9 +405,7 @@ async def _execute_full_man_page_index(
     )
 
     # Store using extracted helper (Issue #398)
-    items_added, items_failed = await _store_man_pages_to_kb(
-        kb, man_pages, TimingConstants.MICRO_DELAY
-    )
+    items_added, items_failed = await _store_man_pages_to_kb(kb, man_pages, TimingConstants.MICRO_DELAY)
 
     return {
         "status": "success",
@@ -463,15 +452,10 @@ def full_man_page_index(
         )
 
         machine_id = socket.gethostname()
-        logger.info(
-            f"Starting full man page index for {machine_id} "
-            f"(limit={limit}, sections={sections})..."
-        )
+        logger.info(f"Starting full man page index for {machine_id} " f"(limit={limit}, sections={sections})...")
 
         # Run async indexing using extracted helper (Issue #665)
-        result = _run_async_in_loop(
-            _execute_full_man_page_index(machine_id, limit, sections)
-        )
+        result = _run_async_in_loop(_execute_full_man_page_index(machine_id, limit, sections))
 
         logger.info(
             f"Full man page index complete: {result.get('items_added', 0)} added, "

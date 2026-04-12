@@ -155,9 +155,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         await self._save_machine_profile()
 
         logger.info(f"Machine profile detected: {new_profile.machine_id}")
-        logger.info(
-            f"OS: {os_info.os_type.value} ({os_info.distro.value if os_info.distro else 'N/A'})"
-        )
+        logger.info(f"OS: {os_info.os_type.value} ({os_info.distro.value if os_info.distro else 'N/A'})")
         logger.info("Available tools: %s", len(os_info.capabilities))
 
     def _generate_machine_id(self, os_info) -> str:
@@ -173,9 +171,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
 
         # Create hash of components
         machine_string = "|".join(components)
-        machine_hash = hashlib.md5(
-            machine_string.encode(), usedforsecurity=False
-        ).hexdigest()[:12]
+        machine_hash = hashlib.md5(machine_string.encode(), usedforsecurity=False).hexdigest()[:12]
 
         return f"{os_info.os_type.value}_{machine_hash}"
 
@@ -184,16 +180,11 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         if not self.current_machine_profile:
             return
 
-        profile_file = (
-            self.machine_profiles_dir
-            / f"{self.current_machine_profile.machine_id}.json"
-        )
+        profile_file = self.machine_profiles_dir / f"{self.current_machine_profile.machine_id}.json"
 
         try:
             async with aiofiles.open(profile_file, "w", encoding="utf-8") as f:
-                await f.write(
-                    json.dumps(self.current_machine_profile.to_dict(), indent=2)
-                )
+                await f.write(json.dumps(self.current_machine_profile.to_dict(), indent=2))
             logger.info("Machine profile saved: %s", profile_file)
         except OSError as e:
             logger.error("Failed to save machine profile to %s: %s", profile_file, e)
@@ -223,29 +214,21 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         if not self.current_machine_profile:
             return self.runtime_knowledge_dir
 
-        return (
-            self.runtime_knowledge_dir
-            / "machines"
-            / self.current_machine_profile.machine_id
-        )
+        return self.runtime_knowledge_dir / "machines" / self.current_machine_profile.machine_id
 
     async def _has_machine_changed(self) -> bool:
         """Check if current machine profile differs from saved profile"""
         if not self.current_machine_profile:
             return True
 
-        saved_profile = await self._load_machine_profile(
-            self.current_machine_profile.machine_id
-        )
+        saved_profile = await self._load_machine_profile(self.current_machine_profile.machine_id)
         if not saved_profile:
             return True
 
         # Compare key attributes
         return (
-            saved_profile.available_tools
-            != self.current_machine_profile.available_tools
-            or saved_profile.package_manager
-            != self.current_machine_profile.package_manager
+            saved_profile.available_tools != self.current_machine_profile.available_tools
+            or saved_profile.package_manager != self.current_machine_profile.package_manager
             or saved_profile.capabilities != self.current_machine_profile.capabilities
         )
 
@@ -294,13 +277,9 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
                 machine_file = machine_tools_dir / yaml_file.name
                 try:
                     async with aiofiles.open(machine_file, "w", encoding="utf-8") as f:
-                        await f.write(
-                            yaml.dump(adapted_tools, default_flow_style=False, indent=2)
-                        )
+                        await f.write(yaml.dump(adapted_tools, default_flow_style=False, indent=2))
                 except OSError as e:
-                    logger.error(
-                        f"Failed to write adapted tools to {machine_file}: {e}"
-                    )
+                    logger.error(f"Failed to write adapted tools to {machine_file}: {e}")
 
     def _filter_tools_for_machine(self, tools_data: Dict[str, Any]) -> Dict[str, Any]:
         """Filter tools based on current machine capabilities"""
@@ -344,9 +323,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         # Check if installation method exists for this package manager
         return package_manager in installation
 
-    def _adapt_tool_for_machine(
-        self, tool_data: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    def _adapt_tool_for_machine(self, tool_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Adapt tool configuration for current machine"""
         if not self.current_machine_profile:
             return tool_data
@@ -362,9 +339,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
                 # Keep only the relevant installation method
                 adapted_tool["installation"] = {
                     package_manager: installation[package_manager],
-                    "system": (
-                        f"Optimized for {self.current_machine_profile.os_type.value}"
-                    ),
+                    "system": (f"Optimized for {self.current_machine_profile.os_type.value}"),
                 }
             else:
                 # No suitable installation method
@@ -387,9 +362,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             return
 
         machine_workflows_dir = self._get_machine_knowledge_dir() / "workflows"
-        await asyncio.to_thread(
-            machine_workflows_dir.mkdir, parents=True, exist_ok=True
-        )
+        await asyncio.to_thread(machine_workflows_dir.mkdir, parents=True, exist_ok=True)
 
         # Issue #358 - wrap glob in lambda to avoid blocking
         yaml_files = await asyncio.to_thread(lambda: list(workflows_dir.glob("*.yaml")))
@@ -411,19 +384,11 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
                 machine_file = machine_workflows_dir / yaml_file.name
                 try:
                     async with aiofiles.open(machine_file, "w", encoding="utf-8") as f:
-                        await f.write(
-                            yaml.dump(
-                                adapted_workflow, default_flow_style=False, indent=2
-                            )
-                        )
+                        await f.write(yaml.dump(adapted_workflow, default_flow_style=False, indent=2))
                 except OSError as e:
-                    logger.error(
-                        f"Failed to write adapted workflow to {machine_file}: {e}"
-                    )
+                    logger.error(f"Failed to write adapted workflow to {machine_file}: {e}")
 
-    def _adapt_workflow_for_machine(
-        self, workflow_data: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    def _adapt_workflow_for_machine(self, workflow_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Adapt workflow based on machine capabilities"""
         if not self.current_machine_profile:
             return workflow_data
@@ -436,11 +401,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         available_required_tools = []
 
         for tool_req in required_tools:
-            tool_name = (
-                tool_req.get("name", "")
-                if isinstance(tool_req, dict)
-                else str(tool_req)
-            )
+            tool_name = tool_req.get("name", "") if isinstance(tool_req, dict) else str(tool_req)
 
             if tool_name in available_tools:
                 available_required_tools.append(tool_req)
@@ -450,9 +411,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         # Skip workflow if critical tools are missing
         if missing_tools:
             workflow_name = workflow_data.get("metadata", {}).get("name", "Unknown")
-            logger.info(
-                "Skipping workflow %s - missing tools: %s", workflow_name, missing_tools
-            )
+            logger.info("Skipping workflow %s - missing tools: %s", workflow_name, missing_tools)
             return None
 
         # Adapt workflow
@@ -477,15 +436,11 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             return
 
         machine_procedures_dir = self._get_machine_knowledge_dir() / "procedures"
-        await asyncio.to_thread(
-            machine_procedures_dir.mkdir, parents=True, exist_ok=True
-        )
+        await asyncio.to_thread(machine_procedures_dir.mkdir, parents=True, exist_ok=True)
 
         # Simply copy procedures for now - future enhancement could adapt commands
         # Issue #358 - wrap glob in lambda to avoid blocking
-        yaml_files = await asyncio.to_thread(
-            lambda: list(procedures_dir.glob("*.yaml"))
-        )
+        yaml_files = await asyncio.to_thread(lambda: list(procedures_dir.glob("*.yaml")))
         for yaml_file in yaml_files:
             machine_file = machine_procedures_dir / yaml_file.name
             await asyncio.to_thread(shutil.copy2, yaml_file, machine_file)
@@ -496,9 +451,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
 
         machine_dir_exists = await asyncio.to_thread(machine_dir.exists)
         if not machine_dir_exists:
-            logger.warning(
-                f"Machine-specific knowledge directory not found: {machine_dir}"
-            )
+            logger.warning(f"Machine-specific knowledge directory not found: {machine_dir}")
             return
 
         # Import adapted knowledge using parent class methods
@@ -538,9 +491,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         profiles_dir_exists = await asyncio.to_thread(self.machine_profiles_dir.exists)
         if profiles_dir_exists:
             # Issue #358 - wrap glob in lambda to avoid blocking
-            profile_files = await asyncio.to_thread(
-                lambda: list(self.machine_profiles_dir.glob("*.json"))
-            )
+            profile_files = await asyncio.to_thread(lambda: list(self.machine_profiles_dir.glob("*.json")))
             for profile_file in profile_files:
                 try:
                     async with aiofiles.open(profile_file, "r", encoding="utf-8") as f:
@@ -582,29 +533,21 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         integration_results["processed"] += 1
 
         try:
-            if await self._try_use_cached_man_page(
-                command, integrator, integration_results
-            ):
+            if await self._try_use_cached_man_page(command, integrator, integration_results):
                 return
 
-            man_info = await self._extract_man_page_info(
-                command, integrator, integration_results
-            )
+            man_info = await self._extract_man_page_info(command, integrator, integration_results)
             if not man_info:
                 return
 
-            await self._store_man_page(
-                command, man_info, integrator, profile, integration_results
-            )
+            await self._store_man_page(command, man_info, integrator, profile, integration_results)
 
         except Exception as e:
             integration_results["failed"] += 1
             integration_results["commands"][command] = f"error: {str(e)}"
             logger.error("Failed to integrate man page for %s: %s", command, e)
 
-    async def _try_use_cached_man_page(
-        self, command: str, integrator, integration_results: dict
-    ) -> bool:
+    async def _try_use_cached_man_page(self, command: str, integrator, integration_results: dict) -> bool:
         """
         Check for recent cached man page and use it if available. Issue #620.
 
@@ -618,9 +561,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             return True
         return False
 
-    async def _extract_man_page_info(
-        self, command: str, integrator, integration_results: dict
-    ):
+    async def _extract_man_page_info(self, command: str, integrator, integration_results: dict):
         """
         Validate and extract man page information. Issue #620.
 
@@ -640,9 +581,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
 
         return man_info
 
-    async def _store_man_page(
-        self, command: str, man_info, integrator, profile, integration_results: dict
-    ) -> None:
+    async def _store_man_page(self, command: str, man_info, integrator, profile, integration_results: dict) -> None:
         """
         Store man page in cache and knowledge base. Issue #620.
 
@@ -676,11 +615,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         machine_dir = self._get_machine_knowledge_dir()
         integrator.knowledge_base_dir = machine_dir.parent.parent
 
-        commands_to_integrate = [
-            cmd
-            for cmd in integrator.priority_commands
-            if cmd in profile.available_tools
-        ]
+        commands_to_integrate = [cmd for cmd in integrator.priority_commands if cmd in profile.available_tools]
         logger.info("Integrating man pages for %d commands", len(commands_to_integrate))
         return integrator, commands_to_integrate
 
@@ -714,9 +649,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             results = self._create_integration_results_dict()
 
             for command in commands:
-                await self._process_single_man_page(
-                    command, integrator, profile, results
-                )
+                await self._process_single_man_page(command, integrator, profile, results)
 
             logger.info(
                 "Man page integration complete: %d successful, %d failed, %d cached",
@@ -775,12 +708,8 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         yaml_file = man_knowledge_dir / f"{man_info.command}.yaml"
         try:
             async with aiofiles.open(yaml_file, "w", encoding="utf-8") as f:
-                await f.write(
-                    yaml.dump(knowledge_data, default_flow_style=False, indent=2)
-                )
-            logger.debug(
-                f"Saved man page knowledge for {man_info.command} to {yaml_file}"
-            )
+                await f.write(yaml.dump(knowledge_data, default_flow_style=False, indent=2))
+            logger.debug(f"Saved man page knowledge for {man_info.command} to {yaml_file}")
         except OSError as e:
             logger.error("Failed to save man page knowledge to %s: %s", yaml_file, e)
 
@@ -805,9 +734,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
                 await f.write(json.dumps(summary_data, indent=2))
             logger.info("Saved man page integration summary to %s", summary_file)
         except OSError as e:
-            logger.error(
-                f"Failed to save man page integration summary to {summary_file}: {e}"
-            )
+            logger.error(f"Failed to save man page integration summary to {summary_file}: {e}")
 
     async def get_man_page_summary(self) -> Dict[str, Any]:
         """Get summary of integrated man pages for current machine"""
@@ -831,9 +758,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             man_pages_exists = await asyncio.to_thread(man_pages_dir.exists)
             if man_pages_exists:
                 # Issue #358 - use lambda to avoid calling glob() in main thread
-                yaml_files = await asyncio.to_thread(
-                    lambda: list(man_pages_dir.glob("*.yaml"))
-                )
+                yaml_files = await asyncio.to_thread(lambda: list(man_pages_dir.glob("*.yaml")))
                 summary["current_man_page_files"] = len(yaml_files)
                 summary["available_commands"] = [f.stem for f in yaml_files]
             else:
@@ -912,16 +837,10 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
                     searchable_text = self._build_tool_searchable_text(tool)
                     if query_lower in searchable_text:
                         score = searchable_text.count(query_lower)
-                        results.append(
-                            self._create_search_result(
-                                tool, knowledge_data, yaml_file, score
-                            )
-                        )
+                        results.append(self._create_search_result(tool, knowledge_data, yaml_file, score))
 
             except Exception as e:
-                logger.error(
-                    f"Error searching man page knowledge file {yaml_file}: {e}"
-                )
+                logger.error(f"Error searching man page knowledge file {yaml_file}: {e}")
 
         results.sort(key=lambda x: x.get("relevance_score", 0), reverse=True)
         return results

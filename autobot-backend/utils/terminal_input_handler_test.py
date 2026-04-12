@@ -57,9 +57,7 @@ class TestTerminalInputHandler:
             os.environ[env_var] = value
 
             handler3 = TerminalInputHandler()
-            print(  # noqa: print
-                f"    {env_var}={value} detected as testing: {handler3.is_testing}"
-            )  # noqa: print
+            print(f"    {env_var}={value} detected as testing: {handler3.is_testing}")  # noqa: print  # noqa: print
 
             # Restore environment
             if old_value is None:
@@ -84,16 +82,12 @@ class TestTerminalInputHandler:
         # Test sequential responses
         for i, expected in enumerate(test_responses):
             result = self.handler.get_input(f"Prompt {i+1}: ")
-            print(  # noqa: print
-                f"  Mock response {i+1}: '{result}' (expected: '{expected}')"
-            )  # noqa: print
+            print(f"  Mock response {i+1}: '{result}' (expected: '{expected}')")  # noqa: print  # noqa: print
             assert result == expected, f"Should return mock response {expected}"
 
         # Test exhausted responses (should use defaults)
         result = self.handler.get_input("Extra prompt: ", default="default_value")
-        print(  # noqa: print
-            f"  Exhausted mock responses: '{result}' (should be default)"
-        )  # noqa: print
+        print(f"  Exhausted mock responses: '{result}' (should be default)")  # noqa: print  # noqa: print
 
         print("✓ Mock responses working")  # noqa: print
         return True
@@ -138,9 +132,7 @@ class TestTerminalInputHandler:
         result = self.handler.get_input("Test prompt: ", timeout=0.1, default="quick")
         duration = time.time() - start_time
 
-        print(  # noqa: print
-            f"  Testing mode response time: {duration:.3f}s (result: '{result}')"
-        )  # noqa: print
+        print(f"  Testing mode response time: {duration:.3f}s (result: '{result}')")  # noqa: print  # noqa: print
         assert duration < 0.5, "Testing mode should be fast"
 
         # Test timeout with interactive mode (mock to avoid actual waiting)
@@ -152,18 +144,12 @@ class TestTerminalInputHandler:
             with patch("builtins.input", side_effect=lambda x: time.sleep(2)):
                 start_time = time.time()
                 try:
-                    result = handler_interactive.get_input(
-                        "Timeout test: ", timeout=0.1, default="timeout_default"
-                    )
+                    result = handler_interactive.get_input("Timeout test: ", timeout=0.1, default="timeout_default")
                     duration = time.time() - start_time
-                    print(  # noqa: print
-                        f"  Interactive timeout test: {duration:.3f}s (result: '{result}')"
-                    )
+                    print(f"  Interactive timeout test: {duration:.3f}s (result: '{result}')")  # noqa: print
                 except InputTimeoutError:
                     duration = time.time() - start_time
-                    print(  # noqa: print
-                        f"  Interactive timeout raised exception after: {duration:.3f}s"
-                    )
+                    print(f"  Interactive timeout raised exception after: {duration:.3f}s")  # noqa: print
         except Exception as e:
             print(f"  Timeout test skipped due to: {e}")  # noqa: print
 
@@ -188,10 +174,7 @@ class TestTerminalInputHandler:
         assert result2 == "async2", "Should return second async response"
 
         # Test concurrent async inputs
-        tasks = [
-            self.handler.get_input_async(f"Concurrent {i}: ", default=f"default{i}")
-            for i in range(3)
-        ]
+        tasks = [self.handler.get_input_async(f"Concurrent {i}: ", default=f"default{i}") for i in range(3)]
 
         results = await asyncio.gather(*tasks)
         print(f"  Concurrent results: {results}")  # noqa: print
@@ -221,9 +204,7 @@ class TestTerminalInputHandler:
             assert result2 == "ctx2", "Should use sequential context responses"
 
         # After context, should revert to original behavior
-        result3 = self.handler.get_input(
-            "Post-context prompt: ", default="post_default"
-        )
+        result3 = self.handler.get_input("Post-context prompt: ", default="post_default")
         print(f"  Post-context result: '{result3}'")  # noqa: print
 
         print("✓ Context manager working")  # noqa: print

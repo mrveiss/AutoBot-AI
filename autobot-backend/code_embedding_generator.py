@@ -163,9 +163,7 @@ class CodeEmbeddingGenerator:
         content = f"codebert:{language}:{code}"
         return hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()
 
-    async def generate_embedding(
-        self, code: str, language: str = "python"
-    ) -> CodeEmbeddingResult:
+    async def generate_embedding(self, code: str, language: str = "python") -> CodeEmbeddingResult:
         """
         Generate embedding for a code snippet.
 
@@ -204,9 +202,7 @@ class CodeEmbeddingGenerator:
             cache_hit=False,
         )
 
-    async def _compute_embedding(
-        self, code: str, language: str
-    ) -> Tuple[np.ndarray, str]:
+    async def _compute_embedding(self, code: str, language: str) -> Tuple[np.ndarray, str]:
         """Compute embedding using available hardware."""
         formatted_code = f"# {language}\n{code}"
 
@@ -316,9 +312,7 @@ class CodeEmbeddingGenerator:
 
         for i in range(0, len(code_snippets), batch_size):
             batch = code_snippets[i : i + batch_size]
-            batch_results = await asyncio.gather(
-                *[self.generate_embedding(code, lang) for code, lang in batch]
-            )
+            batch_results = await asyncio.gather(*[self.generate_embedding(code, lang) for code, lang in batch])
             results.extend(batch_results)
 
         return results

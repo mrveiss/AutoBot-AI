@@ -197,10 +197,8 @@ class GPUSemanticChunker:
                 # Load model in thread pool to avoid blocking
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                     logger.info("Loading GPU embedding model...")
-                    self._embedding_model = (
-                        await asyncio.get_running_loop().run_in_executor(
-                            executor, self._load_model_with_optimizations
-                        )
+                    self._embedding_model = await asyncio.get_running_loop().run_in_executor(
+                        executor, self._load_model_with_optimizations
                     )
 
                 logger.info("GPU model loading completed")
@@ -247,14 +245,10 @@ class GPUSemanticChunker:
         from sentence_transformers import SentenceTransformer
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        self._embedding_model = SentenceTransformer(
-            self.embedding_model_name, device=device
-        )
+        self._embedding_model = SentenceTransformer(self.embedding_model_name, device=device)
         logger.warning("Using basic model fallback")
 
-    def _add_chunk_metadata(
-        self, chunks: List[SemanticChunk], metadata: Optional[Dict[str, Any]]
-    ) -> None:
+    def _add_chunk_metadata(self, chunks: List[SemanticChunk], metadata: Optional[Dict[str, Any]]) -> None:
         """Add optimization metadata to each chunk.
 
         Args:
@@ -276,9 +270,7 @@ class GPUSemanticChunker:
                 }
             )
 
-    def _log_chunking_results(
-        self, start_time: float, sentence_count: int, chunk_count: int
-    ) -> None:
+    def _log_chunking_results(self, start_time: float, sentence_count: int, chunk_count: int) -> None:
         """Log chunking performance results.
 
         Args:
@@ -296,9 +288,7 @@ class GPUSemanticChunker:
         logger.info("  - Performance: %.1f sentences/sec", sentences_per_sec)
         logger.info("  - Chunks created: %s", chunk_count)
 
-    async def chunk_text(
-        self, text: str, metadata: Optional[Dict[str, Any]] = None
-    ) -> List[SemanticChunk]:
+    async def chunk_text(self, text: str, metadata: Optional[Dict[str, Any]] = None) -> List[SemanticChunk]:
         """Main GPU-accelerated chunking method with performance monitoring.
 
         Target: 3x performance improvement over basic implementation.
@@ -326,9 +316,7 @@ class GPUSemanticChunker:
             embeddings = await self._compute_embeddings(sentences)
             distances = self._compute_semantic_distances(embeddings)
             boundaries = self._find_chunk_boundaries(distances)
-            chunks = self._create_chunks_with_boundaries(
-                sentences, boundaries, distances
-            )
+            chunks = self._create_chunks_with_boundaries(sentences, boundaries, distances)
 
             self._add_chunk_metadata(chunks, metadata)
             self._log_chunking_results(start_time, len(sentences), len(chunks))
@@ -430,9 +418,7 @@ class GPUSemanticChunker:
 
             distances = []
             for i in range(len(embeddings) - 1):
-                similarity = cosine_similarity(
-                    embeddings[i].reshape(1, -1), embeddings[i + 1].reshape(1, -1)
-                )[0][0]
+                similarity = cosine_similarity(embeddings[i].reshape(1, -1), embeddings[i + 1].reshape(1, -1))[0][0]
                 distances.append(1 - similarity)
 
             return distances
@@ -480,11 +466,7 @@ class GPUSemanticChunker:
             )
             chunks.append(chunk)
 
-            start_idx = (
-                boundary - self.overlap_sentences
-                if self.overlap_sentences > 0
-                else boundary
-            )
+            start_idx = boundary - self.overlap_sentences if self.overlap_sentences > 0 else boundary
 
         return chunks
 
@@ -502,10 +484,7 @@ class GPUSemanticChunker:
         for i, sentence in enumerate(sentences):
             sentence_len = len(sentence)
 
-            if (
-                current_length + sentence_len > self.max_chunk_size
-                and current_sentences
-            ):
+            if current_length + sentence_len > self.max_chunk_size and current_sentences:
                 chunk_content = " ".join(current_sentences)
                 chunk = SemanticChunk(
                     content=chunk_content,
@@ -554,9 +533,7 @@ class GPUSemanticChunker:
             "optimization_level": "RTX4070_GPU",
         }
 
-    async def chunk_document(
-        self, content: str, metadata: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
+    async def chunk_document(self, content: str, metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Main interface method compatible with LlamaIndex."""
         semantic_chunks = await self.chunk_text(content, metadata)
 

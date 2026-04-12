@@ -52,6 +52,7 @@ _INCLUDE_EXTENSIONS = _dc._INCLUDE_EXTENSIONS
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _sha256(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
 
@@ -102,8 +103,8 @@ class TestCollectChecksums:
         """Only files whose suffix is in _INCLUDE_EXTENSIONS appear in result."""
         _write(tmp_path / "script.py", b"a")
         _write(tmp_path / "config.yaml", b"b")
-        _write(tmp_path / "readme.md", b"c")   # excluded
-        _write(tmp_path / "image.png", b"d")   # excluded
+        _write(tmp_path / "readme.md", b"c")  # excluded
+        _write(tmp_path / "image.png", b"d")  # excluded
         result = _collect_checksums(tmp_path)
         assert "script.py" in result
         assert "config.yaml" in result
@@ -271,9 +272,7 @@ class TestComputeDrift:
 
     def test_both_dirs_missing_returns_empty(self, tmp_path):
         """Both dirs missing returns ([], 0) without raising."""
-        drifted, total = compute_drift(
-            str(tmp_path / "no_src"), str(tmp_path / "no_dep")
-        )
+        drifted, total = compute_drift(str(tmp_path / "no_src"), str(tmp_path / "no_dep"))
         assert drifted == []
         assert total == 0
 
@@ -480,6 +479,6 @@ class TestAllowedComponents:
             "..",
         ]
         for attempt in traversal_attempts:
-            assert attempt not in ALLOWED_COMPONENTS, (
-                f"Path traversal payload '{attempt}' should not be in ALLOWED_COMPONENTS"
-            )
+            assert (
+                attempt not in ALLOWED_COMPONENTS
+            ), f"Path traversal payload '{attempt}' should not be in ALLOWED_COMPONENTS"

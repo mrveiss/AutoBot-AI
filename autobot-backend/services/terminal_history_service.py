@@ -67,9 +67,7 @@ class TerminalHistoryService:
         except Exception as e:
             logger.error("Failed to add command to history: %s", e)
 
-    async def get_history(
-        self, user_id: str, limit: int = 100, offset: int = 0
-    ) -> List[str]:
+    async def get_history(self, user_id: str, limit: int = 100, offset: int = 0) -> List[str]:
         """Get recent commands (most recent first).
 
         Args:
@@ -94,9 +92,7 @@ class TerminalHistoryService:
             logger.error("Failed to get history: %s", e)
             return []
 
-    async def search_history(
-        self, user_id: str, query: str, limit: int = 50
-    ) -> List[str]:
+    async def search_history(self, user_id: str, query: str, limit: int = 50) -> List[str]:
         """Search history for commands containing query.
 
         Args:

@@ -229,14 +229,9 @@ class SLMAgent:
         Returns a list of dictionaries with port, process, and pid info.
         Issue #620.
         """
-        return [
-            {"port": p.port, "process": p.process, "pid": p.pid}
-            for p in get_listening_ports()
-        ]
+        return [{"port": p.port, "process": p.process, "pid": p.pid} for p in get_listening_ports()]
 
-    def _build_heartbeat_payload(
-        self, health: dict, os_info: str, code_version: Optional[str]
-    ) -> dict:
+    def _build_heartbeat_payload(self, health: dict, os_info: str, code_version: Optional[str]) -> dict:
         """
         Build the complete heartbeat payload.
 
@@ -326,8 +321,7 @@ class SLMAgent:
         conn = sqlite3.connect(self.buffer_db)
         try:
             cursor = conn.execute(
-                "SELECT id, event_type, data FROM event_buffer "
-                "WHERE synced = 0 ORDER BY id LIMIT 100"
+                "SELECT id, event_type, data FROM event_buffer " "WHERE synced = 0 ORDER BY id LIMIT 100"
             )
             events = cursor.fetchall()
 
@@ -356,10 +350,7 @@ class SLMAgent:
                     if response.status == 200:
                         ids = [e[0] for e in events]
                         placeholders = ",".join("?" * len(ids))
-                        query = (
-                            "UPDATE event_buffer SET synced = 1 "
-                            f"WHERE id IN ({placeholders})"
-                        )
+                        query = "UPDATE event_buffer SET synced = 1 " f"WHERE id IN ({placeholders})"
                         conn.execute(query, ids)
                         conn.commit()
                         logger.info("Synced %d events", len(events))
@@ -401,14 +392,10 @@ class SLMAgent:
         finally:
             conn.close()
 
-    async def run(
-        self, enable_notify_server: bool = False, notify_port: int = DEFAULT_NOTIFY_PORT
-    ):
+    async def run(self, enable_notify_server: bool = False, notify_port: int = DEFAULT_NOTIFY_PORT):
         """Main agent loop."""
         self.running = True
-        logger.info(
-            "SLM Agent started (node_id=%s, admin=%s)", self.node_id, self.admin_url
-        )
+        logger.info("SLM Agent started (node_id=%s, admin=%s)", self.node_id, self.admin_url)
 
         # Notify systemd that we're ready
         sd_notify("READY=1")

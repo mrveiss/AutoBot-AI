@@ -62,25 +62,19 @@ class KnowledgeAuditLog:
     async def _index_event_for_user(self, event_id: str, user_id: str) -> None:
         """Helper for log_event. Ref: #1088."""
         user_key = f"audit:user:{user_id}"
-        await asyncio.to_thread(
-            self.redis_client.zadd, user_key, {event_id: datetime.utcnow().timestamp()}
-        )
+        await asyncio.to_thread(self.redis_client.zadd, user_key, {event_id: datetime.utcnow().timestamp()})
         await asyncio.to_thread(self.redis_client.expire, user_key, self.ttl_seconds)
 
     async def _index_event_for_fact(self, event_id: str, fact_id: str) -> None:
         """Helper for log_event. Ref: #1088."""
         fact_key = f"audit:fact:{fact_id}"
-        await asyncio.to_thread(
-            self.redis_client.zadd, fact_key, {event_id: datetime.utcnow().timestamp()}
-        )
+        await asyncio.to_thread(self.redis_client.zadd, fact_key, {event_id: datetime.utcnow().timestamp()})
         await asyncio.to_thread(self.redis_client.expire, fact_key, self.ttl_seconds)
 
     async def _index_event_for_org(self, event_id: str, organization_id: str) -> None:
         """Helper for log_event. Ref: #1088."""
         org_key = f"audit:org:{organization_id}"
-        await asyncio.to_thread(
-            self.redis_client.zadd, org_key, {event_id: datetime.utcnow().timestamp()}
-        )
+        await asyncio.to_thread(self.redis_client.zadd, org_key, {event_id: datetime.utcnow().timestamp()})
         await asyncio.to_thread(self.redis_client.expire, org_key, self.ttl_seconds)
 
     async def log_event(
@@ -142,9 +136,7 @@ class KnowledgeAuditLog:
 
         return event_id
 
-    async def get_user_activity(
-        self, user_id: str, limit: int = 100, offset: int = 0
-    ) -> List[Dict]:
+    async def get_user_activity(self, user_id: str, limit: int = 100, offset: int = 0) -> List[Dict]:
         """Get audit events for a user.
 
         Args:
@@ -158,9 +150,7 @@ class KnowledgeAuditLog:
         user_key = f"audit:user:{user_id}"
 
         # Get event IDs sorted by timestamp (newest first)
-        event_ids = await asyncio.to_thread(
-            self.redis_client.zrevrange, user_key, offset, offset + limit - 1
-        )
+        event_ids = await asyncio.to_thread(self.redis_client.zrevrange, user_key, offset, offset + limit - 1)
 
         # Fetch event data
         events = []
@@ -189,9 +179,7 @@ class KnowledgeAuditLog:
         fact_key = f"audit:fact:{fact_id}"
 
         # Get event IDs sorted by timestamp (newest first)
-        event_ids = await asyncio.to_thread(
-            self.redis_client.zrevrange, fact_key, 0, limit - 1
-        )
+        event_ids = await asyncio.to_thread(self.redis_client.zrevrange, fact_key, 0, limit - 1)
 
         # Fetch event data
         events = []
@@ -207,9 +195,7 @@ class KnowledgeAuditLog:
 
         return events
 
-    async def get_organization_audit_log(
-        self, organization_id: str, limit: int = 1000, offset: int = 0
-    ) -> List[Dict]:
+    async def get_organization_audit_log(self, organization_id: str, limit: int = 1000, offset: int = 0) -> List[Dict]:
         """Get audit events for an organization.
 
         Args:
@@ -223,9 +209,7 @@ class KnowledgeAuditLog:
         org_key = f"audit:org:{organization_id}"
 
         # Get event IDs sorted by timestamp (newest first)
-        event_ids = await asyncio.to_thread(
-            self.redis_client.zrevrange, org_key, offset, offset + limit - 1
-        )
+        event_ids = await asyncio.to_thread(self.redis_client.zrevrange, org_key, offset, offset + limit - 1)
 
         # Fetch event data
         events = []
@@ -275,20 +259,14 @@ class KnowledgeAuditLog:
             return []
 
         # Filter for permission events
-        permission_events = [
-            event for event in all_events if event.get("type") in permission_event_types
-        ]
+        permission_events = [event for event in all_events if event.get("type") in permission_event_types]
 
         return permission_events[:limit]
 
-    async def _fetch_events_in_range(
-        self, organization_id: str, start_ts: float, end_ts: float
-    ) -> List[Dict]:
+    async def _fetch_events_in_range(self, organization_id: str, start_ts: float, end_ts: float) -> List[Dict]:
         """Helper for generate_compliance_report. Ref: #1088."""
         org_key = f"audit:org:{organization_id}"
-        event_ids = await asyncio.to_thread(
-            self.redis_client.zrangebyscore, org_key, start_ts, end_ts
-        )
+        event_ids = await asyncio.to_thread(self.redis_client.zrangebyscore, org_key, start_ts, end_ts)
         events = []
         for event_id in event_ids:
             if isinstance(event_id, bytes):
@@ -322,9 +300,7 @@ class KnowledgeAuditLog:
                 fact_modifications[fact_id].append(event)
         return event_counts, user_activity, fact_modifications
 
-    async def generate_compliance_report(
-        self, organization_id: str, start_date: datetime, end_date: datetime
-    ) -> Dict:
+    async def generate_compliance_report(self, organization_id: str, start_date: datetime, end_date: datetime) -> Dict:
         """Generate compliance report for an organization.
 
         Args:
@@ -335,9 +311,7 @@ class KnowledgeAuditLog:
         Returns:
             Compliance report dict with statistics
         """
-        events = await self._fetch_events_in_range(
-            organization_id, start_date.timestamp(), end_date.timestamp()
-        )
+        events = await self._fetch_events_in_range(organization_id, start_date.timestamp(), end_date.timestamp())
 
         (
             event_counts,
@@ -353,10 +327,7 @@ class KnowledgeAuditLog:
             "event_counts": event_counts,
             "unique_users": len(user_activity),
             "most_active_users": sorted(
-                [
-                    {"user_id": uid, "count": count}
-                    for uid, count in user_activity.items()
-                ],
+                [{"user_id": uid, "count": count} for uid, count in user_activity.items()],
                 key=lambda x: x["count"],
                 reverse=True,
             )[:10],

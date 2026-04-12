@@ -202,9 +202,7 @@ class ServiceRegistry:
             self._load_config_file(config_file)
         self._load_environment_config()
 
-        self.logger.info(
-            f"Service registry initialized in {self.deployment_mode.value} mode"
-        )
+        self.logger.info(f"Service registry initialized in {self.deployment_mode.value} mode")
 
     def _detect_deployment_mode(self) -> DeploymentMode:
         """Detect current deployment mode"""
@@ -244,23 +242,15 @@ class ServiceRegistry:
                 host=host,
                 port=svc_def["port"],
                 health_endpoint=svc_def["health_endpoint"],
-                scheme=svc_def["schemes"].get(
-                    self.deployment_mode.value.split("_")[0], "http"
-                ),
+                scheme=svc_def["schemes"].get(self.deployment_mode.value.split("_")[0], "http"),
                 timeout=config.get_timeout("service_registry", "default"),
                 retries=config.get("service_registry.retries", 3),
-                circuit_breaker_threshold=config.get(
-                    "circuit_breaker.service_registry.failure_threshold", 5
-                ),
-                circuit_breaker_timeout=config.get_timeout(
-                    "circuit_breaker", "recovery"
-                ),
+                circuit_breaker_threshold=config.get("circuit_breaker.service_registry.failure_threshold", 5),
+                circuit_breaker_timeout=config.get_timeout("circuit_breaker", "recovery"),
             )
 
             self.services[service_name] = service_config
-            self.health_status[service_name] = ServiceHealth(
-                status=ServiceStatus.UNKNOWN, last_check=0
-            )
+            self.health_status[service_name] = ServiceHealth(status=ServiceStatus.UNKNOWN, last_check=0)
 
     def _resolve_host(self, service_name: str) -> str:
         """Resolve hostname based on deployment mode and service"""
@@ -282,9 +272,7 @@ class ServiceRegistry:
         if service_name in patterns:
             pattern = patterns[service_name]
         else:
-            pattern = patterns.get(
-                "default", config.get("infrastructure.defaults.localhost")
-            )
+            pattern = patterns.get("default", config.get("infrastructure.defaults.localhost"))
 
         # Replace placeholders
         return pattern.format(service=service_name, domain=self.domain)
@@ -306,22 +294,14 @@ class ServiceRegistry:
                     service.host = service_data.get("host", service.host)
                     service.port = service_data.get("port", service.port)
                     service.scheme = service_data.get("scheme", service.scheme)
-                    service.health_endpoint = service_data.get(
-                        "health_endpoint", service.health_endpoint
-                    )
+                    service.health_endpoint = service_data.get("health_endpoint", service.health_endpoint)
                 else:
                     # Add new service
                     self.services[service_name] = ServiceConfig(
                         name=service_name,
-                        host=service_data.get(
-                            "host", config.get("infrastructure.defaults.localhost")
-                        ),
-                        port=service_data.get(
-                            "port", config.get("infrastructure.ports.default", 80)
-                        ),
-                        scheme=service_data.get(
-                            "scheme", config.get("deployment.default_scheme", "http")
-                        ),
+                        host=service_data.get("host", config.get("infrastructure.defaults.localhost")),
+                        port=service_data.get("port", config.get("infrastructure.ports.default", 80)),
+                        scheme=service_data.get("scheme", config.get("deployment.default_scheme", "http")),
                         health_endpoint=service_data.get(
                             "health_endpoint",
                             config.get("deployment.default_health_endpoint", "/health"),
@@ -351,13 +331,9 @@ class ServiceRegistry:
             else:
                 service.host = config.get(f"services.{service_key}.host", service.host)
             service.port = config.get(f"services.{service_key}.port", service.port)
-            service.scheme = config.get(
-                f"services.{service_key}.scheme", service.scheme
-            )
+            service.scheme = config.get(f"services.{service_key}.scheme", service.scheme)
             service.path = config.get(f"services.{service_key}.path", service.path)
-            service.health_endpoint = config.get(
-                f"services.{service_key}.health_endpoint", service.health_endpoint
-            )
+            service.health_endpoint = config.get(f"services.{service_key}.health_endpoint", service.health_endpoint)
 
     def get_service_url(self, service_name: str, path: str = "") -> str:
         """
@@ -401,9 +377,7 @@ class ServiceRegistry:
     def register_service(self, service_config: ServiceConfig):
         """Register a new service"""
         self.services[service_config.name] = service_config
-        self.health_status[service_config.name] = ServiceHealth(
-            status=ServiceStatus.UNKNOWN, last_check=0
-        )
+        self.health_status[service_config.name] = ServiceHealth(status=ServiceStatus.UNKNOWN, last_check=0)
         self.logger.info("Registered service: %s", service_config.name)
 
     async def check_service_health(self, service_name: str) -> ServiceHealth:
@@ -464,12 +438,8 @@ class ServiceRegistry:
         health_report = {}
         for i, service_name in enumerate(self.services):
             if isinstance(results[i], Exception):
-                self.logger.error(
-                    f"Health check error for {service_name}: {results[i]}"
-                )
-                health_report[service_name] = ServiceHealth(
-                    status=ServiceStatus.UNHEALTHY, last_check=time.time()
-                )
+                self.logger.error(f"Health check error for {service_name}: {results[i]}")
+                health_report[service_name] = ServiceHealth(status=ServiceStatus.UNHEALTHY, last_check=time.time())
             else:
                 health_report[service_name] = results[i]
 
@@ -477,9 +447,7 @@ class ServiceRegistry:
 
     def get_service_health(self, service_name: str) -> ServiceHealth:
         """Get cached health status for a service"""
-        return self.health_status.get(
-            service_name, ServiceHealth(status=ServiceStatus.UNKNOWN, last_check=0)
-        )
+        return self.health_status.get(service_name, ServiceHealth(status=ServiceStatus.UNKNOWN, last_check=0))
 
     def is_service_healthy(self, service_name: str, max_age: int = 60) -> bool:
         """Check if service is healthy (with cache age limit)"""

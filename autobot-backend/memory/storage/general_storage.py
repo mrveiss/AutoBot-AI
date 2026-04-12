@@ -68,11 +68,7 @@ class GeneralStorage:
 
     async def store(self, entry: MemoryEntry) -> int:
         """Store memory entry"""
-        category_value = (
-            entry.category.value
-            if isinstance(entry.category, MemoryCategory)
-            else entry.category
-        )
+        category_value = entry.category.value if isinstance(entry.category, MemoryCategory) else entry.category
 
         try:
             async with self._get_connection() as conn:
@@ -94,21 +90,15 @@ class GeneralStorage:
                 )
                 await conn.commit()
 
-                logger.debug(
-                    "Stored memory entry: %s (ID: %s)", category_value, cursor.lastrowid
-                )
+                logger.debug("Stored memory entry: %s (ID: %s)", category_value, cursor.lastrowid)
                 return cursor.lastrowid
         except aiosqlite.Error as e:
             logger.error("Failed to store memory entry: %s", e)
             raise RuntimeError(f"Failed to store memory entry: {e}")
 
-    async def retrieve(
-        self, category: Union[MemoryCategory, str], filters: Dict[str, Any]
-    ) -> List[MemoryEntry]:
+    async def retrieve(self, category: Union[MemoryCategory, str], filters: Dict[str, Any]) -> List[MemoryEntry]:
         """Retrieve memories by category and filters"""
-        category_value = (
-            category.value if isinstance(category, MemoryCategory) else category
-        )
+        category_value = category.value if isinstance(category, MemoryCategory) else category
 
         where_clauses = ["category = ?"]
         values = [category_value]
@@ -172,9 +162,7 @@ class GeneralStorage:
 
         try:
             async with self._get_connection() as conn:
-                cursor = await conn.execute(
-                    "DELETE FROM memory_entries WHERE timestamp < ?", (cutoff,)
-                )
+                cursor = await conn.execute("DELETE FROM memory_entries WHERE timestamp < ?", (cutoff,))
                 await conn.commit()
 
                 deleted = cursor.rowcount
@@ -220,9 +208,7 @@ class GeneralStorage:
             content=row["content"],
             metadata=json.loads(row["metadata_json"]) if row["metadata_json"] else {},
             timestamp=(
-                datetime.fromisoformat(row["timestamp"])
-                if isinstance(row["timestamp"], str)
-                else row["timestamp"]
+                datetime.fromisoformat(row["timestamp"]) if isinstance(row["timestamp"], str) else row["timestamp"]
             ),
             reference_path=row["reference_path"],
             embedding=row["embedding"],

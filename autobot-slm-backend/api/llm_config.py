@@ -254,18 +254,12 @@ async def _test_ollama(endpoint: str) -> LLMTestResponse:
                 provider="ollama",
                 latency_ms=round(latency, 1),
             )
-        return LLMTestResponse(
-            success=False, message=f"HTTP {resp.status_code}", provider="ollama"
-        )
+        return LLMTestResponse(success=False, message=f"HTTP {resp.status_code}", provider="ollama")
     except Exception:
-        return LLMTestResponse(
-            success=False, message="Connection failed", provider="ollama"
-        )
+        return LLMTestResponse(success=False, message="Connection failed", provider="ollama")
 
 
-async def _test_cloud_provider(
-    provider: str, endpoint: str, api_key: str
-) -> LLMTestResponse:
+async def _test_cloud_provider(provider: str, endpoint: str, api_key: str) -> LLMTestResponse:
     """Test cloud provider connection. Helper for test_llm_connection (#2371)."""
     import time
 
@@ -292,9 +286,7 @@ async def _test_cloud_provider(
             provider=provider,
         )
     except Exception:
-        return LLMTestResponse(
-            success=False, message="Connection failed", provider=provider
-        )
+        return LLMTestResponse(success=False, message="Connection failed", provider=provider)
 
 
 @router.post("/test", response_model=LLMTestResponse)
@@ -330,9 +322,7 @@ async def apply_llm_config(
     node_count = 0
     limit: Optional[List[str]] = None
     if request.node_ids:
-        node_result = await db.execute(
-            select(Node).where(Node.node_id.in_(request.node_ids))
-        )
+        node_result = await db.execute(select(Node).where(Node.node_id.in_(request.node_ids)))
         nodes = node_result.scalars().all()
         limit = [n.node_id for n in nodes]
         node_count = len(limit)

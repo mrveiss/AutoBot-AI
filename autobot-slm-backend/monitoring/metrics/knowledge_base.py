@@ -189,21 +189,13 @@ class KnowledgeBaseMetricsRecorder(BaseMetricsRecorder):
     # Document Methods
     # =========================================================================
 
-    def set_document_count(
-        self, count: int, collection: str, document_type: str = "default"
-    ) -> None:
+    def set_document_count(self, count: int, collection: str, document_type: str = "default") -> None:
         """Set total document count for a collection."""
-        self.documents_total.labels(
-            collection=collection, document_type=document_type
-        ).set(count)
+        self.documents_total.labels(collection=collection, document_type=document_type).set(count)
 
-    def record_document_operation(
-        self, operation: str, collection: str, size_bytes: int = 0
-    ) -> None:
+    def record_document_operation(self, operation: str, collection: str, size_bytes: int = 0) -> None:
         """Record a document operation."""
-        self.document_operations.labels(
-            operation=operation, collection=collection
-        ).inc()
+        self.document_operations.labels(operation=operation, collection=collection).inc()
         if size_bytes > 0:
             self.document_size_bytes.labels(collection=collection).observe(size_bytes)
 
@@ -215,9 +207,7 @@ class KnowledgeBaseMetricsRecorder(BaseMetricsRecorder):
         """Set total vector count for a collection."""
         self.vectors_total.labels(collection=collection).set(count)
 
-    def record_embedding_operation(
-        self, operation: str, model: str, latency_seconds: float = 0
-    ) -> None:
+    def record_embedding_operation(self, operation: str, model: str, latency_seconds: float = 0) -> None:
         """Record an embedding operation."""
         self.embedding_operations.labels(operation=operation, model=model).inc()
         if latency_seconds > 0:
@@ -239,12 +229,8 @@ class KnowledgeBaseMetricsRecorder(BaseMetricsRecorder):
         results_count: int,
     ) -> None:
         """Record a search operation with all metrics."""
-        self.search_requests.labels(
-            search_type=search_type, collection=collection
-        ).inc()
-        self.search_latency.labels(
-            search_type=search_type, collection=collection
-        ).observe(latency_seconds)
+        self.search_requests.labels(search_type=search_type, collection=collection).inc()
+        self.search_latency.labels(search_type=search_type, collection=collection).observe(latency_seconds)
         self.search_results_count.labels(search_type=search_type).observe(results_count)
 
     # =========================================================================
@@ -259,9 +245,7 @@ class KnowledgeBaseMetricsRecorder(BaseMetricsRecorder):
         success: bool,
     ) -> None:
         """Record an indexing operation."""
-        self.indexing_duration.labels(
-            collection=collection, index_type=index_type
-        ).observe(duration_seconds)
+        self.indexing_duration.labels(collection=collection, index_type=index_type).observe(duration_seconds)
         status = "success" if success else "failure"
         self.indexing_operations.labels(collection=collection, status=status).inc()
 

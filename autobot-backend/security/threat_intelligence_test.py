@@ -495,14 +495,10 @@ class TestGracefulDegradation:
         )
 
         # VT succeeds
-        service._virustotal.check_url = AsyncMock(
-            return_value={"success": True, "score": 0.85}
-        )
+        service._virustotal.check_url = AsyncMock(return_value={"success": True, "score": 0.85})
 
         # URLVoid fails
-        service._urlvoid.check_domain = AsyncMock(
-            return_value={"success": False, "error": "API error", "score": None}
-        )
+        service._urlvoid.check_domain = AsyncMock(return_value={"success": False, "error": "API error", "score": None})
 
         result = await service.check_url_reputation("https://example.com")
 

@@ -78,7 +78,7 @@ class HookPoint(Enum):
 
     # Prompt pipeline — Issue #3405
     SYSTEM_PROMPT_READY = auto()  # Method: on_system_prompt_ready
-    FULL_PROMPT_READY = auto()    # Method: on_full_prompt_ready
+    FULL_PROMPT_READY = auto()  # Method: on_full_prompt_ready
 
 
 # Hook metadata for documentation and validation

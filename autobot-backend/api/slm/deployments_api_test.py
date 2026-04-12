@@ -102,9 +102,7 @@ class TestListDeployments:
         data = response.json()
         assert data["total"] == 1
 
-    def test_list_filter_excludes_other_status(
-        self, client, mock_orchestrator, sample_context
-    ):
+    def test_list_filter_excludes_other_status(self, client, mock_orchestrator, sample_context):
         """Test filter excludes other statuses."""
         sample_context.status = DeploymentStatus.QUEUED
         mock_orchestrator.active_deployments = [sample_context]
@@ -208,9 +206,7 @@ class TestGetDeployment:
 class TestExecuteDeployment:
     """Test execute deployment endpoint."""
 
-    def test_execute_deployment_success(
-        self, client, mock_orchestrator, sample_context
-    ):
+    def test_execute_deployment_success(self, client, mock_orchestrator, sample_context):
         """Test executing a queued deployment."""
         sample_context.status = DeploymentStatus.QUEUED
         mock_orchestrator.get_deployment.return_value = sample_context
@@ -301,9 +297,7 @@ class TestCancelDeployment:
 class TestRollbackDeployment:
     """Test rollback deployment endpoint."""
 
-    def test_rollback_deployment_success(
-        self, client, mock_orchestrator, sample_context
-    ):
+    def test_rollback_deployment_success(self, client, mock_orchestrator, sample_context):
         """Test triggering rollback."""
         mock_orchestrator.get_deployment.return_value = sample_context
         mock_orchestrator.trigger_rollback = AsyncMock(return_value=True)
@@ -377,9 +371,7 @@ class TestDeploymentResponseFormat:
         assert data["steps"][0]["step_type"] == "drain"
         assert data["steps"][0]["success"] is True
 
-    def test_response_timestamps_formatted(
-        self, client, mock_orchestrator, sample_context
-    ):
+    def test_response_timestamps_formatted(self, client, mock_orchestrator, sample_context):
         """Test timestamps are ISO formatted."""
         from datetime import datetime
 

@@ -43,12 +43,7 @@ class Agent(Base, TimestampMixin):
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     agent_type = Column(String(50), nullable=False, default="worker")
-    status = Column(
-        String(20), nullable=False, default=AgentStatus.ACTIVE.value, index=True
-    )
+    status = Column(String(20), nullable=False, default=AgentStatus.ACTIVE.value, index=True)
 
     def __repr__(self) -> str:
-        return (
-            f"<Agent agent_id={self.agent_id!r} name={self.name!r} "
-            f"status={self.status!r}>"
-        )
+        return f"<Agent agent_id={self.agent_id!r} name={self.name!r} " f"status={self.status!r}>"

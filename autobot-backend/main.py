@@ -74,9 +74,7 @@ if __name__ == "__main__":
             cert_dir = os.getenv("AUTOBOT_TLS_CERT_DIR", "certs")
             project_root = Path(__file__).parent.parent
             ssl_keyfile = str(project_root / cert_dir / "main-host" / "server-key.pem")
-            ssl_certfile = str(
-                project_root / cert_dir / "main-host" / "server-cert.pem"
-            )
+            ssl_certfile = str(project_root / cert_dir / "main-host" / "server-cert.pem")
 
         # Override port to TLS port when enabled
         port = int(os.getenv("AUTOBOT_BACKEND_TLS_PORT", "8443"))

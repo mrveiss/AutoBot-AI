@@ -136,9 +136,7 @@ class TestSlmGetServiceStatus:
 
     @pytest.mark.asyncio
     async def test_returns_running_when_service_found(self, manager):
-        data = {
-            "services": [{"service_name": "redis-stack-server", "status": "running"}]
-        }
+        data = {"services": [{"service_name": "redis-stack-server", "status": "running"}]}
         resp_cm = _make_response(data)
         session_cm, _session = _make_session(resp_cm)
         with patch(

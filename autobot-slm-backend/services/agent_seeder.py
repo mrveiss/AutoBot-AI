@@ -104,8 +104,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
         "agent_id": "research",
         "name": "Research Agent",
         "description": (
-            "Conducts web research using browser automation. Invoked by AgentRouter "
-            "when research patterns detected."
+            "Conducts web research using browser automation. Invoked by AgentRouter " "when research patterns detected."
         ),
         "llm_model": _QUALITY,
         "is_default": False,
@@ -126,8 +125,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
         "agent_id": "knowledge_retrieval",
         "name": "Knowledge Retrieval Agent",
         "description": (
-            "Fast semantic search using vector embeddings. Invoked by AgentRouter "
-            "for knowledge queries."
+            "Fast semantic search using vector embeddings. Invoked by AgentRouter " "for knowledge queries."
         ),
         "llm_model": _LIGHT,
         "is_default": False,
@@ -137,8 +135,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
         "agent_id": "code_analysis",
         "name": "Code Analysis Agent",
         "description": (
-            "Performs static code analysis, code review, and bug detection. "
-            "Uses AST parsing and pattern matching."
+            "Performs static code analysis, code review, and bug detection. " "Uses AST parsing and pattern matching."
         ),
         "llm_model": _QUALITY,
         "is_default": False,
@@ -226,8 +223,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
         "agent_id": "development_speedup",
         "name": "Development Speedup Agent",
         "description": (
-            "Accelerates development by finding code duplicates, patterns, and "
-            "optimization opportunities."
+            "Accelerates development by finding code duplicates, patterns, and " "optimization opportunities."
         ),
         "llm_model": _QUALITY,
         "is_default": False,
@@ -248,8 +244,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
         "agent_id": "graph_entity_extractor",
         "name": "Graph Entity Extractor",
         "description": (
-            "Automatically extracts entities and relationships from conversations "
-            "to populate AutoBot Memory Graph."
+            "Automatically extracts entities and relationships from conversations " "to populate AutoBot Memory Graph."
         ),
         "llm_model": _INSTRUCTION,
         "is_default": False,
@@ -282,8 +277,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
         "agent_id": "npu_code_search",
         "name": "NPU Code Search Agent",
         "description": (
-            "High-performance semantic code search using NPU acceleration (OpenVINO) "
-            "with Redis indexing."
+            "High-performance semantic code search using NPU acceleration (OpenVINO) " "with Redis indexing."
         ),
         "llm_model": _LIGHT,
         "is_default": False,
@@ -336,10 +330,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
     {
         "agent_id": "man_page_knowledge_integrator",
         "name": "Man Page Knowledge Integrator",
-        "description": (
-            "Scrapes, parses, and integrates Linux man pages into machine-aware "
-            "knowledge system."
-        ),
+        "description": ("Scrapes, parses, and integrates Linux man pages into machine-aware " "knowledge system."),
         "llm_model": _INSTRUCTION,
         "is_default": False,
         "is_active": True,
@@ -404,9 +395,7 @@ async def seed_default_agents(db: AsyncSession) -> int:
     """
     created = 0
     for cfg in SEED_AGENT_CONFIGS:
-        result = await db.execute(
-            select(Agent).where(Agent.agent_id == cfg["agent_id"])
-        )
+        result = await db.execute(select(Agent).where(Agent.agent_id == cfg["agent_id"]))
         if result.scalar_one_or_none() is not None:
             continue
 

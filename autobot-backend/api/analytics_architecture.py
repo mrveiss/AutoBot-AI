@@ -276,12 +276,8 @@ class AnalysisRequest(BaseModel):
         default_factory=lambda: ["backend/", "src/"],
         description="Paths to analyze",
     )
-    patterns_to_detect: Optional[List[PatternType]] = Field(
-        None, description="Specific patterns to look for"
-    )
-    include_autobot_patterns: bool = Field(
-        True, description="Include AutoBot-specific patterns"
-    )
+    patterns_to_detect: Optional[List[PatternType]] = Field(None, description="Specific patterns to look for")
+    include_autobot_patterns: bool = Field(True, description="Include AutoBot-specific patterns")
     generate_diagram: bool = Field(True, description="Generate Mermaid diagram")
 
 
@@ -497,9 +493,7 @@ class ArchitectureAnalyzer:
             target_patterns = [p for p in target_patterns if p not in autobot_patterns]
         return target_patterns
 
-    async def _analyze_all_files(
-        self, python_files: List[str], target_patterns: List[PatternType]
-    ) -> None:
+    async def _analyze_all_files(self, python_files: List[str], target_patterns: List[PatternType]) -> None:
         """Analyze all files in parallel (Issue #398: extracted)."""
         if not python_files:
             return
@@ -538,9 +532,7 @@ class ArchitectureAnalyzer:
         self.pattern_matches = []
         self.file_analyses = {}
 
-        target_patterns = self._determine_target_patterns(
-            patterns_to_detect, include_autobot_patterns
-        )
+        target_patterns = self._determine_target_patterns(patterns_to_detect, include_autobot_patterns)
         python_files = await self._collect_python_files(paths)
         logger.info("Analyzing %d Python files", len(python_files))
 
@@ -553,9 +545,7 @@ class ArchitectureAnalyzer:
             self._detect_layers(),
         )
         self.layers = layers
-        recommendations = self._generate_recommendations(
-            all_matches, consistency_results
-        )
+        recommendations = self._generate_recommendations(all_matches, consistency_results)
         mermaid_diagram = self._generate_mermaid_diagram()
 
         return ArchitectureReport(
@@ -603,9 +593,7 @@ class ArchitectureAnalyzer:
                 python_files.append(str(path))
             elif is_dir:
                 # _collect_files_from_directory is sync, run in thread
-                files = await asyncio.to_thread(
-                    self._collect_files_from_directory, path
-                )
+                files = await asyncio.to_thread(self._collect_files_from_directory, path)
                 python_files.extend(files)
 
         return python_files
@@ -652,9 +640,7 @@ class ArchitectureAnalyzer:
             if isinstance(item, _FUNCTION_DEF_TYPES):  # Issue #380
                 class_info["methods"].append(item.name)
             elif isinstance(item, ast.Assign):
-                class_info["attributes"].extend(
-                    self._extract_attributes_from_assign(item)
-                )
+                class_info["attributes"].extend(self._extract_attributes_from_assign(item))
 
         return class_info
 
@@ -668,32 +654,22 @@ class ArchitectureAnalyzer:
                         "name": node.name,
                         "line": node.lineno,
                         "is_async": isinstance(node, ast.AsyncFunctionDef),
-                        "decorators": [
-                            self._get_decorator_name(d) for d in node.decorator_list
-                        ],
+                        "decorators": [self._get_decorator_name(d) for d in node.decorator_list],
                     }
                 )
         return funcs
 
-    def _detect_patterns_in_analysis(
-        self, analysis: "FileAnalysis", content: str, target_patterns: list
-    ) -> None:
+    def _detect_patterns_in_analysis(self, analysis: "FileAnalysis", content: str, target_patterns: list) -> None:
         """Detect patterns and add to analysis (Issue #398: extracted)."""
         for pattern_type in target_patterns:
             if pattern_type in PATTERN_TEMPLATES:
-                matches = self._match_pattern(
-                    analysis, content, PATTERN_TEMPLATES[pattern_type]
-                )
+                matches = self._match_pattern(analysis, content, PATTERN_TEMPLATES[pattern_type])
                 analysis.patterns_found.extend(matches)
 
-    async def _analyze_file(
-        self, file_path: str, target_patterns: List[PatternType]
-    ) -> Optional[FileAnalysis]:
+    async def _analyze_file(self, file_path: str, target_patterns: List[PatternType]) -> Optional[FileAnalysis]:
         """Analyze a single Python file (Issue #398: refactored)."""
         try:
-            async with aiofiles.open(
-                file_path, "r", encoding="utf-8", errors="ignore"
-            ) as f:
+            async with aiofiles.open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = await f.read()
         except (OSError, Exception):
             return None
@@ -791,9 +767,7 @@ class ArchitectureAnalyzer:
                 indicators.append(f"code_pattern:{pattern[:30]}")
         return score
 
-    def _score_class_indicators(
-        self, class_info: Dict[str, Any], template: PatternTemplate
-    ) -> tuple:
+    def _score_class_indicators(self, class_info: Dict[str, Any], template: PatternTemplate) -> tuple:
         """Score class name, methods, and base classes (Issue #398: extracted)."""
         score = 0.0
         indicators = []
@@ -899,19 +873,11 @@ class ArchitectureAnalyzer:
 
         for class_info in analysis.classes:
             score, indicators = self._score_class_indicators(class_info, template)
-            score += self._check_code_patterns(
-                content, template.code_patterns, indicators
-            )
-            score += self._check_import_indicators(
-                analysis.imports, template.import_indicators, indicators
-            )
+            score += self._check_code_patterns(content, template.code_patterns, indicators)
+            score += self._check_import_indicators(analysis.imports, template.import_indicators, indicators)
 
             if score >= template.required_score:
-                matches.append(
-                    self._build_class_match(
-                        template, analysis, class_info, score, indicators, lines
-                    )
-                )
+                matches.append(self._build_class_match(template, analysis, class_info, score, indicators, lines))
 
         module_match = self._match_module_level_patterns(template, analysis, content)
         if module_match:
@@ -960,9 +926,7 @@ class ArchitectureAnalyzer:
 
         return {"violations": violations, "consistent_count": consistent_count}
 
-    def _process_layer_definition(
-        self, layer_def: Dict[str, Any]
-    ) -> Optional[ArchitectureLayer]:
+    def _process_layer_definition(self, layer_def: Dict[str, Any]) -> Optional[ArchitectureLayer]:
         """
         Process a layer definition and extract components.
 
@@ -1036,9 +1000,7 @@ class ArchitectureAnalyzer:
             return ConsistencyLevel.MOSTLY_CONSISTENT, int(match_count * 0.7)
         return ConsistencyLevel.INCONSISTENT, int(match_count * 0.3)
 
-    def _build_recommendations(
-        self, pattern_type: PatternType, violations: list
-    ) -> list:
+    def _build_recommendations(self, pattern_type: PatternType, violations: list) -> list:
         """Build recommendations list (Issue #398: extracted)."""
         if not violations:
             return []
@@ -1047,9 +1009,7 @@ class ArchitectureAnalyzer:
             recs.append("Standardize naming convention across all implementations")
         return recs
 
-    async def _check_consistency(
-        self, matches: List[PatternMatch]
-    ) -> List[PatternConsistency]:
+    async def _check_consistency(self, matches: List[PatternMatch]) -> List[PatternConsistency]:
         """Check consistency of pattern implementations (Issue #398: refactored)."""
         by_pattern: Dict[PatternType, List[PatternMatch]] = defaultdict(list)
         for match in matches:
@@ -1060,17 +1020,13 @@ class ArchitectureAnalyzer:
             if len(pattern_matches) < 2:
                 continue
 
-            naming_result = self._check_naming_consistency(
-                pattern_type, pattern_matches
-            )
+            naming_result = self._check_naming_consistency(pattern_type, pattern_matches)
             violations = list(naming_result["violations"])
             low_confidence = [m for m in pattern_matches if m.confidence < 0.5]
             if low_confidence:
                 violations.append(self._build_low_confidence_violation(low_confidence))
 
-            level, consistent_count = self._determine_consistency_level(
-                violations, len(pattern_matches)
-            )
+            level, consistent_count = self._determine_consistency_level(violations, len(pattern_matches))
             results.append(
                 PatternConsistency(
                     pattern_type=pattern_type,
@@ -1078,9 +1034,7 @@ class ArchitectureAnalyzer:
                     total_instances=len(pattern_matches),
                     consistent_instances=consistent_count,
                     violations=violations,
-                    recommendations=self._build_recommendations(
-                        pattern_type, violations
-                    ),
+                    recommendations=self._build_recommendations(pattern_type, violations),
                 )
             )
         return results
@@ -1145,40 +1099,24 @@ class ArchitectureAnalyzer:
 
         # Recommend Repository pattern if not found
         if pattern_counts[PatternType.REPOSITORY] == 0:
-            recommendations.append(
-                "Consider using Repository pattern to abstract data access"
-            )
+            recommendations.append("Consider using Repository pattern to abstract data access")
 
         # Recommend Service Layer if business logic is in API
-        if (
-            pattern_counts[PatternType.AUTOBOT_ROUTER] > 10
-            and pattern_counts[PatternType.SERVICE_LAYER] < 5
-        ):
-            recommendations.append(
-                "Extract business logic from routers into Service layer"
-            )
+        if pattern_counts[PatternType.AUTOBOT_ROUTER] > 10 and pattern_counts[PatternType.SERVICE_LAYER] < 5:
+            recommendations.append("Extract business logic from routers into Service layer")
 
         # Check for singleton overuse
         if pattern_counts[PatternType.SINGLETON] > 10:
-            recommendations.append(
-                "High singleton usage detected - consider Dependency Injection"
-            )
+            recommendations.append("High singleton usage detected - consider Dependency Injection")
 
         # Add consistency-based recommendations
         for c in consistency:
             if c.consistency_level == ConsistencyLevel.INCONSISTENT:
-                recommendations.append(
-                    f"Improve consistency of {c.pattern_type.value} implementations"
-                )
+                recommendations.append(f"Improve consistency of {c.pattern_type.value} implementations")
 
         # AutoBot-specific recommendations
-        if (
-            pattern_counts[PatternType.REDIS_CACHING] > 0
-            and pattern_counts[PatternType.REDIS_CACHING] < 5
-        ):
-            recommendations.append(
-                "Consider expanding Redis caching to more operations"
-            )
+        if pattern_counts[PatternType.REDIS_CACHING] > 0 and pattern_counts[PatternType.REDIS_CACHING] < 5:
+            recommendations.append("Consider expanding Redis caching to more operations")
 
         return recommendations[:10]
 
@@ -1217,9 +1155,7 @@ class ArchitectureAnalyzer:
             for match in analysis.patterns_found:
                 pattern_counts[match.pattern_type.value] += 1
 
-        for pattern, count in sorted(
-            pattern_counts.items(), key=lambda x: x[1], reverse=True
-        )[:5]:
+        for pattern, count in sorted(pattern_counts.items(), key=lambda x: x[1], reverse=True)[:5]:
             lines.append(f"    %% {pattern}: {count} instances")
 
         return "\n".join(lines)
@@ -1320,9 +1256,7 @@ async def quick_scan(
         "path": path,
         "files_analyzed": report.total_files_analyzed,
         "patterns_found": report.patterns_detected,
-        "top_patterns": sorted(
-            report.patterns_detected.items(), key=lambda x: x[1], reverse=True
-        )[:5],
+        "top_patterns": sorted(report.patterns_detected.items(), key=lambda x: x[1], reverse=True)[:5],
     }
 
 
@@ -1417,8 +1351,7 @@ async def health_check(
     Issue #744: Requires admin authentication.
     """
     logger.warning(
-        "Deprecated health endpoint called: /api/architecture/health — "
-        "use /api/system/health instead (#3333)"
+        "Deprecated health endpoint called: /api/architecture/health — " "use /api/system/health instead (#3333)"
     )
     return {
         "status": "healthy",

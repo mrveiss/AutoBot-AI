@@ -48,9 +48,7 @@ class NPUWorkerConfig(BaseModel):
         ...,
         description="Worker endpoint URL (see ServiceURLs.NPU_WORKER_WINDOWS_SERVICE)",
     )
-    platform: str = Field(
-        default="linux", description="Worker platform (linux, windows, macos)"
-    )
+    platform: str = Field(default="linux", description="Worker platform (linux, windows, macos)")
     enabled: bool = Field(default=True, description="Whether worker is enabled")
     priority: int = Field(
         default=5,
@@ -58,12 +56,8 @@ class NPUWorkerConfig(BaseModel):
         le=10,
         description="Worker priority (1-10, higher is more preferred)",
     )
-    weight: int = Field(
-        default=1, ge=1, le=100, description="Worker weight for weighted load balancing"
-    )
-    max_concurrent_tasks: int = Field(
-        default=4, ge=1, description="Maximum concurrent tasks"
-    )
+    weight: int = Field(default=1, ge=1, le=100, description="Worker weight for weighted load balancing")
+    max_concurrent_tasks: int = Field(default=4, ge=1, description="Maximum concurrent tasks")
 
     @validator("url")
     def validate_url(cls, v):
@@ -79,9 +73,7 @@ class NPUWorkerConfig(BaseModel):
             raise ValueError("Worker ID cannot be empty")
         # Ensure ID is URL-safe
         if not v.replace("-", "").replace("_", "").isalnum():
-            raise ValueError(
-                "Worker ID must contain only alphanumeric characters, hyphens, and underscores"
-            )
+            raise ValueError("Worker ID must contain only alphanumeric characters, hyphens, and underscores")
         return v
 
     class Config:
@@ -89,10 +81,7 @@ class NPUWorkerConfig(BaseModel):
             "example": {
                 "id": "npu-worker-1",
                 "name": "Primary NPU Worker",
-                "url": (
-                    f"http://{NetworkConstants.MAIN_MACHINE_IP}:"
-                    f"{NetworkConstants.NPU_WORKER_WINDOWS_PORT}"
-                ),
+                "url": (f"http://{NetworkConstants.MAIN_MACHINE_IP}:" f"{NetworkConstants.NPU_WORKER_WINDOWS_PORT}"),
                 "platform": "linux",
                 "enabled": True,
                 "priority": 8,
@@ -106,25 +95,13 @@ class NPUWorkerStatus(BaseModel):
     """NPU Worker Runtime Status Model"""
 
     id: str = Field(..., description="Worker identifier")
-    status: WorkerStatus = Field(
-        default=WorkerStatus.UNKNOWN, description="Current worker status"
-    )
-    current_load: int = Field(
-        default=0, ge=0, description="Current number of active tasks"
-    )
-    total_tasks_completed: int = Field(
-        default=0, ge=0, description="Total tasks completed"
-    )
+    status: WorkerStatus = Field(default=WorkerStatus.UNKNOWN, description="Current worker status")
+    current_load: int = Field(default=0, ge=0, description="Current number of active tasks")
+    total_tasks_completed: int = Field(default=0, ge=0, description="Total tasks completed")
     total_tasks_failed: int = Field(default=0, ge=0, description="Total tasks failed")
-    uptime_seconds: float = Field(
-        default=0.0, ge=0.0, description="Worker uptime in seconds"
-    )
-    last_heartbeat: Optional[datetime] = Field(
-        default=None, description="Last successful heartbeat timestamp"
-    )
-    error_message: Optional[str] = Field(
-        default=None, description="Latest error message if status is ERROR"
-    )
+    uptime_seconds: float = Field(default=0.0, ge=0.0, description="Worker uptime in seconds")
+    last_heartbeat: Optional[datetime] = Field(default=None, description="Last successful heartbeat timestamp")
+    error_message: Optional[str] = Field(default=None, description="Latest error message if status is ERROR")
 
     class Config:
         json_schema_extra = {
@@ -145,22 +122,12 @@ class NPUWorkerMetrics(BaseModel):
     """NPU Worker Performance Metrics Model"""
 
     id: str = Field(..., description="Worker identifier")
-    avg_response_time_ms: float = Field(
-        default=0.0, ge=0.0, description="Average response time in milliseconds"
-    )
-    success_rate: float = Field(
-        default=100.0, ge=0.0, le=100.0, description="Success rate percentage"
-    )
-    requests_per_minute: float = Field(
-        default=0.0, ge=0.0, description="Average requests per minute"
-    )
+    avg_response_time_ms: float = Field(default=0.0, ge=0.0, description="Average response time in milliseconds")
+    success_rate: float = Field(default=100.0, ge=0.0, le=100.0, description="Success rate percentage")
+    requests_per_minute: float = Field(default=0.0, ge=0.0, description="Average requests per minute")
     peak_load: int = Field(default=0, ge=0, description="Peak concurrent load observed")
-    last_error_time: Optional[datetime] = Field(
-        default=None, description="Timestamp of last error"
-    )
-    metrics_timestamp: datetime = Field(
-        default_factory=datetime.utcnow, description="Metrics collection timestamp"
-    )
+    last_error_time: Optional[datetime] = Field(default=None, description="Timestamp of last error")
+    metrics_timestamp: datetime = Field(default_factory=datetime.utcnow, description="Metrics collection timestamp")
 
     class Config:
         json_schema_extra = {
@@ -183,9 +150,7 @@ class LoadBalancingConfig(BaseModel):
         default=LoadBalancingStrategy.LEAST_LOADED,
         description="Load balancing strategy to use",
     )
-    health_check_interval: int = Field(
-        default=30, ge=5, le=300, description="Health check interval in seconds (5-300)"
-    )
+    health_check_interval: int = Field(default=30, ge=5, le=300, description="Health check interval in seconds (5-300)")
     timeout_seconds: int = Field(
         default=10,
         ge=1,
@@ -220,9 +185,7 @@ class NPUWorkerDetails(BaseModel):
 
     config: NPUWorkerConfig = Field(..., description="Worker configuration")
     status: NPUWorkerStatus = Field(..., description="Worker runtime status")
-    metrics: Optional[NPUWorkerMetrics] = Field(
-        default=None, description="Worker performance metrics"
-    )
+    metrics: Optional[NPUWorkerMetrics] = Field(default=None, description="Worker performance metrics")
 
     def to_event_dict(self) -> Dict[str, Any]:
         """Convert to event dictionary format (Issue #372 - reduces feature envy)."""
@@ -253,11 +216,7 @@ class NPUWorkerDetails(BaseModel):
             "performance_metrics": self.metrics.dict() if self.metrics else {},
             "priority": self.config.priority,
             "weight": self.config.weight,
-            "last_heartbeat": (
-                self.status.last_heartbeat.isoformat() + "Z"
-                if self.status.last_heartbeat
-                else ""
-            ),
+            "last_heartbeat": (self.status.last_heartbeat.isoformat() + "Z" if self.status.last_heartbeat else ""),
             "created_at": "",  # Not tracked in current model
         }
 
@@ -268,8 +227,7 @@ class NPUWorkerDetails(BaseModel):
                     "id": "npu-worker-1",
                     "name": "Primary NPU Worker",
                     "url": (
-                        f"http://{NetworkConstants.MAIN_MACHINE_IP}:"
-                        f"{NetworkConstants.NPU_WORKER_WINDOWS_PORT}"
+                        f"http://{NetworkConstants.MAIN_MACHINE_IP}:" f"{NetworkConstants.NPU_WORKER_WINDOWS_PORT}"
                     ),
                     "platform": "linux",
                     "enabled": True,
@@ -308,25 +266,13 @@ class WorkerHeartbeat(BaseModel):
         description="Worker platform (linux, windows, macos)",
     )
     url: str = Field(..., description="Worker's accessible URL for health checks")
-    current_load: int = Field(
-        default=0, ge=0, description="Current number of active tasks"
-    )
-    total_tasks_completed: int = Field(
-        default=0, ge=0, description="Total tasks completed"
-    )
+    current_load: int = Field(default=0, ge=0, description="Current number of active tasks")
+    total_tasks_completed: int = Field(default=0, ge=0, description="Total tasks completed")
     total_tasks_failed: int = Field(default=0, ge=0, description="Total tasks failed")
-    uptime_seconds: float = Field(
-        default=0.0, ge=0.0, description="Worker uptime in seconds"
-    )
-    npu_available: bool = Field(
-        default=False, description="Whether NPU hardware is available"
-    )
-    loaded_models: list = Field(
-        default_factory=list, description="List of loaded model names"
-    )
-    metrics: Optional[Dict[str, Any]] = Field(
-        default=None, description="Performance metrics"
-    )
+    uptime_seconds: float = Field(default=0.0, ge=0.0, description="Worker uptime in seconds")
+    npu_available: bool = Field(default=False, description="Whether NPU hardware is available")
+    loaded_models: list = Field(default_factory=list, description="List of loaded model names")
+    metrics: Optional[Dict[str, Any]] = Field(default=None, description="Performance metrics")
 
     class Config:
         json_schema_extra = {
@@ -351,16 +297,10 @@ class WorkerTestResult(BaseModel):
 
     worker_id: str = Field(..., description="Worker identifier")
     success: bool = Field(..., description="Whether test succeeded")
-    response_time_ms: Optional[float] = Field(
-        default=None, description="Response time in milliseconds"
-    )
+    response_time_ms: Optional[float] = Field(default=None, description="Response time in milliseconds")
     status_code: Optional[int] = Field(default=None, description="HTTP status code")
-    error_message: Optional[str] = Field(
-        default=None, description="Error message if test failed"
-    )
-    health_data: Optional[Dict] = Field(
-        default=None, description="Health check response data"
-    )
+    error_message: Optional[str] = Field(default=None, description="Error message if test failed")
+    health_data: Optional[Dict] = Field(default=None, description="Health check response data")
 
     class Config:
         json_schema_extra = {

@@ -50,12 +50,8 @@ class LLMConfigurationSynchronizer:
         common_model = None
 
         for agent_id, config in agent_configs.items():
-            agent_model = config_manager.get_nested(
-                f"agents.{agent_id}.model", config["default_model"]
-            )
-            agent_enabled = config_manager.get_nested(
-                f"agents.{agent_id}.enabled", config["enabled"]
-            )
+            agent_model = config_manager.get_nested(f"agents.{agent_id}.model", config["default_model"])
+            agent_enabled = config_manager.get_nested(f"agents.{agent_id}.enabled", config["enabled"])
 
             agent_models[agent_id] = {"model": agent_model, "enabled": agent_enabled}
 
@@ -63,9 +59,7 @@ class LLMConfigurationSynchronizer:
                 if common_model is None:
                     common_model = agent_model
                 elif common_model != agent_model:
-                    logger.warning(
-                        "Agent %s uses different model: %s", agent_id, agent_model
-                    )
+                    logger.warning("Agent %s uses different model: %s", agent_id, agent_model)
 
         return agent_models, common_model
 
@@ -86,9 +80,7 @@ class LLMConfigurationSynchronizer:
         if not current_model:
             return True, "No global LLM model configured"
         if common_model and current_model != common_model:
-            return True, (
-                f"Global model '{current_model}' differs from agent model '{common_model}'"
-            )
+            return True, (f"Global model '{current_model}' differs from agent model '{common_model}'")
         return False, ""
 
     @staticmethod
@@ -119,14 +111,10 @@ class LLMConfigurationSynchronizer:
         config_manager.update_llm_model(target_model)
 
         # Verify the change
-        updated_model = LLMConfigurationSynchronizer._get_current_llm_model(
-            config_manager
-        )
+        updated_model = LLMConfigurationSynchronizer._get_current_llm_model(config_manager)
 
         if updated_model == target_model:
-            logger.info(
-                "✅ Successfully synchronized global LLM model to: %s", target_model
-            )
+            logger.info("✅ Successfully synchronized global LLM model to: %s", target_model)
             return {
                 "status": "synchronized",
                 "previous_model": previous_model,
@@ -162,20 +150,14 @@ class LLMConfigurationSynchronizer:
             logger.info("Starting LLM configuration synchronization...")
 
             # Get current model using helper (Issue #315: reduced nesting)
-            current_selected_model = (
-                LLMConfigurationSynchronizer._get_current_llm_model(
-                    global_config_manager
-                )
-            )
+            current_selected_model = LLMConfigurationSynchronizer._get_current_llm_model(global_config_manager)
             logger.info("Current global LLM model: '%s'", current_selected_model)
 
             # Collect agent models using helper
             (
                 agent_models,
                 common_model,
-            ) = LLMConfigurationSynchronizer._collect_agent_models(
-                global_config_manager, DEFAULT_AGENT_CONFIGS
-            )
+            ) = LLMConfigurationSynchronizer._collect_agent_models(global_config_manager, DEFAULT_AGENT_CONFIGS)
             logger.info("Agent models: %s", agent_models)
             logger.info("Most common agent model: %s", common_model)
 
@@ -227,17 +209,12 @@ class LLMConfigurationSynchronizer:
                 return {"status": "error", "error": result["error"]}
 
             models = result["models"]
-            model_names = [
-                model.get("name", "") if isinstance(model, dict) else str(model)
-                for model in models
-            ]
+            model_names = [model.get("name", "") if isinstance(model, dict) else str(model) for model in models]
 
             logger.info("Found %s available models: %s", len(model_names), model_names)
 
             # Update the configuration with available models
-            global_config_manager.set_nested(
-                "backend.llm.local.providers.ollama.models", model_names
-            )
+            global_config_manager.set_nested("backend.llm.local.providers.ollama.models", model_names)
 
             # Save the configuration
             global_config_manager.save_settings()
@@ -276,14 +253,10 @@ class LLMConfigurationSynchronizer:
             results["timestamp"] = datetime.now(tz=timezone.utc).isoformat()
 
             # Step 1: Synchronize agent configurations with global LLM config
-            results["sync_result"] = await asyncio.to_thread(
-                LLMConfigurationSynchronizer.sync_llm_config_with_agents
-            )
+            results["sync_result"] = await asyncio.to_thread(LLMConfigurationSynchronizer.sync_llm_config_with_agents)
 
             # Step 2: Populate available models list
-            results["models_result"] = (
-                await LLMConfigurationSynchronizer.ensure_models_populated()
-            )
+            results["models_result"] = await LLMConfigurationSynchronizer.ensure_models_populated()
 
             # Determine overall status
             sync_ok = results["sync_result"]["status"] in [
@@ -294,9 +267,7 @@ class LLMConfigurationSynchronizer:
 
             if sync_ok and models_ok:
                 results["overall_status"] = "success"
-                logger.info(
-                    "✅ Full LLM configuration synchronization completed successfully"
-                )
+                logger.info("✅ Full LLM configuration synchronization completed successfully")
             elif sync_ok:
                 results["overall_status"] = "partial"
                 logger.warning("⚠️ LLM sync succeeded but model population failed")

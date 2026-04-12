@@ -58,9 +58,7 @@ class MetricsQueryRequest(BaseModel):
         return v
 
     @validator("to_time")
-    def validate_to_time(
-        cls, v: Optional[int], values: Dict[str, Any]
-    ) -> Optional[int]:
+    def validate_to_time(cls, v: Optional[int], values: Dict[str, Any]) -> Optional[int]:
         """Ensure to_time is after from_time."""
         if v and "from_time" in values and values["from_time"]:
             if v < values["from_time"]:
@@ -78,9 +76,7 @@ class EventsQueryRequest(BaseModel):
     end: Optional[int] = Field(None, description="End time (unix timestamp)")
 
     @validator("end")
-    def validate_time_range(
-        cls, v: Optional[int], values: Dict[str, Any]
-    ) -> Optional[int]:
+    def validate_time_range(cls, v: Optional[int], values: Dict[str, Any]) -> Optional[int]:
         """Validate time range does not exceed 24 hours."""
         if v and "start" in values and values["start"]:
             time_range = v - values["start"]
@@ -377,9 +373,7 @@ def _build_config_from_params(
     )
 
 
-def _get_integration(
-    provider: str, config: IntegrationConfig
-) -> DatadogIntegration | NewRelicIntegration:
+def _get_integration(provider: str, config: IntegrationConfig) -> DatadogIntegration | NewRelicIntegration:
     """Get integration instance for provider.
 
     Args:
@@ -400,9 +394,7 @@ def _get_integration(
         raise ValueError(f"Unsupported provider: {provider}")
 
 
-def _build_metrics_params(
-    provider: str, request: MetricsQueryRequest
-) -> Dict[str, Any]:
+def _build_metrics_params(provider: str, request: MetricsQueryRequest) -> Dict[str, Any]:
     """Build metrics query parameters.
 
     Args:
@@ -414,9 +406,7 @@ def _build_metrics_params(
     """
     if provider == "datadog":
         to_time = request.to_time or int(datetime.now(tz=timezone.utc).timestamp())
-        from_time = request.from_time or int(
-            (datetime.now(tz=timezone.utc) - timedelta(hours=1)).timestamp()
-        )
+        from_time = request.from_time or int((datetime.now(tz=timezone.utc) - timedelta(hours=1)).timestamp())
         return {"query": request.query, "from_time": from_time, "to_time": to_time}
     else:  # new_relic
         since = request.since or "1 hour ago"

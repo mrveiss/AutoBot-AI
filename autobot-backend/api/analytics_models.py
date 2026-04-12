@@ -53,9 +53,7 @@ class CodeAnalysisRequest(BaseModel):
     """Code analysis request model"""
 
     target_path: Optional[str] = Field(default_factory=lambda: str(PATH.PROJECT_ROOT))
-    analysis_type: str = Field(
-        default="full", description="full, incremental, or communication_chains"
-    )
+    analysis_type: str = Field(default="full", description="full, incremental, or communication_chains")
     include_metrics: bool = True
 
 

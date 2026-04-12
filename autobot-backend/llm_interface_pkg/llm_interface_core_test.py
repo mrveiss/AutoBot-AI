@@ -166,9 +166,7 @@ async def test_consolidation_success():
             "openvino_cpu",
             "openvino_npu",
         ]
-        print(  # noqa: print
-            f"✅ Hardware detection works (detected: {detected}, backend: {backend})"
-        )  # noqa: print
+        print(f"✅ Hardware detection works (detected: {detected}, backend: {backend})")  # noqa: print  # noqa: print
         success_count += 1
     except Exception as e:
         print(f"❌ Hardware detection failed: {e}")  # noqa: print
@@ -177,21 +175,15 @@ async def test_consolidation_success():
     total_tests += 1
     try:
         # Test Ollama model
-        provider, model = interface._determine_provider_and_model(
-            "orchestrator", model_name="ollama_test"
-        )
+        provider, model = interface._determine_provider_and_model("orchestrator", model_name="ollama_test")
         assert provider == "ollama"
 
         # Test OpenAI model
-        provider, model = interface._determine_provider_and_model(
-            "task", model_name="openai_gpt-4"
-        )
+        provider, model = interface._determine_provider_and_model("task", model_name="openai_gpt-4")
         assert provider == "openai"
 
         # Test explicit provider
-        provider, model = interface._determine_provider_and_model(
-            "chat", provider="mock", model_name="test"
-        )
+        provider, model = interface._determine_provider_and_model("chat", provider="mock", model_name="test")
         assert provider == "mock"
 
         print("✅ Provider and model determination works")  # noqa: print

@@ -89,9 +89,7 @@ class NPUClient:
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session"""
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=EMBEDDING_TIMEOUT)
-            )
+            self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=EMBEDDING_TIMEOUT))
         return self._session
 
     async def close(self):
@@ -208,9 +206,7 @@ class NPUClient:
 
         return None
 
-    async def generate_embedding(
-        self, text: str, model_name: str = "nomic-embed-text"
-    ) -> Optional[List[float]]:
+    async def generate_embedding(self, text: str, model_name: str = "nomic-embed-text") -> Optional[List[float]]:
         """
         Generate single embedding using NPU worker.
 
@@ -297,9 +293,7 @@ async def generate_embedding_with_fallback(
 
     # Fallback to Ollama - use SSOT config for defaults
     ollama_host = ollama_host or os.getenv("AUTOBOT_OLLAMA_HOST", _ssot.vm.ollama)
-    ollama_port = ollama_port or os.getenv(
-        "AUTOBOT_OLLAMA_PORT", str(_ssot.port.ollama)
-    )
+    ollama_port = ollama_port or os.getenv("AUTOBOT_OLLAMA_PORT", str(_ssot.port.ollama))
     ollama_url = f"http://{ollama_host}:{ollama_port}/api/embeddings"
 
     try:

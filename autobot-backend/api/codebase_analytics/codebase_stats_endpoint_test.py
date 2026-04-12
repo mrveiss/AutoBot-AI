@@ -260,9 +260,7 @@ class TestRecreateChromaDBCollection:
             return mock_new_collection
 
         mock_client.delete_collection = MagicMock(side_effect=async_delete_collection)
-        mock_client.get_or_create_collection = MagicMock(
-            side_effect=async_get_or_create
-        )
+        mock_client.get_or_create_collection = MagicMock(side_effect=async_get_or_create)
 
         with patch(
             "utils.chromadb_client.get_async_chromadb_client",
@@ -289,9 +287,7 @@ class TestRecreateChromaDBCollection:
             return mock_new_collection
 
         mock_client.delete_collection = MagicMock(side_effect=async_delete_raises)
-        mock_client.get_or_create_collection = MagicMock(
-            side_effect=async_get_or_create
-        )
+        mock_client.get_or_create_collection = MagicMock(side_effect=async_get_or_create)
 
         with patch(
             "utils.chromadb_client.get_async_chromadb_client",

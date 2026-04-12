@@ -68,17 +68,11 @@ class ConversationContextEnhancer:
         Issue #509: Optimized entity extraction by combining patterns into
         single regex for O(n) instead of O(n*p) where p = number of patterns.
         """
-        self._reference_re = re.compile(
-            r"\b(" + "|".join(self.REFERENCE_PRONOUNS) + r")\b", re.IGNORECASE
-        )
-        self._context_question_re = [
-            re.compile(p, re.IGNORECASE) for p in self.CONTEXT_QUESTION_PATTERNS
-        ]
+        self._reference_re = re.compile(r"\b(" + "|".join(self.REFERENCE_PRONOUNS) + r")\b", re.IGNORECASE)
+        self._context_question_re = [re.compile(p, re.IGNORECASE) for p in self.CONTEXT_QUESTION_PATTERNS]
         # Issue #509: Combined entity pattern for single-pass extraction
         # O(1) regex compilation, O(n) matching instead of O(n*p)
-        self._combined_entity_re = re.compile(
-            "|".join(f"({p})" for p in self.ENTITY_PATTERNS), re.IGNORECASE
-        )
+        self._combined_entity_re = re.compile("|".join(f"({p})" for p in self.ENTITY_PATTERNS), re.IGNORECASE)
 
     def _build_no_enhancement_result(self, query: str) -> EnhancedQuery:
         """Build result when no context enhancement is needed.
@@ -124,9 +118,7 @@ class ConversationContextEnhancer:
             context_entities=context_entities,
             context_topics=context_topics,
             enhancement_applied=enhanced_query != query,
-            reasoning=self._get_enhancement_reasoning(
-                query, context_entities, word_count
-            ),
+            reasoning=self._get_enhancement_reasoning(query, context_entities, word_count),
         )
 
     def enhance_query(
@@ -157,17 +149,11 @@ class ConversationContextEnhancer:
         recent_history = conversation_history[-max_history_items:]
         context_entities = self._extract_entities(recent_history)
         context_topics = self._extract_topics(recent_history)
-        enhanced_query = self._build_enhanced_query(
-            query, recent_history, context_entities, context_topics, word_count
-        )
+        enhanced_query = self._build_enhanced_query(query, recent_history, context_entities, context_topics, word_count)
 
-        return self._build_enhanced_result(
-            query, enhanced_query, context_entities, context_topics, word_count
-        )
+        return self._build_enhanced_result(query, enhanced_query, context_entities, context_topics, word_count)
 
-    def _needs_context_enhancement(
-        self, query: str, word_count: Optional[int] = None
-    ) -> bool:
+    def _needs_context_enhancement(self, query: str, word_count: Optional[int] = None) -> bool:
         """Check if a query would benefit from context enhancement."""
         query_lower = query.lower().strip()
 
@@ -244,9 +230,7 @@ class ConversationContextEnhancer:
             enhanced_parts.append(context_phrase)
 
         # For very short queries, add recent topic (#624: avoid repeated split)
-        elif (
-            word_count if word_count is not None else len(query.split())
-        ) <= 3 and topics:
+        elif (word_count if word_count is not None else len(query.split())) <= 3 and topics:
             last_topic = topics[-1]
             # Check if the short query relates to last topic
             enhanced_parts.append(f" (regarding: {last_topic})")
@@ -264,9 +248,7 @@ class ConversationContextEnhancer:
 
         return "".join(enhanced_parts)
 
-    def _get_enhancement_reasoning(
-        self, query: str, entities: List[str], word_count: Optional[int] = None
-    ) -> str:
+    def _get_enhancement_reasoning(self, query: str, entities: List[str], word_count: Optional[int] = None) -> str:
         """Generate reasoning for the enhancement."""
         reasons = []
 

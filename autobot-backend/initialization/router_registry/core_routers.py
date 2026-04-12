@@ -41,12 +41,12 @@ from api.knowledge_metadata import router as knowledge_metadata_router
 from api.knowledge_organization import router as knowledge_organization_router
 from api.knowledge_ownership import router as knowledge_ownership_router
 from api.knowledge_population import router as knowledge_population_router
+from api.knowledge_rag_feedback import router as knowledge_rag_feedback_router
 from api.knowledge_search import router as knowledge_search_router
 from api.knowledge_search_scoped import router as knowledge_search_scoped_router
 from api.knowledge_suggestions import router as knowledge_suggestions_router
 from api.knowledge_tags import router as knowledge_tags_router
 from api.knowledge_verification import router as knowledge_verification_router
-from api.knowledge_rag_feedback import router as knowledge_rag_feedback_router
 from api.llm import router as llm_router
 from api.llm_providers import router as llm_providers_router
 from api.mcp_registry import router as mcp_registry_router
@@ -212,9 +212,7 @@ def _get_knowledge_collaboration_routers() -> list:
 def _get_knowledge_routers() -> list:
     """Get knowledge base routers (Issue #560: extracted, #688: ownership, #679: full collaboration)."""
     return (
-        _get_core_knowledge_routers()
-        + _get_knowledge_organization_routers()
-        + _get_knowledge_collaboration_routers()
+        _get_core_knowledge_routers() + _get_knowledge_organization_routers() + _get_knowledge_collaboration_routers()
     )
 
 

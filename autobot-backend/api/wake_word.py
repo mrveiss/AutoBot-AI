@@ -24,9 +24,7 @@ class WakeWordCheckRequest(BaseModel):
     """Request to check text for wake word"""
 
     text: str = Field(..., description="Text to check for wake word")
-    confidence: float = Field(
-        default=1.0, ge=0.0, le=1.0, description="Recognition confidence"
-    )
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Recognition confidence")
 
 
 class WakeWordCheckResponse(BaseModel):
@@ -60,9 +58,7 @@ class AddWakeWordRequest(BaseModel):
 class ReportFeedbackRequest(BaseModel):
     """Request to report detection feedback"""
 
-    is_correct: bool = Field(
-        ..., description="True if detection was correct, False if false positive"
-    )
+    is_correct: bool = Field(..., description="True if detection was correct, False if false positive")
 
 
 @with_error_handling(
@@ -255,9 +251,7 @@ async def report_detection_feedback(request: ReportFeedbackRequest) -> Metadata:
 
     if request.is_correct:
         detector.report_true_positive()
-        message = (
-            "True positive reported - threshold may be adjusted for better convenience"
-        )
+        message = "True positive reported - threshold may be adjusted for better convenience"
     else:
         detector.report_false_positive()
         message = "False positive reported - threshold increased to reduce false alarms"

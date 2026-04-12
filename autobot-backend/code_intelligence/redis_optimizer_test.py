@@ -49,11 +49,7 @@ class TestRedisOptimizer:
             results = optimizer.analyze_file(f.name)
 
             # Should detect sequential GETs that can be pipelined
-            pipeline_results = [
-                r
-                for r in results
-                if r.optimization_type == OptimizationType.SEQUENTIAL_GETS
-            ]
+            pipeline_results = [r for r in results if r.optimization_type == OptimizationType.SEQUENTIAL_GETS]
 
             assert len(pipeline_results) >= 1
             assert pipeline_results[0].severity == OptimizationSeverity.MEDIUM
@@ -75,17 +71,10 @@ class TestRedisOptimizer:
             optimizer = RedisOptimizer()
             results = optimizer.analyze_file(f.name)
 
-            set_results = [
-                r
-                for r in results
-                if r.optimization_type == OptimizationType.SEQUENTIAL_SETS
-            ]
+            set_results = [r for r in results if r.optimization_type == OptimizationType.SEQUENTIAL_SETS]
 
             assert len(set_results) >= 1
-            assert (
-                "MSET" in set_results[0].suggestion
-                or "pipeline" in set_results[0].suggestion.lower()
-            )
+            assert "MSET" in set_results[0].suggestion or "pipeline" in set_results[0].suggestion.lower()
 
     def test_detect_loop_operations(self):
         """Test detection of Redis operations inside loops."""
@@ -105,11 +94,7 @@ class TestRedisOptimizer:
             optimizer = RedisOptimizer()
             results = optimizer.analyze_file(f.name)
 
-            loop_results = [
-                r
-                for r in results
-                if r.optimization_type == OptimizationType.LOOP_OPERATIONS
-            ]
+            loop_results = [r for r in results if r.optimization_type == OptimizationType.LOOP_OPERATIONS]
 
             assert len(loop_results) >= 1
             assert loop_results[0].severity == OptimizationSeverity.HIGH
@@ -135,17 +120,10 @@ class TestRedisOptimizer:
             optimizer = RedisOptimizer()
             results = optimizer.analyze_file(f.name)
 
-            rmw_results = [
-                r
-                for r in results
-                if r.optimization_type == OptimizationType.READ_MODIFY_WRITE
-            ]
+            rmw_results = [r for r in results if r.optimization_type == OptimizationType.READ_MODIFY_WRITE]
 
             assert len(rmw_results) >= 1
-            assert (
-                "Lua" in rmw_results[0].suggestion
-                or "atomic" in rmw_results[0].suggestion.lower()
-            )
+            assert "Lua" in rmw_results[0].suggestion or "atomic" in rmw_results[0].suggestion.lower()
 
     def test_detect_direct_redis_instantiation(self):
         """Test detection of direct redis.Redis() usage."""
@@ -164,11 +142,7 @@ class TestRedisOptimizer:
             optimizer = RedisOptimizer()
             results = optimizer.analyze_file(f.name)
 
-            connection_results = [
-                r
-                for r in results
-                if r.optimization_type == OptimizationType.CONNECTION_PER_REQUEST
-            ]
+            connection_results = [r for r in results if r.optimization_type == OptimizationType.CONNECTION_PER_REQUEST]
 
             assert len(connection_results) >= 1
             assert "get_redis_client" in connection_results[0].suggestion
@@ -187,11 +161,7 @@ class TestRedisOptimizer:
             optimizer = RedisOptimizer()
             results = optimizer.analyze_file(f.name)
 
-            expiry_results = [
-                r
-                for r in results
-                if r.optimization_type == OptimizationType.MISSING_EXPIRY
-            ]
+            expiry_results = [r for r in results if r.optimization_type == OptimizationType.MISSING_EXPIRY]
 
             # Should detect SET without expiry
             assert len(expiry_results) >= 1
@@ -218,11 +188,7 @@ class TestRedisOptimizer:
             results = optimizer.analyze_file(f.name)
 
             # Should not detect connection issues (uses get_redis_client)
-            connection_results = [
-                r
-                for r in results
-                if r.optimization_type == OptimizationType.CONNECTION_PER_REQUEST
-            ]
+            connection_results = [r for r in results if r.optimization_type == OptimizationType.CONNECTION_PER_REQUEST]
 
             assert len(connection_results) == 0
 
@@ -316,11 +282,7 @@ class TestOptimizationTypes:
             optimizer = RedisOptimizer()
             results = optimizer.analyze_file(f.name)
 
-            scan_results = [
-                r
-                for r in results
-                if r.optimization_type == OptimizationType.INEFFICIENT_SCAN
-            ]
+            scan_results = [r for r in results if r.optimization_type == OptimizationType.INEFFICIENT_SCAN]
 
             assert len(scan_results) >= 1
             assert "SCAN" in scan_results[0].suggestion
@@ -343,11 +305,7 @@ class TestOptimizationTypes:
             results = optimizer.analyze_file(f.name)
 
             # Should suggest hash structure
-            _hash_results = [
-                r
-                for r in results
-                if r.optimization_type == OptimizationType.STRING_TO_HASH
-            ]
+            _hash_results = [r for r in results if r.optimization_type == OptimizationType.STRING_TO_HASH]
 
             # May or may not detect this depending on key pattern parsing
             # The important thing is it doesn't crash
@@ -372,11 +330,7 @@ class TestSeverityLevels:
             optimizer = RedisOptimizer()
             results = optimizer.analyze_file(f.name)
 
-            loop_results = [
-                r
-                for r in results
-                if r.optimization_type == OptimizationType.LOOP_OPERATIONS
-            ]
+            loop_results = [r for r in results if r.optimization_type == OptimizationType.LOOP_OPERATIONS]
 
             if loop_results:
                 assert loop_results[0].severity == OptimizationSeverity.HIGH
@@ -397,11 +351,7 @@ class TestSeverityLevels:
             optimizer = RedisOptimizer()
             results = optimizer.analyze_file(f.name)
 
-            seq_results = [
-                r
-                for r in results
-                if r.optimization_type == OptimizationType.SEQUENTIAL_GETS
-            ]
+            seq_results = [r for r in results if r.optimization_type == OptimizationType.SEQUENTIAL_GETS]
 
             if seq_results:
                 assert seq_results[0].severity == OptimizationSeverity.MEDIUM

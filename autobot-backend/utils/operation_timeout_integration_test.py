@@ -128,9 +128,7 @@ class TestOperationIntegrationManager:
             op.status = status
             mock_ops.append(op)
 
-        manager.operation_manager.operations = {
-            f"op{i}": op for i, op in enumerate(mock_ops)
-        }
+        manager.operation_manager.operations = {f"op{i}": op for i, op in enumerate(mock_ops)}
         total, active, completed, failed = manager._calculate_operation_stats()
         assert total == 3
         assert active == 1
@@ -143,16 +141,12 @@ class TestOperationWrappers:
 
     def test_get_operation_function_codebase_indexing(self):
         manager = OperationIntegrationManager()
-        func = manager._get_operation_function(
-            OperationType.CODEBASE_INDEXING, {"codebase_path": "/test"}
-        )
+        func = manager._get_operation_function(OperationType.CODEBASE_INDEXING, {"codebase_path": "/test"})
         assert callable(func)
 
     def test_get_operation_function_test_suite(self):
         manager = OperationIntegrationManager()
-        func = manager._get_operation_function(
-            OperationType.COMPREHENSIVE_TEST_SUITE, {"test_path": "/tests"}
-        )
+        func = manager._get_operation_function(OperationType.COMPREHENSIVE_TEST_SUITE, {"test_path": "/tests"})
         assert callable(func)
 
     def test_get_operation_function_code_analysis(self):
@@ -208,9 +202,7 @@ class TestBroadcastProgress:
         mock_ws.send_json = AsyncMock()
         manager.websocket_connections["op-123"] = [mock_ws]
 
-        await manager._broadcast_progress_update(
-            {"operation_id": "op-123", "progress": 50}
-        )
+        await manager._broadcast_progress_update({"operation_id": "op-123", "progress": 50})
         mock_ws.send_json.assert_called_once()
 
     @pytest.mark.asyncio

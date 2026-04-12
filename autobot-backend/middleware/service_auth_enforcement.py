@@ -137,9 +137,7 @@ def is_path_exempt(path: str) -> bool:
     """
     for exempt in EXEMPT_PATHS:
         if path.startswith(exempt):
-            logger.debug(
-                "Path exempt from service auth", path=path, exempt_pattern=exempt
-            )
+            logger.debug("Path exempt from service auth", path=path, exempt_pattern=exempt)
             return True
     return False
 
@@ -158,9 +156,7 @@ def requires_service_auth(path: str) -> bool:
     """
     for service_path in SERVICE_ONLY_PATHS:
         if path.startswith(service_path):
-            logger.debug(
-                "Path requires service auth", path=path, service_pattern=service_path
-            )
+            logger.debug("Path requires service auth", path=path, service_pattern=service_path)
             return True
     return False
 
@@ -389,9 +385,7 @@ def get_endpoint_categories() -> dict:
         "enforcement_mode": get_enforcement_mode(),
         "circuit_breaker_percentage": _get_enforcement_percentage(),
         "override_token_configured": bool(os.getenv("SERVICE_AUTH_OVERRIDE_TOKEN", "")),
-        "rate_limit_max_failures": int(
-            os.getenv("SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES", "10")
-        ),
+        "rate_limit_max_failures": int(os.getenv("SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES", "10")),
         "exempt_paths": EXEMPT_PATHS,
         "service_only_paths": SERVICE_ONLY_PATHS,
         "total_exempt": len(EXEMPT_PATHS),

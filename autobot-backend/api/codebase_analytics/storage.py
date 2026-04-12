@@ -34,9 +34,7 @@ async def get_redis_connection():
 
     redis_client = get_redis_client(database="analytics", async_client=False)
     if redis_client is None:
-        logger.warning(
-            "Redis client initialization returned None, using in-memory storage"
-        )
+        logger.warning("Redis client initialization returned None, using in-memory storage")
         return None
 
     return redis_client
@@ -73,23 +71,15 @@ def get_code_collection():
         chroma_path = _PROJECT_ROOT / "data" / "chromadb"
 
         # Create persistent client with telemetry disabled using shared utility
-        chroma_client = get_chromadb_client(
-            db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False
-        )
+        chroma_client = get_chromadb_client(db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False)
 
         # Get or create the code collection
         code_collection = chroma_client.get_or_create_collection(
             name="autobot_code",
-            metadata={
-                "description": (
-                    "Codebase analytics: functions, classes, problems, duplicates"
-                )
-            },
+            metadata={"description": ("Codebase analytics: functions, classes, problems, duplicates")},
         )
 
-        logger.info(
-            f"ChromaDB autobot_code collection ready ({code_collection.count()} items)"
-        )
+        logger.info(f"ChromaDB autobot_code collection ready ({code_collection.count()} items)")
         return code_collection
 
     except Exception as e:
@@ -118,11 +108,7 @@ async def get_code_collection_async():
         # Get or create the code collection (async)
         async_collection = await async_client.get_or_create_collection(
             name="autobot_code",
-            metadata={
-                "description": (
-                    "Codebase analytics: functions, classes, problems, duplicates"
-                )
-            },
+            metadata={"description": ("Codebase analytics: functions, classes, problems, duplicates")},
         )
 
         # Get count asynchronously

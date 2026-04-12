@@ -74,12 +74,8 @@ _model_lock = threading.Lock()
 class TrainRequest(BaseModel):
     """Request to trigger model training."""
 
-    language: Optional[str] = Field(
-        None, description="Filter training data by language"
-    )
-    pattern_type: Optional[str] = Field(
-        None, description="Filter training data by pattern type"
-    )
+    language: Optional[str] = Field(None, description="Filter training data by language")
+    pattern_type: Optional[str] = Field(None, description="Filter training data by pattern type")
     num_epochs: int = Field(default=10, ge=1, le=100)
     batch_size: int = Field(default=32, ge=1, le=256)
     notes: Optional[str] = Field(None, description="Training notes")
@@ -177,9 +173,7 @@ def _train_background(request):
     """
     try:
         start_time = time.time()
-        trainer = _get_trainer_class()(
-            language=request.language, pattern_type=request.pattern_type
-        )
+        trainer = _get_trainer_class()(language=request.language, pattern_type=request.pattern_type)
         trainer.prepare_data(batch_size=request.batch_size)
         history = trainer.train(num_epochs=request.num_epochs)
         trainer.save_checkpoint(is_best=True)
@@ -322,9 +316,7 @@ async def get_evaluation_metrics():
         raise HTTPException(status_code=400, detail="No active model")
 
     with _get_session() as db:
-        model = (
-            db.query(MLModel).filter(MLModel.version == active_version_snapshot).first()
-        )
+        model = db.query(MLModel).filter(MLModel.version == active_version_snapshot).first()
 
         if not model:
             raise HTTPException(status_code=404, detail="Active model not found in DB")
@@ -361,9 +353,7 @@ async def predict_completion(request: PredictRequest):
         active_version_snapshot = _active_version
 
     if active_model_snapshot is None:
-        raise HTTPException(
-            status_code=400, detail="No active model. Activate a model first."
-        )
+        raise HTTPException(status_code=400, detail="No active model. Activate a model first.")
 
     try:
         # Tokenize context
@@ -371,14 +361,10 @@ async def predict_completion(request: PredictRequest):
         context_ids = tokenizer.encode(request.context, max_length=128)
         import torch
 
-        input_tensor = torch.tensor([context_ids], dtype=torch.long).to(
-            active_model_snapshot.device
-        )
+        input_tensor = torch.tensor([context_ids], dtype=torch.long).to(active_model_snapshot.device)
 
         # Get predictions
-        predictions = active_model_snapshot.model.predict(
-            input_tensor, top_k=request.top_k
-        )
+        predictions = active_model_snapshot.model.predict(input_tensor, top_k=request.top_k)
 
         # Decode token IDs to text
         token_ids = predictions["tokens"][0].cpu().tolist()

@@ -98,9 +98,7 @@ class TestValidateExtraParams:
     """Tests for ExperimentRunner._validate_extra_params."""
 
     def test_valid_params_accepted(self):
-        ExperimentRunner._validate_extra_params(
-            {"custom_lr": 0.001, "warmup_ratio": 0.1}
-        )
+        ExperimentRunner._validate_extra_params({"custom_lr": 0.001, "warmup_ratio": 0.1})
 
     def test_reserved_key_rejected(self):
         for key in ("max_steps", "learning_rate", "batch_size"):
@@ -152,9 +150,7 @@ class TestValidateExtraParams:
     def test_all_reserved_keys_are_lowercase(self):
         """Sanity check: all reserved keys match the key pattern format."""
         for key in _RESERVED_KEYS:
-            assert _EXTRA_KEY_PATTERN.match(
-                key
-            ), f"Reserved key '{key}' doesn't match pattern"
+            assert _EXTRA_KEY_PATTERN.match(key), f"Reserved key '{key}' doesn't match pattern"
 
 
 # ---------------------------------------------------------------------------
@@ -177,9 +173,7 @@ class TestBuildCommand:
 
     def test_extra_params_appended(self):
         runner = _make_runner()
-        exp = _make_experiment(
-            hyperparams=HyperParams(extra={"seed": 42, "use_flash": True})
-        )
+        exp = _make_experiment(hyperparams=HyperParams(extra={"seed": 42, "use_flash": True}))
         cmd = runner._build_command(exp)
 
         assert "--seed=42" in cmd
@@ -213,9 +207,7 @@ class TestBuildCommand:
             "weight_decay",
         ]
         for flag in expected_flags:
-            assert any(
-                f"--{flag}=" in arg for arg in cmd
-            ), f"Missing --{flag} in command"
+            assert any(f"--{flag}=" in arg for arg in cmd), f"Missing --{flag} in command"
 
 
 # ---------------------------------------------------------------------------
@@ -286,9 +278,7 @@ class TestExecuteTraining:
 
     @pytest.mark.asyncio
     async def test_empty_stdout_handled(self):
-        parser = _make_parser(
-            result=ExperimentResult(error_message="Empty training output")
-        )
+        parser = _make_parser(result=ExperimentResult(error_message="Empty training output"))
         runner = _make_runner(parser=parser)
         exp = _make_experiment()
 
@@ -306,9 +296,7 @@ class TestExecuteTraining:
 
     @pytest.mark.asyncio
     async def test_none_stdout_handled(self):
-        parser = _make_parser(
-            result=ExperimentResult(error_message="Empty training output")
-        )
+        parser = _make_parser(result=ExperimentResult(error_message="Empty training output"))
         runner = _make_runner(parser=parser)
         exp = _make_experiment()
 
@@ -785,9 +773,9 @@ class TestExecuteInDocker:
         runner = _make_runner(config=config, parser=parser)
         exp = _make_experiment()
 
-        output_payload = json.dumps(
-            {"returncode": 0, "stdout": "step 1000 val_bpb 4.8\n", "stderr": ""}
-        ).encode("utf-8")
+        output_payload = json.dumps({"returncode": 0, "stdout": "step 1000 val_bpb 4.8\n", "stderr": ""}).encode(
+            "utf-8"
+        )
 
         mock_process = AsyncMock()
         mock_process.communicate = AsyncMock(return_value=(output_payload, None))
@@ -849,9 +837,7 @@ class TestExecuteInDocker:
 
             def __enter__(self):
                 path = self._real.__enter__()
-                with open(
-                    os.path.join(path, "result.json"), "w", encoding="utf-8"
-                ) as fh:
+                with open(os.path.join(path, "result.json"), "w", encoding="utf-8") as fh:
                     json.dump({"returncode": 0, "stdout": "", "stderr": ""}, fh)
                 return path
 
@@ -862,9 +848,7 @@ class TestExecuteInDocker:
         mock_process.communicate = AsyncMock(return_value=(b"", None))
         mock_process.returncode = 0
 
-        with patch(
-            "asyncio.create_subprocess_exec", return_value=mock_process
-        ) as mock_exec:
+        with patch("asyncio.create_subprocess_exec", return_value=mock_process) as mock_exec:
             with patch(
                 "services.autoresearch.runner.tempfile.TemporaryDirectory",
                 _PrePopTmpDir,
@@ -950,9 +934,7 @@ class TestExecuteInDocker:
 
             def __enter__(self):
                 path = self._real.__enter__()
-                with open(
-                    os.path.join(path, "result.json"), "w", encoding="utf-8"
-                ) as fh:
+                with open(os.path.join(path, "result.json"), "w", encoding="utf-8") as fh:
                     json.dump(
                         {"returncode": 1, "stdout": "err\n", "stderr": "crash"},
                         fh,
@@ -1008,9 +990,7 @@ class TestDockerFallback:
         mock_process.communicate = AsyncMock(return_value=(b"step 5000", None))
         mock_process.returncode = 0
 
-        with patch(
-            "asyncio.create_subprocess_exec", return_value=mock_process
-        ) as mock_exec:
+        with patch("asyncio.create_subprocess_exec", return_value=mock_process) as mock_exec:
             result = await runner._execute_training(exp)
 
         # Must not call docker

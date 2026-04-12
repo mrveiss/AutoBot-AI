@@ -138,26 +138,18 @@ class PerformanceTracker:
                     await self.apm.start_api_tracking(endpoint_name, method, trace_id)
 
                     # Execute function
-                    result = (
-                        await func(*args, **kwargs)
-                        if inspect.iscoroutinefunction(func)
-                        else func(*args, **kwargs)
-                    )
+                    result = await func(*args, **kwargs) if inspect.iscoroutinefunction(func) else func(*args, **kwargs)
 
                     # Track successful completion
                     response_time = (time.time() - start_time) * 1000
-                    await self.apm.complete_api_tracking(
-                        endpoint_name, 200, response_time, trace_id
-                    )
+                    await self.apm.complete_api_tracking(endpoint_name, 200, response_time, trace_id)
 
                     return result
 
                 except Exception as e:
                     # Track error
                     response_time = (time.time() - start_time) * 1000
-                    await self.apm.complete_api_tracking(
-                        endpoint_name, 500, response_time, trace_id, str(e)
-                    )
+                    await self.apm.complete_api_tracking(endpoint_name, 500, response_time, trace_id, str(e))
                     raise
 
             return wrapper
@@ -173,16 +165,10 @@ class PerformanceTracker:
                 start_time = time.time()
 
                 try:
-                    result = (
-                        await func(*args, **kwargs)
-                        if inspect.iscoroutinefunction(func)
-                        else func(*args, **kwargs)
-                    )
+                    result = await func(*args, **kwargs) if inspect.iscoroutinefunction(func) else func(*args, **kwargs)
 
                     execution_time = (time.time() - start_time) * 1000
-                    await self.apm.track_database_operation(
-                        database, operation, execution_time, success=True
-                    )
+                    await self.apm.track_database_operation(database, operation, execution_time, success=True)
 
                     return result
 
@@ -207,9 +193,7 @@ class PerformanceTracker:
 class AdvancedAPMSystem:
     """Advanced Application Performance Monitoring System."""
 
-    def __init__(
-        self, redis_host: str = NetworkConstants.REDIS_VM_IP, redis_port: int = 6379
-    ):
+    def __init__(self, redis_host: str = NetworkConstants.REDIS_VM_IP, redis_port: int = 6379):
         self.logger = logging.getLogger(__name__)
         self.redis_host = redis_host
         self.redis_port = redis_port
@@ -230,9 +214,7 @@ class AdvancedAPMSystem:
         self.alert_history: deque = deque(maxlen=500)
 
         # Cache monitoring
-        self.cache_stats = defaultdict(
-            lambda: {"hits": 0, "misses": 0, "total_size": 0, "operations": 0}
-        )
+        self.cache_stats = defaultdict(lambda: {"hits": 0, "misses": 0, "total_size": 0, "operations": 0})
 
         # Performance tracker
         self.tracker = PerformanceTracker(self)
@@ -481,9 +463,7 @@ class AdvancedAPMSystem:
                 # Store in Redis with TTL
                 metric_data = json.dumps(asdict(metric), default=str)
                 self.redis_client.lpush("autobot:apm:api_metrics", metric_data)
-                self.redis_client.ltrim(
-                    "autobot:apm:api_metrics", 0, 9999
-                )  # Keep 10k metrics
+                self.redis_client.ltrim("autobot:apm:api_metrics", 0, 9999)  # Keep 10k metrics
 
             # Store in daily file
             date_str = datetime.now().strftime("%Y%m%d")
@@ -511,9 +491,7 @@ class AdvancedAPMSystem:
                 async with aiofiles.open(metrics_file, "a", encoding="utf-8") as f:
                     await f.write(json.dumps(asdict(metric), default=str) + "\n")
             except OSError as e:
-                self.logger.error(
-                    f"Failed to write cache metrics to {metrics_file}: {e}"
-                )
+                self.logger.error(f"Failed to write cache metrics to {metrics_file}: {e}")
 
         except Exception as e:
             self.logger.error(f"Error storing cache metrics: {e}")
@@ -532,9 +510,7 @@ class AdvancedAPMSystem:
                 async with aiofiles.open(metrics_file, "a", encoding="utf-8") as f:
                     await f.write(json.dumps(asdict(metric), default=str) + "\n")
             except OSError as e:
-                self.logger.error(
-                    f"Failed to write database metrics to {metrics_file}: {e}"
-                )
+                self.logger.error(f"Failed to write database metrics to {metrics_file}: {e}")
 
         except Exception as e:
             self.logger.error(f"Error storing database metrics: {e}")
@@ -552,20 +528,14 @@ class AdvancedAPMSystem:
                     violated = metric.response_time_ms > rule.threshold_value
                 elif rule.name == "API Error Rate High":
                     # Calculate error rate from recent metrics
-                    recent_metrics = list(self.api_metrics_buffer)[
-                        -50:
-                    ]  # Last 50 requests
+                    recent_metrics = list(self.api_metrics_buffer)[-50:]  # Last 50 requests
                     if len(recent_metrics) >= 10:
-                        error_count = sum(
-                            1 for m in recent_metrics if m.status_code >= 400
-                        )
+                        error_count = sum(1 for m in recent_metrics if m.status_code >= 400)
                         error_rate = (error_count / len(recent_metrics)) * 100
                         violated = error_rate > rule.threshold_value
 
                 if violated:
-                    await self._trigger_alert(
-                        rule, metric.response_time_ms, metric.endpoint
-                    )
+                    await self._trigger_alert(rule, metric.response_time_ms, metric.endpoint)
                 else:
                     await self._resolve_alert(rule.name)
 
@@ -585,9 +555,7 @@ class AdvancedAPMSystem:
                     violated = metric.hit_rate_percent < rule.threshold_value
 
                 if violated:
-                    await self._trigger_alert(
-                        rule, metric.hit_rate_percent, metric.cache_type
-                    )
+                    await self._trigger_alert(rule, metric.hit_rate_percent, metric.cache_type)
                 else:
                     await self._resolve_alert(rule.name)
 
@@ -606,15 +574,11 @@ class AdvancedAPMSystem:
                 if rule.name == "Slow Database Queries":
                     violated = metric.execution_time_ms > rule.threshold_value
                 elif rule.name == "Database Connection Pool Exhaustion":
-                    pool_utilization = (
-                        metric.active_connections / metric.connection_pool_size
-                    ) * 100
+                    pool_utilization = (metric.active_connections / metric.connection_pool_size) * 100
                     violated = pool_utilization > rule.threshold_value
 
                 if violated:
-                    await self._trigger_alert(
-                        rule, metric.execution_time_ms, metric.database
-                    )
+                    await self._trigger_alert(rule, metric.execution_time_ms, metric.database)
                 else:
                     await self._resolve_alert(rule.name)
 
@@ -631,10 +595,7 @@ class AdvancedAPMSystem:
                 return
 
             # Create new alert
-            msg = (
-                f"{rule.name}: {context} - "
-                f"Value: {metric_value:.2f}, Threshold: {rule.threshold_value:.2f}"
-            )
+            msg = f"{rule.name}: {context} - " f"Value: {metric_value:.2f}, Threshold: {rule.threshold_value:.2f}"
             alert = Alert(
                 timestamp=datetime.now(timezone.utc).isoformat(),
                 rule_name=rule.name,
@@ -679,9 +640,7 @@ class AdvancedAPMSystem:
             for channel in channels:
                 if channel == "console":
                     # Use warning level for console alerts to maintain visibility
-                    self.logger.warning(
-                        "ALERT %s: %s", alert.severity.upper(), alert.message
-                    )
+                    self.logger.warning("ALERT %s: %s", alert.severity.upper(), alert.message)
                 elif channel == "log":
                     self.logger.warning("ALERT: %s", alert.message)
                 # Additional notification channels (email, webhook, etc.) would be implemented here
@@ -700,20 +659,13 @@ class AdvancedAPMSystem:
         return {
             "total_requests": len(api_metrics),
             "average_response_time": statistics.mean(response_times),
-            "p95_response_time": (
-                sorted(response_times)[int(len(response_times) * 0.95)]
-                if response_times
-                else 0
-            ),
+            "p95_response_time": (sorted(response_times)[int(len(response_times) * 0.95)] if response_times else 0),
             "error_rate": (error_count / len(api_metrics)) * 100,
             "requests_per_minute": len(
                 [
                     m
                     for m in api_metrics
-                    if (
-                        datetime.now(timezone.utc)
-                        - datetime.fromisoformat(m.timestamp.replace("Z", "+00:00"))
-                    ).seconds
+                    if (datetime.now(timezone.utc) - datetime.fromisoformat(m.timestamp.replace("Z", "+00:00"))).seconds
                     < 60
                 ]
             ),
@@ -757,12 +709,8 @@ class AdvancedAPMSystem:
         """
         return {
             "active_alerts": len(self.active_alerts),
-            "critical_alerts": len(
-                [a for a in self.active_alerts.values() if a.severity == "critical"]
-            ),
-            "high_alerts": len(
-                [a for a in self.active_alerts.values() if a.severity == "high"]
-            ),
+            "critical_alerts": len([a for a in self.active_alerts.values() if a.severity == "critical"]),
+            "high_alerts": len([a for a in self.active_alerts.values() if a.severity == "high"]),
             "total_alert_rules": len(self.alert_rules),
             "enabled_rules": len([r for r in self.alert_rules if r.enabled]),
         }
@@ -786,9 +734,7 @@ class AdvancedAPMSystem:
                 "cache_performance": cache_summary,
                 "database_performance": db_summary,
                 "alerting": alerts_summary,
-                "system_health": (
-                    "healthy" if len(self.active_alerts) == 0 else "degraded"
-                ),
+                "system_health": ("healthy" if len(self.active_alerts) == 0 else "degraded"),
             }
 
         except Exception as e:
@@ -803,19 +749,11 @@ class AdvancedAPMSystem:
             # Add detailed metrics
             report = {
                 "summary": summary,
-                "active_alerts": [
-                    asdict(alert) for alert in self.active_alerts.values()
-                ],
+                "active_alerts": [asdict(alert) for alert in self.active_alerts.values()],
                 "alert_rules": [asdict(rule) for rule in self.alert_rules],
-                "recent_api_metrics": [
-                    asdict(m) for m in list(self.api_metrics_buffer)[-20:]
-                ],
-                "recent_cache_metrics": [
-                    asdict(m) for m in list(self.cache_metrics_buffer)[-20:]
-                ],
-                "recent_database_metrics": [
-                    asdict(m) for m in list(self.database_metrics_buffer)[-20:]
-                ],
+                "recent_api_metrics": [asdict(m) for m in list(self.api_metrics_buffer)[-20:]],
+                "recent_cache_metrics": [asdict(m) for m in list(self.cache_metrics_buffer)[-20:]],
+                "recent_database_metrics": [asdict(m) for m in list(self.database_metrics_buffer)[-20:]],
                 "cache_stats": dict(self.cache_stats),
             }
 
@@ -841,10 +779,7 @@ class AdvancedAPMSystem:
                 )
 
             # Store in file
-            report_file = (
-                self.apm_data_path
-                / f"apm_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-            )
+            report_file = self.apm_data_path / f"apm_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
             try:
                 async with aiofiles.open(report_file, "w", encoding="utf-8") as f:
                     await f.write(json.dumps(report, indent=2, default=str))
@@ -894,13 +829,9 @@ if __name__ == "__main__":
 
     async def main():
         parser = argparse.ArgumentParser(description="AutoBot Advanced APM System")
-        parser.add_argument(
-            "--monitor", action="store_true", help="Start APM monitoring"
-        )
+        parser.add_argument("--monitor", action="store_true", help="Start APM monitoring")
         parser.add_argument("--report", action="store_true", help="Generate APM report")
-        parser.add_argument(
-            "--test", action="store_true", help="Test APM functionality"
-        )
+        parser.add_argument("--test", action="store_true", help="Test APM functionality")
 
         args = parser.parse_args()
 
@@ -920,9 +851,7 @@ if __name__ == "__main__":
             await apm.track_cache_operation("redis", "get", "test_key", True, 5.0, 1024)
 
             # Test database tracking
-            await apm.track_database_operation(
-                "redis", "query", 50.0, True, rows_affected=10
-            )
+            await apm.track_database_operation("redis", "query", 50.0, True, rows_affected=10)
 
             logger.info("✅ APM test completed")
 
@@ -937,16 +866,12 @@ if __name__ == "__main__":
             while True:
                 summary = await apm.get_performance_summary()
                 logger.info(f"System Health: {summary.get('system_health', 'unknown')}")
-                logger.info(
-                    f"Active Alerts: {summary.get('alerting', {}).get('active_alerts', 0)}"
-                )
+                logger.info(f"Active Alerts: {summary.get('alerting', {}).get('active_alerts', 0)}")
 
                 api_perf = summary.get("api_performance", {})
                 if api_perf:
                     logger.info(f"API Requests: {api_perf.get('total_requests', 0)}")
-                    logger.info(
-                        f"Avg Response Time: {api_perf.get('average_response_time', 0):.2f}ms"
-                    )
+                    logger.info(f"Avg Response Time: {api_perf.get('average_response_time', 0):.2f}ms")
                     logger.info(f"Error Rate: {api_perf.get('error_rate', 0):.2f}%")
 
                 logger.info("%s", "=" * 50)

@@ -24,9 +24,7 @@ from typing import Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level frozenset for acknowledgment word detection
-_ACKNOWLEDGMENT_WORDS = frozenset(
-    {"ok", "okay", "yes", "no", "sure", "thanks", "thank you"}
-)
+_ACKNOWLEDGMENT_WORDS = frozenset({"ok", "okay", "yes", "no", "sure", "thanks", "thank you"})
 
 
 class ConversationIntent(Enum):
@@ -222,29 +220,17 @@ class IntentClassifier:
             "has_exclamation": "!" in message,
             "is_very_short": len(words) <= 2,
             "is_long": len(words) > 20,
-            "starts_with_question_word": (
-                words[0] in self.QUESTION_WORDS if words else False
-            ),
+            "starts_with_question_word": (words[0] in self.QUESTION_WORDS if words else False),
             "has_task_word": any(word in self.TASK_WORDS for word in words),
-            "has_clarification_word": any(
-                word in self.CLARIFICATION_WORDS for word in words
-            ),
-            "has_continuation_word": any(
-                word in self.CONTINUATION_WORDS for word in words
-            ),
-            "has_exit_phrase": any(
-                phrase in message_lower for phrase in self.EXIT_PHRASES
-            ),
+            "has_clarification_word": any(word in self.CLARIFICATION_WORDS for word in words),
+            "has_continuation_word": any(word in self.CONTINUATION_WORDS for word in words),
+            "has_exit_phrase": any(phrase in message_lower for phrase in self.EXIT_PHRASES),
         }
 
         # Classify based on signals
-        return self._classify_from_signals(
-            message, message_lower, words, signals, conversation_history
-        )
+        return self._classify_from_signals(message, message_lower, words, signals, conversation_history)
 
-    def _check_exit_phrase_intent(
-        self, signals: Dict[str, bool]
-    ) -> Optional[IntentClassification]:
+    def _check_exit_phrase_intent(self, signals: Dict[str, bool]) -> Optional[IntentClassification]:
         """
         Check if exit phrase signals indicate END or CONTINUE intent.
 
@@ -264,10 +250,7 @@ class IntentClassifier:
             return IntentClassification(
                 intent=ConversationIntent.CLARIFICATION,
                 confidence=0.85,
-                reasoning=(
-                    "Exit phrase detected but in question form - "
-                    "user asking about exiting"
-                ),
+                reasoning=("Exit phrase detected but in question form - " "user asking about exiting"),
                 signals=signals,
             )
 
@@ -288,9 +271,7 @@ class IntentClassifier:
             signals=signals,
         )
 
-    def _check_question_intent(
-        self, signals: Dict[str, bool]
-    ) -> Optional[IntentClassification]:
+    def _check_question_intent(self, signals: Dict[str, bool]) -> Optional[IntentClassification]:
         """
         Check if question signals indicate CLARIFICATION or CONTINUE intent.
 
@@ -345,9 +326,7 @@ class IntentClassifier:
         # Check if responding to assistant's question
         if conversation_history and len(conversation_history) > 0:
             last_msg = conversation_history[-1]
-            if last_msg.get("role") == "assistant" and "?" in last_msg.get(
-                "content", ""
-            ):
+            if last_msg.get("role") == "assistant" and "?" in last_msg.get("content", ""):
                 return IntentClassification(
                     intent=ConversationIntent.CONTINUE,
                     confidence=0.75,
@@ -392,9 +371,7 @@ class IntentClassifier:
             )
 
         # RULE 5: Very short messages - likely acknowledgment or continuation
-        short_msg_result = self._check_short_message_intent(
-            words, signals, conversation_history
-        )
+        short_msg_result = self._check_short_message_intent(words, signals, conversation_history)
         if short_msg_result:
             return short_msg_result
 
@@ -450,6 +427,4 @@ class IntentClassifier:
             return question_result
 
         # RULES 3-6 + DEFAULT: delegate to lower-priority helper
-        return self._classify_lower_priority_signals(
-            words, signals, conversation_history
-        )
+        return self._classify_lower_priority_signals(words, signals, conversation_history)

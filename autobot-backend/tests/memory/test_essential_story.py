@@ -3,19 +3,18 @@
 # Author: mrveiss
 """Tests for EssentialStoryGenerator (#3787)."""
 
-import sys
-import types
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
-
 # ---------------------------------------------------------------------------
 # Stub out heavy optional imports before any project module is loaded.
 # We use importlib to load essential_story.py directly, bypassing the
 # memory package __init__ (which pulls in aiosqlite, ssot_config, etc.).
 # ---------------------------------------------------------------------------
 import importlib.util
+import sys
+import types
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 def _stub(name: str, attrs: dict = None, is_pkg: bool = False):
@@ -42,9 +41,7 @@ _stub("knowledge._composed")
 def _load_essential_story():
     """Load memory/essential_story.py directly, bypassing memory/__init__."""
     _stub("memory", is_pkg=True)
-    src = (
-        Path(__file__).parent.parent.parent / "memory" / "essential_story.py"
-    )
+    src = Path(__file__).parent.parent.parent / "memory" / "essential_story.py"
     spec = importlib.util.spec_from_file_location("memory.essential_story", src)
     mod = importlib.util.module_from_spec(spec)
     sys.modules["memory.essential_story"] = mod
@@ -112,9 +109,7 @@ class TestGetTokenBudget:
     @pytest.mark.asyncio
     async def test_derives_300_for_small_context(self, tmp_path):
         yaml_file = tmp_path / "context_windows.yaml"
-        yaml_file.write_text(
-            "models:\n  tiny:\n    context_window_tokens: 4096\n", encoding="utf-8"
-        )
+        yaml_file.write_text("models:\n  tiny:\n    context_window_tokens: 4096\n", encoding="utf-8")
         gen = EssentialStoryGenerator()
         with patch("memory.essential_story._YAML_PATH", yaml_file):
             budget = await gen._get_token_budget("tiny")
@@ -123,9 +118,7 @@ class TestGetTokenBudget:
     @pytest.mark.asyncio
     async def test_derives_600_for_medium_context(self, tmp_path):
         yaml_file = tmp_path / "context_windows.yaml"
-        yaml_file.write_text(
-            "models:\n  mid:\n    context_window_tokens: 32768\n", encoding="utf-8"
-        )
+        yaml_file.write_text("models:\n  mid:\n    context_window_tokens: 32768\n", encoding="utf-8")
         gen = EssentialStoryGenerator()
         with patch("memory.essential_story._YAML_PATH", yaml_file):
             budget = await gen._get_token_budget("mid")
@@ -134,9 +127,7 @@ class TestGetTokenBudget:
     @pytest.mark.asyncio
     async def test_derives_800_for_large_context(self, tmp_path):
         yaml_file = tmp_path / "context_windows.yaml"
-        yaml_file.write_text(
-            "models:\n  large:\n    context_window_tokens: 128000\n", encoding="utf-8"
-        )
+        yaml_file.write_text("models:\n  large:\n    context_window_tokens: 128000\n", encoding="utf-8")
         gen = EssentialStoryGenerator()
         with patch("memory.essential_story._YAML_PATH", yaml_file):
             budget = await gen._get_token_budget("large")
@@ -174,9 +165,7 @@ class TestFetchTopFacts:
         facts = _make_facts(5, quality_step=0.2)
         mock_kb = AsyncMock()
         mock_kb.get_all_facts = AsyncMock(return_value=facts)
-        sys.modules["knowledge._composed"].get_knowledge_base = AsyncMock(
-            return_value=mock_kb
-        )
+        sys.modules["knowledge._composed"].get_knowledge_base = AsyncMock(return_value=mock_kb)
 
         gen = EssentialStoryGenerator()
         result = await gen._fetch_top_facts(max_tokens=10000)
@@ -191,9 +180,7 @@ class TestFetchTopFacts:
         facts = _make_facts(20, quality_step=0.05)
         mock_kb = AsyncMock()
         mock_kb.get_all_facts = AsyncMock(return_value=facts)
-        sys.modules["knowledge._composed"].get_knowledge_base = AsyncMock(
-            return_value=mock_kb
-        )
+        sys.modules["knowledge._composed"].get_knowledge_base = AsyncMock(return_value=mock_kb)
 
         gen = EssentialStoryGenerator()
         result = await gen._fetch_top_facts(max_tokens=40)
@@ -207,9 +194,7 @@ class TestFetchTopFacts:
         facts = _make_facts(200, quality_step=0.005)
         mock_kb = AsyncMock()
         mock_kb.get_all_facts = AsyncMock(return_value=facts)
-        sys.modules["knowledge._composed"].get_knowledge_base = AsyncMock(
-            return_value=mock_kb
-        )
+        sys.modules["knowledge._composed"].get_knowledge_base = AsyncMock(return_value=mock_kb)
 
         gen = EssentialStoryGenerator()
         await gen._fetch_top_facts(max_tokens=100_000)
@@ -220,9 +205,7 @@ class TestFetchTopFacts:
     async def test_empty_kb_returns_empty_list(self):
         mock_kb = AsyncMock()
         mock_kb.get_all_facts = AsyncMock(return_value=[])
-        sys.modules["knowledge._composed"].get_knowledge_base = AsyncMock(
-            return_value=mock_kb
-        )
+        sys.modules["knowledge._composed"].get_knowledge_base = AsyncMock(return_value=mock_kb)
 
         gen = EssentialStoryGenerator()
         result = await gen._fetch_top_facts(max_tokens=600)
@@ -272,9 +255,10 @@ class TestGenerate:
     async def test_returns_empty_string_on_kb_error(self):
         gen = EssentialStoryGenerator()
         # Patch _get_cached to return None (miss) then _fetch_top_facts raises
-        with patch.object(gen, "_get_cached", AsyncMock(return_value=None)), \
-             patch.object(gen, "_fetch_top_facts",
-                          AsyncMock(side_effect=RuntimeError("KB unavailable"))):
+        with (
+            patch.object(gen, "_get_cached", AsyncMock(return_value=None)),
+            patch.object(gen, "_fetch_top_facts", AsyncMock(side_effect=RuntimeError("KB unavailable"))),
+        ):
             result = await gen.generate(model_name="test-model")
         assert result == ""
 
@@ -286,10 +270,11 @@ class TestGenerate:
         gen = EssentialStoryGenerator()
         cached_story = "## Essential Context\n[x] cached"
 
-        with patch("memory.essential_story._YAML_PATH", yaml_file), \
-             patch.object(gen, "_get_cached", AsyncMock(return_value=cached_story)), \
-             patch.object(gen, "_fetch_top_facts",
-                          AsyncMock(side_effect=AssertionError("KB should not be called"))):
+        with (
+            patch("memory.essential_story._YAML_PATH", yaml_file),
+            patch.object(gen, "_get_cached", AsyncMock(return_value=cached_story)),
+            patch.object(gen, "_fetch_top_facts", AsyncMock(side_effect=AssertionError("KB should not be called"))),
+        ):
             result = await gen.generate(model_name="big-model")
 
         assert result == cached_story
@@ -303,10 +288,12 @@ class TestGenerate:
         set_cached_mock = AsyncMock()
 
         gen = EssentialStoryGenerator()
-        with patch("memory.essential_story._YAML_PATH", yaml_file), \
-             patch.object(gen, "_get_cached", AsyncMock(return_value=None)), \
-             patch.object(gen, "_fetch_top_facts", AsyncMock(return_value=facts)), \
-             patch.object(gen, "_set_cached", set_cached_mock):
+        with (
+            patch("memory.essential_story._YAML_PATH", yaml_file),
+            patch.object(gen, "_get_cached", AsyncMock(return_value=None)),
+            patch.object(gen, "_fetch_top_facts", AsyncMock(return_value=facts)),
+            patch.object(gen, "_set_cached", set_cached_mock),
+        ):
             result = await gen.generate(model_name="big-model")
 
         assert "## Essential Context" in result

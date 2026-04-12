@@ -84,8 +84,7 @@ class TestChromaDBLoader:
         mock_client.get_or_create_collection.return_value = mock_collection
 
         with patch(
-            "backend.knowledge.pipeline.loaders.chromadb_loader."
-            "get_async_chromadb_client",
+            "backend.knowledge.pipeline.loaders.chromadb_loader." "get_async_chromadb_client",
             return_value=mock_client,
         ):
             from knowledge.pipeline.loaders.chromadb_loader import ChromaDBLoader
@@ -102,8 +101,7 @@ class TestChromaDBLoader:
         mock_client.get_or_create_collection.return_value = mock_collection
 
         with patch(
-            "backend.knowledge.pipeline.loaders.chromadb_loader."
-            "get_async_chromadb_client",
+            "backend.knowledge.pipeline.loaders.chromadb_loader." "get_async_chromadb_client",
             return_value=mock_client,
         ):
             from knowledge.pipeline.loaders.chromadb_loader import ChromaDBLoader
@@ -120,8 +118,7 @@ class TestChromaDBLoader:
         mock_client.get_or_create_collection.return_value = mock_collection
 
         with patch(
-            "backend.knowledge.pipeline.loaders.chromadb_loader."
-            "get_async_chromadb_client",
+            "backend.knowledge.pipeline.loaders.chromadb_loader." "get_async_chromadb_client",
             return_value=mock_client,
         ):
             from knowledge.pipeline.loaders.chromadb_loader import ChromaDBLoader
@@ -136,8 +133,7 @@ class TestChromaDBLoader:
         mock_client = AsyncMock()
 
         with patch(
-            "backend.knowledge.pipeline.loaders.chromadb_loader."
-            "get_async_chromadb_client",
+            "backend.knowledge.pipeline.loaders.chromadb_loader." "get_async_chromadb_client",
             return_value=mock_client,
         ):
             from knowledge.pipeline.loaders.chromadb_loader import ChromaDBLoader
@@ -265,9 +261,7 @@ class TestSQLiteLoader:
         import aiosqlite
 
         async with aiosqlite.connect(db_path) as db:
-            cursor = await db.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            )
+            cursor = await db.execute("SELECT name FROM sqlite_master WHERE type='table'")
             tables = [row[0] for row in await cursor.fetchall()]
 
         assert "knowledge_facts" in tables

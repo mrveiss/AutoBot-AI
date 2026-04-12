@@ -73,10 +73,7 @@ class ToolCall:
             arguments=data.get("arguments", {}),
             priority=data.get("priority", 0),
             depends_on=data.get("depends_on", []),
-            dependency_types={
-                k: DependencyType[v]
-                for k, v in data.get("dependency_types", {}).items()
-            },
+            dependency_types={k: DependencyType[v] for k, v in data.get("dependency_types", {}).items()},
             status=data.get("status", TaskStatus.PENDING.value),
             result=data.get("result"),
             error=data.get("error"),

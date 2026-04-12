@@ -44,9 +44,7 @@ CATEGORY_METADATA: Dict[str, Dict[str, str]] = {
     },
     KnowledgeCategory.SYSTEM_KNOWLEDGE: {
         "name": "System Knowledge",
-        "description": (
-            "AutoBot's initial knowledge - system info, man pages, OS knowledge"
-        ),
+        "description": ("AutoBot's initial knowledge - system info, man pages, OS knowledge"),
         "icon": "fas fa-server",
         "color": "#10b981",  # Green
         "examples": "Man pages, system commands, configuration files, hardware info",

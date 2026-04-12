@@ -15,7 +15,6 @@ import pytest
 from cache.coordinator import CacheCoordinator, get_cache_coordinator
 from cache.protocols import CacheProtocol
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

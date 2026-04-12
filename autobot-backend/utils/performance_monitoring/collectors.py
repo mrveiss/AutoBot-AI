@@ -46,9 +46,7 @@ class GPUCollector:
         """Initialize GPU collector."""
         self.gpu_available = gpu_available
 
-    def _parse_metric_value(
-        self, parts: List[str], index: int, as_int: bool = False
-    ) -> Optional[Any]:
+    def _parse_metric_value(self, parts: List[str], index: int, as_int: bool = False) -> Optional[Any]:
         """Parse GPU metric value from nvidia-smi output."""
         if index >= len(parts):
             return None
@@ -69,11 +67,7 @@ class GPUCollector:
         if len(parts) <= 16:
             return False, False
         thermal_throttling = parts[16] == "Active"
-        power_throttling = (
-            (parts[15] == "Active" or parts[17] == "Active")
-            if len(parts) > 17
-            else False
-        )
+        power_throttling = (parts[15] == "Active" or parts[17] == "Active") if len(parts) > 17 else False
         return thermal_throttling, power_throttling
 
     def _build_metrics(self, parts: List[str]) -> Optional[GPUMetrics]:
@@ -101,11 +95,7 @@ class GPUCollector:
             fan_speed_percent=self._parse_metric_value(parts, 8, as_int=True),
             encoder_utilization=self._parse_metric_value(parts, 9, as_int=True),
             decoder_utilization=self._parse_metric_value(parts, 10, as_int=True),
-            performance_state=(
-                parts[11]
-                if len(parts) > 11 and parts[11] != "[Not Supported]"
-                else None
-            ),
+            performance_state=(parts[11] if len(parts) > 11 and parts[11] != "[Not Supported]" else None),
             thermal_throttling=thermal_throttling,
             power_throttling=power_throttling,
         )
@@ -210,20 +200,14 @@ class NPUCollector:
 class SystemCollector:
     """Collects system performance metrics via psutil."""
 
-    def _try_add_autobot_process(
-        self, proc_info: Dict, autobot_processes: List[Dict]
-    ) -> None:
+    def _try_add_autobot_process(self, proc_info: Dict, autobot_processes: List[Dict]) -> None:
         """Try to add process to AutoBot processes list."""
         cmdline = " ".join(proc_info["cmdline"]) if proc_info["cmdline"] else ""
 
         if not any(keyword in cmdline.lower() for keyword in AUTOBOT_PROCESS_KEYWORDS):
             return
 
-        memory_mb = (
-            proc_info["memory_info"].rss / (1024 * 1024)
-            if proc_info["memory_info"]
-            else 0
-        )
+        memory_mb = proc_info["memory_info"].rss / (1024 * 1024) if proc_info["memory_info"] else 0
 
         autobot_processes.append(
             {
@@ -232,12 +216,8 @@ class SystemCollector:
                 "cmdline": cmdline[:100] + "..." if len(cmdline) > 100 else cmdline,
                 "cpu_percent": proc_info["cpu_percent"] or 0,
                 "memory_mb": round(memory_mb, 2),
-                "create_time": datetime.fromtimestamp(
-                    proc_info["create_time"]
-                ).isoformat(),
-                "running_time_minutes": round(
-                    (time.time() - proc_info["create_time"]) / 60, 1
-                ),
+                "create_time": datetime.fromtimestamp(proc_info["create_time"]).isoformat(),
+                "running_time_minutes": round((time.time() - proc_info["create_time"]) / 60, 1),
             }
         )
 
@@ -338,9 +318,7 @@ class SystemCollector:
             network_packet_loss_percent=0,
             autobot_processes=autobot_procs,
             autobot_memory_usage_mb=sum(p.get("memory_mb", 0) for p in autobot_procs),
-            autobot_cpu_usage_percent=sum(
-                p.get("cpu_percent", 0) for p in autobot_procs
-            ),
+            autobot_cpu_usage_percent=sum(p.get("cpu_percent", 0) for p in autobot_procs),
         )
 
     async def collect(self) -> SystemPerformanceMetrics:
@@ -352,9 +330,7 @@ class SystemCollector:
             swap = psutil.swap_memory()
             autobot_processes = self._get_autobot_processes()
 
-            return await self._build_system_metrics(
-                cpu_metrics, io_metrics, memory, swap, autobot_processes
-            )
+            return await self._build_system_metrics(cpu_metrics, io_metrics, memory, swap, autobot_processes)
         except Exception as e:
             logger.error("Error collecting system performance metrics: %s", e)
             return self._empty_metrics()
@@ -433,9 +409,7 @@ class ServiceCollector:
         except Exception:
             return "offline"
 
-    async def _collect_single_service(
-        self, service_config: Dict[str, Any]
-    ) -> Optional[ServicePerformanceMetrics]:
+    async def _collect_single_service(self, service_config: Dict[str, Any]) -> Optional[ServicePerformanceMetrics]:
         """Collect metrics for a single service."""
         try:
             service_name = service_config["name"]
@@ -523,9 +497,7 @@ class ServiceCollector:
                 if service_metrics:
                     services.append(service_metrics)
             except Exception as e:
-                logger.error(
-                    "Error collecting metrics for %s: %s", service_config["name"], e
-                )
+                logger.error("Error collecting metrics for %s: %s", service_config["name"], e)
 
         return services
 
@@ -541,38 +513,20 @@ class MultiModalCollector:
         """Collect multi-modal AI processing performance metrics."""
         try:
             if self.redis_client:
-                multimodal_stats = await asyncio.to_thread(
-                    self.redis_client.hgetall, "multimodal:performance_stats"
-                )
+                multimodal_stats = await asyncio.to_thread(self.redis_client.hgetall, "multimodal:performance_stats")
                 if multimodal_stats:
                     return MultiModalMetrics(
                         timestamp=time.time(),
-                        text_processing_time_ms=float(
-                            multimodal_stats.get("text_time_ms", 0)
-                        ),
-                        image_processing_time_ms=float(
-                            multimodal_stats.get("image_time_ms", 0)
-                        ),
-                        audio_processing_time_ms=float(
-                            multimodal_stats.get("audio_time_ms", 0)
-                        ),
-                        combined_processing_time_ms=float(
-                            multimodal_stats.get("combined_time_ms", 0)
-                        ),
-                        pipeline_efficiency=float(
-                            multimodal_stats.get("pipeline_efficiency", 0)
-                        ),
-                        memory_peak_usage_mb=float(
-                            multimodal_stats.get("memory_peak_mb", 0)
-                        ),
-                        gpu_acceleration_used=multimodal_stats.get("gpu_used", "false")
-                        == "true",
-                        npu_acceleration_used=multimodal_stats.get("npu_used", "false")
-                        == "true",
+                        text_processing_time_ms=float(multimodal_stats.get("text_time_ms", 0)),
+                        image_processing_time_ms=float(multimodal_stats.get("image_time_ms", 0)),
+                        audio_processing_time_ms=float(multimodal_stats.get("audio_time_ms", 0)),
+                        combined_processing_time_ms=float(multimodal_stats.get("combined_time_ms", 0)),
+                        pipeline_efficiency=float(multimodal_stats.get("pipeline_efficiency", 0)),
+                        memory_peak_usage_mb=float(multimodal_stats.get("memory_peak_mb", 0)),
+                        gpu_acceleration_used=multimodal_stats.get("gpu_used", "false") == "true",
+                        npu_acceleration_used=multimodal_stats.get("npu_used", "false") == "true",
                         batch_size=int(multimodal_stats.get("batch_size", 1)),
-                        throughput_items_per_second=float(
-                            multimodal_stats.get("throughput_ips", 0)
-                        ),
+                        throughput_items_per_second=float(multimodal_stats.get("throughput_ips", 0)),
                         error_rate_percent=float(multimodal_stats.get("error_rate", 0)),
                     )
 

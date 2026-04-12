@@ -122,9 +122,7 @@ class GPUAccelerationOptimizer:
 
         # Mixed precision optimization
         if self._capabilities.mixed_precision:
-            precision_result = await enable_mixed_precision(
-                self.config, self._capabilities
-            )
+            precision_result = await enable_mixed_precision(self.config, self._capabilities)
             if precision_result["success"]:
                 applied_optimizations.extend(precision_result["optimizations"])
             recommendations.extend(precision_result["recommendations"])
@@ -144,26 +142,16 @@ class GPUAccelerationOptimizer:
 
         return applied_optimizations, recommendations
 
-    def _calculate_metrics_changes(
-        self, baseline: Dict[str, float], post_optimization: Dict[str, float]
-    ) -> tuple:
+    def _calculate_metrics_changes(self, baseline: Dict[str, float], post_optimization: Dict[str, float]) -> tuple:
         """Calculate improvement metrics between baseline and post-optimization (Issue #398: extracted).
 
         Returns:
             Tuple of (performance_improvement, memory_savings, throughput_improvement, latency_reduction)
         """
-        performance_improvement = self._calculate_performance_improvement(
-            baseline, post_optimization
-        )
-        memory_savings = baseline.get("memory_used_mb", 0) - post_optimization.get(
-            "memory_used_mb", 0
-        )
-        throughput_improvement = post_optimization.get(
-            "throughput_fps", 0
-        ) - baseline.get("throughput_fps", 0)
-        latency_reduction = baseline.get(
-            "inference_latency_ms", 0
-        ) - post_optimization.get("inference_latency_ms", 0)
+        performance_improvement = self._calculate_performance_improvement(baseline, post_optimization)
+        memory_savings = baseline.get("memory_used_mb", 0) - post_optimization.get("memory_used_mb", 0)
+        throughput_improvement = post_optimization.get("throughput_fps", 0) - baseline.get("throughput_fps", 0)
+        latency_reduction = baseline.get("inference_latency_ms", 0) - post_optimization.get("inference_latency_ms", 0)
 
         return (
             performance_improvement,
@@ -216,17 +204,12 @@ class GPUAccelerationOptimizer:
             async with self._lock:
                 self.optimization_history.append(result)
 
-            self.logger.info(
-                f"Multi-modal optimization completed: "
-                f"{performance_improvement:.1f}% improvement"
-            )
+            self.logger.info(f"Multi-modal optimization completed: " f"{performance_improvement:.1f}% improvement")
             return result
 
         except Exception as e:
             self.logger.error("Multi-modal optimization failed: %s", e)
-            return GPUOptimizationResult.create_failed(
-                "multimodal_workload", "Multi-modal optimization failed"
-            )
+            return GPUOptimizationResult.create_failed("multimodal_workload", "Multi-modal optimization failed")
 
     async def _collect_performance_baseline(self) -> Dict[str, float]:
         """Collect current performance metrics as baseline."""
@@ -260,9 +243,7 @@ class GPUAccelerationOptimizer:
             self.logger.error("Error collecting performance baseline: %s", e)
             return {}
 
-    def _calculate_performance_improvement(
-        self, baseline: Dict[str, float], post_opt: Dict[str, float]
-    ) -> float:
+    def _calculate_performance_improvement(self, baseline: Dict[str, float], post_opt: Dict[str, float]) -> float:
         """Calculate overall performance improvement percentage."""
         try:
             if not baseline or not post_opt:
@@ -281,18 +262,14 @@ class GPUAccelerationOptimizer:
             baseline_latency = baseline.get("inference_latency_ms", 0)
             post_latency = post_opt.get("inference_latency_ms", 0)
             if baseline_latency > 0 and post_latency > 0:
-                latency_improvement = (
-                    (baseline_latency - post_latency) / baseline_latency
-                ) * 100
+                latency_improvement = ((baseline_latency - post_latency) / baseline_latency) * 100
                 improvements.append(latency_improvement)
 
             # Throughput improvement (higher is better)
             baseline_throughput = baseline.get("throughput_fps", 0)
             post_throughput = post_opt.get("throughput_fps", 0)
             if baseline_throughput > 0:
-                throughput_improvement = (
-                    (post_throughput - baseline_throughput) / baseline_throughput
-                ) * 100
+                throughput_improvement = ((post_throughput - baseline_throughput) / baseline_throughput) * 100
                 improvements.append(throughput_improvement)
 
             return sum(improvements) / len(improvements) if improvements else 0.0
@@ -307,9 +284,7 @@ class GPUAccelerationOptimizer:
 
     async def monitor_gpu_acceleration_efficiency(self) -> Dict[str, Any]:
         """Monitor current GPU acceleration efficiency."""
-        return await monitor_gpu_acceleration_efficiency(
-            self._capabilities, self.current_optimizations
-        )
+        return await monitor_gpu_acceleration_efficiency(self._capabilities, self.current_optimizations)
 
     def get_optimization_config(self) -> GPUOptimizationConfig:
         """Get current optimization configuration."""
@@ -362,33 +337,21 @@ class GPUAccelerationOptimizer:
         memory_gb = self._capabilities.memory_gb
 
         if memory_gb >= 12:
-            recommendations.append(
-                "High memory GPU - excellent for large models and high batch sizes"
-            )
+            recommendations.append("High memory GPU - excellent for large models and high batch sizes")
         elif memory_gb >= 8:
-            recommendations.append(
-                "Good memory capacity - suitable for most AI workloads"
-            )
+            recommendations.append("Good memory capacity - suitable for most AI workloads")
         else:
-            recommendations.append(
-                "Limited memory - use memory optimization techniques"
-            )
+            recommendations.append("Limited memory - use memory optimization techniques")
 
         if self._capabilities.tensor_cores:
-            recommendations.append(
-                "Tensor Cores available - enable for maximum AI performance"
-            )
+            recommendations.append("Tensor Cores available - enable for maximum AI performance")
 
         if self._capabilities.mixed_precision:
-            recommendations.append(
-                "Mixed precision supported - can double performance with FP16"
-            )
+            recommendations.append("Mixed precision supported - can double performance with FP16")
 
         compute_cap = self._capabilities.compute_capability
         if compute_cap and float(compute_cap) >= 7.5:
-            recommendations.append(
-                "Modern compute capability - supports latest CUDA optimizations"
-            )
+            recommendations.append("Modern compute capability - supports latest CUDA optimizations")
 
         return recommendations
 
@@ -436,21 +399,14 @@ if __name__ == "__main__":
 
         # Run benchmark
         benchmark = await benchmark_gpu()
-        print(  # noqa: print
-            f"GPU Benchmark: {json.dumps(benchmark, indent=2, default=str)}"
-        )  # noqa: print
+        print(f"GPU Benchmark: {json.dumps(benchmark, indent=2, default=str)}")  # noqa: print  # noqa: print
 
         # Monitor efficiency
         efficiency = await monitor_gpu_efficiency()
-        print(  # noqa: print
-            f"GPU Efficiency: {json.dumps(efficiency, indent=2, default=str)}"
-        )  # noqa: print
+        print(f"GPU Efficiency: {json.dumps(efficiency, indent=2, default=str)}")  # noqa: print  # noqa: print
 
         # Optimize for multi-modal
         optimization = await optimize_gpu_for_multimodal()
-        print(  # noqa: print
-            f"Optimization Result: "
-            f"{json.dumps(asdict(optimization), indent=2, default=str)}"
-        )
+        print(f"Optimization Result: " f"{json.dumps(asdict(optimization), indent=2, default=str)}")  # noqa: print
 
     asyncio.run(test_gpu_optimization())

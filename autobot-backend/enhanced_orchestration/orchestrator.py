@@ -19,9 +19,11 @@ from typing import Any, Dict, List, Optional, Set
 
 from agents.agent_client import AgentRegistry as AgentClientRegistry
 from agents.llm_failsafe_agent import get_robust_llm_response
-from autobot_shared.redis_client import get_redis_client, get_async_redis_client
+from autobot_shared.redis_client import get_async_redis_client, get_redis_client
 from event_manager import event_manager
 
+from .execution_strategies import ExecutionStrategyHandler
+from .success_criteria import SuccessCriteriaEvaluator
 from .types import (
     FALLBACK_TIERS,
     AgentCapability,
@@ -30,8 +32,6 @@ from .types import (
     ExecutionStrategy,
     WorkflowPlan,
 )
-from .execution_strategies import ExecutionStrategyHandler
-from .success_criteria import SuccessCriteriaEvaluator
 from .workflow_planning import WorkflowPlanner
 
 logger = logging.getLogger(__name__)
@@ -140,10 +140,7 @@ class EnhancedMultiAgentOrchestrator:
             Formatted planning prompt string
         """
         capabilities_json = json.dumps(
-            {
-                agent: [cap.value for cap in caps]
-                for agent, caps in self.agent_capabilities.items()
-            },
+            {agent: [cap.value for cap in caps] for agent, caps in self.agent_capabilities.items()},
             indent=2,
         )
 
@@ -203,9 +200,7 @@ class EnhancedMultiAgentOrchestrator:
             return parse_result.data
         return self._planner.create_fallback_plan(goal)
 
-    async def create_workflow_plan(
-        self, goal: str, context: Optional[Dict[str, Any]] = None
-    ) -> WorkflowPlan:
+    async def create_workflow_plan(self, goal: str, context: Optional[Dict[str, Any]] = None) -> WorkflowPlan:
         """
         Create an intelligent workflow plan for a goal.
 
@@ -241,9 +236,7 @@ class EnhancedMultiAgentOrchestrator:
             self.logger.error("Failed to create workflow plan: %s", e)
             return self._planner.create_simple_workflow_plan(goal)
 
-    async def _evaluate_criteria(
-        self, plan: WorkflowPlan, results: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _evaluate_criteria(self, plan: WorkflowPlan, results: Dict[str, Any]) -> Dict[str, Any]:
         """Issue #3293: Evaluate structured success criteria and return serialisable dict.
 
         Falls back to binary check when no structured criteria are defined.
@@ -357,9 +350,7 @@ class EnhancedMultiAgentOrchestrator:
         except Exception as e:
             return await self._handle_workflow_failure(plan, e, results)
 
-    async def _handle_task_timeout(
-        self, task: AgentTask, context: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _handle_task_timeout(self, task: AgentTask, context: Dict[str, Any]) -> Dict[str, Any]:
         """
         Handle task timeout with retry logic.
 
@@ -380,9 +371,7 @@ class EnhancedMultiAgentOrchestrator:
         self._update_agent_performance(task.agent_type, False, task.timeout)
         return task.to_failed_result("Task execution timed out")
 
-    def _handle_task_exception(
-        self, task: AgentTask, error: Exception
-    ) -> Dict[str, Any]:
+    def _handle_task_exception(self, task: AgentTask, error: Exception) -> Dict[str, Any]:
         """
         Handle task execution exception.
 
@@ -393,9 +382,7 @@ class EnhancedMultiAgentOrchestrator:
         self._update_agent_performance(task.agent_type, False, execution_time)
         return task.to_failed_result(str(error))
 
-    async def _execute_single_task(
-        self, task: AgentTask, context: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _execute_single_task(self, task: AgentTask, context: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a single agent task. Issue #620: Refactored with helpers."""
         task.start_execution()
 
@@ -409,16 +396,12 @@ class EnhancedMultiAgentOrchestrator:
                 enhanced_inputs = task.get_enhanced_inputs(context)
 
                 result = await asyncio.wait_for(
-                    agent.process_request(
-                        {"action": task.action, "payload": enhanced_inputs}
-                    ),
+                    agent.process_request({"action": task.action, "payload": enhanced_inputs}),
                     timeout=task.timeout,
                 )
 
                 task.complete_execution(result)
-                self._update_agent_performance(
-                    task.agent_type, True, task.get_execution_time()
-                )
+                self._update_agent_performance(task.agent_type, True, task.get_execution_time())
                 return task.to_completed_result(result)
 
         except asyncio.TimeoutError:
@@ -427,9 +410,7 @@ class EnhancedMultiAgentOrchestrator:
         except Exception as e:
             return self._handle_task_exception(task, e)
 
-    async def get_agent_recommendations(
-        self, task_type: str, capabilities_needed: Set[AgentCapability]
-    ) -> List[str]:
+    async def get_agent_recommendations(self, task_type: str, capabilities_needed: Set[AgentCapability]) -> List[str]:
         """Get recommended agents for a task based on capabilities and performance."""
         suitable_agents = []
 
@@ -440,18 +421,12 @@ class EnhancedMultiAgentOrchestrator:
 
                 # Calculate suitability score
                 reliability = performance.reliability_score
-                capability_match = len(capabilities_needed.intersection(caps)) / len(
-                    capabilities_needed
-                )
+                capability_match = len(capabilities_needed.intersection(caps)) / len(capabilities_needed)
 
                 # Boost score for agents with relevant experience
                 experience_boost = min(performance.total_tasks / 100, 1.0)
 
-                score = (
-                    (reliability * 0.5)
-                    + (capability_match * 0.3)
-                    + (experience_boost * 0.2)
-                )
+                score = (reliability * 0.5) + (capability_match * 0.3) + (experience_boost * 0.2)
 
                 suitable_agents.append((agent, score))
 
@@ -499,9 +474,7 @@ class EnhancedMultiAgentOrchestrator:
         await self._ensure_redis()
         await self.redis_async.publish(channel, json.dumps(data))
 
-    async def _update_performance_metrics(
-        self, plan: WorkflowPlan, results: Dict[str, Any], execution_time: float
-    ):
+    async def _update_performance_metrics(self, plan: WorkflowPlan, results: Dict[str, Any], execution_time: float):
         """Update agent performance metrics"""
         for task in plan.tasks:
             result = results.get(task.task_id, {})
@@ -512,9 +485,7 @@ class EnhancedMultiAgentOrchestrator:
 
                 self._update_agent_performance(agent_type, success, task_time)
 
-    def _update_agent_performance(
-        self, agent_type: str, success: bool, execution_time: float
-    ):
+    def _update_agent_performance(self, agent_type: str, success: bool, execution_time: float):
         """Update performance metrics for an agent"""
         if agent_type in self.agent_performance:
             perf = self.agent_performance[agent_type]
@@ -535,9 +506,7 @@ class EnhancedMultiAgentOrchestrator:
 
             perf.last_update = time.time()
 
-    async def _publish_workflow_event(
-        self, workflow_id: str, event_type: str, data: Dict[str, Any]
-    ):
+    async def _publish_workflow_event(self, workflow_id: str, event_type: str, data: Dict[str, Any]):
         """Publish workflow event"""
         await event_manager.publish(
             "workflow_event",
@@ -597,9 +566,7 @@ class EnhancedMultiAgentOrchestrator:
         coverage = {}
 
         for capability in AgentCapability:
-            agents_with_cap = sum(
-                1 for caps in self.agent_capabilities.values() if capability in caps
-            )
+            agents_with_cap = sum(1 for caps in self.agent_capabilities.values() if capability in caps)
             coverage[capability.value] = agents_with_cap / len(self.agent_capabilities)
 
         return coverage
@@ -609,9 +576,7 @@ class EnhancedMultiAgentOrchestrator:
 enhanced_orchestrator = EnhancedMultiAgentOrchestrator()
 
 
-async def create_and_execute_workflow(
-    goal: str, context: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
+async def create_and_execute_workflow(goal: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     Convenience function to create and execute a workflow.
 

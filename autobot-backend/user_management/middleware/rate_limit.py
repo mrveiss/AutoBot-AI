@@ -47,9 +47,7 @@ class PasswordChangeRateLimiter:
 
         if current >= self.MAX_ATTEMPTS:
             ttl = await redis_client.ttl(key)
-            raise RateLimitExceeded(
-                f"Too many attempts. Try again in {ttl // 60} minutes."
-            )
+            raise RateLimitExceeded(f"Too many attempts. Try again in {ttl // 60} minutes.")
 
         return True, self.MAX_ATTEMPTS - current
 

@@ -153,8 +153,7 @@ def register_root_endpoints(app: FastAPI) -> None:
         return await _build_agent_card_response(request)
 
     logger.info(
-        "✅ Root endpoints registered: /api/health, /api/health/ai-stack, "
-        "/api/version, /.well-known/agent.json"
+        "✅ Root endpoints registered: /api/health, /api/health/ai-stack, " "/api/version, /.well-known/agent.json"
     )
 
 

@@ -185,10 +185,7 @@ class TestAPIEndpointBenchmarks:
         import json
 
         test_data = {
-            "agents": [
-                {"id": f"agent_{i}", "status": "active", "tasks": [1, 2, 3]}
-                for i in range(100)
-            ],
+            "agents": [{"id": f"agent_{i}", "status": "active", "tasks": [1, 2, 3]} for i in range(100)],
             "metrics": {"cpu": 45.2, "memory": 67.8, "requests": 1000},
             "config": {"debug": False, "log_level": "INFO", "max_workers": 4},
         }
@@ -217,10 +214,7 @@ class TestAPIEndpointBenchmarks:
 
         test_json = json.dumps(
             {
-                "agents": [
-                    {"id": f"agent_{i}", "status": "active", "tasks": [1, 2, 3]}
-                    for i in range(100)
-                ],
+                "agents": [{"id": f"agent_{i}", "status": "active", "tasks": [1, 2, 3]} for i in range(100)],
                 "metrics": {"cpu": 45.2, "memory": 67.8, "requests": 1000},
             }
         )

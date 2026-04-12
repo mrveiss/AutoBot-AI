@@ -47,10 +47,7 @@ _NAME_RE = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
 def _validate_secret_name(name: str) -> str:
     """Reject names containing characters outside the safe set. Issue #2153."""
     if not _NAME_RE.match(name):
-        raise ValueError(
-            "Secret name must contain only alphanumeric characters, "
-            "underscores, hyphens, and dots"
-        )
+        raise ValueError("Secret name must contain only alphanumeric characters, " "underscores, hyphens, and dots")
     return name
 
 

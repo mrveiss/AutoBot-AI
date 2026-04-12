@@ -161,17 +161,14 @@ class AgentRegistry:
 
     def find_by_capability(self, capability: AgentCapability) -> List[AgentProfile]:
         """Find all agents with a specific capability."""
-        return [
-            agent for agent in self._agents.values() if capability in agent.capabilities
-        ]
+        return [agent for agent in self._agents.values() if capability in agent.capabilities]
 
     def find_available(self) -> List[AgentProfile]:
         """Find all available agents (not at max capacity)."""
         return [
             agent
             for agent in self._agents.values()
-            if agent.current_workload < agent.max_concurrent_tasks
-            and agent.availability_status == "available"
+            if agent.current_workload < agent.max_concurrent_tasks and agent.availability_status == "available"
         ]
 
     def find_best_for_task(
@@ -198,9 +195,7 @@ class AgentRegistry:
                 continue
 
             # Skip if missing required capabilities
-            if required_capabilities and not required_capabilities.issubset(
-                agent.capabilities
-            ):
+            if required_capabilities and not required_capabilities.issubset(agent.capabilities):
                 continue
 
             # Calculate score based on preferences and performance
@@ -289,9 +284,7 @@ class AgentRegistry:
         if agent.average_completion_time == 0:
             agent.average_completion_time = execution_time
         else:
-            agent.average_completion_time = (
-                alpha * execution_time + (1 - alpha) * agent.average_completion_time
-            )
+            agent.average_completion_time = alpha * execution_time + (1 - alpha) * agent.average_completion_time
 
     def __len__(self) -> int:
         """Return number of registered agents."""

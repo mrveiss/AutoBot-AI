@@ -125,9 +125,7 @@ def get_slm_session_maker() -> async_sessionmaker[AsyncSession]:
         with _slm_session_maker_lock:
             if _slm_session_maker is None:
                 engine = get_slm_engine()
-                _slm_session_maker = async_sessionmaker(
-                    engine, class_=AsyncSession, expire_on_commit=False
-                )
+                _slm_session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     return _slm_session_maker
 
 
@@ -141,9 +139,7 @@ def get_autobot_session_maker() -> async_sessionmaker[AsyncSession]:
         with _autobot_session_maker_lock:
             if _autobot_session_maker is None:
                 engine = get_autobot_engine()
-                _autobot_session_maker = async_sessionmaker(
-                    engine, class_=AsyncSession, expire_on_commit=False
-                )
+                _autobot_session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     return _autobot_session_maker
 
 

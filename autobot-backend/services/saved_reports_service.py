@@ -37,9 +37,7 @@ class SavedReportsService:
     async def _get_redis(self):
         """Get async Redis client for the analytics database."""
         if self._redis is None:
-            self._redis = get_redis_client(
-                async_client=True, database=RedisDatabase.ANALYTICS
-            )
+            self._redis = get_redis_client(async_client=True, database=RedisDatabase.ANALYTICS)
         return self._redis
 
     # ------------------------------------------------------------------
@@ -132,9 +130,7 @@ class SavedReportsService:
     # Report execution
     # ------------------------------------------------------------------
 
-    async def run_report(
-        self, report_id: str, days: int = 30
-    ) -> Optional[Dict[str, Any]]:
+    async def run_report(self, report_id: str, days: int = 30) -> Optional[Dict[str, Any]]:
         """
         Run a saved report: fetch live analytics for configured sections.
 

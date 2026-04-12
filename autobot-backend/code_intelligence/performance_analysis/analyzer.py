@@ -82,9 +82,7 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
         ]
         self.results: List[PerformanceIssue] = []
         self.total_files_scanned: int = 0  # Issue #686: Track total files analyzed
-        self.use_semantic_analysis = (
-            use_semantic_analysis and HAS_ANALYTICS_INFRASTRUCTURE
-        )
+        self.use_semantic_analysis = use_semantic_analysis and HAS_ANALYTICS_INFRASTRUCTURE
         self.use_shared_cache = use_shared_cache and HAS_SHARED_CACHE
 
         # Issue #554: Initialize analytics infrastructure if semantic analysis enabled
@@ -138,9 +136,7 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
 
         return findings
 
-    def _check_list_lookup_pattern(
-        self, file_path: str, content: str, lines: List[str]
-    ) -> List[PerformanceIssue]:
+    def _check_list_lookup_pattern(self, file_path: str, content: str, lines: List[str]) -> List[PerformanceIssue]:
         """
         Check for list used as lookup (should be set).
 
@@ -170,9 +166,7 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
             )
         return findings
 
-    def _check_repeated_file_opens(
-        self, file_path: str, content: str, lines: List[str]
-    ) -> List[PerformanceIssue]:
+    def _check_repeated_file_opens(self, file_path: str, content: str, lines: List[str]) -> List[PerformanceIssue]:
         """
         Check for repeated file opens in same file.
 
@@ -200,9 +194,7 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
             )
         return findings
 
-    def _check_string_concat_in_loop(
-        self, file_path: str, content: str, lines: List[str]
-    ) -> List[PerformanceIssue]:
+    def _check_string_concat_in_loop(self, file_path: str, content: str, lines: List[str]) -> List[PerformanceIssue]:
         """
         Check for += with strings in loop-like context.
 
@@ -236,9 +228,7 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
                 )
         return findings
 
-    def _regex_analysis(
-        self, file_path: str, content: str, lines: List[str]
-    ) -> List[PerformanceIssue]:
+    def _regex_analysis(self, file_path: str, content: str, lines: List[str]) -> List[PerformanceIssue]:
         """
         Perform regex-based performance analysis.
 
@@ -257,9 +247,7 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
 
         return findings
 
-    def analyze_directory(
-        self, directory: Optional[str] = None
-    ) -> List[PerformanceIssue]:
+    def analyze_directory(self, directory: Optional[str] = None) -> List[PerformanceIssue]:
         """Analyze all Python files in a directory."""
         target = Path(directory) if directory else self.project_root
         self.results = []
@@ -319,9 +307,7 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
 
         # Issue #686: Use total_files_scanned instead of files with issues
         files_analyzed = (
-            self.total_files_scanned
-            if self.total_files_scanned > 0
-            else len(set(f.file_path for f in self.results))
+            self.total_files_scanned if self.total_files_scanned > 0 else len(set(f.file_path for f in self.results))
         )
 
         return {
@@ -357,9 +343,7 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
     def _get_top_issues(self) -> List[Dict[str, Any]]:
         """Get top issues by severity."""
         severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
-        sorted_issues = sorted(
-            self.results, key=lambda x: severity_order.get(x.severity.value, 5)
-        )
+        sorted_issues = sorted(self.results, key=lambda x: severity_order.get(x.severity.value, 5))
         return [issue.to_dict() for issue in sorted_issues[:5]]
 
     def generate_report(self, format: str = "json") -> str:
@@ -384,15 +368,11 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
         seen_types: set = set()
 
         severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-        sorted_findings = sorted(
-            self.results, key=lambda x: severity_order.get(x.severity.value, 4)
-        )
+        sorted_findings = sorted(self.results, key=lambda x: severity_order.get(x.severity.value, 4))
 
         for finding in sorted_findings[:10]:
             if finding.issue_type not in seen_types:
-                recommendations.append(
-                    f"[{finding.severity.value.upper()}] {finding.recommendation}"
-                )
+                recommendations.append(f"[{finding.severity.value.upper()}] {finding.recommendation}")
                 seen_types.add(finding.issue_type)
 
         return recommendations
@@ -420,9 +400,7 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
             for finding in report["findings"][:20]:
                 md.append(f"### {finding['issue_type']}\n")
                 md.append(f"- **Severity**: {finding['severity']}\n")
-                md.append(
-                    f"- **File**: {finding['file_path']}:{finding['line_start']}\n"
-                )
+                md.append(f"- **File**: {finding['file_path']}:{finding['line_start']}\n")
                 md.append(f"- **Complexity**: {finding['estimated_complexity']}\n")
                 md.append(f"- **Description**: {finding['description']}\n")
                 md.append(f"- **Fix**: {finding['recommendation']}\n\n")
@@ -497,9 +475,7 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
                     "line_start": "line_start",
                     "description": "description",
                 },
-                min_similarity=(
-                    SIMILARITY_MEDIUM if HAS_ANALYTICS_INFRASTRUCTURE else 0.7
-                ),
+                min_similarity=(SIMILARITY_MEDIUM if HAS_ANALYTICS_INFRASTRUCTURE else 0.7),
             )
         except Exception as e:
             logger.warning("Semantic duplicate detection failed: %s", e)
@@ -575,9 +551,7 @@ def analyze_performance(
     Returns:
         Dictionary with results and summary
     """
-    analyzer = PerformanceAnalyzer(
-        project_root=directory, exclude_patterns=exclude_patterns
-    )
+    analyzer = PerformanceAnalyzer(project_root=directory, exclude_patterns=exclude_patterns)
     results = analyzer.analyze_directory()
 
     return {

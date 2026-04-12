@@ -100,9 +100,7 @@ class RetryRecoveryHandler(ErrorRecoveryHandler):
         current_retries = self._retry_counts.get(retry_key, 0)
 
         if current_retries >= self.max_retries:
-            logger.error(
-                "Max retries (%d) exceeded for %s", self.max_retries, retry_key
-            )
+            logger.error("Max retries (%d) exceeded for %s", self.max_retries, retry_key)
             raise error
 
         # Calculate backoff delay

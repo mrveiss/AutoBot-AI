@@ -143,13 +143,9 @@ class NodeCreate(BaseModel):
     """Node registration request."""
 
     hostname: str
-    ansible_name: Optional[str] = Field(
-        None, min_length=1
-    )  # Ansible inventory name (#1814, #2011)
+    ansible_name: Optional[str] = Field(None, min_length=1)  # Ansible inventory name (#1814, #2011)
     ip_address: str
-    node_id: Optional[str] = (
-        None  # Custom node_id; if not provided, derived from hostname
-    )
+    node_id: Optional[str] = None  # Custom node_id; if not provided, derived from hostname
     roles: List[str] = Field(default_factory=list)
     ssh_user: Optional[str] = "autobot"
     ssh_port: Optional[int] = 22
@@ -163,9 +159,7 @@ class NodeUpdate(BaseModel):
     """Node update request."""
 
     hostname: Optional[str] = None
-    ansible_name: Optional[str] = Field(
-        None, min_length=1
-    )  # Ansible inventory name (#1814, #2011)
+    ansible_name: Optional[str] = Field(None, min_length=1)  # Ansible inventory name (#1814, #2011)
     ip_address: Optional[str] = None
     status: Optional[NodeStatus] = None
     roles: Optional[List[str]] = None
@@ -972,9 +966,7 @@ class BlueGreenCreate(BaseModel):
     blue_node_id: str = Field(..., description="Source node (current production)")
     green_node_id: str = Field(..., description="Target node (will receive roles)")
     roles: List[str] = Field(..., description="Roles to migrate from blue to green")
-    deployment_type: str = Field(
-        default="upgrade", description="upgrade, migration, or failover"
-    )
+    deployment_type: str = Field(default="upgrade", description="upgrade, migration, or failover")
     health_check_url: Optional[str] = None
     health_check_interval: int = Field(default=10, ge=5, le=60)
     health_check_timeout: int = Field(default=300, ge=60, le=1800)
@@ -1116,28 +1108,18 @@ class VNCCredentialCreate(BaseModel):
     """Create VNC credential for a node."""
 
     vnc_type: str = Field(default="desktop", pattern="^(desktop|browser|custom)$")
-    name: Optional[str] = Field(
-        None, description="Optional friendly name for the credential"
-    )
-    password: str = Field(
-        ..., min_length=1, description="VNC password (will be encrypted)"
-    )
+    name: Optional[str] = Field(None, description="Optional friendly name for the credential")
+    password: str = Field(..., min_length=1, description="VNC password (will be encrypted)")
     port: Optional[int] = Field(None, ge=1, le=65535, description="websockify port")
-    display_number: Optional[int] = Field(
-        None, ge=0, le=99, description="X display number"
-    )
+    display_number: Optional[int] = Field(None, ge=0, le=99, description="X display number")
     vnc_port: Optional[int] = Field(
         None,
         ge=1,
         le=65535,
         description="Raw VNC port (auto-calculated if not provided)",
     )
-    websockify_enabled: bool = Field(
-        default=True, description="Enable websockify for noVNC"
-    )
-    extra_data: Dict = Field(
-        default_factory=dict, description="Additional configuration"
-    )
+    websockify_enabled: bool = Field(default=True, description="Enable websockify for noVNC")
+    extra_data: Dict = Field(default_factory=dict, description="Additional configuration")
 
 
 class VNCCredentialUpdate(BaseModel):
@@ -1225,23 +1207,13 @@ class VNCEndpointsResponse(BaseModel):
 class TLSCredentialCreate(BaseModel):
     """Create TLS certificate credential for a node."""
 
-    name: Optional[str] = Field(
-        None, description="Optional friendly name (e.g., 'redis-server', 'api-client')"
-    )
+    name: Optional[str] = Field(None, description="Optional friendly name (e.g., 'redis-server', 'api-client')")
     ca_cert: str = Field(..., description="CA certificate (PEM format)")
     server_cert: str = Field(..., description="Server/client certificate (PEM format)")
-    server_key: str = Field(
-        ..., description="Private key (PEM format, will be encrypted)"
-    )
-    common_name: Optional[str] = Field(
-        None, description="CN from certificate (auto-extracted if not provided)"
-    )
-    expires_at: Optional[datetime] = Field(
-        None, description="Expiration date (auto-extracted if not provided)"
-    )
-    extra_data: Dict = Field(
-        default_factory=dict, description="Additional configuration"
-    )
+    server_key: str = Field(..., description="Private key (PEM format, will be encrypted)")
+    common_name: Optional[str] = Field(None, description="CN from certificate (auto-extracted if not provided)")
+    expires_at: Optional[datetime] = Field(None, description="Expiration date (auto-extracted if not provided)")
+    extra_data: Dict = Field(default_factory=dict, description="Additional configuration")
 
 
 class TLSCredentialUpdate(BaseModel):
@@ -1292,9 +1264,7 @@ class TLSCertificateInfo(BaseModel):
     not_before: datetime
     not_after: datetime
     fingerprint: str
-    san: List[str] = Field(
-        default_factory=list, description="Subject Alternative Names"
-    )
+    san: List[str] = Field(default_factory=list, description="Subject Alternative Names")
 
 
 class TLSEndpointResponse(BaseModel):
@@ -1316,9 +1286,7 @@ class TLSEndpointsResponse(BaseModel):
 
     endpoints: List[TLSEndpointResponse]
     total: int
-    expiring_soon: int = Field(
-        default=0, description="Certificates expiring within 30 days"
-    )
+    expiring_soon: int = Field(default=0, description="Certificates expiring within 30 days")
 
 
 # =============================================================================
@@ -1501,18 +1469,12 @@ class SecurityOverviewResponse(BaseModel):
     """Security dashboard overview metrics."""
 
     security_score: float = Field(..., description="Overall security score (0-100)")
-    active_threats: int = Field(
-        default=0, description="Number of unresolved security events"
-    )
-    failed_logins_24h: int = Field(
-        default=0, description="Failed login attempts in last 24 hours"
-    )
+    active_threats: int = Field(default=0, description="Number of unresolved security events")
+    failed_logins_24h: int = Field(default=0, description="Failed login attempts in last 24 hours")
     policy_violations: int = Field(default=0, description="Policy violations count")
     total_events_24h: int = Field(default=0, description="Total security events in 24h")
     critical_events: int = Field(default=0, description="Critical severity events")
-    certificates_expiring: int = Field(
-        default=0, description="Certificates expiring within 30 days"
-    )
+    certificates_expiring: int = Field(default=0, description="Certificates expiring within 30 days")
     recent_events: List[SecurityEventResponse] = Field(default_factory=list)
 
 
@@ -1528,9 +1490,7 @@ class ThreatSummary(BaseModel):
     resolved: int = 0
     by_type: Dict[str, int] = Field(default_factory=dict)
     by_source_ip: Dict[str, int] = Field(default_factory=dict)
-    trend_24h: List[Dict] = Field(
-        default_factory=list, description="Hourly threat count"
-    )
+    trend_24h: List[Dict] = Field(default_factory=list, description="Hourly threat count")
 
 
 # =============================================================================
@@ -1624,9 +1584,7 @@ class FleetSyncRequest(BaseModel):
     """Request to sync code to multiple nodes."""
 
     node_ids: Optional[List[str]] = None
-    strategy: str = Field(
-        default="rolling", pattern="^(immediate|graceful|manual|rolling)$"
-    )
+    strategy: str = Field(default="rolling", pattern="^(immediate|graceful|manual|rolling)$")
     batch_size: int = Field(default=1, ge=1, le=10)
     restart: bool = True
 
@@ -1708,9 +1666,7 @@ class ScheduleCreate(BaseModel):
     enabled: bool = True
     target_type: str = Field(default="all", pattern="^(all|specific|tag)$")
     target_nodes: Optional[List[str]] = None
-    restart_strategy: str = Field(
-        default="graceful", pattern="^(immediate|graceful|manual)$"
-    )
+    restart_strategy: str = Field(default="graceful", pattern="^(immediate|graceful|manual)$")
     restart_after_sync: bool = True
 
 
@@ -1722,9 +1678,7 @@ class ScheduleUpdate(BaseModel):
     enabled: Optional[bool] = None
     target_type: Optional[str] = Field(None, pattern="^(all|specific|tag)$")
     target_nodes: Optional[List[str]] = None
-    restart_strategy: Optional[str] = Field(
-        None, pattern="^(immediate|graceful|manual)$"
-    )
+    restart_strategy: Optional[str] = Field(None, pattern="^(immediate|graceful|manual)$")
     restart_after_sync: Optional[bool] = None
 
 
@@ -1909,9 +1863,7 @@ class AgentUpdateRequest(BaseModel):
 
     name: Optional[str] = Field(default=None, min_length=1, max_length=128)
     description: Optional[str] = None
-    llm_provider: Optional[str] = Field(
-        default=None, pattern="^(ollama|openai|anthropic|vllm)$"
-    )
+    llm_provider: Optional[str] = Field(default=None, pattern="^(ollama|openai|anthropic|vllm)$")
     llm_endpoint: Optional[str] = None
     llm_model: Optional[str] = Field(default=None, min_length=1, max_length=64)
     llm_api_key: Optional[str] = None  # Will be encrypted before storage
@@ -1987,9 +1939,7 @@ class NPULoadBalancingConfig(BaseModel):
     """NPU load balancing configuration."""
 
     strategy: str = "round-robin"
-    model_affinity: Dict[str, List[str]] = Field(
-        default_factory=dict, alias="modelAffinity"
-    )
+    model_affinity: Dict[str, List[str]] = Field(default_factory=dict, alias="modelAffinity")
 
     model_config = {"populate_by_name": True}
 

@@ -42,10 +42,7 @@ class ConnectionTester:
             # Check cache first (thread-safe)
             current_time = time.time()
             async with _health_cache_lock:
-                if (
-                    _health_cache["data"]
-                    and current_time - _health_cache["timestamp"] < _health_cache["ttl"]
-                ):
+                if _health_cache["data"] and current_time - _health_cache["timestamp"] < _health_cache["ttl"]:
                     return _health_cache["data"]
 
             # Quick Redis check
@@ -128,8 +125,7 @@ class ConnectionTester:
         model = None
         llm_config = global_config_manager.get("backend", {}).get("llm", {})
         is_local_ollama = (
-            llm_config.get("provider_type") == "local"
-            and llm_config.get("local", {}).get("provider") == "ollama"
+            llm_config.get("provider_type") == "local" and llm_config.get("local", {}).get("provider") == "ollama"
         )
         if is_local_ollama:
             ollama_providers = llm_config.get("local", {}).get("providers", {})
@@ -149,17 +145,13 @@ class ConnectionTester:
         if not model:
             model = global_config_manager.get_nested(
                 "backend.ollama_model",
-                os.getenv(
-                    "AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL
-                ),
+                os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL),
             )
         # Final fallbacks
         if not endpoint:
             endpoint = f"{get_ollama_url()}/api/generate"
         if not model:
-            model = os.getenv(
-                "AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL
-            )
+            model = os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL)
         return endpoint, model
 
     @staticmethod
@@ -204,9 +196,7 @@ class ConnectionTester:
         """Test Ollama LLM connection with current configuration"""
         try:
             endpoint, model = ConnectionTester._get_ollama_config_from_new_structure()
-            endpoint, model = ConnectionTester._get_ollama_config_fallback(
-                endpoint, model
-            )
+            endpoint, model = ConnectionTester._get_ollama_config_fallback(endpoint, model)
 
             check_url = endpoint.replace(PATH_OLLAMA_GENERATE, PATH_OLLAMA_TAGS)
             timeout = aiohttp.ClientTimeout(total=_ssot_config.timeout.http)
@@ -244,9 +234,7 @@ class ConnectionTester:
 
         if task_transport_config.get("type") == "redis":
             redis_config = task_transport_config.get("redis", {})
-            host = redis_config.get(
-                "host", os.getenv("AUTOBOT_REDIS_HOST", "localhost")
-            )
+            host = redis_config.get("host", os.getenv("AUTOBOT_REDIS_HOST", "localhost"))
             port = redis_config.get(
                 "port",
                 int(os.getenv("AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT))),
@@ -302,15 +290,11 @@ class ConnectionTester:
             redis_client.ping()
 
             # Check if RediSearch module is loaded
-            redis_search_module_loaded = ConnectionTester._check_redis_search_module(
-                redis_client
-            )
+            redis_search_module_loaded = ConnectionTester._check_redis_search_module(redis_client)
 
             return {
                 "status": "connected",
-                "message": (
-                    f"Successfully connected to Redis at {redis_host}:{redis_port}"
-                ),
+                "message": (f"Successfully connected to Redis at {redis_host}:{redis_port}"),
                 "host": redis_host,
                 "port": redis_port,
                 "redis_search_module_loaded": redis_search_module_loaded,
@@ -323,9 +307,7 @@ class ConnectionTester:
             }
 
     @staticmethod
-    async def _check_ollama_embedding(
-        provider_config: dict, current_model: str, provider: str
-    ) -> Metadata:
+    async def _check_ollama_embedding(provider_config: dict, current_model: str, provider: str) -> Metadata:
         """Check Ollama embedding model availability (reduces nesting in _get_embedding_status)."""
         ollama_host = provider_config.get("host", get_ollama_url())
         tags_url = f"{ollama_host}/api/tags"
@@ -342,17 +324,14 @@ class ConnectionTester:
                     }
                 data = await response.json()
                 available_models = [model["name"] for model in data.get("models", [])]
-                model_available = (
-                    current_model in available_models if current_model else False
-                )
+                model_available = current_model in available_models if current_model else False
                 return {
                     "connected": True,
                     "current_model": current_model,
                     "model_available": model_available,
                     "provider": provider,
                     "message": (
-                        f"Embedding model '{current_model}' "
-                        f"{'available' if model_available else 'not found'}"
+                        f"Embedding model '{current_model}' " f"{'available' if model_available else 'not found'}"
                     ),
                 }
 
@@ -376,9 +355,7 @@ class ConnectionTester:
             current_model = provider_config.get("selected_model")
 
             if provider == "ollama":
-                return await ConnectionTester._check_ollama_embedding(
-                    provider_config, current_model, provider
-                )
+                return await ConnectionTester._check_ollama_embedding(provider_config, current_model, provider)
 
             if provider == "openai":
                 # For OpenAI, just return configured status
@@ -428,9 +405,7 @@ class ConnectionTester:
                 "embedding_status": embedding_status.get("connected", False),
                 "current_embedding_model": embedding_status.get("current_model"),
                 "redis_status": redis_result["status"],
-                "redis_search_module_loaded": redis_result.get(
-                    "redis_search_module_loaded", False
-                ),
+                "redis_search_module_loaded": redis_result.get("redis_search_module_loaded", False),
                 "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "details": {
                     "ollama": ollama_status,
@@ -531,9 +506,7 @@ class ModelManager:
                         return []
                     ollama_data = await response.json()
                     raw_models = ollama_data.get("models", [])
-                    return [
-                        ModelManager._parse_ollama_model(model) for model in raw_models
-                    ]
+                    return [ModelManager._parse_ollama_model(model) for model in raw_models]
         except Exception as e:
             ModelManager._log_ollama_warning_if_needed(e)
             return []

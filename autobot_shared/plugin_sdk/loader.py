@@ -60,9 +60,7 @@ class PluginLoader:
 
                     manifest = PluginManifest(**data)
                     manifests.append(manifest)
-                    logger.info(
-                        "Discovered plugin: %s v%s", manifest.name, manifest.version
-                    )
+                    logger.info("Discovered plugin: %s v%s", manifest.name, manifest.version)
 
                 except Exception as e:
                     logger.error(
@@ -74,9 +72,7 @@ class PluginLoader:
 
         return manifests
 
-    async def load_plugin(
-        self, manifest: PluginManifest, config: Optional[Dict] = None
-    ) -> Optional[BasePlugin]:
+    async def load_plugin(self, manifest: PluginManifest, config: Optional[Dict] = None) -> Optional[BasePlugin]:
         """
         Load a plugin from its manifest.
 
@@ -117,9 +113,7 @@ class PluginLoader:
             return plugin
 
         except Exception as e:
-            logger.error(
-                "Failed to load plugin %s: %s", manifest.name, e, exc_info=True
-            )
+            logger.error("Failed to load plugin %s: %s", manifest.name, e, exc_info=True)
             return None
 
     async def unload_plugin(self, name: str) -> bool:
@@ -211,20 +205,14 @@ class PluginLoader:
             # Look for Plugin class or class with 'Plugin' suffix
             for attr_name in dir(module):
                 attr = getattr(module, attr_name)
-                if (
-                    isinstance(attr, type)
-                    and issubclass(attr, BasePlugin)
-                    and attr is not BasePlugin
-                ):
+                if isinstance(attr, type) and issubclass(attr, BasePlugin) and attr is not BasePlugin:
                     return attr
 
             logger.error("No plugin class found in module: %s", entry_point)
             return None
 
         except Exception as e:
-            logger.error(
-                "Failed to import plugin %s: %s", entry_point, e, exc_info=True
-            )
+            logger.error("Failed to import plugin %s: %s", entry_point, e, exc_info=True)
             return None
 
     def get_loaded_plugins(self) -> Dict[str, BasePlugin]:

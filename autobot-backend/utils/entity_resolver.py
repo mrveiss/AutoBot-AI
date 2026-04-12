@@ -76,9 +76,7 @@ _ENTITY_PATTERNS = {
 
 def _check_version_pattern(name_lower: str, entity_name: str) -> bool:
     """Check if entity name matches version pattern. (Issue #315 - extracted)"""
-    return any(p in name_lower for p in _ENTITY_PATTERNS[EntityType.VERSION]) and any(
-        c.isdigit() for c in entity_name
-    )
+    return any(p in name_lower for p in _ENTITY_PATTERNS[EntityType.VERSION]) and any(c.isdigit() for c in entity_name)
 
 
 class EntityResolver:
@@ -92,18 +90,10 @@ class EntityResolver:
     def __init__(self):
         """Initialize the entity resolver."""
         # Configuration
-        self.similarity_threshold = config_manager.get(
-            "entity_resolution.similarity_threshold", 0.85
-        )
-        self.fuzzy_threshold = config_manager.get(
-            "entity_resolution.fuzzy_threshold", 0.8
-        )
-        self.enable_semantic_similarity = config_manager.get(
-            "entity_resolution.enable_semantic", True
-        )
-        self.enable_fuzzy_matching = config_manager.get(
-            "entity_resolution.enable_fuzzy", True
-        )
+        self.similarity_threshold = config_manager.get("entity_resolution.similarity_threshold", 0.85)
+        self.fuzzy_threshold = config_manager.get("entity_resolution.fuzzy_threshold", 0.8)
+        self.enable_semantic_similarity = config_manager.get("entity_resolution.enable_semantic", True)
+        self.enable_fuzzy_matching = config_manager.get("entity_resolution.enable_fuzzy", True)
 
         # Models and clients
         self.embedding_model = None
@@ -130,9 +120,7 @@ class EntityResolver:
                 # Import only when needed to avoid startup delay
                 from sentence_transformers import SentenceTransformer
 
-                model_name = config_manager.get(
-                    "entity_resolution.embedding_model", "all-MiniLM-L6-v2"
-                )
+                model_name = config_manager.get("entity_resolution.embedding_model", "all-MiniLM-L6-v2")
                 self.embedding_model = SentenceTransformer(model_name)
                 logger.info("Loaded embedding model: %s", model_name)
             except Exception as e:
@@ -159,16 +147,12 @@ class EntityResolver:
             for original, mapping in batch_results.items():
                 resolved_mappings[original] = mapping.canonical_id
 
-                if not any(
-                    c.canonical_id == mapping.canonical_id for c in canonical_entities
-                ):
+                if not any(c.canonical_id == mapping.canonical_id for c in canonical_entities):
                     canonical_entities.append(mapping)
 
         return resolved_mappings, canonical_entities
 
-    def _create_fallback_result(
-        self, entity_names: List[str], start_time: datetime
-    ) -> "EntityResolutionResult":
+    def _create_fallback_result(self, entity_names: List[str], start_time: datetime) -> "EntityResolutionResult":
         """Create fallback result when resolution fails (Issue #665: extracted helper)."""
         return EntityResolutionResult(
             original_entities=entity_names,
@@ -215,9 +199,7 @@ class EntityResolver:
             await self._store_entity_mappings(canonical_entities)
             await self._record_resolution_history(result, context)
 
-            logger.info(
-                f"Entity resolution completed: {result.resolution_rate:.1f}% reduction"
-            )
+            logger.info(f"Entity resolution completed: {result.resolution_rate:.1f}% reduction")
             return result
 
         except Exception as e:
@@ -247,9 +229,7 @@ class EntityResolver:
                 continue
 
             # Look for similar entities
-            similar_mapping = await self._find_similar_entity(
-                entity_name, existing_mappings
-            )
+            similar_mapping = await self._find_similar_entity(entity_name, existing_mappings)
             if similar_mapping:
                 # Add this entity as an alias to the similar mapping
                 similar_mapping.add_alias(entity_name, confidence=0.8)
@@ -296,30 +276,21 @@ class EntityResolver:
         for mapping in existing_mappings.values():
             # Fuzzy string similarity
             if self.enable_fuzzy_matching:
-                fuzzy_score = await self._calculate_fuzzy_similarity(
-                    entity_name, mapping
-                )
+                fuzzy_score = await self._calculate_fuzzy_similarity(entity_name, mapping)
                 if fuzzy_score > best_score and fuzzy_score >= self.fuzzy_threshold:
                     best_score = fuzzy_score
                     best_mapping = mapping
 
             # Semantic similarity
             if self.enable_semantic_similarity and self._get_embedding_model():
-                semantic_score = await self._calculate_semantic_similarity(
-                    entity_name, mapping
-                )
-                if (
-                    semantic_score > best_score
-                    and semantic_score >= self.similarity_threshold
-                ):
+                semantic_score = await self._calculate_semantic_similarity(entity_name, mapping)
+                if semantic_score > best_score and semantic_score >= self.similarity_threshold:
                     best_score = semantic_score
                     best_mapping = mapping
 
         return best_mapping if best_score >= self.similarity_threshold else None
 
-    async def _calculate_fuzzy_similarity(
-        self, entity_name: str, mapping: EntityMapping
-    ) -> float:
+    async def _calculate_fuzzy_similarity(self, entity_name: str, mapping: EntityMapping) -> float:
         """Calculate fuzzy string similarity between entity and mapping."""
         entity_name_normalized = entity_name.lower().strip()
         max_similarity = 0.0
@@ -332,16 +303,12 @@ class EntityResolver:
 
         # Check aliases
         for alias in mapping.aliases:
-            alias_similarity = SequenceMatcher(
-                None, entity_name_normalized, alias.lower().strip()
-            ).ratio()
+            alias_similarity = SequenceMatcher(None, entity_name_normalized, alias.lower().strip()).ratio()
             max_similarity = max(max_similarity, alias_similarity)
 
         return max_similarity
 
-    async def _calculate_semantic_similarity(
-        self, entity_name: str, mapping: EntityMapping
-    ) -> float:
+    async def _calculate_semantic_similarity(self, entity_name: str, mapping: EntityMapping) -> float:
         """Calculate semantic similarity using embeddings."""
         try:
             model = self._get_embedding_model()
@@ -436,9 +403,7 @@ class EntityResolver:
         except Exception as e:
             logger.error("Error storing entity mappings: %s", e)
 
-    async def _record_resolution_history(
-        self, result: EntityResolutionResult, context: Optional[Dict[str, Any]]
-    ):
+    async def _record_resolution_history(self, result: EntityResolutionResult, context: Optional[Dict[str, Any]]):
         """Record entity resolution history for analytics."""
         try:
             if not self.redis_client:
@@ -462,9 +427,7 @@ class EntityResolver:
             }
 
             # Store in history list (keep last 500 entries)
-            await self.redis_client.lpush(
-                self.resolution_history_key, str(history_entry)
-            )
+            await self.redis_client.lpush(self.resolution_history_key, str(history_entry))
             await self.redis_client.ltrim(self.resolution_history_key, 0, 499)
 
             logger.debug("Recorded entity resolution history")
@@ -493,9 +456,7 @@ class EntityResolver:
             all_entities.add(fact.object)
         return all_entities
 
-    def _apply_resolution_to_fact(
-        self, fact: AtomicFact, resolution_result: EntityResolutionResult
-    ) -> AtomicFact:
+    def _apply_resolution_to_fact(self, fact: AtomicFact, resolution_result: EntityResolutionResult) -> AtomicFact:
         """
         Apply entity resolution to a single atomic fact.
 
@@ -508,9 +469,7 @@ class EntityResolver:
 
         Issue #620.
         """
-        resolved_entities = [
-            resolution_result.get_canonical_name(entity) for entity in fact.entities
-        ]
+        resolved_entities = [resolution_result.get_canonical_name(entity) for entity in fact.entities]
         resolved_subject = resolution_result.get_canonical_name(fact.subject)
         resolved_object = resolution_result.get_canonical_name(fact.object)
 
@@ -543,14 +502,9 @@ class EntityResolver:
                 context={"source": "atomic_facts", "fact_count": len(facts)},
             )
 
-            updated_facts = [
-                self._apply_resolution_to_fact(fact, resolution_result)
-                for fact in facts
-            ]
+            updated_facts = [self._apply_resolution_to_fact(fact, resolution_result) for fact in facts]
 
-            logger.info(
-                f"Entity resolution completed: {resolution_result.resolution_rate:.1f}% reduction"
-            )
+            logger.info(f"Entity resolution completed: {resolution_result.resolution_rate:.1f}% reduction")
             return updated_facts
 
         except Exception as e:
@@ -604,15 +558,9 @@ class EntityResolver:
 
         Issue #620.
         """
-        avg_processing_time = (
-            totals["processing_time"] / total_resolutions
-            if total_resolutions > 0
-            else 0
-        )
+        avg_processing_time = totals["processing_time"] / total_resolutions if total_resolutions > 0 else 0
         avg_resolution_rate = (
-            (totals["entities_processed"] - totals["entities_resolved"])
-            / totals["entities_processed"]
-            * 100
+            (totals["entities_processed"] - totals["entities_resolved"]) / totals["entities_processed"] * 100
             if totals["entities_processed"] > 0
             else 0
         )
@@ -637,14 +585,10 @@ class EntityResolver:
                 return {"error": "Redis client not available"}
 
             total_mappings = await self.redis_client.hlen(self.entity_mappings_key)
-            recent_history = await self.redis_client.lrange(
-                self.resolution_history_key, 0, 99
-            )
+            recent_history = await self.redis_client.lrange(self.resolution_history_key, 0, 99)
 
             totals = self._parse_resolution_history(recent_history)
-            return self._build_statistics_response(
-                total_mappings, len(recent_history), totals
-            )
+            return self._build_statistics_response(total_mappings, len(recent_history), totals)
 
         except Exception as e:
             logger.error("Error getting resolution statistics: %s", e)

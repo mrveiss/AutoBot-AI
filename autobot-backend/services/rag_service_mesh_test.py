@@ -64,30 +64,38 @@ class TestMeshFlagDisabledUsesLegacyPath:
 
         svc = _make_service(mesh_retriever_enabled=False)
 
-        with patch(
-            "services.rag_service.RAGService._check_cache_tiers",
-            new_callable=AsyncMock,
-            return_value=None,
-        ), patch(
-            "services.rag_service.RAGService.initialize",
-            new_callable=AsyncMock,
-            return_value=True,
-        ), patch(
-            "services.rag_service.RAGService._execute_and_cache_search",
-            new_callable=AsyncMock,
-            return_value=([], RAGMetrics()),
-        ) as mock_exec, patch(
-            "services.rag_service.RAGService._store_in_semantic_cache",
-            new_callable=AsyncMock,
-        ), patch(
-            "services.rag_service.RAGService._store_in_topic_cache",
-            new_callable=AsyncMock,
-        ), patch(
-            "services.rag_service.RAGService._emit_retrieval_feedback",
-            new_callable=AsyncMock,
-        ), patch(
-            "services.rag_service.RAGService._store_feedback_in_stream",
-            new_callable=AsyncMock,
+        with (
+            patch(
+                "services.rag_service.RAGService._check_cache_tiers",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "services.rag_service.RAGService.initialize",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch(
+                "services.rag_service.RAGService._execute_and_cache_search",
+                new_callable=AsyncMock,
+                return_value=([], RAGMetrics()),
+            ) as mock_exec,
+            patch(
+                "services.rag_service.RAGService._store_in_semantic_cache",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "services.rag_service.RAGService._store_in_topic_cache",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "services.rag_service.RAGService._emit_retrieval_feedback",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "services.rag_service.RAGService._store_feedback_in_stream",
+                new_callable=AsyncMock,
+            ),
         ):
             await svc.advanced_search(query="test query")
 
@@ -110,20 +118,22 @@ class TestMeshFlagEnabledUsesMeshRetriever:
         svc._mesh_retriever = AsyncMock()
         svc._mesh_retriever.retrieve = AsyncMock(return_value=mesh_result)
 
-        with patch(
-            "services.rag_service.RAGService._check_cache_tiers",
-            new_callable=AsyncMock,
-            return_value=None,
-        ), patch(
-            "services.rag_service.RAGService._emit_retrieval_feedback",
-            new_callable=AsyncMock,
-        ), patch(
-            "services.rag_service.RAGService._store_feedback_in_stream",
-            new_callable=AsyncMock,
+        with (
+            patch(
+                "services.rag_service.RAGService._check_cache_tiers",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "services.rag_service.RAGService._emit_retrieval_feedback",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "services.rag_service.RAGService._store_feedback_in_stream",
+                new_callable=AsyncMock,
+            ),
         ):
-            results, metrics = await svc.advanced_search(
-                query="mesh query", max_results=2
-            )
+            results, metrics = await svc.advanced_search(query="mesh query", max_results=2)
 
         svc._mesh_retriever.retrieve.assert_called_once_with("mesh query", 2)
         assert len(results) == 2
@@ -137,17 +147,21 @@ class TestMeshFlagEnabledUsesMeshRetriever:
         svc._mesh_retriever = AsyncMock()
         svc._mesh_retriever.retrieve = AsyncMock(return_value=mesh_result)
 
-        with patch(
-            "services.rag_service.RAGService._check_cache_tiers",
-            new_callable=AsyncMock,
-            return_value=None,
-        ), patch(
-            "services.rag_service.RAGService._emit_retrieval_feedback",
-            new_callable=AsyncMock,
-        ) as mock_emit, patch(
-            "services.rag_service.RAGService._store_feedback_in_stream",
-            new_callable=AsyncMock,
-        ) as mock_store:
+        with (
+            patch(
+                "services.rag_service.RAGService._check_cache_tiers",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "services.rag_service.RAGService._emit_retrieval_feedback",
+                new_callable=AsyncMock,
+            ) as mock_emit,
+            patch(
+                "services.rag_service.RAGService._store_feedback_in_stream",
+                new_callable=AsyncMock,
+            ) as mock_store,
+        ):
             await svc.advanced_search(query="q")
 
         mock_emit.assert_called_once()
@@ -170,30 +184,38 @@ class TestMeshFlagEnabledButNoRetrieverFallsBack:
         svc = _make_service(mesh_retriever_enabled=True)
         # _mesh_retriever stays None (set by _make_service)
 
-        with patch(
-            "services.rag_service.RAGService._check_cache_tiers",
-            new_callable=AsyncMock,
-            return_value=None,
-        ), patch(
-            "services.rag_service.RAGService.initialize",
-            new_callable=AsyncMock,
-            return_value=True,
-        ), patch(
-            "services.rag_service.RAGService._execute_and_cache_search",
-            new_callable=AsyncMock,
-            return_value=([], RAGMetrics()),
-        ) as mock_exec, patch(
-            "services.rag_service.RAGService._store_in_semantic_cache",
-            new_callable=AsyncMock,
-        ), patch(
-            "services.rag_service.RAGService._store_in_topic_cache",
-            new_callable=AsyncMock,
-        ), patch(
-            "services.rag_service.RAGService._emit_retrieval_feedback",
-            new_callable=AsyncMock,
-        ), patch(
-            "services.rag_service.RAGService._store_feedback_in_stream",
-            new_callable=AsyncMock,
+        with (
+            patch(
+                "services.rag_service.RAGService._check_cache_tiers",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "services.rag_service.RAGService.initialize",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch(
+                "services.rag_service.RAGService._execute_and_cache_search",
+                new_callable=AsyncMock,
+                return_value=([], RAGMetrics()),
+            ) as mock_exec,
+            patch(
+                "services.rag_service.RAGService._store_in_semantic_cache",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "services.rag_service.RAGService._store_in_topic_cache",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "services.rag_service.RAGService._emit_retrieval_feedback",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "services.rag_service.RAGService._store_feedback_in_stream",
+                new_callable=AsyncMock,
+            ),
         ):
             await svc.advanced_search(query="test")
 

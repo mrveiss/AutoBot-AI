@@ -222,18 +222,12 @@ class SecurityAssessment:
             "name": self.name,
             "target": self.target,
             "scope": self.scope,
-            "phase": (
-                self.phase.value
-                if isinstance(self.phase, AssessmentPhase)
-                else self.phase
-            ),
+            "phase": (self.phase.value if isinstance(self.phase, AssessmentPhase) else self.phase),
             "training_mode": self.training_mode,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "phase_history": self.phase_history,
-            "hosts": [
-                h.to_dict() if isinstance(h, TargetHost) else h for h in self.hosts
-            ],
+            "hosts": [h.to_dict() if isinstance(h, TargetHost) else h for h in self.hosts],
             "findings": self.findings,
             "actions_taken": self.actions_taken,
             "error_message": self.error_message,
@@ -247,10 +241,7 @@ class SecurityAssessment:
         if isinstance(phase, str):
             phase = AssessmentPhase(phase)
 
-        hosts = [
-            TargetHost.from_dict(h) if isinstance(h, dict) else h
-            for h in data.get("hosts", [])
-        ]
+        hosts = [TargetHost.from_dict(h) if isinstance(h, dict) else h for h in data.get("hosts", [])]
 
         return cls(
             id=data.get("id", ""),
@@ -314,9 +305,7 @@ class SecurityWorkflowManager:
     async def _get_redis(self) -> Any:
         """Get Redis client for workflow database."""
         if self._redis_client is None:
-            self._redis_client = get_redis_client(
-                async_client=True, database="workflows"
-            )
+            self._redis_client = get_redis_client(async_client=True, database="workflows")
         return self._redis_client
 
     def _assessment_key(self, assessment_id: str) -> str:
@@ -391,9 +380,7 @@ class SecurityWorkflowManager:
             training_mode=training_mode,
             created_at=now,
             updated_at=now,
-            phase_history=[
-                {"phase": "INIT", "timestamp": now, "action": "Assessment created"}
-            ],
+            phase_history=[{"phase": "INIT", "timestamp": now, "action": "Assessment created"}],
             metadata=metadata or {},
         )
         await self._save_assessment(assessment)
@@ -583,10 +570,7 @@ class SecurityWorkflowManager:
 
         # Check training mode requirement for exploitation
         if next_phase == "EXPLOITATION" and not assessment.training_mode:
-            logger.warning(
-                "Cannot enter EXPLOITATION phase: training_mode=False. "
-                "Skipping to REPORTING."
-            )
+            logger.warning("Cannot enter EXPLOITATION phase: training_mode=False. " "Skipping to REPORTING.")
             next_phase = "REPORTING"
 
         self._record_phase_transition(assessment, current_phase, next_phase, reason)
@@ -620,17 +604,13 @@ class SecurityWorkflowManager:
         if not assessment:
             return None
 
-        is_new_host = self._update_or_create_host(
-            assessment, ip, hostname, status, metadata
-        )
+        is_new_host = self._update_or_create_host(assessment, ip, hostname, status, metadata)
 
         await self._save_assessment(assessment)
         logger.info("Added/updated host %s in assessment %s", ip, assessment_id)
 
         if is_new_host:
-            await self._create_host_memory_entity(
-                assessment_id, ip, hostname, status, metadata
-            )
+            await self._create_host_memory_entity(assessment_id, ip, hostname, status, metadata)
 
         return assessment
 
@@ -798,20 +778,14 @@ class SecurityWorkflowManager:
             return None
 
         host, is_new_host = self._find_or_create_host(assessment, host_ip)
-        port_info = self._build_port_info(
-            port, protocol, state, service, version, product
-        )
+        port_info = self._build_port_info(port, protocol, state, service, version, product)
         host.ports.append(port_info)
         self._add_service_if_identified(host, port, protocol, service, version, product)
 
         await self._save_assessment(assessment)
-        logger.info(
-            "Added port %d to %s in assessment %s", port, host_ip, assessment_id
-        )
+        logger.info("Added port %d to %s in assessment %s", port, host_ip, assessment_id)
 
-        await self._create_port_memory_entity(
-            assessment_id, host_ip, is_new_host, port_info, service, state
-        )
+        await self._create_port_memory_entity(assessment_id, host_ip, is_new_host, port_info, service, state)
         return assessment
 
     async def _create_port_memory_entity(
@@ -840,9 +814,7 @@ class SecurityWorkflowManager:
                 return
 
             if is_new_host:
-                await memory.create_host_entity(
-                    assessment_id=assessment_id, ip=host_ip, status="up"
-                )
+                await memory.create_host_entity(assessment_id=assessment_id, ip=host_ip, status="up")
 
             if service and state == "open":
                 await memory.create_service_entity(
@@ -935,9 +907,7 @@ class SecurityWorkflowManager:
             vuln: Vulnerability record dictionary
         """
         host.vulnerabilities.append(vuln)
-        assessment.findings.append(
-            {"type": "vulnerability", "host": host_ip, "data": vuln}
-        )
+        assessment.findings.append({"type": "vulnerability", "host": host_ip, "data": vuln})
 
     async def _log_and_store_vulnerability(
         self,
@@ -1006,9 +976,7 @@ class SecurityWorkflowManager:
         )
         self._add_vulnerability_to_host(assessment, host, host_ip, vuln)
         await self._save_assessment(assessment)
-        await self._log_and_store_vulnerability(
-            assessment_id, host_ip, is_new_host, vuln
-        )
+        await self._log_and_store_vulnerability(assessment_id, host_ip, is_new_host, vuln)
         return assessment
 
     async def _create_vulnerability_memory_entity(
@@ -1081,9 +1049,7 @@ class SecurityWorkflowManager:
         assessment.findings.append(finding)
 
         await self._save_assessment(assessment)
-        logger.info(
-            "Added finding to assessment %s: %s", assessment_id, finding.get("type")
-        )
+        logger.info("Added finding to assessment %s: %s", assessment_id, finding.get("type"))
 
         return assessment
 
@@ -1164,9 +1130,7 @@ class SecurityWorkflowManager:
         )
 
         await self._save_assessment(assessment)
-        logger.error(
-            "Assessment %s entered ERROR state: %s", assessment_id, error_message
-        )
+        logger.error("Assessment %s entered ERROR state: %s", assessment_id, error_message)
 
         return assessment
 
@@ -1244,9 +1208,7 @@ class SecurityWorkflowManager:
             logger.error("Failed to delete assessment %s: %s", assessment_id, e)
             raise RuntimeError(f"Failed to delete assessment: {e}")
 
-    def _calculate_assessment_counts(
-        self, assessment: SecurityAssessment
-    ) -> dict[str, int]:
+    def _calculate_assessment_counts(self, assessment: SecurityAssessment) -> dict[str, int]:
         """
         Calculate host, port, service, and vulnerability counts for an assessment.
 
@@ -1258,9 +1220,7 @@ class SecurityWorkflowManager:
 
         Issue #620.
         """
-        vuln_count = len(
-            [f for f in assessment.findings if f.get("type") == "vulnerability"]
-        )
+        vuln_count = len([f for f in assessment.findings if f.get("type") == "vulnerability"])
         return {
             "hosts": len(assessment.hosts),
             "ports": sum(len(h.ports) for h in assessment.hosts),
@@ -1268,9 +1228,7 @@ class SecurityWorkflowManager:
             "vulnerabilities": vuln_count,
         }
 
-    def _calculate_severity_distribution(
-        self, assessment: SecurityAssessment
-    ) -> dict[str, int]:
+    def _calculate_severity_distribution(self, assessment: SecurityAssessment) -> dict[str, int]:
         """
         Calculate vulnerability severity distribution across all hosts.
 
@@ -1314,18 +1272,14 @@ class SecurityWorkflowManager:
             "name": assessment.name,
             "target": assessment.target,
             "phase": assessment.phase.value,
-            "phase_description": PHASE_DESCRIPTIONS.get(assessment.phase.value, {}).get(
-                "description", ""
-            ),
+            "phase_description": PHASE_DESCRIPTIONS.get(assessment.phase.value, {}).get("description", ""),
             "training_mode": assessment.training_mode,
             "stats": {
                 **counts,
                 "severity_distribution": severity_counts,
                 "actions_taken": len(assessment.actions_taken),
             },
-            "next_actions": PHASE_DESCRIPTIONS.get(assessment.phase.value, {}).get(
-                "actions", []
-            ),
+            "next_actions": PHASE_DESCRIPTIONS.get(assessment.phase.value, {}).get("actions", []),
             "created_at": assessment.created_at,
             "updated_at": assessment.updated_at,
         }

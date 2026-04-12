@@ -38,9 +38,7 @@ class SlackIntegration(BaseIntegration):
         """Test Slack connection by calling auth.test endpoint."""
         start_time = datetime.utcnow()
         if not self.config.token:
-            return self._create_health_response(
-                IntegrationStatus.ERROR, 0, "Bot token not configured"
-            )
+            return self._create_health_response(IntegrationStatus.ERROR, 0, "Bot token not configured")
 
         url = f"{self.base_url}/auth.test"
         headers = {"Authorization": f"Bearer {self.config.token}"}
@@ -54,9 +52,7 @@ class SlackIntegration(BaseIntegration):
                 "Connected to Slack",
                 {"team": result.get("team"), "user": result.get("user")},
             )
-        return self._create_health_response(
-            IntegrationStatus.ERROR, latency, result.get("error", "Unknown error")
-        )
+        return self._create_health_response(IntegrationStatus.ERROR, latency, result.get("error", "Unknown error"))
 
     def get_available_actions(self) -> List[IntegrationAction]:
         """Return list of supported Slack actions."""
@@ -87,9 +83,7 @@ class SlackIntegration(BaseIntegration):
             ),
         ]
 
-    async def execute_action(
-        self, action: str, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a named Slack action."""
         action_map = {
             "send_message": self._send_message,
@@ -193,17 +187,11 @@ class TeamsIntegration(BaseIntegration):
             result = await self._test_webhook()
             latency = (datetime.utcnow() - start_time).total_seconds() * 1000
             if result.get("success"):
-                return self._create_health_response(
-                    IntegrationStatus.CONNECTED, latency, "Webhook configured"
-                )
-            return self._create_health_response(
-                IntegrationStatus.ERROR, latency, "Webhook test failed"
-            )
+                return self._create_health_response(IntegrationStatus.CONNECTED, latency, "Webhook configured")
+            return self._create_health_response(IntegrationStatus.ERROR, latency, "Webhook test failed")
 
         if not self.config.token:
-            return self._create_health_response(
-                IntegrationStatus.ERROR, 0, "No token or webhook configured"
-            )
+            return self._create_health_response(IntegrationStatus.ERROR, 0, "No token or webhook configured")
 
         url = f"{self.graph_url}/me"
         headers = {"Authorization": f"Bearer {self.config.token}"}
@@ -216,9 +204,7 @@ class TeamsIntegration(BaseIntegration):
                 latency,
                 "Connected to Microsoft Teams",
             )
-        return self._create_health_response(
-            IntegrationStatus.ERROR, latency, "Authentication failed"
-        )
+        return self._create_health_response(IntegrationStatus.ERROR, latency, "Authentication failed")
 
     def get_available_actions(self) -> List[IntegrationAction]:
         """Return list of supported Teams actions."""
@@ -243,9 +229,7 @@ class TeamsIntegration(BaseIntegration):
             ),
         ]
 
-    async def execute_action(
-        self, action: str, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a named Teams action."""
         action_map = {
             "send_message": self._send_message,
@@ -349,9 +333,7 @@ class DiscordIntegration(BaseIntegration):
         """Test Discord connection by fetching bot user info."""
         start_time = datetime.utcnow()
         if not self.config.token:
-            return self._create_health_response(
-                IntegrationStatus.ERROR, 0, "Bot token not configured"
-            )
+            return self._create_health_response(IntegrationStatus.ERROR, 0, "Bot token not configured")
 
         url = f"{self.base_url}/users/@me"
         headers = {"Authorization": f"Bot {self.config.token}"}
@@ -366,9 +348,7 @@ class DiscordIntegration(BaseIntegration):
                 "Connected to Discord",
                 {"username": body.get("username"), "id": body.get("id")},
             )
-        return self._create_health_response(
-            IntegrationStatus.ERROR, latency, "Authentication failed"
-        )
+        return self._create_health_response(IntegrationStatus.ERROR, latency, "Authentication failed")
 
     def get_available_actions(self) -> List[IntegrationAction]:
         """Return list of supported Discord actions."""
@@ -393,9 +373,7 @@ class DiscordIntegration(BaseIntegration):
             ),
         ]
 
-    async def execute_action(
-        self, action: str, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a named Discord action."""
         action_map = {
             "send_message": self._send_message,
@@ -438,9 +416,7 @@ class DiscordIntegration(BaseIntegration):
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.request(
-                    method, url, headers=headers, json=data
-                ) as resp:
+                async with session.request(method, url, headers=headers, json=data) as resp:
                     body = await resp.json()
                     return {"status_code": resp.status, "body": body}
         except aiohttp.ClientError as exc:

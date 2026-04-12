@@ -173,10 +173,7 @@ class TestHeartbeatSchemas:
             latest_version="v1.2.3",
             update_url="https://github.com/mrveiss/AutoBot-AI/releases/tag/v1.2.3",
         )
-        assert (
-            response.update_url
-            == "https://github.com/mrveiss/AutoBot-AI/releases/tag/v1.2.3"
-        )
+        assert response.update_url == "https://github.com/mrveiss/AutoBot-AI/releases/tag/v1.2.3"
 
 
 class TestHeartbeatVersionTracking:
@@ -236,17 +233,13 @@ class TestHeartbeatVersionTracking:
         latest_version = "def456"
         node_id = "test-node"
 
-        update_available = (
-            code_status == CodeStatus.OUTDATED.value and latest_version is not None
-        )
+        update_available = code_status == CodeStatus.OUTDATED.value and latest_version is not None
 
         response = HeartbeatResponse(
             status="ok",
             update_available=update_available,
             latest_version=latest_version if update_available else None,
-            update_url=(
-                f"/api/nodes/{node_id}/code-package" if update_available else None
-            ),
+            update_url=(f"/api/nodes/{node_id}/code-package" if update_available else None),
         )
 
         assert response.update_available is True
@@ -261,17 +254,13 @@ class TestHeartbeatVersionTracking:
         code_status = CodeStatus.UP_TO_DATE.value
         latest_version = "abc123"
 
-        update_available = (
-            code_status == CodeStatus.OUTDATED.value and latest_version is not None
-        )
+        update_available = code_status == CodeStatus.OUTDATED.value and latest_version is not None
 
         response = HeartbeatResponse(
             status="ok",
             update_available=update_available,
             latest_version=latest_version if update_available else None,
-            update_url=(
-                None if not update_available else "/api/nodes/test-node/code-package"
-            ),
+            update_url=(None if not update_available else "/api/nodes/test-node/code-package"),
         )
 
         assert response.update_available is False

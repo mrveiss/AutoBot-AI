@@ -124,11 +124,7 @@ class Team(Base, TenantMixin, TimestampMixin):
 
     def get_members_by_role(self, role: TeamRole) -> list["User"]:
         """Get team members with a specific role."""
-        return [
-            m.user
-            for m in self.memberships
-            if m.role == role.value and m.user and not m.user.is_deleted
-        ]
+        return [m.user for m in self.memberships if m.role == role.value and m.user and not m.user.is_deleted]
 
     @property
     def owners(self) -> list["User"]:
@@ -198,10 +194,7 @@ class TeamMembership(Base, TimestampMixin):
     )
 
     def __repr__(self) -> str:
-        return (
-            f"<TeamMembership(team_id={self.team_id}, "
-            f"user_id={self.user_id}, role={self.role})>"
-        )
+        return f"<TeamMembership(team_id={self.team_id}, " f"user_id={self.user_id}, role={self.role})>"
 
     def is_owner(self) -> bool:
         """Check if this is an owner membership."""

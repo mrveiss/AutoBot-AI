@@ -34,13 +34,9 @@ router = APIRouter(
 class DatabaseConnectionRequest(BaseModel):
     """Request model for testing database connections."""
 
-    provider: str = Field(
-        ..., description="Database provider (postgresql/mysql/mongodb)"
-    )
+    provider: str = Field(..., description="Database provider (postgresql/mysql/mongodb)")
     host: str = Field("localhost", description="Database host")
-    port: Optional[int] = Field(
-        None, description="Database port (default: provider-specific)"
-    )
+    port: Optional[int] = Field(None, description="Database port (default: provider-specific)")
     username: Optional[str] = Field(None, description="Database username")
     password: Optional[str] = Field(None, description="Database password")
     database: str = Field("", description="Database name")
@@ -77,9 +73,7 @@ class DatabaseListRequest(BaseModel):
     port: Optional[int] = Field(None, description="Database port")
     username: Optional[str] = Field(None, description="Database username")
     password: Optional[str] = Field(None, description="Database password")
-    database: Optional[str] = Field(
-        None, description="Database name (for table listing)"
-    )
+    database: Optional[str] = Field(None, description="Database name (for table listing)")
 
 
 def _create_integration_config(
@@ -153,8 +147,7 @@ def _get_integration_class(provider: str):
     if not integration_class:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported provider: {provider}. "
-            f"Supported: {list(providers.keys())}",
+            detail=f"Unsupported provider: {provider}. " f"Supported: {list(providers.keys())}",
         )
 
     return integration_class
@@ -387,13 +380,9 @@ async def list_tables(provider: str, request: DatabaseListRequest):
 
         # MongoDB uses collections instead of tables
         if provider.lower() == "mongodb":
-            result = await integration.execute_action(
-                "list_collections", {"database": request.database}
-            )
+            result = await integration.execute_action("list_collections", {"database": request.database})
         else:
-            result = await integration.execute_action(
-                "list_tables", {"database": request.database}
-            )
+            result = await integration.execute_action("list_tables", {"database": request.database})
 
         return result
 

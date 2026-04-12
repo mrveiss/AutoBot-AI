@@ -114,9 +114,7 @@ async def test_git_repo_sync_clones_and_delegates(tmp_path, monkeypatch):
     from skills.sync.git_sync import GitRepoSync
 
     with patch("asyncio.create_subprocess_exec", side_effect=fake_create_subprocess):
-        with patch.object(
-            GitRepoSync, "_find_skills_dir", return_value=str(skills_root)
-        ):
+        with patch.object(GitRepoSync, "_find_skills_dir", return_value=str(skills_root)):
             sync = GitRepoSync("https://example.com/skills.git")
             packages = await sync.discover()
 

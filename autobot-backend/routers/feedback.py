@@ -54,12 +54,8 @@ class FeedbackRequest(BaseModel):
     language: Optional[str] = Field(None, description="Programming language")
     file_path: Optional[str] = Field(None, description="File path")
     pattern_id: Optional[int] = Field(None, description="Pattern ID if applicable")
-    confidence_score: Optional[float] = Field(
-        None, description="Model confidence (0-1)"
-    )
-    completion_rank: Optional[int] = Field(
-        None, description="Position in top-k suggestions"
-    )
+    confidence_score: Optional[float] = Field(None, description="Model confidence (0-1)")
+    completion_rank: Optional[int] = Field(None, description="Position in top-k suggestions")
 
 
 class FeedbackResponse(BaseModel):
@@ -90,9 +86,7 @@ class RetrainRequest(BaseModel):
         description="Training mode: 'incremental' or 'full'",
     )
     language: Optional[str] = Field(None, description="Filter by language")
-    num_epochs: int = Field(
-        default=5, ge=1, le=20, description="Epochs for full retrain"
-    )
+    num_epochs: int = Field(default=5, ge=1, le=20, description="Epochs for full retrain")
 
 
 class RetrainResponse(BaseModel):
@@ -217,9 +211,7 @@ async def get_recent_feedback(
 
 
 @router.post("/retrain", response_model=RetrainResponse)
-async def trigger_retraining(
-    request: RetrainRequest, background_tasks: BackgroundTasks
-):
+async def trigger_retraining(request: RetrainRequest, background_tasks: BackgroundTasks):
     """
     Trigger model retraining with feedback.
 
@@ -250,9 +242,7 @@ async def trigger_retraining(
             else:  # full retrain
                 logger.info("Starting full retraining...")
                 trainer = _get_incremental_trainer()
-                result = trainer.trigger_full_retrain(
-                    language=request.language, num_epochs=request.num_epochs
-                )
+                result = trainer.trigger_full_retrain(language=request.language, num_epochs=request.num_epochs)
                 logger.info(f"Full retrain result: {result}")
 
                 # Mark retrain as completed
@@ -265,9 +255,7 @@ async def trigger_retraining(
     # Start background training
     background_tasks.add_task(_run_training)
 
-    mode_desc = (
-        "incremental update" if request.mode == "incremental" else "full retrain"
-    )
+    mode_desc = "incremental update" if request.mode == "incremental" else "full retrain"
 
     return RetrainResponse(
         status="success",
@@ -287,9 +275,7 @@ async def get_feedback_statistics():
     try:
         # Get 7-day and 30-day metrics
         metrics_7d = _get_feedback_tracker().get_acceptance_metrics(time_window_days=7)
-        metrics_30d = _get_feedback_tracker().get_acceptance_metrics(
-            time_window_days=30
-        )
+        metrics_30d = _get_feedback_tracker().get_acceptance_metrics(time_window_days=30)
 
         return {
             "last_7_days": {

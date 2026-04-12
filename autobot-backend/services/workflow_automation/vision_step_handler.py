@@ -79,9 +79,7 @@ async def execute_vision_step(
         return _build_error_result(step_type, target, exc, start)
 
 
-def _build_success_result(
-    step_type: str, target: str, result: dict, start: float
-) -> dict[str, Any]:
+def _build_success_result(step_type: str, target: str, result: dict, start: float) -> dict[str, Any]:
     """Build the standard success result envelope."""
     return {
         "success": True,
@@ -92,9 +90,7 @@ def _build_success_result(
     }
 
 
-def _build_error_result(
-    step_type: str, target: str, exc: Exception, start: float
-) -> dict[str, Any]:
+def _build_error_result(step_type: str, target: str, exc: Exception, start: float) -> dict[str, Any]:
     """Build the standard error result envelope."""
     return {
         "success": False,
@@ -105,9 +101,7 @@ def _build_error_result(
     }
 
 
-async def _execute_vnc_step(
-    step_type: str, config: dict[str, Any], backend_url: str
-) -> dict:
+async def _execute_vnc_step(step_type: str, config: dict[str, Any], backend_url: str) -> dict:
     """Execute a vision step via the VNC vision API."""
     endpoint = _VNC_ENDPOINT.get(step_type)
     if not endpoint:
@@ -116,9 +110,7 @@ async def _execute_vnc_step(
     async with httpx.AsyncClient(verify=_VERIFY_TLS, timeout=30.0) as client:
         if step_type == "vision-wait":
             payload = _build_vnc_payload(step_type, config)
-            return await _poll_vnc_element(
-                client, backend_url, endpoint, payload, config
-            )
+            return await _poll_vnc_element(client, backend_url, endpoint, payload, config)
 
         if step_type in _VNC_GET_STEPS:
             response = await client.get(f"{backend_url}{endpoint}")
@@ -179,11 +171,7 @@ def _element_matches(elements: list, search_text: str) -> bool:
     if not search_text:
         return len(elements) > 0
     needle = search_text.lower()
-    return any(
-        needle in str(e.get("text", "")).lower()
-        or needle in str(e.get("label", "")).lower()
-        for e in elements
-    )
+    return any(needle in str(e.get("text", "")).lower() or needle in str(e.get("label", "")).lower() for e in elements)
 
 
 # ---------------------------------------------------------------------------
@@ -199,9 +187,7 @@ _WEB_ACTION_MAP: dict[str, dict] = {
 }
 
 
-async def _execute_web_step(
-    step_type: str, config: dict[str, Any], backend_url: str
-) -> dict:
+async def _execute_web_step(step_type: str, config: dict[str, Any], backend_url: str) -> dict:
     """Execute a vision step via the browser automation API."""
     session_id = config.get("browser_session_id")
     if not session_id:
@@ -225,9 +211,7 @@ async def _execute_web_step(
         return response.json()
 
 
-def _build_web_action_payload(
-    step_type: str, action_base: dict, config: dict[str, Any]
-) -> dict:
+def _build_web_action_payload(step_type: str, action_base: dict, config: dict[str, Any]) -> dict:
     """Build browser action payload for a given step type."""
     payload = dict(action_base)
     if step_type == "vision-find-element":
@@ -244,9 +228,7 @@ def _build_web_action_payload(
     return payload
 
 
-async def _web_ocr_step(
-    session_id: str, config: dict[str, Any], backend_url: str
-) -> dict:
+async def _web_ocr_step(session_id: str, config: dict[str, Any], backend_url: str) -> dict:
     """Capture a browser screenshot then run OCR via the vision pipeline (#2601).
 
     Two-stage pipeline:
@@ -254,17 +236,11 @@ async def _web_ocr_step(
       2. POST the screenshot image data to /api/vision/ocr
     """
     async with httpx.AsyncClient(verify=_VERIFY_TLS, timeout=30.0) as client:
-        screenshot_data = await _capture_browser_screenshot(
-            client, session_id, backend_url
-        )
-        return await _run_ocr_on_screenshot(
-            client, screenshot_data, config, backend_url
-        )
+        screenshot_data = await _capture_browser_screenshot(client, session_id, backend_url)
+        return await _run_ocr_on_screenshot(client, screenshot_data, config, backend_url)
 
 
-async def _capture_browser_screenshot(
-    client: httpx.AsyncClient, session_id: str, backend_url: str
-) -> dict:
+async def _capture_browser_screenshot(client: httpx.AsyncClient, session_id: str, backend_url: str) -> dict:
     """POST screenshot action to the browser session API and return response JSON."""
     resp = await client.post(
         f"{backend_url}/api/research-browser/session/action",

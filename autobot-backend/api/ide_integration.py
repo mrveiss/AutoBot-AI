@@ -339,12 +339,8 @@ class AnalysisRequest(BaseModel):
     file_path: str = Field(..., description="Path to the file being analyzed")
     content: str = Field(..., description="File content to analyze")
     language: str = Field(default="python", description="Programming language")
-    include_hints: bool = Field(
-        default=True, description="Include hint-level diagnostics"
-    )
-    categories: Optional[List[PatternCategory]] = Field(
-        None, description="Filter by categories"
-    )
+    include_hints: bool = Field(default=True, description="Include hint-level diagnostics")
+    categories: Optional[List[PatternCategory]] = Field(None, description="Filter by categories")
 
 
 class AnalysisResponse(BaseModel):
@@ -422,9 +418,7 @@ class CompletionItem(BaseModel):
     """LSP-compatible completion item."""
 
     label: str = Field(..., description="Display text")
-    kind: CompletionItemKind = Field(
-        default=CompletionItemKind.TEXT, description="Item kind"
-    )
+    kind: CompletionItemKind = Field(default=CompletionItemKind.TEXT, description="Item kind")
     detail: Optional[str] = Field(None, description="Additional details")
     documentation: Optional[str] = Field(None, description="Documentation")
     insert_text: Optional[str] = Field(None, description="Text to insert")
@@ -484,17 +478,11 @@ class IDEIntegrationEngine:
         """Find a rule by its ID using O(1) lookup. (Issue #315 - extracted)"""
         return self._rules_by_id.get(rule_id)
 
-    def _is_position_in_diagnostic(
-        self, diagnostic: Diagnostic, line_num: int, character: int
-    ) -> bool:
+    def _is_position_in_diagnostic(self, diagnostic: Diagnostic, line_num: int, character: int) -> bool:
         """Check if a position falls within a diagnostic's range. (Issue #315 - extracted)"""
         if diagnostic.range.start.line != line_num:
             return False
-        return (
-            diagnostic.range.start.character
-            <= character
-            <= diagnostic.range.end.character
-        )
+        return diagnostic.range.start.character <= character <= diagnostic.range.end.character
 
     def _check_rule_on_lines(
         self,
@@ -556,9 +544,7 @@ class IDEIntegrationEngine:
             contents += f"\n**Suggested Fix:**\n```python\n{rule['fix_template']}\n```"
         return contents
 
-    def _create_fix_action(
-        self, rule: dict, file_path: str, edit_range: dict
-    ) -> CodeAction:
+    def _create_fix_action(self, rule: dict, file_path: str, edit_range: dict) -> CodeAction:
         """Create a quick fix code action from rule template (Issue #665: extracted helper)."""
         return CodeAction(
             title=f"Fix: {rule['name']}",
@@ -585,9 +571,7 @@ class IDEIntegrationEngine:
             edit=None,  # Handled by configuration
         )
 
-    def _create_suppress_comment_action(
-        self, rule: dict, file_path: str, line_num: int, line_end: int
-    ) -> CodeAction:
+    def _create_suppress_comment_action(self, rule: dict, file_path: str, line_num: int, line_end: int) -> CodeAction:
         """Create action to suppress rule with comment (Issue #665: extracted helper)."""
         return CodeAction(
             title="Suppress with comment",
@@ -623,9 +607,7 @@ class IDEIntegrationEngine:
             issues_found=len(cached_diagnostics),
         )
 
-    def _store_and_evict_cache(
-        self, cache_key: str, content_hash: str, diagnostics
-    ) -> None:
+    def _store_and_evict_cache(self, cache_key: str, content_hash: str, diagnostics) -> None:
         """Helper for analyze. Store result and evict old entries if over limit. Ref: #1088."""
         self.analysis_cache[cache_key] = (content_hash, diagnostics)
         if len(self.analysis_cache) > 1000:
@@ -708,9 +690,7 @@ class IDEIntegrationEngine:
                     diagnostics.append(
                         Diagnostic(
                             range=Range(
-                                start=Position(
-                                    line=node.lineno - 1, character=node.col_offset
-                                ),
+                                start=Position(line=node.lineno - 1, character=node.col_offset),
                                 end=Position(
                                     line=node.lineno - 1,
                                     character=node.col_offset + len(node.name),
@@ -730,9 +710,7 @@ class IDEIntegrationEngine:
                     diagnostics.append(
                         Diagnostic(
                             range=Range(
-                                start=Position(
-                                    line=node.lineno - 1, character=node.col_offset
-                                ),
+                                start=Position(line=node.lineno - 1, character=node.col_offset),
                                 end=Position(
                                     line=node.lineno - 1,
                                     character=node.col_offset + 10,
@@ -785,22 +763,12 @@ class IDEIntegrationEngine:
 
         # Issue #665: Use extracted helpers for action creation
         if rule.get("fix_template"):
-            actions.append(
-                self._create_fix_action(
-                    rule, request.file_path, request.range.model_dump()
-                )
-            )
+            actions.append(self._create_fix_action(rule, request.file_path, request.range.model_dump()))
 
         actions.append(self._create_disable_rule_action(rule))
-        actions.append(
-            self._create_suppress_comment_action(
-                rule, request.file_path, line_num, len(problematic_line)
-            )
-        )
+        actions.append(self._create_suppress_comment_action(rule, request.file_path, line_num, len(problematic_line)))
 
-        return QuickFixResponse(
-            actions=actions, diagnostic_code=request.diagnostic_code
-        )
+        return QuickFixResponse(actions=actions, diagnostic_code=request.diagnostic_code)
 
     async def get_hover(self, request: HoverRequest) -> HoverResponse:
         """
@@ -828,9 +796,7 @@ class IDEIntegrationEngine:
 
         # Find diagnostic at position and return hover info (Issue #315 - refactored)
         for diagnostic in analysis.diagnostics:
-            if not self._is_position_in_diagnostic(
-                diagnostic, line_num, request.position.character
-            ):
+            if not self._is_position_in_diagnostic(diagnostic, line_num, request.position.character):
                 continue
             # Found a diagnostic at this position - use O(1) lookup
             rule = self._find_rule_by_id(diagnostic.code)
@@ -939,9 +905,7 @@ class IDEIntegrationEngine:
         completions = self._rank_completions(completions, context)
         completions = completions[: request.max_completions]
 
-        redis_client.setex(
-            cache_key, 10, json.dumps([c.model_dump() for c in completions])
-        )
+        redis_client.setex(cache_key, 10, json.dumps([c.model_dump() for c in completions]))
         elapsed_ms = (_time.time() - start_time) * 1000
         return CompletionResponse(
             completions=completions,
@@ -950,9 +914,7 @@ class IDEIntegrationEngine:
             cached=False,
         )
 
-    async def _get_ml_completions(
-        self, context: CompletionContext, request: CompletionRequest
-    ) -> List[CompletionItem]:
+    async def _get_ml_completions(self, context: CompletionContext, request: CompletionRequest) -> List[CompletionItem]:
         """Get ML-based completions. (Issue #906 - helper)"""
         # Check if ML is available
         if not HAS_ML or trainer is None:
@@ -1013,9 +975,7 @@ class IDEIntegrationEngine:
 
         return items[:10]  # Limit pattern completions
 
-    def _rank_completions(
-        self, completions: List[CompletionItem], context: CompletionContext
-    ) -> List[CompletionItem]:
+    def _rank_completions(self, completions: List[CompletionItem], context: CompletionContext) -> List[CompletionItem]:
         """Rank completions by relevance. (Issue #906 - helper)"""
         # Sort by score (descending), then by label
         return sorted(
@@ -1023,9 +983,7 @@ class IDEIntegrationEngine:
             key=lambda c: (-c.score, c.label),
         )
 
-    def _get_fastapi_completions(
-        self, context: CompletionContext
-    ) -> List[CompletionItem]:
+    def _get_fastapi_completions(self, context: CompletionContext) -> List[CompletionItem]:
         """Get FastAPI-specific completions. (Issue #906 - helper)"""
         return [
             CompletionItem(
@@ -1044,9 +1002,7 @@ class IDEIntegrationEngine:
             ),
         ]
 
-    def _get_pydantic_completions(
-        self, context: CompletionContext
-    ) -> List[CompletionItem]:
+    def _get_pydantic_completions(self, context: CompletionContext) -> List[CompletionItem]:
         """Get Pydantic-specific completions. (Issue #906 - helper)"""
         return [
             CompletionItem(
@@ -1058,9 +1014,7 @@ class IDEIntegrationEngine:
             ),
         ]
 
-    def _get_logging_completions(
-        self, context: CompletionContext
-    ) -> List[CompletionItem]:
+    def _get_logging_completions(self, context: CompletionContext) -> List[CompletionItem]:
         """Get logging completions. (Issue #906 - helper)"""
         return [
             CompletionItem(
@@ -1079,9 +1033,7 @@ class IDEIntegrationEngine:
             ),
         ]
 
-    def _get_function_completions(
-        self, context: CompletionContext
-    ) -> List[CompletionItem]:
+    def _get_function_completions(self, context: CompletionContext) -> List[CompletionItem]:
         """Get function-specific completions. (Issue #906 - helper)"""
         items = []
 
@@ -1099,9 +1051,7 @@ class IDEIntegrationEngine:
 
         return items
 
-    def _infer_completion_kind(
-        self, text: str, context: CompletionContext
-    ) -> CompletionItemKind:
+    def _infer_completion_kind(self, text: str, context: CompletionContext) -> CompletionItemKind:
         """Infer completion kind from text. (Issue #906 - helper)"""
         if text.startswith("def ") or text.endswith("()"):
             return CompletionItemKind.FUNCTION
@@ -1189,12 +1139,7 @@ async def update_config(config: ConfigurationUpdate) -> Dict[str, Any]:
 @router.get("/categories", summary="Get pattern categories")
 async def get_categories() -> Dict[str, Any]:
     """Get available pattern categories."""
-    return {
-        "categories": [
-            {"id": cat.value, "name": cat.value.replace("_", " ").title()}
-            for cat in PatternCategory
-        ]
-    }
+    return {"categories": [{"id": cat.value, "name": cat.value.replace("_", " ").title()} for cat in PatternCategory]}
 
 
 @router.get("/severities", summary="Get severity levels")
@@ -1202,8 +1147,7 @@ async def get_severities() -> Dict[str, Any]:
     """Get available severity levels."""
     return {
         "severities": [
-            {"id": sev.value, "name": sev.value.title(), "lsp_code": i + 1}
-            for i, sev in enumerate(DiagnosticSeverity)
+            {"id": sev.value, "name": sev.value.title(), "lsp_code": i + 1} for i, sev in enumerate(DiagnosticSeverity)
         ]
     }
 
@@ -1216,9 +1160,7 @@ async def batch_analyze(
     engine = await get_engine()
 
     # Issue #619: Parallelize independent file analyses
-    results = await asyncio.gather(
-        *[engine.analyze(request) for request in requests], return_exceptions=True
-    )
+    results = await asyncio.gather(*[engine.analyze(request) for request in requests], return_exceptions=True)
 
     # Filter out exceptions and count issues
     valid_results = [r for r in results if not isinstance(r, Exception)]

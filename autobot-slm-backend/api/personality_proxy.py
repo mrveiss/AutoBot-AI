@@ -41,9 +41,7 @@ _VERIFY_TLS = os.environ.get("AUTOBOT_SKIP_TLS_VERIFY", "").lower() != "true"
 async def _proxy_to_main_backend(request: Request, path: str) -> Response:
     """Forward request to the main backend personality API with internal key."""
     if not AUTOBOT_INTERNAL_API_KEY:
-        logger.error(
-            "AUTOBOT_INTERNAL_API_KEY not configured — personality proxy unavailable"
-        )
+        logger.error("AUTOBOT_INTERNAL_API_KEY not configured — personality proxy unavailable")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Personality service not configured (missing internal API key)",

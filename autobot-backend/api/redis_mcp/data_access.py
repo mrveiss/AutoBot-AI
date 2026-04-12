@@ -123,9 +123,7 @@ async def handle_redis_hgetall(key: str, database: str = "main") -> Metadata:
     client = await _get_client(database)
     raw = await client.hgetall(key)
     data = {
-        (k.decode("utf-8") if isinstance(k, bytes) else k): (
-            v.decode("utf-8") if isinstance(v, bytes) else v
-        )
+        (k.decode("utf-8") if isinstance(k, bytes) else k): (v.decode("utf-8") if isinstance(v, bytes) else v)
         for k, v in raw.items()
     }
     return {
@@ -136,9 +134,7 @@ async def handle_redis_hgetall(key: str, database: str = "main") -> Metadata:
     }
 
 
-async def handle_redis_hset(
-    key: str, mapping: Dict[str, Any], database: str = "main"
-) -> Metadata:
+async def handle_redis_hset(key: str, mapping: Dict[str, Any], database: str = "main") -> Metadata:
     """Set one or more hash fields.
 
     Keys matching AGENT_MEMORY_PREFIX receive a 24h TTL automatically (Issue #2646).
@@ -161,9 +157,7 @@ async def handle_redis_hset(
 # ---------------------------------------------------------------------------
 
 
-async def handle_redis_lrange(
-    key: str, start: int = 0, stop: int = -1, database: str = "main"
-) -> Metadata:
+async def handle_redis_lrange(key: str, start: int = 0, stop: int = -1, database: str = "main") -> Metadata:
     """Get a range of list elements."""
     client = await _get_client(database)
     raw = await client.lrange(key, start, stop)
@@ -277,10 +271,7 @@ async def handle_redis_xrange(
     if count is not None:
         kwargs["count"] = count
     raw = await client.xrange(key, min=start, max=end, **kwargs)
-    entries = [
-        {"id": _decode(eid), "fields": {_decode(k): _decode(v) for k, v in f.items()}}
-        for eid, f in raw
-    ]
+    entries = [{"id": _decode(eid), "fields": {_decode(k): _decode(v) for k, v in f.items()}} for eid, f in raw]
     return {
         "status": "success",
         "key": key,
@@ -336,9 +327,7 @@ async def handle_redis_scan_keys(
     cursor = 0
     scan_count = min(count, _SCAN_MAX_KEYS)
     while True:
-        cursor, batch = await client.scan(
-            cursor=cursor, match=pattern, count=scan_count
-        )
+        cursor, batch = await client.scan(cursor=cursor, match=pattern, count=scan_count)
         for k in batch:
             keys.append(k.decode("utf-8") if isinstance(k, bytes) else k)
             if len(keys) >= _SCAN_MAX_KEYS:

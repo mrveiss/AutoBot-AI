@@ -201,8 +201,7 @@ async def _read_response_body_chunked(response, chunk_size: int = 8192) -> str:
             raise HTTPException(
                 status_code=413,
                 detail=(
-                    f"Response exceeded size limit during streaming:"
-                    f"{total_size} bytes (max: {MAX_RESPONSE_SIZE})"
+                    f"Response exceeded size limit during streaming:" f"{total_size} bytes (max: {MAX_RESPONSE_SIZE})"
                 ),
             )
         chunks.append(chunk)
@@ -295,9 +294,7 @@ async def check_rate_limit() -> bool:
             request_counter["reset_time"] = now
 
         if request_counter["count"] >= MAX_REQUESTS_PER_MINUTE:
-            logger.warning(
-                f"Rate limit exceeded: {request_counter['count']} requests/min"
-            )
+            logger.warning(f"Rate limit exceeded: {request_counter['count']} requests/min")
             return False
 
         request_counter["count"] += 1
@@ -319,9 +316,7 @@ class HTTPRequestBase(BaseModel):
     """Base model for HTTP requests"""
 
     url: str = Field(..., description="Target URL for the request")
-    headers: Optional[Dict[str, str]] = Field(
-        default=None, description="Optional HTTP headers"
-    )
+    headers: Optional[Dict[str, str]] = Field(default=None, description="Optional HTTP headers")
     timeout: Optional[int] = Field(
         default=DEFAULT_TIMEOUT,
         ge=1,
@@ -341,17 +336,13 @@ class HTTPRequestBase(BaseModel):
 class HTTPGetRequest(HTTPRequestBase):
     """GET request model"""
 
-    params: Optional[Dict[str, str]] = Field(
-        default=None, description="Query parameters"
-    )
+    params: Optional[Dict[str, str]] = Field(default=None, description="Query parameters")
 
 
 class HTTPPostRequest(HTTPRequestBase):
     """POST request model"""
 
-    json_body: Optional[JSONObject] = Field(
-        default=None, description="JSON request body"
-    )
+    json_body: Optional[JSONObject] = Field(default=None, description="JSON request body")
     form_data: Optional[Dict[str, str]] = Field(
         default=None, description="Form data (mutually exclusive with json_body)"
     )
@@ -360,17 +351,13 @@ class HTTPPostRequest(HTTPRequestBase):
 class HTTPPutRequest(HTTPRequestBase):
     """PUT request model"""
 
-    json_body: Optional[JSONObject] = Field(
-        default=None, description="JSON request body"
-    )
+    json_body: Optional[JSONObject] = Field(default=None, description="JSON request body")
 
 
 class HTTPPatchRequest(HTTPRequestBase):
     """PATCH request model"""
 
-    json_body: Optional[JSONObject] = Field(
-        default=None, description="JSON request body for partial update"
-    )
+    json_body: Optional[JSONObject] = Field(default=None, description="JSON request body for partial update")
 
 
 class HTTPDeleteRequest(HTTPRequestBase):
@@ -411,9 +398,7 @@ def _get_http_get_tool() -> MCPTool:
                 },
                 "timeout": {
                     "type": "integer",
-                    "description": (
-                        f"Request timeout in seconds (default: {DEFAULT_TIMEOUT}, max: {MAX_TIMEOUT})"
-                    ),
+                    "description": (f"Request timeout in seconds (default: {DEFAULT_TIMEOUT}, max: {MAX_TIMEOUT})"),
                     "minimum": 1,
                     "maximum": MAX_TIMEOUT,
                 },
@@ -526,9 +511,7 @@ def _get_http_put_tool() -> MCPTool:
             "properties": {
                 "url": _build_url_property(),
                 "headers": _build_headers_property(),
-                "json_body": _build_json_body_property(
-                    "JSON request body for replacement"
-                ),
+                "json_body": _build_json_body_property("JSON request body for replacement"),
                 "timeout": _build_timeout_property(),
             },
             "required": ["url"],
@@ -549,9 +532,7 @@ def _get_http_patch_tool() -> MCPTool:
             "properties": {
                 "url": _build_url_property(),
                 "headers": _build_headers_property(),
-                "json_body": _build_json_body_property(
-                    "JSON body with fields to update"
-                ),
+                "json_body": _build_json_body_property("JSON body with fields to update"),
                 "timeout": _build_timeout_property(),
             },
             "required": ["url"],
@@ -676,9 +657,7 @@ async def execute_http_request(
         # Build request kwargs (Issue #665: uses extracted helper)
         http_client = get_http_client()
         session = await http_client.get_session()
-        request_kwargs = _build_request_kwargs(
-            url, request_headers, timeout, params, json_body, form_data
-        )
+        request_kwargs = _build_request_kwargs(url, request_headers, timeout, params, json_body, form_data)
 
         # Execute the request
         async with session.request(method, **request_kwargs) as response:
@@ -691,11 +670,7 @@ async def execute_http_request(
                 )
 
             # Read response body (Issue #315 - uses helper)
-            body = (
-                None
-                if method.upper() == "HEAD"
-                else await _read_response_body_chunked(response)
-            )
+            body = None if method.upper() == "HEAD" else await _read_response_body_chunked(response)
             json_response = _try_parse_json(body)
 
             # Build response (Issue #665: uses extracted helper)
@@ -703,9 +678,7 @@ async def execute_http_request(
 
     except asyncio.TimeoutError:
         logger.error("HTTP request timed out after %s seconds: %s", timeout, url)
-        raise HTTPException(
-            status_code=504, detail=f"Request timed out after {timeout} seconds"
-        )
+        raise HTTPException(status_code=504, detail=f"Request timed out after {timeout} seconds")
     except aiohttp.ClientError as e:
         logger.error("HTTP client error: %s", e)
         raise HTTPException(status_code=502, detail="HTTP request failed")
@@ -729,9 +702,7 @@ async def http_get_mcp(request: HTTPGetRequest) -> JSONObject:
     """
     # Security checks
     if not await check_rate_limit():
-        raise HTTPException(
-            status_code=429, detail="Rate limit exceeded. Try again later."
-        )
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_domain_allowed(request.url):
         raise HTTPException(status_code=403, detail="Domain not in allowed whitelist")
@@ -772,9 +743,7 @@ async def http_post_mcp(request: HTTPPostRequest) -> JSONObject:
     """
     # Security checks
     if not await check_rate_limit():
-        raise HTTPException(
-            status_code=429, detail="Rate limit exceeded. Try again later."
-        )
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_domain_allowed(request.url):
         raise HTTPException(status_code=403, detail="Domain not in allowed whitelist")
@@ -832,9 +801,7 @@ async def http_put_mcp(request: HTTPPutRequest) -> JSONObject:
     """
     # Security checks
     if not await check_rate_limit():
-        raise HTTPException(
-            status_code=429, detail="Rate limit exceeded. Try again later."
-        )
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_domain_allowed(request.url):
         raise HTTPException(status_code=403, detail="Domain not in allowed whitelist")
@@ -884,9 +851,7 @@ async def http_patch_mcp(request: HTTPPatchRequest) -> JSONObject:
     """
     # Security checks
     if not await check_rate_limit():
-        raise HTTPException(
-            status_code=429, detail="Rate limit exceeded. Try again later."
-        )
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_domain_allowed(request.url):
         raise HTTPException(status_code=403, detail="Domain not in allowed whitelist")
@@ -936,9 +901,7 @@ async def http_delete_mcp(request: HTTPDeleteRequest) -> JSONObject:
     """
     # Security checks
     if not await check_rate_limit():
-        raise HTTPException(
-            status_code=429, detail="Rate limit exceeded. Try again later."
-        )
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_domain_allowed(request.url):
         raise HTTPException(status_code=403, detail="Domain not in allowed whitelist")
@@ -977,9 +940,7 @@ async def http_head_mcp(request: HTTPHeadRequest) -> JSONObject:
     """
     # Security checks
     if not await check_rate_limit():
-        raise HTTPException(
-            status_code=429, detail="Rate limit exceeded. Try again later."
-        )
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_domain_allowed(request.url):
         raise HTTPException(status_code=403, detail="Domain not in allowed whitelist")
@@ -1021,10 +982,7 @@ async def get_http_client_mcp_status() -> Metadata:
         current_rate = request_counter["count"]
         time_until_reset = max(
             0,
-            60
-            - (
-                datetime.now(timezone.utc) - request_counter["reset_time"]
-            ).total_seconds(),
+            60 - (datetime.now(timezone.utc) - request_counter["reset_time"]).total_seconds(),
         )
 
     return {

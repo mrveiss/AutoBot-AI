@@ -197,9 +197,7 @@ def _build_llm_update_response() -> dict:
         "status": "success",
         "message": "LLM provider configuration updated successfully using unified config system",
         "current_config": {
-            "provider_type": current_llm_config.get("unified", {}).get(
-                "provider_type", "local"
-            ),
+            "provider_type": current_llm_config.get("unified", {}).get("provider_type", "local"),
             "selected_model": (
                 current_llm_config.get("unified", {})
                 .get("local", {})
@@ -263,17 +261,13 @@ async def get_available_embedding_models(
         # Filter to common embedding models if possible, otherwise return all
         embedding_models = []
         for model in result["models"]:
-            model_name = (
-                model.get("name", "") if isinstance(model, dict) else str(model)
-            )
+            model_name = model.get("name", "") if isinstance(model, dict) else str(model)
             # Cache model_name.lower() to avoid repeated computation (Issue #323)
             model_name_lower = model_name.lower()
             # Common embedding model patterns
             if any(pattern in model_name_lower for pattern in EMBEDDING_MODEL_PATTERNS):
                 embedding_models.append(model)
-            elif "text" in model_name_lower and any(
-                size in model_name_lower for size in TEXT_MODEL_SIZE_INDICATORS
-            ):
+            elif "text" in model_name_lower and any(size in model_name_lower for size in TEXT_MODEL_SIZE_INDICATORS):
                 embedding_models.append(model)
 
         # If no specific embedding models found, include some common ones
@@ -294,9 +288,7 @@ async def get_available_embedding_models(
         )
 
 
-async def _apply_embedding_config(
-    provider: str, model: str, embedding_data: dict
-) -> None:
+async def _apply_embedding_config(provider: str, model: str, embedding_data: dict) -> None:
     """Helper for update_embedding_model. Ref: #1088."""
     config.set("backend.llm.embedding.provider", provider)
     config.set(f"backend.llm.embedding.providers.{provider}.selected_model", model)
@@ -367,9 +359,7 @@ def _build_local_provider_status(local_config: dict, ollama_url: str) -> dict:
             "configured": bool(providers.get("lmstudio", {}).get("selected_model")),
             "status": "disconnected",  # Typically not running
             "model": providers.get("lmstudio", {}).get("selected_model", ""),
-            "endpoint": providers.get("lmstudio", {}).get(
-                "endpoint", f"{ollama_url}/v1"
-            ),
+            "endpoint": providers.get("lmstudio", {}).get("endpoint", f"{ollama_url}/v1"),
         },
     }
 
@@ -400,20 +390,14 @@ def _build_cloud_provider_status(cloud_config: dict) -> dict:
         },
         "anthropic": {
             "configured": bool(anthropic_config.get("api_key")),
-            "status": (
-                "connected" if anthropic_config.get("api_key") else "disconnected"
-            ),
+            "status": ("connected" if anthropic_config.get("api_key") else "disconnected"),
             "model": anthropic_config.get("selected_model", ""),
-            "endpoint": anthropic_config.get(
-                "endpoint", "https://api.anthropic.com/v1"
-            ),
+            "endpoint": anthropic_config.get("endpoint", "https://api.anthropic.com/v1"),
         },
     }
 
 
-def _build_active_provider_info(
-    provider_type: str, local_config: dict, cloud_config: dict
-) -> dict:
+def _build_active_provider_info(provider_type: str, local_config: dict, cloud_config: dict) -> dict:
     """
     Build active provider information dictionary.
 
@@ -431,11 +415,7 @@ def _build_active_provider_info(
         return {
             "type": provider_type,
             "name": local_config.get("provider", "ollama"),
-            "model": (
-                local_config.get("providers", {})
-                .get("ollama", {})
-                .get("selected_model", "")
-            ),
+            "model": (local_config.get("providers", {}).get("ollama", {}).get("selected_model", "")),
         }
 
     # Cloud provider
@@ -443,11 +423,7 @@ def _build_active_provider_info(
     return {
         "type": provider_type,
         "name": cloud_provider,
-        "model": (
-            cloud_config.get("providers", {})
-            .get(cloud_provider, {})
-            .get("selected_model", "")
-        ),
+        "model": (cloud_config.get("providers", {}).get(cloud_provider, {}).get("selected_model", "")),
     }
 
 
@@ -484,9 +460,7 @@ async def get_comprehensive_llm_status(
                 "local": _build_local_provider_status(local_config, ollama_url),
                 "cloud": _build_cloud_provider_status(cloud_config),
             },
-            "active_provider": _build_active_provider_info(
-                provider_type, local_config, cloud_config
-            ),
+            "active_provider": _build_active_provider_info(provider_type, local_config, cloud_config),
             "settings": {
                 "streaming": llm_config.get("streaming", False),
                 "timeout": llm_config.get("timeout", 60),
@@ -498,9 +472,7 @@ async def get_comprehensive_llm_status(
 
     except Exception as e:
         logger.error("Failed to get comprehensive LLM status: %s", e)
-        return JSONResponse(
-            status_code=500, content={"error": "Failed to get LLM status"}
-        )
+        return JSONResponse(status_code=500, content={"error": "Failed to get LLM status"})
 
 
 @with_error_handling(
@@ -548,16 +520,10 @@ def _get_model_from_llm_config(llm_config: dict) -> tuple[str, str]:
 def _get_model_from_local_config(unified_config: dict) -> str:
     """Extract model from local/ollama config paths. Issue #620."""
     local_config = unified_config.get("local", {})
-    model = (
-        local_config.get("providers", {}).get("ollama", {}).get("selected_model", "")
-    )
+    model = local_config.get("providers", {}).get("ollama", {}).get("selected_model", "")
     if not model:
         nested_local = unified_config.get("unified", {}).get("local", {})
-        model = (
-            nested_local.get("providers", {})
-            .get("ollama", {})
-            .get("selected_model", "")
-        )
+        model = nested_local.get("providers", {}).get("ollama", {}).get("selected_model", "")
     return model
 
 
@@ -599,9 +565,7 @@ async def get_quick_llm_status(
                 "status": status,
                 "provider_type": provider_type,
                 "model": model,
-                "timestamp": datetime.now(timezone.utc)
-                .isoformat()
-                .replace("+00:00", "Z"),
+                "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             },
         )
 
@@ -616,9 +580,7 @@ async def get_quick_llm_status(
                 "provider_type": "unknown",
                 "model": "",
                 "error": "Internal server error",
-                "timestamp": datetime.now(timezone.utc)
-                .isoformat()
-                .replace("+00:00", "Z"),
+                "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             },
         )
 
@@ -669,9 +631,7 @@ async def get_all_providers_health():
     from services.provider_health import ProviderHealthManager
 
     try:
-        results = await ProviderHealthManager.check_all_providers(
-            timeout=5.0, use_cache=True
-        )
+        results = await ProviderHealthManager.check_all_providers(timeout=5.0, use_cache=True)
         providers_health, available_count = _build_providers_health_dict(results)
         total_count = len(results)
         if available_count == total_count:
@@ -688,9 +648,7 @@ async def get_all_providers_health():
                 "total_providers": total_count,
                 "providers": providers_health,
                 "cache_stats": ProviderHealthManager.get_cache_stats(),
-                "timestamp": datetime.now(timezone.utc)
-                .isoformat()
-                .replace("+00:00", "Z"),
+                "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             },
         )
     except Exception as e:
@@ -700,9 +658,7 @@ async def get_all_providers_health():
             content={
                 "overall_status": "error",
                 "error": "Internal server error",
-                "timestamp": datetime.now(timezone.utc)
-                .isoformat()
-                .replace("+00:00", "Z"),
+                "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             },
         )
 
@@ -746,9 +702,7 @@ async def get_provider_health(provider_name: str, use_cache: bool = True):
                 "message": result.message,
                 "response_time_ms": round(result.response_time * 1000, 2),
                 "details": result.details or {},
-                "timestamp": datetime.now(timezone.utc)
-                .isoformat()
-                .replace("+00:00", "Z"),
+                "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             },
         )
 
@@ -761,9 +715,7 @@ async def get_provider_health(provider_name: str, use_cache: bool = True):
                 "status": "error",
                 "available": False,
                 "error": "Internal server error",
-                "timestamp": datetime.now(timezone.utc)
-                .isoformat()
-                .replace("+00:00", "Z"),
+                "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             },
         )
 
@@ -976,9 +928,7 @@ def _apply_tiered_routing_updates(tier_router, config_data: dict) -> None:
             tier_router.config.models.complex = str(config_data["models"]["complex"])
 
     if "fallback_to_complex" in config_data:
-        tier_router.config.fallback_to_complex = bool(
-            config_data["fallback_to_complex"]
-        )
+        tier_router.config.fallback_to_complex = bool(config_data["fallback_to_complex"])
 
 
 def _build_tiered_routing_response(tier_router) -> dict:

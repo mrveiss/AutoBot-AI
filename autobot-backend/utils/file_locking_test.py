@@ -53,9 +53,7 @@ class TestWebsocketsNPUEventsLocking:
         assert "_npu_events_lock" in source, "Lock not used in function"
         assert "with _npu_events_lock:" in source, "Lock context manager not used"
         # Check for double-check pattern (two checks of _npu_events_subscribed)
-        assert (
-            source.count("_npu_events_subscribed") >= 2
-        ), "Double-checked locking not implemented"
+        assert source.count("_npu_events_subscribed") >= 2, "Double-checked locking not implemented"
 
     def test_concurrent_init_npu_worker_websocket(self):
         """Test concurrent calls to init_npu_worker_websocket"""
@@ -326,9 +324,7 @@ class TestConcurrentFileWriteSafety:
                     errors.append(e)
 
             # Run 20 concurrent writes
-            await asyncio.gather(
-                *[write_to_file(f"Content from writer {i}\n" * 100) for i in range(20)]
-            )
+            await asyncio.gather(*[write_to_file(f"Content from writer {i}\n" * 100) for i in range(20)])
 
             assert len(errors) == 0, f"Errors during concurrent writes: {errors}"
             assert write_count["count"] == 20
@@ -371,9 +367,7 @@ class TestConcurrentFileWriteSafety:
             # If writes were serialized, total time would be ~50ms
             # If concurrent, should be close to 10ms
             total_elapsed = max(end_times.values()) - min(start_times.values())
-            assert (
-                total_elapsed < 0.03
-            ), f"Writes appear serialized: {total_elapsed:.3f}s (expected <0.03s)"
+            assert total_elapsed < 0.03, f"Writes appear serialized: {total_elapsed:.3f}s (expected <0.03s)"
 
 
 class TestLockPatternConsistency:

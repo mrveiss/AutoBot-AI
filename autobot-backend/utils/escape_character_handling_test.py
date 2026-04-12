@@ -32,9 +32,7 @@ def clean_ansi_escape_sequences(text: str) -> str:
     # Remove carriage returns and excessive whitespace
     cleaned = re.sub(r"\r+", "", cleaned)
     cleaned = re.sub(r"\n\s*\n", "\n\n", cleaned)  # Remove empty lines with spaces
-    cleaned = re.sub(
-        r"[ \t]+$", "", cleaned, flags=re.MULTILINE
-    )  # Remove trailing spaces
+    cleaned = re.sub(r"[ \t]+$", "", cleaned, flags=re.MULTILINE)  # Remove trailing spaces
 
     return cleaned.strip()
 
@@ -134,24 +132,16 @@ def test_real_command_output():
             print(f"Has ANSI sequences after: {has_ansi_after}")  # noqa: print
 
             if has_ansi_before and not has_ansi_after:
-                print(
-                    "✓ Real command test: PASSED - ANSI sequences removed"
-                )  # noqa: print
+                print("✓ Real command test: PASSED - ANSI sequences removed")  # noqa: print
                 return True
             elif not has_ansi_before:
-                print(
-                    "✓ Real command test: PASSED - No ANSI sequences to remove"
-                )  # noqa: print
+                print("✓ Real command test: PASSED - No ANSI sequences to remove")  # noqa: print
                 return True
             else:
-                print(
-                    "✗ Real command test: FAILED - ANSI sequences still present"
-                )  # noqa: print
+                print("✗ Real command test: FAILED - ANSI sequences still present")  # noqa: print
                 return False
         else:
-            print(
-                "✗ Real command test: FAILED - Command execution failed"
-            )  # noqa: print
+            print("✗ Real command test: FAILED - Command execution failed")  # noqa: print
             return False
 
     except Exception as e:
@@ -180,14 +170,10 @@ def test_preserve_useful_formatting():
         {
             "name": "Process list with columns",
             "input": (
-                "  PID USER     TIME  COMMAND\n"
-                "  1234 root     0:01  /usr/sbin/sshd\n"
-                "  5678 user     0:00  bash"
+                "  PID USER     TIME  COMMAND\n" "  1234 root     0:01  /usr/sbin/sshd\n" "  5678 user     0:00  bash"
             ),
             "expected": (
-                "PID USER     TIME  COMMAND\n"
-                "  1234 root     0:01  /usr/sbin/sshd\n"
-                "  5678 user     0:00  bash"
+                "PID USER     TIME  COMMAND\n" "  1234 root     0:01  /usr/sbin/sshd\n" "  5678 user     0:00  bash"
             ),
         },
     ]
@@ -206,9 +192,7 @@ def test_preserve_useful_formatting():
             print(f"  Got: {repr(result)}")  # noqa: print
             failed += 1
 
-    print(
-        f"\nFormatting preservation results: {passed} passed, {failed} failed"
-    )  # noqa: print
+    print(f"\nFormatting preservation results: {passed} passed, {failed} failed")  # noqa: print
     return failed == 0
 
 
@@ -227,14 +211,10 @@ def main():
     print("=" * 60)  # noqa: print
 
     if test1_passed and test2_passed and test3_passed:
-        print(
-            "✅ ALL TESTS PASSED - Escape character handling is working correctly"
-        )  # noqa: print
+        print("✅ ALL TESTS PASSED - Escape character handling is working correctly")  # noqa: print
         return 0
     else:
-        print(
-            "❌ SOME TESTS FAILED - Escape character handling needs improvement"
-        )  # noqa: print
+        print("❌ SOME TESTS FAILED - Escape character handling needs improvement")  # noqa: print
         return 1
 
 

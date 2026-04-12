@@ -241,9 +241,7 @@ from .pattern_analysis import (
     PatternCluster,
     PatternSeverity,
 )
-from .pattern_analysis import (
-    PatternType as CodePatternType,  # Types; Refactoring types; Storage functions
-)
+from .pattern_analysis import PatternType as CodePatternType  # Types; Refactoring types; Storage functions
 from .pattern_analysis import (
     RefactoringSuggestion,
     RefactoringSuggestionGenerator,

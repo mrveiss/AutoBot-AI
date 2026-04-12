@@ -1,5 +1,6 @@
 # AutoBot - AI-Powered Automation Platform
 import uuid
+
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
@@ -89,15 +90,10 @@ class ImageAnalysisAgent(StandardizedAgent):
         """Handle image description action."""
         image_data = request.payload["image_data"]
         detail_level = request.payload.get("detail_level", "detailed")
-        prompt = (
-            f"Provide a {detail_level} description of the following image.\n\n"
-            f"Image data:\n{image_data}"
-        )
+        prompt = f"Provide a {detail_level} description of the following image.\n\n" f"Image data:\n{image_data}"
         return await self.process_query(prompt)
 
-    def _build_image_prompt(
-        self, image_data: str, query: str, analysis_type: str
-    ) -> str:
+    def _build_image_prompt(self, image_data: str, query: str, analysis_type: str) -> str:
         """Build analysis prompt based on image data and analysis type."""
         type_instructions = {
             "objects": "Focus on identifying and listing all objects visible.",
@@ -108,9 +104,7 @@ class ImageAnalysisAgent(StandardizedAgent):
         instruction = type_instructions.get(analysis_type, type_instructions["general"])
         return f"{query}\n\n{instruction}\n\nImage data:\n{image_data}"
 
-    async def process_query(
-        self, request_text: str, context: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    async def process_query(self, request_text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Process an image analysis query using the vLLM-optimised API (Issue #3389)."""
         try:
             logger.info("Image Analysis Agent processing: %s...", request_text[:50])
@@ -132,9 +126,7 @@ class ImageAnalysisAgent(StandardizedAgent):
                 "response_text": response_text,
                 "agent_type": "image_analysis",
                 "model_used": self.model_name,
-                "token_usage": (
-                    response.get("usage", {}) if isinstance(response, dict) else {}
-                ),
+                "token_usage": (response.get("usage", {}) if isinstance(response, dict) else {}),
             }
         except Exception as e:
             logger.error("Image Analysis Agent error: %s", e)

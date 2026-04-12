@@ -112,9 +112,7 @@ class DevelopmentSpeedupAgent:
 
         self.cache_ttl = 7200  # 2 hours cache
 
-    def _build_analysis_report(
-        self, root_path: str, results: List[Any]
-    ) -> Dict[str, Any]:
+    def _build_analysis_report(self, root_path: str, results: List[Any]) -> Dict[str, Any]:
         """Build analysis report from task results (Issue #398: extracted)."""
         report_keys = [
             "duplicate_code",
@@ -130,19 +128,13 @@ class DevelopmentSpeedupAgent:
         }
         for i, key in enumerate(report_keys):
             result = results[i]
-            report[key] = (
-                result if not isinstance(result, Exception) else {"error": str(result)}
-            )
+            report[key] = result if not isinstance(result, Exception) else {"error": str(result)}
         return report
 
-    async def _cache_analysis_report(
-        self, root_path: str, report: Dict[str, Any]
-    ) -> None:
+    async def _cache_analysis_report(self, root_path: str, report: Dict[str, Any]) -> None:
         """Cache analysis report to Redis (Issue #398: extracted)."""
         cache_key = f"{self.analysis_cache_prefix}{hashlib.md5(root_path.encode(), usedforsecurity=False).hexdigest()}"
-        await asyncio.to_thread(
-            self.redis_client.setex, cache_key, self.cache_ttl, json.dumps(report)
-        )
+        await asyncio.to_thread(self.redis_client.setex, cache_key, self.cache_ttl, json.dumps(report))
 
     async def analyze_codebase_comprehensive(self, root_path: str) -> Dict[str, Any]:
         """Perform comprehensive codebase analysis (Issue #398: refactored)."""
@@ -166,9 +158,7 @@ class DevelopmentSpeedupAgent:
 
         return report
 
-    def _analyze_block_duplicates(
-        self, content: str, file_path: str, file_hashes: Dict[str, list]
-    ) -> None:
+    def _analyze_block_duplicates(self, content: str, file_path: str, file_hashes: Dict[str, list]) -> None:
         """Analyze file content for duplicate code blocks (Issue #334 - extracted helper)."""
         lines = content.splitlines()
         for i in range(len(lines) - self.min_duplicate_lines + 1):
@@ -181,9 +171,7 @@ class DevelopmentSpeedupAgent:
             block_hash = hashlib.sha256(block_normalized.encode()).hexdigest()
             file_hashes[block_hash].append((file_path, i + 1, block))
 
-    def _analyze_function_duplicates(
-        self, content: str, file_path: str, function_hashes: Dict[str, list]
-    ) -> None:
+    def _analyze_function_duplicates(self, content: str, file_path: str, function_hashes: Dict[str, list]) -> None:
         """Analyze AST for duplicate functions (Issue #334 - extracted helper)."""
         try:
             tree = ast.parse(content)
@@ -199,13 +187,9 @@ class DevelopmentSpeedupAgent:
                 continue
             func_normalized = self._normalize_code(func_source)
             func_hash = hashlib.sha256(func_normalized.encode()).hexdigest()
-            function_hashes[func_hash].append(
-                (file_path, node.lineno, func_source, node.name)
-            )
+            function_hashes[func_hash].append((file_path, node.lineno, func_source, node.name))
 
-    def _process_block_duplicates(
-        self, file_hashes: Dict[str, list]
-    ) -> List["DuplicateCode"]:
+    def _process_block_duplicates(self, file_hashes: Dict[str, list]) -> List["DuplicateCode"]:
         """Process file-level duplicate hashes into results (Issue #334 - extracted helper)."""
         duplicates = []
         for block_hash, locations in file_hashes.items():
@@ -222,9 +206,7 @@ class DevelopmentSpeedupAgent:
             duplicates.append(duplicate)
         return duplicates
 
-    def _process_function_duplicates(
-        self, function_hashes: Dict[str, list]
-    ) -> List["DuplicateCode"]:
+    def _process_function_duplicates(self, function_hashes: Dict[str, list]) -> List["DuplicateCode"]:
         """Process function-level duplicate hashes into results (Issue #334 - extracted helper)."""
         function_duplicates = []
         for func_hash, locations in function_hashes.items():
@@ -255,9 +237,7 @@ class DevelopmentSpeedupAgent:
 
         for file_path in python_files:
             try:
-                async with aiofiles.open(
-                    file_path, "r", encoding="utf-8", errors="ignore"
-                ) as f:
+                async with aiofiles.open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                     content = await f.read()
 
                 self._analyze_block_duplicates(content, file_path, file_hashes)
@@ -274,20 +254,11 @@ class DevelopmentSpeedupAgent:
         return {
             "total_duplicates": len(duplicates) + len(function_duplicates),
             "code_block_duplicates": [self._duplicate_to_dict(d) for d in duplicates],
-            "function_duplicates": [
-                self._duplicate_to_dict(d) for d in function_duplicates
-            ],
+            "function_duplicates": [self._duplicate_to_dict(d) for d in function_duplicates],
             "potential_savings": {
-                "lines_of_code": sum(
-                    d.size_lines * (len(d.locations) - 1)
-                    for d in duplicates + function_duplicates
-                ),
+                "lines_of_code": sum(d.size_lines * (len(d.locations) - 1) for d in duplicates + function_duplicates),
                 "estimated_files_affected": len(
-                    set(
-                        loc[0]
-                        for d in duplicates + function_duplicates
-                        for loc in d.locations
-                    )
+                    set(loc[0] for d in duplicates + function_duplicates for loc in d.locations)
                 ),
             },
         }
@@ -327,9 +298,7 @@ class DevelopmentSpeedupAgent:
             },
         ]
 
-    async def _search_single_pattern(
-        self, pattern_config: Dict[str, str]
-    ) -> Optional[CodePattern]:
+    async def _search_single_pattern(self, pattern_config: Dict[str, str]) -> Optional[CodePattern]:
         """Search for a single pattern and return result (Issue #398: extracted)."""
         try:
             results = await self.npu_code_search.search_code(
@@ -346,9 +315,7 @@ class DevelopmentSpeedupAgent:
                     suggestion=pattern_config["suggestion"],
                 )
         except Exception as e:
-            self.logger.error(
-                "Error searching for pattern %s: %s", pattern_config["name"], e
-            )
+            self.logger.error("Error searching for pattern %s: %s", pattern_config["name"], e)
         return None
 
     async def identify_code_patterns(self, root_path: str) -> Dict[str, Any]:
@@ -364,13 +331,7 @@ class DevelopmentSpeedupAgent:
         import_patterns = await self._analyze_import_patterns(root_path)
         patterns.extend(import_patterns)
 
-        high_priority = len(
-            [
-                p
-                for p in patterns
-                if "TODO" in p.pattern_type or "FIXME" in p.pattern_type
-            ]
-        )
+        high_priority = len([p for p in patterns if "TODO" in p.pattern_type or "FIXME" in p.pattern_type])
         return {
             "total_patterns": len(patterns),
             "patterns": [self._pattern_to_dict(p) for p in patterns],
@@ -408,9 +369,7 @@ class DevelopmentSpeedupAgent:
             return None
         module = import_line.split()[1].split(".")[0]
         try:
-            async with aiofiles.open(
-                result.file_path, "r", encoding="utf-8", errors="ignore"
-            ) as f:
+            async with aiofiles.open(result.file_path, "r", encoding="utf-8", errors="ignore") as f:
                 file_content = await f.read()
             if file_content.count(module) == 1:
                 return {
@@ -442,9 +401,7 @@ class DevelopmentSpeedupAgent:
 
         return {
             "import_statistics": dict(import_stats),
-            "most_used_modules": sorted(
-                import_stats.items(), key=lambda x: x[1], reverse=True
-            )[:10],
+            "most_used_modules": sorted(import_stats.items(), key=lambda x: x[1], reverse=True)[:10],
             "potential_unused_imports": unused_imports[:20],
             "optimization_suggestions": [
                 "Consider using relative imports for internal modules",
@@ -492,9 +449,7 @@ class DevelopmentSpeedupAgent:
                     )
 
             except Exception as e:
-                self.logger.error(
-                    f"Error searching for dead code pattern {pattern['name']}: {e}"
-                )
+                self.logger.error(f"Error searching for dead code pattern {pattern['name']}: {e}")
 
         return {
             "potential_dead_code": dead_code_indicators,
@@ -522,9 +477,7 @@ class DevelopmentSpeedupAgent:
             self.logger.error("Error finding complex conditions: %s", e)
 
         return {
-            "refactoring_opportunities": [
-                self._opportunity_to_dict(o) for o in opportunities
-            ],
+            "refactoring_opportunities": [self._opportunity_to_dict(o) for o in opportunities],
             "total_opportunities": len(opportunities),
             "high_priority": len([o for o in opportunities if o.complexity_score > 8]),
         }
@@ -546,9 +499,7 @@ class DevelopmentSpeedupAgent:
         return {
             "quality_issues": [self._quality_issue_to_dict(q) for q in quality_issues],
             "total_issues": len(quality_issues),
-            "critical_issues": len(
-                [q for q in quality_issues if q.severity == "critical"]
-            ),
+            "critical_issues": len([q for q in quality_issues if q.severity == "critical"]),
             "recommendations": [
                 "Establish and enforce consistent naming conventions",
                 "Add docstrings to all public functions and classes",
@@ -558,9 +509,7 @@ class DevelopmentSpeedupAgent:
         }
 
     # Helper methods
-    async def _get_files_by_extension(
-        self, root_path: str, extensions: List[str]
-    ) -> List[str]:
+    async def _get_files_by_extension(self, root_path: str, extensions: List[str]) -> List[str]:
         """Get all files with specified extensions"""
 
         def _walk_files():
@@ -614,10 +563,7 @@ class DevelopmentSpeedupAgent:
             patterns.append(
                 CodePattern(
                     pattern_type="Star Imports",
-                    description=(
-                        f"Found {len(star_imports)} star imports that could pollute"
-                        f"namespace"
-                    ),
+                    description=(f"Found {len(star_imports)} star imports that could pollute" f"namespace"),
                     occurrences=[(r.file_path, r.line_number) for r in star_imports],
                     confidence=0.9,
                     suggestion="Use explicit imports instead of star imports",
@@ -626,9 +572,7 @@ class DevelopmentSpeedupAgent:
 
         return patterns
 
-    def _check_function_length(
-        self, node: ast.FunctionDef, file_path: str
-    ) -> Optional["RefactoringOpportunity"]:
+    def _check_function_length(self, node: ast.FunctionDef, file_path: str) -> Optional["RefactoringOpportunity"]:
         """Check if function is too long (Issue #334 - extracted helper)."""
         if not hasattr(node, "end_lineno") or not node.end_lineno:
             return None
@@ -644,9 +588,7 @@ class DevelopmentSpeedupAgent:
             potential_benefit="Extract smaller functions for better readability and testability",
         )
 
-    def _analyze_file_for_long_functions(
-        self, content: str, file_path: str
-    ) -> List["RefactoringOpportunity"]:
+    def _analyze_file_for_long_functions(self, content: str, file_path: str) -> List["RefactoringOpportunity"]:
         """Analyze single file for long functions (Issue #334 - extracted helper)."""
         opportunities = []
         try:
@@ -663,23 +605,17 @@ class DevelopmentSpeedupAgent:
 
         return opportunities
 
-    async def _find_long_functions(
-        self, root_path: str
-    ) -> List[RefactoringOpportunity]:
+    async def _find_long_functions(self, root_path: str) -> List[RefactoringOpportunity]:
         """Find functions that are too long and could benefit from refactoring"""
         opportunities = []
         python_files = await self._get_files_by_extension(root_path, [".py"])
 
         for file_path in python_files[:20]:  # Limit to prevent timeout
             try:
-                async with aiofiles.open(
-                    file_path, "r", encoding="utf-8", errors="ignore"
-                ) as f:
+                async with aiofiles.open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                     content = await f.read()
 
-                opportunities.extend(
-                    self._analyze_file_for_long_functions(content, file_path)
-                )
+                opportunities.extend(self._analyze_file_for_long_functions(content, file_path))
 
             except OSError as e:
                 self.logger.debug("Failed to read file %s: %s", file_path, e)
@@ -688,9 +624,7 @@ class DevelopmentSpeedupAgent:
 
         return opportunities
 
-    async def _find_complex_conditions(
-        self, root_path: str
-    ) -> List[RefactoringOpportunity]:
+    async def _find_complex_conditions(self, root_path: str) -> List[RefactoringOpportunity]:
         """Find complex conditional statements that could be simplified"""
         opportunities = []
 
@@ -752,9 +686,7 @@ class DevelopmentSpeedupAgent:
 
         return issues
 
-    async def _check_documentation_consistency(
-        self, root_path: str
-    ) -> List[CodeQualityIssue]:
+    async def _check_documentation_consistency(self, root_path: str) -> List[CodeQualityIssue]:
         """Check for missing or inconsistent documentation"""
         issues = []
 
@@ -803,9 +735,7 @@ class DevelopmentSpeedupAgent:
         import_analysis = analysis_report.get("import_analysis", {})
         unused_imports = len(import_analysis.get("potential_unused_imports", []))
         if unused_imports > 0:
-            recommendations.append(
-                f"📦 Remove {unused_imports} potentially unused imports"
-            )
+            recommendations.append(f"📦 Remove {unused_imports} potentially unused imports")
 
         # Refactoring recommendations
         refactoring = analysis_report.get("refactoring_opportunities", {})
@@ -817,9 +747,7 @@ class DevelopmentSpeedupAgent:
         # Quality recommendations
         quality = analysis_report.get("quality_issues", {})
         if quality.get("critical_issues", 0) > 0:
-            recommendations.append(
-                f"🏆 Fix {quality['critical_issues']} critical code quality issues"
-            )
+            recommendations.append(f"🏆 Fix {quality['critical_issues']} critical code quality issues")
 
         return recommendations
 
@@ -827,11 +755,7 @@ class DevelopmentSpeedupAgent:
     def _duplicate_to_dict(self, duplicate: DuplicateCode) -> Dict[str, Any]:
         """Convert DuplicateCode dataclass to serializable dictionary."""
         return {
-            "content_preview": (
-                duplicate.content[:200] + "..."
-                if len(duplicate.content) > 200
-                else duplicate.content
-            ),
+            "content_preview": (duplicate.content[:200] + "..." if len(duplicate.content) > 200 else duplicate.content),
             "locations": duplicate.locations,
             "similarity_score": duplicate.similarity_score,
             "size_lines": duplicate.size_lines,
@@ -849,9 +773,7 @@ class DevelopmentSpeedupAgent:
             "suggestion": pattern.suggestion,
         }
 
-    def _opportunity_to_dict(
-        self, opportunity: RefactoringOpportunity
-    ) -> Dict[str, Any]:
+    def _opportunity_to_dict(self, opportunity: RefactoringOpportunity) -> Dict[str, Any]:
         """Convert RefactoringOpportunity dataclass to serializable dictionary."""
         return {
             "opportunity_type": opportunity.opportunity_type,

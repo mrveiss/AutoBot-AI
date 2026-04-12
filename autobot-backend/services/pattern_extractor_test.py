@@ -148,9 +148,7 @@ def test_categorize_function():
 
     # Test async function
     async_node = ast.parse("async def fetch_data(): pass").body[0]
-    category = extractor._categorize_function(
-        async_node, Path("/test/redis_service.py")
-    )
+    category = extractor._categorize_function(async_node, Path("/test/redis_service.py"))
     assert category == "redis"
 
     # Test test function
@@ -197,9 +195,7 @@ def test_extract_typescript_interface_patterns(temp_codebase):
 def test_extract_from_codebase_all_languages(temp_codebase):
     """Test extracting patterns from all languages."""
     extractor = PatternExtractor(base_path=str(temp_codebase))
-    patterns = extractor.extract_from_codebase(
-        languages=["python", "typescript", "vue"]
-    )
+    patterns = extractor.extract_from_codebase(languages=["python", "typescript", "vue"])
 
     # Should have multiple pattern types
     assert len(patterns) > 0
@@ -268,9 +264,7 @@ def test_skip_test_files():
 
         # Test files should be skipped
         function_patterns = extractor.patterns.get("function", [])
-        test_file_patterns = [
-            p for p in function_patterns if "test_" in str(p["file_path"])
-        ]
+        test_file_patterns = [p for p in function_patterns if "test_" in str(p["file_path"])]
         assert len(test_file_patterns) == 0
 
 
@@ -291,7 +285,5 @@ def test_skip_long_functions():
 
         # Long function should be skipped
         function_patterns = extractor.patterns.get("function", [])
-        long_patterns = [
-            p for p in function_patterns if "very_long_function" in p["signature"]
-        ]
+        long_patterns = [p for p in function_patterns if "very_long_function" in p["signature"]]
         assert len(long_patterns) == 0

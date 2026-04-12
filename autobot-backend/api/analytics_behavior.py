@@ -39,18 +39,12 @@ router = APIRouter(prefix="/behavior", tags=["analytics", "behavior"])
 class TrackEventRequest(BaseModel):
     """Request model for tracking user events"""
 
-    event_type: str = Field(
-        ..., description="Type of event (page_view, click, search, etc.)"
-    )
+    event_type: str = Field(..., description="Type of event (page_view, click, search, etc.)")
     feature: str = Field(..., description="Feature area (chat, knowledge, tools, etc.)")
     user_id: Optional[str] = Field(None, description="User ID if authenticated")
     session_id: Optional[str] = Field(None, description="Session ID")
-    duration_ms: Optional[int] = Field(
-        None, ge=0, description="Duration in milliseconds"
-    )
-    metadata: Optional[dict] = Field(
-        default_factory=dict, description="Additional metadata"
-    )
+    duration_ms: Optional[int] = Field(None, ge=0, description="Duration in milliseconds")
+    metadata: Optional[dict] = Field(default_factory=dict, description="Additional metadata")
 
 
 class FeatureMetricsResponse(BaseModel):
@@ -130,9 +124,7 @@ async def track_user_event(
 )
 @router.get("/events/recent")
 async def get_recent_events(
-    limit: int = Query(
-        default=100, ge=1, le=1000, description="Number of events to return"
-    ),
+    limit: int = Query(default=100, ge=1, le=1000, description="Number of events to return"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -163,9 +155,7 @@ async def get_recent_events(
 )
 @router.get("/features")
 async def get_feature_metrics(
-    feature: Optional[str] = Query(
-        None, description="Specific feature to get metrics for"
-    ),
+    feature: Optional[str] = Query(None, description="Specific feature to get metrics for"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -301,9 +291,7 @@ async def get_engagement_metrics(
 )
 @router.get("/stats/daily")
 async def get_daily_stats(
-    days: int = Query(
-        default=30, ge=1, le=90, description="Number of days to retrieve"
-    ),
+    days: int = Query(default=30, ge=1, le=90, description="Number of days to retrieve"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """

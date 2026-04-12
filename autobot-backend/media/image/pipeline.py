@@ -93,9 +93,7 @@ class ImagePipeline(BasePipeline):
         # Try AI-powered analysis if VisionProcessor is available
         vp = _get_vision_processor()
         if vp is not None:
-            return await self._run_vision_analysis(
-                pil_image, basic_meta, media_input, vp
-            )
+            return await self._run_vision_analysis(pil_image, basic_meta, media_input, vp)
 
         return {
             "type": "image_analysis",
@@ -110,9 +108,7 @@ class ImagePipeline(BasePipeline):
     async def _load_pil_image(self, data: Any) -> Any:
         """Load PIL Image from bytes, base64 string, or file path."""
         raw_bytes = await asyncio.to_thread(self._decode_input, data)
-        return await asyncio.to_thread(
-            lambda b: Image.open(io.BytesIO(b)).convert("RGB"), raw_bytes
-        )
+        return await asyncio.to_thread(lambda b: Image.open(io.BytesIO(b)).convert("RGB"), raw_bytes)
 
     def _decode_input(self, data: Any) -> bytes:
         """Normalize input data to bytes."""
@@ -141,16 +137,8 @@ class ImagePipeline(BasePipeline):
         try:
             exif_raw = img._getexif()  # type: ignore[attr-defined]
             if exif_raw:
-                exif = {
-                    ExifTags.TAGS.get(k, k): str(v)
-                    for k, v in exif_raw.items()
-                    if k in ExifTags.TAGS
-                }
-                meta["exif"] = {
-                    k: exif[k]
-                    for k in ["Make", "Model", "DateTime", "GPSInfo"]
-                    if k in exif
-                }
+                exif = {ExifTags.TAGS.get(k, k): str(v) for k, v in exif_raw.items() if k in ExifTags.TAGS}
+                meta["exif"] = {k: exif[k] for k in ["Make", "Model", "DateTime", "GPSInfo"] if k in exif}
         except Exception:
             logger.debug("Suppressed exception in try block", exc_info=True)
         return meta

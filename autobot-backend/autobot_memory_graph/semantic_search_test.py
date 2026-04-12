@@ -47,6 +47,7 @@ def _bootstrap_stubs() -> None:
         def vm(self):
             class _VM:
                 redis = "127.0.0.1"
+
             return _VM()
 
     ssot_config_mod.config = _Config()
@@ -76,7 +77,6 @@ from autobot_memory_graph.semantic_search import (  # noqa: E402
     SearchResult,
     ensure_indexes,
 )
-
 
 # ===========================================================================
 # HybridScorer tests
@@ -200,9 +200,7 @@ class TestExtractIntent:
     def test_time_last_7_days(self) -> None:
         intent = self.proc._extract_intent("issues from last 7 days")
         assert intent.time_range is not None
-        expected_start = datetime.now(tz=timezone.utc).date() - __import__(
-            "datetime"
-        ).timedelta(days=7)
+        expected_start = datetime.now(tz=timezone.utc).date() - __import__("datetime").timedelta(days=7)
         assert intent.time_range["start"] == expected_start
 
     def test_status_completed_extracted(self) -> None:
@@ -274,9 +272,7 @@ class TestProcessQuery:
             "metadata": {"status": "active", "priority": "medium"},
         }
 
-    def _make_processor_with_candidates(
-        self, candidates: List[Dict[str, Any]]
-    ) -> MemoryGraphQueryProcessor:
+    def _make_processor_with_candidates(self, candidates: List[Dict[str, Any]]) -> MemoryGraphQueryProcessor:
         redis_mock = AsyncMock()
         # FT.SEARCH returns empty raw to trigger scan fallback
         redis_mock.execute_command = AsyncMock(side_effect=Exception("no index"))
@@ -307,9 +303,7 @@ class TestProcessQuery:
     def test_process_query_empty_string_returns_empty(self) -> None:
         redis_mock = MagicMock()
         proc = MemoryGraphQueryProcessor(redis_client=redis_mock)
-        result = asyncio.run(
-            proc.process_query("")
-        )
+        result = asyncio.run(proc.process_query(""))
         assert result == []
 
     def test_process_query_returns_search_results(self) -> None:
@@ -318,9 +312,7 @@ class TestProcessQuery:
             self._make_entity("New Feature", "FEATURE"),
         ]
         proc = self._make_processor_with_candidates(entities)
-        results = asyncio.run(
-            proc.process_query("redis bug")
-        )
+        results = asyncio.run(proc.process_query("redis bug"))
         assert isinstance(results, list)
         for r in results:
             assert isinstance(r, SearchResult)
@@ -328,17 +320,13 @@ class TestProcessQuery:
     def test_process_query_limit_respected(self) -> None:
         entities = [self._make_entity(f"Entity {i}", "TASK") for i in range(20)]
         proc = self._make_processor_with_candidates(entities)
-        results = asyncio.run(
-            proc.process_query("task", limit=3)
-        )
+        results = asyncio.run(proc.process_query("task", limit=3))
         assert len(results) <= 3
 
     def test_search_result_has_required_fields(self) -> None:
         entities = [self._make_entity("Test Bug", "BUG")]
         proc = self._make_processor_with_candidates(entities)
-        results = asyncio.run(
-            proc.process_query("test bug")
-        )
+        results = asyncio.run(proc.process_query("test bug"))
         if results:
             r = results[0]
             assert hasattr(r, "entity")

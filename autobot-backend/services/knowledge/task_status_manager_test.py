@@ -6,8 +6,9 @@ Tests for task status manager Redis-backed tracking.
 """
 
 import asyncio
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from services.knowledge.task_status_manager import (
     TaskStatus,

@@ -30,7 +30,6 @@ from typing import Any, Dict, List, Optional, Tuple
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_7_DAYS
-
 from services.knowledge_grounding_models import (
     Claim,
     ClaimType,
@@ -324,7 +323,9 @@ class ClaimVerifier:
             verified_fact = result.get("fact") if isinstance(result, dict) else getattr(result, "fact", None)
             status_str = result.get("status") if isinstance(result, dict) else getattr(result, "status", "not_found")
             url = result.get("url") if isinstance(result, dict) else getattr(result, "url", None)
-            confidence = result.get("confidence", 0.6) if isinstance(result, dict) else getattr(result, "confidence", 0.6)
+            confidence = (
+                result.get("confidence", 0.6) if isinstance(result, dict) else getattr(result, "confidence", 0.6)
+            )
 
             # Validate status enum
             try:
@@ -428,7 +429,9 @@ class ClaimVerifier:
                     logger.info("RAG search confidence %.2f >= threshold, returning result", rag_confidence)
                     verified = VerifiedClaim(
                         original=claim,
-                        verified_as=VerificationStatus.VERIFIED if rag_confidence > 0.8 else VerificationStatus.UNVERIFIED,
+                        verified_as=(
+                            VerificationStatus.VERIFIED if rag_confidence > 0.8 else VerificationStatus.UNVERIFIED
+                        ),
                         source="kb_rag",
                         source_text=rag_result.matches[0].text if rag_result.matches else None,
                         source_url=rag_result.matches[0].url if rag_result.matches else None,
@@ -549,7 +552,9 @@ class ClaimVerifier:
         in_kb_claims = [c for c in claims if c.kb_status == KBStatus.IN_KB]
         unknown_claims = [c for c in claims if c.kb_status == KBStatus.UNKNOWN]
         contradicts_claims = [c for c in claims if c.kb_status == KBStatus.CONTRADICTS]
-        other_claims = [c for c in claims if c.kb_status not in (KBStatus.IN_KB, KBStatus.UNKNOWN, KBStatus.CONTRADICTS)]
+        other_claims = [
+            c for c in claims if c.kb_status not in (KBStatus.IN_KB, KBStatus.UNKNOWN, KBStatus.CONTRADICTS)
+        ]
 
         # Create priority queue: IN_KB (fast) first, then UNKNOWN (slow), then others
         priority_queue = in_kb_claims + unknown_claims + contradicts_claims + other_claims

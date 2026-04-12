@@ -51,9 +51,7 @@ router = APIRouter(
 ALLOWED_URL_SCHEMES = {"http", "https"}
 
 # Security Configuration
-BROWSER_VM_URL = (
-    f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}"
-)
+BROWSER_VM_URL = f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}"
 
 # URL Whitelist - Only these domains are allowed
 ALLOWED_URL_PATTERNS = [
@@ -162,9 +160,7 @@ async def check_rate_limit() -> bool:
             request_counter["reset_time"] = now
 
         if request_counter["count"] >= MAX_REQUESTS_PER_MINUTE:
-            logger.warning(
-                f"Rate limit exceeded: {request_counter['count']} requests/min"
-            )
+            logger.warning(f"Rate limit exceeded: {request_counter['count']} requests/min")
             return False
 
         request_counter["count"] += 1
@@ -186,9 +182,7 @@ class NavigateRequest(BaseModel):
     """Request model for browser navigation"""
 
     url: str = Field(..., description="URL to navigate to")
-    wait_until: Optional[str] = Field(
-        "load", description="Wait condition: 'load', 'domcontentloaded', 'networkidle'"
-    )
+    wait_until: Optional[str] = Field("load", description="Wait condition: 'load', 'domcontentloaded', 'networkidle'")
     timeout: Optional[int] = Field(30000, description="Timeout in milliseconds")
 
 
@@ -210,9 +204,7 @@ class FillRequest(BaseModel):
 class ScreenshotRequest(BaseModel):
     """Request model for taking screenshots"""
 
-    selector: Optional[str] = Field(
-        None, description="CSS selector for element (full page if omitted)"
-    )
+    selector: Optional[str] = Field(None, description="CSS selector for element (full page if omitted)")
     full_page: Optional[bool] = Field(False, description="Capture full scrollable page")
 
 
@@ -227,9 +219,7 @@ class WaitForSelectorRequest(BaseModel):
 
     selector: str = Field(..., description="CSS selector to wait for")
     timeout: Optional[int] = Field(30000, description="Timeout in milliseconds")
-    state: Optional[str] = Field(
-        "visible", description="State: 'attached', 'detached', 'visible', 'hidden'"
-    )
+    state: Optional[str] = Field("visible", description="State: 'attached', 'detached', 'visible', 'hidden'")
 
 
 class GetTextRequest(BaseModel):
@@ -696,9 +686,7 @@ async def screenshot_mcp(request: ScreenshotRequest) -> Metadata:
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
-    logger.info(
-        f"Browser screenshot: selector={request.selector}, full_page={request.full_page}"
-    )
+    logger.info(f"Browser screenshot: selector={request.selector}, full_page={request.full_page}")
 
     result = await send_to_browser_vm(
         "screenshot",

@@ -42,9 +42,7 @@ class SyncNodeContext:
 
 # Code cache directory
 CODE_CACHE_DIR = Path(os.environ.get("SLM_CODE_CACHE", "/var/lib/slm/code-cache"))
-SSH_KEY_PATH = os.environ.get(
-    "SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key"  # noqa: ssot-path
-)
+SSH_KEY_PATH = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")  # noqa: ssot-path
 
 
 class SyncOrchestrator:
@@ -200,9 +198,7 @@ class SyncOrchestrator:
         except Exception as e:
             logger.warning("Post-sync command failed: %s", e)
 
-    async def _restart_systemd_service(
-        self, ctx: SyncNodeContext, node_id: str, restart: bool
-    ) -> None:
+    async def _restart_systemd_service(self, ctx: SyncNodeContext, node_id: str, restart: bool) -> None:
         """
         Restart systemd service on remote node if configured.
 
@@ -225,9 +221,7 @@ class SyncOrchestrator:
         except Exception as e:
             logger.warning("Service restart failed: %s", e)
 
-    async def _update_node_role_record(
-        self, node_id: str, role_name: str, commit: str
-    ) -> None:
+    async def _update_node_role_record(self, node_id: str, role_name: str, commit: str) -> None:
         """
         Update or create NodeRole record in database.
 
@@ -270,18 +264,14 @@ class SyncOrchestrator:
             node_ip, node_user, repo_path, and commit.
         """
         # Get active code source
-        result = await db.execute(
-            select(CodeSource).where(CodeSource.is_active == True)  # noqa: E712
-        )
+        result = await db.execute(select(CodeSource).where(CodeSource.is_active == True))  # noqa: E712
         source = result.scalar_one_or_none()
 
         if not source:
             return False, "No active code-source configured", None
 
         # Get source node info
-        node_result = await db.execute(
-            select(Node).where(Node.node_id == source.node_id)
-        )
+        node_result = await db.execute(select(Node).where(Node.node_id == source.node_id))
         node = node_result.scalar_one_or_none()
 
         if not node:
@@ -298,19 +288,13 @@ class SyncOrchestrator:
 
         return True, "OK", node_info
 
-    def _build_rsync_command(
-        self, node_ip: str, node_user: str, repo_path: str, cache_path: Path
-    ) -> list:
+    def _build_rsync_command(self, node_ip: str, node_user: str, repo_path: str, cache_path: Path) -> list:
         """
         Build rsync command for pulling code from source node.
 
         Helper for pull_from_source (Issue #665).
         """
-        ssh_opts = (
-            "ssh -o StrictHostKeyChecking=accept-new "
-            "-o UserKnownHostsFile=/dev/null "
-            "-o ConnectTimeout=30"
-        )
+        ssh_opts = "ssh -o StrictHostKeyChecking=accept-new " "-o UserKnownHostsFile=/dev/null " "-o ConnectTimeout=30"
         if Path(SSH_KEY_PATH).exists():
             ssh_opts += f" -i {SSH_KEY_PATH}"
 
@@ -336,9 +320,7 @@ class SyncOrchestrator:
             f"{cache_path}/",
         ]
 
-    async def _get_current_git_commit(
-        self, node_ip: str, node_user: str, repo_path: str
-    ) -> Optional[str]:
+    async def _get_current_git_commit(self, node_ip: str, node_user: str, repo_path: str) -> Optional[str]:
         """
         Get current git commit from source node via SSH.
 
@@ -410,9 +392,7 @@ class SyncOrchestrator:
             db: Database session
             commit: New commit hash to set
         """
-        result = await db.execute(
-            select(CodeSource).where(CodeSource.is_active == True)  # noqa: E712
-        )
+        result = await db.execute(select(CodeSource).where(CodeSource.is_active == True))  # noqa: E712
         source = result.scalar_one_or_none()
 
         if source:
@@ -429,9 +409,7 @@ class SyncOrchestrator:
     ) -> Tuple[bool, str, Optional[str]]:
         """Execute rsync to pull code to cache. Helper for pull_from_source. Ref: #1088."""
         try:
-            logger.info(
-                "Pulling code from %s to cache (commit: %s)", node_ip, commit[:12]
-            )
+            logger.info("Pulling code from %s to cache (commit: %s)", node_ip, commit[:12])
             proc = await asyncio.create_subprocess_exec(
                 *rsync_cmd,
                 stdout=asyncio.subprocess.PIPE,
@@ -531,9 +509,7 @@ class SyncOrchestrator:
             f"{cache_path}/",
         ]
 
-    async def _fetch_and_update_commit(
-        self, db: AsyncSession, node_info: dict, is_local: bool
-    ) -> str:
+    async def _fetch_and_update_commit(self, db: AsyncSession, node_info: dict, is_local: bool) -> str:
         """Fetch current commit from source and update DB if it changed. Helper for #1194."""
         if is_local:
             current_commit = await self._get_local_git_commit(node_info["repo_path"])
@@ -568,9 +544,7 @@ class SyncOrchestrator:
             is_local = self._is_local_source(node_info["node_ip"])
             if is_local:
                 # Update the git clone first, then read new HEAD (#1194)
-                ok, pull_msg = await self._git_pull_local(
-                    node_info["repo_path"], node_info["branch"]
-                )
+                ok, pull_msg = await self._git_pull_local(node_info["repo_path"], node_info["branch"])
                 if not ok:
                     return False, pull_msg, None
 
@@ -579,9 +553,7 @@ class SyncOrchestrator:
         commit = node_info["commit"]
         cache_path = self.cache_dir / commit
         if is_local:
-            rsync_cmd = self._build_local_rsync_command(
-                node_info["repo_path"], cache_path
-            )
+            rsync_cmd = self._build_local_rsync_command(node_info["repo_path"], cache_path)
         else:
             rsync_cmd = self._build_rsync_command(
                 node_info["node_ip"],
@@ -589,9 +561,7 @@ class SyncOrchestrator:
                 node_info["repo_path"],
                 cache_path,
             )
-        return await self._run_rsync(
-            rsync_cmd, commit, node_info["node_ip"], cache_path
-        )
+        return await self._run_rsync(rsync_cmd, commit, node_info["node_ip"], cache_path)
 
     async def sync_node_role(
         self,
@@ -625,9 +595,7 @@ class SyncOrchestrator:
         # Sync each source path
         ssh_opts = self._build_ssh_options(ctx.node_port)
         for source_path in ctx.source_paths:
-            success, msg = await self._rsync_source_path(
-                cache_path, source_path, ssh_opts, ctx
-            )
+            success, msg = await self._rsync_source_path(cache_path, source_path, ssh_opts, ctx)
             if not success:
                 return False, msg
 

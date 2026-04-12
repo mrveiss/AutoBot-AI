@@ -124,9 +124,7 @@ class CircuitBreaker:
             return False
         return isinstance(exception, self.config.monitored_exceptions)
 
-    def _add_call_record(
-        self, duration: float, success: bool, exception_type: str = None
-    ):
+    def _add_call_record(self, duration: float, success: bool, exception_type: str = None):
         """Add a call record to history.
 
         Note: Caller must hold self._lock when calling this method.
@@ -165,25 +163,18 @@ class CircuitBreaker:
             recent_calls = [
                 record
                 for record in self.call_history
-                if current_time - record.timestamp
-                < CircuitBreakerDefaults.RECENT_CALLS_WINDOW
+                if current_time - record.timestamp < CircuitBreakerDefaults.RECENT_CALLS_WINDOW
             ]
 
             if len(recent_calls) < self.config.min_calls_for_evaluation:
                 return False
 
             # Check slow call rate
-            slow_calls = sum(
-                1
-                for call in recent_calls
-                if call.duration > self.config.slow_call_threshold
-            )
+            slow_calls = sum(1 for call in recent_calls if call.duration > self.config.slow_call_threshold)
             slow_call_rate = slow_calls / len(recent_calls) if recent_calls else 0.0
 
             if slow_call_rate >= self.config.slow_call_rate_threshold:
-                logger.warning(
-                    f"Circuit breaker {self.name}: High slow call rate {slow_call_rate:.1%}"
-                )
+                logger.warning(f"Circuit breaker {self.name}: High slow call rate {slow_call_rate:.1%}")
                 return True
 
             return False
@@ -234,9 +225,7 @@ class CircuitBreaker:
                 )
 
                 if self.success_count >= self.config.success_threshold:
-                    logger.info(
-                        "Circuit breaker %s: Transitioning to CLOSED", self.name
-                    )
+                    logger.info("Circuit breaker %s: Transitioning to CLOSED", self.name)
                     self.state = CircuitState.CLOSED
                     self.failure_count = 0
                     self.success_count = 0
@@ -252,13 +241,9 @@ class CircuitBreaker:
         with self._lock:
             if not self._should_monitor_exception(exception):
                 # Don't count this as a circuit breaker failure
-                self._add_call_record(
-                    duration, success=False, exception_type=type(exception).__name__
-                )
+                self._add_call_record(duration, success=False, exception_type=type(exception).__name__)
                 return
-            self._add_call_record(
-                duration, success=False, exception_type=type(exception).__name__
-            )
+            self._add_call_record(duration, success=False, exception_type=type(exception).__name__)
             self.failure_count += 1
             self.last_failure_time = time.time()
 
@@ -267,15 +252,10 @@ class CircuitBreaker:
             )
 
             # Check if we should open the circuit
-            should_open = (
-                self.failure_count >= self.config.failure_threshold
-                or self._evaluate_performance()
-            )
+            should_open = self.failure_count >= self.config.failure_threshold or self._evaluate_performance()
 
             if should_open and self.state != CircuitState.OPEN:
-                logger.warning(
-                    f"Circuit breaker {self.name}: Opening circuit after {self.failure_count} failures"
-                )
+                logger.warning(f"Circuit breaker {self.name}: Opening circuit after {self.failure_count} failures")
                 self.state = CircuitState.OPEN
                 self.success_count = 0
                 self.state_change_time = time.time()
@@ -283,9 +263,7 @@ class CircuitBreaker:
 
             elif self.state == CircuitState.HALF_OPEN:
                 # Any failure in half-open state opens the circuit
-                logger.warning(
-                    f"Circuit breaker {self.name}: Opening circuit due to failure in HALF_OPEN"
-                )
+                logger.warning(f"Circuit breaker {self.name}: Opening circuit due to failure in HALF_OPEN")
                 self.state = CircuitState.OPEN
                 self.success_count = 0
                 self.state_change_time = time.time()
@@ -295,18 +273,14 @@ class CircuitBreaker:
         """Execute an async function through the circuit breaker"""
         if not self._can_execute():
             self.stats["blocked_calls"] += 1
-            raise CircuitBreakerOpenError(
-                self.name, self.failure_count, self.last_failure_time
-            )
+            raise CircuitBreakerOpenError(self.name, self.failure_count, self.last_failure_time)
 
         start_time = time.time()
 
         try:
             # Execute with timeout
             if asyncio.iscoroutinefunction(func):
-                result = await asyncio.wait_for(
-                    func(*args, **kwargs), timeout=self.config.timeout
-                )
+                result = await asyncio.wait_for(func(*args, **kwargs), timeout=self.config.timeout)
             else:
                 result = await asyncio.wait_for(
                     asyncio.to_thread(func, *args, **kwargs),
@@ -319,9 +293,7 @@ class CircuitBreaker:
 
         except asyncio.TimeoutError:
             duration = time.time() - start_time
-            timeout_error = TimeoutError(
-                f"Call to {self.name} timed out after {self.config.timeout}s"
-            )
+            timeout_error = TimeoutError(f"Call to {self.name} timed out after {self.config.timeout}s")
             self._record_failure(duration, timeout_error)
             raise timeout_error
 
@@ -334,9 +306,7 @@ class CircuitBreaker:
         """Execute a synchronous function through the circuit breaker"""
         if not self._can_execute():
             self.stats["blocked_calls"] += 1
-            raise CircuitBreakerOpenError(
-                self.name, self.failure_count, self.last_failure_time
-            )
+            raise CircuitBreakerOpenError(self.name, self.failure_count, self.last_failure_time)
 
         start_time = time.time()
 
@@ -359,9 +329,7 @@ class CircuitBreaker:
         if self.call_history:
             successful_calls = [r for r in self.call_history if r.success]
             if successful_calls:
-                avg_response_time = statistics.mean(
-                    r.duration for r in successful_calls
-                )
+                avg_response_time = statistics.mean(r.duration for r in successful_calls)
             else:
                 avg_response_time = 0.0
         else:
@@ -374,11 +342,7 @@ class CircuitBreaker:
             "state": self.state.value,
             "failure_count": self.failure_count,
             "success_count": self.success_count,
-            "time_since_last_failure": (
-                current_time - self.last_failure_time
-                if self.last_failure_time
-                else None
-            ),
+            "time_since_last_failure": (current_time - self.last_failure_time if self.last_failure_time else None),
             "time_in_current_state": current_time - self.state_change_time,
             "can_execute": self._can_execute(),
             "config": {
@@ -396,19 +360,14 @@ class CircuitBreaker:
         recent_calls = [
             record
             for record in self.call_history
-            if time.time() - record.timestamp
-            < CircuitBreakerDefaults.PERFORMANCE_WINDOW
+            if time.time() - record.timestamp < CircuitBreakerDefaults.PERFORMANCE_WINDOW
         ]
 
         if not recent_calls:
             return {"calls": 0}
 
         successful = sum(1 for call in recent_calls if call.success)
-        slow_calls = sum(
-            1
-            for call in recent_calls
-            if call.duration > self.config.slow_call_threshold
-        )
+        slow_calls = sum(1 for call in recent_calls if call.duration > self.config.slow_call_threshold)
 
         durations = [call.duration for call in recent_calls if call.success]
         avg_duration = statistics.mean(durations) if durations else 0.0
@@ -417,15 +376,9 @@ class CircuitBreaker:
         p95_duration = avg_duration
         if len(durations) >= CircuitBreakerDefaults.QUANTILE_SAMPLE_SIZE:
             try:
-                quantiles = statistics.quantiles(
-                    durations, n=CircuitBreakerDefaults.QUANTILE_SAMPLE_SIZE
-                )
-                p95_idx = (
-                    CircuitBreakerDefaults.QUANTILE_SAMPLE_SIZE - 2
-                )  # 18 for n=20 (95th percentile)
-                p95_duration = (
-                    quantiles[p95_idx] if len(quantiles) > p95_idx else avg_duration
-                )
+                quantiles = statistics.quantiles(durations, n=CircuitBreakerDefaults.QUANTILE_SAMPLE_SIZE)
+                p95_idx = CircuitBreakerDefaults.QUANTILE_SAMPLE_SIZE - 2  # 18 for n=20 (95th percentile)
+                p95_duration = quantiles[p95_idx] if len(quantiles) > p95_idx else avg_duration
             except Exception:
                 p95_duration = avg_duration
 
@@ -466,16 +419,12 @@ class CircuitBreakerManager:
         self.circuit_breakers: Dict[str, CircuitBreaker] = {}
         self._lock = Lock()
 
-    def get_circuit_breaker(
-        self, service_name: str, config: Optional[CircuitBreakerConfig] = None
-    ) -> CircuitBreaker:
+    def get_circuit_breaker(self, service_name: str, config: Optional[CircuitBreakerConfig] = None) -> CircuitBreaker:
         """Get or create a circuit breaker for a service"""
         if service_name not in self.circuit_breakers:
             with self._lock:
                 if service_name not in self.circuit_breakers:
-                    self.circuit_breakers[service_name] = CircuitBreaker(
-                        service_name, config
-                    )
+                    self.circuit_breakers[service_name] = CircuitBreaker(service_name, config)
 
         return self.circuit_breakers[service_name]
 
@@ -530,9 +479,7 @@ def circuit_breaker_async(
         if monitored_exceptions:
             config.monitored_exceptions = monitored_exceptions
 
-        circuit_breaker = circuit_breaker_manager.get_circuit_breaker(
-            service_name, config
-        )
+        circuit_breaker = circuit_breaker_manager.get_circuit_breaker(service_name, config)
 
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -577,9 +524,7 @@ def circuit_breaker_sync(
         if monitored_exceptions:
             config.monitored_exceptions = monitored_exceptions
 
-        circuit_breaker = circuit_breaker_manager.get_circuit_breaker(
-            service_name, config
-        )
+        circuit_breaker = circuit_breaker_manager.get_circuit_breaker(service_name, config)
 
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -618,9 +563,7 @@ async def protected_database_call(func: Callable, *args, **kwargs) -> Any:
         monitored_exceptions=(ConnectionError, TimeoutError, OSError),
     )
 
-    circuit_breaker = circuit_breaker_manager.get_circuit_breaker(
-        "database_service", config
-    )
+    circuit_breaker = circuit_breaker_manager.get_circuit_breaker("database_service", config)
     return await circuit_breaker.call_async(func, *args, **kwargs)
 
 
@@ -634,9 +577,7 @@ async def protected_network_call(func: Callable, *args, **kwargs) -> Any:
         monitored_exceptions=(ConnectionError, TimeoutError, OSError),
     )
 
-    circuit_breaker = circuit_breaker_manager.get_circuit_breaker(
-        "network_service", config
-    )
+    circuit_breaker = circuit_breaker_manager.get_circuit_breaker("network_service", config)
     return await circuit_breaker.call_async(func, *args, **kwargs)
 
 
@@ -646,9 +587,7 @@ if __name__ == "__main__":
         """Example usage of circuit breaker"""
 
         # Example 1: Using decorator
-        @circuit_breaker_async(
-            "flaky_service", failure_threshold=3, recovery_timeout=5.0
-        )
+        @circuit_breaker_async("flaky_service", failure_threshold=3, recovery_timeout=5.0)
         async def flaky_service_call():
             """Example flaky service that fails 60% of the time."""
             import random
@@ -670,9 +609,7 @@ if __name__ == "__main__":
         # Check circuit breaker state
         cb_state = flaky_service_call.circuit_breaker.get_state()
         print(f"\\nCircuit breaker state: {cb_state['state']}")  # noqa: print
-        print(  # noqa: print
-            f"Success rate: {cb_state['recent_performance'].get('success_rate', 0):.1%}"
-        )
+        print(f"Success rate: {cb_state['recent_performance'].get('success_rate', 0):.1%}")  # noqa: print
 
     # Run example
     asyncio.run(example_usage())

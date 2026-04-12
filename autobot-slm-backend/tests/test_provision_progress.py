@@ -156,9 +156,7 @@ class TestTaskProgressTracker:
         async def callback(progress: dict) -> None:
             received.append(progress)
 
-        tracker = TaskProgressTracker(
-            "ollama pull llama3", callback, heartbeat_interval=1
-        )
+        tracker = TaskProgressTracker("ollama pull llama3", callback, heartbeat_interval=1)
         async with tracker:
             await asyncio.sleep(1.5)
 
@@ -215,9 +213,7 @@ class TestTaskProgressTracker:
         count_on_exit = len(received)
         await asyncio.sleep(1.5)  # Wait another interval after exit
 
-        assert (
-            len(received) == count_on_exit
-        ), "Heartbeats continued after context manager exited"
+        assert len(received) == count_on_exit, "Heartbeats continued after context manager exited"
 
     @pytest.mark.asyncio
     async def test_callback_exception_does_not_crash_tracker(self):
@@ -229,9 +225,7 @@ class TestTaskProgressTracker:
             call_count += 1
             raise ValueError("simulated callback failure")
 
-        tracker = TaskProgressTracker(
-            "pip install torch", bad_callback, heartbeat_interval=1
-        )
+        tracker = TaskProgressTracker("pip install torch", bad_callback, heartbeat_interval=1)
         async with tracker:
             await asyncio.sleep(2.5)
 
@@ -246,12 +240,8 @@ class TestTaskProgressTracker:
         async def callback(progress: dict) -> None:
             received.append(progress)
 
-        tracker = TaskProgressTracker(
-            "docker pull ubuntu", callback, heartbeat_interval=1
-        )
+        tracker = TaskProgressTracker("docker pull ubuntu", callback, heartbeat_interval=1)
         async with tracker:
             await asyncio.sleep(3.5)
 
-        assert (
-            len(received) >= 3
-        ), f"Expected at least 3 heartbeats, got {len(received)}"
+        assert len(received) >= 3, f"Expected at least 3 heartbeats, got {len(received)}"

@@ -44,10 +44,10 @@ from autobot_memory_graph.property_graph import (  # noqa: E402
     _prop_index_key,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fake Redis store
 # ---------------------------------------------------------------------------
+
 
 class FakeRedis:
     """Minimal in-memory async Redis mock with the operations used by PropertyGraph."""
@@ -133,8 +133,7 @@ class FakeRedis:
             stop = len(sorted_members)
         else:
             stop += 1
-        return [m.encode("utf-8") if isinstance(m, str) else m
-                for m in sorted_members[start:stop]]
+        return [m.encode("utf-8") if isinstance(m, str) else m for m in sorted_members[start:stop]]
 
     # ---- generic ----
 

@@ -27,9 +27,7 @@ from services.neural_mesh.query_decomposer import (
 def _make_retrieval_result(chunks: list[dict] | None = None):
     """Return a MagicMock that mimics MeshRetrievalResult with .chunks."""
     result = MagicMock()
-    result.chunks = chunks or [
-        {"chunk_id": "c1", "content": "evidence text", "score": 0.9}
-    ]
+    result.chunks = chunks or [{"chunk_id": "c1", "content": "evidence text", "score": 0.9}]
     return result
 
 
@@ -44,17 +42,11 @@ def _make_decomposer(
             {"step": 2, "query": "sub-query two", "depends_on": [1]},
         ]
     )
-    llm = AsyncMock(
-        return_value=llm_response if llm_response is not None else default_steps
-    )
+    llm = AsyncMock(return_value=llm_response if llm_response is not None else default_steps)
 
     retriever = AsyncMock()
     retriever.retrieve = AsyncMock(
-        return_value=(
-            retrieval_result
-            if retrieval_result is not None
-            else _make_retrieval_result()
-        )
+        return_value=(retrieval_result if retrieval_result is not None else _make_retrieval_result())
     )
 
     return QueryDecomposer(llm=llm, mesh_retriever=retriever)
@@ -186,9 +178,7 @@ class TestExecute:
             {"chunk_id": "a", "content": "alpha", "score": 0.9},
             {"chunk_id": "b", "content": "beta", "score": 0.7},
         ]
-        decomposer = _make_decomposer(
-            retrieval_result=_make_retrieval_result(chunks=chunks)
-        )
+        decomposer = _make_decomposer(retrieval_result=_make_retrieval_result(chunks=chunks))
 
         plan = DecompositionPlan(
             original_query="single step",
@@ -206,9 +196,7 @@ class TestExecute:
     async def test_execute_returns_one_result_per_step(self):
         """execute() returns a StepResult list of the same length as plan.steps."""
         decomposer = _make_decomposer()
-        steps = [
-            DecompositionStep(step=i, query=f"q{i}", depends_on=[]) for i in range(1, 5)
-        ]
+        steps = [DecompositionStep(step=i, query=f"q{i}", depends_on=[]) for i in range(1, 5)]
         plan = DecompositionPlan(original_query="four step plan", steps=steps)
 
         results = await decomposer.execute(plan)
@@ -229,8 +217,5 @@ class TestExecute:
         await decomposer.execute(plan)
 
         call_kwargs = decomposer.mesh_retriever.retrieve.call_args.kwargs
-        query_sent = (
-            call_kwargs.get("query")
-            or decomposer.mesh_retriever.retrieve.call_args.args[0]
-        )
+        query_sent = call_kwargs.get("query") or decomposer.mesh_retriever.retrieve.call_args.args[0]
         assert query_sent == "standalone query"

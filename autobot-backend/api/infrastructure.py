@@ -57,12 +57,8 @@ def _load_secrets_hosts() -> List[Dict[str, Any]]:
 
 @router.get("/hosts")
 async def get_infrastructure_hosts(
-    capability: Optional[str] = Query(
-        None, description="Filter by capability (ssh, vnc)"
-    ),
-    chat_id: Optional[str] = Query(
-        None, description="Associated chat session (unused, for context)"
-    ),
+    capability: Optional[str] = Query(None, description="Filter by capability (ssh, vnc)"),
+    chat_id: Optional[str] = Query(None, description="Associated chat session (unused, for context)"),
     _user: Any = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Return user-configured hosts from secrets, filtered by capability.

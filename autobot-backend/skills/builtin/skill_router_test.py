@@ -124,9 +124,7 @@ def test_llm_rerank_parses_json_response():
 def test_llm_rerank_handles_markdown_code_block():
     """_llm_rerank should extract JSON from ```json ... ``` blocks."""
     mock_response = MagicMock()
-    mock_response.content = (
-        '```json\n{"skill": "code-review", "reason": "code task"}\n```'
-    )
+    mock_response.content = '```json\n{"skill": "code-review", "reason": "code task"}\n```'
     mock_response.error = None
 
     candidates = [
@@ -158,23 +156,20 @@ def test_find_skill_enables_best_match_via_llm():
             ["document", "pdf"],
             ["analyze_doc"],
         ),
-        _make_skill_dict(
-            "browser-automation", "Automate browser", ["browser", "web"], ["browse"]
-        ),
+        _make_skill_dict("browser-automation", "Automate browser", ["browser", "web"], ["browse"]),
     ]
     mock_registry.enable_skill.return_value = {"success": True}
 
-    with patch(
-        "skills.builtin.skill_router.get_skill_registry", return_value=mock_registry
-    ), patch("skills.builtin.skill_router.LLMInterface") as MockLLM:
+    with (
+        patch("skills.builtin.skill_router.get_skill_registry", return_value=mock_registry),
+        patch("skills.builtin.skill_router.LLMInterface") as MockLLM,
+    ):
         instance = MockLLM.return_value
         instance.chat_completion = AsyncMock(return_value=mock_llm_response)
 
         skill = SkillRouterSkill()
         skill.apply_config({"top_k": 5, "auto_enable": True})
-        result = asyncio.run(
-            skill.execute("find_skill", {"task": "analyze this pdf document"})
-        )
+        result = asyncio.run(skill.execute("find_skill", {"task": "analyze this pdf document"}))
 
     assert result["success"] is True
     assert result["enabled_skill"] == "document-analysis"
@@ -194,23 +189,20 @@ def test_find_skill_falls_back_to_keyword_on_llm_error():
             ["document", "pdf"],
             ["analyze_doc"],
         ),
-        _make_skill_dict(
-            "browser-automation", "Automate browser", ["browser"], ["browse"]
-        ),
+        _make_skill_dict("browser-automation", "Automate browser", ["browser"], ["browse"]),
     ]
     mock_registry.enable_skill.return_value = {"success": True}
 
-    with patch(
-        "skills.builtin.skill_router.get_skill_registry", return_value=mock_registry
-    ), patch("skills.builtin.skill_router.LLMInterface") as MockLLM:
+    with (
+        patch("skills.builtin.skill_router.get_skill_registry", return_value=mock_registry),
+        patch("skills.builtin.skill_router.LLMInterface") as MockLLM,
+    ):
         instance = MockLLM.return_value
         instance.chat_completion = AsyncMock(side_effect=Exception("LLM timeout"))
 
         skill = SkillRouterSkill()
         skill.apply_config({"top_k": 5, "auto_enable": True})
-        result = asyncio.run(
-            skill.execute("find_skill", {"task": "analyze this pdf document"})
-        )
+        result = asyncio.run(skill.execute("find_skill", {"task": "analyze this pdf document"}))
 
     assert result["success"] is True
     assert result["enabled_skill"] == "document-analysis"
@@ -233,17 +225,16 @@ def test_find_skill_dry_run_does_not_enable():
         ),
     ]
 
-    with patch(
-        "skills.builtin.skill_router.get_skill_registry", return_value=mock_registry
-    ), patch("skills.builtin.skill_router.LLMInterface") as MockLLM:
+    with (
+        patch("skills.builtin.skill_router.get_skill_registry", return_value=mock_registry),
+        patch("skills.builtin.skill_router.LLMInterface") as MockLLM,
+    ):
         instance = MockLLM.return_value
         instance.chat_completion = AsyncMock(return_value=mock_llm_response)
 
         skill = SkillRouterSkill()
         skill.apply_config({"top_k": 5, "auto_enable": True})
-        result = asyncio.run(
-            skill.execute("find_skill", {"task": "analyze pdf", "dry_run": True})
-        )
+        result = asyncio.run(skill.execute("find_skill", {"task": "analyze pdf", "dry_run": True}))
 
     assert result["success"] is True
     mock_registry.enable_skill.assert_not_called()
@@ -263,9 +254,7 @@ def test_find_skill_no_skills_registered():
     mock_registry.list_skills.return_value = []
     mock_registry.get.return_value = None  # autonomous-skill-development not found
 
-    with patch(
-        "skills.builtin.skill_router.get_skill_registry", return_value=mock_registry
-    ):
+    with patch("skills.builtin.skill_router.get_skill_registry", return_value=mock_registry):
         skill = SkillRouterSkill()
         result = asyncio.run(skill.execute("find_skill", {"task": "do something"}))
 
@@ -294,18 +283,12 @@ def test_find_skill_no_match_delegates_to_autonomous():
         ),
     ]
     # skill-researcher not registered; autonomous-skill-development is
-    mock_registry.get.side_effect = lambda name: (
-        None if name == "skill-researcher" else mock_build_skill
-    )
+    mock_registry.get.side_effect = lambda name: (None if name == "skill-researcher" else mock_build_skill)
 
-    with patch(
-        "skills.builtin.skill_router.get_skill_registry", return_value=mock_registry
-    ):
+    with patch("skills.builtin.skill_router.get_skill_registry", return_value=mock_registry):
         skill = SkillRouterSkill()
         skill.apply_config({"top_k": 5, "auto_enable": True})
-        result = asyncio.run(
-            skill.execute("find_skill", {"task": "transcribe this audio file"})
-        )
+        result = asyncio.run(skill.execute("find_skill", {"task": "transcribe this audio file"}))
 
     assert result["success"] is True
     assert result["build_triggered"] is True
@@ -335,33 +318,22 @@ def test_find_skill_no_match_uses_research_context():
         }
     )
     mock_build_skill = MagicMock()
-    mock_build_skill.execute = AsyncMock(
-        return_value={"success": True, "state": "pending_approval"}
-    )
+    mock_build_skill.execute = AsyncMock(return_value={"success": True, "state": "pending_approval"})
     mock_registry = MagicMock()
     mock_registry.list_skills.return_value = []
-    mock_registry.get.side_effect = lambda name: (
-        mock_researcher if name == "skill-researcher" else mock_build_skill
-    )
+    mock_registry.get.side_effect = lambda name: (mock_researcher if name == "skill-researcher" else mock_build_skill)
 
-    with patch(
-        "skills.builtin.skill_router.get_skill_registry", return_value=mock_registry
-    ):
+    with patch("skills.builtin.skill_router.get_skill_registry", return_value=mock_registry):
         skill = SkillRouterSkill()
         skill.apply_config({"top_k": 5, "auto_enable": True})
-        result = asyncio.run(
-            skill.execute("find_skill", {"task": "voice transcription"})
-        )
+        result = asyncio.run(skill.execute("find_skill", {"task": "voice transcription"}))
 
     assert result["success"] is True
     assert result["research_performed"] is True
     # capability must be enriched with implementation hints
     call_args = mock_build_skill.execute.call_args[0][0]
     assert "faster-whisper" in call_args["capability"]
-    assert (
-        call_args["context"].get("implementation_hints")
-        == "Use faster-whisper for speed"
-    )
+    assert call_args["context"].get("implementation_hints") == "Use faster-whisper for speed"
 
 
 def test_find_skill_no_match_dry_run_skips_build():
@@ -369,14 +341,10 @@ def test_find_skill_no_match_dry_run_skips_build():
     mock_registry = MagicMock()
     mock_registry.list_skills.return_value = []
 
-    with patch(
-        "skills.builtin.skill_router.get_skill_registry", return_value=mock_registry
-    ):
+    with patch("skills.builtin.skill_router.get_skill_registry", return_value=mock_registry):
         skill = SkillRouterSkill()
         skill.apply_config({"top_k": 5, "auto_enable": True})
-        result = asyncio.run(
-            skill.execute("find_skill", {"task": "transcribe audio", "dry_run": True})
-        )
+        result = asyncio.run(skill.execute("find_skill", {"task": "transcribe audio", "dry_run": True}))
 
     assert result["success"] is True
     assert result["dry_run"] is True

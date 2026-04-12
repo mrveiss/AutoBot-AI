@@ -201,9 +201,7 @@ class LogPatternMiner:
         patterns.sort(key=lambda p: p.occurrences, reverse=True)
         return patterns
 
-    def _collect_pattern_data(
-        self, log_lines: List[Tuple[str, str, str]]
-    ) -> Dict[str, Dict]:
+    def _collect_pattern_data(self, log_lines: List[Tuple[str, str, str]]) -> Dict[str, Dict]:
         """Collect pattern data from log lines (Issue #665: extracted helper)."""
         pattern_data: Dict[str, Dict] = defaultdict(
             lambda: {
@@ -258,14 +256,10 @@ class LogPatternMiner:
             pattern_template=data.get("template", "Unknown"),
             occurrences=data["occurrences"],
             first_seen=(
-                data["first_seen"].isoformat()
-                if data["first_seen"]
-                else datetime.now(tz=timezone.utc).isoformat()
+                data["first_seen"].isoformat() if data["first_seen"] else datetime.now(tz=timezone.utc).isoformat()
             ),
             last_seen=(
-                data["last_seen"].isoformat()
-                if data["last_seen"]
-                else datetime.now(tz=timezone.utc).isoformat()
+                data["last_seen"].isoformat() if data["last_seen"] else datetime.now(tz=timezone.utc).isoformat()
             ),
             log_levels=list(data["levels"]),
             sources=list(data["sources"]),
@@ -335,9 +329,7 @@ class LogPatternMiner:
                         severity="high" if count > avg_errors * 5 else "medium",
                         description=f"Error spike detected: {count} errors vs {avg_errors:.1f} average",
                         timestamp=hour,
-                        affected_sources=list(
-                            set(s for lines in hourly_counts.values() for s in lines)
-                        ),
+                        affected_sources=list(set(s for lines in hourly_counts.values() for s in lines)),
                         metric_before=avg_errors,
                         metric_after=float(count),
                         confidence=min(0.95, 0.5 + (count / avg_errors) * 0.1),
@@ -420,9 +412,7 @@ class LogPatternMiner:
                 )
         return anomalies
 
-    def detect_anomalies(
-        self, log_lines: List[Tuple[str, str, str]], patterns: List[LogPattern]
-    ) -> List[LogAnomaly]:
+    def detect_anomalies(self, log_lines: List[Tuple[str, str, str]], patterns: List[LogPattern]) -> List[LogAnomaly]:
         """
         Detect anomalies in log data.
 
@@ -500,15 +490,11 @@ class LogPatternMiner:
 
         return (direction, round(change, 1))
 
-    def _build_hourly_log_data(
-        self, log_lines: List[Tuple[str, str, str]]
-    ) -> Dict[str, Dict[str, int]]:
+    def _build_hourly_log_data(self, log_lines: List[Tuple[str, str, str]]) -> Dict[str, Dict[str, int]]:
         """
         Group log lines by hour with counts (Issue #665: extracted helper).
         """
-        hourly_data: Dict[str, Dict[str, int]] = defaultdict(
-            lambda: {"total": 0, "errors": 0, "warnings": 0}
-        )
+        hourly_data: Dict[str, Dict[str, int]] = defaultdict(lambda: {"total": 0, "errors": 0, "warnings": 0})
         for line, source, _ in log_lines:
             ts = self.extract_timestamp(line)
             if ts:
@@ -521,48 +507,34 @@ class LogPatternMiner:
                     hourly_data[hour_key]["warnings"] += 1
         return hourly_data
 
-    def _build_volume_trend(
-        self, hourly_data: Dict[str, Dict[str, int]], hours: List[str]
-    ) -> Optional[LogTrend]:
+    def _build_volume_trend(self, hourly_data: Dict[str, Dict[str, int]], hours: List[str]) -> Optional[LogTrend]:
         """
         Build log volume trend (Issue #665: extracted helper).
         """
         totals = [float(hourly_data[h]["total"]) for h in hours]
         if not totals:
             return None
-        direction, change = self._calculate_trend_direction(
-            totals, change_threshold=10.0
-        )
+        direction, change = self._calculate_trend_direction(totals, change_threshold=10.0)
         return LogTrend(
             trend_id="log_volume",
             metric_name="Total Log Volume",
             direction=direction,
             change_percent=change,
             time_period=f"{hours[0]} to {hours[-1]}",
-            data_points=[
-                {"hour": h, "count": hourly_data[h]["total"]} for h in hours[-24:]
-            ],
+            data_points=[{"hour": h, "count": hourly_data[h]["total"]} for h in hours[-24:]],
         )
 
-    def _build_error_rate_trend(
-        self, hourly_data: Dict[str, Dict[str, int]], hours: List[str]
-    ) -> Optional[LogTrend]:
+    def _build_error_rate_trend(self, hourly_data: Dict[str, Dict[str, int]], hours: List[str]) -> Optional[LogTrend]:
         """
         Build error rate trend (Issue #665: extracted helper).
         """
         error_rates = [
-            (
-                hourly_data[h]["errors"] / hourly_data[h]["total"] * 100
-                if hourly_data[h]["total"] > 0
-                else 0.0
-            )
+            (hourly_data[h]["errors"] / hourly_data[h]["total"] * 100 if hourly_data[h]["total"] > 0 else 0.0)
             for h in hours
         ]
         if not error_rates:
             return None
-        direction, change = self._calculate_trend_direction(
-            error_rates, change_threshold=20.0
-        )
+        direction, change = self._calculate_trend_direction(error_rates, change_threshold=20.0)
         return LogTrend(
             trend_id="error_rate",
             metric_name="Error Rate",
@@ -666,9 +638,7 @@ async def _read_log_lines(
     return result
 
 
-def _should_include_log_line(
-    line: str, cutoff_time: Optional[datetime], pattern_filter: Optional[str]
-) -> bool:
+def _should_include_log_line(line: str, cutoff_time: Optional[datetime], pattern_filter: Optional[str]) -> bool:
     """Check if a log line should be included. (Issue #315 - extracted)"""
     if not line.strip():
         return False
@@ -731,9 +701,7 @@ async def _collect_all_log_lines(
     # Issue #358 - avoid blocking with lambda for proper glob() execution in thread
     log_files = await asyncio.to_thread(lambda: list(log_dir.glob("*.log")))
     for file_path in log_files:
-        file_lines = await _read_log_lines_with_source(
-            file_path, cutoff_time, source_filter, pattern_filter
-        )
+        file_lines = await _read_log_lines_with_source(file_path, cutoff_time, source_filter, pattern_filter)
         all_lines.extend(file_lines)
 
     return all_lines
@@ -834,9 +802,7 @@ def _build_mining_summary(
 async def mine_log_patterns(
     sources: Optional[str] = Query(None, description="Comma-separated log sources"),
     hours: int = Query(24, ge=1, le=168, description="Hours of logs to analyze"),
-    min_occurrences: int = Query(
-        2, ge=1, le=100, description="Minimum pattern occurrences"
-    ),
+    min_occurrences: int = Query(2, ge=1, le=100, description="Minimum pattern occurrences"),
     include_anomalies: bool = Query(True, description="Include anomaly detection"),
     include_trends: bool = Query(True, description="Include trend analysis"),
     admin_check: bool = Depends(check_admin_permission),
@@ -861,19 +827,13 @@ async def mine_log_patterns(
         log_lines = await _collect_all_log_lines(LOG_DIR, cutoff_time, source_filter)
 
         if not log_lines:
-            return _build_empty_mining_result(
-                round((time.time() - start_time) * 1000, 2)
-            )
+            return _build_empty_mining_result(round((time.time() - start_time) * 1000, 2))
 
         # Mine patterns
         patterns = await pattern_miner.mine_patterns(log_lines, min_occurrences)
 
         # Detect anomalies
-        anomalies = (
-            pattern_miner.detect_anomalies(log_lines, patterns)
-            if include_anomalies
-            else []
-        )
+        anomalies = pattern_miner.detect_anomalies(log_lines, patterns) if include_anomalies else []
 
         # Analyze trends
         trends = pattern_miner.analyze_trends(log_lines) if include_trends else []
@@ -935,14 +895,10 @@ async def get_pattern_details(
         cutoff_time = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
 
         # Use extracted helper with pattern filter (Issue #315)
-        log_lines = await _collect_all_log_lines(
-            LOG_DIR, cutoff_time, pattern_filter=pattern_id
-        )
+        log_lines = await _collect_all_log_lines(LOG_DIR, cutoff_time, pattern_filter=pattern_id)
 
         if not log_lines:
-            raise HTTPException(
-                status_code=404, detail=f"Pattern '{pattern_id}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Pattern '{pattern_id}' not found")
 
         # Analyze matching lines using extracted helper
         timestamps, levels, sources, hourly_dist = _analyze_pattern_lines(log_lines)
@@ -981,9 +937,7 @@ async def get_error_hotspots(
     Issue #744: Requires admin authentication.
     """
     try:
-        hourly_errors: Dict[str, Dict] = defaultdict(
-            lambda: {"errors": 0, "total": 0, "samples": []}
-        )
+        hourly_errors: Dict[str, Dict] = defaultdict(lambda: {"errors": 0, "total": 0, "samples": []})
         cutoff_time = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
 
         log_files = await _collect_log_files(LOG_DIR)
@@ -1064,9 +1018,7 @@ async def get_log_stats(
         log_lines = await _collect_all_log_lines(LOG_DIR, cutoff_time)
 
         # Aggregate stats using extracted helper
-        total, by_level, by_source, by_hour, timestamps = _aggregate_log_stats(
-            log_lines
-        )
+        total, by_level, by_source, by_hour, timestamps = _aggregate_log_stats(log_lines)
 
         earliest = min(timestamps).isoformat() if timestamps else None
         latest = max(timestamps).isoformat() if timestamps else None
@@ -1119,11 +1071,8 @@ async def get_realtime_summary(
         return {
             "logs_last_5min": len(recent_logs),
             "level_counts": dict(level_counts),
-            "error_count": level_counts.get("ERROR", 0)
-            + level_counts.get("CRITICAL", 0),
-            "recent_errors": [
-                log for log in recent_logs if log["level"] in ERROR_LEVELS  # Issue #326
-            ][:10],
+            "error_count": level_counts.get("ERROR", 0) + level_counts.get("CRITICAL", 0),
+            "recent_errors": [log for log in recent_logs if log["level"] in ERROR_LEVELS][:10],  # Issue #326
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 

@@ -130,17 +130,14 @@ class EntityMapping:
             entity_type=primary.entity_type,
             aliases=primary.aliases.union(secondary.aliases),
             mentions=primary.mentions + secondary.mentions,
-            confidence_score=(primary.confidence_score + secondary.confidence_score)
-            / 2,
+            confidence_score=(primary.confidence_score + secondary.confidence_score) / 2,
             validation_status="pending",  # Reset validation status
             related_entities=primary.related_entities.union(secondary.related_entities),
             parent_entity=primary.parent_entity or secondary.parent_entity,
             child_entities=primary.child_entities.union(secondary.child_entities),
             sources=primary.sources.union(secondary.sources),
             contexts=primary.contexts + secondary.contexts,
-            creation_timestamp=min(
-                primary.creation_timestamp, secondary.creation_timestamp
-            ),
+            creation_timestamp=min(primary.creation_timestamp, secondary.creation_timestamp),
             last_updated=datetime.now(tz=timezone.utc),
             created_by="entity_resolution_merge",
             mention_count=primary.mention_count + secondary.mention_count,
@@ -268,9 +265,7 @@ class EntityResolutionResult:
         self.total_canonical = len(self.canonical_entities)
 
         if self.total_original > 0:
-            self.resolution_rate = (
-                (self.total_original - self.total_canonical) / self.total_original * 100
-            )
+            self.resolution_rate = (self.total_original - self.total_canonical) / self.total_original * 100
 
         # Calculate confidence distribution
         for mapping in self.canonical_entities:

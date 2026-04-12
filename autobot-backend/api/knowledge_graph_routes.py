@@ -117,9 +117,7 @@ async def list_entities(
         from autobot_shared.redis_client import get_async_redis_client
 
         redis_client = await get_async_redis_client(database="knowledge")
-        entities = await _list_entities_from_redis(
-            redis_client, entity_type, query, limit
-        )
+        entities = await _list_entities_from_redis(redis_client, entity_type, query, limit)
         return {"entities": entities, "total": len(entities)}
 
     except Exception as e:
@@ -139,9 +137,7 @@ async def get_entity_relationships(
         from autobot_shared.redis_client import get_async_redis_client
 
         redis_client = await get_async_redis_client(database="knowledge")
-        relationships = await _get_relationships_from_redis(
-            redis_client, entity_id, relationship_type, limit
-        )
+        relationships = await _get_relationships_from_redis(redis_client, entity_id, relationship_type, limit)
         return {
             "entity_id": entity_id,
             "relationships": relationships,
@@ -177,9 +173,7 @@ async def search_events(
 
         start = datetime.fromisoformat(start_date) if start_date else datetime.min
         end = datetime.fromisoformat(end_date) if end_date else datetime.now(tz=timezone.utc)
-        types_list = (
-            [t.strip() for t in event_types.split(",")] if event_types else None
-        )
+        types_list = [t.strip() for t in event_types.split(",")] if event_types else None
 
         events = await temporal_svc.search_events_in_range(
             start_date=start,
@@ -210,9 +204,7 @@ async def get_event_timeline(
         redis_client = await get_async_redis_client(database="knowledge")
         temporal_svc = TemporalSearchService(redis_client)
 
-        events = await temporal_svc.get_event_timeline(
-            entity_name=entity_name, limit=limit
-        )
+        events = await temporal_svc.get_event_timeline(entity_name=entity_name, limit=limit)
         return {
             "entity_name": entity_name,
             "events": events,
@@ -245,9 +237,7 @@ async def search_summaries(
         chromadb_client = await get_async_chromadb_client()
         summary_svc = SummarySearchService(chromadb_client)
 
-        summaries = await summary_svc.search_summaries(
-            query=query, level=level, top_k=top_k
-        )
+        summaries = await summary_svc.search_summaries(query=query, level=level, top_k=top_k)
         return {"summaries": summaries, "total": len(summaries)}
 
     except Exception as e:
@@ -340,9 +330,7 @@ async def _list_entities_from_redis(redis_client, entity_type, query, limit) -> 
     return entities
 
 
-async def _get_relationships_from_redis(
-    redis_client, entity_id, relationship_type, limit
-) -> list:
+async def _get_relationships_from_redis(redis_client, entity_id, relationship_type, limit) -> list:
     """Get relationships for an entity from Redis.
 
     Helper for get_entity_relationships endpoint (#759).
@@ -356,10 +344,7 @@ async def _get_relationships_from_redis(
             rel_data = await redis_client.json().get(f"relationship:{rel_id}")
             if not rel_data:
                 continue
-            if (
-                relationship_type
-                and rel_data.get("relationship_type") != relationship_type
-            ):
+            if relationship_type and rel_data.get("relationship_type") != relationship_type:
                 continue
             relationships.append(rel_data)
     except Exception as e:

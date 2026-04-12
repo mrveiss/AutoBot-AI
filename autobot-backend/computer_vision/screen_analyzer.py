@@ -83,9 +83,7 @@ class ScreenAnalyzer:
 
         logger.info("Screen Analyzer initialized with multi-modal processing")
 
-    def _build_analysis_outputs(
-        self, ui_elements: List[UIElement], screen_state: ScreenState
-    ) -> Dict[str, Any]:
+    def _build_analysis_outputs(self, ui_elements: List[UIElement], screen_state: ScreenState) -> Dict[str, Any]:
         """
         Build output dictionary for task tracking.
 
@@ -117,9 +115,7 @@ class ScreenAnalyzer:
         )
 
         # Stage 3: Detect and analyze UI elements
-        ui_elements = await self._detect_and_classify_elements(
-            screenshot, primary_result.result_data or {}
-        )
+        ui_elements = await self._detect_and_classify_elements(screenshot, primary_result.result_data or {})
 
         # Stage 4: Context analysis
         context_analysis = await self._build_context_analysis(
@@ -157,13 +153,9 @@ class ScreenAnalyzer:
             inputs={"session_id": session_id},
         ) as task_context:
             try:
-                screen_state, ui_elements = await self._perform_screen_analysis(
-                    session_id, context_audio
-                )
+                screen_state, ui_elements = await self._perform_screen_analysis(session_id, context_audio)
 
-                task_context.set_outputs(
-                    self._build_analysis_outputs(ui_elements, screen_state)
-                )
+                task_context.set_outputs(self._build_analysis_outputs(ui_elements, screen_state))
                 logger.info(
                     "Screen analysis completed: %d elements, confidence %.2f",
                     len(ui_elements),
@@ -197,16 +189,11 @@ class ScreenAnalyzer:
         # Combine results if multi-modal
         primary_result = processing_results[0]
         if len(processing_results) > 1:
-            primary_result = (
-                await self._combine_multimodal_results(processing_results, session_id)
-                or primary_result
-            )
+            primary_result = await self._combine_multimodal_results(processing_results, session_id) or primary_result
 
         return processing_results, primary_result
 
-    def _create_image_input(
-        self, screenshot: np.ndarray, session_id: Optional[str]
-    ) -> MultiModalInput:
+    def _create_image_input(self, screenshot: np.ndarray, session_id: Optional[str]) -> MultiModalInput:
         """Create image input for multimodal processing. Issue #281: Extracted helper."""
         return MultiModalInput(
             input_id=f"screen_vision_{int(time.time())}",
@@ -216,9 +203,7 @@ class ScreenAnalyzer:
             metadata={"session_id": session_id},
         )
 
-    def _create_audio_input(
-        self, context_audio: bytes, session_id: Optional[str]
-    ) -> MultiModalInput:
+    def _create_audio_input(self, context_audio: bytes, session_id: Optional[str]) -> MultiModalInput:
         """Create audio input for multimodal processing. Issue #281: Extracted helper."""
         return MultiModalInput(
             input_id=f"screen_audio_{int(time.time())}",
@@ -254,9 +239,7 @@ class ScreenAnalyzer:
         primary_result: Any,
     ) -> Dict[str, Any]:
         """Build context analysis with multimodal understanding. Issue #281: Extracted helper."""
-        context_analysis = await self.context_analyzer.analyze_context(
-            screenshot, ui_elements
-        )
+        context_analysis = await self.context_analyzer.analyze_context(screenshot, ui_elements)
 
         # Add multi-modal context if available
         if len(processing_results) > 1 and processing_results[1].result_data:
@@ -277,21 +260,15 @@ class ScreenAnalyzer:
     ) -> ScreenState:
         """Build comprehensive screen state object. Issue #281: Extracted helper."""
         extractor = ProcessingResultExtractor()
-        automation_opportunities = UIElementCollection(
-            ui_elements
-        ).find_automation_opportunities(context_analysis)
+        automation_opportunities = UIElementCollection(ui_elements).find_automation_opportunities(context_analysis)
 
         return ScreenState(
             timestamp=time.time(),
             screenshot=screenshot,
             ui_elements=ui_elements,
             text_regions=extractor.extract_text_regions(primary_result.result_data),
-            dominant_colors=extractor.extract_dominant_colors(
-                primary_result.result_data
-            ),
-            layout_structure=extractor.extract_layout_structure(
-                primary_result.result_data
-            ),
+            dominant_colors=extractor.extract_dominant_colors(primary_result.result_data),
+            layout_structure=extractor.extract_layout_structure(primary_result.result_data),
             automation_opportunities=automation_opportunities,
             context_analysis=context_analysis,
             confidence_score=max(r.confidence for r in processing_results),
@@ -357,9 +334,7 @@ class ScreenAnalyzer:
         )
         return test_image
 
-    async def _capture_screenshot(
-        self, session_id: Optional[str] = None
-    ) -> Optional[np.ndarray]:
+    async def _capture_screenshot(self, session_id: Optional[str] = None) -> Optional[np.ndarray]:
         """Capture screenshot from desktop streaming or system"""
         try:
             # Try session-based capture first
@@ -424,9 +399,7 @@ class ScreenAnalyzer:
         )
 
         # Classify element type
-        element_type = await self.element_classifier.classify_element(
-            element_region, bbox
-        )
+        element_type = await self.element_classifier.classify_element(element_region, bbox)
 
         # Determine possible interactions
         interactions = self._determine_interactions(element_type, element_region)
@@ -452,9 +425,7 @@ class ScreenAnalyzer:
             ocr_data=None,
         )
 
-    async def _process_template_matches(
-        self, screenshot: np.ndarray
-    ) -> List[UIElement]:
+    async def _process_template_matches(self, screenshot: np.ndarray) -> List[UIElement]:
         """Process template matching results (Issue #665: extracted helper)."""
         template_elements = []
         template_matches = await self.template_matcher.find_common_elements(screenshot)
@@ -555,20 +526,14 @@ class ScreenAnalyzer:
                 "difference_score": float(diff_score),
                 "threshold": threshold,
                 "timestamp": self.screenshot_cache[-1][0],
-                "change_regions": (
-                    await self._identify_change_regions(diff)
-                    if changes_detected
-                    else []
-                ),
+                "change_regions": (await self._identify_change_regions(diff) if changes_detected else []),
             }
 
         except Exception as e:
             logger.error("Change detection failed: %s", e)
             return {"changes_detected": False, "error": "Change detection failed"}
 
-    async def _identify_change_regions(
-        self, diff_image: np.ndarray
-    ) -> List[Dict[str, Any]]:
+    async def _identify_change_regions(self, diff_image: np.ndarray) -> List[Dict[str, Any]]:
         """Identify regions where changes occurred"""
         cv2 = _get_cv2()
 
@@ -580,9 +545,7 @@ class ScreenAnalyzer:
             _, binary = cv2.threshold(gray_diff, 30, 255, cv2.THRESH_BINARY)
 
             # Find contours
-            contours, _ = cv2.findContours(
-                binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-            )
+            contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
             change_regions = []
             for contour in contours:
@@ -597,9 +560,7 @@ class ScreenAnalyzer:
                                 "height": int(h),
                             },
                             "area": int(cv2.contourArea(contour)),
-                            "change_intensity": float(
-                                np.mean(gray_diff[y : y + h, x : x + w])
-                            ),
+                            "change_intensity": float(np.mean(gray_diff[y : y + h, x : x + w])),
                         }
                     )
 
@@ -630,9 +591,7 @@ class ScreenAnalyzer:
             )
 
             # Map search results back to UI elements on current screen
-            matched_elements = await self._map_search_to_ui_elements(
-                search_results, screenshot
-            )
+            matched_elements = await self._map_search_to_ui_elements(search_results, screenshot)
 
             logger.info(
                 "Found %d elements matching voice description: '%s'",

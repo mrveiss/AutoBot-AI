@@ -117,9 +117,7 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
         limit = request.payload.get("limit", 5)
         similarity_threshold = request.payload.get("similarity_threshold", 0.6)
         context = request.payload.get("context")
-        return await self.process_query(
-            query, limit=limit, similarity_threshold=similarity_threshold, context=context
-        )
+        return await self.process_query(query, limit=limit, similarity_threshold=similarity_threshold, context=context)
 
     async def _handle_find_similar(self, request) -> Dict[str, Any]:
         """Handle find_similar action via StandardizedAgent routing."""
@@ -239,15 +237,11 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
             search_results = await self.knowledge_base.search(query, n_results=limit)
             processing_time = time.time() - start_time
 
-            processed_results = self._process_search_results(
-                search_results, similarity_threshold, query
-            )
+            processed_results = self._process_search_results(search_results, similarity_threshold, query)
 
             summary = ""
             if processed_results["documents"]:
-                summary = await self._generate_quick_summary(
-                    query, processed_results["documents"][:3]
-                )
+                summary = await self._generate_quick_summary(query, processed_results["documents"][:3])
 
             return self._build_success_response(
                 query, processed_results, summary, processing_time, similarity_threshold
@@ -257,9 +251,7 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
             logger.error("Knowledge Retrieval Agent error: %s", e)
             return self._build_error_response(query, e)
 
-    async def find_similar_documents(
-        self, query: str, top_k: int = 10, min_score: float = 0.5
-    ) -> Dict[str, Any]:
+    async def find_similar_documents(self, query: str, top_k: int = 10, min_score: float = 0.5) -> Dict[str, Any]:
         """
         Find documents similar to the query without LLM processing.
 
@@ -302,9 +294,7 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
                 "error": "Document search failed",
             }
 
-    async def quick_fact_lookup(
-        self, fact_query: str, max_docs: int = 3
-    ) -> Dict[str, Any]:
+    async def quick_fact_lookup(self, fact_query: str, max_docs: int = 3) -> Dict[str, Any]:
         """
         Quick fact lookup optimized for specific factual questions.
 
@@ -334,9 +324,7 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
                 }
 
             # Use lightweight LLM to extract specific fact
-            fact_response = await self._extract_fact_from_documents(
-                fact_query, search_result["documents"]
-            )
+            fact_response = await self._extract_fact_from_documents(fact_query, search_result["documents"])
 
             return {
                 "status": "success",
@@ -410,9 +398,7 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
             context_parts.append(content)
         return "\n\n".join(context_parts)
 
-    def _build_summary_messages(
-        self, query: str, context_text: str
-    ) -> List[Dict[str, str]]:
+    def _build_summary_messages(self, query: str, context_text: str) -> List[Dict[str, str]]:
         """Build messages for quick summary LLM request.
 
         Constructs system prompt and user message for summarization. Issue #620.
@@ -441,9 +427,7 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
             },
         ]
 
-    async def _generate_quick_summary(
-        self, query: str, documents: List[Dict[str, Any]]
-    ) -> str:
+    async def _generate_quick_summary(self, query: str, documents: List[Dict[str, Any]]) -> str:
         """Generate a quick summary using the lightweight model."""
         try:
             if not documents:
@@ -477,9 +461,7 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
             logger.error("Quick summary generation error: %s", e)
             return f"Found {len(documents)} relevant documents but couldn't generate summary."
 
-    async def _extract_fact_from_documents(
-        self, fact_query: str, documents: List[Dict[str, Any]]
-    ) -> str:
+    async def _extract_fact_from_documents(self, fact_query: str, documents: List[Dict[str, Any]]) -> str:
         """Extract specific fact using lightweight LLM."""
         try:
             if not documents:

@@ -95,8 +95,7 @@ class ErrorMetricsCollector:
         # Phase 5 (Issue #348): Redis persistence removed, arg kept for API compat
         if redis_client is not None:
             logger.warning(
-                "redis_client parameter is deprecated and ignored. "
-                "Prometheus is now the primary metrics store."
+                "redis_client parameter is deprecated and ignored. " "Prometheus is now the primary metrics store."
             )
 
         # Phase 5 (Issue #348): Keep only alert thresholds and lock
@@ -143,9 +142,7 @@ class ErrorMetricsCollector:
         """
         # Phase 5 (Issue #348): Record to Prometheus (single source of truth)
         if self.prometheus:
-            self.prometheus.record_error(
-                category.value, component, error_code or "unknown"
-            )
+            self.prometheus.record_error(category.value, component, error_code or "unknown")
 
         # Check alert thresholds (increment count for threshold checking)
         async with self._lock:
@@ -156,13 +153,9 @@ class ErrorMetricsCollector:
         # Check if threshold exceeded
         await self._check_alerts(component, error_code, current_count)
 
-        logger.debug(
-            f"Recorded error metric to Prometheus: {component}/{error_code or category.value}"
-        )
+        logger.debug(f"Recorded error metric to Prometheus: {component}/{error_code or category.value}")
 
-    async def _check_alerts(
-        self, component: str, error_code: Optional[str], current_count: int
-    ) -> None:
+    async def _check_alerts(self, component: str, error_code: Optional[str], current_count: int) -> None:
         """
         Check if error count exceeds alert thresholds and send notifications
 
@@ -172,10 +165,7 @@ class ErrorMetricsCollector:
         threshold = self._alert_thresholds.get(threshold_key, 0)
 
         if threshold > 0 and current_count >= threshold:
-            logger.warning(
-                f"⚠️ Error alert threshold exceeded: {threshold_key} "
-                f"({current_count} >= {threshold})"
-            )
+            logger.warning(f"⚠️ Error alert threshold exceeded: {threshold_key} " f"({current_count} >= {threshold})")
             # Send alert notification via monitoring_alerts system
             await self._send_alert_notification(
                 component=component,
@@ -230,9 +220,7 @@ class ErrorMetricsCollector:
         Returns:
             False (not supported)
         """
-        logger.warning(
-            "mark_resolved() is deprecated. Use Prometheus labels or external tracking."
-        )
+        logger.warning("mark_resolved() is deprecated. Use Prometheus labels or external tracking.")
         return False
 
     def get_stats(self, component: Optional[str] = None) -> List[ErrorStats]:
@@ -255,9 +243,7 @@ class ErrorMetricsCollector:
         )
         return []
 
-    def get_error_timeline(
-        self, hours: int = 24, component: Optional[str] = None
-    ) -> Dict[str, List[Dict[str, Any]]]:
+    def get_error_timeline(self, hours: int = 24, component: Optional[str] = None) -> Dict[str, List[Dict[str, Any]]]:
         """
         DEPRECATED (Phase 5, Issue #348): No in-memory timeline available.
 
@@ -289,8 +275,7 @@ class ErrorMetricsCollector:
             Empty dict (not supported)
         """
         logger.warning(
-            "get_category_breakdown() is deprecated. Query Prometheus:\n"
-            "  sum(autobot_errors_total) by (category)"
+            "get_category_breakdown() is deprecated. Query Prometheus:\n" "  sum(autobot_errors_total) by (category)"
         )
         return {}
 
@@ -305,8 +290,7 @@ class ErrorMetricsCollector:
             Empty dict (not supported)
         """
         logger.warning(
-            "get_component_breakdown() is deprecated. Query Prometheus:\n"
-            "  sum(autobot_errors_total) by (component)"
+            "get_component_breakdown() is deprecated. Query Prometheus:\n" "  sum(autobot_errors_total) by (component)"
         )
         return {}
 
@@ -329,9 +313,7 @@ class ErrorMetricsCollector:
         )
         return []
 
-    def set_alert_threshold(
-        self, component: str, error_code: Optional[str], threshold: int
-    ) -> None:
+    def set_alert_threshold(self, component: str, error_code: Optional[str], threshold: int) -> None:
         """
         Set alert threshold for a component/error combination
 
@@ -354,8 +336,7 @@ class ErrorMetricsCollector:
             0 (not supported)
         """
         logger.warning(
-            "cleanup_old_metrics() is deprecated. "
-            "Configure Prometheus retention in prometheus.yml instead."
+            "cleanup_old_metrics() is deprecated. " "Configure Prometheus retention in prometheus.yml instead."
         )
         return 0
 
@@ -372,9 +353,7 @@ class ErrorMetricsCollector:
         Returns:
             Minimal summary indicating deprecated status
         """
-        logger.warning(
-            "get_summary() is deprecated. Query Prometheus for comprehensive metrics."
-        )
+        logger.warning("get_summary() is deprecated. Query Prometheus for comprehensive metrics.")
         return {
             "status": "deprecated",
             "message": "Use Prometheus PromQL queries for error metrics",
@@ -392,17 +371,11 @@ class ErrorMetricsCollector:
         Args:
             component: Optional component to reset (ignored)
         """
-        logger.warning(
-            "reset_stats() is deprecated. Restart application or use Prometheus admin APIs."
-        )
+        logger.warning("reset_stats() is deprecated. Restart application or use Prometheus admin APIs.")
         # Only reset local counter for threshold checking
         async with self._lock:
             if component:
-                keys_to_remove = [
-                    key
-                    for key in self._last_error_counts.keys()
-                    if key.startswith(f"{component}:")
-                ]
+                keys_to_remove = [key for key in self._last_error_counts.keys() if key.startswith(f"{component}:")]
                 for key in keys_to_remove:
                     del self._last_error_counts[key]
                 logger.info("Reset threshold counters for component: %s", component)
@@ -457,6 +430,4 @@ async def record_error_metric(
         **kwargs: Additional metric fields
     """
     collector = get_metrics_collector()
-    await collector.record_error(
-        error_code, category, component, function, message, **kwargs
-    )
+    await collector.record_error(error_code, category, component, function, message, **kwargs)

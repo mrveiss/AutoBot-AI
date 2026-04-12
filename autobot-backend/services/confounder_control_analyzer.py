@@ -50,9 +50,7 @@ class StratifiedComparison:
     metric: str  # The metric being compared (success_rate, avg_duration, etc.)
     confounders: List[str]  # List of confounders analyzed
     overall_advantage: float  # Agent A's advantage in the metric (-1.0 to 1.0)
-    strata: Dict[
-        str, Tuple[StratumMetrics, StratumMetrics]
-    ]  # agent_a, agent_b metrics per stratum
+    strata: Dict[str, Tuple[StratumMetrics, StratumMetrics]]  # agent_a, agent_b metrics per stratum
     confounded_effect: bool  # True if confounding detected (metric varies by stratum)
     confounding_strength: float  # Strength of confounding effect (0.0-1.0)
     true_effect: float  # Agent A's advantage after controlling for confounders
@@ -118,9 +116,7 @@ class ConfounderControlAnalyzer:
     async def get_redis(self):
         """Get async Redis client"""
         if self._redis_client is None:
-            self._redis_client = get_redis_client(
-                async_client=True, database=RedisDatabase.ANALYTICS
-            )
+            self._redis_client = get_redis_client(async_client=True, database=RedisDatabase.ANALYTICS)
         return self._redis_client
 
     async def compare_agents_stratified(
@@ -170,12 +166,8 @@ class ConfounderControlAnalyzer:
 
             # Compute metrics for each stratum
             for stratum_value in set(strata_a.keys()) & set(strata_b.keys()):
-                metrics_a = self._compute_stratum_metrics(
-                    strata_a[stratum_value], metric, stratum_value
-                )
-                metrics_b = self._compute_stratum_metrics(
-                    strata_b[stratum_value], metric, stratum_value
-                )
+                metrics_a = self._compute_stratum_metrics(strata_a[stratum_value], metric, stratum_value)
+                metrics_b = self._compute_stratum_metrics(strata_b[stratum_value], metric, stratum_value)
 
                 if metrics_a and metrics_b:
                     strata_results[f"{confounder}:{stratum_value}"] = (
@@ -194,16 +186,10 @@ class ConfounderControlAnalyzer:
 
         # Compute overall and true effects
         overall_advantage = self._compute_overall_advantage(metric, strata_results)
-        true_effect, true_effect_confidence = self._estimate_true_effect(
-            metric, strata_results
-        )
-        confounded, confounding_strength = self._detect_confounding(
-            metric, strata_results
-        )
+        true_effect, true_effect_confidence = self._estimate_true_effect(metric, strata_results)
+        confounded, confounding_strength = self._detect_confounding(metric, strata_results)
 
-        sample_coverage = len(strata_results) / (
-            len(confounders) * 3
-        )  # Assume max 3 strata per confounder
+        sample_coverage = len(strata_results) / (len(confounders) * 3)  # Assume max 3 strata per confounder
 
         interpretation = self._generate_interpretation(
             agent_a,
@@ -254,9 +240,7 @@ class ConfounderControlAnalyzer:
 
         return strata
 
-    def _extract_confounder_value(
-        self, task: Dict[str, Any], confounder: str
-    ) -> Optional[str]:
+    def _extract_confounder_value(self, task: Dict[str, Any], confounder: str) -> Optional[str]:
         """Extract and bin confounder value from task record."""
         metadata = task.get("metadata", {})
 
@@ -405,11 +389,7 @@ class ConfounderControlAnalyzer:
             if metrics_a.task_count >= 2 and metrics_b.task_count >= 2:
                 diff = metrics_a.metric_value - metrics_b.metric_value
                 # Weight by sample size and confidence
-                weight = (
-                    (metrics_a.task_count + metrics_b.task_count)
-                    * metrics_a.confidence
-                    * metrics_b.confidence
-                )
+                weight = (metrics_a.task_count + metrics_b.task_count) * metrics_a.confidence * metrics_b.confidence
                 differences.append(diff)
                 weights.append(weight)
 
@@ -418,19 +398,13 @@ class ConfounderControlAnalyzer:
 
         # Weighted average of within-stratum effects
         total_weight = sum(weights)
-        true_effect = (
-            sum(d * w for d, w in zip(differences, weights)) / total_weight
-            if total_weight > 0
-            else 0.0
-        )
+        true_effect = sum(d * w for d, w in zip(differences, weights)) / total_weight if total_weight > 0 else 0.0
 
         # Confidence based on consistency of within-stratum effects
         # If all strata show same direction → high confidence
         same_direction = all((d > 0) == (differences[0] > 0) for d in differences)
         consistency = 1.0 if same_direction else 0.5
-        stratum_factor = min(
-            1.0, len(differences) / 3
-        )  # More strata = higher confidence
+        stratum_factor = min(1.0, len(differences) / 3)  # More strata = higher confidence
         confidence = min(1.0, consistency * stratum_factor)
 
         return true_effect / 100 if true_effect > 0 else true_effect, confidence
@@ -490,14 +464,10 @@ class ConfounderControlAnalyzer:
             parts.append(f"{agent_a} and {agent_b} perform similarly on {metric}.")
         elif overall_advantage > 0:
             pct = abs(overall_advantage) * 100
-            parts.append(
-                f"{agent_a} shows {pct:.1f}% advantage over {agent_b} on {metric}."
-            )
+            parts.append(f"{agent_a} shows {pct:.1f}% advantage over {agent_b} on {metric}.")
         else:
             pct = abs(overall_advantage) * 100
-            parts.append(
-                f"{agent_b} shows {pct:.1f}% advantage over {agent_a} on {metric}."
-            )
+            parts.append(f"{agent_b} shows {pct:.1f}% advantage over {agent_a} on {metric}.")
 
         # Confounding detection
         if confounded:
@@ -508,19 +478,13 @@ class ConfounderControlAnalyzer:
 
             # True effect after control
             if abs(true_effect - overall_advantage) > 0.01:
-                parts.append(
-                    f"After controlling for confounders, the true effect is {true_effect:.3f}."
-                )
+                parts.append(f"After controlling for confounders, the true effect is {true_effect:.3f}.")
         else:
-            parts.append(
-                "No significant confounding detected. Observed advantage is likely genuine."
-            )
+            parts.append("No significant confounding detected. Observed advantage is likely genuine.")
 
         return " ".join(parts)
 
-    async def _get_agent_history(
-        self, agent_id: str, limit: int = 1000
-    ) -> List[Dict[str, Any]]:
+    async def _get_agent_history(self, agent_id: str, limit: int = 1000) -> List[Dict[str, Any]]:
         """Get task history for an agent from Redis."""
         try:
             redis = await self.get_redis()

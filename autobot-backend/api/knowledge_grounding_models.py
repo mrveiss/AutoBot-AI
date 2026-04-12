@@ -298,9 +298,7 @@ class ReviewTicket:
     created_at: float = field(default_factory=time.time)
 
     @classmethod
-    def create_from_conflict(
-        cls, conflict: Conflict, priority: ReviewTicketPriority
-    ) -> "ReviewTicket":
+    def create_from_conflict(cls, conflict: Conflict, priority: ReviewTicketPriority) -> "ReviewTicket":
         """Factory method to create a ticket from a conflict.
 
         Args:
@@ -316,9 +314,7 @@ class ReviewTicket:
             priority=priority,
         )
 
-    def resolve(
-        self, resolution: ResolvedClaim, resolved_by: str, notes: str = ""
-    ) -> None:
+    def resolve(self, resolution: ResolvedClaim, resolved_by: str, notes: str = "") -> None:
         """Mark this ticket as resolved.
 
         Args:

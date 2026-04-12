@@ -82,9 +82,7 @@ class TaskSendRequest(BaseModel):
     """Body for POST /tasks — submit a new A2A task."""
 
     message: str = Field(..., description="The natural-language task to execute")
-    context: Optional[Dict[str, Any]] = Field(
-        None, description="Optional key-value context passed to the orchestrator"
-    )
+    context: Optional[Dict[str, Any]] = Field(None, description="Optional key-value context passed to the orchestrator")
 
 
 class TaskSendResponse(BaseModel):
@@ -173,9 +171,7 @@ async def get_signed_agent_card(request: Request) -> Dict[str, Any]:
     try:
         signed = SecurityCardSigner.sign(card.to_dict())
     except RuntimeError as exc:
-        raise HTTPException(
-            status_code=503, detail="Service temporarily unavailable"
-        ) from exc
+        raise HTTPException(status_code=503, detail="Service temporarily unavailable") from exc
     return signed
 
 

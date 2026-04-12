@@ -234,9 +234,7 @@ class TaskQueue:
 
         return decorator
 
-    def _calculate_task_timing(
-        self, delay: Optional[float], expires_in: Optional[float]
-    ) -> tuple:
+    def _calculate_task_timing(self, delay: Optional[float], expires_in: Optional[float]) -> tuple:
         """
         Calculate scheduled_at and expires_at timestamps for a task.
 
@@ -259,9 +257,7 @@ class TaskQueue:
 
         return scheduled_at, expires_at
 
-    async def _add_task_to_queue(
-        self, task_id: str, scheduled_at: Optional[datetime], priority: TaskPriority
-    ) -> None:
+    async def _add_task_to_queue(self, task_id: str, scheduled_at: Optional[datetime], priority: TaskPriority) -> None:
         """
         Add task to appropriate queue (scheduled or pending).
 
@@ -416,26 +412,21 @@ class TaskQueue:
                 # can migrate only this worker's tasks if it dies (#2944, #2985).
                 if self.npu_worker_manager is not None:
                     try:
-                        await self.npu_worker_manager.assign_task_to_worker(
-                            self.queue_name, worker_name, task_id
-                        )
+                        await self.npu_worker_manager.assign_task_to_worker(self.queue_name, worker_name, task_id)
                     except Exception as assign_err:
                         # Tracking failed: move the task back to pending so
                         # another worker can pick it up with tracking intact.
                         # Processing without tracking would make this task
                         # invisible to failover and silently lost on crash (#2985).
                         self.logger.error(
-                            "Worker %s: task tracking failed for %s, "
-                            "returning task to pending queue: %s",
+                            "Worker %s: task tracking failed for %s, " "returning task to pending queue: %s",
                             worker_name,
                             task_id,
                             assign_err,
                         )
                         if self.redis:
                             await self.redis.zrem(self.running_key, task_id)
-                            await self.redis.zadd(
-                                self.pending_key, {task_id: time.time()}
-                            )
+                            await self.redis.zadd(self.pending_key, {task_id: time.time()})
                         await asyncio.sleep(TimingConstants.STANDARD_DELAY)
                         continue
 
@@ -445,9 +436,7 @@ class TaskQueue:
                 finally:
                     # Always release regardless of success or exception (#2944).
                     if self.npu_worker_manager is not None:
-                        await self.npu_worker_manager.release_worker_task(
-                            self.queue_name, worker_name, task_id
-                        )
+                        await self.npu_worker_manager.release_worker_task(self.queue_name, worker_name, task_id)
 
             except asyncio.CancelledError:
                 break
@@ -470,29 +459,19 @@ class TaskQueue:
                 current_time = time.time()
 
                 # Get scheduled tasks that are due
-                due_tasks = await self.redis.zrangebyscore(
-                    self.scheduled_key, 0, current_time, withscores=True
-                )
+                due_tasks = await self.redis.zrangebyscore(self.scheduled_key, 0, current_time, withscores=True)
 
                 for task_id, score in due_tasks:
                     # Move to pending queue
                     task = await self._get_task(task_id)
                     if task:
-                        priority_score = task.priority.value * 1000000 + int(
-                            time.time()
-                        )
-                        await self.redis.zadd(
-                            self.pending_key, {task_id: priority_score}
-                        )
+                        priority_score = task.priority.value * 1000000 + int(time.time())
+                        await self.redis.zadd(self.pending_key, {task_id: priority_score})
                         await self.redis.zrem(self.scheduled_key, task_id)
 
-                        self.logger.debug(
-                            "Moved scheduled task to pending: %s", task_id
-                        )
+                        self.logger.debug("Moved scheduled task to pending: %s", task_id)
 
-                await asyncio.sleep(
-                    TimingConstants.ERROR_RECOVERY_DELAY
-                )  # Check every 5 seconds
+                await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY)  # Check every 5 seconds
 
             except asyncio.CancelledError:
                 break
@@ -524,9 +503,7 @@ class TaskQueue:
             self.logger.error("Failed to get next task from queue: %s", e)
             return None  # Return None to allow worker to continue
 
-    async def _record_task_success(
-        self, result: TaskResult, task_result: Any, start_time: float
-    ) -> None:
+    async def _record_task_success(self, result: TaskResult, task_result: Any, start_time: float) -> None:
         """
         Record successful task execution.
 
@@ -580,9 +557,7 @@ class TaskQueue:
         """
         return task.expires_at is not None and datetime.utcnow() > task.expires_at
 
-    async def _execute_task_with_timeout(
-        self, task: Task, result: TaskResult, start_time: float
-    ) -> None:
+    async def _execute_task_with_timeout(self, task: Task, result: TaskResult, start_time: float) -> None:
         """
         Execute a task with optional timeout handling.
 
@@ -626,48 +601,34 @@ class TaskQueue:
         if self._check_task_expired(task):
             await self._handle_task_completion(
                 task,
-                TaskResult(
-                    task_id=task_id, status=TaskStatus.CANCELLED, error="Task expired"
-                ),
+                TaskResult(task_id=task_id, status=TaskStatus.CANCELLED, error="Task expired"),
             )
             return
 
-        self.logger.info(
-            "Worker %s processing task %s: %s", worker_name, task_id, task.function_name
-        )
+        self.logger.info("Worker %s processing task %s: %s", worker_name, task_id, task.function_name)
 
-        result = TaskResult(
-            task_id=task_id, status=TaskStatus.RUNNING, started_at=datetime.utcnow()
-        )
+        result = TaskResult(task_id=task_id, status=TaskStatus.RUNNING, started_at=datetime.utcnow())
 
         try:
             await self._execute_task_with_timeout(task, result, start_time)
 
         except asyncio.TimeoutError:
-            self._record_task_failure(
-                result, f"Task timed out after {task.timeout}s", start_time
-            )
+            self._record_task_failure(result, f"Task timed out after {task.timeout}s", start_time)
             self.logger.error("Task %s timed out", task_id)
 
         except Exception as e:
-            self._record_task_failure(
-                result, str(e), start_time, traceback.format_exc()
-            )
+            self._record_task_failure(result, str(e), start_time, traceback.format_exc())
             self.logger.error("Task %s failed: %s", task_id, e)
 
         await self._handle_task_completion(task, result)
 
-    async def _execute_function(
-        self, func: Callable, args: tuple, kwargs: Dict[str, Any]
-    ) -> Any:
+    async def _execute_function(self, func: Callable, args: tuple, kwargs: Dict[str, Any]) -> Any:
         """Execute task function (sync or async)."""
         if asyncio.iscoroutinefunction(func):
             return await func(*args, **kwargs)
         else:
             # Run sync function in thread pool
-            return await asyncio.get_running_loop().run_in_executor(
-                None, lambda: func(*args, **kwargs)
-            )
+            return await asyncio.get_running_loop().run_in_executor(None, lambda: func(*args, **kwargs))
 
     async def _handle_task_completion(self, task: Task, result: TaskResult) -> None:
         """Handle task completion (success or failure)."""
@@ -701,8 +662,7 @@ class TaskQueue:
         await self.redis.zadd(self.scheduled_key, {task.id: retry_time.timestamp()})
 
         self.logger.info(
-            f"Scheduling retry {result.retry_count}/{task.max_retries} "
-            f"for task {task.id} in {retry_delay}s"
+            f"Scheduling retry {result.retry_count}/{task.max_retries} " f"for task {task.id} in {retry_delay}s"
         )
 
     async def _finalize_task_completion(self, task: Task, result: TaskResult) -> None:
@@ -738,9 +698,7 @@ class TaskQueue:
         if not self.redis:
             return None
         # Issue #361 - avoid blocking
-        result_data = await asyncio.to_thread(
-            self.redis.hget, self.results_key, task_id
-        )
+        result_data = await asyncio.to_thread(self.redis.hget, self.results_key, task_id)
         if result_data:
             return TaskResult.from_dict(json.loads(result_data))
         return None
@@ -791,9 +749,7 @@ class TaskQueue:
 
             result_data = json.dumps(result.to_dict())
             # Issue #361 - avoid blocking
-            await asyncio.to_thread(
-                self.redis.hset, self.results_key, task_id, result_data
-            )
+            await asyncio.to_thread(self.redis.hset, self.results_key, task_id, result_data)
 
             self.logger.info("Cancelled task %s", task_id)
             return True
@@ -827,9 +783,7 @@ class TaskQueue:
             "completed_tasks": completed_count,
             "failed_tasks": failed_count,
             "scheduled_tasks": scheduled_count,
-            "total_tasks": (
-                pending_count + running_count + completed_count + failed_count
-            ),
+            "total_tasks": (pending_count + running_count + completed_count + failed_count),
             "workers": len(self.workers),
             "is_running": self.is_running,
             "registered_functions": list(self.task_registry.keys()),

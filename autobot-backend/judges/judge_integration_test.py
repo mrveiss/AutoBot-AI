@@ -67,9 +67,7 @@ class TestJudgeIntegration:
             "user_context": {"permissions": ["user"]},
         }
 
-        response = test_client.post(
-            "/api/validation_dashboard/judge_workflow_step", json=request_data
-        )
+        response = test_client.post("/api/validation_dashboard/judge_workflow_step", json=request_data)
 
         assert response.status_code == 200
         data = response.json()
@@ -93,9 +91,7 @@ class TestJudgeIntegration:
             "context": {"os": "ubuntu"},
         }
 
-        response = test_client.post(
-            "/api/validation_dashboard/judge_agent_response", json=request_data
-        )
+        response = test_client.post("/api/validation_dashboard/judge_agent_response", json=request_data)
 
         assert response.status_code == 200
         data = response.json()
@@ -133,21 +129,23 @@ class TestJudgeIntegration:
         mock_get_judges.return_value = None
 
         request_data = {"step_data": {"command": "test"}}
-        response = test_client.post(
-            "/api/validation_dashboard/judge_workflow_step", json=request_data
-        )
+        response = test_client.post("/api/validation_dashboard/judge_workflow_step", json=request_data)
 
         assert response.status_code == 503
         assert "not available" in response.json()["detail"]
 
     def test_workflow_automation_judge_integration(self, mock_judges):
         """Test integration with workflow automation system"""
-        with patch("api.workflow_automation.JUDGES_AVAILABLE", True), patch(
-            "api.workflow_automation.WorkflowStepJudge",
-            return_value=mock_judges["workflow_step_judge"],
-        ), patch(
-            "api.workflow_automation.SecurityRiskJudge",
-            return_value=mock_judges["security_risk_judge"],
+        with (
+            patch("api.workflow_automation.JUDGES_AVAILABLE", True),
+            patch(
+                "api.workflow_automation.WorkflowStepJudge",
+                return_value=mock_judges["workflow_step_judge"],
+            ),
+            patch(
+                "api.workflow_automation.SecurityRiskJudge",
+                return_value=mock_judges["security_risk_judge"],
+            ),
         ):
             from api.workflow_automation import WorkflowAutomationManager
 
@@ -160,12 +158,16 @@ class TestJudgeIntegration:
     @pytest.mark.asyncio
     async def test_workflow_step_evaluation_integration(self, mock_judges):
         """Test workflow step evaluation in automation manager"""
-        with patch("api.workflow_automation.JUDGES_AVAILABLE", True), patch(
-            "api.workflow_automation.WorkflowStepJudge",
-            return_value=mock_judges["workflow_step_judge"],
-        ), patch(
-            "api.workflow_automation.SecurityRiskJudge",
-            return_value=mock_judges["security_risk_judge"],
+        with (
+            patch("api.workflow_automation.JUDGES_AVAILABLE", True),
+            patch(
+                "api.workflow_automation.WorkflowStepJudge",
+                return_value=mock_judges["workflow_step_judge"],
+            ),
+            patch(
+                "api.workflow_automation.SecurityRiskJudge",
+                return_value=mock_judges["security_risk_judge"],
+            ),
         ):
             from api.workflow_automation import (
                 ActiveWorkflow,
@@ -178,9 +180,7 @@ class TestJudgeIntegration:
             # Create a test workflow with a step
             workflow_id = "test_workflow"
 
-            test_step = WorkflowStep(
-                step_id="test_step", command="echo 'test'", description="Test step"
-            )
+            test_step = WorkflowStep(step_id="test_step", command="echo 'test'", description="Test step")
 
             workflow = ActiveWorkflow(
                 workflow_id=workflow_id,
@@ -200,12 +200,8 @@ class TestJudgeIntegration:
             assert "security_judgment" in evaluation
 
             # Verify judges were called
-            mock_judges[
-                "workflow_step_judge"
-            ].evaluate_workflow_step.assert_called_once()
-            mock_judges[
-                "security_risk_judge"
-            ].evaluate_command_security.assert_called_once()
+            mock_judges["workflow_step_judge"].evaluate_workflow_step.assert_called_once()
+            mock_judges["security_risk_judge"].evaluate_command_security.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_step_rejection_by_judge(self, mock_judges):
@@ -219,19 +215,19 @@ class TestJudgeIntegration:
         reject_judgment.criterion_scores = []
         reject_judgment.improvement_suggestions = ["Use safer alternative"]
 
-        mock_judges["workflow_step_judge"].evaluate_workflow_step.return_value = (
-            reject_judgment
-        )
-        mock_judges["security_risk_judge"].evaluate_command_security.return_value = (
-            reject_judgment
-        )
+        mock_judges["workflow_step_judge"].evaluate_workflow_step.return_value = reject_judgment
+        mock_judges["security_risk_judge"].evaluate_command_security.return_value = reject_judgment
 
-        with patch("api.workflow_automation.JUDGES_AVAILABLE", True), patch(
-            "api.workflow_automation.WorkflowStepJudge",
-            return_value=mock_judges["workflow_step_judge"],
-        ), patch(
-            "api.workflow_automation.SecurityRiskJudge",
-            return_value=mock_judges["security_risk_judge"],
+        with (
+            patch("api.workflow_automation.JUDGES_AVAILABLE", True),
+            patch(
+                "api.workflow_automation.WorkflowStepJudge",
+                return_value=mock_judges["workflow_step_judge"],
+            ),
+            patch(
+                "api.workflow_automation.SecurityRiskJudge",
+                return_value=mock_judges["security_risk_judge"],
+            ),
         ):
             from api.workflow_automation import (
                 ActiveWorkflow,
@@ -271,16 +267,18 @@ class TestJudgeIntegration:
         from api.workflow_automation import WorkflowAutomationManager
 
         # Configure judge to raise exception
-        mock_judges["workflow_step_judge"].evaluate_workflow_step.side_effect = (
-            Exception("Judge error")
-        )
+        mock_judges["workflow_step_judge"].evaluate_workflow_step.side_effect = Exception("Judge error")
 
-        with patch("api.workflow_automation.JUDGES_AVAILABLE", True), patch(
-            "api.workflow_automation.WorkflowStepJudge",
-            return_value=mock_judges["workflow_step_judge"],
-        ), patch(
-            "api.workflow_automation.SecurityRiskJudge",
-            return_value=mock_judges["security_risk_judge"],
+        with (
+            patch("api.workflow_automation.JUDGES_AVAILABLE", True),
+            patch(
+                "api.workflow_automation.WorkflowStepJudge",
+                return_value=mock_judges["workflow_step_judge"],
+            ),
+            patch(
+                "api.workflow_automation.SecurityRiskJudge",
+                return_value=mock_judges["security_risk_judge"],
+            ),
         ):
             manager = WorkflowAutomationManager()
 
@@ -343,17 +341,19 @@ class TestJudgeIntegration:
         detailed_judgment.criterion_scores = criterion_scores
         detailed_judgment.improvement_suggestions = []
 
-        mock_judges["workflow_step_judge"].evaluate_workflow_step.return_value = (
-            detailed_judgment
-        )
+        mock_judges["workflow_step_judge"].evaluate_workflow_step.return_value = detailed_judgment
 
         # Test that all criteria are evaluated
-        with patch("api.workflow_automation.JUDGES_AVAILABLE", True), patch(
-            "api.workflow_automation.WorkflowStepJudge",
-            return_value=mock_judges["workflow_step_judge"],
-        ), patch(
-            "api.workflow_automation.SecurityRiskJudge",
-            return_value=mock_judges["security_risk_judge"],
+        with (
+            patch("api.workflow_automation.JUDGES_AVAILABLE", True),
+            patch(
+                "api.workflow_automation.WorkflowStepJudge",
+                return_value=mock_judges["workflow_step_judge"],
+            ),
+            patch(
+                "api.workflow_automation.SecurityRiskJudge",
+                return_value=mock_judges["security_risk_judge"],
+            ),
         ):
             from api.workflow_automation import (
                 ActiveWorkflow,

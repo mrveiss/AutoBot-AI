@@ -38,9 +38,7 @@ def _render_message_markdown(msg: Dict[str, Any], index: int) -> str:
     return f"{header}\n\n{text}"
 
 
-def _render_session_metadata_markdown(
-    session_id: str, chat_data: Dict[str, Any]
-) -> List[str]:
+def _render_session_metadata_markdown(session_id: str, chat_data: Dict[str, Any]) -> List[str]:
     """Build Markdown header lines from session metadata."""
     lines = [
         f"# Conversation Export: {session_id}",
@@ -70,9 +68,7 @@ def _build_json_envelope(session_id: str, chat_data: Dict[str, Any]) -> Dict[str
         "session_id": session_id,
         "name": chat_data.get("name", ""),
         "created_time": chat_data.get("created_time", chat_data.get("createdTime", "")),
-        "last_modified": chat_data.get(
-            "last_modified", chat_data.get("lastModified", "")
-        ),
+        "last_modified": chat_data.get("last_modified", chat_data.get("lastModified", "")),
         "metadata": chat_data.get("metadata", {}),
         "messages": chat_data.get("messages", []),
         "message_count": len(chat_data.get("messages", [])),
@@ -94,9 +90,7 @@ def _build_bulk_envelope(sessions: List[Dict[str, Any]]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-async def export_conversation_json(
-    chat_history_manager, session_id: str
-) -> Optional[str]:
+async def export_conversation_json(chat_history_manager, session_id: str) -> Optional[str]:
     """
     Export a single conversation as enriched AutoBot JSON.
 
@@ -113,9 +107,7 @@ async def export_conversation_json(
         return None
 
 
-async def export_conversation_markdown(
-    chat_history_manager, session_id: str
-) -> Optional[str]:
+async def export_conversation_markdown(chat_history_manager, session_id: str) -> Optional[str]:
     """
     Export a single conversation as human-readable Markdown.
 
@@ -241,9 +233,7 @@ async def import_conversation(
             session_id = _apply_suffix_to_session_id(session_id, f"imported-{suffix}")
             logger.info("Import renamed to %s due to conflict", session_id)
 
-    await chat_history_manager.save_session(
-        session_id=session_id, messages=messages, name=name
-    )
+    await chat_history_manager.save_session(session_id=session_id, messages=messages, name=name)
     logger.info("Imported conversation %s (%d messages)", session_id, len(messages))
     return {
         "success": True,
@@ -258,9 +248,7 @@ async def import_conversation(
 # ---------------------------------------------------------------------------
 
 
-async def _load_full_session_data(
-    chat_history_manager, session_id: str
-) -> Optional[Dict[str, Any]]:
+async def _load_full_session_data(chat_history_manager, session_id: str) -> Optional[Dict[str, Any]]:
     """
     Load the full session data dict (not just the messages list).
 

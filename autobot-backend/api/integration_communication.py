@@ -142,26 +142,20 @@ async def list_channels(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="team_id required for Teams",
                 )
-            return await integration.execute_action(
-                "list_channels", {"team_id": team_id}
-            )
+            return await integration.execute_action("list_channels", {"team_id": team_id})
         elif provider_lower == "discord":
             if not guild_id:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="guild_id required for Discord",
                 )
-            return await integration.execute_action(
-                "list_channels", {"guild_id": guild_id}
-            )
+            return await integration.execute_action("list_channels", {"guild_id": guild_id})
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Unsupported provider: {provider}",
         )
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Request failed"
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Request failed") from exc
     except Exception as exc:
         logger.exception("Failed to list channels for %s", provider)
         raise HTTPException(
@@ -190,9 +184,7 @@ async def send_message(
         result = await integration.execute_action("send_message", params)
         return result
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Request failed"
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Request failed") from exc
     except Exception as exc:
         logger.exception("Failed to send message via %s", provider)
         raise HTTPException(
@@ -224,14 +216,10 @@ async def get_channel_history(
     integration = _get_integration(provider_lower, config)
 
     try:
-        result = await integration.execute_action(
-            "get_channel_history", {"channel": channel_id, "limit": limit}
-        )
+        result = await integration.execute_action("get_channel_history", {"channel": channel_id, "limit": limit})
         return result
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Request failed"
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Request failed") from exc
     except Exception as exc:
         logger.exception("Failed to get history for %s", channel_id)
         raise HTTPException(

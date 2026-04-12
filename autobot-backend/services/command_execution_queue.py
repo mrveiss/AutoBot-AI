@@ -66,9 +66,7 @@ class CommandExecutionQueue:
             if self.redis_client:
                 logger.info("✅ Command execution queue initialized with Redis")
             else:
-                logger.warning(
-                    "⚠️ Redis not available for command queue - commands won't persist across restarts"
-                )
+                logger.warning("⚠️ Redis not available for command queue - commands won't persist across restarts")
         except Exception as e:
             logger.error("Failed to initialize Redis for command queue: %s", e)
 
@@ -193,9 +191,7 @@ class CommandExecutionQueue:
 
             await asyncio.to_thread(_update_command_ops)
 
-            logger.debug(
-                f"Updated command {command.command_id} in queue: state={command.state.value}"
-            )
+            logger.debug(f"Updated command {command.command_id} in queue: state={command.state.value}")
             return True
 
         except Exception as e:
@@ -238,20 +234,14 @@ class CommandExecutionQueue:
                 return []
 
             # Process results using helper (Issue #315)
-            commands = [
-                cmd
-                for cmd_data in results
-                if (cmd := _parse_command_data_safe(cmd_data, state_filter))
-            ]
+            commands = [cmd for cmd_data in results if (cmd := _parse_command_data_safe(cmd_data, state_filter))]
 
             # Sort by requested_at (newest first)
             commands.sort(key=lambda c: c.requested_at, reverse=True)
             return commands
 
         except Exception as e:
-            logger.error(
-                f"Failed to get terminal commands for {terminal_session_id}: {e}"
-            )
+            logger.error(f"Failed to get terminal commands for {terminal_session_id}: {e}")
             return []
 
     async def get_chat_commands(
@@ -290,11 +280,7 @@ class CommandExecutionQueue:
                 return []
 
             # Process results using helper (Issue #315)
-            commands = [
-                cmd
-                for cmd_data in results
-                if (cmd := _parse_command_data_safe(cmd_data, state_filter))
-            ]
+            commands = [cmd for cmd_data in results if (cmd := _parse_command_data_safe(cmd_data, state_filter))]
 
             # Sort by requested_at (newest first)
             commands.sort(key=lambda c: c.requested_at, reverse=True)
@@ -334,11 +320,7 @@ class CommandExecutionQueue:
                 return []
 
             # Process results, filter pending only (Issue #315)
-            commands = [
-                cmd
-                for cmd_data in results
-                if (cmd := _parse_command_data_safe(cmd_data)) and cmd.is_pending()
-            ]
+            commands = [cmd for cmd_data in results if (cmd := _parse_command_data_safe(cmd_data)) and cmd.is_pending()]
 
             # Sort by requested_at (oldest first - FIFO)
             commands.sort(key=lambda c: c.requested_at)
@@ -348,9 +330,7 @@ class CommandExecutionQueue:
             logger.error("Failed to get pending approvals: %s", e)
             return []
 
-    async def get_latest_pending_for_chat(
-        self, chat_id: str
-    ) -> Optional[CommandExecution]:
+    async def get_latest_pending_for_chat(self, chat_id: str) -> Optional[CommandExecution]:
         """
         Get the most recent pending approval for a chat.
 
@@ -360,14 +340,10 @@ class CommandExecutionQueue:
         Returns:
             Latest pending command or None
         """
-        commands = await self.get_chat_commands(
-            chat_id, state_filter=CommandState.PENDING_APPROVAL
-        )
+        commands = await self.get_chat_commands(chat_id, state_filter=CommandState.PENDING_APPROVAL)
         return commands[0] if commands else None
 
-    async def approve_command(
-        self, command_id: str, user_id: str, comment: Optional[str] = None
-    ) -> bool:
+    async def approve_command(self, command_id: str, user_id: str, comment: Optional[str] = None) -> bool:
         """
         Approve a pending command.
 
@@ -385,17 +361,13 @@ class CommandExecutionQueue:
             return False
 
         if not command.is_pending():
-            logger.warning(
-                f"Cannot approve - command {command_id} is not pending (state={command.state.value})"
-            )
+            logger.warning(f"Cannot approve - command {command_id} is not pending (state={command.state.value})")
             return False
 
         command.approve(user_id, comment)
         return await self.update_command(command)
 
-    async def deny_command(
-        self, command_id: str, user_id: str, comment: Optional[str] = None
-    ) -> bool:
+    async def deny_command(self, command_id: str, user_id: str, comment: Optional[str] = None) -> bool:
         """
         Deny a pending command.
 
@@ -413,9 +385,7 @@ class CommandExecutionQueue:
             return False
 
         if not command.is_pending():
-            logger.warning(
-                f"Cannot deny - command {command_id} is not pending (state={command.state.value})"
-            )
+            logger.warning(f"Cannot deny - command {command_id} is not pending (state={command.state.value})")
             return False
 
         command.deny(user_id, comment)
@@ -437,17 +407,13 @@ class CommandExecutionQueue:
             return False
 
         if not command.is_approved():
-            logger.error(
-                f"Cannot execute - command {command_id} is not approved (state={command.state.value})"
-            )
+            logger.error(f"Cannot execute - command {command_id} is not approved (state={command.state.value})")
             return False
 
         command.start_execution()
         return await self.update_command(command)
 
-    async def complete_command(
-        self, command_id: str, output: str, stderr: str = "", return_code: int = 0
-    ) -> bool:
+    async def complete_command(self, command_id: str, output: str, stderr: str = "", return_code: int = 0) -> bool:
         """
         Mark command as completed with results.
 

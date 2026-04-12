@@ -54,13 +54,9 @@ class TestImportContext:
     def test_add_from_import_with_alias(self):
         """Test adding from...import with alias."""
         ctx = ImportContext()
-        ctx.add_import(
-            module="src.utils.redis_client", name="get_redis_client", alias="get_redis"
-        )
+        ctx.add_import(module="src.utils.redis_client", name="get_redis_client", alias="get_redis")
 
-        assert (
-            ctx.resolve_name("get_redis") == "src.utils.redis_client.get_redis_client"
-        )
+        assert ctx.resolve_name("get_redis") == "src.utils.redis_client.get_redis_client"
         assert ctx.resolve_name("get_redis_client") is None
 
     def test_is_external_stdlib(self):
@@ -281,14 +277,10 @@ class TestResolveCalleeId:
 
     def test_resolve_with_alias(self):
         """Test resolving aliased import."""
-        functions = {
-            "src.utils.redis_client.get_redis_client": {"name": "get_redis_client"}
-        }
+        functions = {"src.utils.redis_client.get_redis_client": {"name": "get_redis_client"}}
 
         ctx = ImportContext()
-        ctx.add_import(
-            module="src.utils.redis_client", name="get_redis_client", alias="get_redis"
-        )
+        ctx.add_import(module="src.utils.redis_client", name="get_redis_client", alias="get_redis")
 
         callee_id, is_external = _resolve_callee_id(
             callee_name="get_redis",

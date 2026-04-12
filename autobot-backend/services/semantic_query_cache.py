@@ -306,9 +306,7 @@ class SemanticQueryCache(AsyncInitializable):
                 if embedding is None:
                     return False
 
-            success = await self._persist_entry(
-                query, response_text, model, embedding, metadata
-            )
+            success = await self._persist_entry(query, response_text, model, embedding, metadata)
             if not success:
                 return False
 
@@ -438,9 +436,7 @@ class SemanticQueryCache(AsyncInitializable):
                 results = await self._collection.get(include=["metadatas"])
                 if results and results.get("ids"):
                     # Clean Redis
-                    client = get_redis_client(
-                        async_client=True, database=_REDIS_DATABASE
-                    )
+                    client = get_redis_client(async_client=True, database=_REDIS_DATABASE)
                     if client:
                         for meta in results.get("metadatas", []):
                             rkey = meta.get("response_key", "")

@@ -20,9 +20,7 @@ from typing import Any, FrozenSet, Optional
 from autobot_memory_graph import AutoBotMemoryGraph
 
 # Issue #380: Module-level frozenset for security-related tags
-_SECURITY_TAGS: FrozenSet[str] = frozenset(
-    {"security", "vulnerability", "host", "service"}
-)
+_SECURITY_TAGS: FrozenSet[str] = frozenset({"security", "vulnerability", "host", "service"})
 
 
 @dataclass
@@ -120,9 +118,7 @@ class SecurityFindingsIndex:
     async def index_finding(self, finding_id, text, metadata):
         """Index a finding for semantic search."""
         await self.initialize()
-        await self._collection.upsert(
-            ids=[finding_id], documents=[text], metadatas=[metadata]
-        )
+        await self._collection.upsert(ids=[finding_id], documents=[text], metadatas=[metadata])
 
     async def search_findings(self, query, n_results=10, where=None):
         """Search findings by semantic similarity."""
@@ -261,9 +257,7 @@ class SecurityMemoryIntegration:
             Created entity data
         """
         await self.ensure_initialized()
-        observations = self._build_assessment_observations(
-            name, target, scope, training_mode, metadata
-        )
+        observations = self._build_assessment_observations(name, target, scope, training_mode, metadata)
         entity = await self._store_assessment_in_memory(
             assessment_id, name, target, scope, training_mode, observations, metadata
         )
@@ -350,20 +344,14 @@ class SecurityMemoryIntegration:
             Created entity data
         """
         await self.ensure_initialized()
-        observations = self._build_host_observations(
-            ip, status, hostname, os_guess, metadata
-        )
-        entity = await self._store_host_in_memory(
-            ip, observations, assessment_id, hostname, status, os_guess, metadata
-        )
+        observations = self._build_host_observations(ip, status, hostname, os_guess, metadata)
+        entity = await self._store_host_in_memory(ip, observations, assessment_id, hostname, status, os_guess, metadata)
         await self._create_security_relation(
             from_entity=f"Security Assessment: {assessment_id}",
             to_entity=f"Host: {ip}",
             relation_type="contains",
         )
-        await self._index_host_finding(
-            assessment_id, ip, hostname, status, os_guess, metadata
-        )
+        await self._index_host_finding(assessment_id, ip, hostname, status, os_guess, metadata)
         logger.info("Created host entity: %s for assessment %s", ip, assessment_id)
         return entity
 
@@ -457,9 +445,7 @@ class SecurityMemoryIntegration:
         await self.ensure_initialized()
         service_desc = service_name or "unknown"
         entity_name = f"Service: {host_ip}:{port}/{protocol} ({service_desc})"
-        observations = self._build_service_observations(
-            host_ip, port, protocol, service_name, version, product
-        )
+        observations = self._build_service_observations(host_ip, port, protocol, service_name, version, product)
         entity = await self._store_service_in_memory(
             entity_name,
             observations,
@@ -477,9 +463,7 @@ class SecurityMemoryIntegration:
             to_entity=entity_name,
             relation_type="runs",
         )
-        await self._index_service_finding(
-            assessment_id, host_ip, port, protocol, service_name, version, product
-        )
+        await self._index_service_finding(assessment_id, host_ip, port, protocol, service_name, version, product)
         logger.info("Created service entity: %s", entity_name)
         return entity
 
@@ -523,9 +507,7 @@ class SecurityMemoryIntegration:
             relation_type="relates_to",
         )
         if affected_port and affected_service:
-            service_entity = (
-                f"Service: {host_ip}:{affected_port}/tcp ({affected_service})"
-            )
+            service_entity = f"Service: {host_ip}:{affected_port}/tcp ({affected_service})"
             await self._create_security_relation(
                 from_entity=service_entity,
                 to_entity=entity_name,
@@ -604,9 +586,7 @@ class SecurityMemoryIntegration:
         if request is not None:
             return request
         if assessment_id is None or host_ip is None:
-            raise ValueError(
-                "Either 'request' object or 'assessment_id' and 'host_ip' required"
-            )
+            raise ValueError("Either 'request' object or 'assessment_id' and 'host_ip' required")
         return VulnerabilityRequest(
             assessment_id=assessment_id,
             host_ip=host_ip,
@@ -620,9 +600,7 @@ class SecurityMemoryIntegration:
             metadata=metadata,
         )
 
-    async def _build_and_store_vulnerability(
-        self, req: VulnerabilityRequest
-    ) -> dict[str, Any]:
+    async def _build_and_store_vulnerability(self, req: VulnerabilityRequest) -> dict[str, Any]:
         """
         Build observations, store entity, and create relations. Issue #620.
         """
@@ -649,9 +627,7 @@ class SecurityMemoryIntegration:
             req.affected_service,
             req.metadata,
         )
-        await self._create_vuln_relations(
-            req.host_ip, entity_name, req.affected_port, req.affected_service
-        )
+        await self._create_vuln_relations(req.host_ip, entity_name, req.affected_port, req.affected_service)
         await self._index_vulnerability_finding(
             req.assessment_id,
             req.host_ip,
@@ -743,9 +719,7 @@ class SecurityMemoryIntegration:
             )
             return True
         except Exception as e:
-            logger.warning(
-                "Failed to create relation %s -> %s: %s", from_entity, to_entity, e
-            )
+            logger.warning("Failed to create relation %s -> %s: %s", from_entity, to_entity, e)
             return False
 
     async def search_security_findings(
@@ -852,9 +826,7 @@ class SecurityMemoryIntegration:
                 other.append(entity)
         return hosts, services, vulnerabilities, other
 
-    def _compute_severity_distribution(
-        self, vulnerabilities: list[dict[str, Any]]
-    ) -> dict[str, int]:
+    def _compute_severity_distribution(self, vulnerabilities: list[dict[str, Any]]) -> dict[str, int]:
         """
         Compute severity distribution from vulnerability entities.
 
@@ -877,18 +849,10 @@ class SecurityMemoryIntegration:
             Summary with counts and key findings
         """
         await self.ensure_initialized()
-        all_results = await self._memory_graph.search_entities(
-            query=f"assessment_id:{assessment_id}", limit=500
-        )
-        hosts, services, vulnerabilities, _ = self._categorize_assessment_entities(
-            all_results
-        )
+        all_results = await self._memory_graph.search_entities(query=f"assessment_id:{assessment_id}", limit=500)
+        hosts, services, vulnerabilities, _ = self._categorize_assessment_entities(all_results)
         severity_counts = self._compute_severity_distribution(vulnerabilities)
-        critical_vulns = [
-            v
-            for v in vulnerabilities
-            if v.get("metadata", {}).get("severity") == "critical"
-        ][:5]
+        critical_vulns = [v for v in vulnerabilities if v.get("metadata", {}).get("severity") == "critical"][:5]
         return {
             "assessment_id": assessment_id,
             "total_entities": len(all_results),

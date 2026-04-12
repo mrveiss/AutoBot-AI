@@ -135,9 +135,7 @@ class SecureSandboxExecutor:
                 self.logger.error("Failed to pull fallback image: %s", e)
                 raise
 
-    def _create_validation_failure_result(
-        self, command: Union[str, List[str]], container_id: str
-    ) -> SandboxResult:
+    def _create_validation_failure_result(self, command: Union[str, List[str]], container_id: str) -> SandboxResult:
         """
         Create a SandboxResult for command validation failure.
 
@@ -168,9 +166,7 @@ class SecureSandboxExecutor:
             metadata={"validation_failed": True},
         )
 
-    def _create_execution_error_result(
-        self, error: Exception, start_time: float, container_id: str
-    ) -> SandboxResult:
+    def _create_execution_error_result(self, error: Exception, start_time: float, container_id: str) -> SandboxResult:
         """
         Create a SandboxResult for execution errors.
 
@@ -196,9 +192,7 @@ class SecureSandboxExecutor:
             metadata={"error": str(error)},
         )
 
-    def _execute_container_with_timeout(
-        self, container, config: SandboxConfig
-    ) -> Tuple[int, str, str, Dict[str, Any]]:
+    def _execute_container_with_timeout(self, container, config: SandboxConfig) -> Tuple[int, str, str, Dict[str, Any]]:
         """
         Execute container and collect raw output data. Issue #620.
 
@@ -344,9 +338,7 @@ class SecureSandboxExecutor:
             self.active_containers[container_id] = container.id
 
             # Issue #281: uses helper
-            return await self._run_container_and_collect_results(
-                container, container_id, config, start_time
-            )
+            return await self._run_container_and_collect_results(container, container_id, config, start_time)
 
         except Exception as e:
             self.logger.error("Sandbox execution error: %s", e)
@@ -377,9 +369,7 @@ class SecureSandboxExecutor:
         safe_lang = "".join(c for c in language if c.isalnum()) or "sh"
 
         # Create temporary script file
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=f".{safe_lang}", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=f".{safe_lang}", delete=False) as f:
             f.write(script_content)
             script_path = f.name
 
@@ -406,13 +396,9 @@ class SecureSandboxExecutor:
             try:
                 await asyncio.to_thread(os.unlink, script_path)
             except Exception as e:
-                self.logger.debug(
-                    "Failed to cleanup script file %s: %s", script_path, e
-                )
+                self.logger.debug("Failed to cleanup script file %s: %s", script_path, e)
 
-    def _validate_command(
-        self, command: Union[str, List[str]], config: SandboxConfig
-    ) -> bool:
+    def _validate_command(self, command: Union[str, List[str]], config: SandboxConfig) -> bool:
         """Validate command against security policies."""
         command_parts = command.split() if isinstance(command, str) else command
 
@@ -480,9 +466,7 @@ class SecureSandboxExecutor:
             return False
         return True
 
-    def _apply_security_level_config(
-        self, container_config: Dict[str, Any], config: SandboxConfig
-    ) -> None:
+    def _apply_security_level_config(self, container_config: Dict[str, Any], config: SandboxConfig) -> None:
         """
         Apply security level specific settings to container configuration.
 
@@ -508,9 +492,7 @@ class SecureSandboxExecutor:
                 "SETGID",
             ]
 
-    def _apply_volume_config(
-        self, container_config: Dict[str, Any], config: SandboxConfig
-    ) -> None:
+    def _apply_volume_config(self, container_config: Dict[str, Any], config: SandboxConfig) -> None:
         """
         Apply volume configuration to container.
 
@@ -529,9 +511,7 @@ class SecureSandboxExecutor:
                 "/sandbox/tmp": "size=50M,mode=1777",
             }
 
-    def _prepare_container_config(
-        self, command: Union[str, List[str]], config: SandboxConfig
-    ) -> Dict[str, Any]:
+    def _prepare_container_config(self, command: Union[str, List[str]], config: SandboxConfig) -> Dict[str, Any]:
         """Prepare Docker container configuration"""
         container_config = {
             "image": "autobot/secure-sandbox:latest",
@@ -579,12 +559,12 @@ class SecureSandboxExecutor:
             memory_stats = stats.get("memory_stats", {})
 
             # Calculate CPU usage percentage
-            cpu_delta = cpu_stats.get("cpu_usage", {}).get(
-                "total_usage", 0
-            ) - stats.get("precpu_stats", {}).get("cpu_usage", {}).get("total_usage", 0)
-            system_delta = cpu_stats.get("system_cpu_usage", 0) - stats.get(
-                "precpu_stats", {}
-            ).get("system_cpu_usage", 0)
+            cpu_delta = cpu_stats.get("cpu_usage", {}).get("total_usage", 0) - stats.get("precpu_stats", {}).get(
+                "cpu_usage", {}
+            ).get("total_usage", 0)
+            system_delta = cpu_stats.get("system_cpu_usage", 0) - stats.get("precpu_stats", {}).get(
+                "system_cpu_usage", 0
+            )
 
             cpu_percent = 0.0
             if system_delta > 0:
@@ -594,9 +574,7 @@ class SecureSandboxExecutor:
                 "cpu_percent": cpu_percent,
                 "memory_used": memory_stats.get("usage", 0),
                 "memory_limit": memory_stats.get("limit", 0),
-                "memory_percent": (
-                    (memory_stats.get("usage", 0) / memory_stats.get("limit", 1)) * 100
-                ),
+                "memory_percent": ((memory_stats.get("usage", 0) / memory_stats.get("limit", 1)) * 100),
             }
         except Exception as e:
             self.logger.error("Failed to parse resource usage: %s", e)
@@ -640,9 +618,7 @@ class SecureSandboxExecutor:
                                 )
                             )
 
-                            self.logger.warning(
-                                f"Security event in {sandbox_id}: {event_type}"
-                            )
+                            self.logger.warning(f"Security event in {sandbox_id}: {event_type}")
 
                 except Exception as e:
                     self.logger.error("Error processing container log: %s", e)
@@ -657,9 +633,7 @@ class SecureSandboxExecutor:
             events = []
 
             # Get all events from Redis (Issue #361 - avoid blocking)
-            raw_events = await asyncio.to_thread(
-                self.redis_client.lrange, event_key, 0, -1
-            )
+            raw_events = await asyncio.to_thread(self.redis_client.lrange, event_key, 0, -1)
 
             for raw_event in raw_events:
                 try:
@@ -726,17 +700,13 @@ class SecureSandboxExecutor:
         """Get sandbox execution statistics"""
         try:
             # Issue #361 - avoid blocking
-            stats = await asyncio.to_thread(
-                self.redis_client.hgetall, "autobot:sandbox:stats"
-            )
+            stats = await asyncio.to_thread(self.redis_client.hgetall, "autobot:sandbox:stats")
 
             return {
                 "successful_executions": int(stats.get(b"successful_executions", 0)),
                 "failed_executions": int(stats.get(b"failed_executions", 0)),
                 "active_containers": len(self.active_containers),
-                "security_levels_available": [
-                    level.value for level in SandboxSecurityLevel
-                ],
+                "security_levels_available": [level.value for level in SandboxSecurityLevel],
             }
 
         except Exception as e:
@@ -763,16 +733,12 @@ def get_secure_sandbox() -> Optional[SecureSandboxExecutor]:
     with _sandbox_lock:
         if _sandbox_instance is None:
             try:
-                logger.info(
-                    "Initializing secure sandbox for command execution security"
-                ),
+                logger.info("Initializing secure sandbox for command execution security"),
                 _sandbox_instance = SecureSandboxExecutor()
                 logger.info("Secure sandbox initialized successfully")
             except Exception as e:
                 logger.error("Failed to initialize secure sandbox: %s", e)
-                logger.warning(
-                    "Command execution will proceed without sandboxing - SECURITY RISK"
-                ),
+                logger.warning("Command execution will proceed without sandboxing - SECURITY RISK"),
                 _sandbox_instance = None
 
         return _sandbox_instance
@@ -822,8 +788,6 @@ async def execute_in_sandbox(
             metadata={"error": "sandbox_unavailable"},
         )
 
-    config = SandboxConfig(
-        security_level=SandboxSecurityLevel(security_level), timeout=timeout, **kwargs
-    )
+    config = SandboxConfig(security_level=SandboxSecurityLevel(security_level), timeout=timeout, **kwargs)
 
     return await sandbox.execute_command(command, config)

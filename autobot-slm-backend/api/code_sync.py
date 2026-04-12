@@ -116,9 +116,7 @@ async def reconcile_stale_fleet_sync_jobs() -> int:
     from services.database import db_service
 
     async with db_service.session() as db:
-        result = await db.execute(
-            select(FleetSyncJobModel).where(FleetSyncJobModel.status == "running")
-        )
+        result = await db.execute(select(FleetSyncJobModel).where(FleetSyncJobModel.status == "running"))
         stale_jobs = result.scalars().all()
         count = len(stale_jobs)
 
@@ -127,8 +125,7 @@ async def reconcile_stale_fleet_sync_jobs() -> int:
             job.completed_at = datetime.utcnow()
             job.failure_reason = "reconciled: server restarted while job was running"
             logger.warning(
-                "Reconciled stale fleet sync job %s "
-                "(was 'running', marked 'failed')",
+                "Reconciled stale fleet sync job %s " "(was 'running', marked 'failed')",
                 job.job_id,
             )
 
@@ -183,9 +180,7 @@ async def _update_job_status_db(
     from services.database import db_service
 
     async with db_service.session() as db:
-        result = await db.execute(
-            select(FleetSyncJobModel).where(FleetSyncJobModel.job_id == job_id)
-        )
+        result = await db.execute(select(FleetSyncJobModel).where(FleetSyncJobModel.job_id == job_id))
         db_job = result.scalar_one_or_none()
         if not db_job:
             return
@@ -198,11 +193,7 @@ async def _update_job_status_db(
             db_job.failure_reason = failure_reason[:500]
 
         # Recalculate node counts from node_states
-        ns_result = await db.execute(
-            select(FleetSyncNodeStateModel).where(
-                FleetSyncNodeStateModel.job_id == job_id
-            )
-        )
+        ns_result = await db.execute(select(FleetSyncNodeStateModel).where(FleetSyncNodeStateModel.job_id == job_id))
         node_states = ns_result.scalars().all()
         db_job.completed_nodes = sum(1 for n in node_states if n.status == "success")
         db_job.failed_nodes = sum(1 for n in node_states if n.status == "failed")
@@ -252,18 +243,12 @@ async def _load_job_status_from_db(
     from services.database import db_service
 
     async with db_service.session() as db:
-        result = await db.execute(
-            select(FleetSyncJobModel).where(FleetSyncJobModel.job_id == job_id)
-        )
+        result = await db.execute(select(FleetSyncJobModel).where(FleetSyncJobModel.job_id == job_id))
         db_job = result.scalar_one_or_none()
         if not db_job:
             return None
 
-        ns_result = await db.execute(
-            select(FleetSyncNodeStateModel).where(
-                FleetSyncNodeStateModel.job_id == job_id
-            )
-        )
+        ns_result = await db.execute(select(FleetSyncNodeStateModel).where(FleetSyncNodeStateModel.job_id == job_id))
         node_states = ns_result.scalars().all()
 
         return FleetSyncJobStatus(
@@ -295,19 +280,13 @@ async def _list_jobs_from_db(limit: int = 10) -> List[FleetSyncJobStatus]:
     from services.database import db_service
 
     async with db_service.session() as db:
-        result = await db.execute(
-            select(FleetSyncJobModel)
-            .order_by(FleetSyncJobModel.created_at.desc())
-            .limit(limit)
-        )
+        result = await db.execute(select(FleetSyncJobModel).order_by(FleetSyncJobModel.created_at.desc()).limit(limit))
         db_jobs = result.scalars().all()
 
         jobs = []
         for db_job in db_jobs:
             ns_result = await db.execute(
-                select(FleetSyncNodeStateModel).where(
-                    FleetSyncNodeStateModel.job_id == db_job.job_id
-                )
+                select(FleetSyncNodeStateModel).where(FleetSyncNodeStateModel.job_id == db_job.job_id)
             )
             node_states = ns_result.scalars().all()
 
@@ -364,9 +343,7 @@ async def get_sync_status(
     tracker = await _get_tracker_for_db(db)
 
     # Get latest version from settings
-    result = await db.execute(
-        select(Setting).where(Setting.key == "slm_agent_latest_commit")
-    )
+    result = await db.execute(select(Setting).where(Setting.key == "slm_agent_latest_commit"))
     latest_setting = result.scalar_one_or_none()
     latest_version = latest_setting.value if latest_setting else None
 
@@ -391,11 +368,7 @@ async def get_sync_status(
     outdated_nodes = outdated_result.scalar() or 0
 
     # Check if local repo has updates
-    has_update = (
-        local_version is not None
-        and latest_version is not None
-        and local_version != latest_version
-    )
+    has_update = local_version is not None and latest_version is not None and local_version != latest_version
 
     return CodeSyncStatusResponse(
         latest_version=latest_version,
@@ -437,9 +410,7 @@ async def get_file_drift(
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     deployed_dir = get_default_deployed_dir(component)
 
-    logger.info(
-        "drift check: comparing source=%s deployed=%s", source_dir, deployed_dir
-    )
+    logger.info("drift check: comparing source=%s deployed=%s", source_dir, deployed_dir)
 
     report = await asyncio.get_running_loop().run_in_executor(
         None,
@@ -472,9 +443,7 @@ async def refresh_version(
 
         if result["remote_commit"]:
             # Update the setting
-            setting_result = await db.execute(
-                select(Setting).where(Setting.key == "slm_agent_latest_commit")
-            )
+            setting_result = await db.execute(select(Setting).where(Setting.key == "slm_agent_latest_commit"))
             setting = setting_result.scalar_one_or_none()
 
             if setting:
@@ -519,9 +488,7 @@ async def get_pending_nodes(
     Get list of all nodes that need code updates.
     """
     # Get latest version
-    setting_result = await db.execute(
-        select(Setting).where(Setting.key == "slm_agent_latest_commit")
-    )
+    setting_result = await db.execute(select(Setting).where(Setting.key == "slm_agent_latest_commit"))
     latest_setting = setting_result.scalar_one_or_none()
     latest_version = latest_setting.value if latest_setting else None
 
@@ -784,17 +751,13 @@ async def _fetch_code_source_connection_info(
 
     try:
         async with db_service.session() as db:
-            source_result = await db.execute(
-                select(CodeSource).where(CodeSource.is_active.is_(True))
-            )
+            source_result = await db.execute(select(CodeSource).where(CodeSource.is_active.is_(True)))
             source = source_result.scalar_one_or_none()
             if not source:
                 logger.error("SLM self-sync failed: no active code source")
                 return None
 
-            node_result = await db.execute(
-                select(Node).where(Node.node_id == source.node_id)
-            )
+            node_result = await db.execute(select(Node).where(Node.node_id == source.node_id))
             source_node = node_result.scalar_one_or_none()
             if not source_node:
                 logger.error("SLM self-sync failed: code source node not found in DB")
@@ -866,19 +829,13 @@ async def _sync_slm_from_code_source(node_id: str) -> None:
     is_local_source = is_local_ip(source_ip)
 
     if is_local_source:
-        logger.info(
-            "SLM self-sync: code source is local at %s, using direct rsync", repo_path
-        )
+        logger.info("SLM self-sync: code source is local at %s, using direct rsync", repo_path)
     else:
-        ssh_key = os.environ.get(
-            "SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key"  # noqa: ssot-path
-        )
+        ssh_key = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")  # noqa: ssot-path
         if not Path(ssh_key).exists():
             logger.error("SLM self-sync failed: SSH key not found at %s", ssh_key)
             return
-        logger.info(
-            "SLM self-sync: pulling from %s@%s:%s", source_user, source_ip, repo_path
-        )
+        logger.info("SLM self-sync: pulling from %s@%s:%s", source_user, source_ip, repo_path)
 
     # --- Phase 2: rsync components ---
     all_ok = True
@@ -886,9 +843,7 @@ async def _sync_slm_from_code_source(node_id: str) -> None:
         if is_local_source:
             ok, msg = await _rsync_component_local(repo_path, component, excludes)
         else:
-            ok, msg = await _rsync_component(
-                source_user, source_ip, repo_path, component, excludes, ssh_key
-            )
+            ok, msg = await _rsync_component(source_user, source_ip, repo_path, component, excludes, ssh_key)
         if not ok:
             logger.error("SLM self-sync component %s failed: %s", component, msg)
             all_ok = False
@@ -948,9 +903,7 @@ async def _execute_node_playbook(
     return NodeSyncResponse(
         success=playbook_result["success"],
         message=(
-            playbook_result["output"]
-            if playbook_result["success"]
-            else f"Playbook failed: {playbook_result['output']}"
+            playbook_result["output"] if playbook_result["success"] else f"Playbook failed: {playbook_result['output']}"
         ),
         node_id=node_id,
     )
@@ -979,9 +932,7 @@ async def _broadcast_sync_progress(node_id: str, progress: Dict[str, str]) -> No
         logger.debug("Failed to broadcast sync progress: %s", e)
 
 
-async def _update_node_version_after_sync(
-    db: AsyncSession, node: Node, node_id: str
-) -> None:
+async def _update_node_version_after_sync(db: AsyncSession, node: Node, node_id: str) -> None:
     """
     Update node version in database after successful sync (Issue #880).
 
@@ -1042,16 +993,13 @@ async def sync_node(
         return NodeSyncResponse(
             success=True,
             message=(
-                "SLM update queued: pulling from code source + restarting services. "
-                "Check backend health in ~30s."
+                "SLM update queued: pulling from code source + restarting services. " "Check backend health in ~30s."
             ),
             node_id=node_id,
         )
 
     # Normal execution - wait for result with progress updates
-    return await _execute_node_playbook(
-        executor, node, node_id, request, progress_callback, db
-    )
+    return await _execute_node_playbook(executor, node, node_id, request, progress_callback, db)
 
 
 async def _sync_regular_nodes(executor, job: FleetSyncJob, regular_nodes: list) -> None:
@@ -1073,9 +1021,7 @@ async def _sync_regular_nodes(executor, job: FleetSyncJob, regular_nodes: list) 
                 status="syncing",
                 started_at=node_state.started_at,
             )
-            task = asyncio.create_task(
-                _sync_single_node(executor, node_state, job.restart, job.job_id)
-            )
+            task = asyncio.create_task(_sync_single_node(executor, node_state, job.restart, job.job_id))
             tasks.append(task)
 
         await asyncio.gather(*tasks, return_exceptions=True)
@@ -1085,9 +1031,7 @@ async def _sync_regular_nodes(executor, job: FleetSyncJob, regular_nodes: list) 
             await asyncio.sleep(5)
 
 
-async def _sync_slm_self_node(
-    executor, job: FleetSyncJob, slm_self_node: NodeSyncState
-) -> None:
+async def _sync_slm_self_node(executor, job: FleetSyncJob, slm_self_node: NodeSyncState) -> None:
     """Phase 2: sync SLM self-node LAST (#1209).
 
     Helper for _run_fleet_sync_job. Persists final status to DB before
@@ -1118,18 +1062,14 @@ async def _sync_slm_self_node(
             status="success",
             completed_at=datetime.utcnow(),
         )
-        await _update_job_status_db(
-            job.job_id, status=pre_status, completed_at=datetime.utcnow()
-        )
+        await _update_job_status_db(job.job_id, status=pre_status, completed_at=datetime.utcnow())
         # Fire-and-forget — restart kills this process,
         # but all nodes are already done and persisted.
         await _sync_slm_from_code_source(slm_self_node.node_id)
         slm_self_node.status = "success"
         slm_self_node.completed_at = datetime.utcnow()
     else:
-        await _sync_single_node(
-            executor, slm_self_node, restart=False, job_id=job.job_id
-        )
+        await _sync_single_node(executor, slm_self_node, restart=False, job_id=job.job_id)
 
 
 async def _run_fleet_sync_job(job: FleetSyncJob) -> None:
@@ -1265,9 +1205,7 @@ async def _update_fleet_node_version(node_id: str) -> None:
 
     try:
         async with db_service.session() as db:
-            result = await db.execute(
-                select(NodeModel).where(NodeModel.node_id == node_id)
-            )
+            result = await db.execute(select(NodeModel).where(NodeModel.node_id == node_id))
             node = result.scalar_one_or_none()
             if node:
                 node.code_version = current_commit
@@ -1310,15 +1248,11 @@ async def mark_node_synced(
     node_result = await db.execute(select(Node).where(Node.node_id == node_id))
     node = node_result.scalar_one_or_none()
     if not node:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Node not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
 
     version = request.version
     if not version:
-        setting_result = await db.execute(
-            select(Setting).where(Setting.key == "slm_agent_latest_commit")
-        )
+        setting_result = await db.execute(select(Setting).where(Setting.key == "slm_agent_latest_commit"))
         setting = setting_result.scalar_one_or_none()
         version = setting.value if setting else ""
 
@@ -1330,9 +1264,7 @@ async def mark_node_synced(
     return MarkSyncedResponse(success=True, node_id=node_id, version=version)
 
 
-def _build_fleet_sync_job_from_nodes(
-    nodes: List[Node], request: FleetSyncRequest
-) -> FleetSyncJob:
+def _build_fleet_sync_job_from_nodes(nodes: List[Node], request: FleetSyncRequest) -> FleetSyncJob:
     """Helper for sync_fleet. Ref: #1088.
 
     Construct a FleetSyncJob with one NodeSyncState per node.
@@ -1373,13 +1305,9 @@ async def sync_fleet(
 
         # Get target nodes
         if request.node_ids:
-            result = await db.execute(
-                select(Node).where(Node.node_id.in_(request.node_ids))
-            )
+            result = await db.execute(select(Node).where(Node.node_id.in_(request.node_ids)))
         else:
-            result = await db.execute(
-                select(Node).where(Node.code_status == CodeStatus.OUTDATED.value)
-            )
+            result = await db.execute(select(Node).where(Node.code_status == CodeStatus.OUTDATED.value))
 
         nodes = result.scalars().all()
 
@@ -1497,9 +1425,7 @@ async def _update_version_setting(db: AsyncSession, commit: str) -> None:
 
     Helper for notify_code_version (Issue #665).
     """
-    setting_result = await db.execute(
-        select(Setting).where(Setting.key == "slm_agent_latest_commit")
-    )
+    setting_result = await db.execute(select(Setting).where(Setting.key == "slm_agent_latest_commit"))
     setting = setting_result.scalar_one_or_none()
 
     if setting:
@@ -1512,9 +1438,7 @@ async def _update_version_setting(db: AsyncSession, commit: str) -> None:
         db.add(setting)
 
 
-async def _mark_outdated_nodes(
-    db: AsyncSession, node_id: str, commit: str
-) -> List[Node]:
+async def _mark_outdated_nodes(db: AsyncSession, node_id: str, commit: str) -> List[Node]:
     """
     Mark all other nodes as outdated if they have different version.
 
@@ -1534,9 +1458,7 @@ async def _mark_outdated_nodes(
     return outdated_nodes
 
 
-async def _broadcast_code_version_update(
-    notification: CodeVersionNotification, outdated_count: int
-) -> None:
+async def _broadcast_code_version_update(notification: CodeVersionNotification, outdated_count: int) -> None:
     """
     Broadcast code version update notification via WebSocket.
 
@@ -1552,11 +1474,7 @@ async def _broadcast_code_version_update(
                     "new_version": notification.commit,
                     "source_node": notification.node_id,
                     "outdated_nodes": outdated_count,
-                    "timestamp": (
-                        notification.timestamp.isoformat()
-                        if notification.timestamp
-                        else None
-                    ),
+                    "timestamp": (notification.timestamp.isoformat() if notification.timestamp else None),
                 },
             }
         )
@@ -1653,9 +1571,7 @@ async def list_schedules(
     """
     List all update schedules (Issue #741 - Phase 7).
     """
-    result = await db.execute(
-        select(UpdateSchedule).order_by(UpdateSchedule.created_at.desc())
-    )
+    result = await db.execute(select(UpdateSchedule).order_by(UpdateSchedule.created_at.desc()))
     schedules = result.scalars().all()
 
     return [ScheduleResponse.model_validate(s) for s in schedules]
@@ -1717,9 +1633,7 @@ async def get_schedule(
     """
     Get details of a specific schedule (Issue #741 - Phase 7).
     """
-    result = await db.execute(
-        select(UpdateSchedule).where(UpdateSchedule.id == schedule_id)
-    )
+    result = await db.execute(select(UpdateSchedule).where(UpdateSchedule.id == schedule_id))
     schedule = result.scalar_one_or_none()
 
     if not schedule:
@@ -1743,9 +1657,7 @@ async def update_schedule(
 
     Requires admin role.
     """
-    result = await db.execute(
-        select(UpdateSchedule).where(UpdateSchedule.id == schedule_id)
-    )
+    result = await db.execute(select(UpdateSchedule).where(UpdateSchedule.id == schedule_id))
     schedule = result.scalar_one_or_none()
 
     if not schedule:
@@ -1797,9 +1709,7 @@ async def delete_schedule(
 
     Requires admin role.
     """
-    result = await db.execute(
-        select(UpdateSchedule).where(UpdateSchedule.id == schedule_id)
-    )
+    result = await db.execute(select(UpdateSchedule).where(UpdateSchedule.id == schedule_id))
     schedule = result.scalar_one_or_none()
 
     if not schedule:
@@ -1817,26 +1727,18 @@ async def delete_schedule(
     return {"success": True, "message": f"Schedule '{schedule_name}' deleted"}
 
 
-async def _get_schedule_target_nodes(
-    db: AsyncSession, schedule: UpdateSchedule
-) -> List[Node]:
+async def _get_schedule_target_nodes(db: AsyncSession, schedule: UpdateSchedule) -> List[Node]:
     """
     Get target nodes based on schedule configuration.
 
     Helper for run_schedule (Issue #665).
     """
     if schedule.target_type == "all":
-        nodes_result = await db.execute(
-            select(Node).where(Node.code_status == CodeStatus.OUTDATED.value)
-        )
+        nodes_result = await db.execute(select(Node).where(Node.code_status == CodeStatus.OUTDATED.value))
     elif schedule.target_type == "specific" and schedule.target_nodes:
-        nodes_result = await db.execute(
-            select(Node).where(Node.node_id.in_(schedule.target_nodes))
-        )
+        nodes_result = await db.execute(select(Node).where(Node.node_id.in_(schedule.target_nodes)))
     else:
-        nodes_result = await db.execute(
-            select(Node).where(Node.code_status == CodeStatus.OUTDATED.value)
-        )
+        nodes_result = await db.execute(select(Node).where(Node.code_status == CodeStatus.OUTDATED.value))
 
     return nodes_result.scalars().all()
 
@@ -1879,9 +1781,7 @@ async def run_schedule(
 
     Requires admin role.
     """
-    result = await db.execute(
-        select(UpdateSchedule).where(UpdateSchedule.id == schedule_id)
-    )
+    result = await db.execute(select(UpdateSchedule).where(UpdateSchedule.id == schedule_id))
     schedule = result.scalar_one_or_none()
 
     if not schedule:
@@ -1977,9 +1877,7 @@ async def _get_active_commit(db: AsyncSession) -> str:
     Raises:
         HTTPException: If no active code source or commit is available
     """
-    result = await db.execute(
-        select(CodeSource).where(CodeSource.is_active == True)  # noqa: E712
-    )
+    result = await db.execute(select(CodeSource).where(CodeSource.is_active == True))  # noqa: E712
     source = result.scalar_one_or_none()
 
     if not source or not source.last_known_commit:
@@ -1991,9 +1889,7 @@ async def _get_active_commit(db: AsyncSession) -> str:
     return source.last_known_commit
 
 
-async def _get_role_nodes(
-    db: AsyncSession, role_name: str, node_ids: Optional[List[str]] = None
-) -> List[NodeRole]:
+async def _get_role_nodes(db: AsyncSession, role_name: str, node_ids: Optional[List[str]] = None) -> List[NodeRole]:
     """Get NodeRole records, optionally filtered by node_ids.
 
     Helper for sync_role (Issue #665).
@@ -2014,9 +1910,7 @@ async def _get_role_nodes(
             )
         )
     else:
-        role_result = await db.execute(
-            select(NodeRole).where(NodeRole.role_name == role_name)
-        )
+        role_result = await db.execute(select(NodeRole).where(NodeRole.role_name == role_name))
 
     return role_result.scalars().all()
 
@@ -2086,9 +1980,7 @@ async def sync_role(
 
     # Sync each node
     orchestrator = get_sync_orchestrator()
-    results, success_count = await _sync_nodes_for_role(
-        orchestrator, node_roles, role_name, commit, restart
-    )
+    results, success_count = await _sync_nodes_for_role(orchestrator, node_roles, role_name, commit, restart)
 
     logger.info(
         "Role sync complete: %s - %d/%d successful",

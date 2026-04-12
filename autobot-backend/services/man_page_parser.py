@@ -41,14 +41,10 @@ def _validate_man_args(command: str, section: str) -> None:
     """
     if not _VALID_COMMAND_RE.match(command):
         raise ValueError(
-            f"Invalid command name: {command!r} "
-            "(must contain only alphanumeric, hyphen, underscore, dot, or plus)"
+            f"Invalid command name: {command!r} " "(must contain only alphanumeric, hyphen, underscore, dot, or plus)"
         )
     if not _VALID_SECTION_RE.match(section):
-        raise ValueError(
-            f"Invalid man section: {section!r} "
-            "(must be a digit optionally followed by a letter)"
-        )
+        raise ValueError(f"Invalid man section: {section!r} " "(must be a digit optionally followed by a letter)")
 
 
 # Man page section descriptions for metadata
@@ -104,9 +100,7 @@ class ManPageContent:
 
     def __post_init__(self):
         """Set computed fields after initialization."""
-        self.section_description = MAN_SECTION_DESCRIPTIONS.get(
-            self.section, "Unknown Section"
-        )
+        self.section_description = MAN_SECTION_DESCRIPTIONS.get(self.section, "Unknown Section")
 
     def get_structured_content(self) -> str:
         """
@@ -332,9 +326,7 @@ class ManPageParser:
                 return None
 
             if file_path.suffix == ".gz":
-                with gzip.open(
-                    file_path, "rt", encoding="utf-8", errors="replace"
-                ) as f:
+                with gzip.open(file_path, "rt", encoding="utf-8", errors="replace") as f:
                     return f.read()
             else:
                 with open(file_path, "r", encoding="utf-8", errors="replace") as f:
@@ -420,9 +412,7 @@ class ManPageParser:
 
         return result
 
-    def _run_man_subprocess(
-        self, command: str, section: str
-    ) -> subprocess.CompletedProcess:
+    def _run_man_subprocess(self, command: str, section: str) -> subprocess.CompletedProcess:
         """Helper for parse_man_page_with_subprocess. Ref: #1088."""
         _validate_man_args(command, section)
         cmd = ["man", section, command]
@@ -434,9 +424,7 @@ class ManPageParser:
             env={"MANWIDTH": "80", "TERM": "dumb"},
         )
 
-    def _extract_sections_from_rendered(
-        self, result: ManPageContent, content: str
-    ) -> None:
+    def _extract_sections_from_rendered(self, result: ManPageContent, content: str) -> None:
         """Helper for parse_man_page_with_subprocess. Ref: #1088."""
         for section_name, pattern in self.RENDERED_SECTION_PATTERNS.items():
             match = re.search(pattern, content, re.DOTALL | re.MULTILINE)
@@ -454,9 +442,7 @@ class ManPageParser:
                 result.title = result.name.strip()
             result.name = ""
 
-    def parse_man_page_with_subprocess(
-        self, command: str, section: Optional[str] = None
-    ) -> ManPageContent:
+    def parse_man_page_with_subprocess(self, command: str, section: Optional[str] = None) -> ManPageContent:
         """
         Parse a man page using the system `man` command.
 

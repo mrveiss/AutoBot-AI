@@ -10,8 +10,8 @@ calls are made.
 
 from __future__ import annotations
 
-import types
 import sys
+import types
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -41,14 +41,13 @@ _make_anthropic_stub()
 _make_xxhash_stub()
 
 
+from llm_interface_pkg.models import LLMRequest  # noqa: E402
 from llm_providers.anthropic_provider import (  # noqa: E402  (import after stub)
+    AnthropicProvider,
     _build_api_kwargs,
     _extract_text_content,
     _strip_think_blocks,
-    AnthropicProvider,
 )
-from llm_interface_pkg.models import LLMRequest  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # _strip_think_blocks
@@ -86,9 +85,7 @@ class TestBuildApiKwargs:
     def test_thinking_key_forwarded(self):
         base = {"model": "m", "max_tokens": 4096}
         thinking = {"type": "enabled", "budget_tokens": 8000}
-        merged, headers = _build_api_kwargs(
-            base, {"thinking": thinking, "temperature": 1}
-        )
+        merged, headers = _build_api_kwargs(base, {"thinking": thinking, "temperature": 1})
         assert merged["thinking"] == thinking
         assert merged["temperature"] == 1
         assert headers == {}
@@ -125,9 +122,7 @@ class TestBuildApiKwargs:
 
     def test_multiple_betas_comma_joined(self):
         base = {"model": "m"}
-        merged, headers = _build_api_kwargs(
-            base, {"betas": ["beta-a", "beta-b", "beta-c"]}
-        )
+        merged, headers = _build_api_kwargs(base, {"betas": ["beta-a", "beta-b", "beta-c"]})
         assert "betas" not in merged
         assert headers["anthropic-beta"] == "beta-a,beta-b,beta-c"
 
@@ -207,9 +202,7 @@ class TestBuildRequestKwargs:
 
     def test_no_api_kwargs_defaults(self):
         provider = self._provider()
-        kwargs, headers, preserve = provider._build_request_kwargs(
-            "claude-sonnet-4-6", self._make_request()
-        )
+        kwargs, headers, preserve = provider._build_request_kwargs("claude-sonnet-4-6", self._make_request())
         assert kwargs["model"] == "claude-sonnet-4-6"
         assert kwargs["max_tokens"] == 4096
         assert headers == {}
@@ -228,9 +221,7 @@ class TestBuildRequestKwargs:
                 }
             }
         )
-        kwargs, headers, preserve = provider._build_request_kwargs(
-            "claude-sonnet-4-6", request
-        )
+        kwargs, headers, preserve = provider._build_request_kwargs("claude-sonnet-4-6", request)
         assert kwargs["thinking"] == thinking
         assert kwargs["max_tokens"] == 64000
         assert kwargs["temperature"] == 1
@@ -239,9 +230,7 @@ class TestBuildRequestKwargs:
 
     def test_preserve_reasoning_flag(self):
         provider = self._provider()
-        request = self._make_request(
-            metadata={"api_kwargs": {"preserve_reasoning": True}}
-        )
+        request = self._make_request(metadata={"api_kwargs": {"preserve_reasoning": True}})
         _, _, preserve = provider._build_request_kwargs("m", request)
         assert preserve is True
 
@@ -370,9 +359,7 @@ class TestChatCompletionWithThinking:
         await provider.chat_completion(request)
 
         call_kwargs = mock_client.messages.create.call_args.kwargs
-        assert call_kwargs.get("extra_headers") == {
-            "anthropic-beta": "output-128k-2025-02-19"
-        }
+        assert call_kwargs.get("extra_headers") == {"anthropic-beta": "output-128k-2025-02-19"}
 
     @pytest.mark.asyncio
     async def test_normal_request_unaffected(self):

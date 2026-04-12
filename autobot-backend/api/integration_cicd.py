@@ -39,12 +39,8 @@ class ConnectionTestRequest(BaseModel):
 class PipelineTriggerRequest(BaseModel):
     """Request model for triggering a pipeline."""
 
-    confirm: bool = Field(
-        False, description="Confirmation flag - must be true to trigger"
-    )
-    parameters: Dict[str, Any] = Field(
-        default_factory=dict, description="Pipeline parameters"
-    )
+    confirm: bool = Field(False, description="Confirmation flag - must be true to trigger")
+    parameters: Dict[str, Any] = Field(default_factory=dict, description="Pipeline parameters")
 
 
 class ProviderInfo(BaseModel):
@@ -70,9 +66,7 @@ async def test_connection(request: ConnectionTestRequest) -> Dict[str, Any]:
         HTTPException: If provider is unknown or test fails
     """
     try:
-        integration = _create_integration(
-            request.provider, request.base_url, request.credentials
-        )
+        integration = _create_integration(request.provider, request.base_url, request.credentials)
         health = await integration.test_connection()
         return {
             "status": health.status.value,
@@ -141,9 +135,7 @@ async def list_pipelines(
         integration = _create_integration(provider, base_url, creds)
         params = {}
         if project_id:
-            params["project_id"] = (
-                int(project_id) if project_id.isdigit() else project_id
-            )
+            params["project_id"] = int(project_id) if project_id.isdigit() else project_id
             params["project_slug"] = project_id
 
         if provider == "jenkins":
@@ -188,9 +180,7 @@ async def get_pipeline_status(
         action = _get_status_action(provider)
         return await integration.execute_action(action, params)
     except Exception:
-        logger.exception(
-            "Failed to get status for %s pipeline %s", provider, pipeline_id
-        )
+        logger.exception("Failed to get status for %s pipeline %s", provider, pipeline_id)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -220,17 +210,13 @@ async def trigger_pipeline(
         HTTPException: If confirmation missing or operation fails
     """
     if not request.confirm:
-        raise HTTPException(
-            status_code=400, detail="Confirmation required to trigger pipeline"
-        )
+        raise HTTPException(status_code=400, detail="Confirmation required to trigger pipeline")
     try:
         import json
 
         creds = json.loads(credentials)
         integration = _create_integration(provider, base_url, creds)
-        params = _build_trigger_params(
-            provider, pipeline_id, project_id, request.parameters
-        )
+        params = _build_trigger_params(provider, pipeline_id, project_id, request.parameters)
         return await integration.execute_action("trigger_pipeline", params)
     except Exception:
         logger.exception("Failed to trigger %s pipeline %s", provider, pipeline_id)
@@ -281,9 +267,7 @@ async def get_pipeline_logs(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-def _create_integration(
-    provider: CICDProvider, base_url: str, credentials: Dict[str, str]
-):
+def _create_integration(provider: CICDProvider, base_url: str, credentials: Dict[str, str]):
     """Create integration instance.
 
     Helper for _create_integration (Issue #61).
@@ -345,9 +329,7 @@ def _build_status_params(
         return {"job_name": job_name, "build_number": int(pipeline_id)}
     elif provider == "gitlab":
         if not project_id:
-            raise HTTPException(
-                status_code=400, detail="project_id required for GitLab"
-            )
+            raise HTTPException(status_code=400, detail="project_id required for GitLab")
         return {"project_id": int(project_id), "pipeline_id": int(pipeline_id)}
     elif provider == "circleci":
         return {"workflow_id": pipeline_id}
@@ -398,9 +380,7 @@ def _build_trigger_params(
         return {"job_name": pipeline_id, "parameters": parameters}
     elif provider == "gitlab":
         if not project_id:
-            raise HTTPException(
-                status_code=400, detail="project_id required for GitLab"
-            )
+            raise HTTPException(status_code=400, detail="project_id required for GitLab")
         return {"project_id": int(project_id), "ref": pipeline_id}
     elif provider == "circleci":
         return {"project_slug": project_id or pipeline_id, "branch": pipeline_id}

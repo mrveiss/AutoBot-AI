@@ -63,9 +63,7 @@ class TestKnowledgeBaseRedisIntegration:
         """Test connection pool handles multiple sequential operations"""
         # Perform 10 sequential operations
         for i in range(10):
-            result = await kb.store_fact(
-                text=f"Test fact {i}", metadata={"test": True, "iteration": i}
-            )
+            result = await kb.store_fact(text=f"Test fact {i}", metadata={"test": True, "iteration": i})
             assert result["status"] == "success"
 
         # Verify all facts were stored
@@ -103,9 +101,7 @@ class TestKnowledgeBaseRedisIntegration:
         """Test get_fact() retrieves specific fact by ID from real Redis"""
         # Store a fact first
         test_content = "Specific fact retrieval test"
-        store_result = await kb.store_fact(
-            text=test_content, metadata={"test_type": "id_retrieval"}
-        )
+        store_result = await kb.store_fact(text=test_content, metadata={"test_type": "id_retrieval"})
         fact_id = store_result["fact_id"]
 
         # Retrieve by ID
@@ -141,9 +137,7 @@ class TestKnowledgeBaseRedisIntegration:
         stored_ids = []
 
         for i in range(num_facts):
-            result = await kb.store_fact(
-                text=f"Bulk fact {i}", metadata={"batch": "test_all_facts"}
-            )
+            result = await kb.store_fact(text=f"Bulk fact {i}", metadata={"batch": "test_all_facts"})
             stored_ids.append(result["fact_id"])
 
         # Retrieve all facts
@@ -177,9 +171,7 @@ class TestKnowledgeBaseRedisIntegration:
         # Verify no connection pool exhaustion
         assert all("fact_id" in r for r in successes)
 
-        print(
-            f"\n✓ {num_concurrent} concurrent stores completed in {duration:.2f}s"
-        )  # noqa: print
+        print(f"\n✓ {num_concurrent} concurrent stores completed in {duration:.2f}s")  # noqa: print
 
     @pytest.mark.asyncio
     async def test_concurrent_get_operations(self, kb):
@@ -187,9 +179,7 @@ class TestKnowledgeBaseRedisIntegration:
         # Store some facts first
         fact_ids = []
         for i in range(10):
-            result = await kb.store_fact(
-                text=f"Concurrent get test {i}", metadata={"test": "concurrent_get"}
-            )
+            result = await kb.store_fact(text=f"Concurrent get test {i}", metadata={"test": "concurrent_get"})
             fact_ids.append(result["fact_id"])
 
         # Create concurrent get tasks
@@ -215,9 +205,7 @@ class TestKnowledgeBaseRedisIntegration:
         # Verify all returned data
         assert all(isinstance(r, list) for r in results)
 
-        print(
-            f"\n✓ {num_concurrent} concurrent gets completed in {duration:.2f}s"
-        )  # noqa: print
+        print(f"\n✓ {num_concurrent} concurrent gets completed in {duration:.2f}s")  # noqa: print
 
     @pytest.mark.asyncio
     async def test_mixed_concurrent_operations(self, kb):
@@ -247,9 +235,7 @@ class TestKnowledgeBaseRedisIntegration:
         store_results = [r for i, r in enumerate(results) if i % 2 == 0]
         assert all(r["status"] == "success" for r in store_results)
 
-        print(
-            f"\n✓ {num_operations} mixed operations completed in {duration:.2f}s"
-        )  # noqa: print
+        print(f"\n✓ {num_operations} mixed operations completed in {duration:.2f}s")  # noqa: print
 
     @pytest.mark.asyncio
     async def test_performance_p95_latency(self, kb):
@@ -260,9 +246,7 @@ class TestKnowledgeBaseRedisIntegration:
         store_latencies = []
         for i in range(num_samples):
             start = time.time()
-            result = await kb.store_fact(
-                text=f"Latency test {i}", metadata={"test": "latency"}
-            )
+            result = await kb.store_fact(text=f"Latency test {i}", metadata={"test": "latency"})
             latency_ms = (time.time() - start) * 1000
             store_latencies.append(latency_ms)
             assert result["status"] == "success"
@@ -293,9 +277,7 @@ class TestKnowledgeBaseRedisIntegration:
         # Normal operations should complete well within timeout
 
         start_time = time.time()
-        result = await kb.store_fact(
-            text="Timeout protection test", metadata={"test": "timeout"}
-        )
+        result = await kb.store_fact(text="Timeout protection test", metadata={"test": "timeout"})
         duration = time.time() - start_time
 
         # Should complete successfully within timeout
@@ -370,9 +352,7 @@ class TestKnowledgeBaseRedisIntegration:
         # Verify connection pool is still healthy
         assert await kb.aioredis_client.ping() is True
 
-        print(  # noqa: print
-            f"\n✓ {num_operations} operations completed without pool exhaustion in {duration:.2f}s"
-        )
+        print(f"\n✓ {num_operations} operations completed without pool exhaustion in {duration:.2f}s")  # noqa: print
 
     @pytest.mark.asyncio
     async def test_data_persistence_across_operations(self, kb):
@@ -405,9 +385,7 @@ class TestKnowledgeBaseRedisIntegration:
         }
 
         # Store with complex metadata
-        result = await kb.store_fact(
-            text="Complex metadata test", metadata=complex_metadata
-        )
+        result = await kb.store_fact(text="Complex metadata test", metadata=complex_metadata)
         fact_id = result["fact_id"]
 
         # Retrieve and verify
@@ -420,9 +398,7 @@ class TestKnowledgeBaseRedisIntegration:
         assert retrieved_metadata["nested"]["level1"]["level2"] == "deep value"
         assert retrieved_metadata["array"] == [1, 2, 3, "four"]
         assert retrieved_metadata["unicode"] == "🔥 emoji test"
-        assert (
-            retrieved_metadata["special_chars"] == 'quotes: "test", backslash: \\test'
-        )
+        assert retrieved_metadata["special_chars"] == 'quotes: "test", backslash: \\test'
 
 
 class TestKnowledgeBaseAsyncRedisManagerIntegration:
@@ -511,9 +487,7 @@ class TestKnowledgeBasePerformanceIntegration:
         duration = time.time() - start_time
         rate = num_facts / duration
 
-        print(
-            f"\n✓ Stored {num_facts} facts in {duration:.2f}s ({rate:.1f} facts/sec)"
-        )  # noqa: print
+        print(f"\n✓ Stored {num_facts} facts in {duration:.2f}s ({rate:.1f} facts/sec)")  # noqa: print
 
         # Should achieve reasonable throughput
         assert rate > 10, f"Store rate {rate:.1f} facts/sec is too slow"
@@ -536,9 +510,7 @@ class TestKnowledgeBasePerformanceIntegration:
 
         rate = num_retrievals / duration
 
-        print(  # noqa: print
-            f"\n✓ Performed {num_retrievals} retrievals in {duration:.2f}s ({rate:.1f} ops/sec)"
-        )
+        print(f"\n✓ Performed {num_retrievals} retrievals in {duration:.2f}s ({rate:.1f} ops/sec)")  # noqa: print
 
         # Should achieve reasonable throughput
         assert rate > 5, f"Retrieve rate {rate:.1f} ops/sec is too slow"

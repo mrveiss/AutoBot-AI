@@ -57,11 +57,7 @@ class HeartbeatScheduler:
             return
         self._running = True
         async with self._session_factory() as session:
-            rows = await session.execute(
-                select(AgentRuntimeState).where(
-                    AgentRuntimeState.heartbeat_enabled.is_(True)
-                )
-            )
+            rows = await session.execute(select(AgentRuntimeState).where(AgentRuntimeState.heartbeat_enabled.is_(True)))
             states = rows.scalars().all()
         for state in states:
             self._spawn_task(state.agent_id, state.heartbeat_interval_seconds)
@@ -86,9 +82,7 @@ class HeartbeatScheduler:
             self._tasks[agent_id].cancel()
         if self._running:
             self._spawn_task(agent_id, interval_seconds)
-        logger.info(
-            "Heartbeat enabled for agent %s (interval=%ss)", agent_id, interval_seconds
-        )
+        logger.info("Heartbeat enabled for agent %s (interval=%ss)", agent_id, interval_seconds)
 
     async def disable_agent(self, agent_id: str) -> None:
         """Disable heartbeat for an agent and cancel its loop (#1407)."""
@@ -140,9 +134,7 @@ class HeartbeatScheduler:
 
     async def _heartbeat_loop(self, agent_id: str, interval_seconds: int) -> None:
         """Periodically fire heartbeat runs for agent_id (#1407)."""
-        logger.info(
-            "Heartbeat loop started: agent=%s interval=%ss", agent_id, interval_seconds
-        )
+        logger.info("Heartbeat loop started: agent=%s interval=%ss", agent_id, interval_seconds)
         while True:
             try:
                 await asyncio.sleep(interval_seconds)
@@ -151,23 +143,15 @@ class HeartbeatScheduler:
                 logger.info("Heartbeat loop cancelled for agent %s", agent_id)
                 return
             except Exception:
-                logger.exception(
-                    "Heartbeat loop error for agent %s (continuing)", agent_id
-                )
+                logger.exception("Heartbeat loop error for agent %s (continuing)", agent_id)
 
     async def _run_once(self, agent_id: str, trigger: WakeupTrigger) -> None:
         """Execute one heartbeat run for agent_id (#1407)."""
         run_id, state_id, timeout = await self._start_run(agent_id, trigger)
-        final_status, error_msg, usage = await self._invoke_agent(
-            agent_id, state_id, run_id, timeout
-        )
-        await self._finalize_run(
-            agent_id, run_id, state_id, final_status, error_msg, usage
-        )
+        final_status, error_msg, usage = await self._invoke_agent(agent_id, state_id, run_id, timeout)
+        await self._finalize_run(agent_id, run_id, state_id, final_status, error_msg, usage)
 
-    async def _start_run(
-        self, agent_id: str, trigger: WakeupTrigger
-    ) -> Tuple[uuid.UUID, uuid.UUID, int]:
+    async def _start_run(self, agent_id: str, trigger: WakeupTrigger) -> Tuple[uuid.UUID, uuid.UUID, int]:
         """Create HeartbeatRun row; consume any pending wakeup request (#1407)."""
         async with self._session_factory() as session:
             state = await _get_or_create_state(session, agent_id)
@@ -201,9 +185,7 @@ class HeartbeatScheduler:
     ) -> Tuple[str, Optional[str], Dict[str, Any]]:
         """Run _execute_agent with timeout; return (status, error, usage) (#1407)."""
         try:
-            result = await asyncio.wait_for(
-                self._execute_agent(agent_id, state_id, run_id), timeout=timeout
-            )
+            result = await asyncio.wait_for(self._execute_agent(agent_id, state_id, run_id), timeout=timeout)
             return HeartbeatRunStatus.COMPLETED.value, None, result or {}
         except asyncio.TimeoutError:
             logger.warning("Heartbeat run %s timed out for agent %s", run_id, agent_id)
@@ -213,9 +195,7 @@ class HeartbeatScheduler:
                 {},
             )
         except Exception as exc:
-            logger.exception(
-                "Heartbeat run %s failed for %s: %s", run_id, agent_id, exc
-            )
+            logger.exception("Heartbeat run %s failed for %s: %s", run_id, agent_id, exc)
             return HeartbeatRunStatus.FAILED.value, str(exc), {}
 
     async def _finalize_run(
@@ -250,13 +230,9 @@ class HeartbeatScheduler:
                 f"Run finished with status={final_status}",
             )
             await session.commit()
-        logger.info(
-            "Run %s finished: status=%s agent=%s", run_id, final_status, agent_id
-        )
+        logger.info("Run %s finished: status=%s agent=%s", run_id, final_status, agent_id)
 
-    async def _execute_agent(
-        self, agent_id: str, state_id: uuid.UUID, run_id: uuid.UUID
-    ) -> Dict[str, Any]:
+    async def _execute_agent(self, agent_id: str, state_id: uuid.UUID, run_id: uuid.UUID) -> Dict[str, Any]:
         """
         Execute agent work for one heartbeat tick (#1407).
 
@@ -267,13 +243,9 @@ class HeartbeatScheduler:
         return {}
 
 
-async def _get_or_create_state(
-    session: AsyncSession, agent_id: str
-) -> AgentRuntimeState:
+async def _get_or_create_state(session: AsyncSession, agent_id: str) -> AgentRuntimeState:
     """Return existing AgentRuntimeState or create one for agent_id (#1407)."""
-    result = await session.execute(
-        select(AgentRuntimeState).where(AgentRuntimeState.agent_id == agent_id)
-    )
+    result = await session.execute(select(AgentRuntimeState).where(AgentRuntimeState.agent_id == agent_id))
     state = result.scalar_one_or_none()
     if state is None:
         state = AgentRuntimeState(id=uuid.uuid4(), agent_id=agent_id)
@@ -282,9 +254,7 @@ async def _get_or_create_state(
     return state
 
 
-async def _consume_top_wakeup(
-    session: AsyncSession, agent_id: str
-) -> Optional[AgentWakeupRequest]:
+async def _consume_top_wakeup(session: AsyncSession, agent_id: str) -> Optional[AgentWakeupRequest]:
     """
     Fetch and mark-consumed the highest-priority pending wakeup request (#1407).
 

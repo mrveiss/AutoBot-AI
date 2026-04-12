@@ -198,9 +198,7 @@ class TestParseAction:
     def test_parse_action_valid_json(self):
         """Valid JSON with a tool key is returned as-is."""
         retriever = _make_retriever_agentic()
-        action = retriever._parse_action(
-            '{"tool": "semantic_search", "params": {"top_k": 5}}'
-        )
+        action = retriever._parse_action('{"tool": "semantic_search", "params": {"top_k": 5}}')
         assert action["tool"] == "semantic_search"
         assert action["params"]["top_k"] == 5
 
@@ -245,9 +243,7 @@ class TestRetrieveAgenticRouting:
             llm_responses=['{"tool": "DONE"}'],
         )
 
-        with patch.object(
-            retriever, "retrieve_agentic", wraps=retriever.retrieve_agentic
-        ) as spy:
+        with patch.object(retriever, "retrieve_agentic", wraps=retriever.retrieve_agentic) as spy:
             with patch("asyncio.create_task"):
                 await retriever.retrieve("complex multi-faceted query", top_k=3)
 
@@ -261,9 +257,7 @@ class TestRetrieveAgenticRouting:
             llm_responses=['{"tool": "DONE"}'],
         )
 
-        with patch.object(
-            retriever, "retrieve_agentic", wraps=retriever.retrieve_agentic
-        ) as spy:
+        with patch.object(retriever, "retrieve_agentic", wraps=retriever.retrieve_agentic) as spy:
             with patch("asyncio.create_task"):
                 await retriever.retrieve("trace the chain of events", top_k=3)
 
@@ -276,9 +270,7 @@ class TestRetrieveAgenticRouting:
         retriever = _make_retriever_agentic(complexity_value="complex")
         retriever.llm = None
 
-        with patch.object(
-            retriever, "_full_retrieve", wraps=retriever._full_retrieve
-        ) as spy:
+        with patch.object(retriever, "_full_retrieve", wraps=retriever._full_retrieve) as spy:
             with patch("asyncio.create_task"):
                 await retriever.retrieve("complex query without llm", top_k=3)
 

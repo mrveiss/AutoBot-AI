@@ -54,9 +54,7 @@ class SemanticAnalyzer:
             "docstring": re.compile(r'"""[\s\S]{0,5000}Args:[\s\S]{0,5000}Returns:'),
         },
         "numpy": {
-            "docstring": re.compile(
-                r'"""[\s\S]{0,5000}Parameters[\s\S]{0,5000}----------'
-            ),
+            "docstring": re.compile(r'"""[\s\S]{0,5000}Parameters[\s\S]{0,5000}----------'),
         },
     }
 
@@ -170,9 +168,7 @@ class SemanticAnalyzer:
             suggestions.append("from autobot_shared.ssot_config import config")
 
         if "redis_client" in context_patterns:
-            suggestions.append(
-                "from autobot_shared.redis_client import get_redis_client"
-            )
+            suggestions.append("from autobot_shared.redis_client import get_redis_client")
 
         if "logger" in context_patterns:
             suggestions.append("import logging")
@@ -191,9 +187,7 @@ class SemanticAnalyzer:
 
         return suggestions
 
-    def analyze_semantic_context(
-        self, source_code: str, imports: List[str], tree: ast.AST
-    ):
+    def analyze_semantic_context(self, source_code: str, imports: List[str], tree: ast.AST):
         """
         Comprehensive semantic analysis.
 

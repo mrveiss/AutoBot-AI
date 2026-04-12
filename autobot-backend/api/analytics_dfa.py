@@ -495,9 +495,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
             return ".".join(reversed(parts))
         return ""
 
-    def _check_taint_source(
-        self, node: ast.Call
-    ) -> Optional[Tuple[SourceType, TaintLevel]]:
+    def _check_taint_source(self, node: ast.Call) -> Optional[Tuple[SourceType, TaintLevel]]:
         """Check if a call is a taint source."""
         call_name = self._get_call_name(node)
 
@@ -512,9 +510,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
 
         return None
 
-    def _check_taint_sink(
-        self, node: ast.Call
-    ) -> Optional[Tuple[SinkType, VulnerabilityType, Severity]]:
+    def _check_taint_sink(self, node: ast.Call) -> Optional[Tuple[SinkType, VulnerabilityType, Severity]]:
         """Check if a call is a taint sink."""
         call_name = self._get_call_name(node)
 
@@ -615,16 +611,10 @@ class DataFlowAnalyzer(ast.NodeVisitor):
                 target_taint = self.taint_map.get(edge.target_var, TaintLevel.UNTAINTED)
 
                 # Propagate taint
-                if (
-                    source_taint == TaintLevel.TAINTED
-                    and target_taint != TaintLevel.TAINTED
-                ):
+                if source_taint == TaintLevel.TAINTED and target_taint != TaintLevel.TAINTED:
                     self.taint_map[edge.target_var] = TaintLevel.TAINTED
                     changed = True
-                elif (
-                    source_taint == TaintLevel.PARTIALLY_TAINTED
-                    and target_taint == TaintLevel.UNTAINTED
-                ):
+                elif source_taint == TaintLevel.PARTIALLY_TAINTED and target_taint == TaintLevel.UNTAINTED:
                     self.taint_map[edge.target_var] = TaintLevel.PARTIALLY_TAINTED
                     changed = True
 
@@ -789,9 +779,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
         """Visit augmented assignment (+=, -=, etc.)."""
         if isinstance(node.target, ast.Name):
             # The target is both used and defined
-            self._add_use(
-                node.target.id, node.lineno, node.target.col_offset, "augassign"
-            )
+            self._add_use(node.target.id, node.lineno, node.target.col_offset, "augassign")
 
             value_taint = self._get_taint_from_expr(node.value)
             current_taint = self.taint_map.get(node.target.id, TaintLevel.UNTAINTED)
@@ -799,10 +787,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
             # Combine taints (more tainted wins)
             if value_taint == TaintLevel.TAINTED or current_taint == TaintLevel.TAINTED:
                 final_taint = TaintLevel.TAINTED
-            elif (
-                value_taint == TaintLevel.PARTIALLY_TAINTED
-                or current_taint == TaintLevel.PARTIALLY_TAINTED
-            ):
+            elif value_taint == TaintLevel.PARTIALLY_TAINTED or current_taint == TaintLevel.PARTIALLY_TAINTED:
                 final_taint = TaintLevel.PARTIALLY_TAINTED
             else:
                 final_taint = TaintLevel.UNTAINTED
@@ -913,21 +898,15 @@ class DataFlowAnalyzer(ast.NodeVisitor):
         for arg in expr.args:
             self._extract_edges_from_expr(arg, target_var, target_line)
 
-    def _extract_from_subscript(
-        self, expr: ast.Subscript, target_var: str, target_line: int
-    ):
+    def _extract_from_subscript(self, expr: ast.Subscript, target_var: str, target_line: int):
         """Extract edges from Subscript (Issue #315)."""
         self._extract_edges_from_expr(expr.value, target_var, target_line)
 
-    def _extract_from_attribute(
-        self, expr: ast.Attribute, target_var: str, target_line: int
-    ):
+    def _extract_from_attribute(self, expr: ast.Attribute, target_var: str, target_line: int):
         """Extract edges from Attribute (Issue #315)."""
         self._extract_edges_from_expr(expr.value, target_var, target_line)
 
-    def _extract_from_joinedstr(
-        self, expr: ast.JoinedStr, target_var: str, target_line: int
-    ):
+    def _extract_from_joinedstr(self, expr: ast.JoinedStr, target_var: str, target_line: int):
         """Extract edges from f-string (Issue #315)."""
         for value in expr.values:
             if isinstance(value, ast.FormattedValue):
@@ -946,9 +925,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
         for value in expr.values:
             self._extract_edges_from_expr(value, target_var, target_line)
 
-    def _extract_edges_from_expr(
-        self, expr: ast.AST, target_var: str, target_line: int
-    ):
+    def _extract_edges_from_expr(self, expr: ast.AST, target_var: str, target_line: int):
         """Extract data flow edges from an expression (Issue #315 - dispatch table)."""
         # Dispatch table for expression type handlers
         handlers = {
@@ -1091,9 +1068,7 @@ def _build_graph_response(graph) -> DataFlowResponse:
     )
 
 
-def _build_analysis_response(
-    graphs: List["DataFlowGraph"], file_path: str
-) -> AnalysisResponse:
+def _build_analysis_response(graphs: List["DataFlowGraph"], file_path: str) -> AnalysisResponse:
     """Build AnalysisResponse from analyzed graphs (Issue #665: extracted helper)."""
     graph_responses = []
     total_defs = 0
@@ -1122,9 +1097,7 @@ def _build_analysis_response(
 
 
 @router.post("/analyze", response_model=AnalysisResponse)
-async def analyze_code(
-    request: AnalyzeRequest, admin_check: bool = Depends(check_admin_permission)
-):
+async def analyze_code(request: AnalyzeRequest, admin_check: bool = Depends(check_admin_permission)):
     """
     Analyze Python source code for data flow and security vulnerabilities (Issue #665: uses helper).
 
@@ -1148,9 +1121,7 @@ async def analyze_code(
 
 
 @router.post("/analyze-file", response_model=AnalysisResponse)
-async def analyze_file(
-    request: AnalyzeFileRequest, admin_check: bool = Depends(check_admin_permission)
-):
+async def analyze_file(request: AnalyzeFileRequest, admin_check: bool = Depends(check_admin_permission)):
     """
     Analyze a Python file for data flow and security vulnerabilities (Issue #665: uses helper).
 
@@ -1168,9 +1139,7 @@ async def analyze_file(
         return _build_analysis_response(graphs, safe_path)
 
     except FileNotFoundError:
-        raise HTTPException(
-            status_code=404, detail=f"File not found: {request.file_path}"
-        )
+        raise HTTPException(status_code=404, detail=f"File not found: {request.file_path}")
     except OSError:
         raise HTTPException(status_code=500, detail="Failed to read file")
     except SyntaxError:
@@ -1181,9 +1150,7 @@ async def analyze_file(
 
 
 @router.post("/vulnerabilities")
-async def get_vulnerabilities(
-    request: AnalyzeRequest, admin_check: bool = Depends(check_admin_permission)
-):
+async def get_vulnerabilities(request: AnalyzeRequest, admin_check: bool = Depends(check_admin_permission)):
     """
     Get only security vulnerabilities from code analysis.
 
@@ -1248,9 +1215,7 @@ def _aggregate_graph_taint_stats(
 
 
 @router.post("/taint-summary", response_model=TaintSummary)
-async def get_taint_summary(
-    request: AnalyzeRequest, admin_check: bool = Depends(check_admin_permission)
-):
+async def get_taint_summary(request: AnalyzeRequest, admin_check: bool = Depends(check_admin_permission)):
     """
     Get summary of taint analysis.
 
@@ -1267,9 +1232,7 @@ async def get_taint_summary(
 
         # Aggregate stats using helper (Issue #315 - reduced depth)
         for graph in graphs:
-            _aggregate_graph_taint_stats(
-                graph, tainted_vars, vulns_by_type, vulns_by_severity, counts
-            )
+            _aggregate_graph_taint_stats(graph, tainted_vars, vulns_by_type, vulns_by_severity, counts)
 
         return TaintSummary(
             tainted_sources=counts["sources"],
@@ -1344,8 +1307,7 @@ async def health_check(admin_check: bool = Depends(check_admin_permission)):
     Issue #744: Requires admin authentication.
     """
     logger.warning(
-        "Deprecated health endpoint called: /api/dfa-analytics/health — "
-        "use /api/system/health instead (#3333)"
+        "Deprecated health endpoint called: /api/dfa-analytics/health — " "use /api/system/health instead (#3333)"
     )
     return {
         "status": "healthy",

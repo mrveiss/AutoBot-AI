@@ -102,9 +102,7 @@ def main():
     logger.info("")
     logger.info("Next steps:")
     logger.info("  1. Install dependencies: pip install -r requirements.txt")
-    logger.info(
-        "  2. Run migration: python migrations/add_events_certificates_updates_tables.py"
-    )
+    logger.info("  2. Run migration: python migrations/add_events_certificates_updates_tables.py")
     logger.info("  3. Start server: python main.py")
     logger.info("  4. View API docs: http://localhost:8080/api/docs")
     logger.info("")

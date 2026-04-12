@@ -174,14 +174,11 @@ class AnthropicProvider(BaseProvider):
         try:
             import anthropic
         except ImportError as exc:
-            raise ImportError(
-                "anthropic package not installed. Run: pip install anthropic"
-            ) from exc
+            raise ImportError("anthropic package not installed. Run: pip install anthropic") from exc
         api_key = self._resolve_api_key()
         if not api_key:
             raise ValueError(
-                "Anthropic API key not configured. "
-                "Set ANTHROPIC_API_KEY or provide api_key in provider settings."
+                "Anthropic API key not configured. " "Set ANTHROPIC_API_KEY or provide api_key in provider settings."
             )
         self._client = anthropic.AsyncAnthropic(api_key=api_key)
         return self._client
@@ -199,14 +196,10 @@ class AnthropicProvider(BaseProvider):
             if msg.get("role") == "system":
                 system_content = msg.get("content", "")
             else:
-                chat_messages.append(
-                    {"role": msg.get("role", "user"), "content": msg.get("content", "")}
-                )
+                chat_messages.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
         return system_content, chat_messages
 
-    def _build_request_kwargs(
-        self, model: str, request: LLMRequest
-    ) -> tuple[Dict[str, Any], Dict[str, Any], bool]:
+    def _build_request_kwargs(self, model: str, request: LLMRequest) -> tuple[Dict[str, Any], Dict[str, Any], bool]:
         """
         Build the kwargs dict and extra_headers for an Anthropic SDK call.
 
@@ -246,14 +239,10 @@ class AnthropicProvider(BaseProvider):
         """
         self._total_requests += 1
         start = time.time()
-        model = request.model_name or self._get_setting(
-            "default_model", ANTHROPIC_CLAUDE_SONNET4_6
-        )
+        model = request.model_name or self._get_setting("default_model", ANTHROPIC_CLAUDE_SONNET4_6)
         try:
             client = self._ensure_client()
-            kwargs, extra_headers, preserve_reasoning = self._build_request_kwargs(
-                model, request
-            )
+            kwargs, extra_headers, preserve_reasoning = self._build_request_kwargs(model, request)
 
             call_kwargs: Dict[str, Any] = dict(kwargs)
             if extra_headers:
@@ -270,9 +259,7 @@ class AnthropicProvider(BaseProvider):
                 usage={
                     "prompt_tokens": response.usage.input_tokens,
                     "completion_tokens": response.usage.output_tokens,
-                    "total_tokens": (
-                        response.usage.input_tokens + response.usage.output_tokens
-                    ),
+                    "total_tokens": (response.usage.input_tokens + response.usage.output_tokens),
                 },
             )
         except Exception as exc:
@@ -294,14 +281,10 @@ class AnthropicProvider(BaseProvider):
         contains a ``thinking`` key.  Thinking blocks are not yielded.
         """
         self._total_requests += 1
-        model = request.model_name or self._get_setting(
-            "default_model", ANTHROPIC_CLAUDE_SONNET4_6
-        )
+        model = request.model_name or self._get_setting("default_model", ANTHROPIC_CLAUDE_SONNET4_6)
         try:
             client = self._ensure_client()
-            kwargs, extra_headers, _preserve = self._build_request_kwargs(
-                model, request
-            )
+            kwargs, extra_headers, _preserve = self._build_request_kwargs(model, request)
 
             call_kwargs: Dict[str, Any] = dict(kwargs)
             if extra_headers:

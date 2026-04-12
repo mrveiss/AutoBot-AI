@@ -31,9 +31,7 @@ FILE_TRANSFER_OPS = {"upload", "download", "transfer"}
 FILE_TRANSFER_OPS_SIMPLE = {"upload", "download"}
 
 # Issue #380: Module-level frozensets to avoid repeated list creation
-_SENSITIVE_FILE_KEYWORDS = frozenset(
-    {"password", "secret", "key", "token", "credential"}
-)
+_SENSITIVE_FILE_KEYWORDS = frozenset({"password", "secret", "key", "token", "credential"})
 _SYSTEM_DIRECTORIES = frozenset({"/etc/", "/usr/", "/var/"})
 _SENSITIVE_PORTS = frozenset({22, 23, 3389, 5900, 135, 139, 445})
 _REMOTE_ACCESS_PORTS = frozenset({22, 3389})  # SSH and RDP ports for auth requirements
@@ -214,9 +212,7 @@ class SecurityRiskJudge(BaseLLMJudge):
             context=security_context,
         )
 
-    def _extract_dimension_score(
-        self, judgment: JudgmentResult, dimension: JudgmentDimension
-    ) -> float:
+    def _extract_dimension_score(self, judgment: JudgmentResult, dimension: JudgmentDimension) -> float:
         """
         Extract a specific dimension score from judgment result.
 
@@ -251,9 +247,7 @@ class SecurityRiskJudge(BaseLLMJudge):
             "risk_level": self._calculate_risk_level(safety_score, security_score),
             "should_allow": safety_score > 0.7 and security_score > 0.7,
             "requires_confirmation": safety_score < 0.9 or security_score < 0.9,
-            "risk_factors": (
-                path_risks + [operation_risk] if operation_risk else path_risks
-            ),
+            "risk_factors": (path_risks + [operation_risk] if operation_risk else path_risks),
             "detailed_assessment": judgment,
             "mitigation_suggestions": judgment.improvement_suggestions,
         }
@@ -325,16 +319,10 @@ class SecurityRiskJudge(BaseLLMJudge):
                 context=access_context,
             )
 
-            safety_score = self._extract_dimension_score(
-                judgment, JudgmentDimension.SAFETY
-            )
-            security_score = self._extract_dimension_score(
-                judgment, JudgmentDimension.SECURITY
-            )
+            safety_score = self._extract_dimension_score(judgment, JudgmentDimension.SAFETY)
+            security_score = self._extract_dimension_score(judgment, JudgmentDimension.SECURITY)
 
-            return self._build_file_access_result(
-                judgment, safety_score, security_score, path_risks, operation_risk
-            )
+            return self._build_file_access_result(judgment, safety_score, security_score, path_risks, operation_risk)
 
         except Exception as e:
             logger.error("Error assessing file access risk: %s", e)
@@ -393,9 +381,7 @@ class SecurityRiskJudge(BaseLLMJudge):
             "network_risks": network_risks,
             "recommendation": judgment.recommendation,
             "confidence": judgment.confidence.value,
-            "security_requirements": self._get_network_security_requirements(
-                operation_data
-            ),
+            "security_requirements": self._get_network_security_requirements(operation_data),
         }
 
     async def evaluate_network_operation_security(
@@ -416,17 +402,11 @@ class SecurityRiskJudge(BaseLLMJudge):
                 JudgmentDimension.COMPLIANCE,
             ]
 
-            network_context = self._build_network_context(
-                operation_data, network_risks, context
-            )
+            network_context = self._build_network_context(operation_data, network_risks, context)
 
-            judgment = await self.make_judgment(
-                subject=operation_data, criteria=criteria, context=network_context
-            )
+            judgment = await self.make_judgment(subject=operation_data, criteria=criteria, context=network_context)
 
-            return self._build_network_security_result(
-                judgment, network_risks, operation_data
-            )
+            return self._build_network_security_result(judgment, network_risks, operation_data)
 
         except Exception as e:
             logger.error("Error evaluating network operation security: %s", e)
@@ -565,9 +545,7 @@ RISK THRESHOLDS:
 """
         return prompt.strip()
 
-    def _prepare_file_access_prompt(
-        self, subject_data: Dict[str, Any], context: Dict[str, Any]
-    ) -> str:
+    def _prepare_file_access_prompt(self, subject_data: Dict[str, Any], context: Dict[str, Any]) -> str:
         """Prepare prompt for file access security evaluation"""
 
         file_path = subject_data.get("file_path", "unknown")
@@ -615,9 +593,7 @@ Please provide detailed security assessment in the required JSON format.
 
         return prompt.strip()
 
-    def _prepare_network_operation_prompt(
-        self, subject_data: Dict[str, Any], context: Dict[str, Any]
-    ) -> str:
+    def _prepare_network_operation_prompt(self, subject_data: Dict[str, Any], context: Dict[str, Any]) -> str:
         """Prepare prompt for network operation security evaluation"""
 
         operation_data = context.get("operation_data", {})
@@ -644,9 +620,7 @@ Please provide comprehensive security assessment in the required JSON format.
 
         return prompt.strip()
 
-    def _prepare_general_security_prompt(
-        self, subject_data: Dict[str, Any], context: Dict[str, Any]
-    ) -> str:
+    def _prepare_general_security_prompt(self, subject_data: Dict[str, Any], context: Dict[str, Any]) -> str:
         """Prepare prompt for general security evaluation"""
 
         prompt = f"""
@@ -676,9 +650,7 @@ Please provide thorough security assessment focusing on safety, security, and co
                         risk_categories.append(category)
 
         # Check if command matches safe patterns
-        is_safe = any(
-            re.match(pattern, command, re.IGNORECASE) for pattern in self.safe_patterns
-        )
+        is_safe = any(re.match(pattern, command, re.IGNORECASE) for pattern in self.safe_patterns)
 
         if detected_patterns:
             safety_level = "high_risk"
@@ -723,9 +695,7 @@ Please provide thorough security assessment focusing on safety, security, and co
             risks.append("File name suggests sensitive content")
 
         # Hidden files in system directories - Issue #380: Use module-level frozenset
-        if "/." in file_path and any(
-            sys_dir in file_path for sys_dir in _SYSTEM_DIRECTORIES
-        ):
+        if "/." in file_path and any(sys_dir in file_path for sys_dir in _SYSTEM_DIRECTORIES):
             risks.append("Access to hidden system file")
 
         return risks
@@ -789,9 +759,7 @@ Please provide thorough security assessment focusing on safety, security, and co
         else:
             return "critical"
 
-    def _get_network_security_requirements(
-        self, operation_data: Dict[str, Any]
-    ) -> List[str]:
+    def _get_network_security_requirements(self, operation_data: Dict[str, Any]) -> List[str]:
         """Get security requirements for network operations"""
         requirements = []
 

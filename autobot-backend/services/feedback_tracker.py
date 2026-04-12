@@ -73,9 +73,7 @@ class FeedbackTracker:
                     file_path=file_path,
                     action=action,
                     pattern_id=pattern_id,
-                    confidence_score=(
-                        str(confidence_score) if confidence_score else None
-                    ),
+                    confidence_score=(str(confidence_score) if confidence_score else None),
                     completion_rank=completion_rank,
                 )
                 db.add(feedback)
@@ -162,9 +160,7 @@ class FeedbackTracker:
                 last_retrain = datetime.utcnow() - timedelta(days=30)
 
             feedback_count = (
-                db.query(func.count(CompletionFeedback.id))
-                .filter(CompletionFeedback.timestamp > last_retrain)
-                .scalar()
+                db.query(func.count(CompletionFeedback.id)).filter(CompletionFeedback.timestamp > last_retrain).scalar()
             )
 
             if feedback_count >= self.retrain_threshold:
@@ -250,23 +246,17 @@ class FeedbackTracker:
             since = datetime.utcnow() - timedelta(days=time_window_days)
 
             # Base query
-            query = db.query(CompletionFeedback).filter(
-                CompletionFeedback.timestamp > since
-            )
+            query = db.query(CompletionFeedback).filter(CompletionFeedback.timestamp > since)
 
             if language:
                 query = query.filter(CompletionFeedback.language == language)
 
             # Total feedback
             total_feedback = query.count()
-            accepted_feedback = query.filter(
-                CompletionFeedback.action == "accepted"
-            ).count()
+            accepted_feedback = query.filter(CompletionFeedback.action == "accepted").count()
 
             # Acceptance rate
-            acceptance_rate = (
-                accepted_feedback / total_feedback if total_feedback > 0 else 0.0
-            )
+            acceptance_rate = accepted_feedback / total_feedback if total_feedback > 0 else 0.0
 
             return {
                 "time_window_days": time_window_days,
@@ -278,9 +268,7 @@ class FeedbackTracker:
                 "top_patterns": self._get_top_patterns(db),
             }
 
-    def get_recent_feedback(
-        self, limit: int = 50, action: Optional[str] = None
-    ) -> List[Dict]:
+    def get_recent_feedback(self, limit: int = 50, action: Optional[str] = None) -> List[Dict]:
         """
         Get recent feedback events.
 
@@ -292,9 +280,7 @@ class FeedbackTracker:
             List of recent feedback events
         """
         with self.SessionLocal() as db:
-            query = db.query(CompletionFeedback).order_by(
-                CompletionFeedback.timestamp.desc()
-            )
+            query = db.query(CompletionFeedback).order_by(CompletionFeedback.timestamp.desc())
 
             if action:
                 query = query.filter(CompletionFeedback.action == action)
@@ -305,7 +291,5 @@ class FeedbackTracker:
 
     def mark_retrain_completed(self):
         """Mark that retraining has completed."""
-        self.redis_client.set(
-            self.last_retrain_key, datetime.utcnow().isoformat().encode()
-        )
+        self.redis_client.set(self.last_retrain_key, datetime.utcnow().isoformat().encode())
         logger.info("Marked retraining as completed")

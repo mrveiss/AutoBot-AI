@@ -126,17 +126,10 @@ class ApprovalMemoryManager:
             enabled: Whether memory is enabled. Uses config default if not provided.
         """
         self.ttl = ttl or config.permission.approval_memory_ttl
-        self.enabled = (
-            enabled
-            if enabled is not None
-            else config.permission.approval_memory_enabled
-        )
+        self.enabled = enabled if enabled is not None else config.permission.approval_memory_enabled
 
         if self.enabled:
-            logger.info(
-                f"ApprovalMemoryManager initialized: ttl={self.ttl}s "
-                f"({self.ttl // 86400} days)"
-            )
+            logger.info(f"ApprovalMemoryManager initialized: ttl={self.ttl}s " f"({self.ttl // 86400} days)")
         else:
             logger.info("ApprovalMemoryManager disabled by configuration")
 
@@ -225,9 +218,7 @@ class ApprovalMemoryManager:
                 return []
         return []
 
-    def _update_or_add_record(
-        self, records: List[Dict], record: ApprovalRecord, pattern: str, tool: str
-    ) -> List[Dict]:
+    def _update_or_add_record(self, records: List[Dict], record: ApprovalRecord, pattern: str, tool: str) -> List[Dict]:
         """
         Update existing record or add new one.
 
@@ -362,8 +353,7 @@ class ApprovalMemoryManager:
                         return True
                     else:
                         logger.debug(
-                            f"Memory exists but risk level increased: "
-                            f"{rec.get('risk_level')} -> {risk_level}"
+                            f"Memory exists but risk level increased: " f"{rec.get('risk_level')} -> {risk_level}"
                         )
 
             return False
@@ -372,9 +362,7 @@ class ApprovalMemoryManager:
             logger.error(f"Failed to check approval memory: {e}")
             return False
 
-    async def get_project_approvals(
-        self, project_path: str, user_id: str
-    ) -> List[ApprovalRecord]:
+    async def get_project_approvals(self, project_path: str, user_id: str) -> List[ApprovalRecord]:
         """
         Get all stored approvals for a project.
 
@@ -409,9 +397,7 @@ class ApprovalMemoryManager:
             logger.error(f"Failed to get project approvals: {e}")
             return []
 
-    async def clear_project_approvals(
-        self, project_path: str, user_id: Optional[str] = None
-    ) -> bool:
+    async def clear_project_approvals(self, project_path: str, user_id: Optional[str] = None) -> bool:
         """
         Clear approval memory for a project.
 
@@ -436,8 +422,7 @@ class ApprovalMemoryManager:
                 key = self._get_redis_key(project_path, user_id)
                 await redis.delete(key)
                 logger.info(
-                    f"Cleared approvals: project_hash={self._get_project_hash(project_path)}, "
-                    f"user={user_id}"
+                    f"Cleared approvals: project_hash={self._get_project_hash(project_path)}, " f"user={user_id}"
                 )
             else:
                 # Clear all users' approvals for this project
@@ -456,8 +441,7 @@ class ApprovalMemoryManager:
                         break
 
                 logger.info(
-                    f"Cleared all approvals for project: "
-                    f"project_hash={project_hash}, deleted={deleted} records"
+                    f"Cleared all approvals for project: " f"project_hash={project_hash}, deleted={deleted} records"
                 )
 
             return True
@@ -495,11 +479,7 @@ class ApprovalMemoryManager:
 
             # Find and remove matching record
             original_count = len(records)
-            records = [
-                r
-                for r in records
-                if not (r.get("pattern") == pattern and r.get("tool") == tool)
-            ]
+            records = [r for r in records if not (r.get("pattern") == pattern and r.get("tool") == tool)]
 
             if len(records) == original_count:
                 return False  # Not found

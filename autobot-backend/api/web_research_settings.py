@@ -54,9 +54,7 @@ class ResearchPreferences(BaseModel):
 async def get_research_status():
     """Get current web research status and configuration"""
     try:
-        from agents.web_researcher import (
-            get_web_researcher as get_web_research_integration,
-        )
+        from agents.web_researcher import get_web_researcher as get_web_research_integration
 
         # Get web research integration instance
         integration = get_web_research_integration()
@@ -107,9 +105,7 @@ async def enable_web_research():
     try:
         from unified_unified_config_manager import unified_unified_config_manager
 
-        from agents.web_researcher import (
-            get_web_researcher as get_web_research_integration,
-        )
+        from agents.web_researcher import get_web_researcher as get_web_research_integration
         from services.config_service import ConfigService
 
         # Enable in integration
@@ -161,9 +157,7 @@ async def disable_web_research():
     try:
         from unified_unified_config_manager import unified_unified_config_manager
 
-        from agents.web_researcher import (
-            get_web_researcher as get_web_research_integration,
-        )
+        from agents.web_researcher import get_web_researcher as get_web_research_integration
         from services.config_service import ConfigService
 
         # Disable in integration
@@ -222,23 +216,17 @@ async def get_research_settings():
 
         settings = {
             "enabled": research_config.get("enabled", False),
-            "require_user_confirmation": web_research_config.get(
-                "require_user_confirmation", True
-            ),
+            "require_user_confirmation": web_research_config.get("require_user_confirmation", True),
             "preferred_method": research_config.get("preferred_method", "basic"),
             "max_results": research_config.get("max_results", 5),
             "timeout_seconds": research_config.get("timeout_seconds", 30),
-            "auto_research_threshold": web_research_config.get(
-                "auto_research_threshold", 0.3
-            ),
+            "auto_research_threshold": web_research_config.get("auto_research_threshold", 0.3),
             "rate_limit_requests": research_config.get("rate_limit_requests", 5),
             "rate_limit_window": research_config.get("rate_limit_window", 60),
             "daily_limit": web_research_config.get("daily_research_limit", 50),
             "quality_threshold": web_research_config.get("min_result_quality", 0.5),
             "store_results_in_kb": web_research_config.get("store_results_in_kb", True),
-            "filter_adult_content": web_research_config.get(
-                "filter_adult_content", True
-            ),
+            "filter_adult_content": web_research_config.get("filter_adult_content", True),
             "anonymize_requests": web_research_config.get("anonymize_requests", True),
         }
 
@@ -270,30 +258,16 @@ async def update_research_settings(settings: WebResearchSettings):
 
         # Update research agent settings
         unified_config_manager.set_nested("agents.research.enabled", settings.enabled)
-        unified_config_manager.set_nested(
-            "agents.research.preferred_method", settings.preferred_method
-        )
-        unified_config_manager.set_nested(
-            "agents.research.max_results", settings.max_results
-        )
-        unified_config_manager.set_nested(
-            "agents.research.timeout_seconds", settings.timeout_seconds
-        )
-        unified_config_manager.set_nested(
-            "agents.research.rate_limit_requests", settings.rate_limit_requests
-        )
-        unified_config_manager.set_nested(
-            "agents.research.rate_limit_window", settings.rate_limit_window
-        )
+        unified_config_manager.set_nested("agents.research.preferred_method", settings.preferred_method)
+        unified_config_manager.set_nested("agents.research.max_results", settings.max_results)
+        unified_config_manager.set_nested("agents.research.timeout_seconds", settings.timeout_seconds)
+        unified_config_manager.set_nested("agents.research.rate_limit_requests", settings.rate_limit_requests)
+        unified_config_manager.set_nested("agents.research.rate_limit_window", settings.rate_limit_window)
 
         # Update web research settings
         unified_config_manager.set_nested("web_research.enabled", settings.enabled)
-        unified_config_manager.set_nested(
-            "web_research.require_user_confirmation", settings.require_user_confirmation
-        )
-        unified_config_manager.set_nested(
-            "web_research.auto_research_threshold", settings.auto_research_threshold
-        )
+        unified_config_manager.set_nested("web_research.require_user_confirmation", settings.require_user_confirmation)
+        unified_config_manager.set_nested("web_research.auto_research_threshold", settings.auto_research_threshold)
 
         # Save configuration and clear cache
         unified_config_manager.save_settings()
@@ -313,9 +287,7 @@ async def update_research_settings(settings: WebResearchSettings):
 
     except Exception as e:
         logger.error("Failed to update research settings: %s", e)
-        raise HTTPException(
-            status_code=500, detail="Failed to update research settings"
-        )
+        raise HTTPException(status_code=500, detail="Failed to update research settings")
 
 
 @with_error_handling(
@@ -370,9 +342,7 @@ async def test_web_research(query: str = "test query"):
 async def clear_research_cache():
     """Clear web research cache"""
     try:
-        from agents.web_researcher import (
-            get_web_researcher as get_web_research_integration,
-        )
+        from agents.web_researcher import get_web_researcher as get_web_research_integration
 
         integration = get_web_research_integration()
 
@@ -404,9 +374,7 @@ async def clear_research_cache():
 async def reset_circuit_breakers():
     """Reset all circuit breakers for web research"""
     try:
-        from agents.web_researcher import (
-            get_web_researcher as get_web_research_integration,
-        )
+        from agents.web_researcher import get_web_researcher as get_web_research_integration
 
         integration = get_web_research_integration()
 
@@ -438,9 +406,7 @@ async def reset_circuit_breakers():
 async def get_usage_stats():
     """Get web research usage statistics"""
     try:
-        from agents.web_researcher import (
-            get_web_researcher as get_web_research_integration,
-        )
+        from agents.web_researcher import get_web_researcher as get_web_research_integration
 
         integration = get_web_research_integration()
 

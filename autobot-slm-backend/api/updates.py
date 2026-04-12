@@ -82,9 +82,7 @@ async def _create_node_event(
     return event
 
 
-async def _broadcast_job_update(
-    job_id: str, status: str, progress: int, message: str = None
-) -> None:
+async def _broadcast_job_update(job_id: str, status: str, progress: int, message: str = None) -> None:
     """Broadcast job update via WebSocket."""
     try:
         from api.websocket import ws_manager
@@ -106,9 +104,7 @@ async def _broadcast_job_update(
         logger.debug("Failed to broadcast job update: %s", e)
 
 
-async def _get_update_job_data(
-    db: AsyncSession, job_id: str, node_id: str, update_ids: List[str]
-) -> Optional[tuple]:
+async def _get_update_job_data(db: AsyncSession, job_id: str, node_id: str, update_ids: List[str]) -> Optional[tuple]:
     """
     Helper for _run_update_job (Issue #665).
 
@@ -132,9 +128,7 @@ async def _get_update_job_data(
         await db.commit()
         return None
 
-    updates_result = await db.execute(
-        select(UpdateInfo).where(UpdateInfo.update_id.in_(update_ids))
-    )
+    updates_result = await db.execute(select(UpdateInfo).where(UpdateInfo.update_id.in_(update_ids)))
     updates = updates_result.scalars().all()
 
     if not updates:
@@ -147,9 +141,7 @@ async def _get_update_job_data(
     return (job, node, updates)
 
 
-async def _execute_update_playbook(
-    node: Node, updates: List[UpdateInfo]
-) -> Dict[str, any]:
+async def _execute_update_playbook(node: Node, updates: List[UpdateInfo]) -> Dict[str, any]:
     """
     Execute Ansible playbook to apply updates.
 
@@ -196,9 +188,7 @@ async def _handle_successful_update(
         update.applied_at = datetime.utcnow()
 
     await db.commit()
-    await _broadcast_job_update(
-        job.job_id, "completed", 100, f"Completed: {len(updates)} updates applied"
-    )
+    await _broadcast_job_update(job.job_id, "completed", 100, f"Completed: {len(updates)} updates applied")
 
     await _create_node_event(
         db,
@@ -210,9 +200,7 @@ async def _handle_successful_update(
     )
 
 
-async def _handle_failed_update(
-    db: AsyncSession, job: UpdateJob, node_id: str, output: str
-) -> None:
+async def _handle_failed_update(db: AsyncSession, job: UpdateJob, node_id: str, output: str) -> None:
     """
     Handle failed update completion.
 
@@ -261,9 +249,7 @@ async def _run_update_job(job_id: str, node_id: str, update_ids: List[str]) -> N
             result = await _execute_update_playbook(node, updates)
 
             if result["success"]:
-                await _handle_successful_update(
-                    db, job, node_id, updates, result["output"]
-                )
+                await _handle_successful_update(db, job, node_id, updates, result["output"])
             else:
                 await _handle_failed_update(db, job, node_id, result["output"])
 
@@ -283,9 +269,7 @@ async def _run_update_job(job_id: str, node_id: str, update_ids: List[str]) -> N
             job.error = "Internal server error"
             job.completed_at = datetime.utcnow()
             await db.commit()
-            await _broadcast_job_update(
-                job_id, "failed", job.progress, "Update job failed"
-            )
+            await _broadcast_job_update(job_id, "failed", job.progress, "Update job failed")
 
 
 def _parse_discover_output(output: str) -> List[dict]:
@@ -380,9 +364,7 @@ async def _resolve_host_to_node(
     return None
 
 
-def _classify_severity(
-    pkg_name: str, security_packages: List[str], repo: str = ""
-) -> str:
+def _classify_severity(pkg_name: str, security_packages: List[str], repo: str = "") -> str:
     """Classify package update severity.
 
     A package is classified as 'security' when its name appears in the
@@ -588,9 +570,7 @@ async def _run_discover_job(
         job["progress"] = 70
         job["message"] = "Parsing discovered packages..."
         host_results = _parse_discover_output(result["output"])
-        unreachable = (
-            _parse_unreachable_hosts(result["output"]) if not result["success"] else []
-        )
+        unreachable = _parse_unreachable_hosts(result["output"]) if not result["success"] else []
 
         if not result["success"] and not host_results:
             job["status"] = "failed"
@@ -625,10 +605,7 @@ async def _run_discover_job(
             )
         else:
             job["status"] = "completed"
-            job["message"] = (
-                f"Found {total_packages} upgradable packages "
-                f"across {nodes_checked} nodes"
-            )
+            job["message"] = f"Found {total_packages} upgradable packages " f"across {nodes_checked} nodes"
 
         job["progress"] = 100
         job["packages_found"] = total_packages
@@ -640,9 +617,7 @@ async def _run_discover_job(
         job["status"] = "failed"
         job["message"] = "Discover job failed"
         job["completed_at"] = datetime.utcnow().isoformat()
-        await _broadcast_job_update(
-            job_id, "failed", job.get("progress", 0), "Discover job failed"
-        )
+        await _broadcast_job_update(job_id, "failed", job.get("progress", 0), "Discover job failed")
 
 
 @router.post("/discover", response_model=UpdateDiscoverResponse)
@@ -701,9 +676,7 @@ async def get_update_summary(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> UpdateSummaryResponse:
     """Lightweight summary for sidebar badge polling."""
-    total_result = await db.execute(
-        select(UpdateInfo).where(UpdateInfo.is_applied.is_(False))
-    )
+    total_result = await db.execute(select(UpdateInfo).where(UpdateInfo.is_applied.is_(False)))
     all_updates = total_result.scalars().all()
 
     security_count = sum(1 for u in all_updates if u.severity == "security")
@@ -767,9 +740,7 @@ async def check_updates(
     query = select(UpdateInfo).where(UpdateInfo.is_applied.is_(False))
 
     if node_id:
-        query = query.where(
-            or_(UpdateInfo.node_id == node_id, UpdateInfo.node_id.is_(None))
-        )
+        query = query.where(or_(UpdateInfo.node_id == node_id, UpdateInfo.node_id.is_(None)))
 
     query = query.order_by(UpdateInfo.severity.desc(), UpdateInfo.created_at.desc())
 
@@ -782,9 +753,7 @@ async def check_updates(
     )
 
 
-def _build_node_summaries(
-    nodes: list, updates_by_node: dict, global_count: int
-) -> list:
+def _build_node_summaries(nodes: list, updates_by_node: dict, global_count: int) -> list:
     """Build per-node update summaries.
 
     Helper for get_fleet_update_summary (#682).
@@ -820,9 +789,7 @@ async def get_fleet_update_summary(
     nodes_result = await db.execute(select(Node))
     nodes = nodes_result.scalars().all()
 
-    updates_result = await db.execute(
-        select(UpdateInfo).where(UpdateInfo.is_applied.is_(False))
-    )
+    updates_result = await db.execute(select(UpdateInfo).where(UpdateInfo.is_applied.is_(False)))
     all_updates = updates_result.scalars().all()
 
     # Partition: node-specific vs global updates
@@ -866,9 +833,7 @@ async def _validate_node_and_updates(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Node not found",
         )
-    updates_result = await db.execute(
-        select(UpdateInfo).where(UpdateInfo.update_id.in_(update_ids))
-    )
+    updates_result = await db.execute(select(UpdateInfo).where(UpdateInfo.update_id.in_(update_ids)))
     updates = updates_result.scalars().all()
     if not updates:
         raise HTTPException(
@@ -906,9 +871,7 @@ async def _create_and_dispatch_update_job(
         {"job_id": job_id, "update_ids": request.update_ids},
     )
     await db.commit()
-    task = asyncio.create_task(
-        _run_update_job(job_id, request.node_id, request.update_ids)
-    )
+    task = asyncio.create_task(_run_update_job(job_id, request.node_id, request.update_ids))
     _running_jobs[job_id] = task
     return job_id
 
@@ -925,9 +888,7 @@ async def apply_updates(
     Creates an update job that runs in the background. Use the job_id
     to poll for status via GET /updates/jobs/{job_id}.
     """
-    _node, updates = await _validate_node_and_updates(
-        db, request.node_id, request.update_ids
-    )
+    _node, updates = await _validate_node_and_updates(db, request.node_id, request.update_ids)
     job_id = await _create_and_dispatch_update_job(db, request, updates)
 
     logger.info(

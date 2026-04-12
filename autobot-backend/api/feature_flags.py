@@ -150,9 +150,7 @@ async def update_enforcement_mode(
         success = await flags.set_enforcement_mode(update.mode)
 
         if not success:
-            raise HTTPException(
-                status_code=500, detail="Failed to update enforcement mode"
-            )
+            raise HTTPException(status_code=500, detail="Failed to update enforcement mode")
 
         # Audit log the change
         await audit_log(
@@ -167,9 +165,7 @@ async def update_enforcement_mode(
             },
         )
 
-        logger.info(
-            f"Enforcement mode updated to {update.mode.value} by {admin.get('username')}"
-        )
+        logger.info(f"Enforcement mode updated to {update.mode.value} by {admin.get('username')}")
 
         return {
             "success": True,
@@ -216,9 +212,7 @@ async def set_endpoint_enforcement(
         success = await flags.set_endpoint_enforcement(endpoint, update.mode)
 
         if not success:
-            raise HTTPException(
-                status_code=500, detail="Failed to set endpoint enforcement"
-            )
+            raise HTTPException(status_code=500, detail="Failed to set endpoint enforcement")
 
         # Audit log
         await audit_log(
@@ -268,9 +262,7 @@ async def remove_endpoint_enforcement(
         success = await flags.set_endpoint_enforcement(endpoint, None)
 
         if not success:
-            raise HTTPException(
-                status_code=500, detail="Failed to remove endpoint override"
-            )
+            raise HTTPException(status_code=500, detail="Failed to remove endpoint override")
 
         return {
             "success": True,
@@ -293,9 +285,7 @@ async def remove_endpoint_enforcement(
 @router.get("/access-control/metrics")
 async def get_access_control_metrics(
     days: int = Query(7, ge=1, le=30, description="Number of days to include"),
-    include_details: bool = Query(
-        False, description="Include recent violation details"
-    ),
+    include_details: bool = Query(False, description="Include recent violation details"),
     admin: Dict = Depends(require_admin),
     metrics: AccessControlMetrics = Depends(get_metrics_service),
     flags: FeatureFlags = Depends(get_feature_flags),

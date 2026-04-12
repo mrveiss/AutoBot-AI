@@ -78,9 +78,7 @@ class ProfileCreate(BaseModel):
     @classmethod
     def language_code_must_be_valid(cls, v: str) -> str:
         if v not in SUPPORTED_LANGUAGES:
-            raise ValueError(
-                f"language_code must be one of {sorted(SUPPORTED_LANGUAGES)}"
-            )
+            raise ValueError(f"language_code must be one of {sorted(SUPPORTED_LANGUAGES)}")
         return v
 
 
@@ -107,9 +105,7 @@ class ProfileUpdate(BaseModel):
     @classmethod
     def language_code_must_be_valid(cls, v: Optional[str]) -> Optional[str]:
         if v is not None and v not in SUPPORTED_LANGUAGES:
-            raise ValueError(
-                f"language_code must be one of {sorted(SUPPORTED_LANGUAGES)}"
-            )
+            raise ValueError(f"language_code must be one of {sorted(SUPPORTED_LANGUAGES)}")
         return v
 
 
@@ -245,9 +241,7 @@ async def delete_profile(pid: str) -> None:
     except ValueError as exc:
         detail = str(exc)
         if "system profile" in detail:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail=detail
-            ) from exc
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail) from exc
         raise _not_found(pid) from exc
 
 

@@ -94,9 +94,7 @@ class WorkflowPermissionService:
             return False
         return _role_satisfies(row.role, required_role)
 
-    async def _fetch_permission(
-        self, user_id: str, workflow_id: str
-    ) -> Optional[WorkflowPermission]:
+    async def _fetch_permission(self, user_id: str, workflow_id: str) -> Optional[WorkflowPermission]:
         """Retrieve the permission row for (user_id, workflow_id), or None."""
         stmt = select(WorkflowPermission).where(
             WorkflowPermission.user_id == user_id,
@@ -220,9 +218,7 @@ class WorkflowPermissionService:
         Args:
             workflow_id: Target workflow identifier.
         """
-        stmt = select(WorkflowPermission).where(
-            WorkflowPermission.workflow_id == workflow_id
-        )
+        stmt = select(WorkflowPermission).where(WorkflowPermission.workflow_id == workflow_id)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 

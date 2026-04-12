@@ -27,9 +27,7 @@ def load_terminal_routers():
     try:
         from api.terminal import router as terminal_router
 
-        optional_routers.append(
-            (terminal_router, "/terminal", ["terminal"], "terminal")
-        )
+        optional_routers.append((terminal_router, "/terminal", ["terminal"], "terminal"))
         logger.info("✅ Optional router loaded: terminal")
     except ImportError as e:
         logger.warning("⚠️ Optional router not available: terminal - %s", e)
@@ -38,12 +36,8 @@ def load_terminal_routers():
     try:
         from api.agent_terminal import router as agent_terminal_router
 
-        optional_routers.append(
-            (agent_terminal_router, "", ["agent-terminal"], "agent_terminal")
-        )
-        logger.info(
-            "✅ Optional router loaded: agent_terminal (includes prefix /api/agent-terminal)"
-        )
+        optional_routers.append((agent_terminal_router, "", ["agent-terminal"], "agent_terminal"))
+        logger.info("✅ Optional router loaded: agent_terminal (includes prefix /api/agent-terminal)")
     except ImportError as e:
         logger.warning("⚠️ Optional router not available: agent_terminal - %s", e)
 

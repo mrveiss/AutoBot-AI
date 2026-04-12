@@ -53,9 +53,7 @@ class TaskOutcomeJudge(BaseLLMJudge):
         if self._redis_client is None:
             from autobot_shared.redis_client import get_redis_client
 
-            self._redis_client = await get_redis_client(
-                async_client=True, database="main"
-            )
+            self._redis_client = await get_redis_client(async_client=True, database="main")
         return self._redis_client
 
     async def evaluate_task_outcome(
@@ -120,9 +118,7 @@ class TaskOutcomeJudge(BaseLLMJudge):
         except Exception as exc:
             logger.warning("Failed to persist task outcome: %s", exc)
 
-    async def get_outcomes(
-        self, task_type: str, limit: int = 20
-    ) -> List[TaskOutcomeRecord]:
+    async def get_outcomes(self, task_type: str, limit: int = 20) -> List[TaskOutcomeRecord]:
         """Retrieve recent outcomes for a task type from Redis.
 
         Args:
@@ -162,9 +158,7 @@ class TaskOutcomeJudge(BaseLLMJudge):
         goal = context.get("goal", "")
         task_type = context.get("task_type", "unknown")
         strategy = context.get("strategy_used", "default")
-        output = (
-            subject.get("output", "") if isinstance(subject, dict) else str(subject)
-        )
+        output = subject.get("output", "") if isinstance(subject, dict) else str(subject)
         return (
             f"Evaluate the quality of this task output.\n\n"
             f"TASK TYPE: {task_type}\n"

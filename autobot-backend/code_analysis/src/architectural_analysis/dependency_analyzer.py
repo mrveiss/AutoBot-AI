@@ -94,16 +94,12 @@ class DependencyAnalyzer:
 
             if isinstance(child.func, ast.Name):
                 dependencies.append(child.func.id)
-            elif isinstance(child.func, ast.Attribute) and isinstance(
-                child.func.value, ast.Name
-            ):
+            elif isinstance(child.func, ast.Attribute) and isinstance(child.func.value, ast.Name):
                 dependencies.append(child.func.value.id)
 
         return dependencies
 
-    def extract_function_dependencies(
-        self, node: ast.FunctionDef, content: str
-    ) -> List[str]:
+    def extract_function_dependencies(self, node: ast.FunctionDef, content: str) -> List[str]:
         """
         Extract dependencies for a function.
 
@@ -116,9 +112,7 @@ class DependencyAnalyzer:
         """
         return list(set(self._extract_call_dependencies(node)))
 
-    def detect_circular_dependencies(
-        self, dependencies: Dict[str, List[str]]
-    ) -> List[str]:
+    def detect_circular_dependencies(self, dependencies: Dict[str, List[str]]) -> List[str]:
         """
         Detect circular dependencies using DFS.
 

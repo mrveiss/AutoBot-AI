@@ -27,9 +27,7 @@ router = APIRouter(
 )
 
 # Issue #380: Module-level frozenset for allowed elevated commands
-_ALLOWED_ELEVATED_COMMANDS = frozenset(
-    {"apt", "systemctl", "mount", "umount", "chmod", "chown"}
-)
+_ALLOWED_ELEVATED_COMMANDS = frozenset({"apt", "systemctl", "mount", "umount", "chmod", "chown"})
 
 # In-memory storage for elevation sessions (in production, use Redis)
 elevation_sessions: Dict[str, dict] = {}
@@ -111,9 +109,7 @@ async def authorize_elevation(auth: ElevationAuthorization):
         session_data = {
             "token": session_token,
             "created": datetime.now(tz=timezone.utc),
-            "expires": (
-                datetime.now(tz=timezone.utc) + timedelta(minutes=15 if auth.remember_session else 5)
-            ),
+            "expires": (datetime.now(tz=timezone.utc) + timedelta(minutes=15 if auth.remember_session else 5)),
             "request_id": request_id,
         }
 
@@ -131,9 +127,7 @@ async def authorize_elevation(auth: ElevationAuthorization):
         return {
             "success": True,
             "session_token": session_token,
-            "expires_in": int(
-                (session_data["expires"] - datetime.now(tz=timezone.utc)).total_seconds()
-            ),
+            "expires_in": int((session_data["expires"] - datetime.now(tz=timezone.utc)).total_seconds()),
             "message": "Authorization successful",
         }
 
@@ -206,9 +200,7 @@ async def execute_elevated_command(session_token: str, command: str):
 
     except (OSError, IOError) as e:
         logger.error("Failed to execute elevated command due to system error: %s", e)
-        raise HTTPException(
-            status_code=500, detail="System error during command execution"
-        )
+        raise HTTPException(status_code=500, detail="System error during command execution")
     except asyncio.TimeoutError as e:
         logger.error("Failed to execute elevated command due to timeout: %s", e)
         raise HTTPException(status_code=408, detail="Command execution timed out")
@@ -227,9 +219,7 @@ async def get_pending_requests_endpoint():
     """Get all pending elevation requests"""
     async with _pending_requests_lock:
         active_requests = {
-            req_id: req_data
-            for req_id, req_data in pending_requests.items()
-            if req_data["status"] == "pending"
+            req_id: req_data for req_id, req_data in pending_requests.items() if req_data["status"] == "pending"
         }
 
     return {
@@ -335,8 +325,6 @@ async def elevation_health_check():
         "status": "healthy",
         "service": "elevation",
         "active_sessions": len(elevation_sessions),
-        "pending_requests": len(
-            [r for r in pending_requests.values() if r["status"] == "pending"]
-        ),
+        "pending_requests": len([r for r in pending_requests.values() if r["status"] == "pending"]),
         "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }

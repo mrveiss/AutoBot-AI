@@ -114,9 +114,7 @@ class TracedHttpClient:
                 return service
         return "unknown-service"
 
-    def _record_response_attributes(
-        self, span: trace.Span, response: aiohttp.ClientResponse
-    ) -> None:
+    def _record_response_attributes(self, span: trace.Span, response: aiohttp.ClientResponse) -> None:
         """
         Record HTTP response attributes on the current span.
 
@@ -131,9 +129,7 @@ class TracedHttpClient:
         if span.is_recording():
             span.set_attribute("http.status_code", response.status)
 
-    def _record_exception_attributes(
-        self, span: trace.Span, error: Exception
-    ) -> None:
+    def _record_exception_attributes(self, span: trace.Span, error: Exception) -> None:
         """
         Record exception details on the current span.
 

@@ -36,9 +36,7 @@ def initialize_rbac(self, create_admin: bool = False, admin_username: str = "adm
         NotImplementedError: RBAC initialization moved to SLM server
     """
     logger.error("RBAC initialization called but moved to SLM server (#729)")
-    raise NotImplementedError(
-        "RBAC initialization moved to SLM server. Use SLM API for RBAC setup (#729)."
-    )
+    raise NotImplementedError("RBAC initialization moved to SLM server. Use SLM API for RBAC setup (#729).")
 
 
 @celery_app.task(bind=True, name="tasks.run_system_update")
@@ -68,9 +66,7 @@ def run_system_update(
         NotImplementedError: System updates moved to SLM server
     """
     logger.error("System update called but moved to SLM server (#729)")
-    raise NotImplementedError(
-        "System updates moved to SLM server. Use SLM API for system updates (#729)."
-    )
+    raise NotImplementedError("System updates moved to SLM server. Use SLM API for system updates (#729).")
 
 
 @celery_app.task(bind=True, name="tasks.check_available_updates")
@@ -90,6 +86,4 @@ def check_available_updates(self):
         NotImplementedError: Update checking moved to SLM server
     """
     logger.error("Check updates called but moved to SLM server (#729)")
-    raise NotImplementedError(
-        "Update checking moved to SLM server. Use SLM API to check for updates (#729)."
-    )
+    raise NotImplementedError("Update checking moved to SLM server. Use SLM API to check for updates (#729).")

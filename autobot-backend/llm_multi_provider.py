@@ -39,12 +39,13 @@ config_manager = _get_cfg()
 from dotenv import load_dotenv
 
 from autobot_shared.logging_manager import get_llm_logger
-from autobot_shared.ssot_config import DEFAULT_LLM_MODEL, config as _ssot_config
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+from autobot_shared.ssot_config import config as _ssot_config
 from constants.model_constants import (
-    OPENAI_GPT35_TURBO,
-    OPENAI_GPT35_TURBO_16K,
     OPENAI_GPT4,
     OPENAI_GPT4_TURBO,
+    OPENAI_GPT35_TURBO,
+    OPENAI_GPT35_TURBO_16K,
 )
 from constants.threshold_constants import TimingConstants
 
@@ -190,9 +191,7 @@ class OllamaProvider(LLMProvider):
 
     def _build_ollama_payload(self, model: str, request: LLMRequest) -> Dict[str, Any]:
         """Build request payload for Ollama API. Issue #620."""
-        formatted_messages = [
-            {"role": msg["role"], "content": msg["content"]} for msg in request.messages
-        ]
+        formatted_messages = [{"role": msg["role"], "content": msg["content"]} for msg in request.messages]
         payload = {
             "model": model,
             "messages": formatted_messages,
@@ -206,15 +205,11 @@ class OllamaProvider(LLMProvider):
             payload["options"]["num_predict"] = request.max_tokens
         return payload
 
-    async def _execute_ollama_request(
-        self, payload: Dict[str, Any], timeout_seconds: int
-    ) -> Dict[str, Any]:
+    async def _execute_ollama_request(self, payload: Dict[str, Any], timeout_seconds: int) -> Dict[str, Any]:
         """Execute async HTTP request to Ollama API. Issue #620."""
         timeout = aiohttp.ClientTimeout(total=timeout_seconds)
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.post(
-                f"{self.base_url}/api/chat", json=payload
-            ) as response:
+            async with session.post(f"{self.base_url}/api/chat", json=payload) as response:
                 response.raise_for_status()
                 return await response.json()
 
@@ -225,9 +220,7 @@ class OllamaProvider(LLMProvider):
             usage["completion_tokens"] = result["eval_count"]
         if "prompt_eval_count" in result:
             usage["prompt_tokens"] = result["prompt_eval_count"]
-            usage["total_tokens"] = (
-                usage.get("completion_tokens", 0) + result["prompt_eval_count"]
-            )
+            usage["total_tokens"] = usage.get("completion_tokens", 0) + result["prompt_eval_count"]
         return usage
 
     async def chat_completion(self, request: LLMRequest) -> LLMResponse:
@@ -290,9 +283,7 @@ class OllamaProvider(LLMProvider):
                 async with session.get(f"{self.base_url}/api/tags") as response:
                     if response.status == 200:
                         models_data = await response.json()
-                        return [
-                            model["name"] for model in models_data.get("models", [])
-                        ]
+                        return [model["name"] for model in models_data.get("models", [])]
         except Exception:
             logger.debug("Suppressed exception in try block", exc_info=True)
         return self.config.available_models
@@ -367,9 +358,7 @@ class OpenAIProvider(LLMProvider):
             model = request.model_name or self.config.default_model or OPENAI_GPT35_TURBO
             params = self._build_openai_params(request, model)
             response = await self.client.chat.completions.create(**params)
-            return self._build_openai_success_response(
-                response, model, start_time, request.request_id
-            )
+            return self._build_openai_success_response(response, model, start_time, request.request_id)
 
         except Exception as e:
             self._total_errors += 1
@@ -428,8 +417,7 @@ class MockProvider(LLMProvider):
                 content = f"Mock response to: {user_content[:50]}..."
 
             usage = {
-                "prompt_tokens": sum(len(msg["content"]) for msg in request.messages)
-                // 4,
+                "prompt_tokens": sum(len(msg["content"]) for msg in request.messages) // 4,
                 "completion_tokens": len(content) // 4,
                 "total_tokens": 0,
             }
@@ -493,9 +481,7 @@ class UnifiedLLMInterface:
         self._successful_requests = 0
         self._failed_requests = 0
 
-        logger.info(
-            f"Unified LLM Interface initialized with {len(self.providers)} providers"
-        )
+        logger.info(f"Unified LLM Interface initialized with {len(self.providers)} providers")
 
     def _load_default_configs(self) -> Dict[ProviderType, ProviderConfig]:
         """Load default provider configurations."""
@@ -554,20 +540,14 @@ class UnifiedLLMInterface:
                 logger.info(f"Initialized {provider_type.value} provider")
 
             except Exception as e:
-                logger.error(
-                    f"Failed to initialize {provider_type.value} provider: {e}"
-                )
+                logger.error(f"Failed to initialize {provider_type.value} provider: {e}")
                 continue
 
         # Set provider priority order
         enabled_providers = [
-            (ptype, config.priority)
-            for ptype, config in self.default_configs.items()
-            if ptype in self.providers
+            (ptype, config.priority) for ptype, config in self.default_configs.items() if ptype in self.providers
         ]
-        self.provider_priority = [
-            ptype for ptype, _ in sorted(enabled_providers, key=lambda x: x[1])
-        ]
+        self.provider_priority = [ptype for ptype, _ in sorted(enabled_providers, key=lambda x: x[1])]
 
     def _load_llm_type_configs(self) -> Dict[LLMType, Dict[str, Any]]:
         """Load configurations for different LLM types."""
@@ -654,9 +634,7 @@ class UnifiedLLMInterface:
                 provider = None
         return llm_type, provider
 
-    def _apply_type_config_defaults(
-        self, request: LLMRequest, llm_type: LLMType
-    ) -> Dict[str, Any]:
+    def _apply_type_config_defaults(self, request: LLMRequest, llm_type: LLMType) -> Dict[str, Any]:
         """Apply LLM type config defaults to request. Issue #620."""
         type_config = self.llm_type_configs.get(llm_type, {})
         if not hasattr(request, "temperature") or request.temperature == 0.7:
@@ -667,25 +645,17 @@ class UnifiedLLMInterface:
             request.structured_output = type_config.get("structured_output", False)
         return type_config
 
-    def _build_provider_order(
-        self, request: LLMRequest, type_config: Dict[str, Any]
-    ) -> List[ProviderType]:
+    def _build_provider_order(self, request: LLMRequest, type_config: Dict[str, Any]) -> List[ProviderType]:
         """Build ordered list of providers to try. Issue #620."""
         if request.provider and request.provider in self.providers:
             return [request.provider]
         preferred = type_config.get("preferred_providers", [])
         provider_order = [p for p in preferred if p in self.providers]
-        remaining = [
-            p
-            for p in self.provider_priority
-            if p not in provider_order and p in self.providers
-        ]
+        remaining = [p for p in self.provider_priority if p not in provider_order and p in self.providers]
         provider_order.extend(remaining)
         return provider_order
 
-    async def _try_providers(
-        self, request: LLMRequest, provider_order: List[ProviderType]
-    ) -> LLMResponse:
+    async def _try_providers(self, request: LLMRequest, provider_order: List[ProviderType]) -> LLMResponse:
         """Try providers in order until one succeeds. Issue #620."""
         last_error = None
         for provider_type in provider_order:
@@ -699,9 +669,7 @@ class UnifiedLLMInterface:
                 response = await provider.chat_completion(request)
                 if response.error:
                     last_error = response.error
-                    logger.warning(
-                        f"Provider {provider_type.value} returned error: {response.error}"
-                    )
+                    logger.warning(f"Provider {provider_type.value} returned error: {response.error}")
                     continue
                 self._successful_requests += 1
                 if provider_type != (request.provider or provider_order[0]):
@@ -722,9 +690,7 @@ class UnifiedLLMInterface:
         )
 
     # Legacy compatibility methods
-    async def generate_response(
-        self, prompt: str, llm_type: str = "task", **kwargs
-    ) -> str:
+    async def generate_response(self, prompt: str, llm_type: str = "task", **kwargs) -> str:
         """Legacy method for backward compatibility."""
         messages = [{"role": "user", "content": prompt}]
         response = await self.chat_completion(messages, llm_type=llm_type, **kwargs)
@@ -752,9 +718,7 @@ class UnifiedLLMInterface:
 
         return stats
 
-    async def get_available_models(
-        self, provider: Optional[ProviderType] = None
-    ) -> Dict[str, List[str]]:
+    async def get_available_models(self, provider: Optional[ProviderType] = None) -> Dict[str, List[str]]:
         """Get available models for all or specific providers."""
         models = {}
 
@@ -763,9 +727,7 @@ class UnifiedLLMInterface:
         for provider_type in providers_to_check:
             if provider_type in self.providers:
                 try:
-                    provider_models = self.providers[
-                        provider_type
-                    ].get_available_models()
+                    provider_models = self.providers[provider_type].get_available_models()
                     models[provider_type.value] = provider_models
                 except Exception as e:
                     logger.error(f"Error getting models for {provider_type.value}: {e}")
@@ -789,9 +751,7 @@ class UnifiedLLMInterface:
                     health["overall_healthy"] = False
 
             except Exception as e:
-                logger.error(
-                    "Health check failed for provider %s: %s", provider_type.value, e
-                )
+                logger.error("Health check failed for provider %s: %s", provider_type.value, e)
                 health["providers"][provider_type.value] = {
                     "available": False,
                     "enabled": provider.config.enabled,

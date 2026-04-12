@@ -124,12 +124,8 @@ class TestRunDevelopmentPipeline:
     async def test_returns_error_on_generation_failure(self):
         # SkillGenerator imported locally in _run_development_pipeline
         with patch("skills.generator.SkillGenerator") as MockGen:
-            MockGen.return_value.generate = AsyncMock(
-                side_effect=RuntimeError("LLM down")
-            )
-            result = await _run_development_pipeline(
-                "some capability", "bot", "semi_auto"
-            )
+            MockGen.return_value.generate = AsyncMock(side_effect=RuntimeError("LLM down"))
+            result = await _run_development_pipeline("some capability", "bot", "semi_auto")
         assert result["success"] is False
         assert result["state"] == "generation_failed"
 
@@ -156,8 +152,6 @@ class TestRunDevelopmentPipeline:
                         "skills.builtin.autonomous_skill_development._promote_and_reload",
                         new=AsyncMock(return_value=True),
                     ) as mock_promote:
-                        result = await _run_development_pipeline(
-                            "capability", "bot", "semi_auto"
-                        )
+                        result = await _run_development_pipeline("capability", "bot", "semi_auto")
         mock_promote.assert_not_called()
         assert result["state"] == "pending_approval"

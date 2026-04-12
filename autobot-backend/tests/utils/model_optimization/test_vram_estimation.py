@@ -54,9 +54,7 @@ class TestModelInfoEstimateMemory:
 
     def test_estimate_memory_delegates(self):
         model = self._make_model("7B", "Q4_K_M")
-        assert model.estimate_memory_gb() == pytest.approx(
-            estimate_model_memory_gb("7B", "Q4_K_M"), abs=0.01
-        )
+        assert model.estimate_memory_gb() == pytest.approx(estimate_model_memory_gb("7B", "Q4_K_M"), abs=0.01)
 
 
 class TestSystemResourcesGPUVRAM:

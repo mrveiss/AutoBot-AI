@@ -27,9 +27,7 @@ class TestEmitRetrievalFeedback:
     @pytest.mark.asyncio
     async def test_calls_publish_live_event(self):
         """_emit_retrieval_feedback calls publish_live_event exactly once."""
-        with patch(
-            "services.rag_service.publish_live_event", new_callable=AsyncMock
-        ) as mock_pub:
+        with patch("services.rag_service.publish_live_event", new_callable=AsyncMock) as mock_pub:
             svc = self._make_service()
             await svc._emit_retrieval_feedback(
                 query="test query",
@@ -41,9 +39,7 @@ class TestEmitRetrievalFeedback:
     @pytest.mark.asyncio
     async def test_channel_is_global(self):
         """Event is published to the 'global' channel."""
-        with patch(
-            "services.rag_service.publish_live_event", new_callable=AsyncMock
-        ) as mock_pub:
+        with patch("services.rag_service.publish_live_event", new_callable=AsyncMock) as mock_pub:
             svc = self._make_service()
             await svc._emit_retrieval_feedback(
                 query="q",
@@ -56,9 +52,7 @@ class TestEmitRetrievalFeedback:
     @pytest.mark.asyncio
     async def test_event_type_is_rag_retrieval(self):
         """Event type is 'rag_retrieval'."""
-        with patch(
-            "services.rag_service.publish_live_event", new_callable=AsyncMock
-        ) as mock_pub:
+        with patch("services.rag_service.publish_live_event", new_callable=AsyncMock) as mock_pub:
             svc = self._make_service()
             await svc._emit_retrieval_feedback(
                 query="q",
@@ -71,9 +65,7 @@ class TestEmitRetrievalFeedback:
     @pytest.mark.asyncio
     async def test_payload_contains_query_text(self):
         """Payload includes query_text field."""
-        with patch(
-            "services.rag_service.publish_live_event", new_callable=AsyncMock
-        ) as mock_pub:
+        with patch("services.rag_service.publish_live_event", new_callable=AsyncMock) as mock_pub:
             svc = self._make_service()
             await svc._emit_retrieval_feedback(
                 query="what is redis",
@@ -86,9 +78,7 @@ class TestEmitRetrievalFeedback:
     @pytest.mark.asyncio
     async def test_payload_contains_retrieved_chunk_ids(self):
         """Payload includes retrieved_chunk_ids field."""
-        with patch(
-            "services.rag_service.publish_live_event", new_callable=AsyncMock
-        ) as mock_pub:
+        with patch("services.rag_service.publish_live_event", new_callable=AsyncMock) as mock_pub:
             svc = self._make_service()
             await svc._emit_retrieval_feedback(
                 query="q",
@@ -101,9 +91,7 @@ class TestEmitRetrievalFeedback:
     @pytest.mark.asyncio
     async def test_payload_contains_final_ranked_ids(self):
         """Payload includes final_ranked_ids field."""
-        with patch(
-            "services.rag_service.publish_live_event", new_callable=AsyncMock
-        ) as mock_pub:
+        with patch("services.rag_service.publish_live_event", new_callable=AsyncMock) as mock_pub:
             svc = self._make_service()
             await svc._emit_retrieval_feedback(
                 query="q",
@@ -116,9 +104,7 @@ class TestEmitRetrievalFeedback:
     @pytest.mark.asyncio
     async def test_payload_contains_timestamp(self):
         """Payload includes a numeric timestamp."""
-        with patch(
-            "services.rag_service.publish_live_event", new_callable=AsyncMock
-        ) as mock_pub:
+        with patch("services.rag_service.publish_live_event", new_callable=AsyncMock) as mock_pub:
             svc = self._make_service()
             await svc._emit_retrieval_feedback(
                 query="q",
@@ -275,9 +261,7 @@ class TestStoreFeedbackInStream:
     @pytest.mark.asyncio
     async def test_redis_error_does_not_propagate(self):
         """Redis exceptions are swallowed; method does not re-raise."""
-        mock_redis = self._make_redis_mock(
-            xadd_side_effect=ConnectionError("redis gone")
-        )
+        mock_redis = self._make_redis_mock(xadd_side_effect=ConnectionError("redis gone"))
 
         with patch(
             "services.rag_service.get_redis_client",
@@ -310,9 +294,7 @@ class TestComplexityInEmitRetrievalFeedback:
     @pytest.mark.asyncio
     async def test_payload_contains_complexity_field(self):
         """Payload includes a complexity field when explicitly provided."""
-        with patch(
-            "services.rag_service.publish_live_event", new_callable=AsyncMock
-        ) as mock_pub:
+        with patch("services.rag_service.publish_live_event", new_callable=AsyncMock) as mock_pub:
             svc = self._make_service()
             await svc._emit_retrieval_feedback(
                 query="what is redis",
@@ -335,9 +317,7 @@ class TestComplexityInEmitRetrievalFeedback:
         query = "compare redis and memcached advantages and disadvantages"
         expected_complexity = classifier.classify(query).value
 
-        with patch(
-            "services.rag_service.publish_live_event", new_callable=AsyncMock
-        ) as mock_pub:
+        with patch("services.rag_service.publish_live_event", new_callable=AsyncMock) as mock_pub:
             svc = self._make_service()
             await svc._emit_retrieval_feedback(
                 query=query,
@@ -352,9 +332,7 @@ class TestComplexityInEmitRetrievalFeedback:
     @pytest.mark.asyncio
     async def test_default_complexity_is_simple(self):
         """When no complexity is passed, the default is 'simple'."""
-        with patch(
-            "services.rag_service.publish_live_event", new_callable=AsyncMock
-        ) as mock_pub:
+        with patch("services.rag_service.publish_live_event", new_callable=AsyncMock) as mock_pub:
             svc = self._make_service()
             await svc._emit_retrieval_feedback(
                 query="q",
@@ -498,30 +476,38 @@ class TestRetrievedVsRankedIdsSeparation:
         ]
         svc = self._make_service()
 
-        with patch(
-            "services.rag_service.RAGService._check_cache_tiers",
-            new_callable=AsyncMock,
-            return_value=None,
-        ), patch(
-            "services.rag_service.RAGService.initialize",
-            new_callable=AsyncMock,
-            return_value=True,
-        ), patch(
-            "services.rag_service.RAGService._execute_and_cache_search",
-            new_callable=AsyncMock,
-            return_value=(results, RAGMetrics()),
-        ), patch(
-            "services.rag_service.RAGService._store_in_semantic_cache",
-            new_callable=AsyncMock,
-        ), patch(
-            "services.rag_service.RAGService._store_in_topic_cache",
-            new_callable=AsyncMock,
-        ), patch(
-            "services.rag_service.RAGService._emit_retrieval_feedback",
-            new_callable=AsyncMock,
-        ) as mock_emit, patch(
-            "services.rag_service.RAGService._store_feedback_in_stream",
-            new_callable=AsyncMock,
+        with (
+            patch(
+                "services.rag_service.RAGService._check_cache_tiers",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "services.rag_service.RAGService.initialize",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch(
+                "services.rag_service.RAGService._execute_and_cache_search",
+                new_callable=AsyncMock,
+                return_value=(results, RAGMetrics()),
+            ),
+            patch(
+                "services.rag_service.RAGService._store_in_semantic_cache",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "services.rag_service.RAGService._store_in_topic_cache",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "services.rag_service.RAGService._emit_retrieval_feedback",
+                new_callable=AsyncMock,
+            ) as mock_emit,
+            patch(
+                "services.rag_service.RAGService._store_feedback_in_stream",
+                new_callable=AsyncMock,
+            ),
         ):
             await svc.advanced_search(query="test")
 
@@ -542,30 +528,38 @@ class TestRetrievedVsRankedIdsSeparation:
         ]
         svc = self._make_service()
 
-        with patch(
-            "services.rag_service.RAGService._check_cache_tiers",
-            new_callable=AsyncMock,
-            return_value=None,
-        ), patch(
-            "services.rag_service.RAGService.initialize",
-            new_callable=AsyncMock,
-            return_value=True,
-        ), patch(
-            "services.rag_service.RAGService._execute_and_cache_search",
-            new_callable=AsyncMock,
-            return_value=(results, RAGMetrics()),
-        ), patch(
-            "services.rag_service.RAGService._store_in_semantic_cache",
-            new_callable=AsyncMock,
-        ), patch(
-            "services.rag_service.RAGService._store_in_topic_cache",
-            new_callable=AsyncMock,
-        ), patch(
-            "services.rag_service.RAGService._emit_retrieval_feedback",
-            new_callable=AsyncMock,
-        ) as mock_emit, patch(
-            "services.rag_service.RAGService._store_feedback_in_stream",
-            new_callable=AsyncMock,
+        with (
+            patch(
+                "services.rag_service.RAGService._check_cache_tiers",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "services.rag_service.RAGService.initialize",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch(
+                "services.rag_service.RAGService._execute_and_cache_search",
+                new_callable=AsyncMock,
+                return_value=(results, RAGMetrics()),
+            ),
+            patch(
+                "services.rag_service.RAGService._store_in_semantic_cache",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "services.rag_service.RAGService._store_in_topic_cache",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "services.rag_service.RAGService._emit_retrieval_feedback",
+                new_callable=AsyncMock,
+            ) as mock_emit,
+            patch(
+                "services.rag_service.RAGService._store_feedback_in_stream",
+                new_callable=AsyncMock,
+            ),
         ):
             await svc.advanced_search(query="test")
 
@@ -586,30 +580,38 @@ class TestRetrievedVsRankedIdsSeparation:
         ]
         svc = self._make_service()
 
-        with patch(
-            "services.rag_service.RAGService._check_cache_tiers",
-            new_callable=AsyncMock,
-            return_value=None,
-        ), patch(
-            "services.rag_service.RAGService.initialize",
-            new_callable=AsyncMock,
-            return_value=True,
-        ), patch(
-            "services.rag_service.RAGService._execute_and_cache_search",
-            new_callable=AsyncMock,
-            return_value=(results, RAGMetrics()),
-        ), patch(
-            "services.rag_service.RAGService._store_in_semantic_cache",
-            new_callable=AsyncMock,
-        ), patch(
-            "services.rag_service.RAGService._store_in_topic_cache",
-            new_callable=AsyncMock,
-        ), patch(
-            "services.rag_service.RAGService._emit_retrieval_feedback",
-            new_callable=AsyncMock,
-        ) as mock_emit, patch(
-            "services.rag_service.RAGService._store_feedback_in_stream",
-            new_callable=AsyncMock,
+        with (
+            patch(
+                "services.rag_service.RAGService._check_cache_tiers",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "services.rag_service.RAGService.initialize",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch(
+                "services.rag_service.RAGService._execute_and_cache_search",
+                new_callable=AsyncMock,
+                return_value=(results, RAGMetrics()),
+            ),
+            patch(
+                "services.rag_service.RAGService._store_in_semantic_cache",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "services.rag_service.RAGService._store_in_topic_cache",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "services.rag_service.RAGService._emit_retrieval_feedback",
+                new_callable=AsyncMock,
+            ) as mock_emit,
+            patch(
+                "services.rag_service.RAGService._store_feedback_in_stream",
+                new_callable=AsyncMock,
+            ),
         ):
             await svc.advanced_search(query="test")
 
@@ -630,30 +632,38 @@ class TestRetrievedVsRankedIdsSeparation:
         ]
         svc = self._make_service()
 
-        with patch(
-            "services.rag_service.RAGService._check_cache_tiers",
-            new_callable=AsyncMock,
-            return_value=None,
-        ), patch(
-            "services.rag_service.RAGService.initialize",
-            new_callable=AsyncMock,
-            return_value=True,
-        ), patch(
-            "services.rag_service.RAGService._execute_and_cache_search",
-            new_callable=AsyncMock,
-            return_value=(results, RAGMetrics()),
-        ), patch(
-            "services.rag_service.RAGService._store_in_semantic_cache",
-            new_callable=AsyncMock,
-        ), patch(
-            "services.rag_service.RAGService._store_in_topic_cache",
-            new_callable=AsyncMock,
-        ), patch(
-            "services.rag_service.RAGService._emit_retrieval_feedback",
-            new_callable=AsyncMock,
-        ) as mock_emit, patch(
-            "services.rag_service.RAGService._store_feedback_in_stream",
-            new_callable=AsyncMock,
+        with (
+            patch(
+                "services.rag_service.RAGService._check_cache_tiers",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "services.rag_service.RAGService.initialize",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch(
+                "services.rag_service.RAGService._execute_and_cache_search",
+                new_callable=AsyncMock,
+                return_value=(results, RAGMetrics()),
+            ),
+            patch(
+                "services.rag_service.RAGService._store_in_semantic_cache",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "services.rag_service.RAGService._store_in_topic_cache",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "services.rag_service.RAGService._emit_retrieval_feedback",
+                new_callable=AsyncMock,
+            ) as mock_emit,
+            patch(
+                "services.rag_service.RAGService._store_feedback_in_stream",
+                new_callable=AsyncMock,
+            ),
         ):
             await svc.advanced_search(query="test")
 
@@ -671,31 +681,39 @@ class TestRetrievedVsRankedIdsSeparation:
         ]
         svc = self._make_service()
 
-        with patch(
-            "services.rag_service.RAGService._check_cache_tiers",
-            new_callable=AsyncMock,
-            return_value=None,
-        ), patch(
-            "services.rag_service.RAGService.initialize",
-            new_callable=AsyncMock,
-            return_value=True,
-        ), patch(
-            "services.rag_service.RAGService._execute_and_cache_search",
-            new_callable=AsyncMock,
-            return_value=(results, RAGMetrics()),
-        ), patch(
-            "services.rag_service.RAGService._store_in_semantic_cache",
-            new_callable=AsyncMock,
-        ), patch(
-            "services.rag_service.RAGService._store_in_topic_cache",
-            new_callable=AsyncMock,
-        ), patch(
-            "services.rag_service.RAGService._emit_retrieval_feedback",
-            new_callable=AsyncMock,
-        ), patch(
-            "services.rag_service.RAGService._store_feedback_in_stream",
-            new_callable=AsyncMock,
-        ) as mock_store:
+        with (
+            patch(
+                "services.rag_service.RAGService._check_cache_tiers",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "services.rag_service.RAGService.initialize",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch(
+                "services.rag_service.RAGService._execute_and_cache_search",
+                new_callable=AsyncMock,
+                return_value=(results, RAGMetrics()),
+            ),
+            patch(
+                "services.rag_service.RAGService._store_in_semantic_cache",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "services.rag_service.RAGService._store_in_topic_cache",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "services.rag_service.RAGService._emit_retrieval_feedback",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "services.rag_service.RAGService._store_feedback_in_stream",
+                new_callable=AsyncMock,
+            ) as mock_store,
+        ):
             await svc.advanced_search(query="test")
 
         _, kwargs = mock_store.call_args

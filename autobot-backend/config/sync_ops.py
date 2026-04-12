@@ -92,9 +92,7 @@ class SyncOperationsMixin:
 
                 # Clear cache to force fresh load on next access
                 self._sync_cache_timestamp = None
-                logger.info(
-                    "Settings saved to %s and cache cleared", self.settings_file
-                )
+                logger.info("Settings saved to %s and cache cleared", self.settings_file)
             except Exception as e:
                 logger.error("Failed to save settings: %s", e)
                 raise

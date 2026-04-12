@@ -112,9 +112,7 @@ async def benchmark_tensor_cores() -> Dict[str, Any]:
         return {"error": "Internal server error", "score": 0}
 
 
-def _add_memory_bandwidth_recommendations(
-    recommendations: List[str], tests: Dict[str, Any]
-) -> None:
+def _add_memory_bandwidth_recommendations(recommendations: List[str], tests: Dict[str, Any]) -> None:
     """
     Add memory bandwidth recommendations based on test results.
 
@@ -128,9 +126,7 @@ def _add_memory_bandwidth_recommendations(
         )
 
 
-def _add_compute_recommendations(
-    recommendations: List[str], tests: Dict[str, Any]
-) -> None:
+def _add_compute_recommendations(recommendations: List[str], tests: Dict[str, Any]) -> None:
     """
     Add compute performance recommendations based on test results.
 
@@ -139,14 +135,11 @@ def _add_compute_recommendations(
     compute_test = tests.get("compute_performance", {})
     if compute_test.get("score", 0) < 80:
         recommendations.append(
-            "Compute performance is below optimal. Check for thermal throttling "
-            "or power limit issues."
+            "Compute performance is below optimal. Check for thermal throttling " "or power limit issues."
         )
 
 
-def _add_precision_and_tensor_recommendations(
-    recommendations: List[str], tests: Dict[str, Any]
-) -> None:
+def _add_precision_and_tensor_recommendations(recommendations: List[str], tests: Dict[str, Any]) -> None:
     """
     Add mixed precision and Tensor Core recommendations based on test results.
 
@@ -155,40 +148,32 @@ def _add_precision_and_tensor_recommendations(
     mixed_test = tests.get("mixed_precision", {})
     if mixed_test.get("score", 0) < 70:
         recommendations.append(
-            "Mixed precision performance is suboptimal. Ensure models are "
-            "properly configured for FP16 operations."
+            "Mixed precision performance is suboptimal. Ensure models are " "properly configured for FP16 operations."
         )
     elif mixed_test.get("score", 0) >= 90:
         recommendations.append(
-            "Excellent mixed precision performance! Consider using FP16 for "
-            "all supported operations."
+            "Excellent mixed precision performance! Consider using FP16 for " "all supported operations."
         )
 
     tensor_test = tests.get("tensor_core", {})
     if tensor_test.get("score", 0) < 70:
         recommendations.append(
-            "Tensor Core utilization is low. Ensure batch sizes and matrix "
-            "dimensions are multiples of 8 or 16."
+            "Tensor Core utilization is low. Ensure batch sizes and matrix " "dimensions are multiples of 8 or 16."
         )
     elif tensor_test.get("score", 0) >= 90:
         recommendations.append(
-            "Excellent Tensor Core utilization! Your workloads are well "
-            "optimized for Tensor Core acceleration."
+            "Excellent Tensor Core utilization! Your workloads are well " "optimized for Tensor Core acceleration."
         )
 
 
-def _add_overall_score_recommendations(
-    recommendations: List[str], overall_score: float
-) -> None:
+def _add_overall_score_recommendations(recommendations: List[str], overall_score: float) -> None:
     """
     Add overall score recommendations based on benchmark results.
 
     Issue #620.
     """
     if overall_score >= 90:
-        recommendations.append(
-            "GPU is performing excellently! No major optimizations needed."
-        )
+        recommendations.append("GPU is performing excellently! No major optimizations needed.")
     elif overall_score >= 70:
         recommendations.append(
             "GPU performance is good with room for improvement. Review "
@@ -278,17 +263,10 @@ async def run_comprehensive_benchmark(
         }
 
         benchmark_results["benchmark_tests"] = await _run_benchmark_tests(capabilities)
-        benchmark_results["overall_score"] = _calculate_overall_score(
-            benchmark_results["benchmark_tests"]
-        )
-        benchmark_results["recommendations"] = generate_benchmark_recommendations(
-            benchmark_results, capabilities
-        )
+        benchmark_results["overall_score"] = _calculate_overall_score(benchmark_results["benchmark_tests"])
+        benchmark_results["recommendations"] = generate_benchmark_recommendations(benchmark_results, capabilities)
 
-        logger.info(
-            f"GPU benchmark completed. Overall score: "
-            f"{benchmark_results['overall_score']:.1f}/100"
-        )
+        logger.info(f"GPU benchmark completed. Overall score: " f"{benchmark_results['overall_score']:.1f}/100")
         return benchmark_results
 
     except Exception as e:

@@ -39,18 +39,10 @@ def test_security_headers(file_path: str) -> bool:
         frame_options = "X-Frame-Options" in content
 
         logger.info("🔍 Security Headers Check for {file_path}:")
-        logger.info(
-            f"   ✅ Content Security Policy: {'Present' if csp_present else 'Missing'}"
-        )
-        logger.info(
-            "   ✅ X-XSS-Protection: {'Present' if xss_protection else 'Missing'}"
-        )
-        logger.info(
-            f"   ✅ X-Content-Type-Options: {'Present' if content_type_options else 'Missing'}"
-        )
-        logger.info(
-            "   ✅ X-Frame-Options: {'Present' if frame_options else 'Missing'}"
-        )
+        logger.info(f"   ✅ Content Security Policy: {'Present' if csp_present else 'Missing'}")
+        logger.info("   ✅ X-XSS-Protection: {'Present' if xss_protection else 'Missing'}")
+        logger.info(f"   ✅ X-Content-Type-Options: {'Present' if content_type_options else 'Missing'}")
+        logger.info("   ✅ X-Frame-Options: {'Present' if frame_options else 'Missing'}")
 
         return all([csp_present, xss_protection, content_type_options, frame_options])
 
@@ -78,20 +70,12 @@ def test_runtime_protection(file_path: str) -> bool:
         safe_api = "AutoBotSecurity" in content
 
         logger.info("🛡️  Runtime Protection Check for {file_path}:")
-        logger.info(
-            f"   ✅ AutoBot Protection Script: {'Present' if autobot_protection else 'Missing'}"
-        )
-        logger.info(
-            f"   ✅ innerHTML Monitoring: {'Present' if innerhtml_monitoring else 'Missing'}"
-        )
-        logger.info(
-            f"   ✅ Security Event Logging: {'Present' if security_logging else 'Missing'}"
-        )
+        logger.info(f"   ✅ AutoBot Protection Script: {'Present' if autobot_protection else 'Missing'}")
+        logger.info(f"   ✅ innerHTML Monitoring: {'Present' if innerhtml_monitoring else 'Missing'}")
+        logger.info(f"   ✅ Security Event Logging: {'Present' if security_logging else 'Missing'}")
         logger.info("   ✅ Safe API Wrappers: {'Present' if safe_api else 'Missing'}")
 
-        return all(
-            [autobot_protection, innerhtml_monitoring, security_logging, safe_api]
-        )
+        return all([autobot_protection, innerhtml_monitoring, security_logging, safe_api])
 
     except Exception:
         logger.error("Error checking runtime protection: %se ")
@@ -169,9 +153,7 @@ def _print_test_results_summary(results: list, passed: int, total: int) -> None:
         logger.info("\n🎉 All security fixes verified successfully!")
         logger.info("🛡️  The file is now protected against XSS attacks")
     else:
-        logger.info(
-            f"\n⚠️  {total - passed} test(s) failed - security fixes may be incomplete"
-        )
+        logger.info(f"\n⚠️  {total - passed} test(s) failed - security fixes may be incomplete")
         logger.info("Failed tests:")
         for test_name, result in results:
             if not result:
@@ -188,9 +170,7 @@ def main():
     """Run comprehensive security fix verification."""
     if len(sys.argv) != 2:
         logger.info("Usage: python test_security_verification.py <html_file_path>")
-        logger.info(
-            "Example: python test_security_verification.py tests/playwright-report/index.html"
-        )
+        logger.info("Example: python test_security_verification.py tests/playwright-report/index.html")
         sys.exit(1)
 
     file_path = sys.argv[1]

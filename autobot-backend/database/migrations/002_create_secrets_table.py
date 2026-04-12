@@ -110,9 +110,7 @@ def _create_secrets_indices() -> None:
     op.create_index("ix_secrets_session_id", "secrets", ["session_id"])
 
     # Composite index for common query patterns
-    op.create_index(
-        "ix_secrets_owner_scope", "secrets", ["owner_id", "scope"], unique=False
-    )
+    op.create_index("ix_secrets_owner_scope", "secrets", ["owner_id", "scope"], unique=False)
 
 
 def upgrade() -> None:

@@ -241,11 +241,7 @@ class TracingMiddleware(BaseHTTPMiddleware):
         for threshold, status_code, msg_template in self._STATUS_CODE_THRESHOLDS:
             if response.status_code >= threshold:
                 if msg_template:
-                    span.set_status(
-                        Status(
-                            status_code, msg_template.format(code=response.status_code)
-                        )
-                    )
+                    span.set_status(Status(status_code, msg_template.format(code=response.status_code)))
                 else:
                     span.set_status(Status(status_code))
                 break
@@ -269,9 +265,7 @@ class TracingMiddleware(BaseHTTPMiddleware):
             span.set_attribute("http.duration_ms", duration_ms)
         # Log for debugging if trace is slow
         if duration_ms > 5000:  # 5 second threshold
-            logger.warning(
-                "Slow request traced: %s took %.2fms", span_name, duration_ms
-            )
+            logger.warning("Slow request traced: %s took %.2fms", span_name, duration_ms)
 
 
 def create_tracing_middleware(

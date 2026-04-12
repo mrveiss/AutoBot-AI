@@ -41,9 +41,7 @@ async def _handle_analyze_command(optimizer: "PerformanceOptimizer") -> None:
             }.get(rec.severity, "")
             auto_indicator = "🤖 Auto" if rec.auto_applicable else "👤 Manual"
 
-            logger.info(
-                f"{i}. {severity_emoji} [{rec.severity.upper()}] {rec.description}"
-            )
+            logger.info(f"{i}. {severity_emoji} [{rec.severity.upper()}] {rec.description}")
             logger.info(f"   Category: {rec.category}")
             logger.info(f"   Impact: {rec.impact_estimate}")
             logger.info(f"   Application: {auto_indicator}")
@@ -51,9 +49,7 @@ async def _handle_analyze_command(optimizer: "PerformanceOptimizer") -> None:
                 logger.info(f"   Affected: {', '.join(rec.affected_services)}")
             logger.info("")
     else:
-        logger.info(
-            "✅ No optimization opportunities found - system performing optimally!"
-        )
+        logger.info("✅ No optimization opportunities found - system performing optimally!")
 
 
 async def _handle_report_command(optimizer: "PerformanceOptimizer") -> None:
@@ -185,9 +181,7 @@ class PerformanceOptimizer:
                     # Merge with defaults
                     default_config.update(loaded_config)
             except Exception as e:
-                self.logger.warning(
-                    f"Error loading optimization config: {e}, using defaults"
-                )
+                self.logger.warning(f"Error loading optimization config: {e}, using defaults")
         else:
             # Create default config file
             with open(config_path, "w", encoding="utf-8") as f:
@@ -195,47 +189,33 @@ class PerformanceOptimizer:
 
         return default_config
 
-    async def analyze_performance_metrics(
-        self, metrics: Dict
-    ) -> List[OptimizationRecommendation]:
+    async def analyze_performance_metrics(self, metrics: Dict) -> List[OptimizationRecommendation]:
         """Analyze performance metrics and generate optimization recommendations."""
         recommendations = []
 
         # System performance analysis
         if "system" in metrics:
-            recommendations.extend(
-                await self._analyze_system_metrics(metrics["system"])
-            )
+            recommendations.extend(await self._analyze_system_metrics(metrics["system"]))
 
         # Service performance analysis
         if "services" in metrics:
-            recommendations.extend(
-                await self._analyze_service_metrics(metrics["services"])
-            )
+            recommendations.extend(await self._analyze_service_metrics(metrics["services"]))
 
         # Database performance analysis
         if "databases" in metrics:
-            recommendations.extend(
-                await self._analyze_database_metrics(metrics["databases"])
-            )
+            recommendations.extend(await self._analyze_database_metrics(metrics["databases"]))
 
         # Inter-VM communication analysis
         if "inter_vm" in metrics:
-            recommendations.extend(
-                await self._analyze_network_metrics(metrics["inter_vm"])
-            )
+            recommendations.extend(await self._analyze_network_metrics(metrics["inter_vm"]))
 
         # Hardware utilization analysis
         if "hardware" in metrics:
-            recommendations.extend(
-                await self._analyze_hardware_metrics(metrics["hardware"])
-            )
+            recommendations.extend(await self._analyze_hardware_metrics(metrics["hardware"]))
 
         # Sort by severity and impact
         recommendations.sort(
-            key=lambda x: {"critical": 4, "high": 3, "medium": 2, "low": 1}.get(
-                x.severity, 0
-            ),
+            key=lambda x: {"critical": 4, "high": 3, "medium": 2, "low": 1}.get(x.severity, 0),
             reverse=True,
         )
 
@@ -276,9 +256,7 @@ class PerformanceOptimizer:
             affected_services=services,
         )
 
-    async def _analyze_system_metrics(
-        self, system_metrics
-    ) -> List[OptimizationRecommendation]:
+    async def _analyze_system_metrics(self, system_metrics) -> List[OptimizationRecommendation]:
         """Analyze system metrics for optimization opportunities."""
         recommendations = []
 
@@ -318,9 +296,7 @@ class PerformanceOptimizer:
         ]
 
         for val, key, desc, impact, opt, svcs, sev_fn in checks:
-            rec = self._build_resource_recommendation(
-                val, key, desc, impact, opt, svcs, sev_fn
-            )
+            rec = self._build_resource_recommendation(val, key, desc, impact, opt, svcs, sev_fn)
             if rec:
                 recommendations.append(rec)
 
@@ -340,9 +316,7 @@ class PerformanceOptimizer:
 
         return recommendations
 
-    async def _analyze_service_metrics(
-        self, service_metrics
-    ) -> List[OptimizationRecommendation]:
+    async def _analyze_service_metrics(self, service_metrics) -> List[OptimizationRecommendation]:
         """Analyze service metrics for optimization opportunities."""
         recommendations = []
 
@@ -364,10 +338,7 @@ class PerformanceOptimizer:
                 )
 
             # Slow response time optimization
-            elif (
-                service.response_time
-                > self.optimization_config["thresholds"]["response_time_slow"]
-            ):
+            elif service.response_time > self.optimization_config["thresholds"]["response_time_slow"]:
                 severity = "high" if service.response_time > 10 else "medium"
                 recommendations.append(
                     OptimizationRecommendation(
@@ -383,9 +354,7 @@ class PerformanceOptimizer:
 
         return recommendations
 
-    async def _analyze_database_metrics(
-        self, database_metrics
-    ) -> List[OptimizationRecommendation]:
+    async def _analyze_database_metrics(self, database_metrics) -> List[OptimizationRecommendation]:
         """Analyze database metrics for optimization opportunities."""
         recommendations = []
 
@@ -410,10 +379,7 @@ class PerformanceOptimizer:
                 )
 
             # Slow connection time optimization
-            if (
-                db.connection_time
-                > self.optimization_config["thresholds"]["database_slow_query"]
-            ):
+            if db.connection_time > self.optimization_config["thresholds"]["database_slow_query"]:
                 recommendations.append(
                     OptimizationRecommendation(
                         category="database",
@@ -448,9 +414,7 @@ class PerformanceOptimizer:
 
         return recommendations
 
-    async def _analyze_network_metrics(
-        self, network_metrics
-    ) -> List[OptimizationRecommendation]:
+    async def _analyze_network_metrics(self, network_metrics) -> List[OptimizationRecommendation]:
         """Analyze inter-VM network metrics for optimization opportunities."""
         recommendations = []
 
@@ -513,9 +477,7 @@ class PerformanceOptimizer:
 
         return recommendations
 
-    async def _analyze_hardware_metrics(
-        self, hardware_metrics
-    ) -> List[OptimizationRecommendation]:
+    async def _analyze_hardware_metrics(self, hardware_metrics) -> List[OptimizationRecommendation]:
         """Analyze hardware utilization for optimization opportunities."""
         recommendations = []
 
@@ -550,9 +512,7 @@ class PerformanceOptimizer:
 
         return recommendations
 
-    async def _measure_optimization_impact(
-        self, result: OptimizationResult, metrics_before: Dict
-    ) -> None:
+    async def _measure_optimization_impact(self, result: OptimizationResult, metrics_before: Dict) -> None:
         """Measure metrics after optimization and calculate improvement.
 
         Helper for apply_optimization (#825).
@@ -564,9 +524,7 @@ class PerformanceOptimizer:
             metrics_before, metrics_after, result.recommendation.category
         )
 
-    async def apply_optimization(
-        self, recommendation: OptimizationRecommendation
-    ) -> OptimizationResult:
+    async def apply_optimization(self, recommendation: OptimizationRecommendation) -> OptimizationResult:
         """Apply a specific optimization recommendation."""
         self.logger.info("Applying optimization: %s", recommendation.description)
 
@@ -579,9 +537,7 @@ class PerformanceOptimizer:
         )
 
         if not recommendation.auto_applicable or not recommendation.command:
-            result.error_message = (
-                "Optimization is not auto-applicable or missing command"
-            )
+            result.error_message = "Optimization is not auto-applicable or missing command"
             return result
 
         try:
@@ -598,9 +554,7 @@ class PerformanceOptimizer:
                 self.logger.info("Optimization applied: %s", recommendation.description)
                 await self._measure_optimization_impact(result, metrics_before)
             else:
-                result.error_message = (
-                    stderr.decode() if stderr else "Command failed with no error output"
-                )
+                result.error_message = stderr.decode() if stderr else "Command failed with no error output"
                 self.logger.error(
                     "Optimization failed: %s - %s",
                     recommendation.description,
@@ -614,9 +568,7 @@ class PerformanceOptimizer:
         self.optimization_history.append(result)
         return result
 
-    def _calculate_improvement(
-        self, before_metrics: Dict, after_metrics: Dict, category: str
-    ) -> Optional[float]:
+    def _calculate_improvement(self, before_metrics: Dict, after_metrics: Dict, category: str) -> Optional[float]:
         """Calculate improvement percentage for an optimization."""
         try:
             if category == "system":
@@ -631,12 +583,8 @@ class PerformanceOptimizer:
                 after_services = after_metrics.get("services", [])
 
                 if before_services and after_services:
-                    before_avg = sum(
-                        s.response_time for s in before_services if s.response_time
-                    ) / len(before_services)
-                    after_avg = sum(
-                        s.response_time for s in after_services if s.response_time
-                    ) / len(after_services)
+                    before_avg = sum(s.response_time for s in before_services if s.response_time) / len(before_services)
+                    after_avg = sum(s.response_time for s in after_services if s.response_time) / len(after_services)
 
                     if before_avg > 0:
                         return ((before_avg - after_avg) / before_avg) * 100
@@ -671,8 +619,7 @@ class PerformanceOptimizer:
         applicable = [
             rec
             for rec in recommendations
-            if severity_levels.get(rec.severity, 0) >= threshold_level
-            and rec.auto_applicable
+            if severity_levels.get(rec.severity, 0) >= threshold_level and rec.auto_applicable
         ]
         return applicable[:max_optimizations]
 
@@ -688,9 +635,7 @@ class PerformanceOptimizer:
                 self.logger.info("No optimizations needed - system performing well")
                 return
 
-            self.logger.info(
-                "Found %d optimization opportunities", len(recommendations)
-            )
+            self.logger.info("Found %d optimization opportunities", len(recommendations))
 
             applicable = self._filter_applicable_recommendations(recommendations)
             if not applicable:
@@ -790,20 +735,14 @@ async def main():
         action="store_true",
         help="Analyze current performance and show recommendations",
     )
-    parser.add_argument(
-        "--optimize", action="store_true", help="Run optimization cycle"
-    )
+    parser.add_argument("--optimize", action="store_true", help="Run optimization cycle")
     parser.add_argument(
         "--continuous",
         action="store_true",
         help="Run continuous optimization (every 30 minutes)",
     )
-    parser.add_argument(
-        "--report", action="store_true", help="Generate optimization report"
-    )
-    parser.add_argument(
-        "--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"]
-    )
+    parser.add_argument("--report", action="store_true", help="Generate optimization report")
+    parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
 
     args = parser.parse_args()
 

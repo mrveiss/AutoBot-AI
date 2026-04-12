@@ -76,9 +76,7 @@ class DocumentVersion:
         return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
     @staticmethod
-    def detect_change_type(
-        old_hash: Optional[str], new_hash: Optional[str]
-    ) -> ChangeType:
+    def detect_change_type(old_hash: Optional[str], new_hash: Optional[str]) -> ChangeType:
         """
         Automatically detect change type based on content hashes.
 
@@ -298,14 +296,10 @@ class DocumentChangeTracker:
     async def get_latest_version_number(self, document_id: str) -> int:
         """Get the latest version number for a document"""
         # Issue #361 - avoid blocking
-        version = await asyncio.to_thread(
-            self.redis.get, f"doc:latest_version:{document_id}"
-        )
+        version = await asyncio.to_thread(self.redis.get, f"doc:latest_version:{document_id}")
         return int(version) if version else 0
 
-    async def get_version(
-        self, document_id: str, version_number: int
-    ) -> Optional[DocumentVersion]:
+    async def get_version(self, document_id: str, version_number: int) -> Optional[DocumentVersion]:
         """Get a specific version of a document"""
         version_key = f"{self.VERSION_KEY_PREFIX}{document_id}:v{version_number}"
         # Issue #361 - avoid blocking
@@ -316,9 +310,7 @@ class DocumentChangeTracker:
 
         return DocumentVersion.from_dict(data)
 
-    async def get_version_history(
-        self, document_id: str, limit: int = 10
-    ) -> list[DocumentVersion]:
+    async def get_version_history(self, document_id: str, limit: int = 10) -> list[DocumentVersion]:
         """Get version history for a document"""
         latest_version = await self.get_latest_version_number(document_id)
         versions = []
@@ -347,13 +339,9 @@ class DocumentChangeTracker:
         Args:
             event: Change event to broadcast
         """
-        self.redis.xadd(
-            self.CHANGES_STREAM, event.to_dict(), maxlen=1000  # Keep last 1000 events
-        )
+        self.redis.xadd(self.CHANGES_STREAM, event.to_dict(), maxlen=1000)  # Keep last 1000 events
 
-    async def check_content_changed(
-        self, document_id: str, new_content: str
-    ) -> tuple[bool, Optional[str]]:
+    async def check_content_changed(self, document_id: str, new_content: str) -> tuple[bool, Optional[str]]:
         """
         Check if document content has changed.
 

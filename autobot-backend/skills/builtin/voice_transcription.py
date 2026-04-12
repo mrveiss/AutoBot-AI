@@ -54,9 +54,7 @@ class VoiceTranscriptionSkill(BaseSkill):
             return await self._transcribe(params, media_type="video")
         return {"success": False, "error": f"Unknown action: {action}"}
 
-    async def _transcribe(
-        self, params: Dict[str, Any], media_type: str
-    ) -> Dict[str, Any]:
+    async def _transcribe(self, params: Dict[str, Any], media_type: str) -> Dict[str, Any]:
         """Transcribe a media file.
 
         Helper for execute (Issue #731).
@@ -83,7 +81,5 @@ class VoiceTranscriptionSkill(BaseSkill):
             "model": model,
             "language": language,
             "status": "queued",
-            "message": (
-                f"Transcription queued for {file_path} " f"using {model} model"
-            ),
+            "message": (f"Transcription queued for {file_path} " f"using {model} model"),
         }

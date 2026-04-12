@@ -58,9 +58,7 @@ class DocumentationSearcher:
         self._collection = None
         self._embed_model = None
         self._initialized = False
-        self._doc_patterns = [
-            re.compile(p, re.IGNORECASE) for p in self.DOC_QUERY_PATTERNS
-        ]
+        self._doc_patterns = [re.compile(p, re.IGNORECASE) for p in self.DOC_QUERY_PATTERNS]
 
     def initialize(self) -> bool:
         """
@@ -83,9 +81,7 @@ class DocumentationSearcher:
 
             # Get documentation collection (don't create if not exists)
             try:
-                self._collection = self._client.get_collection(
-                    name=self.collection_name
-                )
+                self._collection = self._client.get_collection(name=self.collection_name)
                 doc_count = self._collection.count()
                 logger.info(
                     "DocumentationSearcher initialized: %d documents available",
@@ -100,9 +96,7 @@ class DocumentationSearcher:
                 return False
 
             # Initialize embedding model
-            self._embed_model = OllamaEmbedding(
-                model_name="nomic-embed-text", base_url=get_ollama_url()
-            )
+            self._embed_model = OllamaEmbedding(model_name="nomic-embed-text", base_url=get_ollama_url())
 
             self._initialized = True
             return True
@@ -130,9 +124,7 @@ class DocumentationSearcher:
 
         return False
 
-    def _query_chromadb(
-        self, embedding: List[float], n_results: int
-    ) -> Optional[Dict[str, Any]]:
+    def _query_chromadb(self, embedding: List[float], n_results: int) -> Optional[Dict[str, Any]]:
         """Query ChromaDB collection with embedding.
 
         Args:
@@ -151,9 +143,7 @@ class DocumentationSearcher:
             return None
         return results
 
-    def _format_result_item(
-        self, doc: str, meta: Dict[str, Any], distance: float
-    ) -> Dict[str, Any]:
+    def _format_result_item(self, doc: str, meta: Dict[str, Any], distance: float) -> Dict[str, Any]:
         """Format a single search result item.
 
         Args:
@@ -181,9 +171,7 @@ class DocumentationSearcher:
             "priority": meta.get("priority", "medium"),
         }
 
-    def search(
-        self, query: str, n_results: int = 3, score_threshold: float = 0.3
-    ) -> List[Dict[str, Any]]:
+    def search(self, query: str, n_results: int = 3, score_threshold: float = 0.3) -> List[Dict[str, Any]]:
         """Search documentation for relevant content.
 
         Args:

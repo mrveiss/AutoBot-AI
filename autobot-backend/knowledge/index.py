@@ -59,8 +59,7 @@ class IndexMixin:
     ) -> Any:
         """Delete existing and create new collection with HNSW params."""
         logger.info(
-            "Creating new collection '%s' with HNSW params: "
-            "construction_ef=%d, search_ef=%d, M=%d",
+            "Creating new collection '%s' with HNSW params: " "construction_ef=%d, search_ef=%d, M=%d",
             target_name,
             self.hnsw_construction_ef,
             self.hnsw_search_ef,
@@ -79,13 +78,9 @@ class IndexMixin:
             )
 
         # Issue #369: Wrap blocking create_collection with asyncio.to_thread
-        return await asyncio.to_thread(
-            chroma_client.create_collection, name=target_name, metadata=hnsw_metadata
-        )
+        return await asyncio.to_thread(chroma_client.create_collection, name=target_name, metadata=hnsw_metadata)
 
-    async def _migrate_vectors_batch(
-        self, old_collection: Any, new_collection: Any, old_count: int
-    ) -> int:
+    async def _migrate_vectors_batch(self, old_collection: Any, new_collection: Any, old_count: int) -> int:
         """Migrate vectors in batches from old to new collection."""
         batch_size = 1000
         migrated = 0
@@ -128,9 +123,7 @@ class IndexMixin:
         hnsw_metadata: Dict[str, Any],
     ) -> Dict[str, Any]:
         """Build success result dictionary."""
-        logger.info(
-            "Migration complete: %d vectors migrated to '%s'", migrated, target_name
-        )
+        logger.info("Migration complete: %d vectors migrated to '%s'", migrated, target_name)
         return {
             "status": "success",
             "old_collection": self.chromadb_collection,
@@ -140,16 +133,13 @@ class IndexMixin:
             "hnsw_params": hnsw_metadata,
             "message": (
                 "Successfully migrated %d vectors. "
-                "To switch, update AUTOBOT_CHROMADB_COLLECTION=%s"
-                % (migrated, target_name)
+                "To switch, update AUTOBOT_CHROMADB_COLLECTION=%s" % (migrated, target_name)
             ),
         }
 
     async def _get_old_collection_and_count(self, chroma_client: Any) -> tuple:
         """Get old collection and its vector count (Issue #398: extracted)."""
-        old_collection = await asyncio.to_thread(
-            chroma_client.get_collection, name=self.chromadb_collection
-        )
+        old_collection = await asyncio.to_thread(chroma_client.get_collection, name=self.chromadb_collection)
         old_count = await asyncio.to_thread(old_collection.count)
         return old_collection, old_count
 
@@ -158,27 +148,17 @@ class IndexMixin:
     ) -> Dict[str, Any]:
         """Execute the full migration process (Issue #398: extracted)."""
         hnsw_metadata = self._get_hnsw_metadata()
-        new_collection = await self._prepare_target_collection(
-            chroma_client, target_name, hnsw_metadata
-        )
-        migrated = await self._migrate_vectors_batch(
-            old_collection, new_collection, old_count
-        )
-        return self._build_success_result(
-            target_name, old_count, migrated, hnsw_metadata
-        )
+        new_collection = await self._prepare_target_collection(chroma_client, target_name, hnsw_metadata)
+        migrated = await self._migrate_vectors_batch(old_collection, new_collection, old_count)
+        return self._build_success_result(target_name, old_count, migrated, hnsw_metadata)
 
-    async def rebuild_chromadb_index(
-        self, new_collection_name: Optional[str] = None
-    ) -> dict:
+    async def rebuild_chromadb_index(self, new_collection_name: Optional[str] = None) -> dict:
         """Rebuild ChromaDB collection with optimized HNSW (Issue #398: refactored)."""
         if not self.initialized:
             return {"status": "error", "message": "Knowledge base not initialized"}
 
         try:
-            from utils.chromadb_client import (
-                get_chromadb_client as create_chromadb_client,
-            )
+            from utils.chromadb_client import get_chromadb_client as create_chromadb_client
 
             logger.info("Starting ChromaDB index rebuild with optimized HNSW params...")
             chroma_client = create_chromadb_client(
@@ -187,9 +167,7 @@ class IndexMixin:
                 anonymized_telemetry=False,
             )
 
-            old_collection, old_count = await self._get_old_collection_and_count(
-                chroma_client
-            )
+            old_collection, old_count = await self._get_old_collection_and_count(chroma_client)
             if old_count == 0:
                 return {
                     "status": "skipped",
@@ -197,20 +175,14 @@ class IndexMixin:
                     "old_count": 0,
                 }
 
-            target_name = (
-                new_collection_name or "%s_optimized" % self.chromadb_collection
-            )
-            return await self._execute_index_migration(
-                chroma_client, target_name, old_collection, old_count
-            )
+            target_name = new_collection_name or "%s_optimized" % self.chromadb_collection
+            return await self._execute_index_migration(chroma_client, target_name, old_collection, old_count)
 
         except Exception as e:
             logger.error("ChromaDB index rebuild failed: %s", e)
             return {"status": "error", "message": "Index operation failed"}
 
-    def _build_index_info_result(
-        self, chroma_path: Path, vector_count: int, metadata: Dict
-    ) -> Dict[str, Any]:
+    def _build_index_info_result(self, chroma_path: Path, vector_count: int, metadata: Dict) -> Dict[str, Any]:
         """Build index info result dictionary (Issue #398: extracted)."""
         return {
             "status": "success",
@@ -237,23 +209,17 @@ class IndexMixin:
             return {"status": "error", "message": "Knowledge base not initialized"}
 
         try:
-            from utils.chromadb_client import (
-                get_chromadb_client as create_chromadb_client,
-            )
+            from utils.chromadb_client import get_chromadb_client as create_chromadb_client
 
             chroma_path = Path(self.chromadb_path)
             chroma_client = create_chromadb_client(
                 db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False
             )
 
-            collection = await asyncio.to_thread(
-                chroma_client.get_collection, name=self.chromadb_collection
-            )
+            collection = await asyncio.to_thread(chroma_client.get_collection, name=self.chromadb_collection)
             vector_count = await asyncio.to_thread(collection.count)
 
-            return self._build_index_info_result(
-                chroma_path, vector_count, collection.metadata or {}
-            )
+            return self._build_index_info_result(chroma_path, vector_count, collection.metadata or {})
 
         except Exception as e:
             logger.error("Failed to get ChromaDB index info: %s", e)

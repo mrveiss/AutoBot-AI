@@ -153,9 +153,7 @@ def _validate_find_args(tokens: list[str]) -> None:
     blocked = [t for t in tokens[1:] if t in _FIND_BLOCKED_FLAGS]
     if blocked:
         bad = ", ".join(sorted(blocked))
-        logger.warning(
-            "Command rejected — find contains destructive/exec flag(s): %s", bad
-        )
+        logger.warning("Command rejected — find contains destructive/exec flag(s): %s", bad)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
@@ -248,10 +246,7 @@ def _check_sensitive_path(executable: str, tokens: list[str]) -> None:
             )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    f"Command rejected: file-read commands must use absolute "
-                    f"paths, got {arg!r}"
-                ),
+                detail=(f"Command rejected: file-read commands must use absolute " f"paths, got {arg!r}"),
             )
 
         # Normalise to collapse ../ traversal attempts
@@ -271,8 +266,7 @@ def _check_sensitive_path(executable: str, tokens: list[str]) -> None:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=(
-                        f"Command rejected: {executable!r} is not permitted to "
-                        f"read {arg!r} — path is restricted."
+                        f"Command rejected: {executable!r} is not permitted to " f"read {arg!r} — path is restricted."
                     ),
                 )
 
@@ -374,14 +368,10 @@ def _validate_git_subcommand(tokens: list[str]) -> None:
 
     subcommand = tokens[1]
     if subcommand not in _GIT_ALLOWED_SUBCOMMANDS:
-        logger.warning(
-            "Command rejected — git subcommand %r not in allowlist", subcommand
-        )
+        logger.warning("Command rejected — git subcommand %r not in allowlist", subcommand)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"Command rejected: git subcommand {subcommand!r} is not permitted"
-            ),
+            detail=(f"Command rejected: git subcommand {subcommand!r} is not permitted"),
         )
 
     if subcommand == "stash":
@@ -485,10 +475,7 @@ async def _audit_execute_event(
         node_id=node_id,
         event_type=EventType.MANUAL_ACTION.value,
         severity=severity.value,
-        message=(
-            f"Remote execution job {job_id} by {acting_user!r}: "
-            f"exit_code={exit_code} cmd={short_cmd!r}"
-        ),
+        message=(f"Remote execution job {job_id} by {acting_user!r}: " f"exit_code={exit_code} cmd={short_cmd!r}"),
         details={
             "job_id": job_id,
             "command": command,
@@ -501,12 +488,8 @@ async def _audit_execute_event(
     await db.commit()
 
 
-_SSH_KEY_PATH = os.environ.get(
-    "SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key"
-)  # noqa: ssot-path
-_SSH_KNOWN_HOSTS_PATH = os.environ.get(
-    "SLM_SSH_KNOWN_HOSTS", "/home/autobot/.ssh/known_hosts"
-)
+_SSH_KEY_PATH = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")  # noqa: ssot-path
+_SSH_KNOWN_HOSTS_PATH = os.environ.get("SLM_SSH_KNOWN_HOSTS", "/home/autobot/.ssh/known_hosts")
 # System-wide known_hosts populated by Ansible — used as fallback when the
 # per-user file is absent.  Defined at module level so tests can patch it.
 _SSH_SYSTEM_KNOWN_HOSTS_PATH = "/etc/ssh/ssh_known_hosts"
@@ -535,9 +518,7 @@ async def _run_command(tokens: list[str], timeout: int) -> tuple[int, str, str]:
         stderr=asyncio.subprocess.PIPE,
     )
     try:
-        raw_out, raw_err = await asyncio.wait_for(
-            proc.communicate(), timeout=float(timeout)
-        )
+        raw_out, raw_err = await asyncio.wait_for(proc.communicate(), timeout=float(timeout))
     except asyncio.TimeoutError:
         proc.kill()
         await proc.communicate()
@@ -573,8 +554,7 @@ async def _run_via_ssh(
         host_key_checking = "yes"
         known_hosts_file = _SSH_SYSTEM_KNOWN_HOSTS_PATH
         logger.warning(
-            "Per-user known_hosts not found at %s — falling back to system "
-            "known_hosts %s for %s",
+            "Per-user known_hosts not found at %s — falling back to system " "known_hosts %s for %s",
             _SSH_KNOWN_HOSTS_PATH,
             _SSH_SYSTEM_KNOWN_HOSTS_PATH,
             ip,
@@ -616,9 +596,7 @@ async def _run_via_ssh(
         stderr=asyncio.subprocess.PIPE,
     )
     try:
-        raw_out, raw_err = await asyncio.wait_for(
-            proc.communicate(), timeout=float(timeout)
-        )
+        raw_out, raw_err = await asyncio.wait_for(proc.communicate(), timeout=float(timeout))
     except asyncio.TimeoutError:
         proc.kill()
         await proc.communicate()
@@ -685,9 +663,7 @@ async def execute_on_node(
     else:
         ssh_user = node.ssh_user or "autobot"
         ssh_port = int(node.ssh_port or 22)
-        exit_code, stdout, stderr = await _run_via_ssh(
-            node.ip_address, ssh_user, ssh_port, tokens, body.timeout
-        )
+        exit_code, stdout, stderr = await _run_via_ssh(node.ip_address, ssh_user, ssh_port, tokens, body.timeout)
     duration_ms = int((time.monotonic() - t0) * 1000)
 
     severity = EventSeverity.INFO if exit_code == 0 else EventSeverity.WARNING

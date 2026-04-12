@@ -109,9 +109,7 @@ def _redact_result_secrets(
         svc = get_workflow_secret_service()
         for field in ("stdout", "stderr"):
             if isinstance(result.get(field), str):
-                result[field] = svc.redact_secrets(
-                    result[field], owner_id, resolved_names=resolved_names
-                )
+                result[field] = svc.redact_secrets(result[field], owner_id, resolved_names=resolved_names)
     except Exception as exc:  # pragma: no cover
         logger.error("Secret redaction failed for workflow result: %s", exc)
     return result
@@ -224,15 +222,11 @@ class WorkflowExecutor:
             NE = _get_notification_event()
             event = NE(event_name)
             payload = {"workflow_id": workflow.workflow_id, **extra}
-            await self._notification_service.send(
-                event, workflow.workflow_id, payload, config
-            )
+            await self._notification_service.send(event, workflow.workflow_id, payload, config)
         except Exception:
             logger.exception("Notification delivery failed for %s", event_name)
 
-    async def start_execution(
-        self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]
-    ) -> bool:
+    async def start_execution(self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]) -> bool:
         """Start executing automated workflow"""
         # Issue #2159: Enforce max_steps limit before starting
         if len(workflow.steps) > self.limits.max_steps:
@@ -261,12 +255,8 @@ class WorkflowExecutor:
 
         # Update active workflows count in Prometheus
         workflow_type = "automated_workflow"
-        active_count = len(
-            [w for w in workflows.values() if w.started_at and not w.completed_at]
-        )
-        self.prometheus_metrics.update_active_workflows(
-            workflow_type=workflow_type, count=active_count
-        )
+        active_count = len([w for w in workflows.values() if w.started_at and not w.completed_at])
+        self.prometheus_metrics.update_active_workflows(workflow_type=workflow_type, count=active_count)
 
         # Send workflow start message to frontend
         await self.messenger.send_message(
@@ -296,9 +286,7 @@ class WorkflowExecutor:
         await self.process_next_step(workflow, workflows)
         return True
 
-    async def _evaluate_step_with_judges(
-        self, workflow: ActiveWorkflow, current_step: WorkflowStep
-    ) -> bool:
+    async def _evaluate_step_with_judges(self, workflow: ActiveWorkflow, current_step: WorkflowStep) -> bool:
         """
         Evaluate step with LLM judges if enabled.
 
@@ -313,15 +301,12 @@ class WorkflowExecutor:
             return True
 
         try:
-            step_evaluation = await self.step_evaluator.evaluate_step(
-                workflow, current_step
-            )
+            step_evaluation = await self.step_evaluator.evaluate_step(workflow, current_step)
             if step_evaluation.get("should_proceed", True):
                 return True
 
             logger.warning(
-                f"Step {current_step.step_id} rejected by LLM judge: "
-                f"{step_evaluation.get('reason', 'Unknown')}"
+                f"Step {current_step.step_id} rejected by LLM judge: " f"{step_evaluation.get('reason', 'Unknown')}"
             )
             current_step.status = WorkflowStepStatus.FAILED
             workflow.is_paused = True
@@ -331,9 +316,7 @@ class WorkflowExecutor:
                     "type": "step_rejected_by_judge",
                     "workflow_id": workflow.workflow_id,
                     "step_id": current_step.step_id,
-                    "reason": step_evaluation.get(
-                        "reason", "Step rejected by safety evaluation"
-                    ),
+                    "reason": step_evaluation.get("reason", "Step rejected by safety evaluation"),
                     "suggestions": step_evaluation.get("suggestions", []),
                 },
             )
@@ -343,9 +326,7 @@ class WorkflowExecutor:
             # Continue without judge evaluation
             return True
 
-    async def process_next_step(
-        self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]
-    ) -> None:
+    async def process_next_step(self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]) -> None:
         """Process the next step in workflow"""
         if workflow.is_paused or workflow.is_cancelled:
             return
@@ -375,9 +356,7 @@ class WorkflowExecutor:
         # Send step confirmation request to frontend
         await self._send_step_confirmation_request(workflow, current_step)
 
-    async def _send_step_confirmation_request(
-        self, workflow: ActiveWorkflow, step: WorkflowStep
-    ) -> None:
+    async def _send_step_confirmation_request(self, workflow: ActiveWorkflow, step: WorkflowStep) -> None:
         """Send step confirmation request to frontend"""
         step_data = {
             "stepNumber": workflow.current_step_index + 1,
@@ -410,9 +389,7 @@ class WorkflowExecutor:
                 },
             )
 
-    def _check_step_dependencies(
-        self, workflow: ActiveWorkflow, step: WorkflowStep
-    ) -> bool:
+    def _check_step_dependencies(self, workflow: ActiveWorkflow, step: WorkflowStep) -> bool:
         """Check if step dependencies are satisfied"""
         if not step.dependencies:
             return True
@@ -429,9 +406,7 @@ class WorkflowExecutor:
 
         return True
 
-    def _record_step_metric(
-        self, status: str, step_type: str = "command_execution"
-    ) -> None:
+    def _record_step_metric(self, status: str, step_type: str = "command_execution") -> None:
         """
         Record Prometheus workflow step metric.
 
@@ -441,9 +416,7 @@ class WorkflowExecutor:
                 Issue #2397: Vision steps pass their own type for granular metrics.
         """
         workflow_type = "automated_workflow"
-        self.prometheus_metrics.record_workflow_step(
-            workflow_type=workflow_type, step_type=step_type, status=status
-        )
+        self.prometheus_metrics.record_workflow_step(workflow_type=workflow_type, step_type=step_type, status=status)
 
     # =========================================================================
     # Issue #1380: State machine helpers
@@ -459,9 +432,7 @@ class WorkflowExecutor:
         try:
             sm_state = await self.state_machine.load(workflow.workflow_id)
             if sm_state:
-                sm_state = await self.state_machine.transition(
-                    sm_state, to_phase, error=error
-                )
+                sm_state = await self.state_machine.transition(sm_state, to_phase, error=error)
                 workflow.phase = sm_state.current_step
                 workflow.active_service = sm_state.active_service
         except Exception as exc:
@@ -554,9 +525,7 @@ class WorkflowExecutor:
         current_step = workflow.steps[workflow.current_step_index]
 
         if current_step.step_id != step_id:
-            logger.error(
-                f"Step ID mismatch: expected {current_step.step_id}, got {step_id}"
-            )
+            logger.error(f"Step ID mismatch: expected {current_step.step_id}, got {step_id}")
             return
 
         current_step.status = WorkflowStepStatus.EXECUTING
@@ -574,9 +543,7 @@ class WorkflowExecutor:
         try:
             await self._resolve_and_run_step(workflow, current_step, step_id, workflows)
         except Exception as e:
-            await self._handle_step_execution_failure(
-                workflow, current_step, step_id, e
-            )
+            await self._handle_step_execution_failure(workflow, current_step, step_id, e)
 
     async def _resolve_and_run_step(
         self,
@@ -594,16 +561,12 @@ class WorkflowExecutor:
         # Issue #2321: Capture resolved_names so redaction only scans
         # injected secrets — not all secrets for all users.
         owner_id = workflow.owner_id or workflow.session_id
-        resolved_command, resolved_names = _resolve_command_secrets(
-            current_step.command, owner_id
-        )
+        resolved_command, resolved_names = _resolve_command_secrets(current_step.command, owner_id)
 
         # Issue #2632: Resolve ${steps.<id>.<path>} references for ALL step
         # types, not just vision.  Resolution is cheap and harmless for steps
         # that have no step_config or no references in their config.
-        resolved_config = _resolve_step_references(
-            current_step.step_config or {}, workflow.step_results
-        )
+        resolved_config = _resolve_step_references(current_step.step_config or {}, workflow.step_results)
 
         # Issue #2397: Route vision node types to the vision step handler.
         # All other step types fall through to the standard command executor.
@@ -625,9 +588,7 @@ class WorkflowExecutor:
 
         # Issue #2153: Redact any secret values that may appear in output.
         result = _redact_result_secrets(result, owner_id, resolved_names)
-        await self._finalize_step_result(
-            workflow, current_step, step_id, result, workflows
-        )
+        await self._finalize_step_result(workflow, current_step, step_id, result, workflows)
 
     async def _finalize_step_result(
         self,
@@ -647,9 +608,7 @@ class WorkflowExecutor:
                 workflow,
                 current_step,
                 step_id,
-                RuntimeError(
-                    "Output size budget exhausted for this workflow execution"
-                ),
+                RuntimeError("Output size budget exhausted for this workflow execution"),
             )
             return
 
@@ -723,21 +682,12 @@ class WorkflowExecutor:
 
         duration = time.time() - workflow.prometheus_start_time
         workflow_type = "automated_workflow"
-        failed_steps = len(
-            [s for s in workflow.steps if s.status == WorkflowStepStatus.FAILED]
-        )
+        failed_steps = len([s for s in workflow.steps if s.status == WorkflowStepStatus.FAILED])
         status = "failed" if failed_steps > 0 else "success"
-        self.prometheus_metrics.record_workflow_execution(
-            workflow_type=workflow_type, status=status, duration=duration
-        )
+        self.prometheus_metrics.record_workflow_execution(workflow_type=workflow_type, status=status, duration=duration)
 
-        active_count = (
-            len([w for w in workflows.values() if w.started_at and not w.completed_at])
-            - 1
-        )
-        self.prometheus_metrics.update_active_workflows(
-            workflow_type=workflow_type, count=max(0, active_count)
-        )
+        active_count = len([w for w in workflows.values() if w.started_at and not w.completed_at]) - 1
+        self.prometheus_metrics.update_active_workflows(workflow_type=workflow_type, count=max(0, active_count))
 
     def _build_completion_message(self, workflow: ActiveWorkflow) -> dict:
         """
@@ -754,20 +704,12 @@ class WorkflowExecutor:
             "workflow_id": workflow.workflow_id,
             "name": workflow.name,
             "total_steps": len(workflow.steps),
-            "completed_steps": len(
-                [s for s in workflow.steps if s.status == WorkflowStepStatus.COMPLETED]
-            ),
-            "skipped_steps": len(
-                [s for s in workflow.steps if s.status == WorkflowStepStatus.SKIPPED]
-            ),
-            "failed_steps": len(
-                [s for s in workflow.steps if s.status == WorkflowStepStatus.FAILED]
-            ),
+            "completed_steps": len([s for s in workflow.steps if s.status == WorkflowStepStatus.COMPLETED]),
+            "skipped_steps": len([s for s in workflow.steps if s.status == WorkflowStepStatus.SKIPPED]),
+            "failed_steps": len([s for s in workflow.steps if s.status == WorkflowStepStatus.FAILED]),
         }
 
-    async def _complete_workflow(
-        self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]
-    ) -> None:
+    async def _complete_workflow(self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]) -> None:
         """Complete workflow execution"""
         workflow.completed_at = datetime.now(tz=timezone.utc)
 
@@ -779,9 +721,7 @@ class WorkflowExecutor:
         # Issue #2159: Finalise cost tracking and log cost summary
         self.cost_tracker.finish(workflow.workflow_id)
 
-        await self.messenger.send_message(
-            workflow.session_id, self._build_completion_message(workflow)
-        )
+        await self.messenger.send_message(workflow.session_id, self._build_completion_message(workflow))
 
         # Issue #3101: Notify configured channels on workflow completion.
         await self._notify(
@@ -797,9 +737,7 @@ class WorkflowExecutor:
         if self.on_workflow_finished:
             self.on_workflow_finished(workflow.workflow_id)
 
-    def _record_cancellation_metrics(
-        self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]
-    ) -> None:
+    def _record_cancellation_metrics(self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]) -> None:
         """
         Record Prometheus metrics for workflow cancellation.
 
@@ -816,25 +754,16 @@ class WorkflowExecutor:
             workflow_type=workflow_type, status="cancelled", duration=duration
         )
 
-        active_count = (
-            len([w for w in workflows.values() if w.started_at and not w.completed_at])
-            - 1
-        )
-        self.prometheus_metrics.update_active_workflows(
-            workflow_type=workflow_type, count=max(0, active_count)
-        )
+        active_count = len([w for w in workflows.values() if w.started_at and not w.completed_at]) - 1
+        self.prometheus_metrics.update_active_workflows(workflow_type=workflow_type, count=max(0, active_count))
 
-    async def cancel_workflow(
-        self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]
-    ) -> None:
+    async def cancel_workflow(self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]) -> None:
         """Cancel workflow execution"""
         workflow.is_cancelled = True
         workflow.completed_at = datetime.now(tz=timezone.utc)
 
         # Issue #1380: Transition state machine to failed
-        await self._sm_transition(
-            workflow, WorkflowPhase.FAILED.value, error="cancelled"
-        )
+        await self._sm_transition(workflow, WorkflowPhase.FAILED.value, error="cancelled")
 
         # Issue #390: Clear any pending approval when workflow is cancelled
         self.clear_pending_approval(workflow.workflow_id)
@@ -870,9 +799,7 @@ class WorkflowExecutor:
     # Issue #390: Currently only FULL_PLAN_APPROVAL is implemented
     _SUPPORTED_APPROVAL_MODES = frozenset({PlanApprovalMode.FULL_PLAN_APPROVAL})
 
-    def _validate_approval_params(
-        self, approval_mode: PlanApprovalMode, timeout_seconds: int
-    ) -> int:
+    def _validate_approval_params(self, approval_mode: PlanApprovalMode, timeout_seconds: int) -> int:
         """
         Validate approval mode and timeout parameters (Issue #665: extracted helper).
 
@@ -889,17 +816,14 @@ class WorkflowExecutor:
         if approval_mode not in self._SUPPORTED_APPROVAL_MODES:
             supported = [m.value for m in self._SUPPORTED_APPROVAL_MODES]
             raise ValueError(
-                f"Approval mode '{approval_mode.value}' is not yet implemented. "
-                f"Supported modes: {supported}"
+                f"Approval mode '{approval_mode.value}' is not yet implemented. " f"Supported modes: {supported}"
             )
 
         if timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
 
         if timeout_seconds > 3600:
-            logger.warning(
-                f"Timeout {timeout_seconds}s exceeds max 3600s, capping at 3600s"
-            )
+            logger.warning(f"Timeout {timeout_seconds}s exceeds max 3600s, capping at 3600s")
             return 3600
 
         return timeout_seconds
@@ -922,9 +846,7 @@ class WorkflowExecutor:
             PlanApprovalStatus.AWAITING_APPROVAL,
             PlanApprovalStatus.PRESENTED,
         ]:
-            logger.warning(
-                f"Approval already pending for {workflow_id}, returning existing"
-            )
+            logger.warning(f"Approval already pending for {workflow_id}, returning existing")
             return existing
 
         # If resolved, cleanup first
@@ -995,9 +917,7 @@ class WorkflowExecutor:
             return existing
 
         # Create approval request (Issue #665: uses helper)
-        approval_request = self._create_approval_request(
-            workflow, approval_mode, timeout_seconds
-        )
+        approval_request = self._create_approval_request(workflow, approval_mode, timeout_seconds)
 
         # Store pending approval
         self._pending_plan_approvals[workflow.workflow_id] = approval_request
@@ -1011,8 +931,7 @@ class WorkflowExecutor:
         approval_request.presented_at = datetime.now(tz=timezone.utc)
 
         logger.info(
-            f"Plan presented for workflow {workflow.workflow_id}, "
-            f"awaiting approval (mode: {approval_mode.value})"
+            f"Plan presented for workflow {workflow.workflow_id}, " f"awaiting approval (mode: {approval_mode.value})"
         )
 
         return approval_request
@@ -1044,18 +963,12 @@ class WorkflowExecutor:
             # Wait for approval event with timeout
             await asyncio.wait_for(approval_event.wait(), timeout=timeout_seconds)
 
-            logger.info(
-                f"Plan approval received for workflow {workflow_id}: "
-                f"{approval_request.status.value}"
-            )
+            logger.info(f"Plan approval received for workflow {workflow_id}: " f"{approval_request.status.value}")
 
         except asyncio.TimeoutError:
             approval_request.status = PlanApprovalStatus.TIMEOUT
             approval_request.resolved_at = datetime.now(tz=timezone.utc)
-            logger.warning(
-                f"Plan approval timeout for workflow {workflow_id} "
-                f"after {timeout_seconds}s"
-            )
+            logger.warning(f"Plan approval timeout for workflow {workflow_id} " f"after {timeout_seconds}s")
 
         finally:
             # Cleanup

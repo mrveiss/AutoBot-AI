@@ -115,9 +115,7 @@ class PerformanceMonitor:
             # Set redis client for decorator module
             set_redis_client(self.redis_client)
         except Exception as e:
-            self.logger.warning(
-                f"Could not initialize Redis for performance metrics: {e}"
-            )
+            self.logger.warning(f"Could not initialize Redis for performance metrics: {e}")
             self.redis_client = None
 
     async def collect_gpu_metrics(self):
@@ -155,9 +153,7 @@ class PerformanceMonitor:
             return None
         return result
 
-    def _update_metric_buffer(
-        self, buffer: List[Any], metrics: Any, max_size: int = 100
-    ) -> List[Any]:
+    def _update_metric_buffer(self, buffer: List[Any], metrics: Any, max_size: int = 100) -> List[Any]:
         """Update metrics buffer with size limit (Issue #398: extracted).
 
         Args:
@@ -174,9 +170,7 @@ class PerformanceMonitor:
                 return buffer[-max_size:]
         return buffer
 
-    def _update_service_buffer(
-        self, service_metrics: List[Any], max_size: int = 100
-    ) -> None:
+    def _update_service_buffer(self, service_metrics: List[Any], max_size: int = 100) -> None:
         """Update service metrics buffer by service name (Issue #398: extracted).
 
         Args:
@@ -192,13 +186,9 @@ class PerformanceMonitor:
                 self.service_metrics_buffer[service_name] = []
             self.service_metrics_buffer[service_name].append(service_metric)
             if len(self.service_metrics_buffer[service_name]) > max_size:
-                self.service_metrics_buffer[service_name] = self.service_metrics_buffer[
-                    service_name
-                ][-max_size:]
+                self.service_metrics_buffer[service_name] = self.service_metrics_buffer[service_name][-max_size:]
 
-    def _process_collection_results(
-        self, results: List[Any]
-    ) -> tuple[Any, Any, Any, Any, List[Any]]:
+    def _process_collection_results(self, results: List[Any]) -> tuple[Any, Any, Any, Any, List[Any]]:
         """
         Process asyncio.gather results and handle exceptions. Issue #620.
 
@@ -241,18 +231,10 @@ class PerformanceMonitor:
             system_metrics: System metrics data
             service_metrics: Service metrics list
         """
-        self.gpu_metrics_buffer = self._update_metric_buffer(
-            self.gpu_metrics_buffer, gpu_metrics
-        )
-        self.npu_metrics_buffer = self._update_metric_buffer(
-            self.npu_metrics_buffer, npu_metrics
-        )
-        self.multimodal_metrics_buffer = self._update_metric_buffer(
-            self.multimodal_metrics_buffer, multimodal_metrics
-        )
-        self.system_metrics_buffer = self._update_metric_buffer(
-            self.system_metrics_buffer, system_metrics
-        )
+        self.gpu_metrics_buffer = self._update_metric_buffer(self.gpu_metrics_buffer, gpu_metrics)
+        self.npu_metrics_buffer = self._update_metric_buffer(self.npu_metrics_buffer, npu_metrics)
+        self.multimodal_metrics_buffer = self._update_metric_buffer(self.multimodal_metrics_buffer, multimodal_metrics)
+        self.system_metrics_buffer = self._update_metric_buffer(self.system_metrics_buffer, system_metrics)
         self._update_service_buffer(service_metrics)
 
     def _build_metrics_response(
@@ -298,9 +280,7 @@ class PerformanceMonitor:
             ]
 
             results = await asyncio.gather(*tasks, return_exceptions=True)
-            gpu, npu, multimodal, system, services = self._process_collection_results(
-                results
-            )
+            gpu, npu, multimodal, system, services = self._process_collection_results(results)
 
             self._update_all_metric_buffers(gpu, npu, multimodal, system, services)
 
@@ -342,11 +322,7 @@ class PerformanceMonitor:
                     if metric_data:
                         key = f"performance_metrics:{category}"
                         value = json.dumps(
-                            (
-                                asdict(metric_data)
-                                if hasattr(metric_data, "__dict__")
-                                else metric_data
-                            ),
+                            (asdict(metric_data) if hasattr(metric_data, "__dict__") else metric_data),
                             default=str,
                         )
                         pipe.zadd(key, {value: timestamp})
@@ -366,9 +342,7 @@ class PerformanceMonitor:
                 gpu_id="0",
                 gpu_name=getattr(gpu_metrics, "name", "NVIDIA GPU"),
                 utilization=getattr(gpu_metrics, "utilization_percent", 0),
-                memory_utilization=getattr(
-                    gpu_metrics, "memory_utilization_percent", 0
-                ),
+                memory_utilization=getattr(gpu_metrics, "memory_utilization_percent", 0),
                 temperature=getattr(gpu_metrics, "temperature_celsius", 0),
                 power_watts=getattr(gpu_metrics, "power_draw_watts", 0),
             )
@@ -382,12 +356,8 @@ class PerformanceMonitor:
     def _push_npu_metrics_to_prometheus(self, npu_metrics) -> None:
         """Push NPU metrics to Prometheus. Issue #620."""
         if npu_metrics:
-            self._prometheus.set_npu_available(
-                getattr(npu_metrics, "hardware_detected", False)
-            )
-            self._prometheus.set_npu_wsl_limitation(
-                getattr(npu_metrics, "wsl_limitation", False)
-            )
+            self._prometheus.set_npu_available(getattr(npu_metrics, "hardware_detected", False))
+            self._prometheus.set_npu_wsl_limitation(getattr(npu_metrics, "wsl_limitation", False))
             self._prometheus.update_npu_metrics(
                 utilization=getattr(npu_metrics, "utilization_percent", 0),
                 acceleration_ratio=getattr(npu_metrics, "acceleration_ratio", 0),
@@ -401,23 +371,15 @@ class PerformanceMonitor:
             return
         text_time = getattr(multimodal_metrics, "text_processing_time_ms", 0)
         if text_time > 0:
-            self._prometheus.record_multimodal_processing(
-                "text", text_time / 1000, True
-            )
+            self._prometheus.record_multimodal_processing("text", text_time / 1000, True)
         image_time = getattr(multimodal_metrics, "image_processing_time_ms", 0)
         if image_time > 0:
-            self._prometheus.record_multimodal_processing(
-                "vision", image_time / 1000, True
-            )
+            self._prometheus.record_multimodal_processing("vision", image_time / 1000, True)
         audio_time = getattr(multimodal_metrics, "audio_processing_time_ms", 0)
         if audio_time > 0:
-            self._prometheus.record_multimodal_processing(
-                "audio", audio_time / 1000, True
-            )
+            self._prometheus.record_multimodal_processing("audio", audio_time / 1000, True)
 
-    def _push_to_prometheus(
-        self, gpu_metrics, npu_metrics, multimodal_metrics, system_metrics
-    ):
+    def _push_to_prometheus(self, gpu_metrics, npu_metrics, multimodal_metrics, system_metrics):
         """
         Push collected metrics to Prometheus for unified monitoring.
 
@@ -505,15 +467,9 @@ class PerformanceMonitor:
 
     def _update_prometheus_alert_counts(self) -> None:
         """Update active alert counts in Prometheus. Issue #620."""
-        critical_count = sum(
-            1 for a in self.performance_alerts if a.get("severity") == "critical"
-        )
-        warning_count = sum(
-            1 for a in self.performance_alerts if a.get("severity") == "warning"
-        )
-        info_count = sum(
-            1 for a in self.performance_alerts if a.get("severity") == "info"
-        )
+        critical_count = sum(1 for a in self.performance_alerts if a.get("severity") == "critical")
+        warning_count = sum(1 for a in self.performance_alerts if a.get("severity") == "warning")
+        info_count = sum(1 for a in self.performance_alerts if a.get("severity") == "info")
         self._prometheus.update_active_alerts("critical", critical_count)
         self._prometheus.update_active_alerts("warning", warning_count)
         self._prometheus.update_active_alerts("info", info_count)
@@ -536,9 +492,7 @@ class PerformanceMonitor:
 
             if metrics.get("gpu"):
                 gpu = metrics["gpu"]
-                summary_parts.append(
-                    f"GPU: {gpu['utilization_percent']:.0f}% util, {gpu['temperature_celsius']}°C"
-                )
+                summary_parts.append(f"GPU: {gpu['utilization_percent']:.0f}% util, {gpu['temperature_celsius']}°C")
 
             if metrics.get("npu"):
                 npu = metrics["npu"]
@@ -552,13 +506,9 @@ class PerformanceMonitor:
                 summary_parts.append(f"Load: {system['cpu_load_1m']:.1f}")
 
             if metrics.get("services"):
-                healthy_services = sum(
-                    1 for s in metrics["services"] if s["status"] == "healthy"
-                )
+                healthy_services = sum(1 for s in metrics["services"] if s["status"] == "healthy")
                 total_services = len(metrics["services"])
-                summary_parts.append(
-                    f"Services: {healthy_services}/{total_services} healthy"
-                )
+                summary_parts.append(f"Services: {healthy_services}/{total_services} healthy")
 
             self.logger.info("PERFORMANCE: %s", " | ".join(summary_parts))
 
@@ -593,9 +543,7 @@ class PerformanceMonitor:
         alerts_data = self.redis_client.zrange("performance_alerts", -10, -1)
         return gpu_data, npu_data, system_data, alerts_data
 
-    def _populate_dashboard_from_redis(
-        self, dashboard: Dict[str, Any], redis_data: tuple
-    ) -> None:
+    def _populate_dashboard_from_redis(self, dashboard: Dict[str, Any], redis_data: tuple) -> None:
         """Populate dashboard dict with parsed Redis data.
 
         Args:
@@ -630,9 +578,7 @@ class PerformanceMonitor:
 
             if self.redis_client:
                 try:
-                    redis_data = await asyncio.to_thread(
-                        self._fetch_redis_dashboard_data
-                    )
+                    redis_data = await asyncio.to_thread(self._fetch_redis_dashboard_data)
                     self._populate_dashboard_from_redis(dashboard, redis_data)
                 except Exception as e:
                     self.logger.debug(f"Could not fetch dashboard data from Redis: {e}")
@@ -658,9 +604,7 @@ class PerformanceMonitor:
             return "decreasing"
         return "stable"
 
-    def _compute_metric_trend(
-        self, values: list, metric_name: str, decimals: int = 1
-    ) -> Dict[str, Any]:
+    def _compute_metric_trend(self, values: list, metric_name: str, decimals: int = 1) -> Dict[str, Any]:
         """
         Compute trend statistics for a metric.
 
@@ -680,14 +624,10 @@ class PerformanceMonitor:
         """
         try:
             if not self.redis_client:
-                return {
-                    "note": "Trends require Redis. Use Prometheus PromQL for historical analysis."
-                }
+                return {"note": "Trends require Redis. Use Prometheus PromQL for historical analysis."}
 
             try:
-                gpu_data, system_data = await asyncio.to_thread(
-                    self._fetch_performance_trend_data
-                )
+                gpu_data, system_data = await asyncio.to_thread(self._fetch_performance_trend_data)
                 trends = self._process_trend_data(gpu_data, system_data)
                 return trends
 
@@ -739,11 +679,7 @@ class PerformanceMonitor:
     def _fetch_recommendation_data(self):
         """Fetch metrics data from Redis for recommendations."""
         gpu_data = self.redis_client.zrange("performance_metrics:gpu", -1, -1)
-        npu_data = (
-            self.redis_client.zrange("performance_metrics:npu", -1, -1)
-            if self.npu_available
-            else []
-        )
+        npu_data = self.redis_client.zrange("performance_metrics:npu", -1, -1) if self.npu_available else []
         system_data = self.redis_client.zrange("performance_metrics:system", -1, -1)
         return gpu_data, npu_data, system_data
 
@@ -756,9 +692,7 @@ class PerformanceMonitor:
 
             if self.redis_client:
                 try:
-                    gpu_data, npu_data, system_data = await asyncio.to_thread(
-                        self._fetch_recommendation_data
-                    )
+                    gpu_data, npu_data, system_data = await asyncio.to_thread(self._fetch_recommendation_data)
 
                     class MetricObj:
                         def __init__(self, d):
@@ -772,13 +706,9 @@ class PerformanceMonitor:
                         latest_system = MetricObj(json.loads(system_data[0]))
 
                 except Exception as e:
-                    self.logger.debug(
-                        f"Could not fetch metrics for recommendations: {e}"
-                    )
+                    self.logger.debug(f"Could not fetch metrics for recommendations: {e}")
 
-            return self._recommendation_generator.generate_all(
-                latest_gpu, latest_npu, latest_system
-            )
+            return self._recommendation_generator.generate_all(latest_gpu, latest_npu, latest_system)
 
         except Exception as e:
             self.logger.error("Error generating optimization recommendations: %s", e)

@@ -27,7 +27,6 @@ import re
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
-from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 
 from api.knowledge_models import (
     AssignFactToCategoryRequest,
@@ -39,6 +38,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.threshold_constants import QueryDefaults
 from knowledge_factory import get_or_create_knowledge_base
+from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 
 logger = logging.getLogger(__name__)
 
@@ -129,9 +129,7 @@ async def create_category(
 )
 @router.get("/categories/tree")
 async def get_category_tree(
-    root_id: Optional[str] = Query(
-        default=None, description="Start from specific category"
-    ),
+    root_id: Optional[str] = Query(default=None, description="Start from specific category"),
     max_depth: int = Query(
         default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
         ge=1,
@@ -356,9 +354,7 @@ async def delete_category(
     - deleted_count: Number of categories deleted
     - facts_reassigned: Number of facts reassigned
     """
-    category_id, reassign_to = _validate_delete_category_params(
-        category_id, reassign_to
-    )
+    category_id, reassign_to = _validate_delete_category_params(category_id, reassign_to)
 
     # Get knowledge base instance
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
@@ -383,9 +379,7 @@ async def delete_category(
     _raise_delete_category_error(result)
 
 
-def _validate_delete_category_params(
-    category_id: str, reassign_to: Optional[str]
-) -> tuple:
+def _validate_delete_category_params(category_id: str, reassign_to: Optional[str]) -> tuple:
     """Helper for delete_category. Ref: #1088."""
     category_id = category_id.strip()
     if not _CATEGORY_ID_RE.match(category_id):
@@ -514,9 +508,7 @@ async def get_category_ancestors(
 @router.get("/categories/{category_id}/facts")
 async def get_facts_in_category(
     category_id: str = Path(..., description="Category UUID"),
-    include_descendants: bool = Query(
-        default=False, description="Include facts from children"
-    ),
+    include_descendants: bool = Query(default=False, description="Include facts from children"),
     limit: int = Query(default=QueryDefaults.DEFAULT_PAGE_SIZE, ge=1, le=500),
     offset: int = Query(default=QueryDefaults.DEFAULT_OFFSET, ge=0),
     req: Request = None,

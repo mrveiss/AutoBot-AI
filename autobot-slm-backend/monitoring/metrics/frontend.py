@@ -294,29 +294,19 @@ class FrontendMetricsRecorder(BaseMetricsRecorder):
         # Normalize endpoint to prevent high cardinality
         normalized_endpoint = self._normalize_endpoint(endpoint)
 
-        self.api_requests_total.labels(
-            endpoint=normalized_endpoint, method=method, status=status
-        ).inc()
-        self.api_latency_seconds.labels(
-            endpoint=normalized_endpoint, method=method
-        ).observe(latency_seconds)
+        self.api_requests_total.labels(endpoint=normalized_endpoint, method=method, status=status).inc()
+        self.api_latency_seconds.labels(endpoint=normalized_endpoint, method=method).observe(latency_seconds)
 
         if is_slow:
-            self.api_slow_requests_total.labels(
-                endpoint=normalized_endpoint, method=method
-            ).inc()
+            self.api_slow_requests_total.labels(endpoint=normalized_endpoint, method=method).inc()
 
         if is_timeout:
-            self.api_timeout_requests_total.labels(
-                endpoint=normalized_endpoint, method=method
-            ).inc()
+            self.api_timeout_requests_total.labels(endpoint=normalized_endpoint, method=method).inc()
 
     def record_api_error(self, endpoint: str, method: str, error_type: str) -> None:
         """Record a frontend API error."""
         normalized_endpoint = self._normalize_endpoint(endpoint)
-        self.api_errors_total.labels(
-            endpoint=normalized_endpoint, method=method, error_type=error_type
-        ).inc()
+        self.api_errors_total.labels(endpoint=normalized_endpoint, method=method, error_type=error_type).inc()
 
     def _normalize_endpoint(self, endpoint: str) -> str:
         """Normalize endpoint to prevent high cardinality from dynamic IDs."""
@@ -353,9 +343,7 @@ class FrontendMetricsRecorder(BaseMetricsRecorder):
 
     def record_component_error(self, component: str, error_type: str) -> None:
         """Record a Vue component error."""
-        self.errors_by_component_total.labels(
-            component=component, error_type=error_type
-        ).inc()
+        self.errors_by_component_total.labels(component=component, error_type=error_type).inc()
 
     # =========================================================================
     # User Interaction Methods
@@ -405,13 +393,9 @@ class FrontendMetricsRecorder(BaseMetricsRecorder):
         """Record a slow resource load."""
         self.slow_resources_total.labels(resource_type=resource_type).inc()
 
-    def record_resource_load(
-        self, resource_type: str, load_time_seconds: float
-    ) -> None:
+    def record_resource_load(self, resource_type: str, load_time_seconds: float) -> None:
         """Record resource load time."""
-        self.resource_load_seconds.labels(resource_type=resource_type).observe(
-            load_time_seconds
-        )
+        self.resource_load_seconds.labels(resource_type=resource_type).observe(load_time_seconds)
 
     # =========================================================================
     # Critical Issue Methods

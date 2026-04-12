@@ -200,15 +200,9 @@ class DeltaEngine:
         Returns:
             A populated :class:`DeltaResult`.
         """
-        effective_threshold = (
-            threshold
-            or self._thresholds.get(metric_name)
-            or MetricThreshold(metric_name)
-        )
+        effective_threshold = threshold or self._thresholds.get(metric_name) or MetricThreshold(metric_name)
         previous = self._load_latest_snapshot(metric_name)
-        result = _compute_single_delta(
-            metric_name, previous, current_value, effective_threshold
-        )
+        result = _compute_single_delta(metric_name, previous, current_value, effective_threshold)
         self._persist_snapshot(metric_name, current_value)
         return result
 
@@ -321,9 +315,7 @@ class DeltaEngine:
                 return None
             return float(json.loads(raw))
         except Exception as exc:
-            logger.error(
-                "delta_engine: failed to load snapshot for '%s': %s", metric_name, exc
-            )
+            logger.error("delta_engine: failed to load snapshot for '%s': %s", metric_name, exc)
             return None
 
     def _persist_snapshot(self, metric_name: str, value: float) -> None:
@@ -450,8 +442,6 @@ def _percentage_change(previous: float, current: float) -> float:
         ``0.0`` when *previous* is zero.
     """
     if previous == 0.0:
-        logger.debug(
-            "delta_engine: previous value is zero — change_pct returned as 0.0"
-        )
+        logger.debug("delta_engine: previous value is zero — change_pct returned as 0.0")
         return 0.0
     return ((current - previous) / abs(previous)) * 100.0

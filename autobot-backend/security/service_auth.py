@@ -53,9 +53,7 @@ class ServiceAuthManager:
         # Store in Redis with 90-day expiration
         await self.redis.set(f"service:key:{service_id}", key_hex, ex=TTL_90_DAYS)
 
-        logger.info(
-            "Generated service key for %s", service_id, extra={"service_id": service_id}
-        )
+        logger.info("Generated service key for %s", service_id, extra={"service_id": service_id})
         return key_hex
 
     async def get_service_key(self, service_id: str) -> Optional[str]:
@@ -71,9 +69,7 @@ class ServiceAuthManager:
         key = await self.redis.get(f"service:key:{service_id}")
         return key if key else None
 
-    def generate_signature(
-        self, service_id: str, service_key: str, method: str, path: str, timestamp: int
-    ) -> str:
+    def generate_signature(self, service_id: str, service_key: str, method: str, path: str, timestamp: int) -> str:
         """
         Generate HMAC-SHA256 signature for request.
 
@@ -90,9 +86,7 @@ class ServiceAuthManager:
             Hex-encoded HMAC-SHA256 signature
         """
         message = f"{service_id}:{method}:{path}:{timestamp}"
-        signature = hmac.new(
-            service_key.encode(), message.encode(), hashlib.sha256
-        ).hexdigest()
+        signature = hmac.new(service_key.encode(), message.encode(), hashlib.sha256).hexdigest()
         return signature
 
     def _extract_auth_headers(self, request: Request) -> tuple[str, str, str]:
@@ -194,9 +188,7 @@ class ServiceAuthManager:
             raise_auth_error("AUTH_0004", f"Unknown service: {service_id}")
 
         # Step 4: Validate HMAC signature
-        expected_sig = self.generate_signature(
-            service_id, service_key, request.method, request.url.path, timestamp
-        )
+        expected_sig = self.generate_signature(service_id, service_key, request.method, request.url.path, timestamp)
 
         # Constant-time comparison to prevent timing attacks
         if not hmac.compare_digest(signature, expected_sig):
@@ -251,7 +243,5 @@ async def validate_service_auth(request: Request) -> Dict:
         # Re-raise HTTP exceptions (authentication failures)
         raise
     except Exception as e:
-        logger.error(
-            "Service auth validation error", error=str(e), path=request.url.path
-        )
+        logger.error("Service auth validation error", error=str(e), path=request.url.path)
         raise_server_error("API_0003", "Authentication service error")

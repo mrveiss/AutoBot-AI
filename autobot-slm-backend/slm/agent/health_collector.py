@@ -67,9 +67,7 @@ class HealthCollector:
             "cpu_percent": psutil.cpu_percent(interval=0.1),
             "memory_percent": psutil.virtual_memory().percent,
             "disk_percent": psutil.disk_usage("/").percent,
-            "load_avg": (
-                list(os.getloadavg()) if hasattr(os, "getloadavg") else [0.0, 0.0, 0.0]
-            ),
+            "load_avg": (list(os.getloadavg()) if hasattr(os, "getloadavg") else [0.0, 0.0, 0.0]),
             "uptime_seconds": int(datetime.now().timestamp() - psutil.boot_time()),
         }
 
@@ -97,13 +95,11 @@ class HealthCollector:
     def check_service(self, service_name: str) -> Dict:
         """Check systemd service status."""
         try:
-            result = (
-                subprocess.run(  # nosec B607 - systemctl is a trusted system binary
-                    ["systemctl", "is-active", service_name],
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                )
+            result = subprocess.run(  # nosec B607 - systemctl is a trusted system binary
+                ["systemctl", "is-active", service_name],
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             is_active = result.returncode == 0
             status = result.stdout.strip()
@@ -146,15 +142,11 @@ class HealthCollector:
                 service_info = self._parse_service_line(line)
                 if service_info:
                     if service_info["status"] == "running":
-                        service_info.update(
-                            self._get_service_details(service_info["name"])
-                        )
+                        service_info.update(self._get_service_details(service_info["name"]))
                     elif service_info["status"] in ("failed", "crash-loop"):
                         # Issue #1019: Capture error context for failed services
                         # Issue #1604: Also capture for crash-looping services
-                        service_info.update(
-                            self._get_service_details(service_info["name"])
-                        )
+                        service_info.update(self._get_service_details(service_info["name"]))
                         error_ctx = self._get_error_context(service_info["name"])
                         if error_ctx:
                             service_info["error_message"] = error_ctx
@@ -238,19 +230,16 @@ class HealthCollector:
         details = {}
         try:
             # Get service properties
-            result = (
-                subprocess.run(  # nosec B607 - systemctl is a trusted system binary
-                    [
-                        "systemctl",
-                        "show",
-                        service_name,
-                        "--property=MainPID,MemoryCurrent,Description,"
-                        "UnitFileState,NRestarts",
-                    ],
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                )
+            result = subprocess.run(  # nosec B607 - systemctl is a trusted system binary
+                [
+                    "systemctl",
+                    "show",
+                    service_name,
+                    "--property=MainPID,MemoryCurrent,Description," "UnitFileState,NRestarts",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
 
             if result.returncode == 0:
@@ -319,8 +308,7 @@ class HealthCollector:
             client = get_redis_client(database="main")
             if client is None:
                 logger.warning(
-                    "Redis unavailable — state-change event not published "
-                    "(service=%s %s->%s)",
+                    "Redis unavailable — state-change event not published " "(service=%s %s->%s)",
                     service_name,
                     prev_state,
                     new_state,
@@ -344,13 +332,9 @@ class HealthCollector:
                 new_state,
             )
         except Exception as exc:
-            logger.warning(
-                "Failed to publish state-change event for %s: %s", service_name, exc
-            )
+            logger.warning("Failed to publish state-change event for %s: %s", service_name, exc)
 
-    def _detect_and_publish_state_changes(
-        self, services: List[Dict]
-    ) -> None:
+    def _detect_and_publish_state_changes(self, services: List[Dict]) -> None:
         """Compare discovered service statuses against last known state.
 
         Publishes a Redis pub/sub event for each service whose status has

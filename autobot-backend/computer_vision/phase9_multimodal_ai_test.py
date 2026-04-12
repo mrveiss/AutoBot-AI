@@ -18,8 +18,6 @@ from PIL import Image
 sys.path.append(str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from tests.test_helpers import get_test_backend_url  # noqa: E402
-
 from computer_vision_system import computer_vision_system  # noqa: E402
 from context_aware_decision_system import (  # noqa: E402
     DecisionType,
@@ -32,6 +30,7 @@ from multimodal_processor import (  # noqa: E402
     ProcessingIntent,
     multimodal_processor,
 )
+from tests.test_helpers import get_test_backend_url  # noqa: E402
 from voice_processing_system import AudioInput, voice_processing_system  # noqa: E402
 
 
@@ -45,23 +44,18 @@ def test_api_connectivity():
         response = requests.get(get_test_backend_url() + "/api/system/health", timeout=5)
         if response.status_code == 200:
             health_data = response.json()
-            print(  # noqa: print
-                f"✅ API accessible - Status: {health_data.get('status', 'unknown')}"
-            )  # noqa: print
+            print(f"✅ API accessible - Status: {health_data.get('status', 'unknown')}")  # noqa: print  # noqa: print
             return True
         else:
             print(f"❌ API returned status code: {response.status_code}")  # noqa: print
             return False
     except requests.exceptions.ConnectionError:
         print(  # noqa: print
-            f"⚠️ Cannot connect to backend API at {get_test_backend_url()} "
-            "(not required for Phase 9 tests)"
+            f"⚠️ Cannot connect to backend API at {get_test_backend_url()} " "(not required for Phase 9 tests)"
         )
         return False
     except Exception as e:
-        print(  # noqa: print
-            f"⚠️ API connectivity test failed: {e} " "(continuing with Phase 9 tests)"
-        )
+        print(f"⚠️ API connectivity test failed: {e} " "(continuing with Phase 9 tests)")  # noqa: print
         return False
 
 
@@ -108,9 +102,7 @@ async def test_multimodal_processor():
 
         result = await multimodal_processor.process_input(image_input)
         print(f"✅ Image processing: {result.confidence:.2f} confidence")  # noqa: print
-        print(  # noqa: print
-            f"   UI elements detected: {len(result.results.get('ui_elements', []))}"
-        )  # noqa: print
+        print(f"   UI elements detected: {len(result.results.get('ui_elements', []))}")  # noqa: print  # noqa: print
 
     except Exception as e:
         print(f"⚠️ Image processing test failed: {e}")  # noqa: print
@@ -131,13 +123,8 @@ async def test_multimodal_processor():
         )
 
         result = await multimodal_processor.process_input(combined_input)
-        print(  # noqa: print
-            f"✅ Combined processing: {result.confidence:.2f} confidence"
-        )  # noqa: print
-        print(  # noqa: print
-            f"   Combined results available: "
-            f"{len(result.results.get('combined_results', {}))}"
-        )
+        print(f"✅ Combined processing: {result.confidence:.2f} confidence")  # noqa: print  # noqa: print
+        print(f"   Combined results available: " f"{len(result.results.get('combined_results', {}))}")  # noqa: print
 
     except Exception as e:
         print(f"⚠️ Combined processing test failed: {e}")  # noqa: print
@@ -156,12 +143,8 @@ async def test_computer_vision_system():
         analysis_result = await computer_vision_system.analyze_and_understand_screen()
         print("✅ Screen analysis completed")  # noqa: print
         screen_analysis = analysis_result.get("screen_analysis", {})
-        print(  # noqa: print
-            f"   Elements detected: " f"{screen_analysis.get('elements_detected', 0)}"
-        )
-        print(  # noqa: print
-            f"   Confidence: " f"{screen_analysis.get('confidence_score', 0):.2f}"
-        )  # noqa: print
+        print(f"   Elements detected: " f"{screen_analysis.get('elements_detected', 0)}")  # noqa: print
+        print(f"   Confidence: " f"{screen_analysis.get('confidence_score', 0):.2f}")  # noqa: print  # noqa: print
         opportunities = analysis_result.get("automation_opportunities", [])
         print(f"   Opportunities: {len(opportunities)}")  # noqa: print
     except Exception as e:
@@ -195,13 +178,9 @@ async def test_voice_processing_system():
         status = voice_processing_system.get_system_status()
         print("✅ Voice system status:")  # noqa: print
         recognition_available = status.get("speech_recognition_available", False)
-        print(  # noqa: print
-            f"   Speech recognition available: {recognition_available}"
-        )  # noqa: print
+        print(f"   Speech recognition available: {recognition_available}")  # noqa: print  # noqa: print
         print(f"   TTS available: {status.get('tts_available', False)}")  # noqa: print
-        print(  # noqa: print
-            f"   Commands processed: {status.get('command_history_count', 0)}"
-        )  # noqa: print
+        print(f"   Commands processed: {status.get('command_history_count', 0)}")  # noqa: print  # noqa: print
     except Exception as e:
         print(f"⚠️ Voice system status test failed: {e}")  # noqa: print
 
@@ -211,9 +190,7 @@ async def test_voice_processing_system():
         # Create synthetic audio data
         sample_rate = 16000
         duration = 2.0
-        synthetic_audio = np.sin(
-            2 * np.pi * 440 * np.linspace(0, duration, int(sample_rate * duration))
-        )  # 440 Hz tone
+        synthetic_audio = np.sin(2 * np.pi * 440 * np.linspace(0, duration, int(sample_rate * duration)))  # 440 Hz tone
         audio_bytes = (synthetic_audio * 32767).astype(np.int16).tobytes()
 
         audio_input = AudioInput(
@@ -228,9 +205,7 @@ async def test_voice_processing_system():
         )
 
         result = await voice_processing_system.process_voice_command(audio_input)
-        print(  # noqa: print
-            f"✅ Audio processing completed: {result.get('success', False)}"
-        )  # noqa: print
+        print(f"✅ Audio processing completed: {result.get('success', False)}")  # noqa: print  # noqa: print
         if "speech_recognition" in result:
             transcription = result["speech_recognition"].get("transcription", "N/A")
             print(f"   Transcription: {transcription}")  # noqa: print
@@ -246,9 +221,7 @@ async def test_voice_processing_system():
         history = voice_processing_system.get_command_history(limit=5)
         print(f"✅ Command history: {len(history)} recent commands")  # noqa: print
         for i, cmd in enumerate(history):
-            print(  # noqa: print
-                f"   {i+1}. {cmd.get('type', 'unknown')} - {cmd.get('intent', 'N/A')}"
-            )
+            print(f"   {i+1}. {cmd.get('type', 'unknown')} - {cmd.get('intent', 'N/A')}")  # noqa: print
     except Exception as e:
         print(f"⚠️ Command history test failed: {e}")  # noqa: print
 
@@ -267,17 +240,10 @@ async def test_context_aware_decision_system():
             DecisionType.AUTOMATION_ACTION,
             "Analyze current screen and suggest automation actions",
         )
-        print(  # noqa: print
-            f"✅ Automation decision: {decision.chosen_action.get('action', 'unknown')}"
-        )
-        print(  # noqa: print
-            f"   Confidence: {decision.confidence:.2f} "
-            f"({decision.confidence_level.value})"
-        )
+        print(f"✅ Automation decision: {decision.chosen_action.get('action', 'unknown')}")  # noqa: print
+        print(f"   Confidence: {decision.confidence:.2f} " f"({decision.confidence_level.value})")  # noqa: print
         print(f"   Requires approval: {decision.requires_approval}")  # noqa: print
-        print(  # noqa: print
-            f"   Next actions: {len(decision.chosen_action.get('next_actions', []))}"
-        )  # noqa: print
+        print(f"   Next actions: {len(decision.chosen_action.get('next_actions', []))}")  # noqa: print  # noqa: print
     except Exception as e:
         print(f"⚠️ Automation decision test failed: {e}")  # noqa: print
 
@@ -288,13 +254,9 @@ async def test_context_aware_decision_system():
             DecisionType.RISK_ASSESSMENT,
             "Assess current system risks and recommend actions",
         )
-        print(  # noqa: print
-            f"✅ Risk assessment: {decision.chosen_action.get('action', 'unknown')}"
-        )  # noqa: print
+        print(f"✅ Risk assessment: {decision.chosen_action.get('action', 'unknown')}")  # noqa: print  # noqa: print
         print(f"   Confidence: {decision.confidence:.2f}")  # noqa: print
-        print(  # noqa: print
-            f"   Risk level: {decision.risk_assessment.get('risk_level', 'unknown')}"
-        )  # noqa: print
+        print(f"   Risk level: {decision.risk_assessment.get('risk_level', 'unknown')}")  # noqa: print  # noqa: print
     except Exception as e:
         print(f"⚠️ Risk assessment test failed: {e}")  # noqa: print
 
@@ -305,9 +267,7 @@ async def test_context_aware_decision_system():
             DecisionType.HUMAN_ESCALATION,
             "Determine if human intervention is needed for complex task",
         )
-        print(  # noqa: print
-            f"✅ Escalation decision: {decision.chosen_action.get('action', 'unknown')}"
-        )
+        print(f"✅ Escalation decision: {decision.chosen_action.get('action', 'unknown')}")  # noqa: print
         print(f"   Confidence: {decision.confidence:.2f}")  # noqa: print
         print(f"   Reasoning: {decision.reasoning[:100]}...")  # noqa: print
     except Exception as e:
@@ -319,12 +279,8 @@ async def test_context_aware_decision_system():
         status = context_aware_decision_system.get_system_status()
         print("✅ Decision system status:")  # noqa: print
         print(f"   Total decisions: {status.get('total_decisions', 0)}")  # noqa: print
-        print(  # noqa: print
-            f"   Average confidence: {status.get('average_confidence', 0):.2f}"
-        )  # noqa: print
-        print(  # noqa: print
-            f"   Approval rate: {status.get('approval_required_rate', 0):.2f}"
-        )  # noqa: print
+        print(f"   Average confidence: {status.get('average_confidence', 0):.2f}")  # noqa: print  # noqa: print
+        print(f"   Approval rate: {status.get('approval_required_rate', 0):.2f}")  # noqa: print  # noqa: print
     except Exception as e:
         print(f"⚠️ Decision system status test failed: {e}")  # noqa: print
 
@@ -345,10 +301,7 @@ async def test_modern_ai_integration():
             availability = "✅" if info.get("available") else "❌"
             capabilities_count = len(info.get("capabilities", []))
             model_name = info.get("model_name", "N/A")
-            print(  # noqa: print
-                f"   {availability} {provider}: {model_name} - "
-                f"{capabilities_count} capabilities"
-            )
+            print(f"   {availability} {provider}: {model_name} - " f"{capabilities_count} capabilities")  # noqa: print
     except Exception as e:
         print(f"⚠️ Provider status test failed: {e}")  # noqa: print
 
@@ -370,9 +323,7 @@ async def test_modern_ai_integration():
     print("\n3. Testing Natural Language to Actions...")  # noqa: print
     try:
         actions = await modern_ai_integration.natural_language_to_actions(
-            user_command=(
-                "Click the submit button and then navigate to the " "settings page"
-            ),
+            user_command=("Click the submit button and then navigate to the " "settings page"),
             context={
                 "current_page": "form",
                 "available_elements": ["submit_button", "cancel_button"],
@@ -381,9 +332,7 @@ async def test_modern_ai_integration():
         print(f"✅ NL to actions: {actions.get('intent', 'unknown')}")  # noqa: print
         print(f"   Actions count: {len(actions.get('actions', []))}")  # noqa: print
         if "actions" in actions and actions["actions"]:
-            print(  # noqa: print
-                f"   First action: {actions['actions'][0].get('type', 'unknown')}"
-            )  # noqa: print
+            print(f"   First action: {actions['actions'][0].get('type', 'unknown')}")  # noqa: print  # noqa: print
     except Exception as e:
         print(f"⚠️ NL to actions test failed: {e}")  # noqa: print
 
@@ -434,9 +383,7 @@ async def test_integration():
         print("✅ Multi-modal + CV integration:")  # noqa: print
         print(f"   Modal confidence: {modal_result.confidence:.2f}")  # noqa: print
         cv_screen_analysis = cv_result.get("screen_analysis", {})
-        print(  # noqa: print
-            f"   CV elements: {cv_screen_analysis.get('elements_detected', 0)}"
-        )  # noqa: print
+        print(f"   CV elements: {cv_screen_analysis.get('elements_detected', 0)}")  # noqa: print  # noqa: print
 
     except Exception as e:
         print(f"⚠️ Multi-modal + CV integration test failed: {e}")  # noqa: print
@@ -452,20 +399,13 @@ async def test_integration():
         # Use AI to elaborate on the decision
         ai_response = await modern_ai_integration.process_with_ai(
             provider=AIProvider.LOCAL_MODEL,
-            prompt=(
-                f"Elaborate on this automation decision: "
-                f"{decision.chosen_action.get('action', 'unknown')}"
-            ),
+            prompt=(f"Elaborate on this automation decision: " f"{decision.chosen_action.get('action', 'unknown')}"),
             task_type="decision_elaboration",
         )
 
         print("✅ Context + AI integration:")  # noqa: print
-        print(  # noqa: print
-            f"   Decision: {decision.chosen_action.get('action', 'unknown')}"
-        )  # noqa: print
-        print(  # noqa: print
-            f"   AI elaboration: {len(ai_response.content)} characters"
-        )  # noqa: print
+        print(f"   Decision: {decision.chosen_action.get('action', 'unknown')}")  # noqa: print  # noqa: print
+        print(f"   AI elaboration: {len(ai_response.content)} characters")  # noqa: print  # noqa: print
 
     except Exception as e:
         print(f"⚠️ Context + AI integration test failed: {e}")  # noqa: print
@@ -505,9 +445,7 @@ async def test_integration():
 
 async def main():
     """Main test function"""
-    print(  # noqa: print
-        "🚀 Phase 9: Advanced AI Integration and Multi-Modal Capabilities Test"
-    )  # noqa: print
+    print("🚀 Phase 9: Advanced AI Integration and Multi-Modal Capabilities Test")  # noqa: print  # noqa: print
     print("=" * 80)  # noqa: print
 
     test_results = []
@@ -545,48 +483,27 @@ async def main():
         for test_name, result in test_results:
             status = "✅ PASS" if result else "❌ FAIL"
             print(f"   {status} {test_name}")  # noqa: print
-            if (
-                not result and test_name != "API Connectivity"
-            ):  # API connectivity is optional
+            if not result and test_name != "API Connectivity":  # API connectivity is optional
                 all_passed = False
 
         if all_passed:
             print("\n🎉 Phase 9 Advanced AI Integration Test PASSED!")  # noqa: print
-            print(  # noqa: print
-                "All multi-modal capabilities are functioning correctly."
-            )  # noqa: print
+            print("All multi-modal capabilities are functioning correctly.")  # noqa: print  # noqa: print
 
             print("\n🔬 Phase 9 Key Features Validated:")  # noqa: print
-            print(  # noqa: print
-                "   ✅ Multi-modal input processing (text, image, audio, combined)"
-            )  # noqa: print
-            print(  # noqa: print
-                "   ✅ Computer vision screen analysis and understanding"
-            )  # noqa: print
-            print(  # noqa: print
-                "   ✅ Voice command processing and natural language analysis"
-            )  # noqa: print
-            print(  # noqa: print
-                "   ✅ Context-aware decision making with comprehensive "
-                "context collection"
-            )
-            print(  # noqa: print
-                "   ✅ Modern AI model integration framework "
-                "(GPT-4V, Claude-3, Gemini)"
-            )
-            print(  # noqa: print
-                "   ✅ Cross-component integration and workflow orchestration"
-            )  # noqa: print
+            print("   ✅ Multi-modal input processing (text, image, audio, combined)")  # noqa: print  # noqa: print
+            print("   ✅ Computer vision screen analysis and understanding")  # noqa: print  # noqa: print
+            print("   ✅ Voice command processing and natural language analysis")  # noqa: print  # noqa: print
+            print("   ✅ Context-aware decision making with comprehensive " "context collection")  # noqa: print
+            print("   ✅ Modern AI model integration framework " "(GPT-4V, Claude-3, Gemini)")  # noqa: print
+            print("   ✅ Cross-component integration and workflow orchestration")  # noqa: print  # noqa: print
 
             if not api_available:
                 print(  # noqa: print
-                    "\n💡 Note: Start the backend with './run_agent.sh' "
-                    "for full API integration testing"
+                    "\n💡 Note: Start the backend with './run_agent.sh' " "for full API integration testing"
                 )
         else:
-            print(  # noqa: print
-                "\n⚠️ Some tests failed. Check logs above for details."
-            )  # noqa: print
+            print("\n⚠️ Some tests failed. Check logs above for details.")  # noqa: print  # noqa: print
 
         return all_passed
 

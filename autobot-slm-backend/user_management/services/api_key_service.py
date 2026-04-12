@@ -50,9 +50,7 @@ class APIKeyService(BaseService):
 
         expires_at = self._calculate_expiration(expires_days)
 
-        api_key = self._build_api_key(
-            user_id, key_hash, key_prefix, name, description, scopes, expires_at
-        )
+        api_key = self._build_api_key(user_id, key_hash, key_prefix, name, description, scopes, expires_at)
 
         self.session.add(api_key)
         await self.session.flush()
@@ -61,11 +59,7 @@ class APIKeyService(BaseService):
 
     async def list_keys(self, user_id: uuid.UUID) -> list:
         """List all API keys for a user."""
-        query = (
-            select(APIKey)
-            .where(APIKey.user_id == user_id)
-            .order_by(APIKey.created_at.desc())
-        )
+        query = select(APIKey).where(APIKey.user_id == user_id).order_by(APIKey.created_at.desc())
         result = await self.session.execute(query)
         return list(result.scalars().all())
 

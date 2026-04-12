@@ -201,15 +201,11 @@ class Phase9PerformanceMonitor:
         try:
             from autobot_shared.redis_client import get_redis_client
 
-            self.redis_client = get_redis_client(
-                async_client=False, database="analytics"
-            )
+            self.redis_client = get_redis_client(async_client=False, database="analytics")
             self.redis_client.ping()
             self.logger.info("Redis client initialized for performance metrics")
         except Exception as e:
-            self.logger.warning(
-                f"Could not initialize Redis for performance metrics: {e}"
-            )
+            self.logger.warning(f"Could not initialize Redis for performance metrics: {e}")
             self.redis_client = None
 
     def _check_gpu_availability(self) -> bool:
@@ -283,17 +279,9 @@ class Phase9PerformanceMonitor:
             gpu_clock_mhz=_parse_optional_int(parts[6]) or 0,
             memory_clock_mhz=_parse_optional_int(parts[7]) or 0,
             fan_speed_percent=_parse_optional_int(parts[8]) if len(parts) > 8 else None,
-            encoder_utilization=(
-                _parse_optional_int(parts[9]) if len(parts) > 9 else None
-            ),
-            decoder_utilization=(
-                _parse_optional_int(parts[10]) if len(parts) > 10 else None
-            ),
-            performance_state=(
-                parts[11]
-                if len(parts) > 11 and parts[11] != "[Not Supported]"
-                else None
-            ),
+            encoder_utilization=(_parse_optional_int(parts[9]) if len(parts) > 9 else None),
+            decoder_utilization=(_parse_optional_int(parts[10]) if len(parts) > 10 else None),
+            performance_state=(parts[11] if len(parts) > 11 and parts[11] != "[Not Supported]" else None),
             thermal_throttling=thermal_throttling,
             power_throttling=power_throttling,
         )
@@ -357,9 +345,7 @@ class Phase9PerformanceMonitor:
                 model_cache_misses=npu_stats.get("cache_misses", 0),
                 thermal_state=npu_stats.get("thermal_state", "normal"),
                 power_efficiency_rating=npu_stats.get("power_efficiency", 90.0),
-                acceleration_ratio=npu_stats.get(
-                    "acceleration_ratio", 5.42
-                ),  # From existing metrics
+                acceleration_ratio=npu_stats.get("acceleration_ratio", 5.42),  # From existing metrics
                 wsl_limitation=self._check_wsl_environment(),
             )
 
@@ -376,9 +362,7 @@ class Phase9PerformanceMonitor:
 
             timeout = aiohttp.ClientTimeout(total=5.0)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(
-                    f"http://{ssot_config.vm.npu_worker}:8081/stats"
-                ) as response:
+                async with session.get(f"http://{ssot_config.vm.npu_worker}:8081/stats") as response:
                     if response.status == 200:
                         return await response.json()
 
@@ -400,38 +384,20 @@ class Phase9PerformanceMonitor:
         try:
             # Get multimodal processing stats from Redis
             if self.redis_client:
-                multimodal_stats = self.redis_client.hgetall(
-                    "multimodal:performance_stats"
-                )
+                multimodal_stats = self.redis_client.hgetall("multimodal:performance_stats")
                 if multimodal_stats:
                     return MultiModalMetrics(
                         timestamp=time.time(),
-                        text_processing_time_ms=float(
-                            multimodal_stats.get("text_time_ms", 0)
-                        ),
-                        image_processing_time_ms=float(
-                            multimodal_stats.get("image_time_ms", 0)
-                        ),
-                        audio_processing_time_ms=float(
-                            multimodal_stats.get("audio_time_ms", 0)
-                        ),
-                        combined_processing_time_ms=float(
-                            multimodal_stats.get("combined_time_ms", 0)
-                        ),
-                        pipeline_efficiency=float(
-                            multimodal_stats.get("pipeline_efficiency", 0)
-                        ),
-                        memory_peak_usage_mb=float(
-                            multimodal_stats.get("memory_peak_mb", 0)
-                        ),
-                        gpu_acceleration_used=multimodal_stats.get("gpu_used", "false")
-                        == "true",
-                        npu_acceleration_used=multimodal_stats.get("npu_used", "false")
-                        == "true",
+                        text_processing_time_ms=float(multimodal_stats.get("text_time_ms", 0)),
+                        image_processing_time_ms=float(multimodal_stats.get("image_time_ms", 0)),
+                        audio_processing_time_ms=float(multimodal_stats.get("audio_time_ms", 0)),
+                        combined_processing_time_ms=float(multimodal_stats.get("combined_time_ms", 0)),
+                        pipeline_efficiency=float(multimodal_stats.get("pipeline_efficiency", 0)),
+                        memory_peak_usage_mb=float(multimodal_stats.get("memory_peak_mb", 0)),
+                        gpu_acceleration_used=multimodal_stats.get("gpu_used", "false") == "true",
+                        npu_acceleration_used=multimodal_stats.get("npu_used", "false") == "true",
                         batch_size=int(multimodal_stats.get("batch_size", 1)),
-                        throughput_items_per_second=float(
-                            multimodal_stats.get("throughput_ips", 0)
-                        ),
+                        throughput_items_per_second=float(multimodal_stats.get("throughput_ips", 0)),
                         error_rate_percent=float(multimodal_stats.get("error_rate", 0)),
                     )
 
@@ -503,8 +469,7 @@ class Phase9PerformanceMonitor:
             "disk_write_mb_s": getattr(disk_io, "write_bytes", 0) / (1024 * 1024),
             "disk_usage_percent": round((disk_usage.used / disk_usage.total) * 100, 1),
             "network_upload_mb_s": getattr(network_io, "bytes_sent", 0) / (1024 * 1024),
-            "network_download_mb_s": getattr(network_io, "bytes_recv", 0)
-            / (1024 * 1024),
+            "network_download_mb_s": getattr(network_io, "bytes_recv", 0) / (1024 * 1024),
         }
 
     async def collect_system_performance_metrics(self) -> SystemPerformanceMetrics:
@@ -571,19 +536,13 @@ class Phase9PerformanceMonitor:
         ]
         return any(keyword in cmdline.lower() for keyword in keywords)
 
-    def _build_process_info(
-        self, proc_info: Dict[str, Any], cmdline: str
-    ) -> Dict[str, Any]:
+    def _build_process_info(self, proc_info: Dict[str, Any], cmdline: str) -> Dict[str, Any]:
         """
         Build process info dictionary from psutil process data.
 
         Issue #620.
         """
-        memory_mb = (
-            proc_info["memory_info"].rss / (1024 * 1024)
-            if proc_info["memory_info"]
-            else 0
-        )
+        memory_mb = proc_info["memory_info"].rss / (1024 * 1024) if proc_info["memory_info"] else 0
         return {
             "pid": proc_info["pid"],
             "name": proc_info["name"],
@@ -591,9 +550,7 @@ class Phase9PerformanceMonitor:
             "cpu_percent": proc_info["cpu_percent"] or 0,
             "memory_mb": round(memory_mb, 2),
             "create_time": datetime.fromtimestamp(proc_info["create_time"]).isoformat(),
-            "running_time_minutes": round(
-                (time.time() - proc_info["create_time"]) / 60, 1
-            ),
+            "running_time_minutes": round((time.time() - proc_info["create_time"]) / 60, 1),
         }
 
     def _get_autobot_processes(self) -> List[Dict[str, Any]]:
@@ -601,19 +558,13 @@ class Phase9PerformanceMonitor:
         autobot_processes = []
 
         try:
-            for proc in psutil.process_iter(
-                ["pid", "name", "cmdline", "cpu_percent", "memory_info", "create_time"]
-            ):
+            for proc in psutil.process_iter(["pid", "name", "cmdline", "cpu_percent", "memory_info", "create_time"]):
                 try:
                     proc_info = proc.info
-                    cmdline = (
-                        " ".join(proc_info["cmdline"]) if proc_info["cmdline"] else ""
-                    )
+                    cmdline = " ".join(proc_info["cmdline"]) if proc_info["cmdline"] else ""
 
                     if self._is_autobot_process(cmdline):
-                        autobot_processes.append(
-                            self._build_process_info(proc_info, cmdline)
-                        )
+                        autobot_processes.append(self._build_process_info(proc_info, cmdline))
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     continue
 
@@ -632,13 +583,9 @@ class Phase9PerformanceMonitor:
 
             timeout = aiohttp.ClientTimeout(total=2.0)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(
-                    f"http://{ssot_config.vm.main}:8001/api/health"
-                ) as response:
+                async with session.get(f"http://{ssot_config.vm.main}:8001/api/health") as response:
                     if response.status == 200:
-                        return round(
-                            (time.time() - start_time) * 1000, 1
-                        )  # Convert to ms
+                        return round((time.time() - start_time) * 1000, 1)  # Convert to ms
 
             return 999.0  # High latency if failed
         except Exception:
@@ -658,15 +605,11 @@ class Phase9PerformanceMonitor:
 
         for service_config in service_configs:
             try:
-                service_metrics = await self._collect_single_service_metrics(
-                    service_config
-                )
+                service_metrics = await self._collect_single_service_metrics(service_config)
                 if service_metrics:
                     services.append(service_metrics)
             except Exception as e:
-                self.logger.error(
-                    "Error collecting metrics for %s: %s", service_config["name"], e
-                )
+                self.logger.error("Error collecting metrics for %s: %s", service_config["name"], e)
 
         return services
 
@@ -761,9 +704,7 @@ class Phase9PerformanceMonitor:
         except Exception:
             return "critical"
 
-    def _calculate_service_health_score(
-        self, status: str, response_time_ms: float
-    ) -> float:
+    def _calculate_service_health_score(self, status: str, response_time_ms: float) -> float:
         """
         Calculate health score based on status and response time.
 
@@ -847,13 +788,9 @@ class Phase9PerformanceMonitor:
                 status = await self._check_http_service_status(host, port, path)
             response_time_ms = round((time.time() - start_time) * 1000, 1)
 
-            health_score = self._calculate_service_health_score(
-                status, response_time_ms
-            )
+            health_score = self._calculate_service_health_score(status, response_time_ms)
 
-            return self._build_service_metrics_object(
-                service_name, host, port, status, response_time_ms, health_score
-            )
+            return self._build_service_metrics_object(service_name, host, port, status, response_time_ms, health_score)
         except Exception as e:
             self.logger.error(f"Error collecting single service metrics: {e}")
             return None
@@ -877,9 +814,7 @@ class Phase9PerformanceMonitor:
             npu_metrics = None
 
         if isinstance(multimodal_metrics, Exception):
-            self.logger.error(
-                f"Multimodal metrics collection failed: {multimodal_metrics}"
-            )
+            self.logger.error(f"Multimodal metrics collection failed: {multimodal_metrics}")
             multimodal_metrics = None
 
         if isinstance(system_metrics, Exception):
@@ -917,9 +852,7 @@ class Phase9PerformanceMonitor:
             self.system_metrics_buffer.append(system_metrics)
 
         for service_metric in service_metrics or []:
-            self.service_metrics_buffer[service_metric.service_name].append(
-                service_metric
-            )
+            self.service_metrics_buffer[service_metric.service_name].append(service_metric)
 
     def _build_metrics_dict(
         self,
@@ -944,14 +877,8 @@ class Phase9PerformanceMonitor:
             "timestamp": time.time(),
             "gpu": asdict(metrics_dict["gpu"]) if metrics_dict["gpu"] else None,
             "npu": asdict(metrics_dict["npu"]) if metrics_dict["npu"] else None,
-            "multimodal": (
-                asdict(metrics_dict["multimodal"])
-                if metrics_dict["multimodal"]
-                else None
-            ),
-            "system": (
-                asdict(metrics_dict["system"]) if metrics_dict["system"] else None
-            ),
+            "multimodal": (asdict(metrics_dict["multimodal"]) if metrics_dict["multimodal"] else None),
+            "system": (asdict(metrics_dict["system"]) if metrics_dict["system"] else None),
             "services": [asdict(s) for s in (metrics_dict["services"] or [])],
             "collection_successful": True,
         }
@@ -1007,11 +934,7 @@ class Phase9PerformanceMonitor:
                 if metric_data:
                     key = f"performance_metrics:{category}"
                     value = json.dumps(
-                        (
-                            asdict(metric_data)
-                            if hasattr(metric_data, "__dict__")
-                            else metric_data
-                        ),
+                        (asdict(metric_data) if hasattr(metric_data, "__dict__") else metric_data),
                         default=str,
                     )
                     pipe.zadd(key, {value: timestamp})
@@ -1074,16 +997,11 @@ class Phase9PerformanceMonitor:
         except Exception as e:
             self.logger.error(f"Error analyzing performance: {e}")
 
-    def _analyze_gpu_performance(
-        self, gpu: Optional[Dict[str, Any]], alerts: List[Dict[str, Any]]
-    ) -> None:
+    def _analyze_gpu_performance(self, gpu: Optional[Dict[str, Any]], alerts: List[Dict[str, Any]]) -> None:
         """Analyze GPU metrics and append alerts. Issue #620."""
         if not gpu:
             return
-        if (
-            gpu["utilization_percent"]
-            < self.performance_baselines["gpu_utilization_target"]
-        ):
+        if gpu["utilization_percent"] < self.performance_baselines["gpu_utilization_target"]:
             alerts.append(
                 {
                     "category": "gpu",
@@ -1107,16 +1025,11 @@ class Phase9PerformanceMonitor:
                 }
             )
 
-    def _analyze_npu_performance(
-        self, npu: Optional[Dict[str, Any]], alerts: List[Dict[str, Any]]
-    ) -> None:
+    def _analyze_npu_performance(self, npu: Optional[Dict[str, Any]], alerts: List[Dict[str, Any]]) -> None:
         """Analyze NPU metrics and append alerts. Issue #620."""
         if not npu:
             return
-        if (
-            npu["acceleration_ratio"]
-            < self.performance_baselines["npu_acceleration_target"]
-        ):
+        if npu["acceleration_ratio"] < self.performance_baselines["npu_acceleration_target"]:
             alerts.append(
                 {
                     "category": "npu",
@@ -1130,16 +1043,11 @@ class Phase9PerformanceMonitor:
                 }
             )
 
-    def _analyze_system_performance(
-        self, system: Optional[Dict[str, Any]], alerts: List[Dict[str, Any]]
-    ) -> None:
+    def _analyze_system_performance(self, system: Optional[Dict[str, Any]], alerts: List[Dict[str, Any]]) -> None:
         """Analyze system metrics and append alerts. Issue #620."""
         if not system:
             return
-        if (
-            system["memory_usage_percent"]
-            > self.performance_baselines["memory_usage_warning"]
-        ):
+        if system["memory_usage_percent"] > self.performance_baselines["memory_usage_warning"]:
             alerts.append(
                 {
                     "category": "memory",
@@ -1155,8 +1063,7 @@ class Phase9PerformanceMonitor:
                     "category": "cpu",
                     "severity": "warning",
                     "message": (
-                        f"High CPU load: {system['cpu_load_1m']:.1f} "
-                        f"on {system['cpu_cores_logical']}-core system"
+                        f"High CPU load: {system['cpu_load_1m']:.1f} " f"on {system['cpu_cores_logical']}-core system"
                     ),
                     "recommendation": "Check for CPU-intensive processes",
                     "timestamp": time.time(),
@@ -1180,10 +1087,7 @@ class Phase9PerformanceMonitor:
                         "timestamp": time.time(),
                     }
                 )
-            if (
-                service["response_time_ms"]
-                > self.performance_baselines["api_response_time_threshold"]
-            ):
+            if service["response_time_ms"] > self.performance_baselines["api_response_time_threshold"]:
                 alerts.append(
                     {
                         "category": "performance",
@@ -1213,9 +1117,7 @@ class Phase9PerformanceMonitor:
             # GPU summary
             if metrics.get("gpu"):
                 gpu = metrics["gpu"]
-                summary_parts.append(
-                    f"GPU: {gpu['utilization_percent']:.0f}% util, {gpu['temperature_celsius']}°C"
-                )
+                summary_parts.append(f"GPU: {gpu['utilization_percent']:.0f}% util, {gpu['temperature_celsius']}°C")
 
             # NPU summary
             if metrics.get("npu"):
@@ -1232,13 +1134,9 @@ class Phase9PerformanceMonitor:
 
             # Service summary
             if metrics.get("services"):
-                healthy_services = sum(
-                    1 for s in metrics["services"] if s["status"] == "healthy"
-                )
+                healthy_services = sum(1 for s in metrics["services"] if s["status"] == "healthy")
                 total_services = len(metrics["services"])
-                summary_parts.append(
-                    f"Services: {healthy_services}/{total_services} healthy"
-                )
+                summary_parts.append(f"Services: {healthy_services}/{total_services} healthy")
 
             self.logger.info(f"PHASE9 PERFORMANCE: {' | '.join(summary_parts)}")
 
@@ -1528,13 +1426,9 @@ def _log_performance_metric(
     Issue #620.
     """
     if success:
-        logger.info(
-            f"PERFORMANCE [{category}]: {func_name} executed in {execution_time:.3f}s"
-        )
+        logger.info(f"PERFORMANCE [{category}]: {func_name} executed in {execution_time:.3f}s")
     else:
-        logger.error(
-            f"PERFORMANCE [{category}]: {func_name} failed after {execution_time:.3f}s: {error}"
-        )
+        logger.error(f"PERFORMANCE [{category}]: {func_name} failed after {execution_time:.3f}s: {error}")
 
 
 def _store_performance_in_redis(
@@ -1584,15 +1478,11 @@ def monitor_performance(category: str = "general"):
                 result = await func(*args, **kwargs)
                 execution_time = time.time() - start_time
                 _log_performance_metric(category, func.__name__, execution_time, True)
-                _store_performance_in_redis(
-                    category, func.__name__, execution_time, len(args), len(kwargs)
-                )
+                _store_performance_in_redis(category, func.__name__, execution_time, len(args), len(kwargs))
                 return result
             except Exception as e:
                 execution_time = time.time() - start_time
-                _log_performance_metric(
-                    category, func.__name__, execution_time, False, e
-                )
+                _log_performance_metric(category, func.__name__, execution_time, False, e)
                 raise
 
         @wraps(func)
@@ -1605,9 +1495,7 @@ def monitor_performance(category: str = "general"):
                 return result
             except Exception as e:
                 execution_time = time.time() - start_time
-                _log_performance_metric(
-                    category, func.__name__, execution_time, False, e
-                )
+                _log_performance_metric(category, func.__name__, execution_time, False, e)
                 raise
 
         if asyncio.iscoroutinefunction(func):
@@ -1626,21 +1514,15 @@ if __name__ == "__main__":
 
         # Collect metrics
         metrics = await phase9_monitor.collect_all_metrics()
-        print(  # noqa: print
-            f"Collected metrics: {json.dumps(metrics, indent=2, default=str)}"
-        )  # noqa: print
+        print(f"Collected metrics: {json.dumps(metrics, indent=2, default=str)}")  # noqa: print  # noqa: print
 
         # Get dashboard
         dashboard = phase9_monitor.get_current_performance_dashboard()
-        print(  # noqa: print
-            f"Performance dashboard: {json.dumps(dashboard, indent=2, default=str)}"
-        )  # noqa: print
+        print(f"Performance dashboard: {json.dumps(dashboard, indent=2, default=str)}")  # noqa: print  # noqa: print
 
         # Get recommendations
         recommendations = phase9_monitor.get_performance_optimization_recommendations()
-        print(  # noqa: print
-            f"Optimization recommendations: {json.dumps(recommendations, indent=2)}"
-        )  # noqa: print
+        print(f"Optimization recommendations: {json.dumps(recommendations, indent=2)}")  # noqa: print  # noqa: print
 
     # Run test
     asyncio.run(test_phase9_monitoring())

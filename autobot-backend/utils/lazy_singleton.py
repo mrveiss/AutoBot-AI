@@ -78,15 +78,11 @@ def _validate_existing_instance(
     """
     try:
         if not validator(instance):
-            logger.warning(
-                "Existing %s failed validation, re-initializing", attribute_name
-            )
+            logger.warning("Existing %s failed validation, re-initializing", attribute_name)
             return False
         return True
     except Exception as e:
-        logger.warning(
-            "Validation of existing %s failed: %s, re-initializing", attribute_name, e
-        )
+        logger.warning("Validation of existing %s failed: %s, re-initializing", attribute_name, e)
         return False
 
 
@@ -240,15 +236,11 @@ def lazy_init_singleton_with_check(
 
     # Check if existing instance is valid
     if instance is not None:
-        if validator is None or _validate_existing_instance(
-            instance, attribute_name, validator
-        ):
+        if validator is None or _validate_existing_instance(instance, attribute_name, validator):
             return instance
         instance = None  # Force re-initialization
 
-    return _create_and_validate_instance(
-        storage, attribute_name, factory, validator, *args, **kwargs
-    )
+    return _create_and_validate_instance(storage, attribute_name, factory, validator, *args, **kwargs)
 
 
 def singleton_getter(attribute_name: str, factory: Callable):
@@ -275,12 +267,8 @@ def singleton_getter(attribute_name: str, factory: Callable):
         def wrapper(request, *args, **kwargs):
             """Execute function and lazily initialize singleton. Issue #620."""
             result = func(request, *args, **kwargs)
-            actual_factory = (
-                result if isinstance(result, type) or callable(result) else factory
-            )
-            return lazy_init_singleton(
-                request.app.state, attribute_name, actual_factory, *args, **kwargs
-            )
+            actual_factory = result if isinstance(result, type) or callable(result) else factory
+            return lazy_init_singleton(request.app.state, attribute_name, actual_factory, *args, **kwargs)
 
         return wrapper
 
@@ -302,9 +290,7 @@ class SingletonStorage:
 _global_singleton_storage = SingletonStorage()
 
 
-def global_lazy_singleton(
-    attribute_name: str, factory: Callable[..., T], *args, **kwargs
-) -> Optional[T]:
+def global_lazy_singleton(attribute_name: str, factory: Callable[..., T], *args, **kwargs) -> Optional[T]:
     """
     Lazy-initialize a global singleton (module-level).
 
@@ -322,6 +308,4 @@ def global_lazy_singleton(
     Example:
         >>> service = global_lazy_singleton("my_service", MyService)
     """
-    return lazy_init_singleton(
-        _global_singleton_storage, attribute_name, factory, *args, **kwargs
-    )
+    return lazy_init_singleton(_global_singleton_storage, attribute_name, factory, *args, **kwargs)

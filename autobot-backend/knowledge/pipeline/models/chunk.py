@@ -43,12 +43,6 @@ class ProcessedChunk(BaseModel):
         default="unknown",
         description="Document classification (technical, narrative, etc.)",
     )
-    start_offset: int = Field(
-        default=0, description="Character offset where chunk starts in document"
-    )
-    end_offset: int = Field(
-        default=0, description="Character offset where chunk ends in document"
-    )
-    created_at: datetime = Field(
-        default_factory=_utcnow, description="Chunk creation timestamp"
-    )
+    start_offset: int = Field(default=0, description="Character offset where chunk starts in document")
+    end_offset: int = Field(default=0, description="Character offset where chunk ends in document")
+    created_at: datetime = Field(default_factory=_utcnow, description="Chunk creation timestamp")

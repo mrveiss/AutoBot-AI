@@ -10,8 +10,8 @@ from pathlib import Path
 # Add AutoBot to Python path
 sys.path.append(str(Path(__file__).parent))
 
-from orchestrator import Orchestrator
 from autobot_types import TaskComplexity
+from orchestrator import Orchestrator
 
 
 async def test_current_status():
@@ -26,17 +26,13 @@ async def test_current_status():
     print(f"   ✅ Tool registry initialized: {has_registry}")  # noqa: print
 
     if has_registry:
-        print(  # noqa: print
-            f"   ✅ Tool registry type: {type(orchestrator.tool_registry)}"
-        )  # noqa: print
+        print(f"   ✅ Tool registry type: {type(orchestrator.tool_registry)}")  # noqa: print  # noqa: print
         try:
             # Test if tool registry can execute tools
             result = await orchestrator.tool_registry.execute_tool(
                 "respond_conversationally", {"response_text": "test"}
             )
-            print(  # noqa: print
-                f"   ✅ Tool execution works: {result.get('status', 'unknown')}"
-            )  # noqa: print
+            print(f"   ✅ Tool execution works: {result.get('status', 'unknown')}")  # noqa: print  # noqa: print
         except Exception as e:
             print(f"   ❌ Tool execution failed: {e}")  # noqa: print
 
@@ -52,9 +48,7 @@ async def test_current_status():
             complexity = await orchestrator.classify_request_complexity(msg)
             print(f"   ✅ '{msg[:30]}...' → {complexity.value}")  # noqa: print
         except Exception as e:
-            print(
-                f"   ❌ Classification failed for '{msg[:30]}...': {e}"
-            )  # noqa: print
+            print(f"   ❌ Classification failed for '{msg[:30]}...': {e}")  # noqa: print
 
     # Test 3: Workflow Planning
     print("\n3. Workflow Planning Test:")  # noqa: print
@@ -63,9 +57,7 @@ async def test_current_status():
         print(f"   ✅ COMPLEX workflow planning: {len(steps)} steps")  # noqa: print
 
         if steps:
-            print(  # noqa: print
-                f"   ✅ First step: {steps[0].agent_type} - {steps[0].action}"
-            )  # noqa: print
+            print(f"   ✅ First step: {steps[0].agent_type} - {steps[0].action}")  # noqa: print  # noqa: print
     except Exception as e:
         print(f"   ❌ Workflow planning failed: {e}")  # noqa: print
 
@@ -75,9 +67,7 @@ async def test_current_status():
         should_orchestrate = await orchestrator.should_use_workflow_orchestration(
             "I need to scan my network for security vulnerabilities"
         )
-        print(  # noqa: print
-            f"   ✅ Should orchestrate complex request: {should_orchestrate}"
-        )  # noqa: print
+        print(f"   ✅ Should orchestrate complex request: {should_orchestrate}")  # noqa: print  # noqa: print
 
         workflow_response = await orchestrator.create_workflow_response(
             "I need to scan my network for security vulnerabilities"

@@ -125,9 +125,7 @@ class AsyncServiceContainer:
 
         logger.debug("Registered instance: %s (%s)", name, service_type.__name__)
 
-    async def _resolve_dependencies(
-        self, descriptor: ServiceDescriptor
-    ) -> Dict[str, Any]:
+    async def _resolve_dependencies(self, descriptor: ServiceDescriptor) -> Dict[str, Any]:
         """Resolve service dependencies recursively. Issue #620."""
         resolved_deps = {}
         for dep_name in descriptor.dependencies:
@@ -144,9 +142,7 @@ class AsyncServiceContainer:
             return descriptor.instance
         return descriptor.service_type()
 
-    def _store_singleton_instance(
-        self, name: str, descriptor: ServiceDescriptor, instance: Any
-    ) -> None:
+    def _store_singleton_instance(self, name: str, descriptor: ServiceDescriptor, instance: Any) -> None:
         """Store singleton instance in cache and registry. Issue #620."""
         if descriptor.singleton:
             descriptor.instance = instance
@@ -154,9 +150,7 @@ class AsyncServiceContainer:
             self._instances[name] = instance
             self._initialized_services.add(name)
 
-    async def _run_init_hook(
-        self, descriptor: ServiceDescriptor, instance: Any
-    ) -> None:
+    async def _run_init_hook(self, descriptor: ServiceDescriptor, instance: Any) -> None:
         """Run initialization lifecycle hook if defined. Issue #620."""
         if "on_init" in descriptor.lifecycle_hooks:
             hook = descriptor.lifecycle_hooks["on_init"]
@@ -238,9 +232,7 @@ class AsyncServiceContainer:
         def visit(service_name: str):
             """Recursively visit service and its dependencies for ordering."""
             if service_name in temp_visited:
-                raise ValueError(
-                    f"Circular dependency detected involving {service_name}"
-                )
+                raise ValueError(f"Circular dependency detected involving {service_name}")
 
             if service_name in visited:
                 return
@@ -393,19 +385,13 @@ async def service_context():
 
         # Check if critical services failed (Issue #380: use module-level constant)
         failed_critical = [
-            name
-            for name in _CRITICAL_SERVICES
-            if name in initialization_results and not initialization_results[name]
+            name for name in _CRITICAL_SERVICES if name in initialization_results and not initialization_results[name]
         ]
 
         if failed_critical:
-            logger.warning(
-                "Critical services failed to initialize: %s", failed_critical
-            )
+            logger.warning("Critical services failed to initialize: %s", failed_critical)
 
-        logger.info(
-            f"Service container initialized: {len(initialization_results)} services"
-        )
+        logger.info(f"Service container initialized: {len(initialization_results)} services")
         yield container
 
     finally:

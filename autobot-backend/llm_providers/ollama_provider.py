@@ -141,9 +141,7 @@ class OllamaProvider(BaseProvider):
             ) as resp:
                 if resp.status != 200:
                     body = await resp.text()
-                    raise RuntimeError(
-                        f"Ollama stream returned HTTP {resp.status}: {body}"
-                    )
+                    raise RuntimeError(f"Ollama stream returned HTTP {resp.status}: {body}")
                 async for line in resp.content:
                     decoded = line.decode("utf-8").strip()
                     if not decoded:

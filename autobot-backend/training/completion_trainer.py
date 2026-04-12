@@ -35,9 +35,7 @@ class CompletionTrainer:
 
     def __init__(
         self,
-        model_dir: str = os.path.join(
-            os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"), "models"
-        ),
+        model_dir: str = os.path.join(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"), "models"),
         language: Optional[str] = None,
         pattern_type: Optional[str] = None,
         device: Optional[str] = None,
@@ -108,9 +106,7 @@ class CompletionTrainer:
         self.optimizer = optim.AdamW(self.model.parameters(), lr=1e-4)
 
         logger.info(f"Model initialized with vocab_size={vocab_size}")
-        logger.info(
-            f"Total parameters: " f"{sum(p.numel() for p in self.model.parameters()):,}"
-        )
+        logger.info(f"Total parameters: " f"{sum(p.numel() for p in self.model.parameters()):,}")
 
     def train_epoch(self) -> float:
         """
@@ -231,9 +227,7 @@ class CompletionTrainer:
 
             # Early stopping
             if patience_counter >= early_stopping_patience:
-                logger.info(
-                    f"Early stopping triggered after {self.current_epoch} epochs"
-                )
+                logger.info(f"Early stopping triggered after {self.current_epoch} epochs")
                 break
 
         logger.info("Training complete!")
@@ -299,9 +293,7 @@ class CompletionTrainer:
         if not checkpoint_path.exists():
             raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
-        checkpoint = torch.load(
-            checkpoint_path, map_location=self.device, weights_only=True
-        )
+        checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=True)
 
         # Restore model
         config = checkpoint["model_config"]

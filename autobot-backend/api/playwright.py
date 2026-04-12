@@ -70,9 +70,7 @@ class InteractRequest(BaseModel):
 
 
 # Browser VM connection
-BROWSER_VM_URL = (
-    f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}"
-)
+BROWSER_VM_URL = f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}"
 
 
 @with_error_handling(
@@ -114,11 +112,7 @@ async def health_check():
             "status": "healthy" if is_ready else "unhealthy",
             "ready": is_ready,
             "service": "playwright_embedded",
-            "message": (
-                "Playwright service is ready"
-                if is_ready
-                else "Playwright service unavailable"
-            ),
+            "message": ("Playwright service is ready" if is_ready else "Playwright service unavailable"),
         }
     except Exception as e:
         logger.error("Playwright health check failed: %s", e)
@@ -139,9 +133,7 @@ async def web_search(request: SearchRequest):
     but integrated into the main API
     """
     try:
-        logger.info(
-            f"Web search request: '{request.query}' via {request.search_engine}"
-        )
+        logger.info(f"Web search request: '{request.query}' via {request.search_engine}")
 
         result = await search_web_embedded(
             query=request.query,
@@ -152,12 +144,8 @@ async def web_search(request: SearchRequest):
         if result.get("success", False):
             return result
         else:
-            logger.warning(
-                "Web search failed: %s", result.get("error", "Unknown error")
-            )
-            raise HTTPException(
-                status_code=500, detail=result.get("error", "Web search failed")
-            )
+            logger.warning("Web search failed: %s", result.get("error", "Unknown error"))
+            raise HTTPException(status_code=500, detail=result.get("error", "Web search failed"))
 
     except HTTPException:
         raise
@@ -186,12 +174,8 @@ async def test_frontend(request: FrontendTestRequest):
         if result.get("success", False):
             return result
         else:
-            logger.warning(
-                f"Frontend test failed: {result.get('error', 'Unknown error')}"
-            )
-            raise HTTPException(
-                status_code=500, detail=result.get("error", "Frontend test failed")
-            )
+            logger.warning(f"Frontend test failed: {result.get('error', 'Unknown error')}")
+            raise HTTPException(status_code=500, detail=result.get("error", "Frontend test failed"))
 
     except HTTPException:
         raise
@@ -213,23 +197,15 @@ async def send_test_message(request: TestMessageRequest):
     Automates message sending for testing chat functionality
     """
     try:
-        logger.info(
-            f"Test message request: '{request.message}' to {request.frontend_url}"
-        )
+        logger.info(f"Test message request: '{request.message}' to {request.frontend_url}")
 
-        result = await send_test_message_embedded(
-            message=request.message, frontend_url=request.frontend_url
-        )
+        result = await send_test_message_embedded(message=request.message, frontend_url=request.frontend_url)
 
         if result.get("success", False):
             return result
         else:
-            logger.warning(
-                f"Test message failed: {result.get('error', 'Unknown error')}"
-            )
-            raise HTTPException(
-                status_code=500, detail=result.get("error", "Test message failed")
-            )
+            logger.warning(f"Test message failed: {result.get('error', 'Unknown error')}")
+            raise HTTPException(status_code=500, detail=result.get("error", "Test message failed"))
 
     except HTTPException:
         raise
@@ -263,12 +239,8 @@ async def capture_screenshot(request: ScreenshotRequest):
         if result.get("success", False):
             return result
         else:
-            logger.warning(
-                "Screenshot failed: %s", result.get("error", "Unknown error")
-            )
-            raise HTTPException(
-                status_code=500, detail=result.get("error", "Screenshot capture failed")
-            )
+            logger.warning("Screenshot failed: %s", result.get("error", "Unknown error"))
+            raise HTTPException(status_code=500, detail=result.get("error", "Screenshot capture failed"))
 
     except HTTPException:
         raise
@@ -301,23 +273,13 @@ async def quick_automation_test(background_tasks: BackgroundTasks):
             logger.info("Service health: %s", health.get("status"))
 
             # Test 2: Web search
-            search_result = await search_web_embedded(
-                "AutoBot system test", max_results=2
-            )
-            logger.info(
-                "Search test: %s results", len(search_result.get("results", []))
-            )
+            search_result = await search_web_embedded("AutoBot system test", max_results=2)
+            logger.info("Search test: %s results", len(search_result.get("results", [])))
 
             # Test 3: Frontend test
             frontend_result = await test_frontend_embedded()
             test_count = len(frontend_result.get("tests", []))
-            passed = len(
-                [
-                    t
-                    for t in frontend_result.get("tests", [])
-                    if t.get("status") == "PASS"
-                ]
-            )
+            passed = len([t for t in frontend_result.get("tests", []) if t.get("status") == "PASS"])
             logger.info("Frontend test: %s/%s tests passed", passed, test_count)
 
             logger.info("Quick automation test suite completed successfully")
@@ -493,9 +455,7 @@ async def go_forward():
             result = await response.json()
 
             if response.status == 200:
-                logger.info(
-                    "Forward navigation successful: %s", result.get("final_url")
-                )
+                logger.info("Forward navigation successful: %s", result.get("final_url"))
                 return result
             else:
                 logger.error("Forward navigation failed: %s", result)

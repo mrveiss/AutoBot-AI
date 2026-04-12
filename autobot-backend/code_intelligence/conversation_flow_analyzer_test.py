@@ -60,8 +60,7 @@ def sample_conversation():
         {"role": "user", "content": "I need help installing AutoBot"},
         {
             "role": "assistant",
-            "content": "I'd be happy to help you install AutoBot. "
-            "Which operating system are you using?",
+            "content": "I'd be happy to help you install AutoBot. " "Which operating system are you using?",
         },
         {"role": "user", "content": "I'm using Ubuntu 22.04"},
         {
@@ -85,20 +84,17 @@ def error_conversation():
         {"role": "user", "content": "I get a timeout error when connecting"},
         {
             "role": "assistant",
-            "content": "I apologize, I'm unable to connect to the service. "
-            "The error indicates a timeout.",
+            "content": "I apologize, I'm unable to connect to the service. " "The error indicates a timeout.",
         },
         {"role": "user", "content": "What do you mean? I don't understand"},
         {
             "role": "assistant",
-            "content": "Sorry, I couldn't find a solution. "
-            "Let me try a different approach.",
+            "content": "Sorry, I couldn't find a solution. " "Let me try a different approach.",
         },
         {"role": "user", "content": "This is still not working"},
         {
             "role": "assistant",
-            "content": "I apologize for the continued issues. "
-            "Would you like to escalate this?",
+            "content": "I apologize for the continued issues. " "Would you like to escalate this?",
         },
     ]
 
@@ -211,33 +207,25 @@ class TestIntentClassifier:
 
     def test_classify_architecture(self):
         """Test architecture intent classification."""
-        intent, confidence = IntentClassifier.classify(
-            "How is the system architecture designed?"
-        )
+        intent, confidence = IntentClassifier.classify("How is the system architecture designed?")
         assert intent == IntentCategory.ARCHITECTURE
         assert confidence > 0
 
     def test_classify_security(self):
         """Test security intent classification."""
-        intent, confidence = IntentClassifier.classify(
-            "How do I set up authentication?"
-        )
+        intent, confidence = IntentClassifier.classify("How do I set up authentication?")
         assert intent == IntentCategory.SECURITY
         assert confidence > 0
 
     def test_classify_performance(self):
         """Test performance intent classification."""
-        intent, confidence = IntentClassifier.classify(
-            "The system is slow and needs optimization"
-        )
+        intent, confidence = IntentClassifier.classify("The system is slow and needs optimization")
         assert intent == IntentCategory.PERFORMANCE
         assert confidence > 0
 
     def test_classify_clarification(self):
         """Test clarification intent classification."""
-        intent, confidence = IntentClassifier.classify(
-            "I don't understand, can you explain?"
-        )
+        intent, confidence = IntentClassifier.classify("I don't understand, can you explain?")
         assert intent == IntentCategory.CLARIFICATION
         assert confidence > 0
 
@@ -319,9 +307,7 @@ class TestResponseClassifier:
 
     def test_classify_error(self):
         """Test error response classification."""
-        resp_type = ResponseClassifier.classify(
-            "I apologize, I'm unable to complete that request."
-        )
+        resp_type = ResponseClassifier.classify("I apologize, I'm unable to complete that request.")
         assert resp_type == ResponseType.ERROR_MESSAGE
 
     def test_classify_suggestion(self):
@@ -631,32 +617,24 @@ class TestDetermineFinalState:
                 intent=IntentCategory.FAREWELL,
             )
         ]
-        state = analyzer._determine_final_state(
-            messages, error_count=0, clarification_count=0
-        )
+        state = analyzer._determine_final_state(messages, error_count=0, clarification_count=0)
         assert state == FlowState.COMPLETED
 
     def test_error_recovery_state(self, analyzer):
         """Test error recovery state detection."""
         messages = [ConversationMessage(role="user", content="Help")]
-        state = analyzer._determine_final_state(
-            messages, error_count=2, clarification_count=0
-        )
+        state = analyzer._determine_final_state(messages, error_count=2, clarification_count=0)
         assert state == FlowState.ERROR_RECOVERY
 
     def test_escalated_state(self, analyzer):
         """Test escalated state detection."""
         messages = [ConversationMessage(role="user", content="I'm confused")]
-        state = analyzer._determine_final_state(
-            messages, error_count=0, clarification_count=5
-        )
+        state = analyzer._determine_final_state(messages, error_count=0, clarification_count=5)
         assert state == FlowState.ESCALATED
 
     def test_abandoned_state(self, analyzer):
         """Test abandoned state for empty messages."""
-        state = analyzer._determine_final_state(
-            [], error_count=0, clarification_count=0
-        )
+        state = analyzer._determine_final_state([], error_count=0, clarification_count=0)
         assert state == FlowState.ABANDONED
 
 

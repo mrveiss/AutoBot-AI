@@ -20,9 +20,7 @@ from agents.base_agent import (
 )
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
 logger = logging.getLogger(__name__)
 
@@ -84,9 +82,7 @@ async def test_base_agent_interface():
     logger.info(f"Initial stats - Requests: {stats['total_requests']}")
 
     # Test basic request
-    request = create_agent_request(
-        agent_type="test", action="test_action", payload={"data": "test_value"}
-    )
+    request = create_agent_request(agent_type="test", action="test_action", payload={"data": "test_value"})
 
     response = await agent.execute_with_tracking(request)
     logger.info(f"Test action response: {response.status}")
@@ -100,9 +96,7 @@ async def test_base_agent_interface():
     logger.info(f"Ping response: {ping_response.status} - {ping_response.result}")
 
     # Test error case
-    error_request = create_agent_request(
-        agent_type="test", action="unknown_action", payload={}
-    )
+    error_request = create_agent_request(agent_type="test", action="unknown_action", payload={})
 
     error_response = await agent.execute_with_tracking(error_request)
     logger.info(f"Error response: {error_response.status} - {error_response.error}")

@@ -206,9 +206,7 @@ class PromptInjectionDetector:
         Returns:
             Tuple of (updated_risk, found_patterns)
         """
-        found = self._check_pattern_list(
-            text, patterns, label, use_regex=use_regex, case_sensitive=case_sensitive
-        )
+        found = self._check_pattern_list(text, patterns, label, use_regex=use_regex, case_sensitive=case_sensitive)
         for pattern in found:
             detected_patterns.append(f"{label}: {pattern}")
             current_risk = self._update_risk(current_risk, risk_level)
@@ -300,19 +298,13 @@ class PromptInjectionDetector:
             detected_patterns: List of detected patterns for logging
         """
         if blocked:
-            logger.warning(
-                "BLOCKED: Prompt injection detected (risk=%s)", max_risk.value
-            )
+            logger.warning("BLOCKED: Prompt injection detected (risk=%s)", max_risk.value)
             logger.warning("Detected patterns: %s", detected_patterns)
         elif max_risk != InjectionRisk.SAFE:
-            logger.info(
-                "SUSPICIOUS: Potential injection detected (risk=%s)", max_risk.value
-            )
+            logger.info("SUSPICIOUS: Potential injection detected (risk=%s)", max_risk.value)
             logger.info("Detected patterns: %s", detected_patterns)
 
-    def detect_injection(
-        self, text: str, context: str = "user_input"
-    ) -> InjectionDetectionResult:
+    def detect_injection(self, text: str, context: str = "user_input") -> InjectionDetectionResult:
         """
         Detect prompt injection attempts in text. Issue #620.
 
@@ -337,9 +329,7 @@ class PromptInjectionDetector:
             )
 
         # Run all pattern checks
-        max_risk = self._run_all_pattern_checks(
-            text, context, detected_patterns, metadata
-        )
+        max_risk = self._run_all_pattern_checks(text, context, detected_patterns, metadata)
 
         # Sanitize and determine blocking
         sanitized_text = self.sanitize_input(text)
@@ -357,9 +347,7 @@ class PromptInjectionDetector:
             metadata=metadata,
         )
 
-    def validate_conversation_context(
-        self, conversation_history: List[Dict[str, str]]
-    ) -> bool:
+    def validate_conversation_context(self, conversation_history: List[Dict[str, str]]) -> bool:
         """
         Validate conversation context for poisoning attempts
 
@@ -374,12 +362,8 @@ class PromptInjectionDetector:
             assistant_msg = exchange.get("assistant", "")
 
             # Check both messages for injection patterns
-            user_result = self.detect_injection(
-                user_msg, context="conversation_context"
-            )
-            assistant_result = self.detect_injection(
-                assistant_msg, context="conversation_context"
-            )
+            user_result = self.detect_injection(user_msg, context="conversation_context")
+            assistant_result = self.detect_injection(assistant_msg, context="conversation_context")
 
             if user_result.blocked or assistant_result.blocked:
                 logger.warning("🚨 Context poisoning detected in conversation history")
@@ -577,9 +561,7 @@ if __name__ == "__main__":
             else "❌ FAIL"
         )
 
-        print(  # noqa: print
-            f"{status} | Risk: {result.risk_level.value:8s} | Blocked: {result.blocked}"
-        )
+        print(f"{status} | Risk: {result.risk_level.value:8s} | Blocked: {result.blocked}")  # noqa: print
         logger.info("Input: {test_input}")
         if result.detected_patterns:
             logger.info("Patterns: {result.detected_patterns}")

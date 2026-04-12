@@ -107,9 +107,7 @@ class PatternDetector:
 
         for pattern in file_patterns:
             for file_path in root.glob(pattern):
-                await self._scan_file_for_patterns(
-                    file_path, detected_patterns, skip_check
-                )
+                await self._scan_file_for_patterns(file_path, detected_patterns, skip_check)
 
         return detected_patterns
 

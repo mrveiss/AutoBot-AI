@@ -224,16 +224,10 @@ class LLMProviderMetricsRecorder(BaseMetricsRecorder):
     ) -> None:
         """Record completion of an LLM request."""
         self.requests_in_flight.labels(provider=provider).dec()
-        self.requests_total.labels(
-            provider=provider, model=model, request_type=request_type
-        ).inc()
-        self.request_latency.labels(provider=provider, model=model).observe(
-            latency_seconds
-        )
+        self.requests_total.labels(provider=provider, model=model, request_type=request_type).inc()
+        self.request_latency.labels(provider=provider, model=model).observe(latency_seconds)
         if time_to_first_token_seconds > 0:
-            self.time_to_first_token.labels(provider=provider, model=model).observe(
-                time_to_first_token_seconds
-            )
+            self.time_to_first_token.labels(provider=provider, model=model).observe(time_to_first_token_seconds)
 
     # =========================================================================
     # Token Methods
@@ -247,26 +241,14 @@ class LLMProviderMetricsRecorder(BaseMetricsRecorder):
         output_tokens: int,
     ) -> None:
         """Record token usage for a request."""
-        self.tokens_total.labels(
-            provider=provider, model=model, token_type="input"
-        ).inc(input_tokens)
-        self.tokens_total.labels(
-            provider=provider, model=model, token_type="output"
-        ).inc(output_tokens)
-        self.tokens_per_request.labels(
-            provider=provider, model=model, token_type="input"
-        ).observe(input_tokens)
-        self.tokens_per_request.labels(
-            provider=provider, model=model, token_type="output"
-        ).observe(output_tokens)
+        self.tokens_total.labels(provider=provider, model=model, token_type="input").inc(input_tokens)
+        self.tokens_total.labels(provider=provider, model=model, token_type="output").inc(output_tokens)
+        self.tokens_per_request.labels(provider=provider, model=model, token_type="input").observe(input_tokens)
+        self.tokens_per_request.labels(provider=provider, model=model, token_type="output").observe(output_tokens)
 
-    def set_context_window_usage(
-        self, provider: str, model: str, usage_percent: float
-    ) -> None:
+    def set_context_window_usage(self, provider: str, model: str, usage_percent: float) -> None:
         """Set context window usage percentage."""
-        self.context_window_usage.labels(provider=provider, model=model).set(
-            usage_percent
-        )
+        self.context_window_usage.labels(provider=provider, model=model).set(usage_percent)
 
     # =========================================================================
     # Cost Methods
@@ -281,22 +263,14 @@ class LLMProviderMetricsRecorder(BaseMetricsRecorder):
     ) -> None:
         """Record cost for a request."""
         total_cost = input_cost + output_cost
-        self.cost_dollars.labels(provider=provider, model=model, cost_type="input").inc(
-            input_cost
-        )
-        self.cost_dollars.labels(
-            provider=provider, model=model, cost_type="output"
-        ).inc(output_cost)
-        self.cost_dollars.labels(provider=provider, model=model, cost_type="total").inc(
-            total_cost
-        )
+        self.cost_dollars.labels(provider=provider, model=model, cost_type="input").inc(input_cost)
+        self.cost_dollars.labels(provider=provider, model=model, cost_type="output").inc(output_cost)
+        self.cost_dollars.labels(provider=provider, model=model, cost_type="total").inc(total_cost)
         self.cost_per_request.labels(provider=provider, model=model).observe(total_cost)
 
     def set_budget_remaining(self, provider: str, remaining_dollars: float) -> None:
         """Set remaining daily budget."""
-        self.daily_cost_budget_remaining.labels(provider=provider).set(
-            remaining_dollars
-        )
+        self.daily_cost_budget_remaining.labels(provider=provider).set(remaining_dollars)
 
     # =========================================================================
     # Error Methods
@@ -306,15 +280,11 @@ class LLMProviderMetricsRecorder(BaseMetricsRecorder):
         """Record an LLM error."""
         # Decrement in-flight on error
         self.requests_in_flight.labels(provider=provider).dec()
-        self.errors_total.labels(
-            provider=provider, model=model, error_type=error_type
-        ).inc()
+        self.errors_total.labels(provider=provider, model=model, error_type=error_type).inc()
 
     def record_retry(self, provider: str, model: str, retry_reason: str) -> None:
         """Record a retry attempt."""
-        self.retries_total.labels(
-            provider=provider, model=model, retry_reason=retry_reason
-        ).inc()
+        self.retries_total.labels(provider=provider, model=model, retry_reason=retry_reason).inc()
 
     def set_error_rate(self, provider: str, error_rate_percent: float) -> None:
         """Set current error rate percentage."""
@@ -332,15 +302,9 @@ class LLMProviderMetricsRecorder(BaseMetricsRecorder):
         reset_seconds: float,
     ) -> None:
         """Update rate limit metrics from API response headers."""
-        self.rate_limit_remaining.labels(provider=provider, limit_type="requests").set(
-            requests_remaining
-        )
-        self.rate_limit_remaining.labels(provider=provider, limit_type="tokens").set(
-            tokens_remaining
-        )
-        self.rate_limit_reset_seconds.labels(
-            provider=provider, limit_type="requests"
-        ).set(reset_seconds)
+        self.rate_limit_remaining.labels(provider=provider, limit_type="requests").set(requests_remaining)
+        self.rate_limit_remaining.labels(provider=provider, limit_type="tokens").set(tokens_remaining)
+        self.rate_limit_reset_seconds.labels(provider=provider, limit_type="requests").set(reset_seconds)
 
     def record_rate_limited(self, provider: str) -> None:
         """Record a rate-limited request."""

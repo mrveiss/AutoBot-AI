@@ -30,9 +30,7 @@ class InsiderThreatAnalyzer(ThreatAnalyzer):
         }
     )
 
-    def _collect_risk_indicators(
-        self, event: SecurityEvent, context: AnalysisContext
-    ) -> tuple[list, any]:
+    def _collect_risk_indicators(self, event: SecurityEvent, context: AnalysisContext) -> tuple[list, any]:
         """
         Collect risk indicators from event and context.
 
@@ -49,10 +47,7 @@ class InsiderThreatAnalyzer(ThreatAnalyzer):
         if event.get_timestamp_hour() < 6 or event.get_timestamp_hour() > 22:
             risk_indicators.append("off_hours_access")
 
-        if event.resource and any(
-            sensitive in event.resource.lower()
-            for sensitive in SENSITIVE_RESOURCE_KEYWORDS
-        ):
+        if event.resource and any(sensitive in event.resource.lower() for sensitive in SENSITIVE_RESOURCE_KEYWORDS):
             risk_indicators.append("sensitive_resource_access")
 
         user_profile = context.get_user_profile(event.user_id)
@@ -64,18 +59,14 @@ class InsiderThreatAnalyzer(ThreatAnalyzer):
 
         return risk_indicators, user_profile
 
-    def _build_insider_threat_event(
-        self, event: SecurityEvent, risk_indicators: list, user_profile
-    ) -> ThreatEvent:
+    def _build_insider_threat_event(self, event: SecurityEvent, risk_indicators: list, user_profile) -> ThreatEvent:
         """
         Build ThreatEvent for insider threat detection.
 
         (Issue #398: extracted helper)
         """
         confidence = min(1.0, len(risk_indicators) * 0.3 + 0.4)
-        threat_level = (
-            ThreatLevel.CRITICAL if len(risk_indicators) >= 4 else ThreatLevel.HIGH
-        )
+        threat_level = ThreatLevel.CRITICAL if len(risk_indicators) >= 4 else ThreatLevel.HIGH
         base_fields = event.get_threat_base_fields()
 
         return ThreatEvent(
@@ -88,11 +79,7 @@ class InsiderThreatAnalyzer(ThreatAnalyzer):
                 "risk_indicators": risk_indicators,
                 "user_risk_score": user_profile.risk_score if user_profile else 0.0,
                 "access_time": event.timestamp.isoformat(),
-                "data_sensitivity": (
-                    "high"
-                    if any("sensitive" in ind for ind in risk_indicators)
-                    else "medium"
-                ),
+                "data_sensitivity": ("high" if any("sensitive" in ind for ind in risk_indicators) else "medium"),
             },
             mitigation_actions=[
                 "enhanced_monitoring",
@@ -102,9 +89,7 @@ class InsiderThreatAnalyzer(ThreatAnalyzer):
             ],
         )
 
-    async def analyze(
-        self, event: SecurityEvent, context: AnalysisContext
-    ) -> Optional[ThreatEvent]:
+    async def analyze(self, event: SecurityEvent, context: AnalysisContext) -> Optional[ThreatEvent]:
         """
         Detect insider threat indicators.
 
@@ -116,8 +101,6 @@ class InsiderThreatAnalyzer(ThreatAnalyzer):
         risk_indicators, user_profile = self._collect_risk_indicators(event, context)
 
         if len(risk_indicators) >= 2:
-            return self._build_insider_threat_event(
-                event, risk_indicators, user_profile
-            )
+            return self._build_insider_threat_event(event, risk_indicators, user_profile)
 
         return None

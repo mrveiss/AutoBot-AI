@@ -96,7 +96,9 @@ class TestLinkPipelineHtmlParsing:
         assert "https://example.com/abs" in urls
 
     def test_extract_links_skips_anchors_and_js(self):
-        html = '<html><body><a href="#">Anchor</a><a href="javascript:void">JS</a><a href="/real">Real</a></body></html>'
+        html = (
+            '<html><body><a href="#">Anchor</a><a href="javascript:void">JS</a><a href="/real">Real</a></body></html>'
+        )
         soup = self._soup(html)
         links = self.pipe._extract_links(soup, "https://test.com")
         assert len(links) == 1
@@ -109,9 +111,7 @@ class TestLinkPipelineHtmlParsing:
         assert og.get("description") == "OG description"
 
     def test_parse_html_full(self):
-        result = self.pipe._parse_html(
-            SAMPLE_HTML, "https://test.com/page", "text/html", {}
-        )
+        result = self.pipe._parse_html(SAMPLE_HTML, "https://test.com/page", "text/html", {})
         assert result["type"] == "link_fetch"
         assert result["title"] == "OG Title"
         assert result["description"] == "OG description"
@@ -124,9 +124,7 @@ class TestLinkPipelineErrorHandling:
 
     def test_unavailable_result(self):
         pipe = LinkPipeline()
-        result = pipe._unavailable_result(
-            "https://example.com", ["aiohttp", "beautifulsoup4"], {}
-        )
+        result = pipe._unavailable_result("https://example.com", ["aiohttp", "beautifulsoup4"], {})
         assert result["processing_status"] == "unavailable"
         assert result["confidence"] == 0.0
 
@@ -169,10 +167,10 @@ class TestLinkPipelineHttp:
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("media.link.pipeline._AIOHTTP_AVAILABLE", True), patch(
-            "media.link.pipeline._BS4_AVAILABLE", True
-        ), patch(
-            "media.link.pipeline.aiohttp.ClientSession", return_value=mock_session
+        with (
+            patch("media.link.pipeline._AIOHTTP_AVAILABLE", True),
+            patch("media.link.pipeline._BS4_AVAILABLE", True),
+            patch("media.link.pipeline.aiohttp.ClientSession", return_value=mock_session),
         ):
             result = await pipe._fetch_and_parse("https://example.com", {})
 
@@ -196,10 +194,10 @@ class TestLinkPipelineHttp:
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("media.link.pipeline._AIOHTTP_AVAILABLE", True), patch(
-            "media.link.pipeline._BS4_AVAILABLE", True
-        ), patch(
-            "media.link.pipeline.aiohttp.ClientSession", return_value=mock_session
+        with (
+            patch("media.link.pipeline._AIOHTTP_AVAILABLE", True),
+            patch("media.link.pipeline._BS4_AVAILABLE", True),
+            patch("media.link.pipeline.aiohttp.ClientSession", return_value=mock_session),
         ):
             result = await pipe._fetch_and_parse("https://example.com/404", {})
 

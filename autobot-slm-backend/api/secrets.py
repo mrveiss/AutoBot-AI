@@ -47,9 +47,7 @@ async def create_secret(
     _: Annotated[dict, Depends(require_admin)],
 ) -> SecretResponse:
     """Create a new system secret (admin only)."""
-    existing = await db.execute(
-        select(SystemSecret).where(SystemSecret.key == data.key)
-    )
+    existing = await db.execute(select(SystemSecret).where(SystemSecret.key == data.key))
     if existing.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

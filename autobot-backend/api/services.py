@@ -42,9 +42,7 @@ def _determine_redis_status(redis_status_obj) -> tuple[str, str]:
         "failed": ("error", "Redis service failed"),
     }
 
-    return status_map.get(
-        redis_status_obj.status, ("warning", "Redis service status unknown")
-    )
+    return status_map.get(redis_status_obj.status, ("warning", "Redis service status unknown"))
 
 
 async def _get_services_from_monitoring() -> list:
@@ -235,8 +233,7 @@ async def get_health(admin_check: bool = Depends(check_admin_permission)):
     Issue #744: Requires admin authentication.
     """
     logger.warning(
-        "Deprecated health endpoint called: /api/services/health — "
-        "use /api/system/health instead (#3333)"
+        "Deprecated health endpoint called: /api/services/health — " "use /api/system/health instead (#3333)"
     )
     return {
         "status": "healthy",

@@ -26,12 +26,12 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
+from pydantic import BaseModel, Field
 
 from api.knowledge_models import SearchRequest
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.threshold_constants import QueryDefaults
-from pydantic import BaseModel, Field
 from services.grounded_agent import (
     Claim,
     ConflictResolution,
@@ -54,12 +54,8 @@ class GroundResponseRequest(BaseModel):
     """Request to ground an agent response."""
 
     query: str = Field(..., min_length=1, max_length=2000, description="User query")
-    agent_response: str = Field(
-        ..., min_length=1, max_length=5000, description="Agent response to ground"
-    )
-    context: Optional[Dict[str, Any]] = Field(
-        None, description="Optional context metadata"
-    )
+    agent_response: str = Field(..., min_length=1, max_length=5000, description="Agent response to ground")
+    context: Optional[Dict[str, Any]] = Field(None, description="Optional context metadata")
 
 
 class VerifyClaimRequest(BaseModel):
@@ -355,15 +351,17 @@ async def list_conflicts(
             conflicts.append(
                 {
                     "conflict_id": key.decode().split(":")[-1],
-                    "description": conflict_data.get("description", "").decode()
-                    if isinstance(conflict_data.get("description"), bytes)
-                    else conflict_data.get("description", ""),
-                    "severity": conflict_data.get("severity", "medium").decode()
-                    if isinstance(conflict_data.get("severity"), bytes)
-                    else conflict_data.get("severity", "medium"),
-                    "resolution": conflict_status.decode()
-                    if isinstance(conflict_status, bytes)
-                    else conflict_status,
+                    "description": (
+                        conflict_data.get("description", "").decode()
+                        if isinstance(conflict_data.get("description"), bytes)
+                        else conflict_data.get("description", "")
+                    ),
+                    "severity": (
+                        conflict_data.get("severity", "medium").decode()
+                        if isinstance(conflict_data.get("severity"), bytes)
+                        else conflict_data.get("severity", "medium")
+                    ),
+                    "resolution": conflict_status.decode() if isinstance(conflict_status, bytes) else conflict_status,
                     "timestamp": float(
                         conflict_data.get("timestamp", 0).decode()
                         if isinstance(conflict_data.get("timestamp"), bytes)
@@ -543,29 +541,17 @@ async def get_stats(
         return {
             "status": "success",
             "period": period,
-            "total_responses_grounded": int(
-                decode_val(stats_data.get(b"total_responses_grounded", b"0"))
-            ),
-            "total_claims_extracted": int(
-                decode_val(stats_data.get(b"total_claims_extracted", b"0"))
-            ),
-            "claims_verified": float(
-                decode_val(stats_data.get(b"claims_verified", b"0"))
-            ),
+            "total_responses_grounded": int(decode_val(stats_data.get(b"total_responses_grounded", b"0"))),
+            "total_claims_extracted": int(decode_val(stats_data.get(b"total_claims_extracted", b"0"))),
+            "claims_verified": float(decode_val(stats_data.get(b"claims_verified", b"0"))),
             "claim_sources": {
                 "kb_lookup": 0.65,
                 "external_research": 0.22,
                 "causal_inference": 0.13,
             },
-            "average_confidence": float(
-                decode_val(stats_data.get(b"average_confidence", b"0"))
-            ),
-            "conflicts_created": int(
-                decode_val(stats_data.get(b"conflicts_created", b"0"))
-            ),
-            "conflicts_resolved": int(
-                decode_val(stats_data.get(b"conflicts_resolved", b"0"))
-            ),
+            "average_confidence": float(decode_val(stats_data.get(b"average_confidence", b"0"))),
+            "conflicts_created": int(decode_val(stats_data.get(b"conflicts_created", b"0"))),
+            "conflicts_resolved": int(decode_val(stats_data.get(b"conflicts_resolved", b"0"))),
         }
 
     except Exception as e:

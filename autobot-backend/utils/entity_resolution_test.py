@@ -78,12 +78,8 @@ class TestEntityResolution:
         print(f"  Processing time: {result.processing_time:.3f}s")  # noqa: print
 
         # Validate results
-        assert result.total_original == len(
-            test_entities
-        ), "Should count all original entities"
-        assert result.total_canonical <= len(
-            test_entities
-        ), "Should have same or fewer canonical entities"
+        assert result.total_original == len(test_entities), "Should count all original entities"
+        assert result.total_canonical <= len(test_entities), "Should have same or fewer canonical entities"
         assert result.processing_time > 0, "Should have positive processing time"
 
         # Check mappings
@@ -122,18 +118,14 @@ class TestEntityResolution:
         print("  Testing similarity pairs:")  # noqa: print
         for canonical, variant in similar_pairs:
             # Find the mapping for this canonical entity
-            mapping = next(
-                (m for m in test_mappings if m.canonical_name == canonical), None
-            )
+            mapping = next((m for m in test_mappings if m.canonical_name == canonical), None)
             if mapping:
                 is_similar = mapping.is_similar_to(variant)
                 print(f"    '{canonical}' ~ '{variant}': {is_similar}")  # noqa: print
 
                 # Most pairs should be detected as similar
                 if canonical.lower() == variant.lower():
-                    assert (
-                        is_similar
-                    ), f"Case variations should be similar: {canonical} ~ {variant}"
+                    assert is_similar, f"Case variations should be similar: {canonical} ~ {variant}"
 
         print("✓ Similarity detection working correctly")  # noqa: print
 
@@ -161,9 +153,7 @@ class TestEntityResolution:
             classified_type = self.resolver._classify_entity_type(entity_name)
             is_correct = classified_type == expected_type
 
-            print(  # noqa: print
-                f"    '{entity_name}': {classified_type.value} {'✓' if is_correct else '✗'}"
-            )
+            print(f"    '{entity_name}': {classified_type.value} {'✓' if is_correct else '✗'}")  # noqa: print
 
             if is_correct:
                 correct_classifications += 1
@@ -186,33 +176,21 @@ class TestEntityResolution:
         print(f"✓ Processed {len(self.test_entities)} entities")  # noqa: print
         print(f"  Original entities: {result.total_original}")  # noqa: print
         print(f"  Canonical entities: {result.total_canonical}")  # noqa: print
-        print(
-            f"  Entities merged: {result.total_original - result.total_canonical}"
-        )  # noqa: print
+        print(f"  Entities merged: {result.total_original - result.total_canonical}")  # noqa: print
         print(f"  Resolution rate: {result.resolution_rate:.1f}%")  # noqa: print
         print(f"  Processing time: {result.processing_time:.3f}s")  # noqa: print
 
         # Check quality metrics
         summary = result.get_resolution_summary()
         print("  Quality metrics:")  # noqa: print
-        print(
-            f"    High confidence: {summary['quality_metrics']['high_confidence']}"
-        )  # noqa: print
-        print(
-            f"    Low confidence: {summary['quality_metrics']['low_confidence']}"
-        )  # noqa: print
-        print(
-            f"    Exact matches: {summary['quality_metrics']['exact_matches']}"
-        )  # noqa: print
-        print(
-            f"    Semantic matches: {summary['quality_metrics']['semantic_matches']}"
-        )  # noqa: print
+        print(f"    High confidence: {summary['quality_metrics']['high_confidence']}")  # noqa: print
+        print(f"    Low confidence: {summary['quality_metrics']['low_confidence']}")  # noqa: print
+        print(f"    Exact matches: {summary['quality_metrics']['exact_matches']}")  # noqa: print
+        print(f"    Semantic matches: {summary['quality_metrics']['semantic_matches']}")  # noqa: print
 
         # Should achieve some level of deduplication
         assert result.resolution_rate > 0, "Should achieve some entity deduplication"
-        assert (
-            result.total_canonical < result.total_original
-        ), "Should reduce entity count"
+        assert result.total_canonical < result.total_original, "Should reduce entity count"
 
         return result
 
@@ -270,9 +248,7 @@ class TestEntityResolution:
             original_entities.add(fact.object)
 
         print(f"  Original unique entities: {len(original_entities)}")  # noqa: print
-        print(
-            f"  Sample original entities: {list(original_entities)[:5]}"
-        )  # noqa: print
+        print(f"  Sample original entities: {list(original_entities)[:5]}")  # noqa: print
 
         # Apply entity resolution
         resolved_facts = await self.resolver.resolve_facts_entities(test_facts)
@@ -285,9 +261,7 @@ class TestEntityResolution:
             resolved_entities.add(fact.object)
 
         print(f"  Resolved unique entities: {len(resolved_entities)}")  # noqa: print
-        print(
-            f"  Sample resolved entities: {list(resolved_entities)[:5]}"
-        )  # noqa: print
+        print(f"  Sample resolved entities: {list(resolved_entities)[:5]}")  # noqa: print
 
         # Show some resolved facts
         print("  Sample resolved facts:")  # noqa: print
@@ -295,9 +269,7 @@ class TestEntityResolution:
             print(f"    {fact.subject} {fact.predicate} {fact.object}")  # noqa: print
 
         # Should maintain same number of facts but potentially fewer unique entities
-        assert len(resolved_facts) == len(
-            test_facts
-        ), "Should maintain same number of facts"
+        assert len(resolved_facts) == len(test_facts), "Should maintain same number of facts"
 
         print("✓ Entity resolution applied to facts successfully")  # noqa: print
 
@@ -311,22 +283,14 @@ class TestEntityResolution:
         test_entities = ["TestEntity1", "testentity1", "Test Entity 1"]
 
         # First resolution
-        result1 = await self.resolver.resolve_entities(
-            test_entities, context={"test": "first"}
-        )
+        result1 = await self.resolver.resolve_entities(test_entities, context={"test": "first"})
 
         # Second resolution with additional entities
         extended_entities = test_entities + ["TestEntity2", "Test Entity 2"]
-        result2 = await self.resolver.resolve_entities(
-            extended_entities, context={"test": "second"}
-        )
+        result2 = await self.resolver.resolve_entities(extended_entities, context={"test": "second"})
 
-        print(  # noqa: print
-            f"  First resolution: {result1.total_original} -> {result1.total_canonical}"
-        )
-        print(  # noqa: print
-            f"  Second resolution: {result2.total_original} -> {result2.total_canonical}"
-        )
+        print(f"  First resolution: {result1.total_original} -> {result1.total_canonical}")  # noqa: print
+        print(f"  Second resolution: {result2.total_original} -> {result2.total_canonical}")  # noqa: print
 
         # The second resolution should reuse mappings from the first
         # This is hard to test without direct access to Redis, but we can check consistency
@@ -357,9 +321,7 @@ class TestEntityResolution:
             result = await self.resolver.resolve_entities(test_subset)
 
             processing_time = result.processing_time
-            throughput = (
-                len(test_subset) / processing_time if processing_time > 0 else 0
-            )
+            throughput = len(test_subset) / processing_time if processing_time > 0 else 0
 
             performance_results[size] = {
                 "processing_time": processing_time,
@@ -367,19 +329,13 @@ class TestEntityResolution:
                 "resolution_rate": result.resolution_rate,
             }
 
-            print(  # noqa: print
-                f"  Size {size}: {processing_time:.3f}s ({throughput:.1f} entities/s)"
-            )
+            print(f"  Size {size}: {processing_time:.3f}s ({throughput:.1f} entities/s)")  # noqa: print
 
         # Performance should scale reasonably
         for size in sizes:
             metrics = performance_results[size]
-            assert (
-                metrics["processing_time"] < 10.0
-            ), f"Processing time too slow for size {size}"
-            print(
-                f"    Resolution rate: {metrics['resolution_rate']:.1f}%"
-            )  # noqa: print
+            assert metrics["processing_time"] < 10.0, f"Processing time too slow for size {size}"
+            print(f"    Resolution rate: {metrics['resolution_rate']:.1f}%")  # noqa: print
 
         print("✓ Performance metrics within acceptable ranges")  # noqa: print
 
@@ -397,26 +353,16 @@ class TestEntityResolution:
         stats = await self.resolver.get_resolution_statistics()
 
         print("  Resolution statistics:")  # noqa: print
-        print(
-            f"    Total mappings: {stats.get('total_entity_mappings', 0)}"
-        )  # noqa: print
-        print(
-            f"    Recent resolutions: {stats.get('recent_resolutions', 0)}"
-        )  # noqa: print
-        print(  # noqa: print
-            f"    Average processing time: {stats.get('average_processing_time', 0):.3f}s"
-        )
-        print(  # noqa: print
-            f"    Average resolution rate: {stats.get('average_resolution_rate', 0):.1f}%"
-        )
+        print(f"    Total mappings: {stats.get('total_entity_mappings', 0)}")  # noqa: print
+        print(f"    Recent resolutions: {stats.get('recent_resolutions', 0)}")  # noqa: print
+        print(f"    Average processing time: {stats.get('average_processing_time', 0):.3f}s")  # noqa: print
+        print(f"    Average resolution rate: {stats.get('average_resolution_rate', 0):.1f}%")  # noqa: print
 
         # Basic validation
         assert isinstance(stats, dict), "Should return dictionary of statistics"
 
         if stats.get("recent_resolutions", 0) > 0:
-            assert (
-                stats.get("average_processing_time", 0) > 0
-            ), "Should have positive processing time"
+            assert stats.get("average_processing_time", 0) > 0, "Should have positive processing time"
 
         print("✓ Statistics collection working")  # noqa: print
 
@@ -457,24 +403,16 @@ class TestEntityResolution:
             print("✅ All Entity Resolution Tests Passed!")  # noqa: print
             print("=" * 70)  # noqa: print
             print("Summary:")  # noqa: print
-            print(  # noqa: print
-                f"  - Basic resolution: {basic_result.resolution_rate:.1f}% reduction"
-            )
-            print(
-                f"  - Classification accuracy: {classification_accuracy:.1f}%"
-            )  # noqa: print
+            print(f"  - Basic resolution: {basic_result.resolution_rate:.1f}% reduction")  # noqa: print
+            print(f"  - Classification accuracy: {classification_accuracy:.1f}%")  # noqa: print
             print(  # noqa: print
                 f"  - Large-scale: {large_scale_result.total_original} -> {large_scale_result.total_canonical} entities"
             )
-            print(  # noqa: print
-                f"  - Fact resolution: {orig_entities} -> {resolved_entities} entities"
-            )
+            print(f"  - Fact resolution: {orig_entities} -> {resolved_entities} entities")  # noqa: print
             print(  # noqa: print
                 f"  - Performance: {max(p['throughput'] for p in performance_results.values()):.1f} entities/s max"
             )
-            print(  # noqa: print
-                f"  - Statistics: {stats.get('recent_resolutions', 0)} recent operations"
-            )
+            print(f"  - Statistics: {stats.get('recent_resolutions', 0)} recent operations")  # noqa: print
 
             return True
 
@@ -492,9 +430,7 @@ async def main():
     success = await tester.run_all_tests()
 
     if success:
-        print(
-            "\n🎉 Entity resolution implementation is working correctly!"
-        )  # noqa: print
+        print("\n🎉 Entity resolution implementation is working correctly!")  # noqa: print
         return 0
     else:
         print("\n💥 Entity resolution tests failed!")  # noqa: print

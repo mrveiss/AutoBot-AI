@@ -90,9 +90,7 @@ async def test_invalidate_user_sessions_except_current(mock_redis):
 
     # Mock existing tokens in Redis
     existing_tokens = ["old.token.1", "old.token.2", current_token]
-    mock_redis.smembers = AsyncMock(
-        return_value={SessionService.hash_token(t) for t in existing_tokens}
-    )
+    mock_redis.smembers = AsyncMock(return_value={SessionService.hash_token(t) for t in existing_tokens})
     mock_redis.sadd = AsyncMock()
     mock_redis.expire = AsyncMock()
 
@@ -101,9 +99,7 @@ async def test_invalidate_user_sessions_except_current(mock_redis):
         return_value=mock_redis,
     ):
         service = SessionService()
-        count = await service.invalidate_user_sessions(
-            user_id, except_token=current_token
-        )
+        count = await service.invalidate_user_sessions(user_id, except_token=current_token)
 
     # Should invalidate 2 tokens (excluding current)
     assert count == 2

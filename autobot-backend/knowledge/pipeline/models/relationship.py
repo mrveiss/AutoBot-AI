@@ -58,31 +58,15 @@ class Relationship(BaseModel):
     )
 
     id: UUID = Field(default_factory=uuid4, description="Unique relationship ID")
-    source_entity_id: UUID = Field(
-        ..., description="Source entity (subject of relationship)"
-    )
-    target_entity_id: UUID = Field(
-        ..., description="Target entity (object of relationship)"
-    )
-    relationship_type: RelationType = Field(
-        ..., description="Semantic relationship type"
-    )
-    description: str = Field(
-        default="", description="Relationship description or context"
-    )
+    source_entity_id: UUID = Field(..., description="Source entity (subject of relationship)")
+    target_entity_id: UUID = Field(..., description="Target entity (object of relationship)")
+    relationship_type: RelationType = Field(..., description="Semantic relationship type")
+    description: str = Field(default="", description="Relationship description or context")
     bidirectional: bool = Field(
         default=False,
         description="Whether relationship is symmetric (e.g., SIMILAR_TO)",
     )
-    confidence: float = Field(
-        default=1.0, ge=0.0, le=1.0, description="Extraction confidence score"
-    )
-    source_chunk_ids: List[UUID] = Field(
-        default_factory=list, description="Chunks where relationship was found"
-    )
-    created_at: datetime = Field(
-        default_factory=_utcnow, description="Relationship creation timestamp"
-    )
-    updated_at: datetime = Field(
-        default_factory=_utcnow, description="Last update timestamp"
-    )
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Extraction confidence score")
+    source_chunk_ids: List[UUID] = Field(default_factory=list, description="Chunks where relationship was found")
+    created_at: datetime = Field(default_factory=_utcnow, description="Relationship creation timestamp")
+    updated_at: datetime = Field(default_factory=_utcnow, description="Last update timestamp")

@@ -48,17 +48,13 @@ class TestRedisGraphAdapter:
     @pytest.mark.asyncio
     async def test_get_neighbors_decodes_bytes(self):
         """Members returned as bytes are decoded to strings."""
-        redis = _make_async_redis(
-            zrangebyscore_result=[(b"node-B", 0.9), (b"node-C", 0.5)]
-        )
+        redis = _make_async_redis(zrangebyscore_result=[(b"node-B", 0.9), (b"node-C", 0.5)])
         adapter = RedisGraphAdapter(redis)
 
         neighbors = await adapter.get_neighbors("node-A")
 
         assert neighbors == [("node-B", 0.9), ("node-C", 0.5)]
-        redis.zrangebyscore.assert_awaited_once_with(
-            "mesh:edges:node-A", min=0.0, max="+inf", withscores=True
-        )
+        redis.zrangebyscore.assert_awaited_once_with("mesh:edges:node-A", min=0.0, max="+inf", withscores=True)
 
     @pytest.mark.asyncio
     async def test_get_neighbors_handles_string_members(self):
@@ -136,11 +132,7 @@ class TestFullStalenessIntegrationPipeline:
         # Graph: source -> neighbor-B (weight 1.0)
         # decay=0.7 → neighbor-B gets score 0.7 (above default 0.3 threshold)
         redis = AsyncMock()
-        redis.zrangebyscore = AsyncMock(
-            side_effect=lambda key, **_: (
-                [("neighbor-B", 1.0)] if "source" in key else []
-            )
-        )
+        redis.zrangebyscore = AsyncMock(side_effect=lambda key, **_: ([("neighbor-B", 1.0)] if "source" in key else []))
         redis.rpush = AsyncMock(return_value=1)
         pipe = MagicMock()
         redis.pipeline = lambda: pipe

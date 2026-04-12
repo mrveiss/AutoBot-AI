@@ -237,9 +237,7 @@ def _format_alertmanager_alerts(raw_alerts: List[Dict]) -> List[Dict[str, Any]]:
                 "category": labels.get("component", labels.get("alertname", "system")),
                 "message": annotations.get("summary", labels.get("alertname", "Alert")),
                 "description": annotations.get("description", ""),
-                "recommendation": annotations.get(
-                    "recommendation", "Check system logs"
-                ),
+                "recommendation": annotations.get("recommendation", "Check system logs"),
                 "alertname": labels.get("alertname", ""),
                 "fingerprint": alert.get("fingerprint", ""),
                 "status": alert.get("status", {}).get("state", "active"),
@@ -291,12 +289,8 @@ class OptimizationRecommendation(BaseModel):
 class MetricsQuery(BaseModel):
     """Query parameters for metrics retrieval"""
 
-    categories: Optional[List[str]] = Field(
-        None, description="Metric categories to include"
-    )
-    time_range_minutes: int = Field(
-        10, ge=1, le=1440, description="Time range in minutes"
-    )
+    categories: Optional[List[str]] = Field(None, description="Metric categories to include")
+    time_range_minutes: int = Field(10, ge=1, le=1440, description="Time range in minutes")
     include_trends: bool = Field(True, description="Include trend analysis")
     include_alerts: bool = Field(True, description="Include recent alerts")
 
@@ -322,9 +316,7 @@ class MonitoringWebSocketManager:
         """Accept WebSocket connection and start periodic update task if first."""
         await websocket.accept()
         self.active_connections.append(websocket)
-        logger.info(
-            f"WebSocket connected. Active connections: {len(self.active_connections)}"
-        )
+        logger.info(f"WebSocket connected. Active connections: {len(self.active_connections)}")
 
         # Start update task if this is the first connection
         if len(self.active_connections) == 1 and not self.update_task:
@@ -334,9 +326,7 @@ class MonitoringWebSocketManager:
         """Remove WebSocket connection and cancel update task if last."""
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
-        logger.info(
-            f"WebSocket disconnected. Active connections: {len(self.active_connections)}"
-        )
+        logger.info(f"WebSocket disconnected. Active connections: {len(self.active_connections)}")
 
         # Stop update task if no connections
         if len(self.active_connections) == 0 and self.update_task:
@@ -560,9 +550,7 @@ async def get_monitoring_status(
     # Calculate uptime
     uptime_seconds = 0
     if performance_monitor.monitoring_active:
-        uptime_seconds = time.time() - getattr(
-            performance_monitor, "start_time", time.time()
-        )
+        uptime_seconds = time.time() - getattr(performance_monitor, "start_time", time.time())
 
     # Count metrics collected
     metrics_collected = (
@@ -746,25 +734,19 @@ async def query_metrics(
         # Issue #372: Use model methods to reduce feature envy
         if category == "gpu" and performance_monitor.gpu_metrics_buffer:
             filtered_metrics = [
-                m
-                for m in performance_monitor.gpu_metrics_buffer
-                if start_time <= m.timestamp <= end_time
+                m for m in performance_monitor.gpu_metrics_buffer if start_time <= m.timestamp <= end_time
             ]
             result["metrics"]["gpu"] = [m.to_query_dict() for m in filtered_metrics]
 
         elif category == "npu" and performance_monitor.npu_metrics_buffer:
             filtered_metrics = [
-                m
-                for m in performance_monitor.npu_metrics_buffer
-                if start_time <= m.timestamp <= end_time
+                m for m in performance_monitor.npu_metrics_buffer if start_time <= m.timestamp <= end_time
             ]
             result["metrics"]["npu"] = [m.to_query_dict() for m in filtered_metrics]
 
         elif category == "system" and performance_monitor.system_metrics_buffer:
             filtered_metrics = [
-                m
-                for m in performance_monitor.system_metrics_buffer
-                if start_time <= m.timestamp <= end_time
+                m for m in performance_monitor.system_metrics_buffer if start_time <= m.timestamp <= end_time
             ]
             result["metrics"]["system"] = [m.to_query_dict() for m in filtered_metrics]
 
@@ -788,9 +770,7 @@ async def query_metrics(
     operation="get_optimization_recommendations",
     error_code_prefix="MONITORING",
 )
-@router.get(
-    "/optimization/recommendations", response_model=List[OptimizationRecommendation]
-)
+@router.get("/optimization/recommendations", response_model=List[OptimizationRecommendation])
 async def get_optimization_recommendations_endpoint(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -987,9 +967,7 @@ async def export_metrics(
         return _build_csv_export_response(export_data, end_time)
 
 
-def _build_export_data(
-    start_time: float, end_time: float, time_range_hours: int, format: str
-) -> dict:
+def _build_export_data(start_time: float, end_time: float, time_range_hours: int, format: str) -> dict:
     """Build initial export data structure (Issue #665: extracted helper)."""
     return {
         "export_info": {
@@ -1028,9 +1006,7 @@ def _filter_all_metrics(export_data: dict, start_time: float, end_time: float) -
         service_name,
         metrics_buffer,
     ) in performance_monitor.service_metrics_buffer.items():
-        filtered_metrics = [
-            m.__dict__ for m in metrics_buffer if start_time <= m.timestamp <= end_time
-        ]
+        filtered_metrics = [m.__dict__ for m in metrics_buffer if start_time <= m.timestamp <= end_time]
         if filtered_metrics:
             export_data["service_metrics"][service_name] = filtered_metrics
 
@@ -1039,11 +1015,7 @@ def _build_json_export_response(export_data: dict, end_time: float) -> JSONRespo
     """Build JSON export response (Issue #665: extracted helper)."""
     return JSONResponse(
         content=export_data,
-        headers={
-            "Content-Disposition": (
-                f"attachment; filename=autobot_metrics_{int(end_time)}.json"
-            )
-        },
+        headers={"Content-Disposition": (f"attachment; filename=autobot_metrics_{int(end_time)}.json")},
     )
 
 
@@ -1058,20 +1030,14 @@ def _build_csv_export_response(export_data: dict, end_time: float) -> StreamingR
     return StreamingResponse(
         generate(),
         media_type="text/csv",
-        headers={
-            "Content-Disposition": (
-                f"attachment; filename=autobot_metrics_{int(end_time)}.csv"
-            )
-        },
+        headers={"Content-Disposition": (f"attachment; filename=autobot_metrics_{int(end_time)}.csv")},
     )
 
 
 async def _handle_get_current_metrics(websocket: WebSocket, command: dict) -> None:
     """Handle get_current_metrics WebSocket command (Issue #315: extracted)."""
     metrics = await collect_metrics()
-    await websocket.send_text(
-        json.dumps({"type": "metrics_response", "data": metrics}, default=str)
-    )
+    await websocket.send_text(json.dumps({"type": "metrics_response", "data": metrics}, default=str))
 
 
 async def _handle_update_interval(websocket: WebSocket, command: dict) -> None:
@@ -1080,9 +1046,7 @@ async def _handle_update_interval(websocket: WebSocket, command: dict) -> None:
     if not (0.5 <= new_interval <= 30.0):
         return
     ws_manager.update_interval = new_interval
-    await websocket.send_text(
-        json.dumps({"type": "interval_updated", "interval": new_interval})
-    )
+    await websocket.send_text(json.dumps({"type": "interval_updated", "interval": new_interval}))
 
 
 # WebSocket command handlers (Issue #315: dictionary dispatch pattern)
@@ -1214,8 +1178,7 @@ async def get_claude_api_status():
         _query_prometheus_instant("autobot_claude_api_rate_limit_remaining"),
         _query_prometheus_instant("rate(autobot_claude_api_requests_total[5m]) * 60"),
         _query_prometheus_instant(
-            "histogram_quantile(0.95, "
-            "rate(autobot_claude_api_response_time_seconds_bucket[5m]))"
+            "histogram_quantile(0.95, " "rate(autobot_claude_api_response_time_seconds_bucket[5m]))"
         ),
         _query_prometheus_instant(
             'rate(autobot_claude_api_requests_total{success="false"}[5m])'
@@ -1252,10 +1215,7 @@ async def get_github_status():
     rate_limit, total_ops, p95_latency = await asyncio.gather(
         _query_prometheus_instant("autobot_github_api_rate_limit_remaining"),
         _query_prometheus_instant("sum(autobot_github_api_operations_total)"),
-        _query_prometheus_instant(
-            "histogram_quantile(0.95, "
-            "rate(autobot_github_api_duration_seconds_bucket[5m]))"
-        ),
+        _query_prometheus_instant("histogram_quantile(0.95, " "rate(autobot_github_api_duration_seconds_bucket[5m]))"),
     )
 
     return {

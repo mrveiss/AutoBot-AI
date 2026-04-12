@@ -58,14 +58,10 @@ async def _get_file_analysis(
                 return await analyze_python_file(str(file_path))
             elif analyzer_type == "js":
                 # Issue #666: Wrap blocking file I/O in asyncio.to_thread
-                return await asyncio.to_thread(
-                    analyze_javascript_vue_file, str(file_path)
-                )
+                return await asyncio.to_thread(analyze_javascript_vue_file, str(file_path))
             elif analyzer_type == "doc":
                 # Issue #666: Wrap blocking file I/O in asyncio.to_thread
-                return await asyncio.to_thread(
-                    analyze_documentation_file, str(file_path)
-                )
+                return await asyncio.to_thread(analyze_documentation_file, str(file_path))
             return None
 
     stats["other_files"] += 1
@@ -129,25 +125,19 @@ async def _process_single_file(
     relative_path = str(file_path.relative_to(root_path_obj))
     file_category = _get_file_category(file_path)
 
-    needs_reindex, current_hash = await file_needs_reindex_fn(
-        file_path, relative_path, redis_client
-    )
+    needs_reindex, current_hash = await file_needs_reindex_fn(file_path, relative_path, redis_client)
     if not needs_reindex:
         return False, True
 
     analysis_results["stats"]["total_files"] += 1
 
-    file_analysis = await _get_file_analysis(
-        file_path, extension, analysis_results["stats"]
-    )
+    file_analysis = await _get_file_analysis(file_path, extension, analysis_results["stats"])
     if not file_analysis:
         if current_hash and redis_client:
             await _store_file_hash(redis_client, relative_path, current_hash)
         return True, False
 
-    _aggregate_file_analysis(
-        analysis_results, file_analysis, relative_path, file_category
-    )
+    _aggregate_file_analysis(analysis_results, file_analysis, relative_path, file_category)
     await _process_file_problems(
         file_analysis,
         relative_path,
@@ -313,17 +303,15 @@ async def _iterate_and_process_files(
             "[Issue #711] Parallel mode enabled (concurrency=%d)",
             PARALLEL_FILE_CONCURRENCY,
         )
-        parallel_results, files_processed, files_skipped = (
-            await _iterate_and_process_files_parallel(
-                all_files,
-                root_path_obj,
-                immediate_store_collection,
-                progress_callback,
-                total_files,
-                process_files_parallel_fn,
-                redis_client,
-                source_id=source_id,
-            )
+        parallel_results, files_processed, files_skipped = await _iterate_and_process_files_parallel(
+            all_files,
+            root_path_obj,
+            immediate_store_collection,
+            progress_callback,
+            total_files,
+            process_files_parallel_fn,
+            redis_client,
+            source_id=source_id,
         )
         analysis_results.update(parallel_results)
         return files_processed, files_skipped

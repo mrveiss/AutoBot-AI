@@ -360,19 +360,13 @@ async def get_category_details(
         dir_path = _safe_data_path(category_path)
 
         if not dir_path.exists():
-            raise HTTPException(
-                status_code=404, detail=f"Category not found: {category_path}"
-            )
+            raise HTTPException(status_code=404, detail=f"Category not found: {category_path}")
 
         if not dir_path.is_dir():
-            raise HTTPException(
-                status_code=400, detail=f"Not a directory: {category_path}"
-            )
+            raise HTTPException(status_code=400, detail=f"Not a directory: {category_path}")
 
         files = []
-        for item in sorted(
-            dir_path.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True
-        )[:limit]:
+        for item in sorted(dir_path.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True)[:limit]:
             try:
                 stat = item.stat()
                 files.append(
@@ -380,9 +374,7 @@ async def get_category_details(
                         "name": item.name,
                         "is_dir": item.is_dir(),
                         "size_bytes": stat.st_size if item.is_file() else 0,
-                        "size_human": (
-                            format_size(stat.st_size) if item.is_file() else "-"
-                        ),
+                        "size_human": (format_size(stat.st_size) if item.is_file() else "-"),
                         "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
                     }
                 )
@@ -407,9 +399,7 @@ async def get_category_details(
         raise_server_error("STORAGE_0003", "Error getting category details")
 
 
-def _scan_and_remove_files(
-    dir_path: Path, cutoff_time: Optional[float], dry_run: bool
-) -> tuple:
+def _scan_and_remove_files(dir_path: Path, cutoff_time: Optional[float], dry_run: bool) -> tuple:
     """Helper for cleanup_category. Ref: #1088. Returns (files_removed, bytes_freed, errors)."""
     files_removed = 0
     bytes_freed = 0
@@ -445,9 +435,7 @@ async def cleanup_category(
         dir_path = _safe_data_path(request.category)
 
         if not dir_path.exists():
-            raise HTTPException(
-                status_code=404, detail=f"Category not found: {request.category}"
-            )
+            raise HTTPException(status_code=404, detail=f"Category not found: {request.category}")
 
         categories = {c.path: c for c in get_storage_categories()}
         cat_info = categories.get(request.category)
@@ -460,13 +448,9 @@ async def cleanup_category(
 
         cutoff_time = None
         if request.older_than_days > 0:
-            cutoff_time = datetime.now(tz=timezone.utc).timestamp() - (
-                request.older_than_days * 24 * 60 * 60
-            )
+            cutoff_time = datetime.now(tz=timezone.utc).timestamp() - (request.older_than_days * 24 * 60 * 60)
 
-        files_removed, bytes_freed, errors = _scan_and_remove_files(
-            dir_path, cutoff_time, request.dry_run
-        )
+        files_removed, bytes_freed, errors = _scan_and_remove_files(dir_path, cutoff_time, request.dry_run)
 
         logger.info(
             "Cleanup %s: removed %d files, freed %s (dry_run=%s)",
@@ -508,9 +492,7 @@ async def cleanup_old_backups(
         bytes_freed = 0
 
         for item in DATA_DIR.iterdir():
-            if item.is_dir() and (
-                item.name.endswith(".old") or item.name.endswith(".backup")
-            ):
+            if item.is_dir() and (item.name.endswith(".old") or item.name.endswith(".backup")):
                 size, _ = get_dir_size(item)
                 directories_found.append(
                     {
@@ -562,9 +544,7 @@ async def delete_conversation(
         errors = []
 
         transcripts_base = DATA_DIR / "conversation_transcripts"
-        transcript_path = validate_relative_path(
-            f"{conversation_id}.json", transcripts_base
-        )
+        transcript_path = validate_relative_path(f"{conversation_id}.json", transcripts_base)
         if transcript_path.exists():
             try:
                 transcript_path.unlink()
@@ -584,9 +564,7 @@ async def delete_conversation(
                     errors.append("Error deleting chat file")
 
         if not files_deleted and not errors:
-            raise HTTPException(
-                status_code=404, detail=f"Conversation not found: {conversation_id}"
-            )
+            raise HTTPException(status_code=404, detail=f"Conversation not found: {conversation_id}")
 
         return {
             "conversation_id": conversation_id,

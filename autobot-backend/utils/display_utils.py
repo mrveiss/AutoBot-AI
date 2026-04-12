@@ -17,9 +17,7 @@ from typing import Dict, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 
-def _parse_resolution_from_part(
-    part: str, delimiter: str = "x"
-) -> Optional[Tuple[int, int]]:
+def _parse_resolution_from_part(part: str, delimiter: str = "x") -> Optional[Tuple[int, int]]:
     """Parse resolution from a string part like '1920x1080' (Issue #315 - extracted helper)."""
     if delimiter not in part:
         return None
@@ -71,15 +69,11 @@ class DisplayDetector:
         try:
             resolution = self._detect_resolution()
             self.cached_resolution = resolution
-            logger.info(
-                "Detected display resolution: %sx%s", resolution[0], resolution[1]
-            )
+            logger.info("Detected display resolution: %sx%s", resolution[0], resolution[1])
             return resolution
         except Exception as e:
             logger.warning("Failed to detect display resolution: %s", e)
-            logger.info(
-                f"Using fallback resolution: {self.fallback_resolution[0]}x{self.fallback_resolution[1]}"
-            )
+            logger.info(f"Using fallback resolution: {self.fallback_resolution[0]}x{self.fallback_resolution[1]}")
             return self.fallback_resolution
 
     def _detect_resolution(self) -> Tuple[int, int]:
@@ -112,9 +106,7 @@ class DisplayDetector:
                 if resolution and resolution[0] > 0 and resolution[1] > 0:
                     return resolution
             except Exception as e:
-                logger.debug(
-                    f"Resolution detection method failed: {method.__name__}: {e}"
-                )
+                logger.debug(f"Resolution detection method failed: {method.__name__}: {e}")
                 continue
 
         return self.fallback_resolution
@@ -122,17 +114,14 @@ class DisplayDetector:
     def _try_xrandr(self) -> Optional[Tuple[int, int]]:
         """Try to get resolution using xrandr (X11) (Issue #315 - refactored)."""
         try:
-            result = subprocess.run(
-                ["xrandr", "--query"], capture_output=True, text=True, timeout=5
-            )
+            result = subprocess.run(["xrandr", "--query"], capture_output=True, text=True, timeout=5)
             if result.returncode != 0:
                 return None
 
             return _find_resolution_in_output(
                 result.stdout,
                 line_filter=lambda line: "*" in line and "+" in line,
-                part_filter=lambda part: "x" in part
-                and part.replace("x", "").replace(".", "").isdigit(),
+                part_filter=lambda part: "x" in part and part.replace("x", "").replace(".", "").isdigit(),
             )
         except (
             subprocess.TimeoutExpired,
@@ -144,9 +133,7 @@ class DisplayDetector:
     def _try_xdpyinfo(self) -> Optional[Tuple[int, int]]:
         """Try to get resolution using xdpyinfo (X11) (Issue #315 - refactored)."""
         try:
-            result = subprocess.run(
-                ["xdpyinfo"], capture_output=True, text=True, timeout=5
-            )
+            result = subprocess.run(["xdpyinfo"], capture_output=True, text=True, timeout=5)
             if result.returncode != 0:
                 return None
 
@@ -167,9 +154,7 @@ class DisplayDetector:
         """Try to get resolution on Wayland (Issue #315 - refactored)."""
         try:
             # Try wlr-randr (for wlroots-based compositors)
-            result = subprocess.run(
-                ["wlr-randr"], capture_output=True, text=True, timeout=5
-            )
+            result = subprocess.run(["wlr-randr"], capture_output=True, text=True, timeout=5)
             if result.returncode != 0:
                 return None
 
@@ -188,9 +173,7 @@ class DisplayDetector:
     def _try_framebuffer_resolution(self) -> Optional[Tuple[int, int]]:
         """Try to get resolution from framebuffer info"""
         try:
-            with open(
-                "/sys/class/graphics/fb0/virtual_size", "r", encoding="utf-8"
-            ) as f:
+            with open("/sys/class/graphics/fb0/virtual_size", "r", encoding="utf-8") as f:
                 size = f.read().strip()
                 if "," in size:
                     width, height = size.split(",")
@@ -265,9 +248,7 @@ class DisplayDetector:
                 "Select-Object Width, Height | ConvertTo-Json",
             ]
 
-            result = subprocess.run(
-                powershell_cmd, capture_output=True, text=True, timeout=10
-            )
+            result = subprocess.run(powershell_cmd, capture_output=True, text=True, timeout=10)
 
             if result.returncode == 0:
                 import json

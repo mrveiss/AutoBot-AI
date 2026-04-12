@@ -101,17 +101,13 @@ class WorkflowPlanner:
             List of enhanced workflow steps with agent assignments
         """
         # Get base workflow steps from original orchestrator
-        base_steps = self.base_orchestrator.plan_workflow_steps(
-            user_request, complexity
-        )
+        base_steps = self.base_orchestrator.plan_workflow_steps(user_request, complexity)
 
         enhanced_steps = []
 
         for step in base_steps:
             # Determine required capabilities for each step
-            required_capabilities = self.determine_step_capabilities(
-                step.action, step.agent_type
-            )
+            required_capabilities = self.determine_step_capabilities(step.action, step.agent_type)
 
             # Find best agent for this step
             assigned_agent = self._find_best_agent(
@@ -128,9 +124,7 @@ class WorkflowPlanner:
                 "user_approval_required": step.user_approval_required,
                 "dependencies": step.dependencies or [],
                 "required_capabilities": list(required_capabilities),
-                "estimated_duration": self.estimate_step_duration(
-                    step.action, assigned_agent
-                ),
+                "estimated_duration": self.estimate_step_duration(step.action, assigned_agent),
                 "status": "planned",
             }
 
@@ -138,9 +132,7 @@ class WorkflowPlanner:
 
         return enhanced_steps
 
-    def determine_step_capabilities(
-        self, action: str, agent_type: str
-    ) -> Set[AgentCapability]:
+    def determine_step_capabilities(self, action: str, agent_type: str) -> Set[AgentCapability]:
         """
         Determine required capabilities for a workflow step.
 
@@ -216,9 +208,7 @@ class WorkflowPlanner:
         complexity = self.base_orchestrator.classify_request_complexity(user_request)
 
         # Get base steps synchronously (no agent assignment yet)
-        base_steps = self.base_orchestrator.plan_workflow_steps(
-            user_request, complexity
-        )
+        base_steps = self.base_orchestrator.plan_workflow_steps(user_request, complexity)
 
         return {
             "request": user_request,
@@ -257,9 +247,7 @@ class WorkflowPlanner:
             "workflow_id": workflow_id,
             "request": user_request,
             "total_steps": len(enhanced_steps),
-            "estimated_total_duration": sum(
-                step.get("estimated_duration", 10.0) for step in enhanced_steps
-            ),
+            "estimated_total_duration": sum(step.get("estimated_duration", 10.0) for step in enhanced_steps),
             "steps": [
                 {
                     "id": step.get("id"),
@@ -273,10 +261,6 @@ class WorkflowPlanner:
                 for step in enhanced_steps
             ],
             "agents_involved": list(
-                set(
-                    step.get("assigned_agent")
-                    for step in enhanced_steps
-                    if step.get("assigned_agent")
-                )
+                set(step.get("assigned_agent") for step in enhanced_steps if step.get("assigned_agent"))
             ),
         }

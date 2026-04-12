@@ -129,13 +129,10 @@ async def list_experiments(
         except ValueError:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid state: {state}. "
-                f"Valid: {[s.value for s in ExperimentState]}",
+                detail=f"Invalid state: {state}. " f"Valid: {[s.value for s in ExperimentState]}",
             )
 
-    experiments = await store.list_experiments(
-        limit=limit, offset=offset, state=exp_state
-    )
+    experiments = await store.list_experiments(limit=limit, offset=offset, state=exp_state)
     return {
         "experiments": [e.to_dict() for e in experiments],
         "count": len(experiments),
@@ -316,7 +313,9 @@ def _get_hypothesis_system_prompt() -> str:
     )
 
 
-def _build_hypothesis_result(statement: str, rationale: str, hyperparams: dict, latency_ms: float, error: Optional[str]) -> str:
+def _build_hypothesis_result(
+    statement: str, rationale: str, hyperparams: dict, latency_ms: float, error: Optional[str]
+) -> str:
     """Build a JSON result string for hypothesis generation."""
     import json as _json
 
@@ -367,9 +366,7 @@ async def _benchmark_autoresearch_hypothesis(
         )
     except Exception as exc:
         latency_ms = round((_time.monotonic() - start) * 1000, 1)
-        logger.warning(
-            "_benchmark_autoresearch_hypothesis: agent failed: %s", exc
-        )
+        logger.warning("_benchmark_autoresearch_hypothesis: agent failed: %s", exc)
         return _build_hypothesis_result(
             prompt,
             "",
@@ -470,10 +467,7 @@ async def start_optimization(
         registered = optimizer.get_registered_targets()
         raise HTTPException(
             status_code=400,
-            detail=(
-                f"Unknown agent target: {body.agent_name!r}. "
-                f"Registered targets: {registered}"
-            ),
+            detail=(f"Unknown agent target: {body.agent_name!r}. " f"Registered targets: {registered}"),
         )
 
     target, benchmark_fn = entry
@@ -601,9 +595,7 @@ async def submit_variant_score(
 
     # Validate key components to prevent Redis key injection
     if not _UUID_PATTERN.match(session_id) or not _UUID_PATTERN.match(variant_id):
-        raise HTTPException(
-            status_code=400, detail="Invalid session_id or variant_id format"
-        )
+        raise HTTPException(status_code=400, detail="Invalid session_id or variant_id format")
 
     redis = await get_async_redis_client(database="main")
     key = f"autoresearch:prompt_review:{session_id}:{variant_id}"
@@ -646,11 +638,7 @@ async def list_pending_approvals(
             if len(parts) >= 5:
                 status_key = f"autoresearch:approval:status:{parts[3]}:{parts[4]}"
                 status = await redis.get(status_key)
-                status_str = (
-                    (status.decode("utf-8") if isinstance(status, bytes) else status)
-                    if status
-                    else "unknown"
-                )
+                status_str = (status.decode("utf-8") if isinstance(status, bytes) else status) if status else "unknown"
                 if status_str == "pending":
                     data["status"] = "pending"
                     approvals.append(data)

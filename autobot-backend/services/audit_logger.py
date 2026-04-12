@@ -181,9 +181,7 @@ class AuditEntry:
         }
 
         if self.details:
-            self.details = {
-                k: v for k, v in self.details.items() if k.lower() not in sensitive_keys
-            }
+            self.details = {k: v for k, v in self.details.items() if k.lower() not in sensitive_keys}
 
         return self
 
@@ -219,9 +217,7 @@ class AuditLogger(AsyncInitializable):
         self.batch_timeout_seconds = batch_timeout_seconds
 
         # Get VM identification
-        self.vm_source = os.getenv(
-            "AUTOBOT_BACKEND_HOST", NetworkConstants.MAIN_MACHINE_IP
-        )
+        self.vm_source = os.getenv("AUTOBOT_BACKEND_HOST", NetworkConstants.MAIN_MACHINE_IP)
         self.vm_name = self._get_vm_name()
 
         # Batch processing
@@ -377,9 +373,7 @@ class AuditLogger(AsyncInitializable):
             # Track performance
             log_duration_ms = (datetime.now(tz=timezone.utc) - start_time).total_seconds() * 1000
             if log_duration_ms > 5.0:
-                logger.warning(
-                    f"Audit logging exceeded 5ms target: {log_duration_ms:.2f}ms"
-                )
+                logger.warning(f"Audit logging exceeded 5ms target: {log_duration_ms:.2f}ms")
 
             self._total_logged += 1
             return True
@@ -435,10 +429,7 @@ class AuditLogger(AsyncInitializable):
             logger.error("Batch flush failed: %s", e)
             # Issue #370: Fallback to file in parallel for all entries
             await asyncio.gather(
-                *[
-                    self._fallback_log(entry, error=str(e))
-                    for entry in entries_to_flush
-                ],
+                *[self._fallback_log(entry, error=str(e)) for entry in entries_to_flush],
                 return_exceptions=True,
             )
 
@@ -490,15 +481,10 @@ class AuditLogger(AsyncInitializable):
             await pipe.expire(f"audit:vm:{entry.vm_name}:{date}", retention_seconds)
         await pipe.expire(f"audit:result:{entry.result}:{date}", retention_seconds)
 
-    async def _fallback_log(
-        self, entry: Optional[AuditEntry], error: Optional[str] = None
-    ):
+    async def _fallback_log(self, entry: Optional[AuditEntry], error: Optional[str] = None):
         """Write audit entry to file as fallback when Redis unavailable"""
         try:
-            fallback_file = (
-                self.fallback_log_dir
-                / f"audit_{datetime.now(tz=timezone.utc).strftime('%Y-%m-%d')}.jsonl"
-            )
+            fallback_file = self.fallback_log_dir / f"audit_{datetime.now(tz=timezone.utc).strftime('%Y-%m-%d')}.jsonl"
 
             log_data = {
                 "timestamp": datetime.now(tz=timezone.utc).isoformat(),
@@ -540,9 +526,7 @@ class AuditLogger(AsyncInitializable):
         if session_id:
             return await self._query_session(audit_db, session_id, query_ctx)
         if user_id and operation:
-            return await self._query_user_operation(
-                audit_db, user_id, operation, query_ctx
-            )
+            return await self._query_user_operation(audit_db, user_id, operation, query_ctx)
         if user_id:
             return await self._query_user(audit_db, user_id, query_ctx)
         if operation:
@@ -628,20 +612,10 @@ class AuditLogger(AsyncInitializable):
             key = f"audit:log:{date_str}"
 
             # Query sorted set by timestamp range
-            start_score = (
-                query_ctx.start_time.timestamp()
-                if current_date == query_ctx.start_time.date()
-                else 0
-            )
-            end_score = (
-                query_ctx.end_time.timestamp()
-                if current_date == end_date
-                else float("inf")
-            )
+            start_score = query_ctx.start_time.timestamp() if current_date == query_ctx.start_time.date() else 0
+            end_score = query_ctx.end_time.timestamp() if current_date == end_date else float("inf")
 
-            results = await audit_db.zrange(
-                key, start_score, end_score, withscores=False
-            )
+            results = await audit_db.zrange(key, start_score, end_score, withscores=False)
 
             for json_str in results:
                 entries.append(AuditEntry.from_json(json_str))
@@ -834,9 +808,7 @@ class AuditLogger(AsyncInitializable):
     ) -> Optional[AuditEntry]:
         """Fetch full audit entry from primary log by ID"""
         # Use batch method for single ID
-        entries = await self._fetch_entries_by_ids_batch(
-            audit_db, [entry_id], start_time, end_time
-        )
+        entries = await self._fetch_entries_by_ids_batch(audit_db, [entry_id], start_time, end_time)
         return entries.get(entry_id)
 
     async def _fetch_entries_by_ids_batch(
@@ -896,16 +868,8 @@ class AuditLogger(AsyncInitializable):
                 date_str = yesterday.strftime("%Y-%m-%d")
                 today_str = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
 
-                yesterday_count = (
-                    await audit_db._redis.zcard(f"audit:log:{date_str}")
-                    if audit_db._redis
-                    else 0
-                )
-                today_count = (
-                    await audit_db._redis.zcard(f"audit:log:{today_str}")
-                    if audit_db._redis
-                    else 0
-                )
+                yesterday_count = await audit_db._redis.zcard(f"audit:log:{date_str}") if audit_db._redis else 0
+                today_count = await audit_db._redis.zcard(f"audit:log:{today_str}") if audit_db._redis else 0
 
                 stats["entries_last_24h"] = yesterday_count + today_count
 
@@ -935,9 +899,7 @@ class AuditLogger(AsyncInitializable):
                 logger.warning("Cannot cleanup: Redis unavailable")
                 return
 
-            logger.info(
-                f"Cleaning up audit logs older than {cutoff_date.strftime('%Y-%m-%d')}"
-            )
+            logger.info(f"Cleaning up audit logs older than {cutoff_date.strftime('%Y-%m-%d')}")
 
             # Delete daily partitions older than cutoff
             current_date = cutoff_date.date()
@@ -985,9 +947,7 @@ class AuditLogger(AsyncInitializable):
             except asyncio.CancelledError:
                 logger.debug("Batch task cancelled during shutdown")
 
-        logger.info(
-            f"Audit logger shutdown complete: {self._total_logged} entries logged, {self._total_failed} failed"
-        )
+        logger.info(f"Audit logger shutdown complete: {self._total_logged} entries logged, {self._total_failed} failed")
 
 
 # Global audit logger instance

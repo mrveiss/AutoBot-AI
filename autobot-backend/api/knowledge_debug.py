@@ -70,9 +70,7 @@ async def get_fresh_knowledge_stats(request: Request = None):
             "debug_info": {
                 "vector_count": stats.get("total_documents", 0),
                 "indexed_count": stats.get("indexed_documents", 0),
-                "mismatch": (
-                    stats.get("total_documents", 0) != stats.get("indexed_documents", 0)
-                ),
+                "mismatch": (stats.get("total_documents", 0) != stats.get("indexed_documents", 0)),
             },
         }
 
@@ -111,9 +109,7 @@ async def debug_redis_connection():
 
         redis_client = get_redis_client(database="knowledge")
         if redis_client is None:
-            raise ValueError(
-                "Redis client initialization returned None - check Redis configuration"
-            )
+            raise ValueError("Redis client initialization returned None - check Redis configuration")
 
         # Issue #361 - avoid blocking - wrap Redis ops in thread pool
         def _debug_redis_connection():
@@ -123,9 +119,7 @@ async def debug_redis_connection():
             # Count vectors directly
             vector_keys = []
             for key in redis_client.scan_iter(match="llama_index/vector_*"):
-                vector_keys.append(
-                    key.decode("utf-8") if isinstance(key, bytes) else str(key)
-                )
+                vector_keys.append(key.decode("utf-8") if isinstance(key, bytes) else str(key))
 
             # Get FT.INFO
             try:
@@ -151,11 +145,7 @@ async def debug_redis_connection():
             "vector_keys_found": len(vector_keys),
             "sample_keys": vector_keys[:5],
             "indexed_documents": indexed_docs,
-            "mismatch_detected": (
-                len(vector_keys) != indexed_docs
-                if isinstance(indexed_docs, int)
-                else True
-            ),
+            "mismatch_detected": (len(vector_keys) != indexed_docs if isinstance(indexed_docs, int) else True),
         }
 
     except Exception:

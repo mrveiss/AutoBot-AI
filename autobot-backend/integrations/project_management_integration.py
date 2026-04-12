@@ -136,9 +136,7 @@ class JiraIntegration(BaseIntegration):
             ),
         ]
 
-    async def execute_action(
-        self, action: str, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a Jira action."""
         action_map = {
             "list_projects": self._list_projects,
@@ -206,9 +204,7 @@ class JiraIntegration(BaseIntegration):
             }
         }
 
-        result = await self._jira_request(
-            "POST", "/rest/api/3/issue", json_data=payload
-        )
+        result = await self._jira_request("POST", "/rest/api/3/issue", json_data=payload)
         if result.get("status_code") == 201:
             return {"issue": result.get("body", {})}
         return {"error": f"HTTP {result.get('status_code')}"}
@@ -268,9 +264,7 @@ class JiraIntegration(BaseIntegration):
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.request(
-                    method, url, headers=headers, json=json_data
-                ) as resp:
+                async with session.request(method, url, headers=headers, json=json_data) as resp:
                     if resp.status == 204:
                         return {"status_code": 204, "body": {}}
                     body = await resp.json()
@@ -377,9 +371,7 @@ class TrelloIntegration(BaseIntegration):
             ),
         ]
 
-    async def execute_action(
-        self, action: str, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a Trello action."""
         action_map = {
             "list_boards": self._list_boards,
@@ -604,9 +596,7 @@ class AsanaIntegration(BaseIntegration):
             ),
         ]
 
-    async def execute_action(
-        self, action: str, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute an Asana action."""
         action_map = {
             "list_workspaces": self._list_workspaces,
@@ -728,9 +718,7 @@ class AsanaIntegration(BaseIntegration):
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.request(
-                    method, url, headers=headers, json=json_data
-                ) as resp:
+                async with session.request(method, url, headers=headers, json=json_data) as resp:
                     body = await resp.json()
                     return {"status_code": resp.status, "body": body}
         except aiohttp.ClientError as exc:

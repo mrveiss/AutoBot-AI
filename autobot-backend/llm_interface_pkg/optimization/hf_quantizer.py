@@ -33,8 +33,7 @@ def _import_transformers() -> Any:
         return transformers
     except ImportError as exc:
         raise ImportError(
-            "transformers is required for HfQuantizer support. "
-            "Install with: pip install transformers>=4.40.0"
+            "transformers is required for HfQuantizer support. " "Install with: pip install transformers>=4.40.0"
         ) from exc
 
 
@@ -46,8 +45,7 @@ def _import_auto_gptq() -> Any:
         return auto_gptq
     except ImportError as exc:
         raise ImportError(
-            "auto_gptq is required for GPTQ model support. "
-            "Install with: pip install auto-gptq"
+            "auto_gptq is required for GPTQ model support. " "Install with: pip install auto-gptq"
         ) from exc
 
 
@@ -58,10 +56,7 @@ def _import_autoawq() -> Any:
 
         return awq
     except ImportError as exc:
-        raise ImportError(
-            "autoawq is required for AWQ model support. "
-            "Install with: pip install autoawq"
-        ) from exc
+        raise ImportError("autoawq is required for AWQ model support. " "Install with: pip install autoawq") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -203,9 +198,7 @@ class HfQuantizerWrapper:
     # ------------------------------------------------------------------
 
     @classmethod
-    def from_config(
-        cls, model_config: Dict[str, Any], **overrides: Any
-    ) -> "HfQuantizerWrapper":
+    def from_config(cls, model_config: Dict[str, Any], **overrides: Any) -> "HfQuantizerWrapper":
         """Build a wrapper by auto-detecting quantization from model_config.
 
         Args:
@@ -252,9 +245,7 @@ class HfQuantizerWrapper:
             # causes HuggingFace to raise ValueError.  Strip them here so any
             # other (non-BNB) extra_kwargs still flow through.
             passthrough = {
-                k: v
-                for k, v in self._config.extra_kwargs.items()
-                if k not in ("load_in_4bit", "load_in_8bit")
+                k: v for k, v in self._config.extra_kwargs.items() if k not in ("load_in_4bit", "load_in_8bit")
             }
             kwargs.update(passthrough)
         else:
@@ -266,9 +257,7 @@ class HfQuantizerWrapper:
         )
         return kwargs
 
-    def check_quantized_param(
-        self, param_name: str, param_data: Any
-    ) -> Tuple[bool, str]:
+    def check_quantized_param(self, param_name: str, param_data: Any) -> Tuple[bool, str]:
         """Check whether a named parameter belongs to a quantized layer.
 
         Args:
@@ -311,9 +300,7 @@ class HfQuantizerWrapper:
         """
         is_quantized, reason = self.check_quantized_param(param_name, param_data)
         if not is_quantized:
-            logger.debug(
-                "create_quantized_param: %s — passing through (%s)", param_name, reason
-            )
+            logger.debug("create_quantized_param: %s — passing through (%s)", param_name, reason)
             return param_data
 
         creator = {
@@ -378,9 +365,7 @@ class HfQuantizerWrapper:
         if self._config.extra_kwargs.get("load_in_8bit"):
             bnb_kwargs = {"load_in_8bit": True}
         elif self._config.extra_kwargs.get("load_in_4bit") is not None:
-            bnb_kwargs = {
-                "load_in_4bit": bool(self._config.extra_kwargs["load_in_4bit"])
-            }
+            bnb_kwargs = {"load_in_4bit": bool(self._config.extra_kwargs["load_in_4bit"])}
         bnb_config = transformers.BitsAndBytesConfig(**bnb_kwargs)
         return {
             "quantization_config": bnb_config,
@@ -401,9 +386,7 @@ class HfQuantizerWrapper:
 # ---------------------------------------------------------------------------
 
 # GPTQ packs weights into `qweight` and stores scales/zeros alongside
-_GPTQ_QUANTIZED_SUFFIXES = frozenset(
-    {".qweight", ".qzeros", ".scales", ".g_idx", ".bias"}
-)
+_GPTQ_QUANTIZED_SUFFIXES = frozenset({".qweight", ".qzeros", ".scales", ".g_idx", ".bias"})
 
 # AWQ uses similar packed representation
 _AWQ_QUANTIZED_SUFFIXES = frozenset({".qweight", ".qzeros", ".scales", ".bias"})
@@ -526,14 +509,10 @@ class QuantizedLayerLoader:
         quantized_count = 0
 
         for param_name, param_data in named_params:
-            is_quantized, _ = self._wrapper.check_quantized_param(
-                param_name, param_data
-            )
+            is_quantized, _ = self._wrapper.check_quantized_param(param_name, param_data)
             if is_quantized:
                 quantized_count += 1
-            processed[param_name] = self._wrapper.create_quantized_param(
-                param_name, param_data
-            )
+            processed[param_name] = self._wrapper.create_quantized_param(param_name, param_data)
 
         result = LayerLoadResult(
             layer_name=layer_name,

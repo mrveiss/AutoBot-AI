@@ -35,9 +35,7 @@ class SessionService:
         """
         return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
-    async def add_token_to_blacklist(
-        self, user_id: uuid.UUID, token: str, ttl: int = TTL_24_HOURS
-    ) -> None:
+    async def add_token_to_blacklist(self, user_id: uuid.UUID, token: str, ttl: int = TTL_24_HOURS) -> None:
         """
         Add token to blacklist.
 
@@ -74,9 +72,7 @@ class SessionService:
 
         return await redis_client.sismember(key, token_hash)
 
-    async def invalidate_user_sessions(
-        self, user_id: uuid.UUID, except_token: Optional[str] = None
-    ) -> int:
+    async def invalidate_user_sessions(self, user_id: uuid.UUID, except_token: Optional[str] = None) -> int:
         """
         Invalidate all sessions for a user except the current one.
 

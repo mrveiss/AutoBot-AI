@@ -17,11 +17,7 @@ import sys
 from typing import Any, Dict, List
 
 # Add project root to path for imports  # noqa: E402
-sys.path.insert(
-    0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-)
-
-from constants.threshold_constants import TimingConstants  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from autobot_shared.error_boundaries import ErrorContext  # noqa: E402
 from autobot_shared.error_boundaries import (
@@ -31,6 +27,7 @@ from autobot_shared.error_boundaries import (
     with_async_error_boundary,
     with_error_boundary,
 )
+from constants.threshold_constants import TimingConstants  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -172,8 +169,7 @@ class CustomRecoveryHandler:
             "example_service.risky_calculation": 0.0,
             "example_service.complex_operation": {"error": True, "fallback": True},
             "llm_service.generate_response": (
-                "I apologize, but I'm having trouble "
-                "generating a response right now."
+                "I apologize, but I'm having trouble " "generating a response right now."
             ),
         }
 

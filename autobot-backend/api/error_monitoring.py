@@ -32,9 +32,7 @@ config = get_config_manager()
 
 # Add project root to path for imports
 # Add project root to path for imports
-sys.path.insert(
-    0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 logger = logging.getLogger(__name__)
 
@@ -181,9 +179,7 @@ async def get_error_by_component():
         )
 
 
-def _calculate_health_status(
-    critical_errors: int, high_errors: int, total_errors: int
-) -> tuple:
+def _calculate_health_status(critical_errors: int, high_errors: int, total_errors: int) -> tuple:
     """Calculate health status and score from error counts. (Issue #315 - extracted)"""
     # Check thresholds in priority order (Issue #315 - replaces chained if/elif)
     thresholds = [
@@ -215,9 +211,7 @@ async def get_error_system_health():
         high_errors = severities.get("high", 0)
 
         # Use extracted helper (Issue #315 - reduced depth)
-        health_status, health_score = _calculate_health_status(
-            critical_errors, high_errors, total_errors
-        )
+        health_status, health_score = _calculate_health_status(critical_errors, high_errors, total_errors)
 
         return {
             "status": "success",
@@ -249,9 +243,7 @@ async def clear_error_history(authorization: Optional[str] = Header(None)):
     try:
         # This would typically require authentication
         if not authorization or authorization != "Bearer admin_token":
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized"
-            )
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
 
         manager = get_error_boundary_manager()
 
@@ -344,37 +336,25 @@ def _get_health_recommendations(health_status: str, stats: Metadata) -> list:
         )
 
     if categories.get("network", 0) > 5:
-        recommendations.append(
-            "High network errors - check network connectivity and " "external services"
-        )
+        recommendations.append("High network errors - check network connectivity and " "external services")
 
     if categories.get("database", 0) > 3:
-        recommendations.append(
-            "Database errors detected - verify database connections and " "integrity"
-        )
+        recommendations.append("Database errors detected - verify database connections and " "integrity")
 
     if categories.get("llm", 0) > 5:
-        recommendations.append(
-            "LLM service issues - check LLM provider status and configuration"
-        )
+        recommendations.append("LLM service issues - check LLM provider status and configuration")
 
     if severities.get("high", 0) > 10:
-        recommendations.append(
-            "Many high-severity errors - review system configuration and " "resources"
-        )
+        recommendations.append("Many high-severity errors - review system configuration and " "resources")
 
     # Component-specific recommendations
     top_components = sorted(components.items(), key=lambda x: x[1], reverse=True)[:3]
     if top_components:
         most_problematic = top_components[0][0]
-        recommendations.append(
-            f"Focus on '{most_problematic}' component - highest error count"
-        )
+        recommendations.append(f"Focus on '{most_problematic}' component - highest error count")
 
     if not recommendations:
-        recommendations.append(
-            "System error handling is working well - continue monitoring"
-        )
+        recommendations.append("System error handling is working well - continue monitoring")
 
     return recommendations
 
@@ -434,8 +414,7 @@ async def get_error_timeline_endpoint(hours: int = 24, component: Optional[str] 
             "status": "success",
             "data": {
                 "timeline": [
-                    {"hour": hour, "error_count": len(errors), "errors": errors}
-                    for hour, errors in timeline.items()
+                    {"hour": hour, "error_count": len(errors), "errors": errors} for hour, errors in timeline.items()
                 ],
                 "hours": hours,
                 "component": component,
@@ -538,9 +517,7 @@ async def set_alert_threshold_endpoint(request: AlertThresholdRequest):
     """
     try:
         collector = get_metrics_collector()
-        collector.set_alert_threshold(
-            request.component, request.error_code, request.threshold
-        )
+        collector.set_alert_threshold(request.component, request.error_code, request.threshold)
 
         threshold_key = f"{request.component}:{request.error_code or 'any'}"
 

@@ -218,48 +218,30 @@ class PrometheusMetricsManager:
     # Core Infrastructure Metric Recording Methods
     # =========================================================================
 
-    def record_timeout(
-        self, operation_type: str, database: str, timed_out: bool
-    ) -> None:
+    def record_timeout(self, operation_type: str, database: str, timed_out: bool) -> None:
         """Record a timeout event."""
         status = "timeout" if timed_out else "success"
-        self.timeout_total.labels(
-            operation_type=operation_type, database=database, status=status
-        ).inc()
+        self.timeout_total.labels(operation_type=operation_type, database=database, status=status).inc()
 
-    def record_operation_duration(
-        self, operation_type: str, database: str, duration: float
-    ) -> None:
+    def record_operation_duration(self, operation_type: str, database: str, duration: float) -> None:
         """Record operation duration."""
-        self.operation_duration.labels(
-            operation_type=operation_type, database=database
-        ).observe(duration)
+        self.operation_duration.labels(operation_type=operation_type, database=database).observe(duration)
 
-    def record_circuit_breaker_event(
-        self, database: str, event: str, reason: str
-    ) -> None:
+    def record_circuit_breaker_event(self, database: str, event: str, reason: str) -> None:
         """Record circuit breaker state change."""
-        self.circuit_breaker_events.labels(
-            database=database, event=event, reason=reason
-        ).inc()
+        self.circuit_breaker_events.labels(database=database, event=event, reason=reason).inc()
 
-    def update_circuit_breaker_state(
-        self, database: str, state: str, failure_count: int
-    ) -> None:
+    def update_circuit_breaker_state(self, database: str, state: str, failure_count: int) -> None:
         """Update circuit breaker state gauge."""
         state_value = _CIRCUIT_BREAKER_STATE_VALUES.get(state, 0)
         self.circuit_breaker_state.labels(database=database).set(state_value)
         self.circuit_breaker_failures.labels(database=database).set(failure_count)
 
-    def update_connection_pool(
-        self, database: str, active: int, idle: int, max_connections: int
-    ) -> None:
+    def update_connection_pool(self, database: str, active: int, idle: int, max_connections: int) -> None:
         """Update connection pool metrics."""
         self.pool_connections.labels(database=database, state="active").set(active)
         self.pool_connections.labels(database=database, state="idle").set(idle)
-        self.pool_connections.labels(database=database, state="total").set(
-            max_connections
-        )
+        self.pool_connections.labels(database=database, state="total").set(max_connections)
 
         # Calculate saturation ratio
         saturation = active / max_connections if max_connections > 0 else 0
@@ -268,17 +250,11 @@ class PrometheusMetricsManager:
     def record_request(self, database: str, operation: str, success: bool) -> None:
         """Record a request success or failure."""
         status = "success" if success else "failure"
-        self.requests_total.labels(
-            database=database, operation=operation, status=status
-        ).inc()
+        self.requests_total.labels(database=database, operation=operation, status=status).inc()
 
-    def record_error(
-        self, category: str, component: str, error_code: str = "unknown"
-    ) -> None:
+    def record_error(self, category: str, component: str, error_code: str = "unknown") -> None:
         """Record an error occurrence."""
-        self.errors_total.labels(
-            category=category, component=component, error_code=error_code
-        ).inc()
+        self.errors_total.labels(category=category, component=component, error_code=error_code).inc()
 
     def update_error_rate(self, component: str, time_window: str, rate: float) -> None:
         """Update error rate for a component."""
@@ -288,15 +264,11 @@ class PrometheusMetricsManager:
     # Workflow Metrics (Issue #394: Delegates to WorkflowMetricsRecorder)
     # =========================================================================
 
-    def record_workflow_execution(
-        self, workflow_type: str, status: str, duration: Optional[float] = None
-    ) -> None:
+    def record_workflow_execution(self, workflow_type: str, status: str, duration: Optional[float] = None) -> None:
         """Record a workflow execution."""
         self._workflow.record_execution(workflow_type, status, duration)
 
-    def record_workflow_step(
-        self, workflow_type: str, step_type: str, status: str
-    ) -> None:
+    def record_workflow_step(self, workflow_type: str, step_type: str, status: str) -> None:
         """Record a workflow step execution."""
         self._workflow.record_step(workflow_type, step_type, status)
 
@@ -312,9 +284,7 @@ class PrometheusMetricsManager:
     # GitHub Metrics (Issue #394: Delegates to GitHubMetricsRecorder)
     # =========================================================================
 
-    def record_github_operation(
-        self, operation: str, status: str, duration: Optional[float] = None
-    ) -> None:
+    def record_github_operation(self, operation: str, status: str, duration: Optional[float] = None) -> None:
         """Record a GitHub API operation."""
         self._github.record_operation(operation, status, duration)
 
@@ -326,9 +296,7 @@ class PrometheusMetricsManager:
         """Record a GitHub commit."""
         self._github.record_commit(repository, status)
 
-    def record_github_pull_request(
-        self, repository: str, action: str, status: str
-    ) -> None:
+    def record_github_pull_request(self, repository: str, action: str, status: str) -> None:
         """Record a GitHub pull request operation."""
         self._github.record_pull_request(repository, action, status)
 
@@ -410,9 +378,7 @@ class PrometheusMetricsManager:
         """Update service health score."""
         self._service_health.update_health(service_name, health_score)
 
-    def record_service_response_time(
-        self, service_name: str, response_time: float
-    ) -> None:
+    def record_service_response_time(self, service_name: str, response_time: float) -> None:
         """Record service response time."""
         self._service_health.record_response_time(service_name, response_time)
 
@@ -486,43 +452,29 @@ class PrometheusMetricsManager:
         """Update active alert count for a severity level."""
         self._performance.update_active_alerts(severity, count)
 
-    def record_multimodal_processing(
-        self, modality: str, duration_seconds: float, success: bool
-    ) -> None:
+    def record_multimodal_processing(self, modality: str, duration_seconds: float, success: bool) -> None:
         """Record a multi-modal processing operation."""
-        self._performance.record_multimodal_processing(
-            modality, duration_seconds, success
-        )
+        self._performance.record_multimodal_processing(modality, duration_seconds, success)
 
     # =========================================================================
     # Knowledge Base Metrics (Issue #470: Delegates to KnowledgeBaseMetricsRecorder)
     # =========================================================================
 
-    def set_document_count(
-        self, count: int, collection: str, document_type: str = "default"
-    ) -> None:
+    def set_document_count(self, count: int, collection: str, document_type: str = "default") -> None:
         """Set total document count for a collection."""
         self._knowledge_base.set_document_count(count, collection, document_type)
 
-    def record_document_operation(
-        self, operation: str, collection: str, size_bytes: int = 0
-    ) -> None:
+    def record_document_operation(self, operation: str, collection: str, size_bytes: int = 0) -> None:
         """Record a document operation."""
-        self._knowledge_base.record_document_operation(
-            operation, collection, size_bytes
-        )
+        self._knowledge_base.record_document_operation(operation, collection, size_bytes)
 
     def set_vector_count(self, count: int, collection: str) -> None:
         """Set total vector count for a collection."""
         self._knowledge_base.set_vector_count(count, collection)
 
-    def record_embedding_operation(
-        self, operation: str, model: str, latency_seconds: float = 0
-    ) -> None:
+    def record_embedding_operation(self, operation: str, model: str, latency_seconds: float = 0) -> None:
         """Record an embedding operation."""
-        self._knowledge_base.record_embedding_operation(
-            operation, model, latency_seconds
-        )
+        self._knowledge_base.record_embedding_operation(operation, model, latency_seconds)
 
     def record_knowledge_search(
         self,
@@ -532,9 +484,7 @@ class PrometheusMetricsManager:
         results_count: int,
     ) -> None:
         """Record a knowledge base search operation."""
-        self._knowledge_base.record_search(
-            search_type, collection, latency_seconds, results_count
-        )
+        self._knowledge_base.record_search(search_type, collection, latency_seconds, results_count)
 
     def record_knowledge_cache_hit(self, cache_type: str) -> None:
         """Record a knowledge base cache hit."""
@@ -601,9 +551,7 @@ class PrometheusMetricsManager:
         reset_seconds: float,
     ) -> None:
         """Update LLM rate limit metrics."""
-        self._llm_provider.update_rate_limits(
-            provider, requests_remaining, tokens_remaining, reset_seconds
-        )
+        self._llm_provider.update_rate_limits(provider, requests_remaining, tokens_remaining, reset_seconds)
 
     def record_llm_response_cache_hit(self, endpoint: str) -> None:
         """Record a cache hit for an LLM API endpoint (Issue #3273)."""
@@ -621,21 +569,15 @@ class PrometheusMetricsManager:
         """Record a new WebSocket connection."""
         self._websocket.record_connection(namespace)
 
-    def record_websocket_disconnection(
-        self, namespace: str, reason: str, duration_seconds: float
-    ) -> None:
+    def record_websocket_disconnection(self, namespace: str, reason: str, duration_seconds: float) -> None:
         """Record a WebSocket disconnection."""
         self._websocket.record_disconnection(namespace, reason, duration_seconds)
 
-    def record_websocket_message_sent(
-        self, namespace: str, message_type: str, size_bytes: int
-    ) -> None:
+    def record_websocket_message_sent(self, namespace: str, message_type: str, size_bytes: int) -> None:
         """Record a message sent to WebSocket client."""
         self._websocket.record_message_sent(namespace, message_type, size_bytes)
 
-    def record_websocket_message_received(
-        self, namespace: str, message_type: str, size_bytes: int
-    ) -> None:
+    def record_websocket_message_received(self, namespace: str, message_type: str, size_bytes: int) -> None:
         """Record a message received from WebSocket client."""
         self._websocket.record_message_received(namespace, message_type, size_bytes)
 
@@ -679,9 +621,7 @@ class PrometheusMetricsManager:
         fragmentation_ratio: float,
     ) -> None:
         """Update Redis memory statistics."""
-        self._redis.update_memory_stats(
-            database, used_bytes, peak_bytes, fragmentation_ratio
-        )
+        self._redis.update_memory_stats(database, used_bytes, peak_bytes, fragmentation_ratio)
 
     def set_redis_key_count(self, database: str, count: int) -> None:
         """Set Redis total key count."""
@@ -729,13 +669,9 @@ class PrometheusMetricsManager:
         is_timeout: bool = False,
     ) -> None:
         """Record a frontend API request."""
-        self._frontend.record_api_request(
-            endpoint, method, status, latency_seconds, is_slow, is_timeout
-        )
+        self._frontend.record_api_request(endpoint, method, status, latency_seconds, is_slow, is_timeout)
 
-    def record_frontend_api_error(
-        self, endpoint: str, method: str, error_type: str
-    ) -> None:
+    def record_frontend_api_error(self, endpoint: str, method: str, error_type: str) -> None:
         """Record a frontend API error."""
         self._frontend.record_api_error(endpoint, method, error_type)
 
@@ -783,9 +719,7 @@ class PrometheusMetricsManager:
         """Record a slow resource load from frontend."""
         self._frontend.record_slow_resource(resource_type)
 
-    def record_frontend_resource_load(
-        self, resource_type: str, load_time_seconds: float
-    ) -> None:
+    def record_frontend_resource_load(self, resource_type: str, load_time_seconds: float) -> None:
         """Record resource load time from frontend."""
         self._frontend.record_resource_load(resource_type, load_time_seconds)
 
@@ -797,31 +731,21 @@ class PrometheusMetricsManager:
     # Inference Profiler Metrics (Issue #1956: Delegates to InferenceProfilerMetricsRecorder)
     # =========================================================================
 
-    def record_inference_stage_duration(
-        self, model_name: str, stage: str, duration_seconds: float
-    ) -> None:
+    def record_inference_stage_duration(self, model_name: str, stage: str, duration_seconds: float) -> None:
         """Record an inference stage duration measurement."""
-        self._inference_profiler.record_stage_duration(
-            model_name, stage, duration_seconds
-        )
+        self._inference_profiler.record_stage_duration(model_name, stage, duration_seconds)
 
     def record_inference_vram_peak(self, model_name: str, peak_bytes: int) -> None:
         """Record peak VRAM usage during inference."""
         self._inference_profiler.update_vram_peak(model_name, peak_bytes)
 
-    def record_inference_vram_allocated(
-        self, model_name: str, allocated_bytes: int
-    ) -> None:
+    def record_inference_vram_allocated(self, model_name: str, allocated_bytes: int) -> None:
         """Record current VRAM allocation during inference."""
         self._inference_profiler.update_vram_allocated(model_name, allocated_bytes)
 
-    def record_inference_session_complete(
-        self, model_name: str, total_duration_seconds: float
-    ) -> None:
+    def record_inference_session_complete(self, model_name: str, total_duration_seconds: float) -> None:
         """Record a completed inference profiling session."""
-        self._inference_profiler.record_session_complete(
-            model_name, total_duration_seconds
-        )
+        self._inference_profiler.record_session_complete(model_name, total_duration_seconds)
 
     # =========================================================================
     # Metrics Export

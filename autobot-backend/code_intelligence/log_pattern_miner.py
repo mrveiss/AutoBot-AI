@@ -269,8 +269,7 @@ class LogParser:
 
     # API call pattern with duration
     API_CALL_PATTERN = re.compile(
-        r"API_CALL:\s+(GET|POST|PUT|DELETE|PATCH)\s+(\S+)\s+"
-        r"DURATION=(\d+\.?\d*)ms\s+STATUS=(\d+)"
+        r"API_CALL:\s+(GET|POST|PUT|DELETE|PATCH)\s+(\S+)\s+" r"DURATION=(\d+\.?\d*)ms\s+STATUS=(\d+)"
     )
 
     # Duration pattern
@@ -287,9 +286,7 @@ class LogParser:
     SLOW_REQUEST_THRESHOLD_MS = 100.0
 
     @classmethod
-    def parse_line(
-        cls, line: str, line_number: int, file_path: Optional[str] = None
-    ) -> Optional[LogEntry]:
+    def parse_line(cls, line: str, line_number: int, file_path: Optional[str] = None) -> Optional[LogEntry]:
         """Parse a single log line."""
         line = line.strip()
         if not line:
@@ -466,9 +463,7 @@ class LogPatternMiner:
                 entries.append(entry)
         return entries
 
-    def _parse_all_sources(
-        self, log_files: Optional[list[str]], content: Optional[str]
-    ) -> int:
+    def _parse_all_sources(self, log_files: Optional[list[str]], content: Optional[str]) -> int:
         """Parse all log sources and populate entries.
 
         Args:
@@ -546,9 +541,7 @@ class LogPatternMiner:
             summary=summary,
         )
 
-    def analyze(
-        self, log_files: Optional[list[str]] = None, content: Optional[str] = None
-    ) -> MiningResult:
+    def analyze(self, log_files: Optional[list[str]] = None, content: Optional[str] = None) -> MiningResult:
         """Analyze logs and extract patterns.
 
         Args:
@@ -582,9 +575,7 @@ class LogPatternMiner:
 
     def _extract_error_patterns(self) -> None:
         """Extract recurring error patterns."""
-        error_entries = [
-            e for e in self.entries if e.level in _ERROR_CRITICAL_WARNING_LEVELS
-        ]
+        error_entries = [e for e in self.entries if e.level in _ERROR_CRITICAL_WARNING_LEVELS]
 
         if not error_entries:
             return
@@ -622,11 +613,7 @@ class LogPatternMiner:
 
     def _extract_performance_patterns(self) -> None:
         """Extract performance bottleneck patterns."""
-        slow_requests = [
-            e
-            for e in self.entries
-            if e.duration_ms and e.duration_ms > self.slow_request_threshold_ms
-        ]
+        slow_requests = [e for e in self.entries if e.duration_ms and e.duration_ms > self.slow_request_threshold_ms]
 
         if not slow_requests:
             return
@@ -664,9 +651,7 @@ class LogPatternMiner:
                     )
                 )
 
-    def _group_entries_by_endpoint(
-        self, api_entries: list
-    ) -> dict[str, dict[str, Any]]:
+    def _group_entries_by_endpoint(self, api_entries: list) -> dict[str, dict[str, Any]]:
         """
         Group API entries by endpoint and collect statistics.
 
@@ -719,9 +704,7 @@ class LogPatternMiner:
             extra_data={
                 "avg_duration_ms": round(mean(durations), 2) if durations else 0,
                 "error_count": error_count,
-                "success_rate": round(
-                    (stats["count"] - error_count) / stats["count"] * 100, 1
-                ),
+                "success_rate": round((stats["count"] - error_count) / stats["count"] * 100, 1),
             },
         )
 
@@ -732,9 +715,7 @@ class LogPatternMiner:
             return
 
         endpoint_stats = self._group_entries_by_endpoint(api_entries)
-        sorted_endpoints = sorted(
-            endpoint_stats.items(), key=lambda x: x[1]["count"], reverse=True
-        )
+        sorted_endpoints = sorted(endpoint_stats.items(), key=lambda x: x[1]["count"], reverse=True)
 
         for endpoint, stats in sorted_endpoints[:10]:
             if stats["count"] >= self.min_pattern_occurrences:
@@ -781,16 +762,12 @@ class LogPatternMiner:
                     occurrences=len(error_sessions),
                     first_seen=min(s.start_time for s in error_sessions),
                     last_seen=max(s.end_time or s.start_time for s in error_sessions),
-                    affected_components=list(
-                        set(e for s in error_sessions for e in s.endpoints[:3])
-                    ),
+                    affected_components=list(set(e for s in error_sessions for e in s.endpoints[:3])),
                     severity=LogLevel.WARNING,
                     extra_data={
                         "total_sessions": len(self.sessions),
                         "error_session_count": len(error_sessions),
-                        "error_rate": round(
-                            len(error_sessions) / len(self.sessions) * 100, 1
-                        ),
+                        "error_rate": round(len(error_sessions) / len(self.sessions) * 100, 1),
                     },
                 )
             )
@@ -829,10 +806,7 @@ class LogPatternMiner:
                     Anomaly(
                         id=f"ANOM-{len(self.anomalies) + 1}",
                         anomaly_type=anomaly_type,
-                        description=(
-                            f"Unusual duration: {entry.duration_ms:.1f}ms "
-                            f"(expected: {avg:.1f}ms)"
-                        ),
+                        description=(f"Unusual duration: {entry.duration_ms:.1f}ms " f"(expected: {avg:.1f}ms)"),
                         detected_at=entry.timestamp,
                         severity=LogLevel.WARNING,
                         metric_name="request_duration",
@@ -857,11 +831,7 @@ class LogPatternMiner:
         if len(hourly_errors) < 3:
             return
 
-        error_rates = [
-            hourly_errors[h] / hourly_total[h] * 100
-            for h in hourly_total
-            if hourly_total[h] > 0
-        ]
+        error_rates = [hourly_errors[h] / hourly_total[h] * 100 for h in hourly_total if hourly_total[h] > 0]
         avg_rate = mean(error_rates)
         std_rate = stdev(error_rates) if len(error_rates) > 1 else 0
 
@@ -929,23 +899,18 @@ class LogPatternMiner:
             "by_level": dict(level_counts),
             "by_logger": dict(logger_counts.most_common(10)),
             "by_hour": dict(sorted(hourly_counts.items())),
-            "total_errors": level_counts.get("error", 0)
-            + level_counts.get("critical", 0),
+            "total_errors": level_counts.get("error", 0) + level_counts.get("critical", 0),
             "total_warnings": level_counts.get("warning", 0),
             "avg_duration_ms": round(mean(durations), 2) if durations else 0,
             "max_duration_ms": max(durations) if durations else 0,
             "min_duration_ms": min(durations) if durations else 0,
             "unique_sessions": len(self.sessions),
-            "unique_endpoints": len(
-                set(e.endpoint for e in self.entries if e.endpoint)
-            ),
+            "unique_endpoints": len(set(e.endpoint for e in self.entries if e.endpoint)),
         }
 
     def _generate_summary(self) -> dict[str, Any]:
         """Generate analysis summary."""
-        critical_patterns = [
-            p for p in self.patterns if p.severity in _ERROR_CRITICAL_LEVELS
-        ]
+        critical_patterns = [p for p in self.patterns if p.severity in _ERROR_CRITICAL_LEVELS]
         warning_patterns = [p for p in self.patterns if p.severity == LogLevel.WARNING]
 
         return {
@@ -960,9 +925,7 @@ class LogPatternMiner:
                     "description": p.description[:80],
                     "occurrences": p.occurrences,
                 }
-                for p in sorted(
-                    self.patterns, key=lambda x: x.occurrences, reverse=True
-                )[:5]
+                for p in sorted(self.patterns, key=lambda x: x.occurrences, reverse=True)[:5]
             ],
             "health_score": self._calculate_health_score(),
         }
@@ -975,9 +938,7 @@ class LogPatternMiner:
         score = 100.0
 
         # Deduct for errors
-        error_rate = sum(
-            1 for e in self.entries if e.level in _ERROR_CRITICAL_LEVELS
-        ) / len(self.entries)
+        error_rate = sum(1 for e in self.entries if e.level in _ERROR_CRITICAL_LEVELS) / len(self.entries)
         score -= min(30, error_rate * 100)
 
         # Deduct for patterns
@@ -988,9 +949,7 @@ class LogPatternMiner:
 
         # Deduct for slow requests
         slow_rate = sum(
-            1
-            for e in self.entries
-            if e.duration_ms and e.duration_ms > self.slow_request_threshold_ms
+            1 for e in self.entries if e.duration_ms and e.duration_ms > self.slow_request_threshold_ms
         ) / len(self.entries)
         score -= min(15, slow_rate * 100)
 

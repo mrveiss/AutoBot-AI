@@ -89,9 +89,7 @@ class UserService(BaseService):
             True if password matches
         """
         try:
-            return bcrypt.checkpw(
-                password.encode("utf-8"), password_hash.encode("utf-8")
-            )
+            return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
         except Exception as e:
             logger.error("Password verification error: %s", e)
             return False
@@ -105,9 +103,7 @@ class UserService(BaseService):
     # User CRUD Operations
     # -------------------------------------------------------------------------
 
-    async def _check_duplicate_user(
-        self, email: str, username: str, email_lower: str, username_lower: str
-    ) -> None:
+    async def _check_duplicate_user(self, email: str, username: str, email_lower: str, username_lower: str) -> None:
         """Issue #665: Extracted from create_user to reduce function length."""
         existing = await self._find_by_email_or_username(email, username)
         if existing:
@@ -161,9 +157,7 @@ class UserService(BaseService):
             },
         )
 
-    async def _persist_user(
-        self, user: User, role_ids: Optional[List[uuid.UUID]]
-    ) -> None:
+    async def _persist_user(self, user: User, role_ids: Optional[List[uuid.UUID]]) -> None:
         """Add user to session and assign roles. Issue #620."""
         self.session.add(user)
         await self.session.flush()
@@ -213,9 +207,7 @@ class UserService(BaseService):
             is_platform_admin,
         )
         await self._persist_user(user, role_ids)
-        await self._log_user_creation(
-            user, email, username, effective_org_id, is_platform_admin
-        )
+        await self._log_user_creation(user, email, username, effective_org_id, is_platform_admin)
         logger.info("Created user: %s (id=%s)", username, user.id)
         return user
 
@@ -352,9 +344,7 @@ class UserService(BaseService):
         if new_value_lower != current_value.lower():
             existing = await lookup_func(new_value)
             if existing and existing.id != user_id:
-                raise DuplicateUserError(
-                    f"{field_name.title()} '{new_value}' already in use"
-                )
+                raise DuplicateUserError(f"{field_name.title()} '{new_value}' already in use")
             changes[field_name] = {"old": current_value, "new": new_value_lower}
             setattr(user, field_name, new_value_lower)
 
@@ -390,9 +380,7 @@ class UserService(BaseService):
         if preferences is not None:
             user.preferences = preferences
 
-    async def _finalize_user_update(
-        self, user: User, user_id: uuid.UUID, changes: dict
-    ) -> None:
+    async def _finalize_user_update(self, user: User, user_id: uuid.UUID, changes: dict) -> None:
         """Finalize user update with timestamp and audit logging. Issue #620."""
         user.updated_at = datetime.now(timezone.utc)
         await self.session.flush()
@@ -437,18 +425,12 @@ class UserService(BaseService):
         changes = {}
 
         if email:
-            await self._update_unique_field(
-                user, user_id, "email", email, self.get_user_by_email, changes
-            )
+            await self._update_unique_field(user, user_id, "email", email, self.get_user_by_email, changes)
 
         if username:
-            await self._update_unique_field(
-                user, user_id, "username", username, self.get_user_by_username, changes
-            )
+            await self._update_unique_field(user, user_id, "username", username, self.get_user_by_username, changes)
 
-        self._update_optional_profile_fields(
-            user, display_name, bio, avatar_url, preferences, changes
-        )
+        self._update_optional_profile_fields(user, display_name, bio, avatar_url, preferences, changes)
 
         await self._finalize_user_update(user, user_id, changes)
         return user
@@ -483,9 +465,7 @@ class UserService(BaseService):
             raise UserNotFoundError(f"User {user_id} not found")
 
         if require_current and user.password_hash:
-            if not current_password or not self.verify_password(
-                current_password, user.password_hash
-            ):
+            if not current_password or not self.verify_password(current_password, user.password_hash):
                 raise InvalidCredentialsError("Current password is incorrect")
 
         user.password_hash = self.hash_password(new_password)
@@ -494,9 +474,7 @@ class UserService(BaseService):
 
         # Invalidate all sessions except current one
         session_service = SessionService()
-        invalidated_count = await session_service.invalidate_user_sessions(
-            user_id=user_id, except_token=current_token
-        )
+        invalidated_count = await session_service.invalidate_user_sessions(user_id=user_id, except_token=current_token)
 
         await self._audit_log(
             action=AuditAction.PASSWORD_CHANGED,
@@ -637,9 +615,7 @@ class UserService(BaseService):
             user = await self.get_user_by_username(username_or_email)
         return user
 
-    async def _validate_user_can_login(
-        self, user: User, password: str, ip_address: Optional[str]
-    ) -> bool:
+    async def _validate_user_can_login(self, user: User, password: str, ip_address: Optional[str]) -> bool:
         """Issue #665: Extracted from authenticate to reduce function length."""
         if not user.is_active:
             await self._log_auth_failure("account_inactive", ip_address, user.id)
@@ -671,9 +647,7 @@ class UserService(BaseService):
         """
         user = await self._lookup_user_for_auth(username_or_email)
         if not user:
-            await self._log_auth_failure(
-                "user_not_found", ip_address, username_or_email=username_or_email
-            )
+            await self._log_auth_failure("user_not_found", ip_address, username_or_email=username_or_email)
             return None
 
         if not await self._validate_user_can_login(user, password, ip_address):
@@ -714,9 +688,7 @@ class UserService(BaseService):
         """
         # Check if already assigned
         existing = await self.session.execute(
-            select(UserRole).where(
-                UserRole.user_id == user_id, UserRole.role_id == role_id
-            )
+            select(UserRole).where(UserRole.user_id == user_id, UserRole.role_id == role_id)
         )
         if existing.scalar_one_or_none():
             return False  # Already assigned
@@ -750,9 +722,7 @@ class UserService(BaseService):
             True if role revoked
         """
         result = await self.session.execute(
-            select(UserRole).where(
-                UserRole.user_id == user_id, UserRole.role_id == role_id
-            )
+            select(UserRole).where(UserRole.user_id == user_id, UserRole.role_id == role_id)
         )
         user_role = result.scalar_one_or_none()
         if not user_role:
@@ -781,10 +751,7 @@ class UserService(BaseService):
             List of Role instances
         """
         result = await self.session.execute(
-            select(Role)
-            .join(UserRole)
-            .where(UserRole.user_id == user_id)
-            .order_by(Role.priority.desc())
+            select(Role).join(UserRole).where(UserRole.user_id == user_id).order_by(Role.priority.desc())
         )
         return list(result.scalars().all())
 
@@ -804,18 +771,14 @@ class UserService(BaseService):
         for role in roles:
             # Load permissions for each role
             result = await self.session.execute(
-                select(Role)
-                .options(selectinload(Role.role_permissions))
-                .where(Role.id == role.id)
+                select(Role).options(selectinload(Role.role_permissions)).where(Role.id == role.id)
             )
             role_with_perms = result.scalar_one_or_none()
             if role_with_perms:
                 for rp in role_with_perms.role_permissions:
                     # Get permission name
                     perm_result = await self.session.execute(
-                        select(role.Permission).where(
-                            role.Permission.id == rp.permission_id
-                        )
+                        select(role.Permission).where(role.Permission.id == rp.permission_id)
                     )
                     perm = perm_result.scalar_one_or_none()
                     if perm:
@@ -827,9 +790,7 @@ class UserService(BaseService):
     # Private Helpers
     # -------------------------------------------------------------------------
 
-    async def _find_by_email_or_username(
-        self, email: str, username: str
-    ) -> Optional[User]:
+    async def _find_by_email_or_username(self, email: str, username: str) -> Optional[User]:
         """Find user by email or username."""
         # Cache lower() values to avoid repeated calls
         email_lower = email.lower()
@@ -844,9 +805,7 @@ class UserService(BaseService):
         )
         return result.scalar_one_or_none()
 
-    async def _assign_roles(
-        self, user_id: uuid.UUID, role_ids: List[uuid.UUID]
-    ) -> None:
+    async def _assign_roles(self, user_id: uuid.UUID, role_ids: List[uuid.UUID]) -> None:
         """Assign multiple roles to a user."""
         for role_id in role_ids:
             await self.assign_role(user_id, role_id)

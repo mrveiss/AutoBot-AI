@@ -34,9 +34,7 @@ class InviteRequest(BaseModel):
     """Request to invite user to session."""
 
     user_id: str = Field(..., description="User ID to invite")
-    permission: PermissionLevel = Field(
-        ..., description="Permission level (owner/editor/viewer)"
-    )
+    permission: PermissionLevel = Field(..., description="Permission level (owner/editor/viewer)")
 
 
 class RemoveRequest(BaseModel):
@@ -95,15 +93,11 @@ class RemoveResponse(BaseModel):
 # ====================================================================
 
 
-async def _get_session_collab(
-    session_id: str, db: AsyncSession
-) -> Optional[SessionCollaboration]:
+async def _get_session_collab(session_id: str, db: AsyncSession) -> Optional[SessionCollaboration]:
     """Get session collaboration record."""
     from sqlalchemy import select
 
-    stmt = select(SessionCollaboration).where(
-        SessionCollaboration.session_id == session_id
-    )
+    stmt = select(SessionCollaboration).where(SessionCollaboration.session_id == session_id)
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
 
@@ -136,9 +130,7 @@ async def _ensure_permission(
     return collab
 
 
-async def _get_or_create_collab(
-    session_id: str, owner_id: uuid.UUID, db: AsyncSession
-) -> SessionCollaboration:
+async def _get_or_create_collab(session_id: str, owner_id: uuid.UUID, db: AsyncSession) -> SessionCollaboration:
     """Get or create session collaboration record."""
     collab = await _get_session_collab(session_id, db)
 
@@ -152,9 +144,7 @@ async def _get_or_create_collab(
     return collab
 
 
-async def _fetch_and_validate_secret(
-    secret_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSession
-):
+async def _fetch_and_validate_secret(secret_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSession):
     """Helper for share_secret_with_session. Ref: #1088."""
     from sqlalchemy import select
 
@@ -179,9 +169,7 @@ async def _fetch_and_validate_secret(
     return secret
 
 
-def _resolve_share_recipients(
-    share: ShareSecretRequest, user_id: uuid.UUID, collab: SessionCollaboration
-) -> list:
+def _resolve_share_recipients(share: ShareSecretRequest, user_id: uuid.UUID, collab: SessionCollaboration) -> list:
     """Helper for share_secret_with_session. Ref: #1088."""
     if share.participant_ids:
         return [uuid.UUID(pid) for pid in share.participant_ids]
@@ -218,9 +206,7 @@ async def invite_user(
         invited_user_id = uuid.UUID(invite.user_id)
 
         # Ensure caller is owner
-        collab = await _ensure_permission(
-            session_id, user_id, PermissionLevel.OWNER, db
-        )
+        collab = await _ensure_permission(session_id, user_id, PermissionLevel.OWNER, db)
 
         # Add collaborator
         collab.add_collaborator(invited_user_id, invite.permission)
@@ -228,8 +214,7 @@ async def invite_user(
         await db.commit()
 
         logger.info(
-            f"User {user_id} invited {invited_user_id} "
-            f"to session {session_id} as {invite.permission.value}"
+            f"User {user_id} invited {invited_user_id} " f"to session {session_id} as {invite.permission.value}"
         )
 
         return InviteResponse(
@@ -271,9 +256,7 @@ async def remove_collaborator(
         remove_user_id = uuid.UUID(remove.user_id)
 
         # Ensure caller is owner
-        collab = await _ensure_permission(
-            session_id, user_id, PermissionLevel.OWNER, db
-        )
+        collab = await _ensure_permission(session_id, user_id, PermissionLevel.OWNER, db)
 
         # Cannot remove owner
         if remove_user_id == collab.owner_id:
@@ -293,9 +276,7 @@ async def remove_collaborator(
 
         await db.commit()
 
-        logger.info(
-            f"User {user_id} removed {remove_user_id} " f"from session {session_id}"
-        )
+        logger.info(f"User {user_id} removed {remove_user_id} " f"from session {session_id}")
 
         return RemoveResponse(
             success=True,
@@ -333,9 +314,7 @@ async def get_participants(
         user_id = uuid.UUID(current_user.get("user_id"))
 
         # Ensure caller has at least viewer access
-        collab = await _ensure_permission(
-            session_id, user_id, PermissionLevel.VIEWER, db
-        )
+        collab = await _ensure_permission(session_id, user_id, PermissionLevel.VIEWER, db)
 
         # Build participant list
         participants = []
@@ -397,9 +376,7 @@ async def share_secret_with_session(
         user_id = uuid.UUID(current_user.get("user_id"))
         secret_id = uuid.UUID(share.secret_id)
 
-        collab = await _ensure_permission(
-            session_id, user_id, PermissionLevel.EDITOR, db
-        )
+        collab = await _ensure_permission(session_id, user_id, PermissionLevel.EDITOR, db)
 
         secret = await _fetch_and_validate_secret(secret_id, user_id, db)
         recipient_ids = _resolve_share_recipients(share, user_id, collab)
@@ -410,9 +387,7 @@ async def share_secret_with_session(
 
         await db.commit()
 
-        logger.info(
-            f"User shared secret with {len(recipient_ids)} participants in session {session_id}"
-        )
+        logger.info(f"User shared secret with {len(recipient_ids)} participants in session {session_id}")
 
         return {
             "success": True,

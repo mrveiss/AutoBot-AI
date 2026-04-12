@@ -91,19 +91,13 @@ class MediaPipeline(ABC):
         if result.success:
             self.metrics.successful += 1
             # Update average confidence
-            total_confidence = (
-                self.metrics.average_confidence * (self.metrics.successful - 1)
-                + result.confidence
-            )
+            total_confidence = self.metrics.average_confidence * (self.metrics.successful - 1) + result.confidence
             self.metrics.average_confidence = total_confidence / self.metrics.successful
         else:
             self.metrics.failed += 1
 
         # Update average processing time
-        total_time = (
-            self.metrics.average_time * (self.metrics.total_processed - 1)
-            + result.processing_time
-        )
+        total_time = self.metrics.average_time * (self.metrics.total_processed - 1) + result.processing_time
         self.metrics.average_time = total_time / self.metrics.total_processed
 
 
@@ -162,10 +156,7 @@ class BasePipeline(MediaPipeline):
                 confidence=0.0,
                 result_data=None,
                 processing_time=0.0,
-                error_message=(
-                    f"Media type {media_input.media_type.value} "
-                    f"not supported by {self.pipeline_name}"
-                ),
+                error_message=(f"Media type {media_input.media_type.value} " f"not supported by {self.pipeline_name}"),
             )
 
         start_time = time.time()
@@ -177,9 +168,7 @@ class BasePipeline(MediaPipeline):
 
         except Exception as e:
             processing_time = time.time() - start_time
-            self.logger.error(
-                "Pipeline '%s' processing failed: %s", self.pipeline_name, e
-            )
+            self.logger.error("Pipeline '%s' processing failed: %s", self.pipeline_name, e)
             result = ProcessingResult(
                 result_id=f"{self.pipeline_name}_{media_input.media_id}",
                 media_id=media_input.media_id,

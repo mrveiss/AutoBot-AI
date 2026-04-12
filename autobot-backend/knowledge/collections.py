@@ -75,13 +75,9 @@ class CollectionsMixin:
         }
         return collection_data
 
-    async def _store_collection(
-        self, collection_id: str, collection_data: Dict[str, Any]
-    ) -> None:
+    async def _store_collection(self, collection_id: str, collection_data: Dict[str, Any]) -> None:
         """Store collection in Redis (Issue #398: extracted)."""
-        await self.aioredis_client.hset(
-            f"collection:{collection_id}", mapping=collection_data
-        )
+        await self.aioredis_client.hset(f"collection:{collection_id}", mapping=collection_data)
         await self.aioredis_client.sadd("collection:all", collection_id)
 
     async def create_collection(
@@ -102,9 +98,7 @@ class CollectionsMixin:
                 return {"success": False, "message": "Collection name is required"}
 
             collection_id = str(uuid.uuid4())
-            collection_data = self._build_collection_data(
-                collection_id, name, description, icon, color, metadata
-            )
+            collection_data = self._build_collection_data(collection_id, name, description, icon, color, metadata)
             await self._store_collection(collection_id, collection_data)
 
             logger.info("Created collection '%s' (id: %s)", name, collection_id)
@@ -159,9 +153,7 @@ class CollectionsMixin:
                 collections.append(data)
         return collections
 
-    def _sort_collections(
-        self, collections: List[Dict[str, Any]], sort_by: str
-    ) -> List[Dict[str, Any]]:
+    def _sort_collections(self, collections: List[Dict[str, Any]], sort_by: str) -> List[Dict[str, Any]]:
         """Sort collections by specified field (Issue #398: extracted)."""
         if sort_by == "name":
             collections.sort(key=lambda x: x.get("name", "").lower())
@@ -171,9 +163,7 @@ class CollectionsMixin:
             collections.sort(key=lambda x: x.get("fact_count", 0), reverse=True)
         return collections
 
-    async def list_collections(
-        self, limit: int = 100, offset: int = 0, sort_by: str = "name"
-    ) -> Dict[str, Any]:
+    async def list_collections(self, limit: int = 100, offset: int = 0, sort_by: str = "name") -> Dict[str, Any]:
         """List all collections (Issue #398: refactored)."""
         if not self.aioredis_client:
             return {"success": False, "message": "Redis not available"}
@@ -241,12 +231,8 @@ class CollectionsMixin:
                     "message": f"Collection not found: {collection_id}",
                 }
 
-            updates = self._build_collection_updates(
-                name, description, icon, color, metadata
-            )
-            await self.aioredis_client.hset(
-                f"collection:{collection_id}", mapping=updates
-            )
+            updates = self._build_collection_updates(name, description, icon, color, metadata)
+            await self.aioredis_client.hset(f"collection:{collection_id}", mapping=updates)
             updated = await self._get_collection_data(collection_id)
 
             logger.info("Updated collection '%s'", collection_id)
@@ -260,9 +246,7 @@ class CollectionsMixin:
             logger.error("Failed to update collection '%s': %s", collection_id, e)
             return {"success": False, "message": "Collection operation failed"}
 
-    async def _remove_facts_from_deleted_collection(
-        self, collection_id: str, fact_ids: set, delete_facts: bool
-    ) -> int:
+    async def _remove_facts_from_deleted_collection(self, collection_id: str, fact_ids: set, delete_facts: bool) -> int:
         """Remove or delete facts when collection is deleted (Issue #398: extracted)."""
         facts_deleted = 0
         for fid in fact_ids:
@@ -280,9 +264,7 @@ class CollectionsMixin:
         await self.aioredis_client.delete(f"collection:facts:{collection_id}")
         await self.aioredis_client.srem("collection:all", collection_id)
 
-    async def delete_collection(
-        self, collection_id: str, delete_facts: bool = False
-    ) -> Dict[str, Any]:
+    async def delete_collection(self, collection_id: str, delete_facts: bool = False) -> Dict[str, Any]:
         """Delete a collection (Issue #398: refactored)."""
         if not self.aioredis_client:
             return {"success": False, "message": "Redis not available"}
@@ -295,13 +277,9 @@ class CollectionsMixin:
                     "message": f"Collection not found: {collection_id}",
                 }
 
-            fact_ids = await self.aioredis_client.smembers(
-                f"collection:facts:{collection_id}"
-            )
+            fact_ids = await self.aioredis_client.smembers(f"collection:facts:{collection_id}")
             facts_count = len(fact_ids)
-            facts_deleted = await self._remove_facts_from_deleted_collection(
-                collection_id, fact_ids, delete_facts
-            )
+            facts_deleted = await self._remove_facts_from_deleted_collection(collection_id, fact_ids, delete_facts)
             await self._delete_collection_records(collection_id)
 
             logger.info(
@@ -326,9 +304,7 @@ class CollectionsMixin:
     # COLLECTION MEMBERSHIP OPERATIONS (Issue #412)
     # =========================================================================
 
-    async def _process_facts_for_add(
-        self, collection_id: str, fact_ids: List[str]
-    ) -> tuple:
+    async def _process_facts_for_add(self, collection_id: str, fact_ids: List[str]) -> tuple:
         """Process facts for adding to collection (Issue #398: extracted)."""
         added_count = 0
         already_in_collection = 0
@@ -340,9 +316,7 @@ class CollectionsMixin:
                 not_found.append(fid)
                 continue
 
-            is_member = await self.aioredis_client.sismember(
-                f"collection:facts:{collection_id}", fid
-            )
+            is_member = await self.aioredis_client.sismember(f"collection:facts:{collection_id}", fid)
             if is_member:
                 already_in_collection += 1
                 continue
@@ -355,17 +329,11 @@ class CollectionsMixin:
 
     async def _update_collection_fact_count(self, collection_id: str) -> int:
         """Update and return collection fact count (Issue #398: extracted)."""
-        new_count = await self.aioredis_client.scard(
-            f"collection:facts:{collection_id}"
-        )
-        await self.aioredis_client.hset(
-            f"collection:{collection_id}", "fact_count", new_count
-        )
+        new_count = await self.aioredis_client.scard(f"collection:facts:{collection_id}")
+        await self.aioredis_client.hset(f"collection:{collection_id}", "fact_count", new_count)
         return new_count
 
-    async def add_facts_to_collection(
-        self, collection_id: str, fact_ids: List[str]
-    ) -> Dict[str, Any]:
+    async def add_facts_to_collection(self, collection_id: str, fact_ids: List[str]) -> Dict[str, Any]:
         """Add facts to a collection (Issue #398: refactored)."""
         if not self.aioredis_client:
             return {"success": False, "message": "Redis not available"}
@@ -406,17 +374,13 @@ class CollectionsMixin:
             logger.error("Failed to add facts to collection '%s': %s", collection_id, e)
             return {"success": False, "message": "Collection operation failed"}
 
-    async def _process_facts_for_remove(
-        self, collection_id: str, fact_ids: List[str]
-    ) -> tuple:
+    async def _process_facts_for_remove(self, collection_id: str, fact_ids: List[str]) -> tuple:
         """Process facts for removal from collection (Issue #398: extracted)."""
         removed_count = 0
         not_in_collection = 0
 
         for fid in fact_ids:
-            is_member = await self.aioredis_client.sismember(
-                f"collection:facts:{collection_id}", fid
-            )
+            is_member = await self.aioredis_client.sismember(f"collection:facts:{collection_id}", fid)
             if not is_member:
                 not_in_collection += 1
                 continue
@@ -427,9 +391,7 @@ class CollectionsMixin:
 
         return removed_count, not_in_collection
 
-    async def remove_facts_from_collection(
-        self, collection_id: str, fact_ids: List[str]
-    ) -> Dict[str, Any]:
+    async def remove_facts_from_collection(self, collection_id: str, fact_ids: List[str]) -> Dict[str, Any]:
         """Remove facts from a collection (Issue #398: refactored)."""
         if not self.aioredis_client:
             return {"success": False, "message": "Redis not available"}
@@ -442,9 +404,7 @@ class CollectionsMixin:
                     "message": f"Collection not found: {collection_id}",
                 }
 
-            removed_count, not_in_collection = await self._process_facts_for_remove(
-                collection_id, fact_ids
-            )
+            removed_count, not_in_collection = await self._process_facts_for_remove(collection_id, fact_ids)
             new_count = await self._update_collection_fact_count(collection_id)
 
             logger.info(
@@ -463,22 +423,16 @@ class CollectionsMixin:
             }
 
         except Exception as e:
-            logger.error(
-                "Failed to remove facts from collection '%s': %s", collection_id, e
-            )
+            logger.error("Failed to remove facts from collection '%s': %s", collection_id, e)
             return {"success": False, "message": "Collection operation failed"}
 
-    async def _fetch_fact_for_collection(
-        self, fid: str, include_content: bool
-    ) -> Optional[Dict[str, Any]]:
+    async def _fetch_fact_for_collection(self, fid: str, include_content: bool) -> Optional[Dict[str, Any]]:
         """Fetch a single fact for collection display (Issue #398: extracted)."""
         fact_data = await self.aioredis_client.hgetall(f"fact:{fid}")
         if not fact_data:
             return None
         decoded = {
-            (k.decode("utf-8") if isinstance(k, bytes) else k): (
-                v.decode("utf-8") if isinstance(v, bytes) else v
-            )
+            (k.decode("utf-8") if isinstance(k, bytes) else k): (v.decode("utf-8") if isinstance(v, bytes) else v)
             for k, v in fact_data.items()
         }
         result = {
@@ -509,17 +463,10 @@ class CollectionsMixin:
                     "message": f"Collection not found: {collection_id}",
                 }
 
-            fact_ids = await self.aioredis_client.smembers(
-                f"collection:facts:{collection_id}"
-            )
+            fact_ids = await self.aioredis_client.smembers(f"collection:facts:{collection_id}")
             total_count = len(fact_ids)
 
-            fact_ids_list = sorted(
-                [
-                    fid.decode("utf-8") if isinstance(fid, bytes) else fid
-                    for fid in fact_ids
-                ]
-            )
+            fact_ids_list = sorted([fid.decode("utf-8") if isinstance(fid, bytes) else fid for fid in fact_ids])
             paginated_ids = fact_ids_list[offset : offset + limit]
 
             facts = []
@@ -566,9 +513,7 @@ class CollectionsMixin:
                 return {"success": False, "message": f"Fact not found: {fact_id}"}
 
             # Get collection IDs
-            collection_ids = await self.aioredis_client.smembers(
-                f"fact:collections:{fact_id}"
-            )
+            collection_ids = await self.aioredis_client.smembers(f"fact:collections:{fact_id}")
 
             collections = []
             for cid in collection_ids:
@@ -648,17 +593,13 @@ class CollectionsMixin:
                     "message": f"Collection not found: {collection_id}",
                 }
 
-            fact_ids = await self.aioredis_client.smembers(
-                f"collection:facts:{collection_id}"
-            )
+            fact_ids = await self.aioredis_client.smembers(f"collection:facts:{collection_id}")
 
             facts = []
             for fid in fact_ids:
                 if isinstance(fid, bytes):
                     fid = fid.decode("utf-8")
-                export_fact = await self._export_single_fact(
-                    fid, include_content, include_metadata
-                )
+                export_fact = await self._export_single_fact(fid, include_content, include_metadata)
                 if export_fact:
                     facts.append(export_fact)
 
@@ -687,9 +628,7 @@ class CollectionsMixin:
                 "message": f"Collection not found: {collection_id}",
             }
 
-        fact_count = await self.aioredis_client.scard(
-            f"collection:facts:{collection_id}"
-        )
+        fact_count = await self.aioredis_client.scard(f"collection:facts:{collection_id}")
         return {
             "success": True,
             "collection_id": collection_id,
@@ -710,9 +649,7 @@ class CollectionsMixin:
         await self.aioredis_client.delete(f"fact:{fid}")
         await self.aioredis_client.delete(f"fact:collections:{fid}")
 
-    async def bulk_delete_collection_facts(
-        self, collection_id: str, confirm: bool = False
-    ) -> Dict[str, Any]:
+    async def bulk_delete_collection_facts(self, collection_id: str, confirm: bool = False) -> Dict[str, Any]:
         """Delete all facts in a collection (Issue #398: refactored)."""
         if not self.aioredis_client:
             return {"success": False, "message": "Redis not available"}
@@ -728,17 +665,13 @@ class CollectionsMixin:
                     "message": f"Collection not found: {collection_id}",
                 }
 
-            fact_ids = await self.aioredis_client.smembers(
-                f"collection:facts:{collection_id}"
-            )
+            fact_ids = await self.aioredis_client.smembers(f"collection:facts:{collection_id}")
             deleted_count = 0
             for fid in fact_ids:
                 await self._delete_fact_completely(fid)
                 deleted_count += 1
 
-            await self.aioredis_client.hset(
-                f"collection:{collection_id}", "fact_count", 0
-            )
+            await self.aioredis_client.hset(f"collection:{collection_id}", "fact_count", 0)
             logger.info(
                 "Bulk deleted %d facts from collection '%s'",
                 deleted_count,
@@ -753,18 +686,14 @@ class CollectionsMixin:
             }
 
         except Exception as e:
-            logger.error(
-                "Failed to bulk delete facts in collection '%s': %s", collection_id, e
-            )
+            logger.error("Failed to bulk delete facts in collection '%s': %s", collection_id, e)
             return {"success": False, "message": "Collection operation failed"}
 
     # =========================================================================
     # PRIVATE HELPER METHODS (Issue #412)
     # =========================================================================
 
-    async def _get_collection_data(
-        self, collection_id: str
-    ) -> Optional[Dict[str, Any]]:
+    async def _get_collection_data(self, collection_id: str) -> Optional[Dict[str, Any]]:
         """Get collection data from Redis hash."""
         data = await self.aioredis_client.hgetall(f"collection:{collection_id}")
         if not data:

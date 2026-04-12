@@ -51,16 +51,12 @@ class KnowledgeBaseTimeouts:
     @property
     def redis_get(self) -> float:
         """Timeout for Redis GET operations"""
-        return self._config.get_timeout_for_env(
-            "redis.operations", "get", environment=self.environment, default=1.0
-        )
+        return self._config.get_timeout_for_env("redis.operations", "get", environment=self.environment, default=1.0)
 
     @property
     def redis_set(self) -> float:
         """Timeout for Redis SET operations"""
-        return self._config.get_timeout_for_env(
-            "redis.operations", "set", environment=self.environment, default=1.0
-        )
+        return self._config.get_timeout_for_env("redis.operations", "set", environment=self.environment, default=1.0)
 
     @property
     def redis_hgetall(self) -> float:
@@ -167,32 +163,22 @@ class KnowledgeBaseTimeouts:
     @property
     def llm_default(self) -> float:
         """Default LLM operation timeout"""
-        return self._config.get_timeout_for_env(
-            "llm", "default", environment=self.environment, default=120.0
-        )
+        return self._config.get_timeout_for_env("llm", "default", environment=self.environment, default=120.0)
 
     @property
     def llm_fast(self) -> float:
         """Fast LLM operation timeout"""
-        return self._config.get_timeout_for_env(
-            "llm", "fast", environment=self.environment, default=30.0
-        )
+        return self._config.get_timeout_for_env("llm", "fast", environment=self.environment, default=30.0)
 
     # Convenience Methods
     def get_all_redis_timeouts(self) -> Dict[str, float]:
         """Get all Redis operation timeouts"""
-        return self._config.get_timeout_group(
-            "redis.operations", environment=self.environment
-        )
+        return self._config.get_timeout_group("redis.operations", environment=self.environment)
 
     def get_all_llamaindex_timeouts(self) -> Dict[str, float]:
         """Get all LlamaIndex operation timeouts"""
-        indexing = self._config.get_timeout_group(
-            "llamaindex.indexing", environment=self.environment
-        )
-        search = self._config.get_timeout_group(
-            "llamaindex.search", environment=self.environment
-        )
+        indexing = self._config.get_timeout_group("llamaindex.indexing", environment=self.environment)
+        search = self._config.get_timeout_group("llamaindex.search", environment=self.environment)
         return {**indexing, **search}
 
     def get_timeout_summary(self) -> Dict[str, Dict[str, float]]:
@@ -200,9 +186,7 @@ class KnowledgeBaseTimeouts:
         return {
             "redis": self.get_all_redis_timeouts(),
             "llamaindex": self.get_all_llamaindex_timeouts(),
-            "documents": self._config.get_timeout_group(
-                "documents.operations", environment=self.environment
-            ),
+            "documents": self._config.get_timeout_group("documents.operations", environment=self.environment),
             "llm": {"default": self.llm_default, "fast": self.llm_fast},
         }
 

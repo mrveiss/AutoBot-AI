@@ -33,9 +33,7 @@ async def health_check(
 ) -> HealthResponse:
     """Public health check endpoint."""
     try:
-        online_count = await db.execute(
-            select(func.count(Node.id)).where(Node.status == NodeStatus.ONLINE.value)
-        )
+        online_count = await db.execute(select(func.count(Node.id)).where(Node.status == NodeStatus.ONLINE.value))
         total_count = await db.execute(select(func.count(Node.id)))
 
         nodes_online = online_count.scalar() or 0

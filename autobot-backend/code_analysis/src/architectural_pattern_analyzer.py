@@ -18,7 +18,6 @@ import logging
 import time
 from typing import Any, Dict, List
 
-
 # Issue #394: Import from architectural_analysis package
 from .architectural_analysis import (
     ArchitecturalComponent,
@@ -76,9 +75,7 @@ class ArchitecturalPatternAnalyzer:
 
             self.redis_client = await get_async_redis_client()
 
-    async def analyze_architecture(
-        self, root_path: str = ".", patterns: List[str] = None
-    ) -> Dict[str, Any]:
+    async def analyze_architecture(self, root_path: str = ".", patterns: List[str] = None) -> Dict[str, Any]:
         """
         Analyze architectural patterns and design quality.
 
@@ -99,9 +96,7 @@ class ArchitecturalPatternAnalyzer:
 
         # Discover architectural components
         logger.info("Discovering architectural components")
-        components = await self._component_discovery.discover_components(
-            root_path, patterns
-        )
+        components = await self._component_discovery.discover_components(root_path, patterns)
         logger.info(f"Found {len(components)} architectural components")
 
         # Analyze dependencies and relationships
@@ -168,9 +163,7 @@ class ArchitecturalPatternAnalyzer:
             "metrics": metrics.to_dict(),
         }
 
-    async def _analyze_dependencies(
-        self, components: List[ArchitecturalComponent]
-    ) -> Dict[str, List[str]]:
+    async def _analyze_dependencies(self, components: List[ArchitecturalComponent]) -> Dict[str, List[str]]:
         """Analyze dependencies between components."""
         return {component.name: component.dependencies for component in components}
 
@@ -192,9 +185,7 @@ class ArchitecturalPatternAnalyzer:
             try:
                 cursor = 0
                 while True:
-                    cursor, keys = await self.redis_client.scan(
-                        cursor, match="architecture_analysis:*", count=100
-                    )
+                    cursor, keys = await self.redis_client.scan(cursor, match="architecture_analysis:*", count=100)
                     if keys:
                         await self.redis_client.delete(*keys)
                     if cursor == 0:
@@ -217,9 +208,7 @@ async def main():
     analyzer = ArchitecturalPatternAnalyzer()
 
     # Analyze architectural patterns
-    results = await analyzer.analyze_architecture(
-        root_path=".", patterns=["src/**/*.py", "backend/**/*.py"]
-    )
+    results = await analyzer.analyze_architecture(root_path=".", patterns=["src/**/*.py", "backend/**/*.py"])
 
     # Print summary
     print("\n=== Architectural Pattern Analysis Results ===")  # noqa: print
@@ -232,14 +221,10 @@ async def main():
     # Print detailed metrics
     metrics = results["metrics"]
     print("\n=== Architectural Metrics ===")  # noqa: print
-    print(
-        f"Coupling score: {metrics['coupling_score']}/100 (lower is better)"
-    )  # noqa: print
+    print(f"Coupling score: {metrics['coupling_score']}/100 (lower is better)")  # noqa: print
     print(f"Cohesion score: {metrics['cohesion_score']}/100")  # noqa: print
     print(f"Pattern adherence: {metrics['pattern_adherence_score']}/100")  # noqa: print
-    print(
-        f"Maintainability index: {metrics['maintainability_index']}/100"
-    )  # noqa: print
+    print(f"Maintainability index: {metrics['maintainability_index']}/100")  # noqa: print
 
 
 if __name__ == "__main__":

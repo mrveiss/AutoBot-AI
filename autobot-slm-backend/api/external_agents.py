@@ -75,9 +75,7 @@ def _serialize(agent: ExternalAgent, include_card: bool = True) -> Dict[str, Any
         "has_api_key": bool(agent.api_key),
         "verified": agent.verified,
         "card_data": agent.card_data if include_card else None,
-        "card_fetched_at": (
-            agent.card_fetched_at.isoformat() if agent.card_fetched_at else None
-        ),
+        "card_fetched_at": (agent.card_fetched_at.isoformat() if agent.card_fetched_at else None),
         "card_error": agent.card_error,
         "skill_count": len((agent.card_data or {}).get("skills", [])),
         "created_by": agent.created_by,
@@ -133,9 +131,7 @@ async def register_agent(
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> Dict[str, Any]:
     """Register a new external A2A agent."""
-    existing = await db.execute(
-        select(ExternalAgent).where(ExternalAgent.base_url == body.base_url)
-    )
+    existing = await db.execute(select(ExternalAgent).where(ExternalAgent.base_url == body.base_url))
     if existing.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -186,9 +182,7 @@ async def get_agent(
     result = await db.execute(select(ExternalAgent).where(ExternalAgent.id == agent_id))
     agent = result.scalar_one_or_none()
     if not agent:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
     return _serialize(agent)
 
 
@@ -203,9 +197,7 @@ async def update_agent(
     result = await db.execute(select(ExternalAgent).where(ExternalAgent.id == agent_id))
     agent = result.scalar_one_or_none()
     if not agent:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
     if body.name is not None:
         agent.name = body.name
@@ -241,9 +233,7 @@ async def delete_agent(
     result = await db.execute(select(ExternalAgent).where(ExternalAgent.id == agent_id))
     agent = result.scalar_one_or_none()
     if not agent:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
     await db.delete(agent)
     await db.commit()
     logger.info("External agent deleted: id=%s name=%s", agent_id, agent.name)
@@ -268,9 +258,7 @@ async def verify_agent(
     result = await db.execute(select(ExternalAgent).where(ExternalAgent.id == agent_id))
     agent = result.scalar_one_or_none()
     if not agent:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
     from services.a2a_card_fetcher import fetch_card_for_external
 
@@ -299,9 +287,7 @@ async def refresh_agent_card(
     result = await db.execute(select(ExternalAgent).where(ExternalAgent.id == agent_id))
     agent = result.scalar_one_or_none()
     if not agent:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
     from services.a2a_card_fetcher import fetch_card_for_external
 

@@ -373,9 +373,7 @@ async def get_hardcoded_values(
             "status": "success",
             "hardcodes": all_hardcodes,
             "total_count": len(all_hardcodes),
-            "hardcode_types": list(
-                set(h.get("type", "unknown") for h in all_hardcodes)
-            ),
+            "hardcode_types": list(set(h.get("type", "unknown") for h in all_hardcodes)),
             "storage_type": storage_type,
         }
     )
@@ -428,9 +426,7 @@ def _fetch_problems_from_chromadb(
         if problem_type:
             where_filter["problem_type"] = problem_type
 
-    results = get_all_paginated(
-        code_collection, where=where_filter, include=["metadatas"]
-    )
+    results = get_all_paginated(code_collection, where=where_filter, include=["metadatas"])
     problems = [_parse_problem_metadata(m) for m in results.get("metadatas", [])]
 
     # Issue #2724: Validate file paths against the indexed repository root.
@@ -438,9 +434,7 @@ def _fetch_problems_from_chromadb(
     return filter_problems_by_file_existence(problems, root)
 
 
-async def _fetch_problems_from_redis(
-    problem_type: Optional[str], source_id: Optional[str] = None
-) -> tuple:
+async def _fetch_problems_from_redis(problem_type: Optional[str], source_id: Optional[str] = None) -> tuple:
     """Fetch problems from Redis. Returns (problems, success).
 
     Issue #315: Extracted helper.
@@ -618,9 +612,7 @@ async def get_codebase_problems(
             )
             logger.info("Retrieved %s problems from ChromaDB", len(all_problems))
         except Exception as chroma_error:
-            logger.warning(
-                "ChromaDB query failed: %s, falling back to Redis", chroma_error
-            )
+            logger.warning("ChromaDB query failed: %s, falling back to Redis", chroma_error)
             code_collection = None
 
     # Issue #1759: Problems are stored to ChromaDB only (not Redis).

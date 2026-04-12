@@ -64,9 +64,7 @@ class MultiModalPerformanceMonitor:
 
         self.gpu_memory_tracker: Dict[str, List[float]] = defaultdict(list)
         self.processing_times: Dict[str, deque] = defaultdict(lambda: deque(maxlen=100))
-        self.throughput_history: Dict[str, deque] = defaultdict(
-            lambda: deque(maxlen=100)
-        )
+        self.throughput_history: Dict[str, deque] = defaultdict(lambda: deque(maxlen=100))
 
         # Adaptive batch sizes optimized for RTX 4070 (8GB VRAM)
         self.batch_sizes = {
@@ -96,9 +94,7 @@ class MultiModalPerformanceMonitor:
                 gpu_gb,
             )
         else:
-            logger.warning(
-                "GPU not available - performance monitoring limited to CPU metrics"
-            )
+            logger.warning("GPU not available - performance monitoring limited to CPU metrics")
 
     def _trim_memory_tracker_history(self) -> None:
         """Trim memory tracker to keep only recent history (Issue #315: extracted)."""
@@ -118,9 +114,7 @@ class MultiModalPerformanceMonitor:
             self.batch_sizes[modality] = max(1, old_size // 2)
             if self.batch_sizes[modality] != old_size:
                 optimization_applied = True
-                logger.info(
-                    f"Reduced {modality} batch size: {old_size} -> {self.batch_sizes[modality]}"
-                )
+                logger.info(f"Reduced {modality} batch size: {old_size} -> {self.batch_sizes[modality]}")
         return optimization_applied
 
     def _increase_batch_sizes(self) -> bool:
@@ -136,9 +130,7 @@ class MultiModalPerformanceMonitor:
             self.batch_sizes[modality] = min(max_sizes[modality], old_size * 2)
             if self.batch_sizes[modality] != old_size:
                 optimization_applied = True
-                logger.info(
-                    f"Increased {modality} batch size: {old_size} -> {self.batch_sizes[modality]}"
-                )
+                logger.info(f"Increased {modality} batch size: {old_size} -> {self.batch_sizes[modality]}")
         return optimization_applied
 
     async def optimize_gpu_memory(self) -> Dict[str, Any]:
@@ -197,11 +189,7 @@ class MultiModalPerformanceMonitor:
             return False
 
         try:
-            if (
-                enable
-                and hasattr(torch.cuda, "amp")
-                and torch.cuda.get_device_capability()[0] >= 7
-            ):
+            if enable and hasattr(torch.cuda, "amp") and torch.cuda.get_device_capability()[0] >= 7:
                 # RTX 4070 supports Tensor cores (compute capability 8.9)
                 logger.info("Mixed precision enabled for RTX 4070 Tensor cores")
                 return True
@@ -212,9 +200,7 @@ class MultiModalPerformanceMonitor:
             logger.error("Failed to enable mixed precision: %s", e)
             return False
 
-    def _emit_prometheus_metrics(
-        self, cpu_percent: float, memory_percent: float, gpu_stats: Dict[str, Any]
-    ) -> None:
+    def _emit_prometheus_metrics(self, cpu_percent: float, memory_percent: float, gpu_stats: Dict[str, Any]) -> None:
         """
         Emit Prometheus system and GPU metrics.
 
@@ -268,9 +254,7 @@ class MultiModalPerformanceMonitor:
             "optimization_status": {
                 "last_optimization": last_optimization,
                 "time_since_optimization": timestamp - last_optimization,
-                "needs_optimization": (
-                    timestamp - last_optimization > self.optimization_interval
-                ),
+                "needs_optimization": (timestamp - last_optimization > self.optimization_interval),
             },
         }
 
@@ -321,9 +305,7 @@ class MultiModalPerformanceMonitor:
 
             return {
                 "device_name": self.device_properties.name,
-                "compute_capability": (
-                    f"{self.device_properties.major}.{self.device_properties.minor}"
-                ),
+                "compute_capability": (f"{self.device_properties.major}.{self.device_properties.minor}"),
                 "total_memory_gb": self.total_gpu_memory / 1024**3,
                 "allocated_mb": allocated / 1024 / 1024,
                 "reserved_mb": reserved / 1024 / 1024,
@@ -376,20 +358,14 @@ class MultiModalPerformanceMonitor:
                 recent_5min = [x for x in history if current_time - x[0] <= 300]
 
                 throughput[modality] = {
-                    "items_per_second_1min": (
-                        len(recent_1min) / 60 if recent_1min else 0
-                    ),
-                    "items_per_second_5min": (
-                        len(recent_5min) / 300 if recent_5min else 0
-                    ),
+                    "items_per_second_1min": (len(recent_1min) / 60 if recent_1min else 0),
+                    "items_per_second_5min": (len(recent_5min) / 300 if recent_5min else 0),
                     "total_processed": len(history),
                 }
 
         return throughput
 
-    def record_processing(
-        self, modality: str, processing_time: float, items_processed: int = 1
-    ):
+    def record_processing(self, modality: str, processing_time: float, items_processed: int = 1):
         """Record processing completion for performance tracking (thread-safe).
 
         Issue #473: Now also emits Prometheus metrics for multi-modal processing.
@@ -435,16 +411,12 @@ class MultiModalPerformanceMonitor:
 
         # Calculate averages outside lock
         avg_cpu = np.mean([m.get("cpu_utilization", 0) for m in recent_metrics])
-        avg_ram = np.mean(
-            [m.get("ram_usage", {}).get("percent", 0) for m in recent_metrics]
-        )
+        avg_ram = np.mean([m.get("ram_usage", {}).get("percent", 0) for m in recent_metrics])
 
         gpu_utilization = 0
         if self.gpu_available and recent_metrics:
             gpu_utils = [
-                m.get("gpu_stats", {}).get("utilization_percent", 0)
-                for m in recent_metrics
-                if m.get("gpu_stats")
+                m.get("gpu_stats", {}).get("utilization_percent", 0) for m in recent_metrics if m.get("gpu_stats")
             ]
             gpu_utilization = np.mean(gpu_utils) if gpu_utils else 0
 
@@ -460,13 +432,9 @@ class MultiModalPerformanceMonitor:
             "average_gpu_utilization": float(gpu_utilization),
             "current_batch_sizes": batch_sizes_copy,
             "gpu_available": self.gpu_available,
-            "mixed_precision_capable": (
-                self.gpu_available and hasattr(torch.cuda, "amp")
-            ),
+            "mixed_precision_capable": (self.gpu_available and hasattr(torch.cuda, "amp")),
             "last_optimization": last_optimization,
-            "optimization_status": (
-                "recent" if time.time() - last_optimization < 60 else "needed"
-            ),
+            "optimization_status": ("recent" if time.time() - last_optimization < 60 else "needed"),
         }
 
 

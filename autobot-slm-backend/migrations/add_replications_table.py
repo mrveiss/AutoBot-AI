@@ -42,15 +42,9 @@ def migrate(db_url: str) -> None:
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        create_index_if_not_exists(
-            cursor, "idx_replications_source_node", "replications", "source_node_id"
-        )
-        create_index_if_not_exists(
-            cursor, "idx_replications_target_node", "replications", "target_node_id"
-        )
-        create_index_if_not_exists(
-            cursor, "idx_replications_status", "replications", "status"
-        )
+        create_index_if_not_exists(cursor, "idx_replications_source_node", "replications", "source_node_id")
+        create_index_if_not_exists(cursor, "idx_replications_target_node", "replications", "target_node_id")
+        create_index_if_not_exists(cursor, "idx_replications_status", "replications", "status")
         logger.info("Created replications table")
     else:
         logger.info("replications table already exists")
@@ -73,9 +67,7 @@ def migrate(db_url: str) -> None:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        create_index_if_not_exists(
-            cursor, "idx_update_info_node_id", "update_info", "node_id"
-        )
+        create_index_if_not_exists(cursor, "idx_update_info_node_id", "update_info", "node_id")
         logger.info("Created update_info table")
     else:
         logger.info("update_info table already exists")

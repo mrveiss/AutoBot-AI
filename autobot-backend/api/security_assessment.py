@@ -51,9 +51,7 @@ class AdvancePhaseRequest(BaseModel):
     """Request to advance to the next phase."""
 
     reason: str = Field("", description="Reason for phase transition")
-    target_phase: Optional[str] = Field(
-        None, description="Specific phase to transition to"
-    )
+    target_phase: Optional[str] = Field(None, description="Specific phase to transition to")
 
 
 class AddHostRequest(BaseModel):
@@ -101,9 +99,7 @@ class ParseToolOutputRequest(BaseModel):
     """Request to parse tool output."""
 
     output: str = Field(..., min_length=1, description="Raw tool output")
-    tool: Optional[str] = Field(
-        None, description="Tool name (auto-detect if not provided)"
-    )
+    tool: Optional[str] = Field(None, description="Tool name (auto-detect if not provided)")
 
 
 class RecoverErrorRequest(BaseModel):
@@ -421,9 +417,7 @@ async def advance_phase(
     )
 
     if not assessment:
-        raise HTTPException(
-            status_code=400, detail="Invalid phase transition or assessment not found"
-        )
+        raise HTTPException(status_code=400, detail="Invalid phase transition or assessment not found")
 
     return JSONResponse(
         status_code=200,
@@ -683,10 +677,7 @@ async def get_findings(
 
     if severity:
         findings = [
-            f
-            for f in findings
-            if f.get("data", {}).get("severity") == severity
-            or f.get("severity") == severity
+            f for f in findings if f.get("data", {}).get("severity") == severity or f.get("severity") == severity
         ]
 
     vulnerabilities = _collect_host_vulnerabilities(assessment, severity)
@@ -934,9 +925,7 @@ async def recover_from_error(
     )
 
     if not assessment:
-        raise HTTPException(
-            status_code=400, detail="Recovery failed or assessment not found"
-        )
+        raise HTTPException(status_code=400, detail="Recovery failed or assessment not found")
 
     return JSONResponse(
         status_code=200,
@@ -969,10 +958,7 @@ async def get_phase_definitions(
         content={
             "success": True,
             "data": {
-                "phases": {
-                    phase.value: PHASE_DESCRIPTIONS.get(phase.value, {})
-                    for phase in AssessmentPhase
-                },
+                "phases": {phase.value: PHASE_DESCRIPTIONS.get(phase.value, {}) for phase in AssessmentPhase},
                 "transitions": VALID_TRANSITIONS,
             },
         },

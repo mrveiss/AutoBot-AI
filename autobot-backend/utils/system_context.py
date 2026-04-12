@@ -189,9 +189,7 @@ def get_compatible_os_list(os_name: str) -> List[str]:
     return os_families.get(os_name, [os_name])
 
 
-def generate_unique_key(
-    machine_id: str, os_name: str, command: str, section: str
-) -> str:
+def generate_unique_key(machine_id: str, os_name: str, command: str, section: str) -> str:
     """
     Generate unique key for man page deduplication
 

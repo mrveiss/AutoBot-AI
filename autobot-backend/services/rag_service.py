@@ -70,9 +70,7 @@ class RAGService:
         # Neural Mesh RAG retriever (Issue #2059); set externally when Phase 3 is active.
         self._mesh_retriever: Optional[Any] = None
 
-        logger.info(
-            f"RAGService initialized with {self.kb_adapter.implementation_type}"
-        )
+        logger.info(f"RAGService initialized with {self.kb_adapter.implementation_type}")
 
     async def initialize(self) -> bool:
         """
@@ -90,9 +88,7 @@ class RAGService:
             # Create optimizer instance
             # Issue #2034: Pass rerank_weights at construction time so
             # RAGConfig.rerank_weights is honoured instead of defaulting to 0.8/0.2.
-            self.optimizer = AdvancedRAGOptimizer(
-                rerank_weights=self.config.rerank_weights
-            )
+            self.optimizer = AdvancedRAGOptimizer(rerank_weights=self.config.rerank_weights)
 
             # Configure from settings
             self.optimizer.hybrid_weight_semantic = self.config.hybrid_weight_semantic
@@ -167,8 +163,7 @@ class RAGService:
                 filtered = self._filter_by_categories(results, categories)[:max_results]
                 if not filtered and unfiltered_count > 0:
                     logger.warning(
-                        "Category filter %s eliminated all %d results — "
-                        "returning unfiltered results instead",
+                        "Category filter %s eliminated all %d results — " "returning unfiltered results instead",
                         categories,
                         unfiltered_count,
                     )
@@ -182,14 +177,10 @@ class RAGService:
                     )
                 metrics.final_results_count = len(results)
             await self._add_to_cache(cache_key, (results, metrics))
-            logger.info(
-                f"Advanced search completed: {len(results)} results in {metrics.total_time:.3f}s"
-            )
+            logger.info(f"Advanced search completed: {len(results)} results in {metrics.total_time:.3f}s")
             return results, metrics
         except asyncio.TimeoutError:
-            logger.error(
-                f"Advanced search timed out after {timeout_seconds}s, using fallback"
-            )
+            logger.error(f"Advanced search timed out after {timeout_seconds}s, using fallback")
             if self.config.fallback_to_basic_search:
                 return await self._fallback_basic_search(query, max_results)
             raise
@@ -199,9 +190,7 @@ class RAGService:
                 return await self._fallback_basic_search(query, max_results)
             raise
 
-    async def _check_topic_cache(
-        self, query: str
-    ) -> Optional[Tuple[List[SearchResult], RAGMetrics]]:
+    async def _check_topic_cache(self, query: str) -> Optional[Tuple[List[SearchResult], RAGMetrics]]:
         """Check topic retrieval cache for related chunks. Issue #1376."""
         try:
             from knowledge.facts import _generate_embedding_with_npu_fallback
@@ -259,9 +248,7 @@ class RAGService:
         except Exception as exc:
             logger.debug("Topic cache store failed: %s", exc)
 
-    async def _check_semantic_cache(
-        self, query: str
-    ) -> Optional[Tuple[List[SearchResult], RAGMetrics]]:
+    async def _check_semantic_cache(self, query: str) -> Optional[Tuple[List[SearchResult], RAGMetrics]]:
         """Check semantic query cache for similar past queries. Issue #1372."""
         try:
             sem_cache = await get_semantic_query_cache()
@@ -387,9 +374,7 @@ class RAGService:
             learner = get_retrieval_learner()
             await learner.record_pattern_outcome(pattern_hash, success, user_id=user_id)
         except Exception as exc:
-            logger.debug(
-                "RetrievalLearner outcome recording failed (non-fatal): %s", exc
-            )
+            logger.debug("RetrievalLearner outcome recording failed (non-fatal): %s", exc)
 
     async def _emit_retrieval_feedback(
         self,
@@ -486,18 +471,14 @@ class RAGService:
         sem_result = await self._check_semantic_cache(query)
         if sem_result is not None:
             context_text = sem_result[0][0].content if sem_result[0] else ""
-            cached_at = (
-                sem_result[0][0].metadata.get("cached_at", 0) if sem_result[0] else 0
-            )
+            cached_at = sem_result[0][0].metadata.get("cached_at", 0) if sem_result[0] else 0
             check = await evaluator.evaluate(query, context_text, cached_at)
             if check.verdict != SufficiencyVerdict.INSUFFICIENT:
                 return sem_result + ("",)
             logger.info("Semantic cache hit rejected: %s", check.reason)
 
         # Tier 1: Exact-match cache
-        cache_key = self._build_cache_key(
-            query, max_results, enable_reranking, categories
-        )
+        cache_key = self._build_cache_key(query, max_results, enable_reranking, categories)
         cached_result = await self._get_from_cache(cache_key)
         if cached_result:
             context_text = " ".join(r.content for r in cached_result[0][:3])
@@ -562,9 +543,7 @@ class RAGService:
         complexity = classifier.classify(query)
         ranked_ids = [r.metadata.get("chunk_id", r.source_path) for r in results]
         pre_rerank_order = sorted(results, key=lambda r: r.hybrid_score, reverse=True)
-        retrieved_ids = [
-            r.metadata.get("chunk_id", r.source_path) for r in pre_rerank_order
-        ]
+        retrieved_ids = [r.metadata.get("chunk_id", r.source_path) for r in pre_rerank_order]
         await self._emit_retrieval_feedback(
             query=query,
             retrieved_ids=retrieved_ids,
@@ -606,9 +585,7 @@ class RAGService:
         if not self.config.enable_advanced_rag:
             return await self._fallback_basic_search(query, max_results, categories)
 
-        hit = await self._check_cache_tiers(
-            query, max_results, enable_reranking, categories
-        )
+        hit = await self._check_cache_tiers(query, max_results, enable_reranking, categories)
         if hit is not None:
             return hit[0], hit[1]
 
@@ -630,9 +607,7 @@ class RAGService:
             user_id=user_id,
         )
 
-        cache_key = self._build_cache_key(
-            query, max_results, enable_reranking, categories
-        )
+        cache_key = self._build_cache_key(query, max_results, enable_reranking, categories)
         timeout_seconds = timeout or self.config.timeout_seconds
         results, metrics = await self._execute_and_cache_search(
             query,
@@ -732,9 +707,7 @@ class RAGService:
                 search_results.append(sr)
 
             # Apply reranking
-            reranked = await self.optimizer._rerank_with_cross_encoder(
-                query, search_results
-            )
+            reranked = await self.optimizer._rerank_with_cross_encoder(query, search_results)
 
             # Convert back to dictionaries
             reranked_dicts = []
@@ -873,9 +846,7 @@ class RAGService:
             logger.error("Basic search fallback failed: %s", e)
             return [], metrics
 
-    async def _get_from_cache(
-        self, cache_key: str
-    ) -> Optional[Tuple[List[SearchResult], RAGMetrics]]:
+    async def _get_from_cache(self, cache_key: str) -> Optional[Tuple[List[SearchResult], RAGMetrics]]:
         """Get results from cache if not expired."""
         # CRITICAL: Protect cache access with lock to prevent race conditions
         async with self._cache_lock:
@@ -888,9 +859,7 @@ class RAGService:
                     del self._cache[cache_key]
         return None
 
-    async def _add_to_cache(
-        self, cache_key: str, results: Tuple[List[SearchResult], RAGMetrics]
-    ):
+    async def _add_to_cache(self, cache_key: str, results: Tuple[List[SearchResult], RAGMetrics]):
         """Add results to cache with timestamp.
 
         Args:

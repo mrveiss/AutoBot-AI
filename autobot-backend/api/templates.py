@@ -15,12 +15,12 @@ import logging
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from constants.error_constants import ERR_TEMPLATE_NOT_FOUND
 from pydantic import BaseModel
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_types import TaskComplexity
+from constants.error_constants import ERR_TEMPLATE_NOT_FOUND
 from utils.advanced_cache_manager import smart_cache
 from workflow_templates import TemplateCategory, workflow_template_manager
 
@@ -101,9 +101,7 @@ async def list_workflow_templates(
             try:
                 category_filter = TemplateCategory(category.lower())
             except ValueError:
-                raise HTTPException(
-                    status_code=400, detail=f"Invalid category: {category}"
-                )
+                raise HTTPException(status_code=400, detail=f"Invalid category: {category}")
 
         # Apply tags filter
         tags_filter = None
@@ -112,9 +110,7 @@ async def list_workflow_templates(
 
         # Get filtered templates
         if category_filter or tags_filter:
-            template_list = workflow_template_manager.list_templates(
-                category=category_filter, tags=tags_filter
-            )
+            template_list = workflow_template_manager.list_templates(category=category_filter, tags=tags_filter)
         else:
             template_list = workflow_template_manager.list_templates()
 
@@ -122,13 +118,9 @@ async def list_workflow_templates(
         if complexity:
             try:
                 complexity_filter = TaskComplexity(complexity.lower())
-                template_list = [
-                    t for t in template_list if t.complexity == complexity_filter
-                ]
+                template_list = [t for t in template_list if t.complexity == complexity_filter]
             except ValueError:
-                raise HTTPException(
-                    status_code=400, detail=f"Invalid complexity: {complexity}"
-                )
+                raise HTTPException(status_code=400, detail=f"Invalid complexity: {complexity}")
 
         # Convert to response format using model method (Issue #372 - reduces feature envy)
         templates = [template.to_summary_dict() for template in template_list]
@@ -181,11 +173,7 @@ async def get_secrets_usage():
     error_code_prefix="TEMPLATES",
 )
 @router.get("/templates/search")
-async def search_templates(
-    q: str = Query(
-        ..., description="Search query for template name, description, or tags"
-    )
-):
+async def search_templates(q: str = Query(..., description="Search query for template name, description, or tags")):
     """Search workflow templates by query string (Issue #372 - uses model methods)"""
     try:
         templates = workflow_template_manager.search_templates(q)
@@ -216,9 +204,7 @@ async def list_template_categories():
         categories = []
         for category in TemplateCategory:
             # Count templates in each category
-            template_count = len(
-                workflow_template_manager.list_templates(category=category)
-            )
+            template_count = len(workflow_template_manager.list_templates(category=category))
             categories.append(
                 {
                     "name": category.value,
@@ -247,16 +233,12 @@ async def get_template_statistics():
         # Category statistics
         category_stats = {}
         for category in TemplateCategory:
-            category_stats[category.value] = len(
-                workflow_template_manager.list_templates(category=category)
-            )
+            category_stats[category.value] = len(workflow_template_manager.list_templates(category=category))
 
         # Complexity statistics
         complexity_stats = {}
         for complexity in TaskComplexity:
-            complexity_stats[complexity.value] = len(
-                workflow_template_manager.get_templates_by_complexity(complexity)
-            )
+            complexity_stats[complexity.value] = len(workflow_template_manager.get_templates_by_complexity(complexity))
 
         # Agent usage statistics
         agent_usage = {}
@@ -296,9 +278,7 @@ async def get_template_statistics():
     error_code_prefix="TEMPLATES",
 )
 @router.get("/templates/{template_id}")
-@smart_cache(
-    data_type="templates", key_func=lambda template_id: f"detail:{template_id}"
-)
+@smart_cache(data_type="templates", key_func=lambda template_id: f"detail:{template_id}")
 async def get_template_details(template_id: str):
     """Get detailed information about a specific template (Issue #372 - uses model methods)"""
     try:
@@ -342,19 +322,13 @@ async def preview_template_workflow(
             try:
                 template_variables = json.loads(variables)
             except json.JSONDecodeError:
-                raise HTTPException(
-                    status_code=400, detail="Invalid JSON in variables parameter"
-                )
+                raise HTTPException(status_code=400, detail="Invalid JSON in variables parameter")
 
         # Create workflow preview
-        workflow_data = workflow_template_manager.create_workflow_from_template(
-            template_id, template_variables
-        )
+        workflow_data = workflow_template_manager.create_workflow_from_template(template_id, template_variables)
 
         if not workflow_data:
-            raise HTTPException(
-                status_code=500, detail="Failed to create workflow preview"
-            )
+            raise HTTPException(status_code=500, detail="Failed to create workflow preview")
 
         # Create preview steps
         preview_steps = []
@@ -371,9 +345,7 @@ async def preview_template_workflow(
             "workflow_preview": preview_steps,
             "variables_used": template_variables,
             "total_steps": len(workflow_data["steps"]),
-            "approval_required_steps": sum(
-                1 for step in workflow_data["steps"] if step["requires_approval"]
-            ),
+            "approval_required_steps": sum(1 for step in workflow_data["steps"] if step["requires_approval"]),
         }
 
     except HTTPException:
@@ -388,14 +360,10 @@ async def preview_template_workflow(
     error_code_prefix="TEMPLATES",
 )
 @router.post("/templates/{template_id}/validate")
-async def validate_template_variables(
-    template_id: str, request: TemplateValidationRequest
-):
+async def validate_template_variables(template_id: str, request: TemplateValidationRequest):
     """Validate variables for a template before execution"""
     try:
-        validation_result = workflow_template_manager.validate_template_variables(
-            template_id, request.variables
-        )
+        validation_result = workflow_template_manager.validate_template_variables(template_id, request.variables)
 
         return {
             "success": True,
@@ -416,9 +384,7 @@ async def validate_template_variables(
     error_code_prefix="TEMPLATES",
 )
 @router.post("/templates/{template_id}/create-workflow")
-async def create_workflow_from_template(
-    template_id: str, request: TemplateExecutionRequest
-):
+async def create_workflow_from_template(template_id: str, request: TemplateExecutionRequest):
     """Create a workflow instance from a template"""
     try:
         # Validate template exists
@@ -428,9 +394,7 @@ async def create_workflow_from_template(
 
         # Validate variables if provided
         if request.variables:
-            validation = workflow_template_manager.validate_template_variables(
-                template_id, request.variables
-            )
+            validation = workflow_template_manager.validate_template_variables(template_id, request.variables)
             if not validation["valid"]:
                 return {
                     "success": False,
@@ -439,14 +403,10 @@ async def create_workflow_from_template(
                 }
 
         # Create workflow from template
-        workflow_data = workflow_template_manager.create_workflow_from_template(
-            template_id, request.variables
-        )
+        workflow_data = workflow_template_manager.create_workflow_from_template(template_id, request.variables)
 
         if not workflow_data:
-            raise HTTPException(
-                status_code=500, detail="Failed to create workflow from template"
-            )
+            raise HTTPException(status_code=500, detail="Failed to create workflow from template")
 
         return {
             "success": True,
@@ -470,18 +430,14 @@ async def create_workflow_from_template(
     error_code_prefix="TEMPLATES",
 )
 @router.post("/templates/{template_id}/execute")
-async def execute_template_workflow(
-    template_id: str, request: TemplateExecutionRequest
-):
+async def execute_template_workflow(template_id: str, request: TemplateExecutionRequest):
     """Execute a workflow directly from a template (#1272).
 
     Creates a workflow via WorkflowAutomationManager so it
     appears in the Runner tab with step-by-step approval gates.
     """
     try:
-        workflow_data = workflow_template_manager.create_workflow_from_template(
-            template_id, request.variables
-        )
+        workflow_data = workflow_template_manager.create_workflow_from_template(template_id, request.variables)
         if not workflow_data:
             raise HTTPException(
                 status_code=404,
@@ -514,9 +470,7 @@ async def execute_template_workflow(
                 "category": workflow_data["category"],
                 "variables_used": workflow_data.get("variables_used", {}),
             },
-            "message": (
-                f"Workflow '{workflow_data['template_name']}' " f"created and started"
-            ),
+            "message": (f"Workflow '{workflow_data['template_name']}' " f"created and started"),
         }
 
     except HTTPException:
@@ -545,10 +499,7 @@ def _convert_template_steps(steps):
                 step_id=step["step_id"],
                 command=step["action"],
                 description=step["description"],
-                explanation=(
-                    f"Agent: {step['agent_type']} | "
-                    f"Inputs: {step.get('inputs', {})}"
-                ),
+                explanation=(f"Agent: {step['agent_type']} | " f"Inputs: {step.get('inputs', {})}"),
                 requires_confirmation=step.get("requires_approval", True),
                 risk_level="medium",
                 estimated_duration=(step.get("expected_duration_ms", 30000) / 1000),
@@ -567,11 +518,7 @@ async def _create_and_start_workflow(
     """Create and auto-start a workflow (#1272)."""
     from services.workflow_automation.models import AutomationMode
 
-    mode = (
-        AutomationMode.AUTOMATIC
-        if request.auto_approve
-        else AutomationMode.SEMI_AUTOMATIC
-    )
+    mode = AutomationMode.AUTOMATIC if request.auto_approve else AutomationMode.SEMI_AUTOMATIC
     workflow_id = await manager.create_automated_workflow(
         name=workflow_data["template_name"],
         description=workflow_data.get("description", ""),

@@ -280,9 +280,7 @@ async def example_database_exhaustion():
 
     print("\nRECOMMENDATION: Escalate to DBA")
     print("  • High success rate (95%) beats speed here")
-    print(
-        "  • 2-minute deadline is tight, but DBA can decide if automated expansion is safe"
-    )
+    print("  • 2-minute deadline is tight, but DBA can decide if automated expansion is safe")
     print("  • Avoid automation (irreversible state mutation in high-load condition)")
 
 
@@ -335,9 +333,7 @@ async def example_enhanced_decision():
         outcome = await reasoner.what_if(action["action"], context, action)
         decision.intervention_effects.append(outcome)
 
-    print(
-        f"Enhanced decision now includes {len(decision.intervention_effects)} predictions:"
-    )
+    print(f"Enhanced decision now includes {len(decision.intervention_effects)} predictions:")
     for effect in decision.intervention_effects:
         print(
             f"  • {effect.option}: {effect.predicted_success_rate:.0%} "
@@ -347,9 +343,7 @@ async def example_enhanced_decision():
     # Show serialization
     print("\nSerialized decision.to_dict():")
     decision_dict = decision.to_dict()
-    print(
-        f"  intervention_effects: {len(decision_dict['intervention_effects'])} entries"
-    )
+    print(f"  intervention_effects: {len(decision_dict['intervention_effects'])} entries")
     for ie in decision_dict["intervention_effects"]:
         print(f"    - {ie['option']}: {ie['predicted_success_rate']:.0%}")
 

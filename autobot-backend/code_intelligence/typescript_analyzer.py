@@ -384,20 +384,14 @@ class TypeScriptAnalyzer(BaseLanguageAnalyzer):
         if not self._load_file(file_path):
             return []
 
-        language = (
-            Language.TYPESCRIPT
-            if file_path.suffix in _TYPESCRIPT_EXTENSIONS
-            else Language.JAVASCRIPT
-        )
+        language = Language.TYPESCRIPT if file_path.suffix in _TYPESCRIPT_EXTENSIONS else Language.JAVASCRIPT
 
         # Run all detection methods
         self._check_blocking_io(language)
         self._check_security_issues(language)
         self._check_anti_patterns(language)
 
-        logger.debug(
-            f"TypeScript Analyzer found {len(self.issues)} issues in {file_path}"
-        )
+        logger.debug(f"TypeScript Analyzer found {len(self.issues)} issues in {file_path}")
         return self.issues
 
     def _should_skip_line(self, line: str, line_num: int) -> bool:
@@ -409,11 +403,7 @@ class TypeScriptAnalyzer(BaseLanguageAnalyzer):
             return True
 
         # Skip comments
-        if (
-            stripped.startswith("//")
-            or stripped.startswith("/*")
-            or stripped.startswith("*")
-        ):
+        if stripped.startswith("//") or stripped.startswith("/*") or stripped.startswith("*"):
             return True
 
         # Skip imports/requires
@@ -461,9 +451,7 @@ class TypeScriptAnalyzer(BaseLanguageAnalyzer):
                                 confidence=confidence,
                                 potential_false_positive=confidence < 0.9,
                                 false_positive_reason=(
-                                    ""
-                                    if confidence >= 0.9
-                                    else "Context may justify sync operation"
+                                    "" if confidence >= 0.9 else "Context may justify sync operation"
                                 ),
                                 rule_id=rule_id,
                                 tags=["blocking-io", "performance", "async"],
@@ -482,9 +470,7 @@ class TypeScriptAnalyzer(BaseLanguageAnalyzer):
         """Create security issue from pattern match (Issue #315 - extracted helper)."""
         recommendation, confidence, rule_id = pattern_data
         if is_critical:
-            severity = (
-                IssueSeverity.CRITICAL if confidence >= 0.90 else IssueSeverity.HIGH
-            )
+            severity = IssueSeverity.CRITICAL if confidence >= 0.90 else IssueSeverity.HIGH
             title = f"Security Issue: {rule_id}"
             description = "Potential security vulnerability detected"
             false_positive = confidence < 0.85
@@ -534,9 +520,7 @@ class TypeScriptAnalyzer(BaseLanguageAnalyzer):
             return
         if is_in_comment(self.source_code, line_num, language):
             return
-        issue = self._create_security_issue(
-            line_num, line, match, pattern_data, language, is_critical
-        )
+        issue = self._create_security_issue(line_num, line, match, pattern_data, language, is_critical)
         self.issues.append(issue)
 
     def _check_security_issues(self, language: Language) -> None:
@@ -546,18 +530,12 @@ class TypeScriptAnalyzer(BaseLanguageAnalyzer):
                 continue
 
             for pattern, pattern_data in SECURITY_PATTERNS_CRITICAL.items():
-                self._check_security_pattern_on_line(
-                    line_num, line, pattern, pattern_data, language, is_critical=True
-                )
+                self._check_security_pattern_on_line(line_num, line, pattern, pattern_data, language, is_critical=True)
 
             for pattern, pattern_data in SECURITY_PATTERNS_MEDIUM.items():
-                self._check_security_pattern_on_line(
-                    line_num, line, pattern, pattern_data, language, is_critical=False
-                )
+                self._check_security_pattern_on_line(line_num, line, pattern, pattern_data, language, is_critical=False)
 
-    def _get_antipattern_severity(
-        self, category: "IssueCategory", confidence: float
-    ) -> "IssueSeverity":
+    def _get_antipattern_severity(self, category: "IssueCategory", confidence: float) -> "IssueSeverity":
         """Determine severity based on category and confidence (Issue #315 - extracted helper)."""
         if category == IssueCategory.SECURITY:
             return IssueSeverity.HIGH
@@ -589,9 +567,7 @@ class TypeScriptAnalyzer(BaseLanguageAnalyzer):
             current_code=line.strip(),
             confidence=confidence,
             potential_false_positive=confidence < 0.75,
-            false_positive_reason=(
-                "" if confidence >= 0.75 else "Context may make this acceptable"
-            ),
+            false_positive_reason=("" if confidence >= 0.75 else "Context may make this acceptable"),
             rule_id=rule_id,
             tags=["anti-pattern", category.value],
         )
@@ -610,9 +586,7 @@ class TypeScriptAnalyzer(BaseLanguageAnalyzer):
             return
         if is_in_comment(self.source_code, line_num, language):
             return
-        issue = self._create_antipattern_issue(
-            line_num, line, match, pattern_data, language
-        )
+        issue = self._create_antipattern_issue(line_num, line, match, pattern_data, language)
         self.issues.append(issue)
 
     def _check_anti_patterns(self, language: Language) -> None:
@@ -622,9 +596,7 @@ class TypeScriptAnalyzer(BaseLanguageAnalyzer):
                 continue
 
             for pattern, pattern_data in ANTI_PATTERN_DEFINITIONS.items():
-                self._check_antipattern_on_line(
-                    line_num, line, pattern, pattern_data, language
-                )
+                self._check_antipattern_on_line(line_num, line, pattern, pattern_data, language)
 
     def _check_await_in_loops(self, language: Language) -> None:
         """Advanced check for sequential awaits that could be parallelized."""

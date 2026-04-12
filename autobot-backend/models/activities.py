@@ -100,10 +100,7 @@ class TerminalActivityModel(Base, TimestampMixin):
     user: Mapped["User"] = relationship("User", back_populates="terminal_activities")
 
     def __repr__(self) -> str:
-        return (
-            f"<TerminalActivity(id={self.id}, user_id={self.user_id}, "
-            f"command={self.command[:50]}...)>"
-        )
+        return f"<TerminalActivity(id={self.id}, user_id={self.user_id}, " f"command={self.command[:50]}...)>"
 
 
 class FileActivityModel(Base, TimestampMixin):
@@ -177,10 +174,7 @@ class FileActivityModel(Base, TimestampMixin):
     user: Mapped["User"] = relationship("User", back_populates="file_activities")
 
     def __repr__(self) -> str:
-        return (
-            f"<FileActivity(id={self.id}, user_id={self.user_id}, "
-            f"operation={self.operation}, path={self.path})>"
-        )
+        return f"<FileActivity(id={self.id}, user_id={self.user_id}, " f"operation={self.operation}, path={self.path})>"
 
 
 class BrowserActivityModel(Base, TimestampMixin):
@@ -257,8 +251,7 @@ class BrowserActivityModel(Base, TimestampMixin):
 
     def __repr__(self) -> str:
         return (
-            f"<BrowserActivity(id={self.id}, user_id={self.user_id}, "
-            f"action={self.action}, url={self.url[:50]}...)>"
+            f"<BrowserActivity(id={self.id}, user_id={self.user_id}, " f"action={self.action}, url={self.url[:50]}...)>"
         )
 
 
@@ -336,10 +329,7 @@ class DesktopActivityModel(Base, TimestampMixin):
     user: Mapped["User"] = relationship("User", back_populates="desktop_activities")
 
     def __repr__(self) -> str:
-        return (
-            f"<DesktopActivity(id={self.id}, user_id={self.user_id}, "
-            f"action={self.action})>"
-        )
+        return f"<DesktopActivity(id={self.id}, user_id={self.user_id}, " f"action={self.action})>"
 
 
 class SecretUsageModel(Base, TimestampMixin):

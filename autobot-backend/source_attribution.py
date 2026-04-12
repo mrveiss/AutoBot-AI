@@ -176,9 +176,7 @@ class SourceAttributionManager:
             **(metadata or {}),
         }
 
-        return self.add_source(
-            SourceType.KNOWLEDGE_BASE, content, SourceReliability.HIGH, kb_metadata
-        )
+        return self.add_source(SourceType.KNOWLEDGE_BASE, content, SourceReliability.HIGH, kb_metadata)
 
     def add_web_source(
         self,
@@ -200,24 +198,16 @@ class SourceAttributionManager:
             "domain_reliability": domain_reliability,
         }
 
-        return self.add_source(
-            SourceType.WEB_SEARCH, content, reliability, web_metadata
-        )
+        return self.add_source(SourceType.WEB_SEARCH, content, reliability, web_metadata)
 
-    def add_system_source(
-        self, content: str, command: Optional[str] = None, output_type: str = "command"
-    ) -> Source:
+    def add_system_source(self, content: str, command: Optional[str] = None, output_type: str = "command") -> Source:
         """Add a system/tool output source"""
         system_metadata = {"output_type": output_type}
         if command:
             system_metadata["command"] = command
 
         return self.add_source(
-            (
-                SourceType.SYSTEM_STATE
-                if output_type == "state"
-                else SourceType.TOOL_OUTPUT
-            ),
+            (SourceType.SYSTEM_STATE if output_type == "state" else SourceType.TOOL_OUTPUT),
             content,
             SourceReliability.VERIFIED,
             system_metadata,
@@ -258,9 +248,7 @@ class SourceAttributionManager:
 
     def to_json(self) -> str:
         """Export current sources as JSON"""
-        return json.dumps(
-            [s.to_dict() for s in self.current_response_sources], indent=2
-        )
+        return json.dumps([s.to_dict() for s in self.current_response_sources], indent=2)
 
 
 # Global instance

@@ -191,9 +191,7 @@ async def list_deployments(
     per_page: int = Query(20, ge=1, le=100),
 ) -> DeploymentListResponse:
     """List deployments with optional filters."""
-    deployments, total = await deployment_service.list_deployments(
-        db, node_id, status_filter, page, per_page
-    )
+    deployments, total = await deployment_service.list_deployments(db, node_id, status_filter, page, per_page)
 
     return DeploymentListResponse(
         deployments=deployments,
@@ -227,10 +225,7 @@ async def create_deployment(
         if owner:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    f"Role '{role}' is already assigned to node "
-                    f"'{owner}'. Migrate or unassign it first."
-                ),
+                detail=(f"Role '{role}' is already assigned to node " f"'{owner}'. Migrate or unassign it first."),
             )
 
     try:

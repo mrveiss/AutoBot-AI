@@ -183,11 +183,7 @@ async def _per_node_systemd_action(
         )
         svc = svc_result.scalar_one_or_none()
         if svc:
-            new_status = (
-                ServiceStatus.STOPPED.value
-                if action == "stop"
-                else ServiceStatus.RUNNING.value
-            )
+            new_status = ServiceStatus.STOPPED.value if action == "stop" else ServiceStatus.RUNNING.value
             svc.status = new_status
             await db.commit()
 
@@ -298,9 +294,7 @@ async def start_service(
 
     # Fall back to SSH systemctl for raw systemd names not in registry
     if not service_orchestrator.registry.get_service(service_name):
-        return await _per_node_systemd_action(
-            db, service_name, "start", request.node_id
-        )
+        return await _per_node_systemd_action(db, service_name, "start", request.node_id)
 
     success, message = await service_orchestrator.start_service(
         db=db,
@@ -369,9 +363,7 @@ async def restart_service(
     request = request or ServiceActionRequest()
 
     if not service_orchestrator.registry.get_service(service_name):
-        return await _per_node_systemd_action(
-            db, service_name, "restart", request.node_id
-        )
+        return await _per_node_systemd_action(db, service_name, "restart", request.node_id)
 
     success, message = await service_orchestrator.restart_service(
         db=db,
@@ -459,10 +451,7 @@ async def start_all_services(
 
     return BulkActionResponse(
         action="start-all",
-        results={
-            name: {"success": success, "message": msg}
-            for name, (success, msg) in results.items()
-        },
+        results={name: {"success": success, "message": msg} for name, (success, msg) in results.items()},
         success_count=success_count,
         failure_count=failure_count,
     )
@@ -499,10 +488,7 @@ async def stop_all_services(
 
     return BulkActionResponse(
         action="stop-all",
-        results={
-            name: {"success": success, "message": msg}
-            for name, (success, msg) in results.items()
-        },
+        results={name: {"success": success, "message": msg} for name, (success, msg) in results.items()},
         success_count=success_count,
         failure_count=failure_count,
     )

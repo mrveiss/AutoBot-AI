@@ -29,9 +29,7 @@ class DomainReputationService:
 
     def __init__(
         self,
-        config_path: str = str(
-            PATH.get_config_path("security", "domain_security.yaml")
-        ),
+        config_path: str = str(PATH.get_config_path("security", "domain_security.yaml")),
     ):
         """Initialize domain reputation service with config, caches, and threat feeds."""
         self.config_path = config_path
@@ -104,11 +102,7 @@ class DomainReputationService:
 
     def _parse_text_feed(self, content: str) -> set:
         """Parse text format threat feed (Issue #315 - extracted helper)."""
-        return set(
-            line.strip()
-            for line in content.split("\n")
-            if line.strip() and not line.startswith("#")
-        )
+        return set(line.strip() for line in content.split("\n") if line.strip() and not line.startswith("#"))
 
     def _parse_feed_content(self, content: str, feed_format: str) -> Optional[set]:
         """Parse feed content based on format (Issue #315 - extracted helper)."""
@@ -140,13 +134,9 @@ class DomainReputationService:
 
             http_client = get_http_client()
             timeout = aiohttp.ClientTimeout(total=config.get("timeout", 10))
-            async with await http_client.get(
-                config["url"], timeout=timeout
-            ) as response:
+            async with await http_client.get(config["url"], timeout=timeout) as response:
                 if response.status != 200:
-                    logger.error(
-                        "Failed to update %s: HTTP %s", feed_name, response.status
-                    )
+                    logger.error("Failed to update %s: HTTP %s", feed_name, response.status)
                     return
 
                 content = await response.text()
@@ -187,9 +177,7 @@ class DomainReputationService:
             return False
         return True
 
-    async def check_domain_reputation(
-        self, domain: str, context: Optional[Dict] = None
-    ) -> Dict:
+    async def check_domain_reputation(self, domain: str, context: Optional[Dict] = None) -> Dict:
         """
         Comprehensive domain reputation check using multiple sources
 
@@ -219,9 +207,7 @@ class DomainReputationService:
 
         return result
 
-    async def _perform_reputation_check(
-        self, domain: str, context: Optional[Dict]
-    ) -> Dict:
+    async def _perform_reputation_check(self, domain: str, context: Optional[Dict]) -> Dict:
         """Perform multi-source reputation check"""
         checks = {
             "domain": domain,
@@ -244,9 +230,7 @@ class DomainReputationService:
         pattern_threats = self._check_domain_patterns(domain)
         if pattern_threats:
             checks["threats_detected"].extend(pattern_threats)
-            checks[
-                "reputation_score"
-            ] -= 0.3  # Moderate penalty for suspicious patterns
+            checks["reputation_score"] -= 0.3  # Moderate penalty for suspicious patterns
 
         # 3. Check external reputation services
         external_results = await self._check_external_services(domain)
@@ -294,9 +278,7 @@ class DomainReputationService:
         for pattern in blacklist:
             if self._match_pattern(domain, pattern):
                 threats.append(f"blacklist_pattern_{pattern}")
-                logger.warning(
-                    "Domain %s matches blacklist pattern: %s", domain, pattern
-                )
+                logger.warning("Domain %s matches blacklist pattern: %s", domain, pattern)
 
         # Check for suspicious characteristics
         if self._is_suspicious_domain(domain):
@@ -330,8 +312,7 @@ class DomainReputationService:
             domain.count(".") > 3,  # Many subdomains
             any(char.isdigit() for char in domain.split(".")[0])
             and len(domain.split(".")[0]) > 8,  # Long subdomain with numbers
-            domain.count("0") + domain.count("1")
-            > len(domain) * 0.3,  # Too many 0s and 1s
+            domain.count("0") + domain.count("1") > len(domain) * 0.3,  # Too many 0s and 1s
         ]
 
         return sum(suspicious_indicators) >= 2
@@ -361,9 +342,7 @@ class DomainReputationService:
         services = self.config.get("domain_security", {}).get("reputation_services", {})
         service_config = services.get(service_name, {})
 
-        return service_config.get("enabled", False) and service_config.get(
-            "api_key", ""
-        )
+        return service_config.get("enabled", False) and service_config.get("api_key", "")
 
     async def _check_virustotal(self, domain: str) -> Optional[Dict]:
         """Check domain reputation with VirusTotal API"""
@@ -379,9 +358,7 @@ class DomainReputationService:
 
             http_client = get_http_client()
             timeout = aiohttp.ClientTimeout(total=config.get("timeout", 5.0))
-            async with await http_client.get(
-                url, params=params, timeout=timeout
-            ) as response:
+            async with await http_client.get(url, params=params, timeout=timeout) as response:
                 if response.status == 200:
                     data = await response.json()
 
@@ -395,9 +372,7 @@ class DomainReputationService:
                         "total": total,
                         "malicious": positives > 0,
                         "suspicious": (positives > total * 0.1 if total > 0 else False),
-                        "reputation_score": (
-                            max(0, 1 - (positives / total)) if total > 0 else 1.0
-                        ),
+                        "reputation_score": (max(0, 1 - (positives / total)) if total > 0 else 1.0),
                         "raw_response": data,
                     }
                 else:
@@ -434,9 +409,7 @@ class DomainReputationService:
                         "service": "urlvoid",
                         "malicious": malicious,
                         "suspicious": suspicious,
-                        "reputation_score": (
-                            0.0 if malicious else 0.5 if suspicious else 1.0
-                        ),
+                        "reputation_score": (0.0 if malicious else 0.5 if suspicious else 1.0),
                         "raw_response": content[:500],  # Truncated for storage
                     }
                 else:
@@ -460,12 +433,8 @@ class DomainReputationService:
 
     def _determine_action(self, checks: Dict) -> str:
         """Determine action based on reputation assessment"""
-        threshold = self.config.get("domain_security", {}).get(
-            "reputation_threshold", 0.7
-        )
-        default_action = self.config.get("domain_security", {}).get(
-            "default_action", "warn"
-        )
+        threshold = self.config.get("domain_security", {}).get("reputation_threshold", 0.7)
+        default_action = self.config.get("domain_security", {}).get("default_action", "warn")
 
         if checks["reputation_score"] < threshold:
             if checks["risk_level"] == "critical":
@@ -491,14 +460,10 @@ class DomainReputationService:
             **self.stats,
             "cache_size": len(self.reputation_cache),
             "threat_feeds_loaded": len(self.threat_feeds),
-            "cache_hit_rate": (
-                self.stats["cache_hits"] / max(1, self.stats["total_checks"])
-            ),
+            "cache_hit_rate": (self.stats["cache_hits"] / max(1, self.stats["total_checks"])),
         }
 
-    async def bulk_check_domains(
-        self, domains: List[str], context: Optional[Dict] = None
-    ) -> List[Dict]:
+    async def bulk_check_domains(self, domains: List[str], context: Optional[Dict] = None) -> List[Dict]:
         """Check multiple domains concurrently"""
         max_concurrent = self.config.get("performance", {}).get("concurrent_checks", 5)
         semaphore = asyncio.Semaphore(max_concurrent)

@@ -38,11 +38,7 @@ def _get_config_default(key: str, fallback: str) -> str:
     """Get configuration value with fallback."""
     if _config_available:
         try:
-            return str(
-                unified_config_manager.get_config_section("terminal_input", {}).get(
-                    key, fallback
-                )
-            )
+            return str(unified_config_manager.get_config_section("terminal_input", {}).get(key, fallback))
         except Exception:
             return fallback
     return fallback
@@ -104,9 +100,7 @@ class TerminalInputHandler:
         self.mock_responses = responses
         self._mock_index = 0
 
-    def get_input(
-        self, prompt: str = "", timeout: float = None, default: str = ""
-    ) -> str:
+    def get_input(self, prompt: str = "", timeout: float = None, default: str = "") -> str:
         """
         Get input from user with timeout and testing support.
 
@@ -196,9 +190,7 @@ class TerminalInputHandler:
             return (
                 numbers[0]
                 if numbers
-                else os.getenv(
-                    "AUTOBOT_DEFAULT_CHOICE", _get_config_default("default_choice", "1")
-                )
+                else os.getenv("AUTOBOT_DEFAULT_CHOICE", _get_config_default("default_choice", "1"))
             )
 
         # Check command pattern (requires both keywords)
@@ -258,9 +250,7 @@ class TerminalInputHandler:
         except queue.Empty:
             raise InputTimeoutError(f"Input timeout after {timeout} seconds")
 
-    async def get_input_async(
-        self, prompt: str = "", timeout: float = None, default: str = ""
-    ) -> str:
+    async def get_input_async(self, prompt: str = "", timeout: float = None, default: str = "") -> str:
         """
         Asynchronous version of get_input.
 
@@ -376,9 +366,7 @@ def safe_input(prompt: str = "", timeout: float = None, default: str = "") -> st
         return default
 
 
-async def safe_input_async(
-    prompt: str = "", timeout: float = None, default: str = ""
-) -> str:
+async def safe_input_async(prompt: str = "", timeout: float = None, default: str = "") -> str:
     """
     Asynchronous safe input function.
 
@@ -392,11 +380,7 @@ async def safe_input_async(
     """
     # Use environment default for timeout if not specified
     if timeout is None:
-        timeout = float(
-            os.getenv(
-                "AUTOBOT_INPUT_TIMEOUT", _get_config_default("default_timeout", "30.0")
-            )
-        )
+        timeout = float(os.getenv("AUTOBOT_INPUT_TIMEOUT", _get_config_default("default_timeout", "30.0")))
 
     handler = get_terminal_input_handler()
     return await handler.get_input_async(prompt, timeout, default)
@@ -426,27 +410,13 @@ def configure_testing_defaults():
 
     # Common testing defaults - use configuration-driven fallbacks
     testing_defaults = {
-        "yes/no": os.getenv(
-            "AUTOBOT_DEFAULT_YES_NO", _get_config_default("default_yes_no", "y")
-        ),
-        "y/n": os.getenv(
-            "AUTOBOT_DEFAULT_YES_NO", _get_config_default("default_yes_no", "y")
-        ),
-        "continue": os.getenv(
-            "AUTOBOT_DEFAULT_CONTINUE", _get_config_default("default_continue", "y")
-        ),
-        "choice": os.getenv(
-            "AUTOBOT_DEFAULT_CHOICE", _get_config_default("default_choice", "1")
-        ),
-        "select": os.getenv(
-            "AUTOBOT_DEFAULT_CHOICE", _get_config_default("default_choice", "1")
-        ),
-        "enter your choice": os.getenv(
-            "AUTOBOT_DEFAULT_CHOICE", _get_config_default("default_choice", "1")
-        ),
-        "command": os.getenv(
-            "AUTOBOT_DEFAULT_COMMAND", _get_config_default("default_command", "help")
-        ),
+        "yes/no": os.getenv("AUTOBOT_DEFAULT_YES_NO", _get_config_default("default_yes_no", "y")),
+        "y/n": os.getenv("AUTOBOT_DEFAULT_YES_NO", _get_config_default("default_yes_no", "y")),
+        "continue": os.getenv("AUTOBOT_DEFAULT_CONTINUE", _get_config_default("default_continue", "y")),
+        "choice": os.getenv("AUTOBOT_DEFAULT_CHOICE", _get_config_default("default_choice", "1")),
+        "select": os.getenv("AUTOBOT_DEFAULT_CHOICE", _get_config_default("default_choice", "1")),
+        "enter your choice": os.getenv("AUTOBOT_DEFAULT_CHOICE", _get_config_default("default_choice", "1")),
+        "command": os.getenv("AUTOBOT_DEFAULT_COMMAND", _get_config_default("default_command", "help")),
         "filename": os.getenv(
             "AUTOBOT_TEST_FILENAME",
             _get_config_default("test_filename", "test_file.txt"),
@@ -455,9 +425,7 @@ def configure_testing_defaults():
             "AUTOBOT_TEST_PATH",
             _get_config_default("test_path", "/tmp/test"),  # nosec B108
         ),
-        "name": os.getenv(
-            "AUTOBOT_TEST_USER_NAME", _get_config_default("test_user_name", "test_user")
-        ),
+        "name": os.getenv("AUTOBOT_TEST_USER_NAME", _get_config_default("test_user_name", "test_user")),
         "port": os.getenv(
             "AUTOBOT_AI_STACK_PORT",
             _get_config_default("default_port", str(NetworkConstants.AI_STACK_PORT)),
@@ -467,9 +435,7 @@ def configure_testing_defaults():
             _get_config_default("default_host", NetworkConstants.AI_STACK_VM_IP),
         ),
         "url": get_service_url("ai-stack"),
-        "email": os.getenv(
-            "AUTOBOT_TEST_EMAIL", _get_config_default("test_email", "test@example.com")
-        ),
+        "email": os.getenv("AUTOBOT_TEST_EMAIL", _get_config_default("test_email", "test@example.com")),
     }
 
     handler.default_responses.update(testing_defaults)
@@ -489,11 +455,7 @@ def patch_builtin_input():
 
     def patched_input(prompt=""):
         """Replacement input function with timeout support."""
-        timeout = float(
-            os.getenv(
-                "AUTOBOT_INPUT_TIMEOUT", _get_config_default("default_timeout", "30.0")
-            )
-        )
+        timeout = float(os.getenv("AUTOBOT_INPUT_TIMEOUT", _get_config_default("default_timeout", "30.0")))
         return safe_input(prompt, timeout=timeout, default="")
 
     builtins.input = patched_input

@@ -34,9 +34,7 @@ class ConnectionState(Enum):
 
 
 # Issue #380: Module-level frozenset for disconnected states
-_DISCONNECTED_STATES: FrozenSet[ConnectionState] = frozenset(
-    {ConnectionState.ERROR, ConnectionState.DISCONNECTED}
-)
+_DISCONNECTED_STATES: FrozenSet[ConnectionState] = frozenset({ConnectionState.ERROR, ConnectionState.DISCONNECTED})
 
 
 @dataclass
@@ -105,15 +103,11 @@ class WebSocketManager:
                     await self._check_connection_health(connection_id, current_time)
 
                 # Wait before next check
-                await asyncio.sleep(
-                    TimingConstants.STANDARD_DELAY
-                )  # Check every second
+                await asyncio.sleep(TimingConstants.STANDARD_DELAY)  # Check every second
 
             except Exception as e:
                 logger.error("Error in heartbeat loop: %s", e)
-                await asyncio.sleep(
-                    TimingConstants.ERROR_RECOVERY_DELAY
-                )  # Wait longer on error
+                await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY)  # Wait longer on error
 
     async def _check_connection_health(self, connection_id: str, current_time: float):
         """Check health of a specific connection (thread-safe)"""
@@ -141,22 +135,16 @@ class WebSocketManager:
                     missed_count = self.missed_heartbeats.get(connection_id, 0) + 1
                     self.missed_heartbeats[connection_id] = missed_count
 
-                logger.warning(
-                    "Missed heartbeat #%s for %s", missed_count, connection_id
-                )
+                logger.warning("Missed heartbeat #%s for %s", missed_count, connection_id)
 
                 if missed_count >= self.config.max_missed_heartbeats:
                     await self._handle_connection_lost(connection_id)
                 else:
                     # Reset state and try again
                     async with self._lock:
-                        self.connection_states[connection_id] = (
-                            ConnectionState.CONNECTED
-                        )
+                        self.connection_states[connection_id] = ConnectionState.CONNECTED
 
-    async def _send_heartbeat(
-        self, connection_id: str, websocket: WebSocket, current_time: float
-    ):
+    async def _send_heartbeat(self, connection_id: str, websocket: WebSocket, current_time: float):
         """Send heartbeat ping to connection (thread-safe)"""
         try:
             heartbeat_message = {
@@ -296,9 +284,7 @@ class WebSocketManager:
 
             # Handle heartbeat responses
             if message_type == "heartbeat_response":
-                await self._handle_heartbeat_response(
-                    connection_id, message_data, current_time
-                )
+                await self._handle_heartbeat_response(connection_id, message_data, current_time)
                 return True
 
             # Handle other message types
@@ -315,9 +301,7 @@ class WebSocketManager:
             logger.error("Error handling message from %s: %s", connection_id, e)
             return False
 
-    async def _handle_heartbeat_response(
-        self, connection_id: str, message_data: Dict[str, Any], current_time: float
-    ):
+    async def _handle_heartbeat_response(self, connection_id: str, message_data: Dict[str, Any], current_time: float):
         """Handle heartbeat response from client (thread-safe)"""
         logger.debug("💓 Heartbeat response received from %s", connection_id)
 
@@ -329,9 +313,7 @@ class WebSocketManager:
 
         # Send acknowledgment outside lock
         if websocket:
-            await websocket.send_json(
-                {"type": "heartbeat_ack", "timestamp": current_time}
-            )
+            await websocket.send_json({"type": "heartbeat_ack", "timestamp": current_time})
 
     async def _echo_message(self, connection_id: str, message_data: Dict[str, Any]):
         """Default echo behavior for unknown message types (thread-safe)"""
@@ -339,18 +321,14 @@ class WebSocketManager:
             websocket = self.active_connections.get(connection_id)
 
         if websocket:
-            await websocket.send_json(
-                {"type": "echo", "original": message_data, "timestamp": time.time()}
-            )
+            await websocket.send_json({"type": "echo", "original": message_data, "timestamp": time.time()})
 
     def register_message_handler(self, message_type: str, handler: Callable):
         """Register handler for specific message types"""
         self.message_handlers[message_type] = handler
         logger.info("📝 Registered handler for message type: %s", message_type)
 
-    async def broadcast_message(
-        self, message: Dict[str, Any], exclude: Optional[Set[str]] = None
-    ):
+    async def broadcast_message(self, message: Dict[str, Any], exclude: Optional[Set[str]] = None):
         """Broadcast message to all active connections (thread-safe)"""
         exclude = exclude or set()
         message["timestamp"] = time.time()
@@ -390,9 +368,7 @@ class WebSocketManager:
         async with self._lock:
             connection_ids = list(self.active_connections.keys())
             states_copy = {k: v for k, v in self.connection_states.items()}
-            heartbeat_received_copy = {
-                k: v for k, v in self.last_heartbeat_received.items()
-            }
+            heartbeat_received_copy = {k: v for k, v in self.last_heartbeat_received.items()}
             missed_copy = {k: v for k, v in self.missed_heartbeats.items()}
 
         stats = {

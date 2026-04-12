@@ -122,9 +122,7 @@ class UIElement:
         Returns None if no automation opportunity exists.
         (Feature Envy fix - moved logic from UIElementCollection)
         """
-        if self.is_button() and self.matches_automation_pattern(
-            FORM_SUBMISSION_KEYWORDS
-        ):
+        if self.is_button() and self.matches_automation_pattern(FORM_SUBMISSION_KEYWORDS):
             return {
                 "type": "form_submission",
                 "element_id": self.element_id,
@@ -179,9 +177,7 @@ class ScreenState:
     automation_opportunities: List[Dict[str, Any]]
     context_analysis: Dict[str, Any]
     confidence_score: float
-    multimodal_analysis: Optional[List[Dict[str, Any]]] = (
-        None  # New field for multi-modal processing results
-    )
+    multimodal_analysis: Optional[List[Dict[str, Any]]] = None  # New field for multi-modal processing results
 
     def get_element_collection(self) -> "UIElementCollection":
         """Get UI elements as a collection with analysis methods"""
@@ -217,9 +213,7 @@ class ScreenState:
                 {
                     "type": "automation",
                     "priority": "high",
-                    "description": (
-                        f"Found {len(self.automation_opportunities)} automation opportunities"
-                    ),
+                    "description": (f"Found {len(self.automation_opportunities)} automation opportunities"),
                     "actions": ["create_automation_workflow", "test_interactions"],
                 }
             )
@@ -231,9 +225,7 @@ class ScreenState:
                 {
                     "type": "ui_analysis",
                     "priority": "medium",
-                    "description": (
-                        f"{low_confidence_count} elements have low detection confidence"
-                    ),
+                    "description": (f"{low_confidence_count} elements have low detection confidence"),
                     "actions": ["improve_detection", "manual_verification"],
                 }
             )

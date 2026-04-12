@@ -33,9 +33,7 @@ _celery_results_db = DATABASE_MAPPING["celery_results"]
 
 # Issue #725: Check if TLS is enabled for Redis connections
 _redis_tls_enabled = ssot_config.tls.redis_tls_enabled
-_redis_port = (
-    ssot_config.tls.redis_tls_port if _redis_tls_enabled else ssot_config.port.redis
-)
+_redis_port = ssot_config.tls.redis_tls_port if _redis_tls_enabled else ssot_config.port.redis
 _redis_scheme = "rediss" if _redis_tls_enabled else "redis"
 
 # Build SSL context for TLS connections - Issue #725, #164
@@ -71,18 +69,12 @@ if _redis_password:
     _default_broker_url = f"{_redis_scheme}://:{_encoded_password}@{_redis_host}:{_redis_port}/{_celery_broker_db}"
     _default_backend_url = f"{_redis_scheme}://:{_encoded_password}@{_redis_host}:{_redis_port}/{_celery_results_db}"
 else:
-    _default_broker_url = (
-        f"{_redis_scheme}://{_redis_host}:{_redis_port}/{_celery_broker_db}"
-    )
-    _default_backend_url = (
-        f"{_redis_scheme}://{_redis_host}:{_redis_port}/{_celery_results_db}"
-    )
+    _default_broker_url = f"{_redis_scheme}://{_redis_host}:{_redis_port}/{_celery_broker_db}"
+    _default_backend_url = f"{_redis_scheme}://{_redis_host}:{_redis_port}/{_celery_results_db}"
 
 # Get Celery-specific configuration
 _celery_config = config.get("celery", {})
-_visibility_timeout = _celery_config.get(
-    "visibility_timeout", 43200
-)  # 12 hours default
+_visibility_timeout = _celery_config.get("visibility_timeout", 43200)  # 12 hours default
 _result_expires = _celery_config.get("result_expires", 86400)  # 24 hours default
 _worker_prefetch = _celery_config.get("worker_prefetch_multiplier", 1)
 _worker_max_tasks = _celery_config.get("worker_max_tasks_per_child", 100)

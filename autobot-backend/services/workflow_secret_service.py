@@ -187,9 +187,7 @@ class WorkflowSecretService:
             include_value=False,
         )
         if existing is None:
-            logger.warning(
-                "update_secret: secret not found name=%s owner=%s", name, owner_id
-            )
+            logger.warning("update_secret: secret not found name=%s owner=%s", name, owner_id)
             return False
         updated = self._svc.update_secret(
             secret_id=existing["id"],
@@ -269,8 +267,7 @@ class WorkflowSecretService:
             value = self.get_secret_value(name, owner_id)
             if value is None:
                 logger.warning(
-                    "resolve_secrets: no secret found for name=%s owner=%s — "
-                    "token left unresolved",
+                    "resolve_secrets: no secret found for name=%s owner=%s — " "token left unresolved",
                     name,
                     owner_id,
                 )

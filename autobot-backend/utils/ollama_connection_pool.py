@@ -27,15 +27,9 @@ class ConnectionPoolConfig:
 
     max_connections: int = 6  # Maximum concurrent connections to Ollama
     max_queue_size: int = 50  # Maximum queued requests
-    connection_timeout: float = (
-        TimingConstants.SHORT_TIMEOUT
-    )  # Timeout for individual connections
-    queue_timeout: float = (
-        TimingConstants.STANDARD_TIMEOUT
-    )  # Timeout for waiting in queue
-    health_check_interval: float = (
-        TimingConstants.VERY_LONG_TIMEOUT
-    )  # Health check every 5 minutes
+    connection_timeout: float = TimingConstants.SHORT_TIMEOUT  # Timeout for individual connections
+    queue_timeout: float = TimingConstants.STANDARD_TIMEOUT  # Timeout for waiting in queue
+    health_check_interval: float = TimingConstants.VERY_LONG_TIMEOUT  # Health check every 5 minutes
 
 
 class OllamaConnectionPool:
@@ -68,13 +62,9 @@ class OllamaConnectionPool:
             "avg_execution_time": 0.0,
         }
 
-        logger.info(
-            f"Ollama connection pool initialized: max_connections={self.config.max_connections}"
-        )
+        logger.info(f"Ollama connection pool initialized: max_connections={self.config.max_connections}")
 
-    def _update_running_average(
-        self, stat_key: str, new_value: float, count: int
-    ) -> None:
+    def _update_running_average(self, stat_key: str, new_value: float, count: int) -> None:
         """
         Update a running average statistic in connection_stats.
 
@@ -86,9 +76,7 @@ class OllamaConnectionPool:
             count: Total count of samples (including new value)
         """
         if count > 1:
-            self.connection_stats[stat_key] = (
-                self.connection_stats[stat_key] * (count - 1) + new_value
-            ) / count
+            self.connection_stats[stat_key] = (self.connection_stats[stat_key] * (count - 1) + new_value) / count
         else:
             self.connection_stats[stat_key] = new_value
 
@@ -106,13 +94,9 @@ class OllamaConnectionPool:
             self.active_connections += 1
             self.total_requests += 1
             self.connection_stats["active"] += 1
-            self._update_running_average(
-                "avg_wait_time", wait_time, self.total_requests
-            )
+            self._update_running_average("avg_wait_time", wait_time, self.total_requests)
 
-    async def _record_execution_success(
-        self, request_id: str, execution_time: float
-    ) -> None:
+    async def _record_execution_success(self, request_id: str, execution_time: float) -> None:
         """
         Record stats for successful execution.
 
@@ -129,13 +113,9 @@ class OllamaConnectionPool:
                 execution_time,
                 self.connection_stats["completed"],
             )
-        logger.debug(
-            "[%s] Connection completed successfully (%.2fs)", request_id, execution_time
-        )
+        logger.debug("[%s] Connection completed successfully (%.2fs)", request_id, execution_time)
 
-    async def _record_execution_failure(
-        self, request_id: str, error: Exception
-    ) -> None:
+    async def _record_execution_failure(self, request_id: str, error: Exception) -> None:
         """
         Record stats for failed execution.
 
@@ -211,9 +191,7 @@ class OllamaConnectionPool:
                 self.config.max_connections,
             )
 
-        await asyncio.wait_for(
-            self.semaphore.acquire(), timeout=self.config.queue_timeout
-        )
+        await asyncio.wait_for(self.semaphore.acquire(), timeout=self.config.queue_timeout)
 
     @asynccontextmanager
     async def acquire_connection(self):
@@ -240,9 +218,7 @@ class OllamaConnectionPool:
 
             wait_time = time.time() - start_time
             await self._record_connection_acquired(wait_time)
-            logger.debug(
-                "[%s] Acquired connection (waited %.2fs)", request_id, wait_time
-            )
+            logger.debug("[%s] Acquired connection (waited %.2fs)", request_id, wait_time)
 
             http_client = get_http_client()
             session = await http_client.get_session()
@@ -250,18 +226,14 @@ class OllamaConnectionPool:
 
             try:
                 yield session
-                await self._record_execution_success(
-                    request_id, time.time() - execution_start
-                )
+                await self._record_execution_success(request_id, time.time() - execution_start)
             except Exception as e:
                 await self._record_execution_failure(request_id, e)
                 raise
 
         except asyncio.TimeoutError:
             await self._handle_queue_timeout(request_id)
-            raise asyncio.TimeoutError(
-                f"Timeout waiting for Ollama connection slot after {self.config.queue_timeout}s"
-            )
+            raise asyncio.TimeoutError(f"Timeout waiting for Ollama connection slot after {self.config.queue_timeout}s")
 
         finally:
             if semaphore_acquired:
@@ -281,9 +253,7 @@ class OllamaConnectionPool:
             async with session.get(health_url) as response:
                 return response.status == 200
 
-    async def _update_health_status(
-        self, healthy: bool, error: Optional[Exception] = None
-    ) -> None:
+    async def _update_health_status(self, healthy: bool, error: Optional[Exception] = None) -> None:
         """Update health status with logging (Issue #315 - extracted helper)."""
         async with self._stats_lock:
             self.pool_healthy = healthy
@@ -311,10 +281,7 @@ class OllamaConnectionPool:
 
         # Check if recently performed (read under lock)
         async with self._stats_lock:
-            if (
-                current_time - self.last_health_check
-                < self.config.health_check_interval
-            ):
+            if current_time - self.last_health_check < self.config.health_check_interval:
                 return self.pool_healthy
 
         try:
@@ -406,9 +373,7 @@ def get_ollama_pool() -> OllamaConnectionPool:
                 from autobot_shared.ssot_config import get_config
 
                 max_conn = get_config().llm.ollama_pool_max_connections
-                _ollama_pool = OllamaConnectionPool(
-                    ConnectionPoolConfig(max_connections=max_conn)
-                )
+                _ollama_pool = OllamaConnectionPool(ConnectionPoolConfig(max_connections=max_conn))
     return _ollama_pool
 
 
@@ -443,9 +408,7 @@ async def cleanup_ollama_pool():
 
 
 # Convenience function for one-off requests
-async def execute_ollama_request(
-    request_func: Callable, ollama_url: str, *args, **kwargs
-) -> Any:
+async def execute_ollama_request(request_func: Callable, ollama_url: str, *args, **kwargs) -> Any:
     """
     Execute a single Ollama request using the connection pool.
 
@@ -462,8 +425,6 @@ async def execute_ollama_request(
 
     # Perform health check if needed
     if not await pool.health_check(ollama_url):
-        logger.warning(
-            "Ollama service may be unhealthy, proceeding with request anyway"
-        )
+        logger.warning("Ollama service may be unhealthy, proceeding with request anyway")
 
     return await pool.execute_with_pool(request_func, ollama_url, *args, **kwargs)

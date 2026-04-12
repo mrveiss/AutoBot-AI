@@ -13,13 +13,14 @@ Tests the following functionality:
 import sys
 import types
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
-from unittest.mock import patch
 
 
 def _make_shared_mock(return_path=None):
     """Build a fake api.codebase_analytics.endpoints.shared module."""
+
     async def fake_resolve(source_id):
         if source_id is None:
             return None
@@ -71,8 +72,8 @@ class TestGetRefactoringDescription:
     def test_known_type_returns_non_empty_description(self):
         """Each defined RefactoringType should have a description."""
         from api.analytics_code_generation import (
-            _get_refactoring_description,
             RefactoringType,
+            _get_refactoring_description,
         )
 
         for rt in RefactoringType:
@@ -83,8 +84,8 @@ class TestGetRefactoringDescription:
     def test_general_type_returns_fallback(self):
         """GENERAL type should return a reasonable description."""
         from api.analytics_code_generation import (
-            _get_refactoring_description,
             RefactoringType,
+            _get_refactoring_description,
         )
 
         desc = _get_refactoring_description(RefactoringType.GENERAL)

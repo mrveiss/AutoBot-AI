@@ -85,18 +85,12 @@ class HierarchicalSummarizer(BaseCognifier):
         entities: List[Entity] = context.entities
         entity_map = build_entity_map(entities, include_canonical=False)
 
-        chunk_summaries = await self._generate_chunk_summaries(
-            chunks, entity_map, context
-        )
+        chunk_summaries = await self._generate_chunk_summaries(chunks, entity_map, context)
 
         sections = self._group_into_sections(chunks)
-        section_summaries = await self._generate_section_summaries(
-            sections, chunk_summaries, entity_map, context
-        )
+        section_summaries = await self._generate_section_summaries(sections, chunk_summaries, entity_map, context)
 
-        document_summary = await self._generate_document_summary(
-            section_summaries, entity_map, context
-        )
+        document_summary = await self._generate_document_summary(section_summaries, entity_map, context)
 
         all_summaries = chunk_summaries + section_summaries
         if document_summary:
@@ -108,20 +102,14 @@ class HierarchicalSummarizer(BaseCognifier):
         # RAPTOR tree building (#2051)
         if getattr(context, "embeddings", None) is not None:
             try:
-                context.raptor_tree = await self.build_raptor_tree(
-                    chunks, context.embeddings
-                )
-                logger.info(
-                    "Built RAPTOR tree with %d levels", len(context.raptor_tree)
-                )
+                context.raptor_tree = await self.build_raptor_tree(chunks, context.embeddings)
+                logger.info("Built RAPTOR tree with %d levels", len(context.raptor_tree))
             except Exception as exc:
                 logger.warning("RAPTOR tree building failed (non-fatal): %s", exc)
 
         return context
 
-    def _group_into_sections(
-        self, chunks: List[ProcessedChunk]
-    ) -> List[List[ProcessedChunk]]:
+    def _group_into_sections(self, chunks: List[ProcessedChunk]) -> List[List[ProcessedChunk]]:
         """Group chunks into sections."""
         sections = []
         for i in range(0, len(chunks), self.section_size):
@@ -227,19 +215,11 @@ class HierarchicalSummarizer(BaseCognifier):
         """Summarize text using LLM."""
         try:
             prompt = SUMMARY_PROMPT.format(max_words=max_words, text=text)
-            response = await self.llm.chat_completion(
-                messages=[{"role": "user", "content": prompt}]
-            )
+            response = await self.llm.chat_completion(messages=[{"role": "user", "content": prompt}])
             raw = parse_llm_json_response(response.content, fallback_dict=True)
-            parsed = (
-                raw
-                if isinstance(raw, dict)
-                else {"summary": "", "key_topics": [], "key_entities": []}
-            )
+            parsed = raw if isinstance(raw, dict) else {"summary": "", "key_topics": [], "key_entities": []}
 
-            key_entity_ids = self._resolve_entity_ids(
-                parsed.get("key_entities", []), entity_map
-            )
+            key_entity_ids = self._resolve_entity_ids(parsed.get("key_entities", []), entity_map)
 
             word_count = len(parsed["summary"].split())
             compression_ratio = word_count / len(text.split())
@@ -347,15 +327,11 @@ class HierarchicalSummarizer(BaseCognifier):
                 break
             labels = self._cluster_embeddings(current_embeddings, n_clusters)
             groups = self._group_by_cluster(current_items, labels)
-            summaries = await self._summarize_groups(
-                groups, level, document_id, entity_map
-            )
+            summaries = await self._summarize_groups(groups, level, document_id, entity_map)
             level_key = f"L{level}"
             tree[level_key] = summaries
             current_items = summaries
-            current_embeddings = self._compute_level_embeddings(
-                groups, labels, current_embeddings
-            )
+            current_embeddings = self._compute_level_embeddings(groups, labels, current_embeddings)
         return tree
 
     @staticmethod

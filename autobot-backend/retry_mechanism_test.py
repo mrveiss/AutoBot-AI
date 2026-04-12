@@ -52,9 +52,7 @@ class TestRetryMechanism:
 
     def test_delay_calculation_linear(self):
         """Test linear backoff delay calculation"""
-        config = RetryConfig(
-            base_delay=0.5, strategy=RetryStrategy.LINEAR_BACKOFF, jitter=False
-        )
+        config = RetryConfig(base_delay=0.5, strategy=RetryStrategy.LINEAR_BACKOFF, jitter=False)
 
         retry_mechanism = RetryMechanism(config)
 
@@ -64,9 +62,7 @@ class TestRetryMechanism:
 
     def test_delay_calculation_fixed(self):
         """Test fixed delay calculation"""
-        config = RetryConfig(
-            base_delay=2.0, strategy=RetryStrategy.FIXED_DELAY, jitter=False
-        )
+        config = RetryConfig(base_delay=2.0, strategy=RetryStrategy.FIXED_DELAY, jitter=False)
 
         retry_mechanism = RetryMechanism(config)
 
@@ -76,9 +72,7 @@ class TestRetryMechanism:
 
     def test_delay_max_limit(self):
         """Test that delays don't exceed maximum"""
-        config = RetryConfig(
-            base_delay=1.0, max_delay=5.0, backoff_multiplier=3.0, jitter=False
-        )
+        config = RetryConfig(base_delay=1.0, max_delay=5.0, backoff_multiplier=3.0, jitter=False)
 
         retry_mechanism = RetryMechanism(config)
 
@@ -87,9 +81,7 @@ class TestRetryMechanism:
 
     def test_jitter_adds_randomness(self):
         """Test that jitter adds randomness to delays"""
-        config = RetryConfig(
-            base_delay=1.0, jitter=True, strategy=RetryStrategy.FIXED_DELAY
-        )
+        config = RetryConfig(base_delay=1.0, jitter=True, strategy=RetryStrategy.FIXED_DELAY)
 
         retry_mechanism = RetryMechanism(config)
 
@@ -149,9 +141,7 @@ class TestRetryMechanism:
                 raise ConnectionError("Temporary failure")
             return "success"
 
-        result = await retry_mechanism.execute_async(
-            flaky_func, operation_name="flaky_operation"
-        )
+        result = await retry_mechanism.execute_async(flaky_func, operation_name="flaky_operation")
         assert result == "success"
         assert call_count == 3
 
@@ -170,9 +160,7 @@ class TestRetryMechanism:
             raise ConnectionError("Always fails")
 
         with pytest.raises(RetryExhaustedError) as exc_info:
-            await retry_mechanism.execute_async(
-                always_fail, operation_name="always_fail"
-            )
+            await retry_mechanism.execute_async(always_fail, operation_name="always_fail")
 
         assert exc_info.value.attempts == 2
         assert isinstance(exc_info.value.last_exception, ConnectionError)
@@ -212,9 +200,7 @@ class TestRetryMechanism:
                 raise ConnectionError("Temporary failure")
             return "sync_success"
 
-        result = retry_mechanism.execute_sync(
-            flaky_sync_func, operation_name="sync_operation"
-        )
+        result = retry_mechanism.execute_sync(flaky_sync_func, operation_name="sync_operation")
         assert result == "sync_success"
         assert call_count == 2
 
@@ -317,9 +303,7 @@ class TestRetryDecorators:
         class CustomError(Exception):
             pass
 
-        @retry_sync(
-            max_attempts=2, base_delay=0.01, retryable_exceptions=(CustomError,)
-        )
+        @retry_sync(max_attempts=2, base_delay=0.01, retryable_exceptions=(CustomError,))
         def custom_exception_func():
             raise CustomError("Should retry this")
 

@@ -29,13 +29,13 @@ from constants.model_constants import (
     LOCAL_MIXTRAL,
     LOCAL_PHI3,
     LOCAL_PHI4,
-    LOCAL_QWEN25,
     LOCAL_QWEN3,
+    LOCAL_QWEN25,
+    OPENAI_GPT4_TURBO,
+    OPENAI_GPT4O,
     OPENAI_GPT41,
     OPENAI_GPT41_MINI,
     OPENAI_GPT41_NANO,
-    OPENAI_GPT4O,
-    OPENAI_GPT4_TURBO,
     OPENAI_O3,
     OPENAI_O3_MINI,
     OPENAI_O4_MINI,
@@ -114,21 +114,15 @@ class TestModelPricingCompleteness:
     def test_local_models_are_free(self, model):
         """All local/Ollama models must be priced at $0."""
         if model in MODEL_PRICING:
-            assert (
-                MODEL_PRICING[model]["input"] == 0.0
-            ), f"{model} local model should have input price 0.0"
-            assert (
-                MODEL_PRICING[model]["output"] == 0.0
-            ), f"{model} local model should have output price 0.0"
+            assert MODEL_PRICING[model]["input"] == 0.0, f"{model} local model should have input price 0.0"
+            assert MODEL_PRICING[model]["output"] == 0.0, f"{model} local model should have output price 0.0"
 
     def test_paid_models_have_positive_output_price(self):
         """Cloud API models must have a positive output price."""
         cloud_prefixes = ("claude-", "gpt-", "o1", "o3", "gemini-")
         for model, pricing in MODEL_PRICING.items():
             if model.startswith(cloud_prefixes):
-                assert (
-                    pricing["output"] > 0
-                ), f"Cloud model {model} should have positive output price"
+                assert pricing["output"] > 0, f"Cloud model {model} should have positive output price"
 
     def test_claude_opus_4_more_expensive_than_haiku(self):
         """Opus tier should cost more than Haiku tier."""
@@ -153,12 +147,8 @@ class TestModelPricingCompleteness:
         from constants.model_constants import DEEPSEEK_R1_API, DEEPSEEK_V3
 
         for model in (DEEPSEEK_V3, DEEPSEEK_R1_API):
-            assert (
-                MODEL_PRICING[model]["input"] > 0
-            ), f"{model} should have positive input price"
-            assert (
-                MODEL_PRICING[model]["output"] > 0
-            ), f"{model} should have positive output price"
+            assert MODEL_PRICING[model]["input"] > 0, f"{model} should have positive input price"
+            assert MODEL_PRICING[model]["output"] > 0, f"{model} should have positive output price"
 
     def test_pricing_version_is_valid_iso_date(self):
         """PRICING_VERSION must be a valid ISO date string."""
@@ -183,9 +173,7 @@ class TestPricingStaleness:
 
     def test_stale_pricing_emits_warning(self, caplog):
         """A WARNING must be emitted when the pricing table is past the threshold."""
-        stale_date = (
-            date.today() - timedelta(days=PRICING_STALENESS_DAYS + 1)
-        ).isoformat()
+        stale_date = (date.today() - timedelta(days=PRICING_STALENESS_DAYS + 1)).isoformat()
         with patch("services.llm_cost_tracker.PRICING_VERSION", stale_date):
             import logging
 
@@ -211,9 +199,7 @@ class TestUnknownModelFallback:
 
     def test_unknown_claude_sonnet_variant_uses_sonnet_pricing(self):
         """An unrecognised claude-sonnet-X model should be priced like claude-sonnet."""
-        cost = self.tracker.calculate_cost(
-            "claude-sonnet-5-future", 1_000_000, 1_000_000
-        )
+        cost = self.tracker.calculate_cost("claude-sonnet-5-future", 1_000_000, 1_000_000)
         expected_input = MODEL_PRICING["claude-sonnet-4-20250514"]["input"]
         expected_output = MODEL_PRICING["claude-sonnet-4-20250514"]["output"]
         assert cost == round(expected_input + expected_output, 6)

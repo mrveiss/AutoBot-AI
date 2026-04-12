@@ -78,9 +78,7 @@ class ComprehensiveMonitoringController:
 
     def _signal_handler(self, signum, frame):
         """Handle shutdown signals gracefully."""
-        self.logger.info(
-            f"📡 Received signal {signum}, initiating graceful shutdown..."
-        )
+        self.logger.info(f"📡 Received signal {signum}, initiating graceful shutdown...")
         self.shutdown_requested = True
 
     async def initialize_all_systems(self):
@@ -137,9 +135,7 @@ class ComprehensiveMonitoringController:
                 start_time = time.time()
 
                 # Generate performance report
-                performance_report = (
-                    await self.performance_monitor.generate_performance_report()
-                )
+                performance_report = await self.performance_monitor.generate_performance_report()
                 self.monitoring_results["performance"] = performance_report
 
                 # Log summary
@@ -210,9 +206,7 @@ class ComprehensiveMonitoringController:
                 start_time = time.time()
 
                 # Generate BI dashboard report
-                bi_report = (
-                    await self.bi_dashboard.generate_comprehensive_dashboard_report()
-                )
+                bi_report = await self.bi_dashboard.generate_comprehensive_dashboard_report()
                 self.monitoring_results["bi_dashboard"] = bi_report
 
                 # Log BI summary
@@ -303,9 +297,7 @@ class ComprehensiveMonitoringController:
                 "system_overview": await self._generate_system_overview(),
                 "performance_summary": self.monitoring_results.get("performance", {}),
                 "ai_analytics_summary": self.monitoring_results.get("ai_analytics", {}),
-                "business_intelligence": self.monitoring_results.get(
-                    "bi_dashboard", {}
-                ),
+                "business_intelligence": self.monitoring_results.get("bi_dashboard", {}),
                 "apm_summary": self.monitoring_results.get("apm", {}),
                 "overall_health_assessment": await self._assess_overall_health(),
                 "recommendations": await self._generate_recommendations(),
@@ -397,9 +389,7 @@ class ComprehensiveMonitoringController:
                 "overall_score": round(overall_health, 1),
                 "status": status,
                 "component_scores": {
-                    "bi_dashboard": (
-                        bi_health.get("overall_score", 0) if bi_health else 0
-                    ),
+                    "bi_dashboard": (bi_health.get("overall_score", 0) if bi_health else 0),
                     "performance": perf_health,
                     "apm": apm_health,
                 },
@@ -423,20 +413,10 @@ class ComprehensiveMonitoringController:
             perf_data = self.monitoring_results.get("performance", {})
             sys_metrics = perf_data.get("system")
             if sys_metrics:
-                if (
-                    hasattr(sys_metrics, "cpu_percent")
-                    and sys_metrics.cpu_percent > cpu_threshold
-                ):
-                    recommendations.append(
-                        "CPU utilization high - consider workload optimization"
-                    )
-                if (
-                    hasattr(sys_metrics, "memory_percent")
-                    and sys_metrics.memory_percent > memory_threshold
-                ):
-                    recommendations.append(
-                        "Memory utilization high - consider memory optimization"
-                    )
+                if hasattr(sys_metrics, "cpu_percent") and sys_metrics.cpu_percent > cpu_threshold:
+                    recommendations.append("CPU utilization high - consider workload optimization")
+                if hasattr(sys_metrics, "memory_percent") and sys_metrics.memory_percent > memory_threshold:
+                    recommendations.append("Memory utilization high - consider memory optimization")
 
             # AI analytics recommendations
             ai_data = self.monitoring_results.get("ai_analytics", {})
@@ -454,9 +434,7 @@ class ComprehensiveMonitoringController:
             # APM recommendations
             apm_data = self.monitoring_results.get("apm", {})
             if apm_data.get("summary", {}).get("system_health") == "degraded":
-                recommendations.append(
-                    "APM system shows performance degradation - investigate active alerts"
-                )
+                recommendations.append("APM system shows performance degradation - investigate active alerts")
 
             # Remove duplicates and limit to top 10
             recommendations = list(set(recommendations))[:10]
@@ -474,9 +452,7 @@ class ComprehensiveMonitoringController:
         """Store consolidated report to file."""
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            report_file = (
-                self.reports_path / f"consolidated_monitoring_report_{timestamp}.json"
-            )
+            report_file = self.reports_path / f"consolidated_monitoring_report_{timestamp}.json"
 
             with open(report_file, "w", encoding="utf-8") as f:
                 json.dump(report, f, indent=2, default=str)
@@ -498,15 +474,9 @@ class ComprehensiveMonitoringController:
                     self.apm_system.redis_client is not None,
                 ]
             ),
-            "last_performance_check": self.monitoring_results.get(
-                "performance", {}
-            ).get("timestamp"),
-            "last_ai_check": self.monitoring_results.get("ai_analytics", {}).get(
-                "timestamp"
-            ),
-            "last_bi_check": self.monitoring_results.get("bi_dashboard", {}).get(
-                "timestamp"
-            ),
+            "last_performance_check": self.monitoring_results.get("performance", {}).get("timestamp"),
+            "last_ai_check": self.monitoring_results.get("ai_analytics", {}).get("timestamp"),
+            "last_bi_check": self.monitoring_results.get("bi_dashboard", {}).get("timestamp"),
             "last_apm_check": self.monitoring_results.get("apm", {}).get("timestamp"),
             "intervals": self.intervals,
         }
@@ -530,25 +500,15 @@ class ComprehensiveMonitoringController:
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "report_type": "instant_comprehensive",
                 "performance_data": (
-                    results[0]
-                    if not isinstance(results[0], Exception)
-                    else {"error": str(results[0])}
+                    results[0] if not isinstance(results[0], Exception) else {"error": str(results[0])}
                 ),
                 "ai_analytics_data": (
-                    results[1]
-                    if not isinstance(results[1], Exception)
-                    else {"error": str(results[1])}
+                    results[1] if not isinstance(results[1], Exception) else {"error": str(results[1])}
                 ),
                 "bi_dashboard_data": (
-                    results[2]
-                    if not isinstance(results[2], Exception)
-                    else {"error": str(results[2])}
+                    results[2] if not isinstance(results[2], Exception) else {"error": str(results[2])}
                 ),
-                "apm_data": (
-                    results[3]
-                    if not isinstance(results[3], Exception)
-                    else {"error": str(results[3])}
-                ),
+                "apm_data": (results[3] if not isinstance(results[3], Exception) else {"error": str(results[3])}),
             }
 
             # Store instant report
@@ -575,15 +535,9 @@ async def main():
     """Main function for comprehensive monitoring controller."""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="AutoBot Comprehensive Monitoring Controller"
-    )
-    parser.add_argument(
-        "--start", action="store_true", help="Start comprehensive monitoring"
-    )
-    parser.add_argument(
-        "--instant-report", action="store_true", help="Generate instant report"
-    )
+    parser = argparse.ArgumentParser(description="AutoBot Comprehensive Monitoring Controller")
+    parser.add_argument("--start", action="store_true", help="Start comprehensive monitoring")
+    parser.add_argument("--instant-report", action="store_true", help="Generate instant report")
     parser.add_argument("--status", action="store_true", help="Show monitoring status")
 
     args = parser.parse_args()
@@ -596,18 +550,10 @@ async def main():
         logger.info("✅ Instant report generated")
         logger.info("📊 Summary:")
         logger.info(f"  Timestamp: {report.get('timestamp')}")
-        logger.info(
-            f"  Performance: {'✅' if 'error' not in report.get('performance_data', {}) else '❌'}"
-        )
-        logger.info(
-            f"  AI Analytics: {'✅' if 'error' not in report.get('ai_analytics_data', {}) else '❌'}"
-        )
-        logger.info(
-            f"  BI Dashboard: {'✅' if 'error' not in report.get('bi_dashboard_data', {}) else '❌'}"
-        )
-        logger.info(
-            f"  APM System: {'✅' if 'error' not in report.get('apm_data', {}) else '❌'}"
-        )
+        logger.info(f"  Performance: {'✅' if 'error' not in report.get('performance_data', {}) else '❌'}")
+        logger.info(f"  AI Analytics: {'✅' if 'error' not in report.get('ai_analytics_data', {}) else '❌'}")
+        logger.info(f"  BI Dashboard: {'✅' if 'error' not in report.get('bi_dashboard_data', {}) else '❌'}")
+        logger.info(f"  APM System: {'✅' if 'error' not in report.get('apm_data', {}) else '❌'}")
 
     elif args.status:
         status = await controller.get_current_status()

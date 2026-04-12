@@ -40,15 +40,9 @@ def migrate(db_url: str) -> None:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        create_index_if_not_exists(
-            cursor, "idx_node_events_node_id", "node_events", "node_id"
-        )
-        create_index_if_not_exists(
-            cursor, "idx_node_events_event_type", "node_events", "event_type"
-        )
-        create_index_if_not_exists(
-            cursor, "idx_node_events_created_at", "node_events", "created_at"
-        )
+        create_index_if_not_exists(cursor, "idx_node_events_node_id", "node_events", "node_id")
+        create_index_if_not_exists(cursor, "idx_node_events_event_type", "node_events", "event_type")
+        create_index_if_not_exists(cursor, "idx_node_events_created_at", "node_events", "created_at")
         logger.info("Created node_events table")
     else:
         logger.info("node_events table already exists")
@@ -70,9 +64,7 @@ def migrate(db_url: str) -> None:
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        create_index_if_not_exists(
-            cursor, "idx_certificates_node_id", "certificates", "node_id"
-        )
+        create_index_if_not_exists(cursor, "idx_certificates_node_id", "certificates", "node_id")
         logger.info("Created certificates table")
     else:
         logger.info("certificates table already exists")
@@ -95,9 +87,7 @@ def migrate(db_url: str) -> None:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        create_index_if_not_exists(
-            cursor, "idx_update_info_node_id", "update_info", "node_id"
-        )
+        create_index_if_not_exists(cursor, "idx_update_info_node_id", "update_info", "node_id")
         logger.info("Created update_info table")
     else:
         logger.info("update_info table already exists")

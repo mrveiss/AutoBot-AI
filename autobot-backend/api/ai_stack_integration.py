@@ -45,9 +45,7 @@ class RAGQueryRequest(BaseModel):
     """RAG query request model."""
 
     query: str = Field(..., min_length=1, max_length=10000, description="Search query")
-    documents: Optional[List[Metadata]] = Field(
-        None, description="Pre-retrieved documents"
-    )
+    documents: Optional[List[Metadata]] = Field(None, description="Pre-retrieved documents")
     context: Optional[str] = Field(None, description="Additional context")
     max_results: int = Field(10, ge=1, le=50, description="Maximum results to return")
 
@@ -55,13 +53,9 @@ class RAGQueryRequest(BaseModel):
 class EnhancedChatRequest(BaseModel):
     """Enhanced chat request model."""
 
-    message: str = Field(
-        ..., min_length=1, max_length=50000, description="Chat message"
-    )
+    message: str = Field(..., min_length=1, max_length=50000, description="Chat message")
     context: Optional[str] = Field(None, description="Conversation context")
-    chat_history: Optional[List[Metadata]] = Field(
-        None, description="Previous messages"
-    )
+    chat_history: Optional[List[Metadata]] = Field(None, description="Previous messages")
     use_knowledge_base: bool = Field(True, description="Whether to use knowledge base")
     response_style: str = Field("conversational", description="Response style")
 
@@ -69,9 +63,7 @@ class EnhancedChatRequest(BaseModel):
 class KnowledgeExtractionRequest(BaseModel):
     """Knowledge extraction request model."""
 
-    content: str = Field(
-        ..., min_length=1, description="Content to extract knowledge from"
-    )
+    content: str = Field(..., min_length=1, description="Content to extract knowledge from")
     content_type: str = Field("text", description="Content type (text, document, url)")
     extraction_mode: str = Field("comprehensive", description="Extraction detail level")
 
@@ -104,9 +96,7 @@ class ContentClassificationRequest(BaseModel):
     """Content classification request model."""
 
     content: str = Field(..., min_length=1, description="Content to classify")
-    classification_types: Optional[List[str]] = Field(
-        None, description="Classification types"
-    )
+    classification_types: Optional[List[str]] = Field(None, description="Classification types")
 
 
 # ====================================================================
@@ -139,9 +129,7 @@ async def ai_stack_health_check(admin_check: bool = Depends(check_admin_permissi
 
         return JSONResponse(
             status_code=200 if health_status["status"] == "healthy" else 503,
-            content=create_success_response(
-                health_status, "AI Stack health check completed"
-            ),
+            content=create_success_response(health_status, "AI Stack health check completed"),
         )
     except Exception as e:
         logger.error("AI Stack health check failed: %s", e)
@@ -204,9 +192,7 @@ async def rag_query(
     documents = request.documents
     if not documents and knowledge_base:
         try:
-            kb_results = await knowledge_base.search(
-                query=request.query, top_k=request.max_results
-            )
+            kb_results = await knowledge_base.search(query=request.query, top_k=request.max_results)
             documents = kb_results if isinstance(kb_results, list) else []
         except Exception as e:
             logger.warning("Knowledge base search failed: %s", e)
@@ -251,9 +237,7 @@ async def reformulate_query(
     error_code_prefix="AI_STACK",
 )
 @router.post("/rag/analyze-documents")
-async def analyze_documents(
-    documents: List[Metadata], admin_check: bool = Depends(check_admin_permission)
-):
+async def analyze_documents(documents: List[Metadata], admin_check: bool = Depends(check_admin_permission)):
     """
     Analyze and synthesize multiple documents.
 
@@ -298,12 +282,8 @@ async def enhanced_chat(
             # Search knowledge base for relevant context
             kb_context = await knowledge_base.search(query=request.message, top_k=5)
             if kb_context:
-                kb_summary = "\n".join(
-                    [f"- {item.get('content', '')[:200]}..." for item in kb_context[:3]]
-                )
-                enhanced_context = (
-                    f"{request.context or ''}\n\nRelevant knowledge:\n{kb_summary}"
-                )
+                kb_summary = "\n".join([f"- {item.get('content', '')[:200]}..." for item in kb_context[:3]])
+                enhanced_context = f"{request.context or ''}\n\nRelevant knowledge:\n{kb_summary}"
         except Exception as e:
             logger.warning("Knowledge base context enhancement failed: %s", e)
 
@@ -344,9 +324,7 @@ async def extract_knowledge(
         extraction_mode=request.extraction_mode,
     )
 
-    return create_success_response(
-        result, "Knowledge extraction completed successfully"
-    )
+    return create_success_response(result, "Knowledge extraction completed successfully")
 
 
 @with_error_handling(
@@ -426,9 +404,7 @@ async def get_system_knowledge(
     error_code_prefix="AI_STACK",
 )
 @router.post("/research/comprehensive")
-async def comprehensive_research(
-    request: ResearchRequest, admin_check: bool = Depends(check_admin_permission)
-):
+async def comprehensive_research(request: ResearchRequest, admin_check: bool = Depends(check_admin_permission)):
     """
     Perform comprehensive research with multiple AI agents.
 
@@ -448,17 +424,13 @@ async def comprehensive_research(
     # Web research if requested
     if request.include_web:
         try:
-            web_result = await ai_client.web_research(
-                query=request.query, max_pages=10, include_analysis=True
-            )
+            web_result = await ai_client.web_research(query=request.query, max_pages=10, include_analysis=True)
             results["web_research"] = web_result
         except AIStackError as e:
             logger.warning("Web research failed: %s", e)
             results["web_research"] = {"error": "Internal server error"}
 
-    return create_success_response(
-        results, "Comprehensive research completed successfully"
-    )
+    return create_success_response(results, "Comprehensive research completed successfully")
 
 
 @with_error_handling(
@@ -479,9 +451,7 @@ async def web_research(
     Issue #744: Requires admin authentication.
     """
     ai_client = await get_ai_stack_client()
-    result = await ai_client.web_research(
-        query=query, max_pages=max_pages, include_analysis=include_analysis
-    )
+    result = await ai_client.web_research(query=query, max_pages=max_pages, include_analysis=include_analysis)
 
     return create_success_response(result, "Web research completed successfully")
 
@@ -497,9 +467,7 @@ async def web_research(
     error_code_prefix="AI_STACK",
 )
 @router.post("/development/search-code")
-async def search_code(
-    request: CodeSearchRequest, admin_check: bool = Depends(check_admin_permission)
-):
+async def search_code(request: CodeSearchRequest, admin_check: bool = Depends(check_admin_permission)):
     """
     Search codebase using NPU-accelerated AI.
 
@@ -535,9 +503,7 @@ async def analyze_development_speedup(
         code_path=request.code_path, analysis_type=request.analysis_type
     )
 
-    return create_success_response(
-        result, "Development speedup analysis completed successfully"
-    )
+    return create_success_response(result, "Development speedup analysis completed successfully")
 
 
 # ====================================================================
@@ -565,9 +531,7 @@ async def classify_content(
         content=request.content, classification_types=request.classification_types
     )
 
-    return create_success_response(
-        result, "Content classification completed successfully"
-    )
+    return create_success_response(result, "Content classification completed successfully")
 
 
 # ====================================================================
@@ -604,9 +568,7 @@ AGENT_QUERY_HANDLERS: Dict[str, AgentQueryHandler] = {
 }
 
 
-async def _execute_agent_query(
-    ai_client: Any, agent: str, query: str
-) -> Dict[str, Any]:
+async def _execute_agent_query(ai_client: Any, agent: str, query: str) -> Dict[str, Any]:
     """Execute agent query with dispatch table (Issue #336 - extracted helper)."""
     handler = AGENT_QUERY_HANDLERS.get(agent)
     if handler:
@@ -614,9 +576,7 @@ async def _execute_agent_query(
     return {"error": f"Unknown agent: {agent}"}
 
 
-async def _execute_parallel_agents(
-    ai_client: Any, agents: List[str], query: str
-) -> Dict[str, Any]:
+async def _execute_parallel_agents(ai_client: Any, agents: List[str], query: str) -> Dict[str, Any]:
     """Execute agents in parallel mode (Issue #315: extracted to reduce nesting).
 
     Args:
@@ -638,9 +598,7 @@ async def _execute_parallel_agents(
     return results
 
 
-async def _execute_sequential_agents(
-    ai_client: Any, agents: List[str], query: str
-) -> Dict[str, Any]:
+async def _execute_sequential_agents(ai_client: Any, agents: List[str], query: str) -> Dict[str, Any]:
     """Execute agents sequentially, each building on previous (Issue #315: extracted).
 
     Args:

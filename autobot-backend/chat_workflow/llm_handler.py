@@ -51,9 +51,7 @@ async def _emit_system_prompt_ready(system_prompt: str, session: Any) -> str:
         session_id=getattr(session, "session_id", ""),
         data={"system_prompt": system_prompt, "session": session},
     )
-    result = await get_extension_manager().invoke_with_transform(
-        HookPoint.SYSTEM_PROMPT_READY, ctx, "system_prompt"
-    )
+    result = await get_extension_manager().invoke_with_transform(HookPoint.SYSTEM_PROMPT_READY, ctx, "system_prompt")
     if isinstance(result, str) and result != system_prompt:
         logger.debug(
             "[#3405] SYSTEM_PROMPT_READY modified system prompt (%d -> %d chars)",
@@ -64,9 +62,7 @@ async def _emit_system_prompt_ready(system_prompt: str, session: Any) -> str:
     return system_prompt
 
 
-async def _emit_full_prompt_ready(
-    prompt: str, llm_params: Dict[str, Any], context: Dict[str, Any]
-) -> str:
+async def _emit_full_prompt_ready(prompt: str, llm_params: Dict[str, Any], context: Dict[str, Any]) -> str:
     """Emit ON_FULL_PROMPT_READY to registered extensions and return result.
 
     Issue #3405: Fires after _build_full_prompt() so extensions can append
@@ -86,9 +82,7 @@ async def _emit_full_prompt_ready(
         session_id=context.get("session_id", ""),
         data={"prompt": prompt, "llm_params": llm_params, "context": context},
     )
-    result = await get_extension_manager().invoke_with_transform(
-        HookPoint.FULL_PROMPT_READY, ctx, "prompt"
-    )
+    result = await get_extension_manager().invoke_with_transform(HookPoint.FULL_PROMPT_READY, ctx, "prompt")
     if isinstance(result, str) and result != prompt:
         logger.debug(
             "[#3405] FULL_PROMPT_READY modified full prompt (%d -> %d chars)",
@@ -102,9 +96,7 @@ async def _emit_full_prompt_ready(
 class LLMHandlerMixin:
     """Mixin for LLM interaction handling."""
 
-    def _convert_conversation_history_format(
-        self, history: List[Dict[str, str]]
-    ) -> List[Dict[str, str]]:
+    def _convert_conversation_history_format(self, history: List[Dict[str, str]]) -> List[Dict[str, str]]:
         """
         Convert conversation history from storage format to classification format.
 
@@ -127,9 +119,7 @@ class LLMHandlerMixin:
                 converted.append({"role": "user", "content": exchange["user"]})
             # Add assistant message
             if "assistant" in exchange:
-                converted.append(
-                    {"role": "assistant", "content": exchange["assistant"]}
-                )
+                converted.append({"role": "assistant", "content": exchange["assistant"]})
         return converted
 
     def _get_ollama_endpoint_fallback(self) -> str:
@@ -144,17 +134,13 @@ class LLMHandlerMixin:
         Config may store just the base URL, so we ensure the path is appended.
         """
         try:
-            endpoint = get_config().get_nested(
-                "backend.llm.ollama.endpoint", None
-            )
+            endpoint = get_config().get_nested("backend.llm.ollama.endpoint", None)
             if endpoint and endpoint.startswith(_VALID_URL_SCHEMES):  # Issue #380
                 # Ensure /api/generate path is included
                 if not endpoint.endswith(PATH_OLLAMA_GENERATE):
                     endpoint = endpoint.rstrip("/") + PATH_OLLAMA_GENERATE
                 return endpoint
-            logger.error(
-                "Invalid endpoint URL: %s, using config-based default", endpoint
-            )
+            logger.error("Invalid endpoint URL: %s, using config-based default", endpoint)
             return self._get_ollama_endpoint_fallback()
         except Exception as e:
             logger.error("Failed to load Ollama endpoint from config: %s", e)
@@ -264,15 +250,10 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             return ""
 
         context_parts = ["\n**Recent Context:**\n"]
-        context_parts.extend(
-            f"User: {msg['user']}\nYou: {msg['assistant']}\n\n"
-            for msg in complete_messages[-2:]
-        )
+        context_parts.extend(f"User: {msg['user']}\nYou: {msg['assistant']}\n\n" for msg in complete_messages[-2:])
         return "".join(context_parts)
 
-    async def _retrieve_knowledge_context(
-        self, message: str, session: WorkflowSession
-    ) -> tuple:
+    async def _retrieve_knowledge_context(self, message: str, session: WorkflowSession) -> tuple:
         """Retrieve knowledge context for RAG. Returns (context, citations)."""
         try:
             (
@@ -298,9 +279,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
                 session.metadata["query_intent"] = query_intent.intent.value
                 if enhanced_query and enhanced_query.enhancement_applied:
                     session.metadata["query_enhanced"] = True
-                    session.metadata["context_entities"] = (
-                        enhanced_query.context_entities
-                    )
+                    session.metadata["context_entities"] = enhanced_query.context_entities
             else:
                 session.metadata["used_knowledge"] = False
                 session.metadata["query_enhanced"] = False
@@ -326,23 +305,15 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         """
         if knowledge_context:
             return (
-                knowledge_context
-                + "\n"
-                + conversation_context
-                + f"\n**Current user message:** {message}\n\nAssistant:"
+                knowledge_context + "\n" + conversation_context + f"\n**Current user message:** {message}\n\nAssistant:"
             )
-        return (
-            conversation_context
-            + f"\n**Current user message:** {message}\n\nAssistant:"
-        )
+        return conversation_context + f"\n**Current user message:** {message}\n\nAssistant:"
 
     def _get_selected_model(self) -> str:
         """Get selected LLM model from config with fallback."""
         try:
             default_model = get_config().get_default_llm_model()
-            selected = get_config().get_nested(
-                "backend.llm.ollama.selected_model", default_model
-            )
+            selected = get_config().get_nested("backend.llm.ollama.selected_model", default_model)
             if selected and isinstance(selected, str):
                 logger.info("Using LLM model from config: %s", selected)
                 return selected
@@ -352,9 +323,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             logger.error("Failed to load model from config: %s", e)
             import os
 
-            return os.getenv(
-                "AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL
-            )
+            return os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL)
 
     async def _prepare_llm_request_params(
         self,
@@ -382,9 +351,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         try:
             from memory.essential_story import EssentialStoryGenerator
 
-            story = await EssentialStoryGenerator().generate(
-                model_name=selected_model
-            )
+            story = await EssentialStoryGenerator().generate(model_name=selected_model)
             if story:
                 system_prompt = story + "\n\n" + system_prompt
         except Exception as _ess_exc:
@@ -395,9 +362,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         # Knowledge retrieval for RAG
         knowledge_context, citations = "", []
         if self.knowledge_service and use_knowledge:
-            knowledge_context, citations = await self._retrieve_knowledge_context(
-                message, session
-            )
+            knowledge_context, citations = await self._retrieve_knowledge_context(message, session)
             # Issue #3770: compress KB results when context exceeds model budget
             if knowledge_context and citations:
                 from context_window_manager import ContextWindowManager
@@ -407,9 +372,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
                 cwm.set_model(selected_model)
                 kc_tokens = cwm.estimate_tokens(knowledge_context)
                 max_kb_tokens = cwm.get_max_history_tokens()
-                if await cwm.async_should_compress(
-                    content_tokens=kc_tokens, model_name=selected_model
-                ):
+                if await cwm.async_should_compress(content_tokens=kc_tokens, model_name=selected_model):
                     svc = ContextCompressionService(
                         model_thresholds={
                             name: spec.get("compression_threshold", 8192)
@@ -417,9 +380,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
                             if isinstance(spec, dict)
                         }
                     )
-                    citations = await svc.compress_kb_results(
-                        citations, max_tokens=max_kb_tokens
-                    )
+                    citations = await svc.compress_kb_results(citations, max_tokens=max_kb_tokens)
                     # Rebuild knowledge context from trimmed citations
                     if citations:
                         lines = ["KNOWLEDGE CONTEXT:"]
@@ -430,25 +391,22 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
                         knowledge_context = "\n".join(lines)
                         logger.info(
                             "[#3770] KB compressed to %d citations (%d tokens)",
-                            len(citations), cwm.estimate_tokens(knowledge_context),
+                            len(citations),
+                            cwm.estimate_tokens(knowledge_context),
                         )
                     else:
                         knowledge_context = ""
         else:
             session.metadata["used_knowledge"] = False
 
-        full_prompt = self._build_full_prompt(
-            knowledge_context, conversation_context, message
-        )
+        full_prompt = self._build_full_prompt(knowledge_context, conversation_context, message)
         full_prompt = await _emit_full_prompt_ready(
             full_prompt,
             {"endpoint": ollama_endpoint, "model": selected_model},
             {"session_id": session.session_id, "message": message},
         )
 
-        logger.info(
-            "[ChatWorkflowManager] Making Ollama request to: %s", ollama_endpoint
-        )
+        logger.info("[ChatWorkflowManager] Making Ollama request to: %s", ollama_endpoint)
         logger.info("[ChatWorkflowManager] Using model: %s", selected_model)
 
         return {
@@ -460,9 +418,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             "used_knowledge": bool(knowledge_context),
         }
 
-    def _build_interpretation_prompt(
-        self, command: str, stdout: str, stderr: str, return_code: int
-    ) -> str:
+    def _build_interpretation_prompt(self, command: str, stdout: str, stderr: str, return_code: int) -> str:
         """Build the interpretation prompt for LLM (Issue #332 - extracted helper)."""
         # Issue #352: Modified to not imply task completion - just explain this step's results
         return f"""The command `{command}` was executed.
@@ -577,9 +533,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         Yields:
             WorkflowMessage chunks
         """
-        interpretation_prompt = self._build_interpretation_prompt(
-            command, stdout, stderr, return_code
-        )
+        interpretation_prompt = self._build_interpretation_prompt(command, stdout, stderr, return_code)
         llm_options = self._get_interpretation_llm_options()
 
         if not streaming:
@@ -589,9 +543,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
                 yield msg
             return
 
-        async for msg in self._interpret_streaming(
-            ollama_endpoint, selected_model, interpretation_prompt, llm_options
-        ):
+        async for msg in self._interpret_streaming(ollama_endpoint, selected_model, interpretation_prompt, llm_options):
             yield msg
 
     async def _save_to_chat_history(self, session_id: str, interpretation: str) -> None:
@@ -615,14 +567,9 @@ Do NOT conclude the task or provide a final summary - just explain this specific
                 message_type="terminal_interpretation",
                 session_id=session_id,
             )
-            logger.info(
-                f"[interpret_terminal_command] Saved interpretation "
-                f"to chat session {session_id}"
-            )
+            logger.info(f"[interpret_terminal_command] Saved interpretation " f"to chat session {session_id}")
         except Exception as e:
-            logger.error(
-                f"[interpret_terminal_command] Failed to save interpretation: {e}"
-            )
+            logger.error(f"[interpret_terminal_command] Failed to save interpretation: {e}")
 
     async def _get_last_user_message(self, session_id: str) -> str | None:
         """
@@ -659,15 +606,10 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             return None
 
         except asyncio.TimeoutError:
-            logger.warning(
-                f"[interpret_terminal_command] Redis timeout getting session "
-                f"data for {session_id}"
-            )
+            logger.warning(f"[interpret_terminal_command] Redis timeout getting session " f"data for {session_id}")
             return None
 
-    async def _persist_to_conversation_history(
-        self, session_id: str, interpretation: str
-    ) -> None:
+    async def _persist_to_conversation_history(self, session_id: str, interpretation: str) -> None:
         """
         Persist terminal interpretation to conversation history for LLM context.
 
@@ -710,14 +652,11 @@ Do NOT conclude the task or provide a final summary - just explain this specific
 
         except Exception as persist_error:
             logger.error(
-                f"[interpret_terminal_command] Failed to persist to conversation "
-                f"history: {persist_error}",
+                f"[interpret_terminal_command] Failed to persist to conversation " f"history: {persist_error}",
                 exc_info=True,
             )
 
-    async def _get_interpretation_from_llm(
-        self, command: str, stdout: str, stderr: str, return_code: int
-    ) -> str:
+    async def _get_interpretation_from_llm(self, command: str, stdout: str, stderr: str, return_code: int) -> str:
         """Get LLM interpretation for command results (non-streaming)."""
         selected_model = get_config().get_selected_model()
         # Issue #1214: Try SLM discovery first, then config-based routing
@@ -725,14 +664,9 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         if slm_base:
             ollama_endpoint = slm_base
         else:
-            ollama_endpoint = get_config().get_ollama_url_for_model(
-                selected_model
-            )
+            ollama_endpoint = get_config().get_ollama_url_for_model(selected_model)
 
-        logger.info(
-            f"[interpret_terminal_command] Starting interpretation "
-            f"for command: {command[:50]}..."
-        )
+        logger.info(f"[interpret_terminal_command] Starting interpretation " f"for command: {command[:50]}...")
 
         interpretation = ""
         async for msg in self._interpret_command_results(
@@ -747,10 +681,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             if hasattr(msg, "content"):
                 interpretation += msg.content
 
-        logger.info(
-            f"[interpret_terminal_command] Interpretation complete, "
-            f"length: {len(interpretation)}"
-        )
+        logger.info(f"[interpret_terminal_command] Interpretation complete, " f"length: {len(interpretation)}")
         return interpretation
 
     async def interpret_terminal_command(
@@ -765,9 +696,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             Full interpretation text from LLM
         """
         try:
-            interpretation = await self._get_interpretation_from_llm(
-                command, stdout, stderr, return_code
-            )
+            interpretation = await self._get_interpretation_from_llm(command, stdout, stderr, return_code)
 
             if not session_id or not interpretation:
                 return interpretation

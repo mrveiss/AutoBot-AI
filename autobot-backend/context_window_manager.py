@@ -177,9 +177,7 @@ class ContextWindowManager:
         # Fetch 2x what we plan to use (buffer for filtering)
         return message_limit * 2
 
-    def should_truncate_history(
-        self, messages: List[Dict], model_name: Optional[str] = None
-    ) -> bool:
+    def should_truncate_history(self, messages: List[Dict], model_name: Optional[str] = None) -> bool:
         """Check if message history needs truncation.
 
         Args:
@@ -192,9 +190,7 @@ class ContextWindowManager:
         # Calculate total characters from all message contents
         total_chars = sum(len(msg.get("content", "")) for msg in messages)
         # Estimate tokens based on character count
-        estimated_tokens = (
-            total_chars // self.config["token_estimation"]["chars_per_token"]
-        )
+        estimated_tokens = total_chars // self.config["token_estimation"]["chars_per_token"]
 
         max_tokens = self.get_max_history_tokens(model_name)
         return estimated_tokens > max_tokens
@@ -216,9 +212,7 @@ class ContextWindowManager:
             model = self.config["models"]["default"]["name"]
         return self.config["models"][model].get("compression_threshold", 8192)
 
-    async def async_should_compress(
-        self, content_tokens: int, model_name: Optional[str] = None
-    ) -> bool:
+    async def async_should_compress(self, content_tokens: int, model_name: Optional[str] = None) -> bool:
         """Return True when content_tokens exceed the model compression threshold.
 
         Issue #3770: Delegates to ContextCompressionService which applies the

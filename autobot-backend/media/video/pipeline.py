@@ -105,9 +105,7 @@ class VideoPipeline(BasePipeline):
             return self._format_only_result(fmt, raw_bytes, mime, media_input.metadata)
 
         try:
-            result = await asyncio.to_thread(
-                self._extract_with_cv2, raw_bytes, mime, fmt, media_input.metadata
-            )
+            result = await asyncio.to_thread(self._extract_with_cv2, raw_bytes, mime, fmt, media_input.metadata)
             return result
         except Exception as exc:
             logger.warning("cv2 video processing failed: %s", exc)
@@ -151,9 +149,7 @@ class VideoPipeline(BasePipeline):
     # cv2-based extraction (blocking — run via asyncio.to_thread)
     # ------------------------------------------------------------------
 
-    def _extract_with_cv2(
-        self, raw_bytes: bytes, mime: str, fmt: str, metadata: Dict
-    ) -> Dict[str, Any]:
+    def _extract_with_cv2(self, raw_bytes: bytes, mime: str, fmt: str, metadata: Dict) -> Dict[str, Any]:
         """Extract video metadata and sample frames using OpenCV."""
         suffix = self._suffix_from_mime(mime)
         with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
@@ -235,9 +231,7 @@ class VideoPipeline(BasePipeline):
     # Fallback result (no cv2)
     # ------------------------------------------------------------------
 
-    def _format_only_result(
-        self, fmt: str, raw_bytes: bytes, mime: str, metadata: Dict
-    ) -> Dict[str, Any]:
+    def _format_only_result(self, fmt: str, raw_bytes: bytes, mime: str, metadata: Dict) -> Dict[str, Any]:
         """Return format-detected result when cv2 is unavailable."""
         logger.info("cv2 unavailable; returning format-only result for %s video", fmt)
         return {
@@ -252,9 +246,7 @@ class VideoPipeline(BasePipeline):
             "resolution": "unknown",
             "file_size_bytes": len(raw_bytes),
             "processing_status": "partial" if fmt != "unknown" else "unavailable",
-            "unavailability_reason": (
-                "opencv-python not installed. Run: pip install opencv-python"
-            ),
+            "unavailability_reason": ("opencv-python not installed. Run: pip install opencv-python"),
             "confidence": 0.3 if fmt != "unknown" else 0.0,
             "metadata": metadata,
         }

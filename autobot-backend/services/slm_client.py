@@ -62,12 +62,11 @@ def _warn_slm_url_once(url: str) -> None:
             url,
         )
 
+
 # Ultimate fallback configuration (uses env vars where available)
 ULTIMATE_FALLBACK_CONFIG = {
     "llm_provider": os.getenv("AUTOBOT_LLM_PROVIDER", "ollama"),
-    "llm_endpoint": os.getenv(
-        "OLLAMA_URL", os.getenv("OLLAMA_HOST", "http://localhost:11434")
-    ),
+    "llm_endpoint": os.getenv("OLLAMA_URL", os.getenv("OLLAMA_HOST", "http://localhost:11434")),
     "llm_model": os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", DEFAULT_LLM_MODEL),
     "llm_timeout": int(os.getenv("AUTOBOT_LLM_TIMEOUT", "30")),
     "llm_temperature": float(os.getenv("AUTOBOT_LLM_TEMPERATURE", "0.7")),
@@ -129,12 +128,8 @@ class ServiceDiscoveryCache:
             discovery_data: Dict with url, healthy, etc.
         """
         expires_at = time.time() + self._ttl
-        self._cache[service_name] = CacheEntry(
-            config=discovery_data, expires_at=expires_at
-        )
-        logger.debug(
-            "Cached service discovery for %s (TTL: %ds)", service_name, self._ttl
-        )
+        self._cache[service_name] = CacheEntry(config=discovery_data, expires_at=expires_at)
+        logger.debug("Cached service discovery for %s (TTL: %ds)", service_name, self._ttl)
 
     def clear(self) -> None:
         """Clear entire cache."""
@@ -305,9 +300,7 @@ class SLMClient:
                 headers["Authorization"] = f"Bearer {self.auth_token}"
             # Accept self-signed certs for internal HTTPS (#1048)
             connector = aiohttp.TCPConnector(ssl=_create_permissive_ssl_context())
-            self._http_session = aiohttp.ClientSession(
-                headers=headers, connector=connector
-            )
+            self._http_session = aiohttp.ClientSession(headers=headers, connector=connector)
         return self._http_session
 
     async def connect(self) -> None:
@@ -496,9 +489,7 @@ class SLMClient:
             if not self._shutdown:
                 # Exponential backoff for reconnection
                 await asyncio.sleep(self._reconnect_delay)
-                self._reconnect_delay = min(
-                    self._reconnect_delay * 2, self._max_reconnect_delay
-                )
+                self._reconnect_delay = min(self._reconnect_delay * 2, self._max_reconnect_delay)
                 logger.info("Reconnecting to WebSocket in %.1fs", self._reconnect_delay)
 
     async def _ws_connect_and_listen(self) -> None:
@@ -510,19 +501,11 @@ class SLMClient:
 
         try:
             # Accept self-signed certs for wss:// connections (#1048)
-            ws_ssl = (
-                _create_permissive_ssl_context()
-                if ws_url.startswith("wss://")
-                else None
-            )
+            ws_ssl = _create_permissive_ssl_context() if ws_url.startswith("wss://") else None
             async with websockets.connect(
                 ws_url,
                 ssl=ws_ssl,
-                additional_headers=(
-                    {"Authorization": f"Bearer {self.auth_token}"}
-                    if self.auth_token
-                    else {}
-                ),
+                additional_headers=({"Authorization": f"Bearer {self.auth_token}"} if self.auth_token else {}),
             ) as websocket:
                 self._ws_connected = True
                 self._reconnect_delay = 1.0  # Reset backoff on successful connect
@@ -768,6 +751,4 @@ async def discover_service(service_name: str) -> str:
         return env_url
 
     # 4. Error - not configured
-    raise ServiceNotConfiguredError(
-        f"Service '{service_name}' not found in SLM or environment"
-    )
+    raise ServiceNotConfiguredError(f"Service '{service_name}' not found in SLM or environment")

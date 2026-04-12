@@ -20,10 +20,10 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 
-from autobot_shared.redis_client import get_redis_client, get_async_redis_client
+from autobot_shared.redis_client import get_async_redis_client, get_redis_client
 from autobot_shared.security.path_validator import validate_path
-from constants.ttl_constants import TTL_24_HOURS
 from code_embedding_generator import get_code_embedding_generator
+from constants.ttl_constants import TTL_24_HOURS
 from npu_semantic_search import get_npu_search_engine
 from worker_node import WorkerNode
 
@@ -36,9 +36,7 @@ logger = logging.getLogger(__name__)
 _CODE_ELEMENT_TYPES = ("functions", "classes", "imports", "variables")
 
 # Issue #380: Module-level frozenset for ignored directories in code search
-_IGNORED_DIRS = frozenset(
-    {"node_modules", "__pycache__", ".git", "dist", "build", "target"}
-)
+_IGNORED_DIRS = frozenset({"node_modules", "__pycache__", ".git", "dist", "build", "target"})
 
 
 @dataclass
@@ -164,8 +162,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 ),
                 "class": r"class\s+([a-zA-Z_][a-zA-Z0-9_]*)",
                 "import": (
-                    r'(?:import|require)\s*\(\s*[\'"]([^\'"]+)[\'"]|'
-                    r'import\s+.*?\s+from\s+[\'"]([^\'"]+)[\'"]'
+                    r'(?:import|require)\s*\(\s*[\'"]([^\'"]+)[\'"]|' r'import\s+.*?\s+from\s+[\'"]([^\'"]+)[\'"]'
                 ),
                 "variable": r"(?:const|let|var)\s+([a-zA-Z_][a-zA-Z0-9_]*)",
             },
@@ -178,9 +175,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
             # A running loop exists — schedule as a task
             asyncio.create_task(self.initialize_communication(self.capabilities))
         except RuntimeError:
-            logger.debug(
-                "Event loop not available, will initialize communication later"
-            )
+            logger.debug("Event loop not available, will initialize communication later")
 
     def __init__(self):
         """
@@ -266,9 +261,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
         max_results = request.payload.get("max_results", 10)
         file_patterns = request.payload.get("file_patterns", [])
 
-        results = await self.search_code(
-            query=query, max_results=max_results, file_patterns=file_patterns
-        )
+        results = await self.search_code(query=query, max_results=max_results, file_patterns=file_patterns)
 
         return {
             "search_results": [
@@ -318,9 +311,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
         """Check if file has supported extension (Issue #334 - extracted helper)."""
         return any(filename.endswith(ext) for ext in self.supported_extensions)
 
-    async def _index_directory_files(
-        self, root: str, files: list, root_path: str, errors: list
-    ) -> tuple:
+    async def _index_directory_files(self, root: str, files: list, root_path: str, errors: list) -> tuple:
         """Index files in a directory (Issue #334 - extracted helper)."""
         indexed = 0
         skipped = 0
@@ -344,9 +335,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
         """Generate index key for root path (Issue #398: extracted)."""
         return f"{self.index_prefix}meta:{hashlib.md5(root_path.encode(), usedforsecurity=False).hexdigest()}"
 
-    async def _store_index_metadata(
-        self, index_key: str, root_path: str, indexed_files: int
-    ) -> None:
+    async def _store_index_metadata(self, index_key: str, root_path: str, indexed_files: int) -> None:
         """Store indexing metadata to Redis (Issue #398: extracted)."""
         metadata = {
             "root_path": root_path,
@@ -354,9 +343,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
             "timestamp": time.time(),
             "npu_available": self.npu_available,
         }
-        await asyncio.to_thread(
-            self.redis_client.setex, index_key, TTL_24_HOURS, json.dumps(metadata)
-        )
+        await asyncio.to_thread(self.redis_client.setex, index_key, TTL_24_HOURS, json.dumps(metadata))
 
     def _build_index_result(
         self,
@@ -376,9 +363,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
             "index_key": index_key,
         }
 
-    async def index_codebase(
-        self, root_path: str, force_reindex: bool = False
-    ) -> Dict[str, Any]:
+    async def index_codebase(self, root_path: str, force_reindex: bool = False) -> Dict[str, Any]:
         """Index a codebase for fast searching (Issue #398: refactored)."""
         start_time = time.time()
         indexed_files = 0
@@ -390,31 +375,21 @@ class NPUCodeSearchAgent(StandardizedAgent):
             self.logger.info("Starting codebase indexing: %s", root_path)
             index_key = self._get_index_key(root_path)
 
-            already_indexed = await asyncio.to_thread(
-                self.redis_client.exists, index_key
-            )
+            already_indexed = await asyncio.to_thread(self.redis_client.exists, index_key)
             if not force_reindex and already_indexed:
-                self.logger.info(
-                    "Codebase already indexed, use force_reindex=True to re-index"
-                )
+                self.logger.info("Codebase already indexed, use force_reindex=True to re-index")
                 return {"status": "already_indexed", "index_key": index_key}
 
             for root, dirs, files in os.walk(root_path):
                 dirs[:] = [d for d in dirs if not self._is_ignored_dir(d)]
-                indexed, skipped = await self._index_directory_files(
-                    root, files, root_path, errors
-                )
+                indexed, skipped = await self._index_directory_files(root, files, root_path, errors)
                 indexed_files += indexed
                 skipped_files += skipped
 
             await self._store_index_metadata(index_key, root_path, indexed_files)
             execution_time = time.time() - start_time
-            self.logger.info(
-                "Indexing complete: %d files in %.2fs", indexed_files, execution_time
-            )
-            return self._build_index_result(
-                indexed_files, skipped_files, errors, execution_time, index_key
-            )
+            self.logger.info("Indexing complete: %d files in %.2fs", indexed_files, execution_time)
+            return self._build_index_result(indexed_files, skipped_files, errors, execution_time, index_key)
 
         except Exception as e:
             self.logger.error("Codebase indexing failed: %s", e)
@@ -451,9 +426,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
         self.redis_client.expire(language_key, TTL_24_HOURS)
         for element_type, element_list in elements.items():
             for element in element_list:
-                element_key = (
-                    f"{self.index_prefix}element:{element_type}:{element['name']}"
-                )
+                element_key = f"{self.index_prefix}element:{element_type}:{element['name']}"
                 element_data = {
                     "file_path": relative_path,
                     "line_number": element.get("line_number", 0),
@@ -462,9 +435,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 self.redis_client.lpush(element_key, json.dumps(element_data))
                 self.redis_client.expire(element_key, TTL_24_HOURS)
 
-    def _extract_element_code(
-        self, content: str, line_number: int, element_type: str, max_lines: int = 50
-    ) -> str:
+    def _extract_element_code(self, content: str, line_number: int, element_type: str, max_lines: int = 50) -> str:
         """
         Extract code for a specific element with context.
 
@@ -522,18 +493,14 @@ class NPUCodeSearchAgent(StandardizedAgent):
         Returns:
             True if embedding stored successfully. Issue #620.
         """
-        element_code = self._extract_element_code(
-            content, element["line_number"], element_type
-        )
+        element_code = self._extract_element_code(content, element["line_number"], element_type)
         if not element_code.strip():
             return False
 
         content_hash = hashlib.sha256(element_code.encode()).hexdigest()
         result = await embedding_generator.generate_embedding(element_code, language)
 
-        singular_type = (
-            element_type.rstrip("es") if element_type.endswith("es") else element_type
-        )
+        singular_type = element_type.rstrip("es") if element_type.endswith("es") else element_type
         doc_id = await self.npu_search_engine.store_code_embedding(
             embedding=result.embedding,
             code_content=element_code,
@@ -578,18 +545,14 @@ class NPUCodeSearchAgent(StandardizedAgent):
             return stored_count
 
         except Exception as e:
-            self.logger.warning(
-                "Failed to generate embeddings for %s: %s", relative_path, e
-            )
+            self.logger.warning("Failed to generate embeddings for %s: %s", relative_path, e)
             return 0
 
     async def _index_file(self, file_path: str, relative_path: str):
         """Index a single file with embeddings (Issue #207, #398: refactored)."""
         try:
             file_path = str(validate_path(file_path))
-            async with aiofiles.open(
-                file_path, "r", encoding="utf-8", errors="ignore"
-            ) as f:
+            async with aiofiles.open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = await f.read()
 
             if not content.strip():
@@ -599,18 +562,12 @@ class NPUCodeSearchAgent(StandardizedAgent):
             language = self._detect_language(file_ext)
             elements = self._extract_code_elements(content, language)
 
-            embedding_count = await self._generate_and_store_embeddings(
-                content, relative_path, language, elements
-            )
+            embedding_count = await self._generate_and_store_embeddings(content, relative_path, language, elements)
 
             if embedding_count > 0:
-                self.logger.debug(
-                    "Generated %d embeddings for %s", embedding_count, relative_path
-                )
+                self.logger.debug("Generated %d embeddings for %s", embedding_count, relative_path)
 
-            index_data = self._build_file_index_data(
-                relative_path, language, content, elements
-            )
+            index_data = self._build_file_index_data(relative_path, language, content, elements)
 
             file_key = f"{self.index_prefix}file:{relative_path}"
             language_key = f"{self.index_prefix}lang:{language}"
@@ -704,9 +661,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
                     )
         return elements
 
-    def _extract_code_elements(
-        self, content: str, language: str
-    ) -> Dict[str, List[Dict]]:
+    def _extract_code_elements(self, content: str, language: str) -> Dict[str, List[Dict]]:
         """Extract code elements (functions, classes, etc.) from content"""
         elements = {"functions": [], "classes": [], "imports": [], "variables": []}
 
@@ -718,32 +673,22 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
         # Issue #281: Use extracted helper for all element types
         if "function" in patterns:
-            elements["functions"] = self._extract_elements_by_pattern(
-                lines, patterns["function"], use_first_group=True
-            )
+            elements["functions"] = self._extract_elements_by_pattern(lines, patterns["function"], use_first_group=True)
 
         if "class" in patterns:
-            elements["classes"] = self._extract_elements_by_pattern(
-                lines, patterns["class"], use_first_group=False
-            )
+            elements["classes"] = self._extract_elements_by_pattern(lines, patterns["class"], use_first_group=False)
 
         if "import" in patterns:
-            elements["imports"] = self._extract_elements_by_pattern(
-                lines, patterns["import"], use_first_group=True
-            )
+            elements["imports"] = self._extract_elements_by_pattern(lines, patterns["import"], use_first_group=True)
 
         return elements
 
-    def _get_search_cache_key(
-        self, query: str, search_type: str, language: Optional[str]
-    ) -> str:
+    def _get_search_cache_key(self, query: str, search_type: str, language: Optional[str]) -> str:
         """Generate search cache key (Issue #398: extracted)."""
         cache_input = query + search_type + str(language)
         return f"{self.search_cache_prefix}{hashlib.md5(cache_input.encode(), usedforsecurity=False).hexdigest()}"
 
-    def _serialize_results(
-        self, results: List[CodeSearchResult]
-    ) -> List[Dict[str, Any]]:
+    def _serialize_results(self, results: List[CodeSearchResult]) -> List[Dict[str, Any]]:
         """Serialize results for caching (Issue #398: extracted)."""
         return [
             {
@@ -842,9 +787,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
         keyword_results = []
 
         try:
-            semantic_results = await self._search_code_embeddings(
-                query, language, max_results * 2
-            )
+            semantic_results = await self._search_code_embeddings(query, language, max_results * 2)
         except Exception as e:
             self.logger.warning("Hybrid: semantic search failed: %s", e)
 
@@ -903,9 +846,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 self.stats.results_count = len(results)
                 return results[:max_results]
 
-            results = await self._execute_search_by_type(
-                query, search_type, language, max_results
-            )
+            results = await self._execute_search_by_type(query, search_type, language, max_results)
             serializable_results = self._serialize_results(results)
             await asyncio.to_thread(
                 self.redis_client.setex,
@@ -915,9 +856,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
             )
 
             self.stats.search_time_ms = (time.time() - start_time) * 1000
-            self.stats.npu_acceleration_used = (
-                self.npu_available and search_type == "semantic"
-            )
+            self.stats.npu_acceleration_used = self.npu_available and search_type == "semantic"
             self.stats.redis_cache_hit = False
             self.stats.results_count = len(results)
             return results
@@ -926,9 +865,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
             self.logger.error("Code search failed: %s", e)
             return []
 
-    async def _search_elements(
-        self, query: str, language: Optional[str], max_results: int
-    ) -> List[CodeSearchResult]:
+    async def _search_elements(self, query: str, language: Optional[str], max_results: int) -> List[CodeSearchResult]:
         """Search for specific code elements (functions, classes, etc.)"""
         results = []
 
@@ -936,9 +873,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
         for element_type in _CODE_ELEMENT_TYPES:
             element_key = f"{self.index_prefix}element:{element_type}:{query}"
             # Issue #361 - avoid blocking
-            element_data_list = await asyncio.to_thread(
-                self.redis_client.lrange, element_key, 0, max_results
-            )
+            element_data_list = await asyncio.to_thread(self.redis_client.lrange, element_key, 0, max_results)
 
             for element_data in element_data_list:
                 try:
@@ -946,15 +881,11 @@ class NPUCodeSearchAgent(StandardizedAgent):
                     file_path = element["file_path"]
 
                     # Language filter
-                    if language and not self._file_matches_language(
-                        file_path, language
-                    ):
+                    if language and not self._file_matches_language(file_path, language):
                         continue
 
                     # Load file content for context
-                    content_lines = await self._get_file_context(
-                        file_path, element["line_number"]
-                    )
+                    content_lines = await self._get_file_context(file_path, element["line_number"])
 
                     result = CodeSearchResult(
                         file_path=file_path,
@@ -1007,9 +938,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
         try:
             file_path = str(validate_path(file_path))
-            async with aiofiles.open(
-                file_path, "r", encoding="utf-8", errors="ignore"
-            ) as f:
+            async with aiofiles.open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = await f.read()
             lines = content.splitlines()
             return self._search_lines_for_query(lines, query, file_path, file_language)
@@ -1019,9 +948,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
             self.logger.error("Error processing file %s: %s", file_path, e)
         return []
 
-    async def _search_exact(
-        self, query: str, language: Optional[str], max_results: int
-    ) -> List[CodeSearchResult]:
+    async def _search_exact(self, query: str, language: Optional[str], max_results: int) -> List[CodeSearchResult]:
         """Perform exact string search"""
         results = []
         pattern = f"{self.index_prefix}file:*"
@@ -1082,23 +1009,17 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
         try:
             file_path = str(validate_path(file_path))
-            async with aiofiles.open(
-                file_path, "r", encoding="utf-8", errors="ignore"
-            ) as f:
+            async with aiofiles.open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = await f.read()
             lines = content.splitlines()
-            return self._search_lines_regex(
-                lines, pattern, query, file_path, file_language
-            )
+            return self._search_lines_regex(lines, pattern, query, file_path, file_language)
         except OSError as e:
             self.logger.error("Failed to read file %s: %s", file_path, e)
         except Exception as e:
             self.logger.error("Error processing file %s: %s", file_path, e)
         return []
 
-    async def _search_regex(
-        self, query: str, language: Optional[str], max_results: int
-    ) -> List[CodeSearchResult]:
+    async def _search_regex(self, query: str, language: Optional[str], max_results: int) -> List[CodeSearchResult]:
         """Perform regex search"""
         import re
 
@@ -1119,9 +1040,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 # Issue #361 - avoid blocking
                 file_data_raw = await asyncio.to_thread(self.redis_client.get, file_key)
                 file_data = json.loads(file_data_raw)
-                file_results = await self._search_file_regex(
-                    file_data, pattern, query, language
-                )
+                file_results = await self._search_file_regex(file_data, pattern, query, language)
                 results.extend(file_results)
                 if len(results) >= max_results:
                     return results[:max_results]
@@ -1130,9 +1049,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
         return results
 
-    def _calculate_semantic_match(
-        self, line: str, query_words: List[str]
-    ) -> Optional[tuple]:
+    def _calculate_semantic_match(self, line: str, query_words: List[str]) -> Optional[tuple]:
         """Calculate semantic match score for a line (Issue #334 - extracted helper)."""
         line_lower = line.lower()
         matches = sum(1 for word in query_words if word in line_lower)
@@ -1191,14 +1108,10 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
         try:
             file_path = str(validate_path(file_path))
-            async with aiofiles.open(
-                file_path, "r", encoding="utf-8", errors="ignore"
-            ) as f:
+            async with aiofiles.open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = await f.read()
             lines = content.splitlines()
-            return self._search_lines_semantic(
-                lines, query, query_words, file_path, file_language
-            )
+            return self._search_lines_semantic(lines, query, query_words, file_path, file_language)
         except OSError as e:
             self.logger.error("Failed to read file %s: %s", file_path, e)
         except Exception as e:
@@ -1209,9 +1122,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
         """Convert NPU search result to CodeSearchResult (Issue #398: extracted)."""
         file_path = result.metadata.get("file_path", "unknown")
         line_number = result.metadata.get("line_number", 0)
-        context_lines = await self._get_file_context(
-            file_path, line_number, context_size=3
-        )
+        context_lines = await self._get_file_context(file_path, line_number, context_size=3)
         return CodeSearchResult(
             file_path=file_path,
             content=result.content,
@@ -1324,9 +1235,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
             embedding_generator = await get_code_embedding_generator()
             await self._ensure_search_engine_initialized()
 
-            query_result = await embedding_generator.generate_embedding(
-                query, language or "python"
-            )
+            query_result = await embedding_generator.generate_embedding(query, language or "python")
 
             search_results = await self.npu_search_engine.search_code_embeddings(
                 query_embedding=query_result.embedding,
@@ -1336,9 +1245,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
             )
 
             results = [
-                await self._convert_embedding_search_result(
-                    sr, query, query_result.device_used
-                )
+                await self._convert_embedding_search_result(sr, query, query_result.device_used)
                 for sr in search_results
             ]
 
@@ -1373,21 +1280,15 @@ class NPUCodeSearchAgent(StandardizedAgent):
             try:
                 file_data_raw = await asyncio.to_thread(self.redis_client.get, file_key)
                 file_data = json.loads(file_data_raw)
-                file_results = await self._search_file_semantic(
-                    file_data, query, query_words, language
-                )
+                file_results = await self._search_file_semantic(file_data, query, query_words, language)
                 results.extend(file_results)
             except Exception as file_error:
-                self.logger.error(
-                    "Error processing file key %s: %s", file_key, file_error
-                )
+                self.logger.error("Error processing file key %s: %s", file_key, file_error)
 
         results.sort(key=lambda x: x.confidence, reverse=True)
         return results[:max_results]
 
-    async def _search_semantic(
-        self, query: str, language: Optional[str], max_results: int
-    ) -> List[CodeSearchResult]:
+    async def _search_semantic(self, query: str, language: Optional[str], max_results: int) -> List[CodeSearchResult]:
         """
         Perform semantic search using code embeddings.
 
@@ -1401,16 +1302,12 @@ class NPUCodeSearchAgent(StandardizedAgent):
         try:
             return await self._search_code_embeddings(query, language, max_results)
         except Exception as e:
-            self.logger.warning(
-                "Code embedding search failed: %s, trying NPU search", e
-            )
+            self.logger.warning("Code embedding search failed: %s, trying NPU search", e)
 
         try:
             return await self._run_npu_semantic_search(query, language, max_results)
         except Exception as e:
-            self.logger.warning(
-                "NPU semantic search failed: %s, using word matching", e
-            )
+            self.logger.warning("NPU semantic search failed: %s, using word matching", e)
 
         return await self._fallback_word_matching(query, language, max_results)
 
@@ -1420,15 +1317,11 @@ class NPUCodeSearchAgent(StandardizedAgent):
         detected_language = self._detect_language(file_ext)
         return detected_language == language
 
-    async def _get_file_context(
-        self, file_path: str, line_number: int, context_size: int = 3
-    ) -> List[str]:
+    async def _get_file_context(self, file_path: str, line_number: int, context_size: int = 3) -> List[str]:
         """Get context lines around a specific line number"""
         try:
             file_path = str(validate_path(file_path))
-            async with aiofiles.open(
-                file_path, "r", encoding="utf-8", errors="ignore"
-            ) as f:
+            async with aiofiles.open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = await f.read()
                 lines = content.splitlines(keepends=True)
 
@@ -1438,14 +1331,10 @@ class NPUCodeSearchAgent(StandardizedAgent):
             self.logger.error("Failed to read file %s: %s", file_path, e)
             return []
         except Exception as e:
-            self.logger.error(
-                f"Error getting context for {file_path}:{line_number}: {e}"
-            )
+            self.logger.error(f"Error getting context for {file_path}:{line_number}: {e}")
             return []
 
-    def _get_context_lines(
-        self, lines: List[str], center_index: int, context_size: int
-    ) -> List[str]:
+    def _get_context_lines(self, lines: List[str], center_index: int, context_size: int) -> List[str]:
         """Get context lines around a center index"""
         start = max(0, center_index - context_size)
         end = min(len(lines), center_index + context_size + 1)
@@ -1504,9 +1393,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 cache_keys = self.redis_client.keys(f"{self.search_cache_prefix}*")
                 return len(file_keys), language_stats, len(cache_keys)
 
-            file_count, language_stats, cache_count = await asyncio.to_thread(
-                _fetch_index_status
-            )
+            file_count, language_stats, cache_count = await asyncio.to_thread(_fetch_index_status)
 
             return {
                 "total_files_indexed": file_count,
@@ -1556,9 +1443,7 @@ async def search_codebase(
     Returns:
         List of search results
     """
-    return await get_npu_code_search().search_code(
-        query, search_type, language, max_results
-    )
+    return await get_npu_code_search().search_code(query, search_type, language, max_results)
 
 
 async def index_project(root_path: str, force_reindex: bool = False) -> Dict[str, Any]:

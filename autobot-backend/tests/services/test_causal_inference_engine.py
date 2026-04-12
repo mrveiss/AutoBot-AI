@@ -128,9 +128,7 @@ class TestInterventionGeneration:
         assert len(interventions) >= 2
         index_interventions = [i for i in interventions if "index" in i.name.lower()]
         assert len(index_interventions) >= 1
-        assert (
-            index_interventions[0].recommendation_type == RecommendationType.SHORT_TERM
-        )
+        assert index_interventions[0].recommendation_type == RecommendationType.SHORT_TERM
 
 
 class TestConfounderAnalysis:
@@ -369,12 +367,8 @@ class TestConfidenceCalculation:
             )
         ]
 
-        confidence_no_confound = engine._calculate_confidence(
-            report, 0.0, interventions
-        )
-        confidence_with_confound = engine._calculate_confidence(
-            report, 0.5, interventions
-        )
+        confidence_no_confound = engine._calculate_confidence(report, 0.0, interventions)
+        confidence_with_confound = engine._calculate_confidence(report, 0.5, interventions)
 
         assert confidence_with_confound < confidence_no_confound
 
@@ -508,9 +502,7 @@ class TestRecommendationGeneration:
             ),
         ]
 
-        recommendations = engine._generate_recommendations(
-            interventions, Severity.DEGRADED
-        )
+        recommendations = engine._generate_recommendations(interventions, Severity.DEGRADED)
 
         assert len(recommendations) >= 2
         # Check order: IMMEDIATE comes before SHORT_TERM comes before LONG_TERM
@@ -547,9 +539,7 @@ class TestRecommendationGeneration:
             )
         ]
 
-        recommendations = engine._generate_recommendations(
-            interventions, Severity.WARNING
-        )
+        recommendations = engine._generate_recommendations(interventions, Severity.WARNING)
 
         # Should have fallback or empty recommendations
         assert len(recommendations) >= 0
@@ -645,9 +635,7 @@ class TestAnalyzeFailure:
             new_callable=AsyncMock,
             return_value=mock_report,
         ):
-            report = await engine.analyze_failure(
-                "task-1", "Query timeout in production"
-            )
+            report = await engine.analyze_failure("task-1", "Query timeout in production")
 
         assert report.analysis_status == "success"
         assert report.task_id == "task-1"

@@ -117,16 +117,12 @@ class PermissionEnforcementExtension(Extension):
 
         if not _role_satisfies(user_role, tool_permission):
             logger.warning(
-                "Permission denied: tool requires '%s', user has role '%s' "
-                "(session=%s)",
+                "Permission denied: tool requires '%s', user has role '%s' " "(session=%s)",
                 tool_permission,
                 user_role,
                 ctx.session_id,
             )
-            raise PermissionError(
-                f"Tool requires '{tool_permission}' permission, "
-                f"user has role '{user_role}'"
-            )
+            raise PermissionError(f"Tool requires '{tool_permission}' permission, " f"user has role '{user_role}'")
 
         logger.debug(
             "Permission granted: tool_permission='%s' user_role='%s' session=%s",

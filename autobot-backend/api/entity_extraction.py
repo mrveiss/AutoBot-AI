@@ -67,15 +67,9 @@ class Message(BaseModel):
 class EntityExtractionRequest(BaseModel):
     """Request model for entity extraction."""
 
-    conversation_id: str = Field(
-        ..., min_length=1, max_length=200, description="Conversation identifier"
-    )
-    messages: List[Message] = Field(
-        ..., min_items=1, description="Conversation messages"
-    )
-    session_metadata: Optional[Metadata] = Field(
-        None, description="Optional session metadata"
-    )
+    conversation_id: str = Field(..., min_length=1, max_length=200, description="Conversation identifier")
+    messages: List[Message] = Field(..., min_items=1, description="Conversation messages")
+    session_metadata: Optional[Metadata] = Field(None, description="Optional session metadata")
 
     @validator("conversation_id")
     def validate_conversation_id(cls, v):
@@ -111,25 +105,17 @@ class BatchExtractionResponse(BaseModel):
 
     success: bool = Field(..., description="Whether batch succeeded")
     total_conversations: int = Field(..., description="Total conversations processed")
-    successful_extractions: int = Field(
-        ..., description="Number of successful extractions"
-    )
+    successful_extractions: int = Field(..., description="Number of successful extractions")
     failed_extractions: int = Field(..., description="Number of failed extractions")
-    results: List[EntityExtractionResponse] = Field(
-        ..., description="Individual extraction results"
-    )
-    total_processing_time: float = Field(
-        ..., description="Total processing time in seconds"
-    )
+    results: List[EntityExtractionResponse] = Field(..., description="Individual extraction results")
+    total_processing_time: float = Field(..., description="Total processing time in seconds")
     request_id: str = Field(..., description="Unique request identifier")
 
 
 class HealthResponse(BaseModel):
     """Response model for health check."""
 
-    status: str = Field(
-        ..., description="Service status (healthy, degraded, unhealthy)"
-    )
+    status: str = Field(..., description="Service status (healthy, degraded, unhealthy)")
     components: Dict[str, str] = Field(..., description="Component health status")
     timestamp: str = Field(..., description="Timestamp of health check")
 
@@ -204,9 +190,7 @@ def _log_extraction_result(request_id: str, result: ExtractionResult) -> None:
     )
 
 
-def _build_extraction_response(
-    result: ExtractionResult, request_id: str
-) -> JSONResponse:
+def _build_extraction_response(result: ExtractionResult, request_id: str) -> JSONResponse:
     """
     Build JSONResponse from extraction result.
 
@@ -293,9 +277,7 @@ async def extract_entities(
         raise HTTPException(status_code=500, detail="Entity extraction failed")
 
 
-def _build_extraction_tasks(
-    batch_request: "BatchExtractionRequest", extractor: GraphEntityExtractor
-) -> List:
+def _build_extraction_tasks(batch_request: "BatchExtractionRequest", extractor: GraphEntityExtractor) -> List:
     """
     Build extraction tasks for batch processing.
 
@@ -321,9 +303,7 @@ def _build_extraction_tasks(
     return tasks
 
 
-def _process_extraction_results(
-    results: List, batch_request: "BatchExtractionRequest", request_id: str
-) -> tuple:
+def _process_extraction_results(results: List, batch_request: "BatchExtractionRequest", request_id: str) -> tuple:
     """
     Process extraction results into successful and failed lists.
 
@@ -344,9 +324,7 @@ def _process_extraction_results(
         conv_id = batch_request.conversations[idx].conversation_id
 
         if isinstance(result, Exception):
-            logger.error(
-                "[%s] Extraction failed for %s: %s", request_id, conv_id, result
-            )
+            logger.error("[%s] Extraction failed for %s: %s", request_id, conv_id, result)
             failed_results.append(
                 {
                     "success": False,
@@ -402,22 +380,16 @@ async def extract_entities_batch(
     start_time = time.perf_counter()
 
     try:
-        logger.info(
-            f"[{request_id}] Batch extraction: {len(batch_request.conversations)} conversations"
-        )
+        logger.info(f"[{request_id}] Batch extraction: {len(batch_request.conversations)} conversations")
 
         # Build extraction tasks (Issue #281: uses helper)
         tasks = _build_extraction_tasks(batch_request, extractor)
 
         # Wait for all extractions to complete
-        results: List[ExtractionResult] = await asyncio.gather(
-            *tasks, return_exceptions=True
-        )
+        results: List[ExtractionResult] = await asyncio.gather(*tasks, return_exceptions=True)
 
         # Process results (Issue #281: uses helper)
-        successful_results, failed_results = _process_extraction_results(
-            results, batch_request, request_id
-        )
+        successful_results, failed_results = _process_extraction_results(results, batch_request, request_id)
 
         total_time = time.perf_counter() - start_time
 
@@ -467,14 +439,8 @@ async def entity_extraction_health(
         # Check component health
         components = {
             "entity_extractor": "healthy",
-            "knowledge_extraction_agent": (
-                "healthy" if extractor.extractor else "unavailable"
-            ),
-            "memory_graph": (
-                "healthy"
-                if extractor.graph and extractor.graph.initialized
-                else "unavailable"
-            ),
+            "knowledge_extraction_agent": ("healthy" if extractor.extractor else "unavailable"),
+            "memory_graph": ("healthy" if extractor.graph and extractor.graph.initialized else "unavailable"),
         }
 
         # Determine overall status

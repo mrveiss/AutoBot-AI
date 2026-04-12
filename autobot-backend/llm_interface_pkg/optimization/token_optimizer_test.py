@@ -102,9 +102,7 @@ class TestFrequencyTracker:
 
 class TestTokenOptimizer:
     def _make_optimizer(self, **kwargs):
-        config = TokenOptimizerConfig(
-            enabled=True, min_repeat_threshold=2, min_block_length=200, **kwargs
-        )
+        config = TokenOptimizerConfig(enabled=True, min_repeat_threshold=2, min_block_length=200, **kwargs)
         return TokenOptimizer(config)
 
     def test_disabled_returns_original(self):
@@ -170,9 +168,7 @@ class TestL2CacheWithMockedRedis:
         store = {}
         mock_redis = MagicMock()
         mock_redis.get.side_effect = lambda key: store.get(key)
-        mock_redis.setex.side_effect = lambda key, ttl, data: store.__setitem__(
-            key, data
-        )
+        mock_redis.setex.side_effect = lambda key, ttl, data: store.__setitem__(key, data)
         mock_get_redis.return_value = mock_redis
 
         cache = L2Cache(ttl_seconds=3600, key_prefix="test:")

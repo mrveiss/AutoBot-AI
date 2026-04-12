@@ -8,8 +8,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from slm.agent.health_collector import HealthCollector, _STATE_CHANGE_CHANNEL_TEMPLATE
-
+from slm.agent.health_collector import _STATE_CHANGE_CHANNEL_TEMPLATE, HealthCollector
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -68,9 +67,7 @@ class TestDetectAndPublishStateChanges:
         collector = _make_collector()
         collector._last_known_status["redis"] = "running"
         with patch.object(collector, "_publish_state_change") as mock_pub:
-            collector._detect_and_publish_state_changes(
-                [_svc("redis", "failed", error_message="OOM killed")]
-            )
+            collector._detect_and_publish_state_changes([_svc("redis", "failed", error_message="OOM killed")])
         _, kwargs = mock_pub.call_args
         assert kwargs["error_context"] == "OOM killed"
 
@@ -91,9 +88,7 @@ class TestDetectAndPublishStateChanges:
         collector._last_known_status["nginx"] = "running"
         collector._last_known_status["sshd"] = "running"
         with patch.object(collector, "_publish_state_change") as mock_pub:
-            collector._detect_and_publish_state_changes(
-                [_svc("nginx", "failed"), _svc("sshd", "running")]
-            )
+            collector._detect_and_publish_state_changes([_svc("nginx", "failed"), _svc("sshd", "running")])
         assert mock_pub.call_count == 1
         args = mock_pub.call_args
         assert args.kwargs["service_name"] == "nginx"
@@ -113,9 +108,7 @@ class TestPublishStateChange:
     def test_publishes_to_correct_channel(self):
         collector = _make_collector()
         mock_redis = self._mock_redis()
-        with patch(
-            "slm.agent.health_collector.get_redis_client", return_value=mock_redis
-        ):
+        with patch("slm.agent.health_collector.get_redis_client", return_value=mock_redis):
             collector._publish_state_change("nginx", "running", "failed", "")
         expected_channel = _STATE_CHANGE_CHANNEL_TEMPLATE.format(service="nginx")
         call_args = mock_redis.publish.call_args[0]
@@ -131,9 +124,7 @@ class TestPublishStateChange:
             captured["payload"] = json.loads(payload)
 
         mock_redis.publish.side_effect = _capture_publish
-        with patch(
-            "slm.agent.health_collector.get_redis_client", return_value=mock_redis
-        ):
+        with patch("slm.agent.health_collector.get_redis_client", return_value=mock_redis):
             collector._publish_state_change("nginx", "running", "failed", "segfault")
 
         p = captured["payload"]
@@ -145,9 +136,7 @@ class TestPublishStateChange:
 
     def test_redis_unavailable_does_not_raise(self):
         collector = _make_collector()
-        with patch(
-            "slm.agent.health_collector.get_redis_client", return_value=None
-        ):
+        with patch("slm.agent.health_collector.get_redis_client", return_value=None):
             # Must not propagate any exception.
             collector._publish_state_change("nginx", "running", "failed", "")
 
@@ -155,9 +144,7 @@ class TestPublishStateChange:
         collector = _make_collector()
         mock_redis = self._mock_redis()
         mock_redis.publish.side_effect = ConnectionError("redis gone")
-        with patch(
-            "slm.agent.health_collector.get_redis_client", return_value=mock_redis
-        ):
+        with patch("slm.agent.health_collector.get_redis_client", return_value=mock_redis):
             collector._publish_state_change("nginx", "running", "failed", "")
 
 

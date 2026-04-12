@@ -152,9 +152,7 @@ async def _get_target_nodes(db, schedule: UpdateSchedule):
     Helper for execute_schedule (Issue #665).
     """
     if schedule.target_type == "all":
-        result = await db.execute(
-            select(Node).where(Node.code_status == CodeStatus.OUTDATED.value)
-        )
+        result = await db.execute(select(Node).where(Node.code_status == CodeStatus.OUTDATED.value))
     elif schedule.target_type == "specific" and schedule.target_nodes:
         result = await db.execute(
             select(Node).where(
@@ -164,9 +162,7 @@ async def _get_target_nodes(db, schedule: UpdateSchedule):
         )
     else:
         # Default to all outdated nodes
-        result = await db.execute(
-            select(Node).where(Node.code_status == CodeStatus.OUTDATED.value)
-        )
+        result = await db.execute(select(Node).where(Node.code_status == CodeStatus.OUTDATED.value))
     return result.scalars().all()
 
 

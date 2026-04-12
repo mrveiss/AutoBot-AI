@@ -203,9 +203,7 @@ class IntentClassifier:
                 patterns = []
                 for keyword in keywords:
                     # Create word boundary pattern
-                    pattern = re.compile(
-                        r"\b" + re.escape(keyword) + r"\b", re.IGNORECASE
-                    )
+                    pattern = re.compile(r"\b" + re.escape(keyword) + r"\b", re.IGNORECASE)
                     patterns.append(pattern)
                 cls._compiled_patterns[intent] = patterns
 
@@ -248,9 +246,7 @@ class IntentClassifier:
         return best_intent, confidence
 
     @classmethod
-    def classify_sequence(
-        cls, messages: List[str]
-    ) -> List[Tuple[IntentCategory, float]]:
+    def classify_sequence(cls, messages: List[str]) -> List[Tuple[IntentCategory, float]]:
         """Classify a sequence of messages."""
         return [cls.classify(msg) for msg in messages]
 

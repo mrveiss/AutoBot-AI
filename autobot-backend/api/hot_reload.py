@@ -61,12 +61,8 @@ async def reload_chat_workflow():
         reload_results = await hot_reload_manager.reload_chat_workflow()
 
         # Process results
-        successful_reloads = [
-            module for module, success in reload_results.items() if success
-        ]
-        failed_reloads = [
-            module for module, success in reload_results.items() if not success
-        ]
+        successful_reloads = [module for module, success in reload_results.items() if success]
+        failed_reloads = [module for module, success in reload_results.items() if not success]
 
         overall_success = len(successful_reloads) > 0
 
@@ -173,9 +169,7 @@ async def start_hot_reload():
 
         return {
             "success": True,
-            "message": (
-                "Hot reload manager started and chat workflow modules registered"
-            ),
+            "message": ("Hot reload manager started and chat workflow modules registered"),
         }
 
     except Exception as e:

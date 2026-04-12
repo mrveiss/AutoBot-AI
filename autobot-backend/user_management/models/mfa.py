@@ -105,10 +105,7 @@ class UserMFA(Base, TimestampMixin):
     )
 
     def __repr__(self) -> str:
-        return (
-            f"<UserMFA(user_id={self.user_id}, "
-            f"method={self.method}, verified={self.is_verified})>"
-        )
+        return f"<UserMFA(user_id={self.user_id}, " f"method={self.method}, verified={self.is_verified})>"
 
     def record_verification(self) -> None:
         """Record a successful MFA verification."""

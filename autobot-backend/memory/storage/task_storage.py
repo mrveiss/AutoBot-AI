@@ -183,9 +183,7 @@ class TaskStorage:
         try:
             async with self._get_connection() as conn:
                 conn.row_factory = aiosqlite.Row
-                cursor = await conn.execute(
-                    "SELECT * FROM task_execution_history WHERE task_id = ?", (task_id,)
-                )
+                cursor = await conn.execute("SELECT * FROM task_execution_history WHERE task_id = ?", (task_id,))
                 row = await cursor.fetchone()
 
                 if not row:
@@ -196,9 +194,7 @@ class TaskStorage:
             logger.error("Failed to get task %s: %s", task_id, e)
             raise RuntimeError(f"Failed to get task: {e}")
 
-    async def get_task_history(
-        self, filters: Dict[str, Any]
-    ) -> List[TaskExecutionRecord]:
+    async def get_task_history(self, filters: Dict[str, Any]) -> List[TaskExecutionRecord]:
         """Query task history with filters"""
         where_clauses = []
         values = []
@@ -215,9 +211,7 @@ class TaskStorage:
         if filters.get("priority"):
             priority = filters["priority"]
             where_clauses.append("priority = ?")
-            values.append(
-                priority.value if isinstance(priority, TaskPriority) else priority
-            )
+            values.append(priority.value if isinstance(priority, TaskPriority) else priority)
 
         if filters.get("start_date"):
             where_clauses.append("created_at >= ?")
@@ -254,9 +248,7 @@ class TaskStorage:
             async with self._get_connection() as conn:
                 conn.row_factory = aiosqlite.Row
                 # Total tasks
-                cursor = await conn.execute(
-                    "SELECT COUNT(*) FROM task_execution_history"
-                )
+                cursor = await conn.execute("SELECT COUNT(*) FROM task_execution_history")
                 total = (await cursor.fetchone())[0]
 
                 # Tasks by status
@@ -293,9 +285,7 @@ class TaskStorage:
             status=TaskStatus(row["status"]),
             priority=TaskPriority(row["priority"]),
             created_at=(
-                datetime.fromisoformat(row["created_at"])
-                if isinstance(row["created_at"], str)
-                else row["created_at"]
+                datetime.fromisoformat(row["created_at"]) if isinstance(row["created_at"], str) else row["created_at"]
             ),
             started_at=(
                 datetime.fromisoformat(row["started_at"])
@@ -314,14 +304,10 @@ class TaskStorage:
             error_message=row["error_message"],
             retry_count=row["retry_count"],
             markdown_references=(
-                json.loads(row["markdown_references_json"])
-                if row["markdown_references_json"]
-                else None
+                json.loads(row["markdown_references_json"]) if row["markdown_references_json"] else None
             ),
             parent_task_id=row["parent_task_id"],
-            subtask_ids=(
-                json.loads(row["subtask_ids_json"]) if row["subtask_ids_json"] else None
-            ),
+            subtask_ids=(json.loads(row["subtask_ids_json"]) if row["subtask_ids_json"] else None),
             metadata=json.loads(row["metadata_json"]) if row["metadata_json"] else None,
         )
 

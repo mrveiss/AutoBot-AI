@@ -34,9 +34,7 @@ class OperationCheckpointManager:
         self.checkpoint_dir = PATH.PROJECT_ROOT / "data" / "operation_checkpoints"
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
-    def _create_checkpoint_data(
-        self, checkpoint: OperationCheckpoint
-    ) -> Dict[str, Any]:
+    def _create_checkpoint_data(self, checkpoint: OperationCheckpoint) -> Dict[str, Any]:
         """
         Create serializable checkpoint data dictionary.
 
@@ -57,9 +55,7 @@ class OperationCheckpointManager:
             "metadata": checkpoint.metadata,
         }
 
-    async def _save_checkpoint_to_file(
-        self, checkpoint_id: str, checkpoint_data: Dict[str, Any]
-    ) -> None:
+    async def _save_checkpoint_to_file(self, checkpoint_id: str, checkpoint_data: Dict[str, Any]) -> None:
         """
         Save checkpoint data to file storage.
 
@@ -163,9 +159,7 @@ class OperationCheckpointManager:
 
         return checkpoint
 
-    async def load_checkpoint(
-        self, checkpoint_id: str
-    ) -> Optional[OperationCheckpoint]:
+    async def load_checkpoint(self, checkpoint_id: str) -> Optional[OperationCheckpoint]:
         """
         Load a checkpoint by ID.
 
@@ -188,9 +182,7 @@ class OperationCheckpointManager:
                         return OperationCheckpoint(
                             checkpoint_id=checkpoint_data["checkpoint_id"],
                             operation_id=checkpoint_data["operation_id"],
-                            checkpoint_time=datetime.fromisoformat(
-                                checkpoint_data["checkpoint_time"]
-                            ),
+                            checkpoint_time=datetime.fromisoformat(checkpoint_data["checkpoint_time"]),
                             progress_percent=checkpoint_data["progress_percent"],
                             state_data=checkpoint_data["state_data"],
                             metadata=checkpoint_data.get("metadata", {}),
@@ -206,9 +198,7 @@ class OperationCheckpointManager:
                 return OperationCheckpoint(
                     checkpoint_id=checkpoint_data["checkpoint_id"],
                     operation_id=checkpoint_data["operation_id"],
-                    checkpoint_time=datetime.fromisoformat(
-                        checkpoint_data["checkpoint_time"]
-                    ),
+                    checkpoint_time=datetime.fromisoformat(checkpoint_data["checkpoint_time"]),
                     progress_percent=checkpoint_data["progress_percent"],
                     state_data=checkpoint_data["state_data"],
                     metadata=checkpoint_data.get("metadata", {}),
@@ -216,9 +206,7 @@ class OperationCheckpointManager:
 
         return None
 
-    def _parse_checkpoint_data(
-        self, checkpoint_data: Dict[str, Any]
-    ) -> OperationCheckpoint:
+    def _parse_checkpoint_data(self, checkpoint_data: Dict[str, Any]) -> OperationCheckpoint:
         """
         Parse checkpoint data dict into OperationCheckpoint object.
 
@@ -239,9 +227,7 @@ class OperationCheckpointManager:
             metadata=checkpoint_data.get("metadata", {}),
         )
 
-    async def _list_checkpoints_from_redis(
-        self, operation_id: str
-    ) -> List[OperationCheckpoint]:
+    async def _list_checkpoints_from_redis(self, operation_id: str) -> List[OperationCheckpoint]:
         """
         List checkpoints from Redis storage.
 
@@ -301,13 +287,9 @@ class OperationCheckpointManager:
                     if checkpoint_data.get("operation_id") == operation_id:
                         checkpoint_id = checkpoint_data["checkpoint_id"]
                         if checkpoint_id not in existing_ids:
-                            checkpoints.append(
-                                self._parse_checkpoint_data(checkpoint_data)
-                            )
+                            checkpoints.append(self._parse_checkpoint_data(checkpoint_data))
             except Exception as e:
-                logger.warning(
-                    "Failed to read checkpoint file %s: %s", checkpoint_file, e
-                )
+                logger.warning("Failed to read checkpoint file %s: %s", checkpoint_file, e)
 
         return checkpoints
 
@@ -328,9 +310,7 @@ class OperationCheckpointManager:
 
         # Get checkpoints from file storage (avoiding duplicates)
         existing_ids = {c.checkpoint_id for c in checkpoints}
-        file_checkpoints = await self._list_checkpoints_from_files(
-            operation_id, existing_ids
-        )
+        file_checkpoints = await self._list_checkpoints_from_files(operation_id, existing_ids)
         checkpoints.extend(file_checkpoints)
 
         # Sort by checkpoint time
@@ -368,9 +348,7 @@ class OperationCheckpointManager:
 
         return deleted
 
-    async def get_latest_checkpoint(
-        self, operation_id: str
-    ) -> Optional[OperationCheckpoint]:
+    async def get_latest_checkpoint(self, operation_id: str) -> Optional[OperationCheckpoint]:
         """
         Get the most recent checkpoint for an operation.
 

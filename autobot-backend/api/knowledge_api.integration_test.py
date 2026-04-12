@@ -81,9 +81,7 @@ class TestCategoryFilterSearchFlow:
 
     @pytest.mark.asyncio
     @pytest.mark.requires_backend
-    async def test_full_category_filter_workflow(
-        self, api_client, sample_knowledge_data
-    ):
+    async def test_full_category_filter_workflow(self, api_client, sample_knowledge_data):
         """
         Test complete workflow:
         1. Fetch categories
@@ -158,23 +156,17 @@ class TestCategoryFilterSearchFlow:
         with patch("aiohttp.ClientSession.get") as mock_get:
             mock_response = AsyncMock()
             mock_response.status = 200
-            mock_response.json = AsyncMock(
-                return_value={"status": "success", "facts": []}
-            )
+            mock_response.json = AsyncMock(return_value={"status": "success", "facts": []})
             mock_get.return_value.__aenter__.return_value = mock_response
 
-            async with api_client.get(
-                "/api/knowledge_base/category/empty_category"
-            ) as response:
+            async with api_client.get("/api/knowledge_base/category/empty_category") as response:
                 assert response.status == 200
                 data = await response.json()
                 assert data["facts"] == []
 
     @pytest.mark.asyncio
     @pytest.mark.requires_backend
-    async def test_search_across_all_categories(
-        self, api_client, sample_knowledge_data
-    ):
+    async def test_search_across_all_categories(self, api_client, sample_knowledge_data):
         """Test search without category filter (all categories)"""
         with patch("aiohttp.ClientSession.get") as mock_get:
             all_facts = []
@@ -192,9 +184,7 @@ class TestCategoryFilterSearchFlow:
             )
             mock_get.return_value.__aenter__.return_value = mock_response
 
-            async with api_client.get(
-                "/api/knowledge_base/search", params={"query": "security"}
-            ) as response:
+            async with api_client.get("/api/knowledge_base/search", params={"query": "security"}) as response:
                 assert response.status == 200
                 data = await response.json()
                 assert data["count"] > 0
@@ -310,9 +300,7 @@ class TestVectorizationStatusFlow:
             )
             mock_post.return_value.__aenter__.return_value = mock_response
 
-            async with api_client.post(
-                "/api/knowledge_base/vectorize_facts", json={"batch_size": 50}
-            ) as response:
+            async with api_client.post("/api/knowledge_base/vectorize_facts", json={"batch_size": 50}) as response:
                 assert response.status == 200
                 data = await response.json()
                 data["job_id"]
@@ -333,9 +321,7 @@ class TestVectorizationStatusFlow:
                 mock_response.json = AsyncMock(return_value=state)
                 mock_get.return_value.__aenter__.return_value = mock_response
 
-                async with api_client.get(
-                    "/api/knowledge_base/vectorization/status"
-                ) as response:
+                async with api_client.get("/api/knowledge_base/vectorization/status") as response:
                     assert response.status == 200
                     data = await response.json()
 
@@ -354,9 +340,7 @@ class TestVectorizationStatusFlow:
             mock_response = AsyncMock()
             mock_response.status = 200
             mock_response.json = AsyncMock(
-                return_value={
-                    "statuses": {fact_id: {"vectorized": False, "timestamp": None}}
-                }
+                return_value={"statuses": {fact_id: {"vectorized": False, "timestamp": None}}}
             )
             mock_post.return_value.__aenter__.return_value = mock_response
 
@@ -370,14 +354,10 @@ class TestVectorizationStatusFlow:
         with patch("aiohttp.ClientSession.post") as mock_post:
             mock_response = AsyncMock()
             mock_response.status = 200
-            mock_response.json = AsyncMock(
-                return_value={"status": "success", "job_id": f"vec_{fact_id}"}
-            )
+            mock_response.json = AsyncMock(return_value={"status": "success", "job_id": f"vec_{fact_id}"})
             mock_post.return_value.__aenter__.return_value = mock_response
 
-            async with api_client.post(
-                f"/api/knowledge_base/vectorize_fact/{fact_id}"
-            ) as response:
+            async with api_client.post(f"/api/knowledge_base/vectorize_fact/{fact_id}") as response:
                 assert response.status == 200
 
         # Poll until completed
@@ -426,14 +406,10 @@ class TestFailedJobRetryFlow:
         with patch("aiohttp.ClientSession.post") as mock_post:
             mock_response = AsyncMock()
             mock_response.status = 200
-            mock_response.json = AsyncMock(
-                return_value={"status": "success", "job_id": "vec_job_fail_123"}
-            )
+            mock_response.json = AsyncMock(return_value={"status": "success", "job_id": "vec_job_fail_123"})
             mock_post.return_value.__aenter__.return_value = mock_response
 
-            async with api_client.post(
-                "/api/knowledge_base/vectorize_facts"
-            ) as response:
+            async with api_client.post("/api/knowledge_base/vectorize_facts") as response:
                 data = await response.json()
                 data["job_id"]
 
@@ -456,9 +432,7 @@ class TestFailedJobRetryFlow:
             )
             mock_get.return_value.__aenter__.return_value = mock_response
 
-            async with api_client.get(
-                "/api/knowledge_base/vectorization/status"
-            ) as response:
+            async with api_client.get("/api/knowledge_base/vectorization/status") as response:
                 data = await response.json()
                 failed_facts = data["failed_facts"]
                 assert len(failed_facts) == 3
@@ -500,9 +474,7 @@ class TestFailedJobRetryFlow:
             )
             mock_get.return_value.__aenter__.return_value = mock_response
 
-            async with api_client.get(
-                "/api/knowledge_base/vectorization/status"
-            ) as response:
+            async with api_client.get("/api/knowledge_base/vectorization/status") as response:
                 data = await response.json()
                 assert data["failed"] == 0
                 assert data["completed"] == 3
@@ -522,9 +494,7 @@ class TestFailedJobRetryFlow:
                 mock_response.status = 200
                 mock_response.json = AsyncMock(
                     return_value={
-                        "status": (
-                            "retry_scheduled" if attempt < max_retries - 1 else "failed"
-                        ),
+                        "status": ("retry_scheduled" if attempt < max_retries - 1 else "failed"),
                         "attempt": attempt + 1,
                         "delay": expected_delay,
                         "can_retry": attempt < max_retries - 1,
@@ -603,14 +573,10 @@ class TestIntegrationErrorHandling:
         with patch("aiohttp.ClientSession.get") as mock_get:
             mock_response = AsyncMock()
             mock_response.status = 404
-            mock_response.json = AsyncMock(
-                return_value={"status": "error", "message": "Category not found"}
-            )
+            mock_response.json = AsyncMock(return_value={"status": "error", "message": "Category not found"})
             mock_get.return_value.__aenter__.return_value = mock_response
 
-            async with api_client.get(
-                "/api/knowledge_base/category/invalid🔧category"
-            ) as response:
+            async with api_client.get("/api/knowledge_base/category/invalid🔧category") as response:
                 assert response.status == 404
 
     @pytest.mark.asyncio
@@ -623,9 +589,7 @@ class TestIntegrationErrorHandling:
         with patch("aiohttp.ClientSession.get") as mock_get:
             mock_response = AsyncMock()
             mock_response.status = 200
-            mock_response.json = AsyncMock(
-                return_value={"status": "success", "categories": []}
-            )
+            mock_response.json = AsyncMock(return_value={"status": "success", "categories": []})
             mock_get.return_value.__aenter__.return_value = mock_response
 
             for _ in range(10):

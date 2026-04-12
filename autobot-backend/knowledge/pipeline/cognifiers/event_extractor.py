@@ -105,9 +105,7 @@ class EventExtractor(BaseCognifier):
         """Extract events from a single chunk."""
         try:
             prompt = EVENT_EXTRACTION_PROMPT.format(text=chunk.content)
-            response = await self.llm.chat_completion(
-                messages=[{"role": "user", "content": prompt}]
-            )
+            response = await self.llm.chat_completion(messages=[{"role": "user", "content": prompt}])
             parsed = parse_llm_json_response(response.content)
             raw_events = parsed if isinstance(parsed, list) else []
             return self._convert_to_events(raw_events, chunk, entity_map, context)
@@ -152,9 +150,7 @@ class EventExtractor(BaseCognifier):
 
                 participant_names = raw.get("participants", [])
                 participant_ids = [
-                    entity_map[name.lower()].id
-                    for name in participant_names
-                    if name.lower() in entity_map
+                    entity_map[name.lower()].id for name in participant_names if name.lower() in entity_map
                 ]
 
                 event = TemporalEvent(
@@ -197,8 +193,6 @@ class EventExtractor(BaseCognifier):
         if "today" in expression.lower():
             return now.replace(hour=0, minute=0, second=0, microsecond=0)
         if "yesterday" in expression.lower():
-            return (now - timedelta(days=1)).replace(
-                hour=0, minute=0, second=0, microsecond=0
-            )
+            return (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
 
         return None

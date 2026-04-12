@@ -96,27 +96,21 @@ def _check_vosk_dependencies(vosk_model_path: str, model) -> Optional[Dict[str, 
     if not SOUNDDEVICE_AVAILABLE:
         return {
             "status": "error",
-            "message": (
-                "sounddevice not available. "
-                "Install with: pip install sounddevice soundfile"
-            ),
+            "message": ("sounddevice not available. " "Install with: pip install sounddevice soundfile"),
         }
 
     if model is None:
         return {
             "status": "error",
             "message": (
-                f"Vosk model not found at {vosk_model_path}. "
-                "Download from https://alphacephei.com/vosk/models"
+                f"Vosk model not found at {vosk_model_path}. " "Download from https://alphacephei.com/vosk/models"
             ),
         }
 
     return None
 
 
-def _check_vosk_timeout(
-    elapsed: float, timeout: Optional[float], speech_detected: bool
-) -> Optional[Dict[str, Any]]:
+def _check_vosk_timeout(elapsed: float, timeout: Optional[float], speech_detected: bool) -> Optional[Dict[str, Any]]:
     """Issue #665: Extracted from _vosk_recognize_blocking to reduce function length.
 
     Check if speech recognition has timed out waiting for speech to start.
@@ -189,9 +183,7 @@ def _vosk_recognize_blocking(
 
             if result := _check_vosk_timeout(elapsed, timeout, speech_detected):
                 return result
-            if result := _check_vosk_phrase_limit(
-                elapsed, phrase_time_limit, recognizer
-            ):
+            if result := _check_vosk_phrase_limit(elapsed, phrase_time_limit, recognizer):
                 return result
 
             try:
@@ -271,21 +263,16 @@ class VoiceInterface:
         tts_status = ", ".join(tts_backends) if tts_backends else "None available"
 
         logger.info(
-            "VoiceInterface initialized - STT: [%s], TTS: [%s], "
-            "Continuous listening: %s",
+            "VoiceInterface initialized - STT: [%s], TTS: [%s], " "Continuous listening: %s",
             stt_status,
             tts_status,
             self.continuous_listening,
         )
 
         if not stt_backends:
-            logger.warning(
-                "No STT backends available. Install speech_recognition or vosk."
-            )
+            logger.warning("No STT backends available. Install speech_recognition or vosk.")
         if not tts_backends:
-            logger.warning(
-                "No TTS backends available. Install pyttsx3, TTS (coqui), or gtts."
-            )
+            logger.warning("No TTS backends available. Install pyttsx3, TTS (coqui), or gtts.")
 
     def _load_config(self, config_path: str) -> dict:
         """Load YAML configuration from file path.
@@ -321,9 +308,7 @@ class VoiceInterface:
             volume = self.voice_config.get("pyttsx3_volume", 1.0)
             engine.setProperty("rate", rate)
             engine.setProperty("volume", volume)
-            logger.debug(
-                "pyttsx3 engine initialized (rate=%d, volume=%.1f)", rate, volume
-            )
+            logger.debug("pyttsx3 engine initialized (rate=%d, volume=%.1f)", rate, volume)
             return engine
         except Exception as e:
             logger.error("Failed to initialize pyttsx3: %s", e)
@@ -341,8 +326,7 @@ class VoiceInterface:
         if self._vosk_model is None:
             if not os.path.exists(self._vosk_model_path):
                 logger.warning(
-                    "Vosk model not found at %s. Download from "
-                    "https://alphacephei.com/vosk/models",
+                    "Vosk model not found at %s. Download from " "https://alphacephei.com/vosk/models",
                     self._vosk_model_path,
                 )
                 return None
@@ -378,9 +362,7 @@ class VoiceInterface:
 
         return self._coqui_tts
 
-    def _create_speech_error_response(
-        self, status: str, message: str
-    ) -> Dict[str, Any]:
+    def _create_speech_error_response(self, status: str, message: str) -> Dict[str, Any]:
         """
         Create a standardized error response for speech recognition.
 
@@ -404,13 +386,9 @@ class VoiceInterface:
             Dict with status and error message. Issue #620.
         """
         if isinstance(exc, sr.WaitTimeoutError):
-            return self._create_speech_error_response(
-                "timeout", "No speech detected within timeout."
-            )
+            return self._create_speech_error_response("timeout", "No speech detected within timeout.")
         if isinstance(exc, sr.UnknownValueError):
-            return self._create_speech_error_response(
-                "no_match", "Could not understand audio."
-            )
+            return self._create_speech_error_response("no_match", "Could not understand audio.")
         if isinstance(exc, sr.RequestError):
             return self._create_speech_error_response(
                 "error",
@@ -444,9 +422,7 @@ class VoiceInterface:
             self.recognizer.adjust_for_ambient_noise(source)
             logger.info("Listening for speech...")
             try:
-                audio = self.recognizer.listen(
-                    source, timeout=timeout, phrase_time_limit=phrase_time_limit
-                )
+                audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=phrase_time_limit)
                 logger.info("Processing speech...")
                 text = self.recognizer.recognize_google(audio)
                 logger.info("Recognized: %s", text)
@@ -545,16 +521,12 @@ class VoiceInterface:
         if tts is None:
             return {
                 "status": "error",
-                "message": (
-                    f"Failed to initialize Coqui TTS with model: {self._coqui_model}"
-                ),
+                "message": (f"Failed to initialize Coqui TTS with model: {self._coqui_model}"),
             }
 
         try:
             loop = asyncio.get_running_loop()
-            result = await loop.run_in_executor(
-                None, self._synthesize_and_play_blocking, tts, text
-            )
+            result = await loop.run_in_executor(None, self._synthesize_and_play_blocking, tts, text)
             return result
 
         except Exception as e:
@@ -576,8 +548,7 @@ class VoiceInterface:
             return {
                 "status": "error",
                 "message": (
-                    "sounddevice not available for playback. "
-                    "Install with: pip install sounddevice soundfile"
+                    "sounddevice not available for playback. " "Install with: pip install sounddevice soundfile"
                 ),
             }
         return None
@@ -657,8 +628,7 @@ class VoiceInterface:
             return {
                 "status": "error",
                 "message": (
-                    "sounddevice not available for playback. "
-                    "Install with: pip install sounddevice soundfile"
+                    "sounddevice not available for playback. " "Install with: pip install sounddevice soundfile"
                 ),
             }
         return None
@@ -684,9 +654,7 @@ class VoiceInterface:
 
         try:
             loop = asyncio.get_running_loop()
-            result = await loop.run_in_executor(
-                None, self._gtts_synthesize_and_play_blocking, text
-            )
+            result = await loop.run_in_executor(None, self._gtts_synthesize_and_play_blocking, text)
             return result
 
         except Exception as e:
@@ -745,9 +713,7 @@ class VoiceInterface:
         for name, method in backends:
             logger.debug("Trying STT backend: %s", name)
             try:
-                result = await method(
-                    timeout=timeout, phrase_time_limit=phrase_time_limit
-                )
+                result = await method(timeout=timeout, phrase_time_limit=phrase_time_limit)
                 if result.get("status") in ("success", "timeout", "no_match"):
                     result["backend"] = name
                     return result
@@ -915,10 +881,7 @@ if __name__ == "__main__":
         logger.info("\n--- Testing Text-to-Speech ---")
         # await vi.speak_text("Hello, I am AutoBot. How can I help you today?")
 
-        print(  # noqa: print
-            "\n--- Testing continuous listening (requires manual stop "
-            "or external trigger) ---"
-        )
+        print("\n--- Testing continuous listening (requires manual stop " "or external trigger) ---")  # noqa: print
         # if vi.continuous_listening:
         #     logger.info("Continuous listening enabled. Say something...")
         #     while True:

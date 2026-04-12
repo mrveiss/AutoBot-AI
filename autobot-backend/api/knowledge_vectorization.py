@@ -106,9 +106,7 @@ def _calculate_vectorization_summary(total_checked: int, vectorized_count: int) 
         Summary statistics dictionary. Issue #620.
     """
     not_vectorized_count = total_checked - vectorized_count
-    vectorization_percentage = (
-        (vectorized_count / total_checked * 100) if total_checked > 0 else 0.0
-    )
+    vectorization_percentage = (vectorized_count / total_checked * 100) if total_checked > 0 else 0.0
 
     return {
         "total_checked": total_checked,
@@ -157,9 +155,7 @@ async def _check_vectorization_batch_internal(
         results = await _execute_pipeline_exists_check(kb_instance, vector_keys)
 
         # Build status map (Issue #620: uses helper)
-        statuses, vectorized_count = _build_status_map(
-            fact_ids, results, include_dimensions, kb_instance
-        )
+        statuses, vectorized_count = _build_status_map(fact_ids, results, include_dimensions, kb_instance)
 
         # Calculate summary (Issue #620: uses helper)
         summary = _calculate_vectorization_summary(len(fact_ids), vectorized_count)
@@ -209,16 +205,12 @@ def _validate_vectorization_request(fact_ids: List[str]) -> dict:
         }
 
     if len(fact_ids) > 1000:
-        raise ValueError(
-            f"Too many fact IDs ({len(fact_ids)}). Maximum 1000 per request."
-        )
+        raise ValueError(f"Too many fact IDs ({len(fact_ids)}). Maximum 1000 per request.")
 
     return {}
 
 
-async def _get_cached_vectorization_status(
-    kb_instance, cache_key: str, fact_count: int
-) -> dict:
+async def _get_cached_vectorization_status(kb_instance, cache_key: str, fact_count: int) -> dict:
     """
     Try to get cached vectorization status result.
 
@@ -235,11 +227,7 @@ async def _get_cached_vectorization_status(
     try:
         cached_json = await asyncio.to_thread(kb_instance.redis_client.get, cache_key)
         if cached_json:
-            json_str = (
-                cached_json.decode("utf-8")
-                if isinstance(cached_json, bytes)
-                else cached_json
-            )
+            json_str = cached_json.decode("utf-8") if isinstance(cached_json, bytes) else cached_json
             cached_result = json.loads(json_str)
             cached_result["cached"] = True
             logger.debug("Cache hit for vectorization status (%s facts)", fact_count)
@@ -250,9 +238,7 @@ async def _get_cached_vectorization_status(
     return None
 
 
-async def _cache_vectorization_result(
-    kb_instance, cache_key: str, result: dict, fact_count: int
-) -> None:
+async def _cache_vectorization_result(kb_instance, cache_key: str, result: dict, fact_count: int) -> None:
     """
     Cache vectorization status result.
 
@@ -297,13 +283,9 @@ async def _perform_uncached_batch_check(
     Returns:
         Batch check result dict. Issue #620.
     """
-    logger.info(
-        "Checking vectorization status for %d facts (batch operation)", len(fact_ids)
-    )
+    logger.info("Checking vectorization status for %d facts (batch operation)", len(fact_ids))
 
-    result = await _check_vectorization_batch_internal(
-        kb_instance, fact_ids, include_dimensions
-    )
+    result = await _check_vectorization_batch_internal(kb_instance, fact_ids, include_dimensions)
     result["cached"] = False
 
     if use_cache:
@@ -313,9 +295,7 @@ async def _perform_uncached_batch_check(
 
 
 @router.post("/vectorization_status")
-async def check_vectorization_status_batch(
-    request: dict, req: Request, _user: dict = Depends(get_current_user)
-):
+async def check_vectorization_status_batch(request: dict, req: Request, _user: dict = Depends(get_current_user)):
     """
     Check vectorization status for multiple facts in a single efficient batch operation.
 
@@ -324,9 +304,7 @@ async def check_vectorization_status_batch(
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
-        raise InternalError(
-            "Knowledge base not initialized - please check logs for errors"
-        )
+        raise InternalError("Knowledge base not initialized - please check logs for errors")
 
     fact_ids = request.get("fact_ids", [])
     include_dimensions = request.get("include_dimensions", False)
@@ -339,15 +317,11 @@ async def check_vectorization_status_batch(
     cache_key = f"cache:vectorization_status:{_generate_cache_key(fact_ids)}"
 
     if use_cache:
-        cached_result = await _get_cached_vectorization_status(
-            kb_to_use, cache_key, len(fact_ids)
-        )
+        cached_result = await _get_cached_vectorization_status(kb_to_use, cache_key, len(fact_ids))
         if cached_result:
             return cached_result
 
-    return await _perform_uncached_batch_check(
-        kb_to_use, fact_ids, include_dimensions, cache_key, use_cache
-    )
+    return await _perform_uncached_batch_check(kb_to_use, fact_ids, include_dimensions, cache_key, use_cache)
 
 
 def _extract_fact_content(fact_data: dict) -> str:
@@ -380,9 +354,7 @@ async def _fetch_batch_data(kb, batch: List[str], skip_existing: bool) -> tuple:
         all_fact_data = await pipe.execute()
 
     # Extract fact IDs
-    fact_ids = [
-        fact_key.split(":")[-1] if ":" in fact_key else fact_key for fact_key in batch
-    ]
+    fact_ids = [fact_key.split(":")[-1] if ":" in fact_key else fact_key for fact_key in batch]
 
     # If skip_existing, also batch check vector existence
     vector_exists = {}
@@ -439,17 +411,13 @@ async def _process_single_fact_safe(
 ) -> tuple:
     """Process a single fact with exception handling. (Issue #315 - extracted)"""
     try:
-        return await _process_single_fact(
-            kb, fact_key, fact_data, fact_id, skip_existing, vector_exists
-        )
+        return await _process_single_fact(kb, fact_key, fact_data, fact_id, skip_existing, vector_exists)
     except Exception as e:
         logger.error("Error processing fact %s: %s", fact_key, e)
         return False, False, None
 
 
-async def _process_batch(
-    kb, batch: list, batch_num: int, total_batches: int, skip_existing: bool
-) -> tuple:
+async def _process_batch(kb, batch: list, batch_num: int, total_batches: int, skip_existing: bool) -> tuple:
     """
     Process a single batch of facts for vectorization (Issue #486: extracted).
 
@@ -461,14 +429,10 @@ async def _process_batch(
     skipped_count = 0
     processed_facts = []
 
-    logger.info(
-        "Processing batch %d/%d (%d facts)", batch_num + 1, total_batches, len(batch)
-    )
+    logger.info("Processing batch %d/%d (%d facts)", batch_num + 1, total_batches, len(batch))
 
     try:
-        all_fact_data, fact_ids, vector_exists = await _fetch_batch_data(
-            kb, batch, skip_existing
-        )
+        all_fact_data, fact_ids, vector_exists = await _fetch_batch_data(kb, batch, skip_existing)
     except RedisError as e:
         logger.error("Redis error in batch %d: %s", batch_num + 1, e)
         return 0, len(batch), 0, []
@@ -489,9 +453,7 @@ async def _process_batch(
     return success_count, failed_count, skipped_count, processed_facts
 
 
-async def _process_all_batches(
-    kb, fact_keys: list, batch_size: int, batch_delay: float, skip_existing: bool
-) -> tuple:
+async def _process_all_batches(kb, fact_keys: list, batch_size: int, batch_delay: float, skip_existing: bool) -> tuple:
     """
     Process all batches of facts for vectorization (Issue #486: extracted).
 
@@ -510,9 +472,7 @@ async def _process_all_batches(
         end_idx = min(start_idx + batch_size, len(fact_keys))
         batch = fact_keys[start_idx:end_idx]
 
-        success, failed, skipped, processed = await _process_batch(
-            kb, batch, batch_num, total_batches, skip_existing
-        )
+        success, failed, skipped, processed = await _process_batch(kb, batch, batch_num, total_batches, skip_existing)
         total_success += success
         total_failed += failed
         total_skipped += skipped
@@ -571,10 +531,7 @@ def _build_vectorization_response(
     """
     return {
         "status": "success",
-        "message": (
-            f"Vectorization complete: {success} successful, "
-            f"{failed} failed, {skipped} skipped"
-        ),
+        "message": (f"Vectorization complete: {success} successful, " f"{failed} failed, {skipped} skipped"),
         "processed": fact_count,
         "success": success,
         "failed": failed,
@@ -625,15 +582,11 @@ async def vectorize_existing_facts(
         skipped,
         processed_facts,
         total_batches,
-    ) = await _process_all_batches(
-        kb, fact_keys, batch_size, batch_delay, skip_existing
-    )
+    ) = await _process_all_batches(kb, fact_keys, batch_size, batch_delay, skip_existing)
 
     logger.info("Batched vectorization complete - index updated automatically")
 
-    return _build_vectorization_response(
-        len(fact_keys), success, failed, skipped, total_batches, processed_facts
-    )
+    return _build_vectorization_response(len(fact_keys), success, failed, skipped, total_batches, processed_facts)
 
 
 # ===== INDIVIDUAL DOCUMENT VECTORIZATION =====
@@ -691,11 +644,7 @@ async def _get_fact_content(kb_instance, fact_id: str) -> tuple:
 
     # Extract metadata
     metadata_str = fact_hash.get("metadata", "{}")
-    metadata = (
-        json.loads(metadata_str)
-        if isinstance(metadata_str, str)
-        else json.loads(metadata_str.decode("utf-8"))
-    )
+    metadata = json.loads(metadata_str) if isinstance(metadata_str, str) else json.loads(metadata_str.decode("utf-8"))
 
     return content, metadata
 
@@ -757,9 +706,7 @@ async def _fetch_existing_job(kb_instance, job_id: str) -> tuple:
     Raises:
         HTTPException: If job not found or missing fact_id
     """
-    job_json = await asyncio.to_thread(
-        kb_instance.redis_client.get, f"vectorization_job:{job_id}"
-    )
+    job_json = await asyncio.to_thread(kb_instance.redis_client.get, f"vectorization_job:{job_id}")
 
     if not job_json:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
@@ -773,9 +720,7 @@ async def _fetch_existing_job(kb_instance, job_id: str) -> tuple:
     return job_data, fact_id
 
 
-def _create_retry_job_data(
-    new_job_id: str, fact_id: str, original_job_id: str
-) -> Metadata:
+def _create_retry_job_data(new_job_id: str, fact_id: str, original_job_id: str) -> Metadata:
     """
     Create job data structure for a retry job.
 
@@ -826,9 +771,7 @@ async def _store_and_start_retry_job(
         json.dumps(job_data),
     )
 
-    background_tasks.add_task(
-        _vectorize_fact_background, kb_instance, fact_id, new_job_id, force
-    )
+    background_tasks.add_task(_vectorize_fact_background, kb_instance, fact_id, new_job_id, force)
 
 
 async def _validate_fact_exists(kb_instance, fact_id: str) -> None:
@@ -845,9 +788,7 @@ async def _validate_fact_exists(kb_instance, fact_id: str) -> None:
     fact_key = f"fact:{fact_id}"
     fact_data = await asyncio.to_thread(kb_instance.redis_client.hgetall, fact_key)
     if not fact_data:
-        raise HTTPException(
-            status_code=404, detail=f"Fact {fact_id} not found in knowledge base"
-        )
+        raise HTTPException(status_code=404, detail=f"Fact {fact_id} not found in knowledge base")
 
 
 def _create_pending_job_data(job_id: str, fact_id: str) -> Metadata:
@@ -899,14 +840,10 @@ async def _store_and_start_job(
         json.dumps(job_data),
     )
 
-    background_tasks.add_task(
-        _vectorize_fact_background, kb_instance, fact_id, job_id, force
-    )
+    background_tasks.add_task(_vectorize_fact_background, kb_instance, fact_id, job_id, force)
 
 
-async def _handle_already_vectorized(
-    kb_instance, job_id: str, job_data: dict, fact_id: str
-) -> None:
+async def _handle_already_vectorized(kb_instance, job_id: str, job_data: dict, fact_id: str) -> None:
     """
     Handle case where fact is already vectorized.
 
@@ -918,9 +855,7 @@ async def _handle_already_vectorized(
         job_data: Job data to update
         fact_id: Fact ID
     """
-    logger.info(
-        f"Fact {fact_id} already vectorized, skipping (use force=true to re-vectorize)"
-    )
+    logger.info(f"Fact {fact_id} already vectorized, skipping (use force=true to re-vectorize)")
     job_data.update(
         {
             "status": "completed",
@@ -937,9 +872,7 @@ async def _handle_already_vectorized(
     await _update_job_status(kb_instance, job_id, job_data)
 
 
-async def _perform_vectorization(
-    kb_instance, fact_id: str, job_id: str, job_data: dict
-) -> None:
+async def _perform_vectorization(kb_instance, fact_id: str, job_id: str, job_data: dict) -> None:
     """
     Perform the actual vectorization and update job status.
 
@@ -973,17 +906,13 @@ async def _perform_vectorization(
     else:
         job_data["status"] = "failed"
         job_data["error"] = result.get("message", "Unknown error")
-        logger.error(
-            f"Failed to vectorize fact {fact_id} in job {job_id}: {job_data['error']}"
-        )
+        logger.error(f"Failed to vectorize fact {fact_id} in job {job_id}: {job_data['error']}")
 
     job_data["completed_at"] = datetime.now(tz=timezone.utc).isoformat()
     await _update_job_status(kb_instance, job_id, job_data)
 
 
-async def _vectorize_fact_background(
-    kb_instance, fact_id: str, job_id: str, force: bool = False
-):
+async def _vectorize_fact_background(kb_instance, fact_id: str, job_id: str, force: bool = False):
     """
     Background task to vectorize a single fact and track progress in Redis.
 
@@ -1023,9 +952,7 @@ async def _vectorize_fact_background(
 
     except Exception:
         error_msg = "Vectorization did not succeed"
-        logger.error(
-            f"Error in vectorization job {job_id} for fact {fact_id}: {error_msg}"
-        )
+        logger.error(f"Error in vectorization job {job_id} for fact {fact_id}: {error_msg}")
 
         # Update job with error
         job_data.update(
@@ -1079,9 +1006,7 @@ async def vectorize_individual_fact(
 
     await _store_and_start_job(kb, job_id, job_data, fact_id, background_tasks, force)
 
-    logger.info(
-        "Created vectorization job %s for fact %s (force=%s)", job_id, fact_id, force
-    )
+    logger.info("Created vectorization job %s for fact %s (force=%s)", job_id, fact_id, force)
 
     return {
         "status": "success",
@@ -1167,9 +1092,7 @@ async def batch_vectorize_documents(
     if kb is None:
         raise HTTPException(status_code=500, detail="Knowledge base not initialized")
 
-    logger.info(
-        "Starting batch vectorization for %d documents", len(request.document_ids)
-    )
+    logger.info("Starting batch vectorization for %d documents", len(request.document_ids))
 
     semaphore = asyncio.Semaphore(10)
 
@@ -1177,9 +1100,7 @@ async def batch_vectorize_documents(
         async with semaphore:
             return await _vectorize_single_document(kb, doc_id)
 
-    results = await asyncio.gather(
-        *[_bounded_vectorize(doc_id) for doc_id in request.document_ids]
-    )
+    results = await asyncio.gather(*[_bounded_vectorize(doc_id) for doc_id in request.document_ids])
 
     succeeded = sum(1 for r in results if r["status"] == "success")
     logger.info(
@@ -1201,9 +1122,7 @@ async def batch_vectorize_documents(
     error_code_prefix="KNOWLEDGE",
 )
 @router.get("/vectorize_job/{job_id}")
-async def get_vectorization_job_status(
-    job_id: str, req: Request, _user: dict = Depends(get_current_user)
-):
+async def get_vectorization_job_status(job_id: str, req: Request, _user: dict = Depends(get_current_user)):
     """
     Get the status of a vectorization job.
 
@@ -1220,14 +1139,10 @@ async def get_vectorization_job_status(
 
     # Get job data from Redis
     # Issue #361 - avoid blocking
-    job_json = await asyncio.to_thread(
-        kb.redis_client.get, f"vectorization_job:{job_id}"
-    )
+    job_json = await asyncio.to_thread(kb.redis_client.get, f"vectorization_job:{job_id}")
 
     if not job_json:
-        raise HTTPException(
-            status_code=404, detail=f"Vectorization job {job_id} not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Vectorization job {job_id} not found")
 
     job_data = json.loads(job_json)
 
@@ -1264,9 +1179,7 @@ def _collect_failed_keys(keys: list, results: list) -> List[str]:
     error_code_prefix="KNOWLEDGE",
 )
 @router.get("/vectorize_jobs/failed")
-async def get_failed_vectorization_jobs(
-    req: Request, _user: dict = Depends(get_current_user)
-):
+async def get_failed_vectorization_jobs(req: Request, _user: dict = Depends(get_current_user)):
     """
     Get all failed vectorization jobs from Redis.
 
@@ -1284,9 +1197,7 @@ async def get_failed_vectorization_jobs(
         failed_jobs = []
         cursor = 0
         while True:
-            cursor, keys = kb.redis_client.scan(
-                cursor, match="vectorization_job:*", count=100
-            )
+            cursor, keys = kb.redis_client.scan(cursor, match="vectorization_job:*", count=100)
 
             if not keys:
                 if cursor == 0:
@@ -1352,9 +1263,7 @@ async def retry_vectorization_job(
     new_job_id = str(uuid.uuid4())
     job_data = _create_retry_job_data(new_job_id, fact_id, job_id)
 
-    await _store_and_start_retry_job(
-        kb, new_job_id, job_data, fact_id, background_tasks, force
-    )
+    await _store_and_start_retry_job(kb, new_job_id, job_data, fact_id, background_tasks, force)
 
     logger.info("Retrying vectorization job %s as %s", job_id, new_job_id)
 
@@ -1373,9 +1282,7 @@ async def retry_vectorization_job(
     error_code_prefix="KNOWLEDGE",
 )
 @router.delete("/vectorize_jobs/{job_id}")
-async def delete_vectorization_job(
-    job_id: str, req: Request, _admin: bool = Depends(check_admin_permission)
-):
+async def delete_vectorization_job(job_id: str, req: Request, _admin: bool = Depends(check_admin_permission)):
     """
     Delete a vectorization job record from Redis.
 
@@ -1392,9 +1299,7 @@ async def delete_vectorization_job(
 
     # Delete job from Redis
     # Issue #361 - avoid blocking
-    deleted = await asyncio.to_thread(
-        kb.redis_client.delete, f"vectorization_job:{job_id}"
-    )
+    deleted = await asyncio.to_thread(kb.redis_client.delete, f"vectorization_job:{job_id}")
 
     if deleted == 0:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
@@ -1414,9 +1319,7 @@ async def delete_vectorization_job(
     error_code_prefix="KNOWLEDGE",
 )
 @router.delete("/vectorize_jobs/failed/clear")
-async def clear_failed_vectorization_jobs(
-    req: Request, _admin: bool = Depends(check_admin_permission)
-):
+async def clear_failed_vectorization_jobs(req: Request, _admin: bool = Depends(check_admin_permission)):
     """
     Clear all failed vectorization jobs from Redis.
 
@@ -1433,9 +1336,7 @@ async def clear_failed_vectorization_jobs(
         deleted_count = 0
         cursor = 0
         while True:
-            cursor, keys = kb.redis_client.scan(
-                cursor, match="vectorization_job:*", count=100
-            )
+            cursor, keys = kb.redis_client.scan(cursor, match="vectorization_job:*", count=100)
 
             if not keys:
                 if cursor == 0:
@@ -1509,9 +1410,7 @@ async def start_background_vectorization(
     error_code_prefix="KNOWLEDGE",
 )
 @router.get("/vectorize_facts/status")
-async def get_vectorization_status(
-    req: Request, _user: dict = Depends(get_current_user)
-):
+async def get_vectorization_status(req: Request, _user: dict = Depends(get_current_user)):
     """Get the status of background vectorization"""
     vectorizer = get_background_vectorizer()
 
@@ -1642,9 +1541,7 @@ def _build_pipeline_context(doc_id: str, chunks: list) -> PipelineContext:
     return context
 
 
-async def _upsert_enriched_chunks(
-    collection, original_chunks: list, context: PipelineContext
-) -> int:
+async def _upsert_enriched_chunks(collection, original_chunks: list, context: PipelineContext) -> int:
     """Upsert enriched chunks back to ChromaDB (#1513)."""
     update_ids = []
     update_docs = []
@@ -1767,10 +1664,7 @@ async def reindex_with_context(
     if not ContextGeneratorCognifier.is_enabled():
         raise HTTPException(
             status_code=400,
-            detail=(
-                "Contextual retrieval is disabled. "
-                "Set CONTEXT_ENABLED=true to enable."
-            ),
+            detail=("Contextual retrieval is disabled. " "Set CONTEXT_ENABLED=true to enable."),
         )
 
     if _reindex_state["is_running"]:
@@ -1789,10 +1683,7 @@ async def reindex_with_context(
 
     return ReindexWithContextResponse(
         status="accepted",
-        message=(
-            f"Reindex task started for collection '{col}' "
-            f"with batch_size={request.batch_size}"
-        ),
+        message=(f"Reindex task started for collection '{col}' " f"with batch_size={request.batch_size}"),
     )
 
 

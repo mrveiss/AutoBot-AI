@@ -91,9 +91,7 @@ class TestStringValidators:
     def test_validate_string_pattern_custom_error(self):
         """Test custom error message"""
         with pytest.raises(ValueError) as exc_info:
-            validate_string_pattern(
-                "abc-123", r"^[a-z0-9]+$", "Code", error_message="Custom error"
-            )
+            validate_string_pattern("abc-123", r"^[a-z0-9]+$", "Code", error_message="Custom error")
         assert "Custom error" in str(exc_info.value)
 
 
@@ -200,17 +198,13 @@ class TestChoiceValidators:
 
     def test_validate_in_choices_case_insensitive(self):
         """Test case-insensitive matching"""
-        result = validate_in_choices(
-            "APPLE", {"apple", "banana"}, "Fruit", case_sensitive=False
-        )
+        result = validate_in_choices("APPLE", {"apple", "banana"}, "Fruit", case_sensitive=False)
         assert result == "APPLE"
 
     def test_validate_in_choices_case_sensitive_raises(self):
         """Test case-sensitive matching fails"""
         with pytest.raises(ValueError):
-            validate_in_choices(
-                "APPLE", {"apple", "banana"}, "Fruit", case_sensitive=True
-            )
+            validate_in_choices("APPLE", {"apple", "banana"}, "Fruit", case_sensitive=True)
 
 
 class TestFileValidators:

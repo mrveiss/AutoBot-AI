@@ -129,9 +129,7 @@ async def immediate_redis_test(host: str, port: int, db: int = 0):
 
         if ping_result:
             logger.info("Redis immediate connection SUCCESS: %s:%s", host, port)
-            connection_state.mark_connected(
-                client, {"host": host, "port": port, "db": db}
-            )
+            connection_state.mark_connected(client, {"host": host, "port": port, "db": db})
             yield connection_state
         else:
             raise redis.ConnectionError("PING returned False")
@@ -170,13 +168,9 @@ async def create_redis_with_fallback(
     # Primary failed, try fallbacks if provided
     if fallback_configs:
         for i, config in enumerate(fallback_configs):
-            logger.info(
-                f"Trying fallback Redis config {i+1}: {config['host']}:{config['port']}"
-            )
+            logger.info(f"Trying fallback Redis config {i+1}: {config['host']}:{config['port']}")
 
-            async with immediate_redis_test(
-                config["host"], config["port"], config.get("db", 0)
-            ) as state:
+            async with immediate_redis_test(config["host"], config["port"], config.get("db", 0)) as state:
                 if state.is_connected:
                     return (
                         state.client,
@@ -230,9 +224,7 @@ class RedisCircuitBreaker:
 
         # Log outside lock to avoid holding lock during I/O
         if failure_count is not None:
-            logger.warning(
-                f"🚫 Redis circuit breaker OPENED after {failure_count} failures"
-            )
+            logger.warning(f"🚫 Redis circuit breaker OPENED after {failure_count} failures")
 
     def should_attempt_connection(self) -> bool:
         """Check if we should attempt connection (no timeout logic, thread-safe)"""
@@ -303,9 +295,7 @@ async def test_redis_connection_immediate(
         client = get_redis_client(async_client=False, database=database)
 
         if client is None:
-            logger.warning(
-                f"⚠️ Redis canonical client unavailable for database: {database}"
-            )
+            logger.warning(f"⚠️ Redis canonical client unavailable for database: {database}")
             return None
 
         # Verify connectivity with immediate ping test
@@ -315,18 +305,12 @@ async def test_redis_connection_immediate(
             0,  # Database number handled by canonical client
         ) as state:
             if state.is_connected:
-                logger.info(
-                    f"✅ Redis connection test successful for database: {database}"
-                )
+                logger.info(f"✅ Redis connection test successful for database: {database}")
                 # Return the canonical client (not the test client)
                 return client
             else:
-                logger.warning(
-                    f"⚠️ Redis connection test failed for database: {database}"
-                )
+                logger.warning(f"⚠️ Redis connection test failed for database: {database}")
                 return None
     except Exception as e:
-        logger.error(
-            f"❌ Redis connection test error for database {database}: {str(e)}"
-        )
+        logger.error(f"❌ Redis connection test error for database {database}: {str(e)}")
         return None

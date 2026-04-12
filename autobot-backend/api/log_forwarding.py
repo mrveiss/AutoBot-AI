@@ -73,33 +73,21 @@ class DestinationCreate(BaseModel):
     api_key: Optional[str] = Field(None, description="API key for authentication")
     username: Optional[str] = Field(None, description="Username for authentication")
     password: Optional[str] = Field(None, description="Password for authentication")
-    index: Optional[str] = Field(
-        "autobot-logs", description="Index name (Elasticsearch)"
-    )
+    index: Optional[str] = Field("autobot-logs", description="Index name (Elasticsearch)")
     file_path: Optional[str] = Field(None, description="File path (file destination)")
     min_level: str = Field("Information", description="Minimum log level to forward")
     batch_size: int = Field(10, ge=1, le=1000, description="Batch size for sending")
-    batch_timeout: float = Field(
-        5.0, ge=0.1, le=60.0, description="Batch timeout in seconds"
-    )
+    batch_timeout: float = Field(5.0, ge=0.1, le=60.0, description="Batch timeout in seconds")
     retry_count: int = Field(3, ge=0, le=10, description="Number of retries on failure")
-    retry_delay: float = Field(
-        1.0, ge=0.1, le=30.0, description="Delay between retries"
-    )
+    retry_delay: float = Field(1.0, ge=0.1, le=30.0, description="Delay between retries")
     # Scope configuration
     scope: str = Field("global", description="Scope: global (all hosts) or per_host")
-    target_hosts: List[str] = Field(
-        default_factory=list, description="Target hosts for per_host scope"
-    )
+    target_hosts: List[str] = Field(default_factory=list, description="Target hosts for per_host scope")
     # Syslog-specific options
-    syslog_protocol: str = Field(
-        "udp", description="Syslog protocol: udp, tcp, tcp_tls"
-    )
+    syslog_protocol: str = Field("udp", description="Syslog protocol: udp, tcp, tcp_tls")
     ssl_verify: bool = Field(True, description="Verify SSL certificates for TLS")
     ssl_ca_cert: Optional[str] = Field(None, description="Path to CA certificate")
-    ssl_client_cert: Optional[str] = Field(
-        None, description="Path to client certificate"
-    )
+    ssl_client_cert: Optional[str] = Field(None, description="Path to client certificate")
     ssl_client_key: Optional[str] = Field(None, description="Path to client key")
 
 
@@ -177,9 +165,7 @@ def _build_updated_destination_config(
         retry_delay=update_dict.get("retry_delay", existing.retry_delay),
         scope=DestinationScope(update_dict.get("scope", existing.scope.value)),
         target_hosts=update_dict.get("target_hosts", existing.target_hosts),
-        syslog_protocol=SyslogProtocol(
-            update_dict.get("syslog_protocol", existing.syslog_protocol.value)
-        ),
+        syslog_protocol=SyslogProtocol(update_dict.get("syslog_protocol", existing.syslog_protocol.value)),
         ssl_verify=update_dict.get("ssl_verify", existing.ssl_verify),
         ssl_ca_cert=update_dict.get("ssl_ca_cert", existing.ssl_ca_cert),
         ssl_client_cert=update_dict.get("ssl_client_cert", existing.ssl_client_cert),
@@ -192,9 +178,7 @@ def _config_to_destination_config(data: DestinationCreate) -> DestinationConfig:
     try:
         dest_type = DestinationType(data.type)
     except ValueError:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid destination type: {data.type}"
-        )
+        raise HTTPException(status_code=400, detail=f"Invalid destination type: {data.type}")
 
     try:
         scope = DestinationScope(data.scope)
@@ -303,9 +287,7 @@ async def get_destination(
     try:
         forwarder = await _get_forwarder()
         if name not in forwarder.destinations:
-            raise HTTPException(
-                status_code=404, detail=f"Destination not found: {name}"
-            )
+            raise HTTPException(status_code=404, detail=f"Destination not found: {name}")
 
         dest = forwarder.destinations[name]
         return {
@@ -341,9 +323,7 @@ async def create_destination_endpoint(
 
         # Check if name already exists
         if data.name in forwarder.destinations:
-            raise HTTPException(
-                status_code=409, detail=f"Destination already exists: {data.name}"
-            )
+            raise HTTPException(status_code=409, detail=f"Destination already exists: {data.name}")
 
         config = _config_to_destination_config(data)
         success = forwarder.add_destination(config)
@@ -388,9 +368,7 @@ async def update_destination(
         forwarder = await _get_forwarder()
 
         if name not in forwarder.destinations:
-            raise HTTPException(
-                status_code=404, detail=f"Destination not found: {name}"
-            )
+            raise HTTPException(status_code=404, detail=f"Destination not found: {name}")
 
         existing = forwarder.destinations[name].config
         update_dict = data.model_dump(exclude_unset=True)
@@ -438,9 +416,7 @@ async def delete_destination(
         forwarder = await _get_forwarder()
 
         if name not in forwarder.destinations:
-            raise HTTPException(
-                status_code=404, detail=f"Destination not found: {name}"
-            )
+            raise HTTPException(status_code=404, detail=f"Destination not found: {name}")
 
         success = forwarder.remove_destination(name)
         if not success:
@@ -472,9 +448,7 @@ async def test_destination(
         forwarder = await _get_forwarder()
 
         if name not in forwarder.destinations:
-            raise HTTPException(
-                status_code=404, detail=f"Destination not found: {name}"
-            )
+            raise HTTPException(status_code=404, detail=f"Destination not found: {name}")
 
         dest = forwarder.destinations[name]
 
@@ -485,11 +459,7 @@ async def test_destination(
             "name": name,
             "healthy": healthy,
             "last_error": dest._last_error,
-            "message": (
-                "Connection successful"
-                if healthy
-                else f"Connection failed: {dest._last_error}"
-            ),
+            "message": ("Connection successful" if healthy else f"Connection failed: {dest._last_error}"),
         }
     except HTTPException:
         raise
@@ -568,12 +538,8 @@ async def get_status(
             "queue_size": forwarder.log_queue.qsize(),
             "destinations": destinations_status,
             "total_destinations": len(forwarder.destinations),
-            "enabled_destinations": sum(
-                1 for d in forwarder.destinations.values() if d.config.enabled
-            ),
-            "healthy_destinations": sum(
-                1 for d in forwarder.destinations.values() if d.is_healthy
-            ),
+            "enabled_destinations": sum(1 for d in forwarder.destinations.values() if d.config.enabled),
+            "healthy_destinations": sum(1 for d in forwarder.destinations.values() if d.is_healthy),
             "total_sent": total_sent,
             "total_failed": total_failed,
         }
@@ -815,11 +781,7 @@ async def get_auto_start(
     forwarder = await _get_forwarder()
     return {
         "auto_start": forwarder.auto_start,
-        "message": (
-            "Auto-start is enabled"
-            if forwarder.auto_start
-            else "Auto-start is disabled"
-        ),
+        "message": ("Auto-start is enabled" if forwarder.auto_start else "Auto-start is disabled"),
     }
 
 

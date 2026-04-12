@@ -40,22 +40,16 @@ class VLLMProviderHandler:
         if self._vllm_provider is None:
             from llm_providers.vllm_provider import VLLMProvider
 
-            model_name = model_name or config.get(
-                "llm.vllm.default_model", "meta-llama/Llama-3.2-3B-Instruct"
-            )
+            model_name = model_name or config.get("llm.vllm.default_model", "meta-llama/Llama-3.2-3B-Instruct")
 
             vllm_config = {
                 "model": model_name,
                 "tensor_parallel_size": config.get("llm.vllm.tensor_parallel_size", 1),
-                "gpu_memory_utilization": config.get(
-                    "llm.vllm.gpu_memory_utilization", 0.9
-                ),
+                "gpu_memory_utilization": config.get("llm.vllm.gpu_memory_utilization", 0.9),
                 "max_model_len": config.get("llm.vllm.max_model_len", 8192),
                 "trust_remote_code": config.get("llm.vllm.trust_remote_code", False),
                 "dtype": config.get("llm.vllm.dtype", "auto"),
-                "enable_chunked_prefill": config.get(
-                    "llm.vllm.enable_chunked_prefill", True
-                ),
+                "enable_chunked_prefill": config.get("llm.vllm.enable_chunked_prefill", True),
             }
 
             self._vllm_provider = VLLMProvider(vllm_config)

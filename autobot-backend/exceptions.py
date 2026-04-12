@@ -97,9 +97,7 @@ class WorkflowValidationError(WorkflowError):
 class ValidationError(AutoBotError):
     """Raised when input validation fails."""
 
-    def __init__(
-        self, message: str, field: Optional[str] = None, value: Optional[Any] = None
-    ):
+    def __init__(self, message: str, field: Optional[str] = None, value: Optional[Any] = None):
         """Initialize ValidationError with message and optional field/value info."""
         super().__init__(message)
         self.field = field
@@ -201,9 +199,7 @@ class ResourceNotFoundError(ResourceError):
 class ResourceLimitError(ResourceError):
     """Raised when resource limits are exceeded."""
 
-    def __init__(
-        self, message: str, limit: Optional[int] = None, current: Optional[int] = None
-    ):
+    def __init__(self, message: str, limit: Optional[int] = None, current: Optional[int] = None):
         """Initialize ResourceLimitError with message and limit/current values."""
         super().__init__(message)
         self.limit = limit

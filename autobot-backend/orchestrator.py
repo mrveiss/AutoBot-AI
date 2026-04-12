@@ -171,9 +171,7 @@ class OrchestratorConfig:
         self.phi2_enabled = False  # This will be driven by config if needed
 
         # Task configuration
-        self.max_parallel_tasks = self.config_manager.get(
-            "orchestrator.max_parallel_tasks", 3
-        )
+        self.max_parallel_tasks = self.config_manager.get("orchestrator.max_parallel_tasks", 3)
         self.task_timeout = self.config_manager.get("orchestrator.task_timeout", 300)
         self.retry_attempts = self.config_manager.get("orchestrator.retry_attempts", 3)
 
@@ -182,16 +180,10 @@ class OrchestratorConfig:
         self.max_agents = self.config_manager.get("orchestrator.max_agents", 5)
 
         # Performance settings
-        self.enable_caching = self.config_manager.get(
-            "orchestrator.enable_caching", True
-        )
-        self.enable_streaming = self.config_manager.get(
-            "orchestrator.enable_streaming", True
-        )
+        self.enable_caching = self.config_manager.get("orchestrator.enable_caching", True)
+        self.enable_streaming = self.config_manager.get("orchestrator.enable_streaming", True)
 
-        logger.info(
-            "Orchestrator configured with model: %s", self.orchestrator_llm_model
-        )
+        logger.info("Orchestrator configured with model: %s", self.orchestrator_llm_model)
 
 
 class ConsolidatedOrchestrator:
@@ -266,9 +258,7 @@ class ConsolidatedOrchestrator:
         self._init_classification_agent()
         self._initialize_default_agents()
 
-        logger.info(
-            "Consolidated Orchestrator initialized with session: %s", self.session_id
-        )
+        logger.info("Consolidated Orchestrator initialized with session: %s", self.session_id)
 
     def _create_research_agent_profile(self) -> AgentProfile:
         """Create the research agent profile. Issue #620."""
@@ -385,9 +375,7 @@ class ConsolidatedOrchestrator:
             )
             return
 
-        logger.warning(
-            "⚠️ Orchestrator model '%s' test failed", self.config.orchestrator_llm_model
-        )
+        logger.warning("⚠️ Orchestrator model '%s' test failed", self.config.orchestrator_llm_model)
 
         # Try fallback model
         fallback_model = config_manager.get_default_llm_model()
@@ -418,9 +406,7 @@ class ConsolidatedOrchestrator:
             ollama_connected = await self.llm_interface.check_ollama_connection()
             if not ollama_connected:
                 logger.error("❌ Failed to connect to Ollama")
-                raise Exception(
-                    "Failed to connect to Ollama or configured models not found."
-                )
+                raise Exception("Failed to connect to Ollama or configured models not found.")
 
             logger.info("✅ Ollama connection established")
 
@@ -443,9 +429,7 @@ class ConsolidatedOrchestrator:
 
         # Complete pending tasks
         if self.active_tasks:
-            logger.info(
-                "Waiting for %d active tasks to complete...", len(self.active_tasks)
-            )
+            logger.info("Waiting for %d active tasks to complete...", len(self.active_tasks))
             await asyncio.sleep(TimingConstants.STANDARD_DELAY)  # Brief wait for tasks
 
         # Issue #379: Cleanup components in parallel
@@ -487,9 +471,7 @@ class ConsolidatedOrchestrator:
         """Update metrics after successful request processing. Issue #620."""
         self.metrics["tasks_completed"] += 1
         self.metrics["total_processing_time"] += processing_time
-        self.metrics["average_response_time"] = (
-            self.metrics["total_processing_time"] / self.metrics["tasks_completed"]
-        )
+        self.metrics["average_response_time"] = self.metrics["total_processing_time"] / self.metrics["tasks_completed"]
 
     async def process_user_request(
         self,
@@ -536,9 +518,7 @@ class ConsolidatedOrchestrator:
             processing_time = time.time() - start_time
             self.metrics["tasks_failed"] += 1
             task_tracker.fail_task(task_id, str(e))
-            logger.error(
-                "❌ Request %s failed after %.2fs: %s", task_id, processing_time, e
-            )
+            logger.error("❌ Request %s failed after %.2fs: %s", task_id, processing_time, e)
             return self._build_failure_response(task_id, e, processing_time, mode)
 
     async def _classify_task(self, user_message: str) -> Optional[Any]:
@@ -555,10 +535,7 @@ class ConsolidatedOrchestrator:
 
     def _select_model_for_task(self, classification_result: Optional[Any]) -> str:
         """Select appropriate LLM model based on task classification (Issue #281 - extracted helper)."""
-        if (
-            classification_result
-            and classification_result.complexity == TaskComplexity.SIMPLE
-        ):
+        if classification_result and classification_result.complexity == TaskComplexity.SIMPLE:
             model = config_manager.get_default_llm_model()
             logger.info("Using fast model for simple task: %s", model)
             return model
@@ -579,21 +556,15 @@ class ConsolidatedOrchestrator:
     ) -> Dict[str, Any]:
         """Execute request based on orchestration mode (Issue #281 - extracted helper)."""
         if mode == OrchestrationMode.SIMPLE:
-            return await self._process_simple_request(
-                user_message, task_id, target_llm_model, context
-            )
+            return await self._process_simple_request(user_message, task_id, target_llm_model, context)
         elif mode == OrchestrationMode.ENHANCED:
             return await self._process_enhanced_request(
                 user_message, task_id, target_llm_model, classification_result, context
             )
         elif mode == OrchestrationMode.PARALLEL:
-            return await self._process_parallel_request(
-                user_message, task_id, target_llm_model, context
-            )
+            return await self._process_parallel_request(user_message, task_id, target_llm_model, context)
         else:  # SEQUENTIAL
-            return await self._process_sequential_request(
-                user_message, task_id, target_llm_model, context
-            )
+            return await self._process_sequential_request(user_message, task_id, target_llm_model, context)
 
     def _build_success_response(
         self,
@@ -610,9 +581,7 @@ class ConsolidatedOrchestrator:
             "success": True,
             "result": result,
             "processing_time": processing_time,
-            "classification": (
-                classification_result.to_dict() if classification_result else None
-            ),
+            "classification": (classification_result.to_dict() if classification_result else None),
             "model_used": target_llm_model,
             "mode": mode.value,
         }
@@ -684,9 +653,7 @@ class ConsolidatedOrchestrator:
             }
         else:
             # Multi-agent coordination
-            return await self._coordinate_multiple_agents(
-                user_message, suggested_agents, context, classification
-            )
+            return await self._coordinate_multiple_agents(user_message, suggested_agents, context, classification)
 
     async def _process_parallel_request(
         self, user_message: str, task_id: str, model: str, context: Optional[Dict]
@@ -695,9 +662,7 @@ class ConsolidatedOrchestrator:
 
         # Create parallel tasks
         tasks = [
-            self.llm_interface.generate_response(
-                user_message, model=model, max_tokens=LLMDefaults.STANDARD_MAX_TOKENS
-            ),
+            self.llm_interface.generate_response(user_message, model=model, max_tokens=LLMDefaults.STANDARD_MAX_TOKENS),
             self.memory_manager.search_relevant_context(user_message),
             # Add more parallel tasks as needed
         ]
@@ -722,9 +687,7 @@ class ConsolidatedOrchestrator:
         """Process request with sequential execution"""
 
         # Step 1: Context retrieval
-        relevant_context = await self.memory_manager.search_relevant_context(
-            user_message
-        )
+        relevant_context = await self.memory_manager.search_relevant_context(user_message)
 
         # Step 2: Enhanced prompt with context
         enhanced_prompt = f"Context: {relevant_context}\n\nUser Request: {user_message}"
@@ -776,16 +739,12 @@ class ConsolidatedOrchestrator:
         tasks = [
             (
                 agent_name,
-                self.agent_manager.execute_agent_task(
-                    agent_name=agent_name, task=user_message, context=context
-                ),
+                self.agent_manager.execute_agent_task(agent_name=agent_name, task=user_message, context=context),
             )
             for agent_name in agent_names
         ]
 
-        results = await asyncio.gather(
-            *[task for _, task in tasks], return_exceptions=True
-        )
+        results = await asyncio.gather(*[task for _, task in tasks], return_exceptions=True)
 
         agent_results = {}
         execution_order = []
@@ -806,18 +765,12 @@ class ConsolidatedOrchestrator:
         classification: Optional[Any],
     ) -> Dict[str, Any]:
         """Coordinate execution across multiple agents."""
-        is_complex = (
-            classification and classification.complexity == TaskComplexity.COMPLEX
-        )
+        is_complex = classification and classification.complexity == TaskComplexity.COMPLEX
 
         if is_complex:
-            agent_results, execution_order = await self._execute_agents_sequentially(
-                user_message, agent_names, context
-            )
+            agent_results, execution_order = await self._execute_agents_sequentially(user_message, agent_names, context)
         else:
-            agent_results, execution_order = await self._execute_agents_in_parallel(
-                user_message, agent_names, context
-            )
+            agent_results, execution_order = await self._execute_agents_in_parallel(user_message, agent_names, context)
 
         synthesis = await self._synthesize_agent_results(user_message, agent_results)
 
@@ -829,9 +782,7 @@ class ConsolidatedOrchestrator:
             "classification": classification.to_dict() if classification else None,
         }
 
-    async def _synthesize_agent_results(
-        self, user_message: str, agent_results: Dict[str, Any]
-    ) -> str:
+    async def _synthesize_agent_results(self, user_message: str, agent_results: Dict[str, Any]) -> str:
         """Synthesize results from multiple agents"""
 
         # Create synthesis prompt
@@ -908,9 +859,7 @@ class ConsolidatedOrchestrator:
         """
         _release_agent(self.agent_registry, agent_id)
 
-    def _update_agent_performance(
-        self, agent_id: str, success: bool, execution_time: float
-    ):
+    def _update_agent_performance(self, agent_id: str, success: bool, execution_time: float):
         """Update agent performance metrics.
 
         Uses shared utility from utils.agent_selection (Issue #292).
@@ -983,21 +932,15 @@ class ConsolidatedOrchestrator:
                     title=f"Workflow: {user_request[:50]}...",
                     description=user_request,
                 )
-                doc.content.update(
-                    {"request": user_request, "context": context, "start_time": start_time}
-                )
+                doc.content.update({"request": user_request, "context": context, "start_time": start_time})
                 self.workflow_documentation[workflow_id] = doc
 
             complexity = await self.classify_request_complexity(user_request)
             planner = self._get_enhanced_planner()
-            enhanced_steps = await planner.plan_enhanced_workflow_steps(
-                user_request, complexity, context
-            )
+            enhanced_steps = await planner.plan_enhanced_workflow_steps(user_request, complexity, context)
 
             if require_plan_approval and plan_approval_callback is not None:
-                plan_summary = planner.create_plan_summary_for_approval(
-                    workflow_id, user_request, enhanced_steps
-                )
+                plan_summary = planner.create_plan_summary_for_approval(workflow_id, user_request, enhanced_steps)
                 executor = self._get_enhanced_executor()
                 approval_result = await executor.request_plan_approval(
                     workflow_id, user_request, plan_summary, plan_approval_callback
@@ -1036,9 +979,7 @@ class ConsolidatedOrchestrator:
 
             if auto_document:
                 documenter = self._get_enhanced_documenter()
-                await documenter.generate_workflow_documentation(
-                    workflow_id, execution_result
-                )
+                await documenter.generate_workflow_documentation(workflow_id, execution_result)
                 doc = documenter.get_doc(workflow_id)
                 if doc:
                     self.workflow_documentation[workflow_id] = doc
@@ -1120,11 +1061,7 @@ class ConsolidatedOrchestrator:
                 for agent_id, agent in self.agent_registry.items()
             },
             "active_workflows": len(
-                [
-                    doc
-                    for doc in self.workflow_documentation.values()
-                    if doc.content.get("status") == "in_progress"
-                ]
+                [doc for doc in self.workflow_documentation.values() if doc.content.get("status") == "in_progress"]
             ),
             "total_documentation": len(self.workflow_documentation),
             "total_interactions": len(self.agent_interactions),
@@ -1167,14 +1104,10 @@ class ConsolidatedOrchestrator:
 
         try:
             if self.classification_agent:
-                result = await self.classification_agent.classify_user_request(
-                    user_request
-                )
+                result = await self.classification_agent.classify_user_request(user_request)
                 return result.complexity
             else:
-                logger.warning(
-                    "Classification agent not initialized, defaulting to COMPLEX"
-                )
+                logger.warning("Classification agent not initialized, defaulting to COMPLEX")
                 return TaskComplexity.COMPLEX
         except Exception as e:
             logger.error("Classification failed: %s, defaulting to COMPLEX", e)
@@ -1228,9 +1161,7 @@ class ConsolidatedOrchestrator:
             ),
         ]
 
-    async def plan_workflow_steps(
-        self, user_request: str, complexity: TaskComplexity
-    ) -> List[WorkflowStep]:
+    async def plan_workflow_steps(self, user_request: str, complexity: TaskComplexity) -> List[WorkflowStep]:
         """
         Plan workflow steps based on request complexity (backward compatibility method).
 
@@ -1247,9 +1178,7 @@ class ConsolidatedOrchestrator:
             else:
                 steps = self._create_complex_workflow_steps(user_request)
 
-            logger.info(
-                "Generated %d workflow steps for %s task", len(steps), complexity.value
-            )
+            logger.info("Generated %d workflow steps for %s task", len(steps), complexity.value)
             return steps
 
         except Exception as e:

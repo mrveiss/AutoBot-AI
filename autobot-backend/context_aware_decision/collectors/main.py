@@ -44,9 +44,7 @@ class ContextCollector:
 
         logger.info("Context Collector initialized")
 
-    async def _gather_all_context_elements(
-        self, decision_type: DecisionType
-    ) -> List[ContextElement]:
+    async def _gather_all_context_elements(self, decision_type: DecisionType) -> List[ContextElement]:
         """Issue #665: Extracted from collect_comprehensive_context to reduce function length.
 
         Collects context from all sources in parallel and combines them.
@@ -100,9 +98,7 @@ class ContextCollector:
             "system_state": system_state,
         }
 
-    async def collect_comprehensive_context(
-        self, decision_type: DecisionType, primary_goal: str
-    ) -> DecisionContext:
+    async def collect_comprehensive_context(self, decision_type: DecisionType, primary_goal: str) -> DecisionContext:
         """Collect comprehensive context for decision making."""
         async with task_tracker.track_task(
             "Context Collection",
@@ -112,15 +108,9 @@ class ContextCollector:
             inputs={"decision_type": decision_type.value, "goal": primary_goal},
         ) as task_context:
             try:
-                decision_id = (
-                    f"decision_{self.time_provider.current_timestamp_millis()}"
-                )
-                context_elements = await self._gather_all_context_elements(
-                    decision_type
-                )
-                analysis = await self._analyze_context_elements(
-                    decision_type, context_elements
-                )
+                decision_id = f"decision_{self.time_provider.current_timestamp_millis()}"
+                context_elements = await self._gather_all_context_elements(decision_type)
+                analysis = await self._analyze_context_elements(decision_type, context_elements)
 
                 decision_context = DecisionContext(
                     decision_id=decision_id,
@@ -140,18 +130,14 @@ class ContextCollector:
                         "risk_factors": len(analysis["risk_factors"]),
                     }
                 )
-                logger.info(
-                    f"Context collected: {len(context_elements)} elements for decision {decision_id}"
-                )
+                logger.info(f"Context collected: {len(context_elements)} elements for decision {decision_id}")
                 return decision_context
             except Exception as e:
                 task_context.set_outputs({"error": "Context collection failed"})
                 logger.error("Context collection failed: %s", e)
                 raise
 
-    async def _collect_historical_context(
-        self, decision_type: DecisionType
-    ) -> List[ContextElement]:
+    async def _collect_historical_context(self, decision_type: DecisionType) -> List[ContextElement]:
         """Collect relevant historical context."""
         try:
             # This would query the enhanced memory system for relevant historical data
@@ -202,9 +188,7 @@ class ContextCollector:
             logger.debug("Environmental context collection failed: %s", e)
             return []
 
-    def _check_resource_constraints(
-        self, resource_info: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
+    def _check_resource_constraints(self, resource_info: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Check resource-based constraints (Issue #298 - extracted helper)."""
         constraints = []
 
@@ -260,9 +244,7 @@ class ContextCollector:
 
         # Check system resources (Issue #298 - uses extracted helper)
         for resource_context in context_by_type.get("resource_usage", []):
-            constraints.extend(
-                self._check_resource_constraints(resource_context.content)
-            )
+            constraints.extend(self._check_resource_constraints(resource_context.content))
 
         # Time-based constraints
         for temporal_context in context_by_type.get("temporal_context", []):
@@ -279,9 +261,7 @@ class ContextCollector:
 
         return constraints
 
-    def _get_automation_actions(
-        self, context_elements: List[ContextElement]
-    ) -> List[Dict[str, Any]]:
+    def _get_automation_actions(self, context_elements: List[ContextElement]) -> List[Dict[str, Any]]:
         """Get automation actions from context (Issue #298 - extracted helper)."""
         # Issue #317: Single-pass extraction using list comprehension (O(n*m) → O(n+m))
         return [
@@ -297,9 +277,7 @@ class ContextCollector:
             for opportunity in ce.content
         ]
 
-    def _get_navigation_actions(
-        self, context_elements: List[ContextElement]
-    ) -> List[Dict[str, Any]]:
+    def _get_navigation_actions(self, context_elements: List[ContextElement]) -> List[Dict[str, Any]]:
         """Get navigation actions from context (Issue #298 - extracted helper)."""
         # Issue #317: Optimized with set conversion for O(1) membership check (O(n*m*k) → O(n*m))
         return [
@@ -368,9 +346,7 @@ class ContextCollector:
 
         return available_actions
 
-    def _assess_low_confidence_risk(
-        self, context_elements: List[ContextElement]
-    ) -> Optional[Dict[str, Any]]:
+    def _assess_low_confidence_risk(self, context_elements: List[ContextElement]) -> Optional[Dict[str, Any]]:
         """Assess risk from low confidence context elements. Issue #620."""
         low_confidence_elements = [ce for ce in context_elements if ce.confidence < 0.6]
         if len(low_confidence_elements) > len(context_elements) * 0.3:
@@ -378,23 +354,15 @@ class ContextCollector:
                 "risk_type": "low_context_confidence",
                 "severity": "medium",
                 "probability": 0.7,
-                "description": (
-                    f"{len(low_confidence_elements)} context elements have low confidence"
-                ),
-                "mitigation": (
-                    "Gather additional context or request human verification"
-                ),
+                "description": (f"{len(low_confidence_elements)} context elements have low confidence"),
+                "mitigation": ("Gather additional context or request human verification"),
             }
         return None
 
-    def _assess_resource_constraint_risks(
-        self, context_elements: List[ContextElement]
-    ) -> List[Dict[str, Any]]:
+    def _assess_resource_constraint_risks(self, context_elements: List[ContextElement]) -> List[Dict[str, Any]]:
         """Assess risks from system resource constraints. Issue #620."""
         risks = []
-        resource_contexts = [
-            ce for ce in context_elements if ce.metadata.get("type") == "resource_usage"
-        ]
+        resource_contexts = [ce for ce in context_elements if ce.metadata.get("type") == "resource_usage"]
         for resource_context in resource_contexts:
             resource_info = resource_context.content
             if resource_info.get("cpu_percent", 0) > 90:
@@ -409,9 +377,7 @@ class ContextCollector:
                 )
         return risks
 
-    def _assess_information_overload_risk(
-        self, context_elements: List[ContextElement]
-    ) -> Optional[Dict[str, Any]]:
+    def _assess_information_overload_risk(self, context_elements: List[ContextElement]) -> Optional[Dict[str, Any]]:
         """Assess risk from too much conflicting context. Issue #620."""
         if len(context_elements) > 50:
             return {
@@ -423,9 +389,7 @@ class ContextCollector:
             }
         return None
 
-    async def _assess_risk_factors(
-        self, context_elements: List[ContextElement]
-    ) -> List[Dict[str, Any]]:
+    async def _assess_risk_factors(self, context_elements: List[ContextElement]) -> List[Dict[str, Any]]:
         """Assess risk factors based on context."""
         risk_factors = []
 
@@ -444,17 +408,13 @@ class ContextCollector:
 
         return risk_factors
 
-    async def _get_user_preferences(
-        self, decision_type: DecisionType
-    ) -> Dict[str, Any]:
+    async def _get_user_preferences(self, decision_type: DecisionType) -> Dict[str, Any]:
         """Get user preferences relevant to decision type."""
         # This would query a user preference system
         # For now, return default preferences
         return DEFAULT_USER_PREFERENCES.copy()
 
-    async def _analyze_historical_patterns(
-        self, decision_type: DecisionType
-    ) -> List[Dict[str, Any]]:
+    async def _analyze_historical_patterns(self, decision_type: DecisionType) -> List[Dict[str, Any]]:
         """Analyze historical patterns for similar decisions."""
         # This would analyze the enhanced memory system
         # For now, return placeholder patterns
@@ -482,8 +442,7 @@ class ContextCollector:
             "active_sessions": 0,
             "pending_tasks": 0,
             "system_health": "healthy",
-            "last_user_interaction": self.time_provider.current_timestamp()
-            - 3600,  # 1 hour ago
+            "last_user_interaction": self.time_provider.current_timestamp() - 3600,  # 1 hour ago
             "current_focus": "monitoring",
         }
 

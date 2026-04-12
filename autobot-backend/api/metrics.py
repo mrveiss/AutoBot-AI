@@ -48,9 +48,7 @@ async def get_workflow_metrics(workflow_id: str):
 )
 @router.get("/performance/summary")
 async def get_performance_summary(
-    time_window_hours: int = Query(
-        default=24, ge=1, le=168, description="Time window in hours (1-168)"
-    )
+    time_window_hours: int = Query(default=24, ge=1, le=168, description="Time window in hours (1-168)")
 ):
     """Get overall performance summary"""
     try:
@@ -97,9 +95,7 @@ _HISTORY_DURATION_MAP = {
 )
 @router.get("/system/history")
 async def get_system_metrics_history(
-    duration: str = Query(
-        "1h", description="Time duration (e.g., 15m, 1h, 6h, 1d, 7d)"
-    ),
+    duration: str = Query("1h", description="Time duration (e.g., 15m, 1h, 6h, 1d, 7d)"),
     step: str = Query("15s", description="Data point resolution interval"),
 ):
     """Get historical CPU and memory metrics from Prometheus.
@@ -134,9 +130,7 @@ async def get_system_metrics_history(
 )
 @router.get("/system/summary")
 async def get_system_summary(
-    minutes: int = Query(
-        default=10, ge=1, le=60, description="Time window in minutes (1-60)"
-    )
+    minutes: int = Query(default=10, ge=1, le=60, description="Time window in minutes (1-60)")
 ):
     """Get system resource usage summary"""
     try:
@@ -159,9 +153,7 @@ async def get_system_summary(
     error_code_prefix="METRICS",
 )
 @router.get("/export/workflow")
-async def export_workflow_metrics(
-    format: str = Query(default="json", description="Export format")
-):
+async def export_workflow_metrics(format: str = Query(default="json", description="Export format")):
     """Export workflow metrics data"""
     try:
         export_data = workflow_metrics.export_metrics(format)
@@ -178,9 +170,7 @@ async def export_workflow_metrics(
     error_code_prefix="METRICS",
 )
 @router.get("/export/system")
-async def export_system_metrics(
-    format: str = Query(default="json", description="Export format")
-):
+async def export_system_metrics(format: str = Query(default="json", description="Export format")):
     """Export system resource monitoring data"""
     try:
         export_data = system_monitor.export_resource_data(format)

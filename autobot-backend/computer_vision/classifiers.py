@@ -48,9 +48,7 @@ class ElementClassifier:
             },
         }
 
-    async def classify_element(
-        self, element_region: Optional[np.ndarray], bbox: Dict[str, int]
-    ) -> ElementType:
+    async def classify_element(self, element_region: Optional[np.ndarray], bbox: Dict[str, int]) -> ElementType:
         """Classify an element based on its visual features"""
         if element_region is None:
             return ElementType.UNKNOWN
@@ -75,17 +73,11 @@ class ElementClassifier:
             logger.debug("Element classification failed: %s", e)
             return ElementType.UNKNOWN
 
-    def _matches_button_criteria(
-        self, aspect_ratio: float, area: int, region: np.ndarray
-    ) -> bool:
+    def _matches_button_criteria(self, aspect_ratio: float, area: int, region: np.ndarray) -> bool:
         """Check if element matches button criteria"""
         rules = self.classification_rules["button"]
 
-        if not (
-            rules["aspect_ratio_range"][0]
-            <= aspect_ratio
-            <= rules["aspect_ratio_range"][1]
-        ):
+        if not (rules["aspect_ratio_range"][0] <= aspect_ratio <= rules["aspect_ratio_range"][1]):
             return False
 
         if not (rules["min_area"] <= area <= rules["max_area"]):
@@ -93,17 +85,11 @@ class ElementClassifier:
 
         return True
 
-    def _matches_input_criteria(
-        self, aspect_ratio: float, area: int, region: np.ndarray
-    ) -> bool:
+    def _matches_input_criteria(self, aspect_ratio: float, area: int, region: np.ndarray) -> bool:
         """Check if element matches input field criteria"""
         rules = self.classification_rules["input_field"]
 
-        if not (
-            rules["aspect_ratio_range"][0]
-            <= aspect_ratio
-            <= rules["aspect_ratio_range"][1]
-        ):
+        if not (rules["aspect_ratio_range"][0] <= aspect_ratio <= rules["aspect_ratio_range"][1]):
             return False
 
         if area < rules["min_area"]:
@@ -111,17 +97,11 @@ class ElementClassifier:
 
         return True
 
-    def _matches_checkbox_criteria(
-        self, aspect_ratio: float, area: int, region: np.ndarray
-    ) -> bool:
+    def _matches_checkbox_criteria(self, aspect_ratio: float, area: int, region: np.ndarray) -> bool:
         """Check if element matches checkbox criteria"""
         rules = self.classification_rules["checkbox"]
 
-        if not (
-            rules["aspect_ratio_range"][0]
-            <= aspect_ratio
-            <= rules["aspect_ratio_range"][1]
-        ):
+        if not (rules["aspect_ratio_range"][0] <= aspect_ratio <= rules["aspect_ratio_range"][1]):
             return False
 
         if area > rules["max_area"]:
@@ -154,9 +134,7 @@ class TemplateMatchingEngine:
             },
         }
 
-    async def find_common_elements(
-        self, screenshot: np.ndarray
-    ) -> List[Dict[str, Any]]:
+    async def find_common_elements(self, screenshot: np.ndarray) -> List[Dict[str, Any]]:
         """Find common UI elements using template matching"""
         matches: List[Dict[str, Any]] = []
 
@@ -177,9 +155,7 @@ class ContextAnalyzer:
         """Initialize context analyzer for screen state analysis."""
         logger.info("Context Analyzer initialized")
 
-    async def analyze_context(
-        self, screenshot: np.ndarray, ui_elements: List[UIElement]
-    ) -> Dict[str, Any]:
+    async def analyze_context(self, screenshot: np.ndarray, ui_elements: List[UIElement]) -> Dict[str, Any]:
         """Analyze screen context and determine application state (Tell, Don't Ask)"""
         try:
             # Use UIElementCollection for all element analysis (Tell, Don't Ask)

@@ -58,9 +58,7 @@ class MLModel(Base):
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
-    )
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     # Notes
     notes = Column(Text)
@@ -96,7 +94,4 @@ class MLModel(Base):
         }
 
     def __repr__(self) -> str:
-        return (
-            f"<MLModel(version={self.version}, type={self.model_type}, "
-            f"active={self.is_active})>"
-        )
+        return f"<MLModel(version={self.version}, type={self.model_type}, " f"active={self.is_active})>"

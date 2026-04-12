@@ -75,9 +75,7 @@ def _get_chat_ollama():
     try:
         llm_config = get_config().get_llm_config()
         model = ModelConstants.DEFAULT_OLLAMA_MODEL
-        base_url = llm_config.get("ollama", {}).get(
-            "base_url", get_service_url("ollama")
-        )
+        base_url = llm_config.get("ollama", {}).get("base_url", get_service_url("ollama"))
         return ChatOllama(model=model, base_url=base_url, temperature=0.7)
     except Exception as exc:
         logger.warning("Failed to create ChatOllama: %s", exc)
@@ -157,10 +155,7 @@ def _create_add_document_tool() -> MCPTool:
     """
     return MCPTool(
         name="add_to_knowledge_base",
-        description=(
-            "Add new information to the AutoBot knowledge base (stored in Redis"
-            "vectors)"
-        ),
+        description=("Add new information to the AutoBot knowledge base (stored in Redis" "vectors)"),
         input_schema={
             "type": "object",
             "properties": {
@@ -369,9 +364,7 @@ async def mcp_search_knowledge_base(
         kb = get_knowledge_base()
 
         # Perform the search
-        results = await kb.search(
-            query=request.query, top_k=request.top_k, filters=request.filters
-        )
+        results = await kb.search(query=request.query, top_k=request.top_k, filters=request.filters)
 
         # Format results for MCP
         formatted_results = []
@@ -500,9 +493,7 @@ async def mcp_summarize_knowledge_topic(
         if not results:
             return {
                 "success": True,
-                "summary": (
-                    f"No information found about '{topic}' in the knowledge base."
-                ),
+                "summary": (f"No information found about '{topic}' in the knowledge base."),
                 "source_count": 0,
             }
 
@@ -521,9 +512,7 @@ async def mcp_summarize_knowledge_topic(
             summary = await kb.llm.generate(prompt, max_tokens=max_length)
         else:
             # Fallback to simple truncation
-            summary = combined_content[
-                : max_length * 4
-            ]  # Rough char to token conversion
+            summary = combined_content[: max_length * 4]  # Rough char to token conversion
             if len(summary) < len(combined_content):
                 summary += "..."
 
@@ -621,10 +610,7 @@ async def mcp_langchain_qa_chain(
         context = "\n\n".join([r.get("content", "") for r in search_results])
 
         # Issue #1047: Use ChatOllama (langchain 1.x) for QA
-        prompt = (
-            f"Based on the following context, answer this question: "
-            f"{question}\n\nContext:\n{context}"
-        )
+        prompt = f"Based on the following context, answer this question: " f"{question}\n\nContext:\n{context}"
 
         chat_llm = _get_chat_ollama()
         if chat_llm:
@@ -635,10 +621,7 @@ async def mcp_langchain_qa_chain(
             answer = await asyncio.to_thread(kb.llm.complete, prompt)
             answer = str(answer)
         else:
-            answer = (
-                f"Based on the search results: "
-                f"{search_results[0].get('content', '')[:500]}..."
-            )
+            answer = f"Based on the search results: " f"{search_results[0].get('content', '')[:500]}..."
 
         return {
             "success": True,
@@ -763,9 +746,7 @@ async def get_mcp_schema(
     return {
         "name": "autobot-knowledge-base",
         "version": "2.0.0",
-        "description": (
-            "MCP tools for accessing AutoBot's knowledge base via LangChain, LlamaIndex, and Redis"
-        ),
+        "description": ("MCP tools for accessing AutoBot's knowledge base via LangChain, LlamaIndex, and Redis"),
         "tools": await get_mcp_tools(),
         "backends": {
             "langchain": "LangChain for orchestration and QA chains",

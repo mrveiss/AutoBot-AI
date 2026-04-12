@@ -44,9 +44,7 @@ async def benchmark_l2_hit(cache: LLMResponseCache, keys: List[str]) -> List[flo
     return latencies
 
 
-async def run_benchmark(
-    num_entries: int = 100, num_reads: int = 1000
-) -> Dict[str, Any]:
+async def run_benchmark(num_entries: int = 100, num_reads: int = 1000) -> Dict[str, Any]:
     """Run the full L1 vs L2 benchmark."""
     cache = LLMResponseCache(memory_cache_max_size=num_entries * 2, redis_ttl=300)
 

@@ -81,15 +81,11 @@ def _apply_task_defaults(
     """
     defaults = _TASK_TYPE_DEFAULTS.get(llm_type.value, _TASK_TYPE_DEFAULTS["general"])
     resolved_temp = temperature if temperature is not None else defaults["temperature"]
-    resolved_tokens = (
-        max_tokens if max_tokens is not None else defaults.get("max_tokens")
-    )
+    resolved_tokens = max_tokens if max_tokens is not None else defaults.get("max_tokens")
     return resolved_temp, resolved_tokens
 
 
-def _build_error_response(
-    request: LLMRequest, message: str, provider_name: str
-) -> LLMResponse:
+def _build_error_response(request: LLMRequest, message: str, provider_name: str) -> LLMResponse:
     """Build a standardised error LLMResponse."""
     return LLMResponse(
         content="",
@@ -117,9 +113,7 @@ class LLMService:
     # Per-conversation model configuration
     # ------------------------------------------------------------------
 
-    def set_conversation_provider(
-        self, conversation_id: str, provider_name: str
-    ) -> None:
+    def set_conversation_provider(self, conversation_id: str, provider_name: str) -> None:
         """Pin a provider for all future requests in a conversation."""
         self._registry.set_conversation_provider(conversation_id, provider_name)
 
@@ -189,9 +183,7 @@ class LLMService:
         response = await provider.chat_completion(request)
         if response.error:
             self._error_count += 1
-            logger.warning(
-                "Provider %s returned error: %s", provider.provider_name, response.error
-            )
+            logger.warning("Provider %s returned error: %s", provider.provider_name, response.error)
         self._track_usage(response, conversation_id)
         return response
 
@@ -247,9 +239,7 @@ class LLMService:
                 yield chunk
         except Exception as exc:
             self._error_count += 1
-            logger.error(
-                "Stream error from provider %s: %s", provider.provider_name, exc
-            )
+            logger.error("Stream error from provider %s: %s", provider.provider_name, exc)
             raise
 
     # ------------------------------------------------------------------
@@ -264,9 +254,7 @@ class LLMService:
             entry["available"] = availability.get(str(entry["name"]), False)
         return {"providers": providers}
 
-    async def list_models(
-        self, provider_name: Optional[str] = None
-    ) -> Dict[str, List[str]]:
+    async def list_models(self, provider_name: Optional[str] = None) -> Dict[str, List[str]]:
         """
         Return available models, optionally filtered to a single provider.
 
@@ -274,9 +262,7 @@ class LLMService:
         """
         import asyncio as _asyncio
 
-        target_names = (
-            [provider_name] if provider_name else list(self._registry._providers.keys())
-        )
+        target_names = [provider_name] if provider_name else list(self._registry._providers.keys())
         results: Dict[str, List[str]] = {}
         for name in target_names:
             provider = self._registry._providers.get(name)
@@ -301,9 +287,7 @@ class LLMService:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _track_usage(
-        self, response: LLMResponse, conversation_id: Optional[str]
-    ) -> None:
+    def _track_usage(self, response: LLMResponse, conversation_id: Optional[str]) -> None:
         """Forward usage data to the cost tracker when available."""
         if not response.usage:
             return

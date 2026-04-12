@@ -13,6 +13,7 @@ Do NOT add new code here.  Import directly from enhanced_orchestration instead.
 
 # Re-export entire public API from the consolidated package
 from enhanced_orchestration import (  # noqa: F401
+    FALLBACK_TIERS,
     AgentCapability,
     AgentPerformance,
     AgentTask,
@@ -20,7 +21,6 @@ from enhanced_orchestration import (  # noqa: F401
     EnhancedMultiAgentOrchestrator,
     EvaluationResult,
     ExecutionStrategy,
-    FALLBACK_TIERS,
     SuccessCriteria,
     SuccessCriteriaEvaluator,
     SuccessCriteriaType,

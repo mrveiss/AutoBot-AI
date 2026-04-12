@@ -8,19 +8,16 @@ Tests for GitHub issue #4103: Background task for documentation indexing.
 Ensures populate_autobot_docs returns immediately with task_id.
 """
 
-import pytest
 from datetime import datetime, timezone
+
+import pytest
 
 
 def test_task_status_dataclass_initialization():
     """Test TaskStatus dataclass initialization with default values."""
     from services.knowledge.task_status_manager import TaskStatus
 
-    task = TaskStatus(
-        task_id="test-task-123",
-        status="queued",
-        message="Documentation indexing started"
-    )
+    task = TaskStatus(task_id="test-task-123", status="queued", message="Documentation indexing started")
 
     # Verify all fields are initialized correctly
     assert task.task_id == "test-task-123"
@@ -45,7 +42,7 @@ def test_task_status_dataclass_custom_values():
         progress_percent=50,
         items_processed=50,
         items_total=100,
-        elapsed_seconds=30.5
+        elapsed_seconds=30.5,
     )
 
     # Verify custom values are set
@@ -62,10 +59,7 @@ def test_task_status_dataclass_with_error():
 
     error_message = "Failed to read documentation file"
     task = TaskStatus(
-        task_id="test-task-error",
-        status="failed",
-        message="Documentation indexing failed",
-        error=error_message
+        task_id="test-task-error", status="failed", message="Documentation indexing failed", error=error_message
     )
 
     assert task.status == "failed"

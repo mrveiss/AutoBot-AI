@@ -149,9 +149,7 @@ def _prepare_process_env(env: Optional[Dict[str, str]]) -> Optional[Dict[str, st
     return None
 
 
-def _parse_command_output(
-    stdout: bytes, stderr: bytes, return_code: int
-) -> CommandResult:
+def _parse_command_output(stdout: bytes, stderr: bytes, return_code: int) -> CommandResult:
     """
     Parse and clean command output into a CommandResult.
 
@@ -258,9 +256,7 @@ async def _communicate_with_process(
     """
     try:
         if timeout:
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(), timeout=timeout
-            )
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
         else:
             stdout, stderr = await process.communicate()
     except asyncio.TimeoutError:
@@ -487,9 +483,7 @@ async def execute_shell_command_streaming(
 
         output_queue: AsyncQueue[StreamChunk] = AsyncQueue()
         done_event = asyncio.Event()
-        completion_task = await _setup_stream_tasks(
-            process, output_queue, done_event, on_output
-        )
+        completion_task = await _setup_stream_tasks(process, output_queue, done_event, on_output)
 
         async for chunk in _yield_chunks_from_queue(output_queue, done_event):
             yield chunk

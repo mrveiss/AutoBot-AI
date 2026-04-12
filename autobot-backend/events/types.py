@@ -93,9 +93,7 @@ class AgentEvent:
             event_id=data["event_id"],
             event_type=EventType[data["event_type"]],
             timestamp=(
-                datetime.fromisoformat(data["timestamp"])
-                if isinstance(data["timestamp"], str)
-                else data["timestamp"]
+                datetime.fromisoformat(data["timestamp"]) if isinstance(data["timestamp"], str) else data["timestamp"]
             ),
             content=data.get("content", {}),
             source=data.get("source", "unknown"),

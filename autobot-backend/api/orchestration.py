@@ -27,9 +27,7 @@ except ImportError:
     _ORCHESTRATOR_AVAILABLE = False
     create_and_execute_workflow = None
     enhanced_orchestrator = None
-    logging.getLogger(__name__).warning(
-        "enhanced_orchestration package not available"
-    )
+    logging.getLogger(__name__).warning("enhanced_orchestration package not available")
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -81,9 +79,7 @@ def _build_single_task_response(result: dict) -> JSONResponse:
     task_results = list(result.get("results", {}).values())
     if task_results:
         task_result = task_results[0]
-        response_text = task_result.get(
-            "response", task_result.get("result", "Task completed")
-        )
+        response_text = task_result.get("response", task_result.get("result", "Task completed"))
     else:
         response_text = "Task completed successfully"
 
@@ -170,9 +166,7 @@ async def create_workflow_plan(
         logger.info("Creating workflow plan for: %s", request.goal)
 
         # Create plan
-        plan = await enhanced_orchestrator.create_workflow_plan(
-            request.goal, request.context
-        )
+        plan = await enhanced_orchestrator.create_workflow_plan(request.goal, request.context)
 
         # Convert to serializable format
         plan_dict = {
@@ -187,9 +181,7 @@ async def create_workflow_plan(
                     "action": task.action,
                     "priority": task.priority,
                     "dependencies": task.dependencies,
-                    "capabilities_required": [
-                        cap.value for cap in task.capabilities_required
-                    ],
+                    "capabilities_required": [cap.value for cap in task.capabilities_required],
                 }
                 for task in plan.tasks
             ],
@@ -236,9 +228,7 @@ async def get_agent_performance(
     try:
         report = enhanced_orchestrator.get_performance_report()
 
-        return JSONResponse(
-            status_code=200, content={"status": "success", "performance_data": report}
-        )
+        return JSONResponse(status_code=200, content={"status": "success", "performance_data": report})
 
     except Exception as e:
         logger.error("Performance report error: %s", e)
@@ -276,14 +266,10 @@ async def recommend_agents(
                 logger.warning("Unknown capability: %s", cap_str)
 
         if not capabilities_needed:
-            raise HTTPException(
-                status_code=400, detail="No valid capabilities specified"
-            )
+            raise HTTPException(status_code=400, detail="No valid capabilities specified")
 
         # Get recommendations
-        recommendations = await enhanced_orchestrator.get_agent_recommendations(
-            request.task_type, capabilities_needed
-        )
+        recommendations = await enhanced_orchestrator.get_agent_recommendations(request.task_type, capabilities_needed)
 
         return JSONResponse(
             status_code=200,
@@ -394,9 +380,7 @@ async def get_execution_strategies(
         },
     }
 
-    return JSONResponse(
-        status_code=200, content={"strategies": strategies, "default": "adaptive"}
-    )
+    return JSONResponse(status_code=200, content={"strategies": strategies, "default": "adaptive"})
 
 
 @with_error_handling(
@@ -432,12 +416,8 @@ async def get_agent_capabilities(
             agent_details[agent] = {
                 "capabilities": [cap.value for cap in caps],
                 "performance": {
-                    "reliability": (
-                        enhanced_orchestrator.agent_performance[agent].reliability_score
-                    ),
-                    "total_tasks": (
-                        enhanced_orchestrator.agent_performance[agent].total_tasks
-                    ),
+                    "reliability": (enhanced_orchestrator.agent_performance[agent].reliability_score),
+                    "total_tasks": (enhanced_orchestrator.agent_performance[agent].total_tasks),
                 },
             }
 
@@ -529,13 +509,9 @@ async def get_orchestration_examples(
         content={
             "examples": {
                 "parallel_research": {
-                    "goal": (
-                        "Research the latest developments in quantum computing and AI"
-                    ),
+                    "goal": ("Research the latest developments in quantum computing and AI"),
                     "strategy": "parallel",
-                    "description": (
-                        "Multiple research agents work simultaneously on different aspects"
-                    ),
+                    "description": ("Multiple research agents work simultaneously on different aspects"),
                 },
                 "sequential_installation": {
                     "goal": "Install Docker, configure it, and deploy a test container",
@@ -543,29 +519,19 @@ async def get_orchestration_examples(
                     "description": "Installation steps must be performed in order",
                 },
                 "collaborative_analysis": {
-                    "goal": (
-                        "Analyze this codebase for security vulnerabilities and performance issues"
-                    ),
+                    "goal": ("Analyze this codebase for security vulnerabilities and performance issues"),
                     "strategy": "collaborative",
-                    "description": (
-                        "Security and performance agents share findings in real-time"
-                    ),
+                    "description": ("Security and performance agents share findings in real-time"),
                 },
                 "pipeline_processing": {
-                    "goal": (
-                        "Extract data from documents, transform it, and generate a report"
-                    ),
+                    "goal": ("Extract data from documents, transform it, and generate a report"),
                     "strategy": "pipeline",
                     "description": "Each stage processes and passes data to the next",
                 },
                 "adaptive_complex": {
-                    "goal": (
-                        "Help me refactor this legacy application to use microservices"
-                    ),
+                    "goal": ("Help me refactor this legacy application to use microservices"),
                     "strategy": "adaptive",
-                    "description": (
-                        "Strategy adapts based on codebase complexity and progress"
-                    ),
+                    "description": ("Strategy adapts based on codebase complexity and progress"),
                 },
             },
             "usage_tips": [

@@ -37,9 +37,7 @@ from services.trigger_service import (
 # ---------------------------------------------------------------------------
 
 
-def _make_config(
-    trigger_type: TriggerType, extra: Dict[str, Any] | None = None
-) -> TriggerConfig:
+def _make_config(trigger_type: TriggerType, extra: Dict[str, Any] | None = None) -> TriggerConfig:
     cfg: Dict[str, Any] = {}
     if trigger_type == TriggerType.CRON:
         cfg["cron_expression"] = "*/5 * * * *"
@@ -51,9 +49,7 @@ def _make_config(
         cfg["event_name"] = "task_completed"
     if extra:
         cfg.update(extra)
-    return TriggerConfig(
-        trigger_type=trigger_type, workflow_id="wf-test-123", config=cfg
-    )
+    return TriggerConfig(trigger_type=trigger_type, workflow_id="wf-test-123", config=cfg)
 
 
 def _fake_redis_store() -> MagicMock:
@@ -242,9 +238,7 @@ class TestTriggerConfigValidation:
 
     def test_cron_missing_expression(self) -> None:
         svc = self._svc()
-        cfg = TriggerConfig(
-            trigger_type=TriggerType.CRON, workflow_id="wf-1", config={}
-        )
+        cfg = TriggerConfig(trigger_type=TriggerType.CRON, workflow_id="wf-1", config={})
         with pytest.raises(ValueError, match="cron_expression"):
             svc._validate_config(cfg)
 
@@ -260,17 +254,13 @@ class TestTriggerConfigValidation:
 
     def test_pubsub_missing_channel(self) -> None:
         svc = self._svc()
-        cfg = TriggerConfig(
-            trigger_type=TriggerType.REDIS_PUBSUB, workflow_id="wf-1", config={}
-        )
+        cfg = TriggerConfig(trigger_type=TriggerType.REDIS_PUBSUB, workflow_id="wf-1", config={})
         with pytest.raises(ValueError, match="channel"):
             svc._validate_config(cfg)
 
     def test_filewatch_missing_key(self) -> None:
         svc = self._svc()
-        cfg = TriggerConfig(
-            trigger_type=TriggerType.FILE_WATCH, workflow_id="wf-1", config={}
-        )
+        cfg = TriggerConfig(trigger_type=TriggerType.FILE_WATCH, workflow_id="wf-1", config={})
         with pytest.raises(ValueError, match="redis_key"):
             svc._validate_config(cfg)
 
@@ -286,9 +276,7 @@ class TestTriggerConfigValidation:
 
     def test_agent_event_missing_name(self) -> None:
         svc = self._svc()
-        cfg = TriggerConfig(
-            trigger_type=TriggerType.AGENT_EVENT, workflow_id="wf-1", config={}
-        )
+        cfg = TriggerConfig(trigger_type=TriggerType.AGENT_EVENT, workflow_id="wf-1", config={})
         with pytest.raises(ValueError, match="event_name"):
             svc._validate_config(cfg)
 
@@ -314,12 +302,8 @@ class TestTriggerServiceCRUD:
         return TriggerService()
 
     @pytest.mark.asyncio
-    async def test_register_webhook_returns_id_and_stores(
-        self, svc: TriggerService, fake_redis: MagicMock
-    ) -> None:
-        with patch(
-            "services.trigger_service.get_redis_client", return_value=fake_redis
-        ):
+    async def test_register_webhook_returns_id_and_stores(self, svc: TriggerService, fake_redis: MagicMock) -> None:
+        with patch("services.trigger_service.get_redis_client", return_value=fake_redis):
             cfg = _make_config(TriggerType.WEBHOOK)
             trigger_id = await svc.register_trigger(cfg)
 
@@ -327,12 +311,8 @@ class TestTriggerServiceCRUD:
         assert len(trigger_id) == 36  # UUID format
 
     @pytest.mark.asyncio
-    async def test_register_cron_trigger(
-        self, svc: TriggerService, fake_redis: MagicMock
-    ) -> None:
-        with patch(
-            "services.trigger_service.get_redis_client", return_value=fake_redis
-        ):
+    async def test_register_cron_trigger(self, svc: TriggerService, fake_redis: MagicMock) -> None:
+        with patch("services.trigger_service.get_redis_client", return_value=fake_redis):
             cfg = _make_config(TriggerType.CRON)
             trigger_id = await svc.register_trigger(cfg)
             triggers = await svc.list_triggers()
@@ -340,16 +320,10 @@ class TestTriggerServiceCRUD:
         assert any(t.id == trigger_id for t in triggers)
 
     @pytest.mark.asyncio
-    async def test_list_by_workflow_id(
-        self, svc: TriggerService, fake_redis: MagicMock
-    ) -> None:
-        with patch(
-            "services.trigger_service.get_redis_client", return_value=fake_redis
-        ):
+    async def test_list_by_workflow_id(self, svc: TriggerService, fake_redis: MagicMock) -> None:
+        with patch("services.trigger_service.get_redis_client", return_value=fake_redis):
             cfg1 = _make_config(TriggerType.WEBHOOK)
-            cfg2 = TriggerConfig(
-                trigger_type=TriggerType.WEBHOOK, workflow_id="other-wf", config={}
-            )
+            cfg2 = TriggerConfig(trigger_type=TriggerType.WEBHOOK, workflow_id="other-wf", config={})
             await svc.register_trigger(cfg1)
             await svc.register_trigger(cfg2)
 
@@ -360,12 +334,8 @@ class TestTriggerServiceCRUD:
         assert all(t.workflow_id == "other-wf" for t in for_other)
 
     @pytest.mark.asyncio
-    async def test_unregister_removes_from_list(
-        self, svc: TriggerService, fake_redis: MagicMock
-    ) -> None:
-        with patch(
-            "services.trigger_service.get_redis_client", return_value=fake_redis
-        ):
+    async def test_unregister_removes_from_list(self, svc: TriggerService, fake_redis: MagicMock) -> None:
+        with patch("services.trigger_service.get_redis_client", return_value=fake_redis):
             cfg = _make_config(TriggerType.WEBHOOK)
             trigger_id = await svc.register_trigger(cfg)
             await svc.unregister_trigger(trigger_id)
@@ -390,9 +360,7 @@ class TestFireTrigger:
 
         fake_redis = _fake_redis_store()
 
-        with patch(
-            "services.trigger_service.get_redis_client", return_value=fake_redis
-        ):
+        with patch("services.trigger_service.get_redis_client", return_value=fake_redis):
             cfg = _make_config(TriggerType.WEBHOOK)
             trigger_id = await svc.register_trigger(cfg)
             await svc.start(mock_launcher)
@@ -414,9 +382,7 @@ class TestFireTrigger:
 
         fake_redis = _fake_redis_store()
 
-        with patch(
-            "services.trigger_service.get_redis_client", return_value=fake_redis
-        ):
+        with patch("services.trigger_service.get_redis_client", return_value=fake_redis):
             cfg = TriggerConfig(
                 trigger_type=TriggerType.WEBHOOK,
                 workflow_id="wf-cond",
@@ -455,9 +421,7 @@ class TestFireTrigger:
 
         fake_redis = _fake_redis_store()
 
-        with patch(
-            "services.trigger_service.get_redis_client", return_value=fake_redis
-        ):
+        with patch("services.trigger_service.get_redis_client", return_value=fake_redis):
             cfg = TriggerConfig(
                 trigger_type=TriggerType.WEBHOOK,
                 workflow_id="wf-disabled",
@@ -485,9 +449,7 @@ class TestWebhookSignatureValidation:
         svc = TriggerService()
         fake_redis = _fake_redis_store()
 
-        with patch(
-            "services.trigger_service.get_redis_client", return_value=fake_redis
-        ):
+        with patch("services.trigger_service.get_redis_client", return_value=fake_redis):
             cfg = _make_config(TriggerType.WEBHOOK)
             trigger_id = await svc.register_trigger(cfg)
 
@@ -495,9 +457,7 @@ class TestWebhookSignatureValidation:
             assert secret is not None
 
             body = b'{"event": "push"}'
-            sig = (
-                "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
-            )
+            sig = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
 
             assert await svc.validate_webhook_signature(trigger_id, body, sig) is True
 
@@ -506,24 +466,18 @@ class TestWebhookSignatureValidation:
         svc = TriggerService()
         fake_redis = _fake_redis_store()
 
-        with patch(
-            "services.trigger_service.get_redis_client", return_value=fake_redis
-        ):
+        with patch("services.trigger_service.get_redis_client", return_value=fake_redis):
             cfg = _make_config(TriggerType.WEBHOOK)
             trigger_id = await svc.register_trigger(cfg)
 
             body = b'{"event": "push"}'
             bad_sig = "sha256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
-            assert (
-                await svc.validate_webhook_signature(trigger_id, body, bad_sig) is False
-            )
+            assert await svc.validate_webhook_signature(trigger_id, body, bad_sig) is False
 
     @pytest.mark.asyncio
     async def test_no_secret_returns_false(self) -> None:
         svc = TriggerService()
         # No Redis mock — no secret stored
-        result = await svc.validate_webhook_signature(
-            "nonexistent", b"body", "sha256=abc"
-        )
+        result = await svc.validate_webhook_signature("nonexistent", b"body", "sha256=abc")
         assert result is False

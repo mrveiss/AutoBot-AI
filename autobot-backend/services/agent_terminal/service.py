@@ -41,9 +41,7 @@ class AgentTerminalService:
     - Comprehensive audit logging
     """
 
-    def __init__(
-        self, redis_client=None, chat_workflow_manager=None, command_queue=None
-    ):
+    def __init__(self, redis_client=None, chat_workflow_manager=None, command_queue=None):
         """
         Initialize agent terminal service.
 
@@ -66,29 +64,21 @@ class AgentTerminalService:
         self.command_queue = command_queue or get_command_queue()
 
         # Terminal command logger
-        self.terminal_logger = TerminalLogger(
-            redis_client=redis_client, data_dir="data/chats"
-        )
+        self.terminal_logger = TerminalLogger(redis_client=redis_client, data_dir="data/chats")
 
         # Prometheus metrics instance
         self.prometheus_metrics = get_metrics_manager()
 
         # Initialize component modules
-        self.session_manager = SessionManager(
-            redis_client=redis_client, chat_history_manager=self.chat_history_manager
-        )
-        self.command_executor = CommandExecutor(
-            chat_history_manager=self.chat_history_manager
-        )
+        self.session_manager = SessionManager(redis_client=redis_client, chat_history_manager=self.chat_history_manager)
+        self.command_executor = CommandExecutor(chat_history_manager=self.chat_history_manager)
         self.approval_handler = ApprovalHandler(
             approval_manager=self.approval_manager,
             chat_history_manager=self.chat_history_manager,
             command_queue=self.command_queue,
         )
 
-        logger.info(
-            "AgentTerminalService initialized with security controls and command queue"
-        )
+        logger.info("AgentTerminalService initialized with security controls and command queue")
 
     # ============================================================================
     # Session Management (delegated to SessionManager)
@@ -121,9 +111,7 @@ class AgentTerminalService:
         conversation_id: Optional[str] = None,
     ) -> list[AgentTerminalSession]:
         """List agent terminal sessions."""
-        return await self.session_manager.list_sessions(
-            agent_id=agent_id, conversation_id=conversation_id
-        )
+        return await self.session_manager.list_sessions(agent_id=agent_id, conversation_id=conversation_id)
 
     async def close_session(self, session_id: str) -> bool:
         """Close an agent terminal session."""
@@ -184,8 +172,7 @@ class AgentTerminalService:
 
         if is_interactive:
             logger.info(
-                f"Interactive command detected: {command} "
-                f"(requires stdin: {', '.join(interactive_reasons)})"
+                f"Interactive command detected: {command} " f"(requires stdin: {', '.join(interactive_reasons)})"
             )
 
         return executor, risk, reasons, is_interactive, interactive_reasons
@@ -287,9 +274,7 @@ class AgentTerminalService:
                 user_id=None,
             )
 
-        await self._save_command_to_chat(
-            session.conversation_id, command, result, command_type="agent"
-        )
+        await self._save_command_to_chat(session.conversation_id, command, result, command_type="agent")
 
         # Interpret result if chat workflow manager available
         await self._interpret_command_result(session, command, result)
@@ -321,9 +306,7 @@ class AgentTerminalService:
         """
         if session.has_conversation() and self.chat_workflow_manager:
             try:
-                logger.info(
-                    f"[INTERPRETATION] Starting LLM interpretation for command: {command}"
-                )
+                logger.info(f"[INTERPRETATION] Starting LLM interpretation for command: {command}")
                 await self.chat_workflow_manager.interpret_terminal_command(
                     command=command,
                     stdout=result.get("stdout", ""),
@@ -457,9 +440,7 @@ class AgentTerminalService:
             auto_approve_future: Whether to auto-approve similar commands
         """
         # Save to chat
-        await self._save_command_to_chat(
-            session.conversation_id, command, result, command_type="approved"
-        )
+        await self._save_command_to_chat(session.conversation_id, command, result, command_type="approved")
 
         # Interpret command with workflow manager
         await self._interpret_approved_command(session, command, result)
@@ -485,9 +466,7 @@ class AgentTerminalService:
             )
 
         # Update and broadcast status
-        await self._update_and_broadcast_approval_status(
-            session, command, True, user_id, comment
-        )
+        await self._update_and_broadcast_approval_status(session, command, True, user_id, comment)
 
     async def _run_approved_command_body(
         self,
@@ -625,9 +604,7 @@ class AgentTerminalService:
         session.clear_pending_and_resume()
 
         # Update and broadcast status
-        await self._update_and_broadcast_approval_status(
-            session, command, False, user_id, comment
-        )
+        await self._update_and_broadcast_approval_status(session, command, False, user_id, comment)
 
         return {
             "status": "denied",
@@ -636,9 +613,7 @@ class AgentTerminalService:
             "comment": comment,
         }
 
-    async def _interpret_approved_command(
-        self, session: AgentTerminalSession, command: str, result: Metadata
-    ) -> None:
+    async def _interpret_approved_command(self, session: AgentTerminalSession, command: str, result: Metadata) -> None:
         """Interpret approved command results with workflow manager (Issue #281: extracted)."""
         if session.has_conversation() and self.chat_workflow_manager:
             try:
@@ -696,16 +671,10 @@ class AgentTerminalService:
         Returns:
             Error response if permission denied, None if allowed
         """
-        allowed, permission_reason = self.approval_handler.check_agent_permission(
-            session.agent_role, risk
-        )
+        allowed, permission_reason = self.approval_handler.check_agent_permission(session.agent_role, risk)
         if not allowed:
-            logger.warning(
-                f"Agent {session.agent_id} denied command execution: {permission_reason}"
-            )
-            return session.get_permission_denied_response(
-                permission_reason, command, risk.value
-            )
+            logger.warning(f"Agent {session.agent_id} denied command execution: {permission_reason}")
+            return session.get_permission_denied_response(permission_reason, command, risk.value)
         return None
 
     async def _check_auto_approval_or_queue(
@@ -743,10 +712,7 @@ class AgentTerminalService:
         )
 
         if is_auto_approved:
-            logger.info(
-                f"Command auto-approved by rule: {command} "
-                f"(user: {user_id}, risk: {risk.value})"
-            )
+            logger.info(f"Command auto-approved by rule: {command} " f"(user: {user_id}, risk: {risk.value})")
             return True, None
 
         # Queue for approval
@@ -790,9 +756,7 @@ class AgentTerminalService:
             return validation_error
 
         # Assess command risk and interactivity
-        _, risk, reasons, is_interactive, interactive_reasons = self._assess_command(
-            command
-        )
+        _, risk, reasons, is_interactive, interactive_reasons = self._assess_command(command)
 
         # Check agent permissions (Issue #665: extracted helper)
         permission_error = self._check_agent_permission(session, command, risk)
@@ -845,9 +809,7 @@ class AgentTerminalService:
 
             # Save output (if any)
             if result.get("stdout") or result.get("stderr"):
-                output_text = (
-                    result.get("stdout", "") + result.get("stderr", "")
-                ).strip()
+                output_text = (result.get("stdout", "") + result.get("stderr", "")).strip()
                 if output_text:
                     # Strip ANSI escape codes
                     from utils.encoding_utils import strip_ansi_codes
@@ -861,9 +823,7 @@ class AgentTerminalService:
                             session_id=conversation_id,
                         )
 
-            logger.info(
-                f"[CHAT INTEGRATION] {command_type.capitalize()} command saved to chat"
-            )
+            logger.info(f"[CHAT INTEGRATION] {command_type.capitalize()} command saved to chat")
         except Exception as e:
             logger.error("Failed to save %s command to chat: %s", command_type, e)
 
@@ -934,10 +894,7 @@ class AgentTerminalService:
                     tool="Bash",
                     comment=comment,
                 )
-                logger.info(
-                    f"[APPROVAL] Stored in project memory: {project_path}, "
-                    f"command={command[:50]}..."
-                )
+                logger.info(f"[APPROVAL] Stored in project memory: {project_path}, " f"command={command[:50]}...")
 
             # Execute approved command (Issue #281: uses helper)
             return await self._execute_approved_command(
@@ -974,8 +931,7 @@ class AgentTerminalService:
         session.state = AgentSessionState.USER_CONTROL
 
         logger.info(
-            f"User {user_id} interrupted agent session {session_id} "
-            f"(previous state: {previous_state.value})"
+            f"User {user_id} interrupted agent session {session_id} " f"(previous state: {previous_state.value})"
         )
 
         return {

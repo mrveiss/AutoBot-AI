@@ -86,9 +86,7 @@ class TestSecurityCardSigner:
     def test_sign_raises_without_secret(self):
         from a2a.security import SecurityCardSigner
 
-        with patch(
-            "a2a.security._get_secret", side_effect=RuntimeError("AUTOBOT_A2A_SECRET")
-        ):
+        with patch("a2a.security._get_secret", side_effect=RuntimeError("AUTOBOT_A2A_SECRET")):
             with pytest.raises(RuntimeError, match="AUTOBOT_A2A_SECRET"):
                 SecurityCardSigner.sign({})
 
@@ -255,9 +253,7 @@ class TestCapabilityVerifier:
         with patch("a2a.capability_verifier._fetch_and_verify") as mock_fetch:
             from a2a.capability_verifier import CapabilityReport
 
-            mock_fetch.return_value = CapabilityReport(
-                verified=False, warnings=["Network error"]
-            )
+            mock_fetch.return_value = CapabilityReport(verified=False, warnings=["Network error"])
             report = await verify_remote_card("https://unreachable.invalid")
         assert report.verified is False
 
@@ -340,11 +336,7 @@ class TestJwtSubExtraction:
         from api.a2a import _extract_jwt_sub
 
         header = base64.urlsafe_b64encode(b'{"alg":"HS256"}').rstrip(b"=").decode()
-        payload = (
-            base64.urlsafe_b64encode(json.dumps({"sub": "user42"}).encode())
-            .rstrip(b"=")
-            .decode()
-        )
+        payload = base64.urlsafe_b64encode(json.dumps({"sub": "user42"}).encode()).rstrip(b"=").decode()
         token = f"Bearer {header}.{payload}.fakesig"
         assert _extract_jwt_sub(token) == "user42"
 

@@ -65,9 +65,7 @@ class GetVMMetricsRequest(BaseModel):
 class ListMetricsRequest(BaseModel):
     """Request model for listing metrics"""
 
-    filter: str = Field(
-        "", description="Optional filter pattern (e.g., 'autobot_', 'node_')"
-    )
+    filter: str = Field("", description="Optional filter pattern (e.g., 'autobot_', 'node_')")
 
 
 # Issue #281: MCP tool definitions extracted from get_prometheus_mcp_tools
@@ -118,8 +116,7 @@ PROMETHEUS_MCP_TOOL_DEFINITIONS = (
     ),
     (
         "get_service_health",
-        "Get health status of all AutoBot services and node exporters. "
-        "Shows which services are UP or DOWN.",
+        "Get health status of all AutoBot services and node exporters. " "Shows which services are UP or DOWN.",
         {"type": "object", "properties": {}},
     ),
     (
@@ -222,9 +219,7 @@ async def _handle_query_metric(request: Metadata) -> Metadata:
     }
 
 
-def _build_vm_metrics(
-    load_data: Metadata, cpu_data: Metadata, memory_data: Metadata
-) -> dict:
+def _build_vm_metrics(load_data: Metadata, cpu_data: Metadata, memory_data: Metadata) -> dict:
     """Build VM metrics dictionary from query results (Issue #315 - extracted)."""
     vms = {}
     for result in load_data.get("result", []):
@@ -249,12 +244,8 @@ async def _handle_get_system_metrics(_request: Metadata) -> Metadata:
     # Issue #379: Concurrent Prometheus queries
     load_data, cpu_data, memory_data = await asyncio.gather(
         prometheus_query("node_load1"),
-        prometheus_query(
-            "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode='idle'}[5m])) * 100)"
-        ),
-        prometheus_query(
-            "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100"
-        ),
+        prometheus_query("100 - (avg by (instance) (rate(node_cpu_seconds_total{mode='idle'}[5m])) * 100)"),
+        prometheus_query("(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100"),
     )
 
     if not load_data or not load_data.get("result"):
@@ -434,7 +425,5 @@ async def execute_prometheus_tool(tool_name: str, request: Metadata) -> Metadata
     try:
         return await handler(request)
     except Exception as e:
-        logger.error(
-            "Error executing Prometheus tool %s: %s", tool_name, e, exc_info=True
-        )
+        logger.error("Error executing Prometheus tool %s: %s", tool_name, e, exc_info=True)
         return {"status": "error", "error": "Internal server error"}

@@ -63,9 +63,7 @@ class GitHubMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-    def record_operation(
-        self, operation: str, status: str, duration: Optional[float] = None
-    ) -> None:
+    def record_operation(self, operation: str, status: str, duration: Optional[float] = None) -> None:
         """Record a GitHub API operation."""
         self.github_operations_total.labels(operation=operation, status=status).inc()
         if duration is not None:
@@ -73,9 +71,7 @@ class GitHubMetricsRecorder(BaseMetricsRecorder):
 
     def update_rate_limit(self, resource_type: str, remaining: int) -> None:
         """Update GitHub rate limit remaining."""
-        self.github_rate_limit_remaining.labels(resource_type=resource_type).set(
-            remaining
-        )
+        self.github_rate_limit_remaining.labels(resource_type=resource_type).set(remaining)
 
     def record_commit(self, repository: str, status: str) -> None:
         """Record a GitHub commit."""
@@ -83,15 +79,11 @@ class GitHubMetricsRecorder(BaseMetricsRecorder):
 
     def record_pull_request(self, repository: str, action: str, status: str) -> None:
         """Record a GitHub pull request operation."""
-        self.github_pull_requests.labels(
-            repository=repository, action=action, status=status
-        ).inc()
+        self.github_pull_requests.labels(repository=repository, action=action, status=status).inc()
 
     def record_issue(self, repository: str, action: str, status: str) -> None:
         """Record a GitHub issue operation."""
-        self.github_issues.labels(
-            repository=repository, action=action, status=status
-        ).inc()
+        self.github_issues.labels(repository=repository, action=action, status=status).inc()
 
 
 __all__ = ["GitHubMetricsRecorder"]

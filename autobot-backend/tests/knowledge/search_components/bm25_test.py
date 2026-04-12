@@ -41,9 +41,7 @@ class TestBM25Scorer:
 
         score_short = scorer.score(["x"], short_doc, 2)
         score_long = scorer.score(["x"], long_doc, 101)
-        assert (
-            score_short > score_long
-        ), f"Expected short doc score {score_short:.4f} > long doc score {score_long:.4f}"
+        assert score_short > score_long, f"Expected short doc score {score_short:.4f} > long doc score {score_long:.4f}"
 
     def test_unknown_terms_smoothed(self):
         """Terms absent from doc_frequencies must still receive a positive BM25 score."""
@@ -83,6 +81,5 @@ class TestBM25Scorer:
         scorer_common = BM25Scorer(100, 50.0, {"term": 80})
         scorer_rare = BM25Scorer(100, 50.0, {"term": 2})
         assert scorer_rare.idf("term") > scorer_common.idf("term"), (
-            f"Expected rare idf {scorer_rare.idf('term'):.4f} "
-            f"> common idf {scorer_common.idf('term'):.4f}"
+            f"Expected rare idf {scorer_rare.idf('term'):.4f} " f"> common idf {scorer_common.idf('term'):.4f}"
         )

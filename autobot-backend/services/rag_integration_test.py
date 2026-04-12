@@ -41,9 +41,7 @@ class TestKnowledgeBaseAdapter:
         # Mock KnowledgeBase V1
         mock_kb = AsyncMock()
         mock_kb.__class__.__name__ = "KnowledgeBase"
-        mock_kb.search.return_value = [
-            {"content": "test content", "metadata": {}, "score": 0.9}
-        ]
+        mock_kb.search.return_value = [{"content": "test content", "metadata": {}, "score": 0.9}]
 
         adapter = KnowledgeBaseAdapter(mock_kb)
         results = await adapter.search(query="test", top_k=5)
@@ -63,9 +61,7 @@ class TestKnowledgeBaseAdapter:
         # Mock KnowledgeBase V2
         mock_kb = AsyncMock()
         mock_kb.__class__.__name__ = "KnowledgeBaseV2"
-        mock_kb.search.return_value = [
-            {"content": "test content", "metadata": {}, "score": 0.9}
-        ]
+        mock_kb.search.return_value = [{"content": "test content", "metadata": {}, "score": 0.9}]
 
         adapter = KnowledgeBaseAdapter(mock_kb)
         results = await adapter.search(query="test", top_k=5)
@@ -132,19 +128,13 @@ class TestRAGConfig:
             )
 
         # Weights should be normalized
-        assert (
-            abs(config.hybrid_weight_semantic + config.hybrid_weight_keyword - 1.0)
-            < 0.01
-        )
+        assert abs(config.hybrid_weight_semantic + config.hybrid_weight_keyword - 1.0) < 0.01
 
     def test_invalid_weights(self):
         """Test invalid weight values raise errors or get normalized."""
         # Positive out-of-range values get normalized (#788)
         config = RAGConfig(hybrid_weight_semantic=1.5)
-        assert (
-            abs(config.hybrid_weight_semantic + config.hybrid_weight_keyword - 1.0)
-            < 0.01
-        )
+        assert abs(config.hybrid_weight_semantic + config.hybrid_weight_keyword - 1.0) < 0.01
 
         # Negative values cause ValueError after normalization pushes
         # the other weight out of range
@@ -215,9 +205,7 @@ class TestRAGService:
         """Test fallback to basic search when RAG disabled."""
         mock_kb = AsyncMock()
         mock_kb.__class__.__name__ = "KnowledgeBase"
-        mock_kb.search.return_value = [
-            {"content": "fallback result", "metadata": {}, "score": 0.8}
-        ]
+        mock_kb.search.return_value = [{"content": "fallback result", "metadata": {}, "score": 0.8}]
 
         config = RAGConfig(enable_advanced_rag=False)
         service = RAGService(mock_kb, config=config)
@@ -271,9 +259,7 @@ class TestRAGService:
             ),
         ]
 
-        service.optimizer._rerank_with_cross_encoder.return_value = (
-            reranked_search_results
-        )
+        service.optimizer._rerank_with_cross_encoder.return_value = reranked_search_results
 
         reranked = await service.rerank_results("test query", test_results)
 

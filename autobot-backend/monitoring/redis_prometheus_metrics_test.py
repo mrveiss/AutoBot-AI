@@ -36,21 +36,15 @@ class TestRedisPrometheusIntegration:
         pool_manager._update_stats("main", success=True)
 
         # Verify Prometheus metric was recorded
-        mock_metrics.record_request.assert_called_once_with(
-            database="main", operation="general", success=True
-        )
+        mock_metrics.record_request.assert_called_once_with(database="main", operation="general", success=True)
 
     def test_failed_operation_records_metric(self, pool_manager, mock_metrics):
         """Test that failed operations are recorded to Prometheus"""
         # Trigger stats update with failure
-        pool_manager._update_stats(
-            "knowledge", success=False, error="Connection timeout"
-        )
+        pool_manager._update_stats("knowledge", success=False, error="Connection timeout")
 
         # Verify Prometheus metric was recorded
-        mock_metrics.record_request.assert_called_once_with(
-            database="knowledge", operation="general", success=False
-        )
+        mock_metrics.record_request.assert_called_once_with(database="knowledge", operation="general", success=False)
 
     def test_multiple_databases_tracked_separately(self, pool_manager, mock_metrics):
         """Test that different databases are tracked separately"""

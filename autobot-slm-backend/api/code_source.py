@@ -117,16 +117,12 @@ async def _upsert_code_source(db: AsyncSession, data: CodeSourceAssign) -> CodeS
     Helper for assign_code_source (#829).
     """
     # Deactivate any existing code-source
-    existing_result = await db.execute(
-        select(CodeSource).where(CodeSource.is_active.is_(True))
-    )
+    existing_result = await db.execute(select(CodeSource).where(CodeSource.is_active.is_(True)))
     for existing in existing_result.scalars().all():
         existing.is_active = False
 
     # Check if this node already has a code-source record
-    source_result = await db.execute(
-        select(CodeSource).where(CodeSource.node_id == data.node_id)
-    )
+    source_result = await db.execute(select(CodeSource).where(CodeSource.node_id == data.node_id))
     source = source_result.scalar_one_or_none()
 
     if source:
@@ -193,10 +189,7 @@ async def _find_similar_paths(node: Node, target_path: str) -> Optional[str]:
             parent = Path(parent_dir)
             if parent.is_dir():
                 for entry in parent.iterdir():
-                    if (
-                        entry.name.lower() == basename.lower()
-                        and entry.name != basename
-                    ):
+                    if entry.name.lower() == basename.lower() and entry.name != basename:
                         return str(entry)
         except Exception as e:
             logger.debug("Failed to search for similar paths locally: %s", e)
@@ -249,9 +242,7 @@ async def _validate_repo_path(node: Node, repo_path: str) -> None:
         error_detail = f"Repository path does not exist on source node: {repo_path}"
         if similar_path:
             error_detail += f". Did you mean: {similar_path}?"
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=error_detail
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_detail)
 
     ssh_cmd = [
         "ssh",
@@ -276,9 +267,7 @@ async def _validate_repo_path(node: Node, repo_path: str) -> None:
             if similar_path:
                 error_detail += f". Did you mean: {similar_path}?"
 
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail=error_detail
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_detail)
 
     except asyncio.TimeoutError:
         raise HTTPException(
@@ -370,9 +359,7 @@ async def _update_code_sync_state(
     Returns:
         Number of nodes marked as outdated.
     """
-    setting_result = await db.execute(
-        select(Setting).where(Setting.key == "slm_agent_latest_commit")
-    )
+    setting_result = await db.execute(select(Setting).where(Setting.key == "slm_agent_latest_commit"))
     setting = setting_result.scalar_one_or_none()
     if setting:
         setting.value = commit
@@ -387,9 +374,7 @@ async def _update_code_sync_state(
     return outdated_count
 
 
-async def _mark_all_nodes_outdated(
-    db: AsyncSession, source_node_id: str, commit: str
-) -> int:
+async def _mark_all_nodes_outdated(db: AsyncSession, source_node_id: str, commit: str) -> int:
     """Mark all nodes except source as outdated.
 
     Helper for _update_code_sync_state (#926 Phase 5).
@@ -430,9 +415,7 @@ async def _mark_roles_outdated(
         )
         for node_role in role_result.scalars().all():
             affected_node_ids.add(node_role.node_id)
-            await _upsert_node_code_version(
-                db, node_role.node_id, role_name, commit, CodeStatus.OUTDATED
-            )
+            await _upsert_node_code_version(db, node_role.node_id, role_name, commit, CodeStatus.OUTDATED)
 
     # Mark affected nodes OUTDATED at the node level too
     for affected_id in affected_node_ids:
@@ -478,16 +461,12 @@ async def _upsert_node_code_version(
                 commit_hash=commit,
                 status=status.value,
                 cache_path=cache_path,
-                deployed_at=(
-                    datetime.utcnow() if status == CodeStatus.UP_TO_DATE else None
-                ),
+                deployed_at=(datetime.utcnow() if status == CodeStatus.UP_TO_DATE else None),
             )
         )
 
 
-async def _broadcast_commit_notification(
-    notification: CodeNotification, outdated_count: int
-) -> None:
+async def _broadcast_commit_notification(notification: CodeNotification, outdated_count: int) -> None:
     """Broadcast new commit via WebSocket.
 
     Helper for notify_new_commit (#829).
@@ -542,9 +521,7 @@ async def notify_new_commit(
     source.last_notified_at = datetime.utcnow()
 
     # Update source node's code_version and mark as up-to-date
-    node_result = await db.execute(
-        select(Node).where(Node.node_id == notification.node_id)
-    )
+    node_result = await db.execute(select(Node).where(Node.node_id == notification.node_id))
     node = node_result.scalar_one_or_none()
     if node:
         node.code_version = notification.commit
@@ -560,8 +537,7 @@ async def notify_new_commit(
     await db.commit()
 
     logger.info(
-        "Code notification received: commit=%s from node=%s, "
-        "%d nodes marked outdated",
+        "Code notification received: commit=%s from node=%s, " "%d nodes marked outdated",
         notification.commit[:12],
         notification.node_id,
         outdated_count,
@@ -661,18 +637,14 @@ def _extract_tarball_to_cache(data: bytes, role_name: str, commit_hash: str) -> 
     return cache_path
 
 
-async def _extract_package_to_cache(
-    data: bytes, role_name: str, commit_hash: str
-) -> str:
+async def _extract_package_to_cache(data: bytes, role_name: str, commit_hash: str) -> str:
     """Helper for upload_package. Run tarball extraction in executor. Ref: #1088."""
     try:
         return await asyncio.get_event_loop().run_in_executor(
             None, _extract_tarball_to_cache, data, role_name, commit_hash
         )
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Request failed"
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Request failed") from exc
     except OSError as exc:
         logger.error("Failed to extract package for %s: %s", role_name, exc)
         raise HTTPException(
@@ -681,13 +653,9 @@ async def _extract_package_to_cache(
         ) from exc
 
 
-async def _mark_role_nodes_outdated(
-    db: AsyncSession, role_name: str, commit_hash: str, cache_path: str
-) -> int:
+async def _mark_role_nodes_outdated(db: AsyncSession, role_name: str, commit_hash: str, cache_path: str) -> int:
     """Helper for upload_package. Mark all nodes with the role as OUTDATED. Ref: #1088."""
-    role_result = await db.execute(
-        select(NodeRole).where(NodeRole.role_name == role_name)
-    )
+    role_result = await db.execute(select(NodeRole).where(NodeRole.role_name == role_name))
     outdated_count = 0
     for node_role in role_result.scalars().all():
         await _upsert_node_code_version(
@@ -698,9 +666,7 @@ async def _mark_role_nodes_outdated(
             CodeStatus.OUTDATED,
             cache_path=cache_path,
         )
-        node_result = await db.execute(
-            select(Node).where(Node.node_id == node_role.node_id)
-        )
+        node_result = await db.execute(select(Node).where(Node.node_id == node_role.node_id))
         node = node_result.scalar_one_or_none()
         if node:
             node.code_status = CodeStatus.OUTDATED.value
@@ -733,9 +699,7 @@ async def upload_package(
 
     data = await package.read()
     cache_path = await _extract_package_to_cache(data, role_name, commit_hash)
-    outdated_count = await _mark_role_nodes_outdated(
-        db, role_name, commit_hash, cache_path
-    )
+    outdated_count = await _mark_role_nodes_outdated(db, role_name, commit_hash, cache_path)
     await db.commit()
 
     logger.info(

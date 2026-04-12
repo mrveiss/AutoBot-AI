@@ -28,9 +28,7 @@ from .types import FileAnalysisResult
 logger = logging.getLogger(__name__)
 
 
-def _aggregate_stats_for_countable(
-    stats: Dict, file_analysis: Dict, file_line_count: int
-) -> None:
+def _aggregate_stats_for_countable(stats: Dict, file_analysis: Dict, file_line_count: int) -> None:
     """
     Aggregate stats for countable file categories (code/config/test).
 
@@ -45,9 +43,7 @@ def _aggregate_stats_for_countable(
     stats["blank_lines"] += file_analysis.get("blank_lines", 0)
 
 
-def _aggregate_items_to_list(
-    items: List[Dict], target_list: list, relative_path: str, file_category: str
-) -> None:
+def _aggregate_items_to_list(items: List[Dict], target_list: list, relative_path: str, file_category: str) -> None:
     """
     Add file_path and file_category to items and append to target list.
 
@@ -90,15 +86,9 @@ def _aggregate_file_analysis(
     all_funcs = analysis_results["all_functions"]
     all_cls = analysis_results["all_classes"]
     all_hc = analysis_results["all_hardcodes"]
-    _aggregate_items_to_list(
-        file_analysis.get("functions", []), all_funcs, relative_path, file_category
-    )
-    _aggregate_items_to_list(
-        file_analysis.get("classes", []), all_cls, relative_path, file_category
-    )
-    _aggregate_items_to_list(
-        file_analysis.get("hardcodes", []), all_hc, relative_path, file_category
-    )
+    _aggregate_items_to_list(file_analysis.get("functions", []), all_funcs, relative_path, file_category)
+    _aggregate_items_to_list(file_analysis.get("classes", []), all_cls, relative_path, file_category)
+    _aggregate_items_to_list(file_analysis.get("hardcodes", []), all_hc, relative_path, file_category)
 
 
 def _create_empty_category_dict(default_value=0) -> Dict:

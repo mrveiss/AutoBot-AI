@@ -122,9 +122,7 @@ async def create_trigger(
     try:
         trigger_id = await service.register_trigger(config)
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
     webhook_url: Optional[str] = None
     if request.trigger_type == TriggerType.WEBHOOK:
@@ -154,9 +152,7 @@ async def list_triggers(
     Returns serialised TriggerDefinition objects (HMAC secrets excluded).
     """
     service = get_trigger_service()
-    triggers: List[TriggerDefinition] = await service.list_triggers(
-        workflow_id=workflow_id
-    )
+    triggers: List[TriggerDefinition] = await service.list_triggers(workflow_id=workflow_id)
     serialised = [t.to_dict() for t in triggers]
     return TriggerListResponse(triggers=serialised, total=len(serialised))
 
@@ -200,9 +196,7 @@ async def delete_trigger(
 async def receive_webhook(
     trigger_id: str,
     request: Request,
-    x_autobot_signature: Optional[str] = Header(
-        default=None, alias="X-AutoBot-Signature"
-    ),
+    x_autobot_signature: Optional[str] = Header(default=None, alias="X-AutoBot-Signature"),
 ) -> Dict[str, str]:
     """
     Entry point for external webhook events.
@@ -238,9 +232,7 @@ async def receive_webhook(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Missing X-AutoBot-Signature header",
             )
-        valid = await service.validate_webhook_signature(
-            trigger_id, body, x_autobot_signature
-        )
+        valid = await service.validate_webhook_signature(trigger_id, body, x_autobot_signature)
         if not valid:
             logger.warning("Invalid webhook signature for trigger %s", trigger_id)
             raise HTTPException(

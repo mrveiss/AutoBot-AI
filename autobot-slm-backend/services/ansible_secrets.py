@@ -49,9 +49,7 @@ async def fetch_deploy_secrets() -> dict[str, str]:
     try:
         async with db_service.session() as session:
             result = await session.execute(
-                select(SystemSecret).where(
-                    SystemSecret.key.in_(list(_SECRET_TO_ANSIBLE_VAR.keys()))
-                )
+                select(SystemSecret).where(SystemSecret.key.in_(list(_SECRET_TO_ANSIBLE_VAR.keys())))
             )
             for secret in result.scalars().all():
                 ansible_var = _SECRET_TO_ANSIBLE_VAR.get(secret.key)
@@ -62,8 +60,7 @@ async def fetch_deploy_secrets() -> dict[str, str]:
                     extra[ansible_var] = value
     except Exception:
         logger.warning(
-            "fetch_deploy_secrets: could not load SLM secrets — "
-            "deploy will proceed without them (#3519)",
+            "fetch_deploy_secrets: could not load SLM secrets — " "deploy will proceed without them (#3519)",
             exc_info=True,
         )
     return extra

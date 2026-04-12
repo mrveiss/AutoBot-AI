@@ -97,24 +97,18 @@ class ResourceFactory:
             if request is not None:
                 chm = getattr(request.app.state, "chat_history_manager", None)
                 if chm is not None:
-                    logger.debug(
-                        "Using pre-initialized ChatHistoryManager from app.state"
-                    )
+                    logger.debug("Using pre-initialized ChatHistoryManager from app.state")
                     return chm
 
             # Fallback to module-level import and creation
             from chat_history import ChatHistoryManager
             from config import config as global_config_manager
 
-            logger.info(
-                "Creating new ChatHistoryManager instance (expensive operation)"
-            )
+            logger.info("Creating new ChatHistoryManager instance (expensive operation)")
 
             redis_config = global_config_manager.get_redis_config()
             chm = ChatHistoryManager(
-                history_file=global_config_manager.get_nested(
-                    "data.chat_history_file", "data/chat_history.json"
-                ),
+                history_file=global_config_manager.get_nested("data.chat_history_file", "data/chat_history.json"),
                 use_redis=redis_config.get("enabled", False),
                 redis_host=redis_config.get("host", NetworkConstants.LOCALHOST_NAME),
                 redis_port=redis_config.get("port", NetworkConstants.REDIS_PORT),
@@ -124,9 +118,7 @@ class ResourceFactory:
             # Cache in app state if available
             if request is not None:
                 request.app.state.chat_history_manager = chm
-                logger.info(
-                    "Cached ChatHistoryManager in app.state for future requests"
-                )
+                logger.info("Cached ChatHistoryManager in app.state for future requests")
 
             return chm
 
@@ -142,26 +134,20 @@ class ResourceFactory:
             if request is not None:
                 wam = getattr(request.app.state, "workflow_automation_manager", None)
                 if wam is not None:
-                    logger.debug(
-                        "Using pre-initialized WorkflowAutomationManager from app.state"
-                    )
+                    logger.debug("Using pre-initialized WorkflowAutomationManager from app.state")
                     return wam
 
             # Fallback to module-level import and creation
             from services.workflow_automation.manager import WorkflowAutomationManager
 
-            logger.info(
-                "Creating new WorkflowAutomationManager instance (expensive operation)"
-            )
+            logger.info("Creating new WorkflowAutomationManager instance (expensive operation)")
 
             wam = WorkflowAutomationManager()
 
             # Cache in app state if available
             if request is not None:
                 request.app.state.workflow_automation_manager = wam
-                logger.info(
-                    "Cached WorkflowAutomationManager in app.state for future requests"
-                )
+                logger.info("Cached WorkflowAutomationManager in app.state for future requests")
 
             return wam
 

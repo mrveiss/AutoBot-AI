@@ -220,9 +220,7 @@ class DocumentationWatcherService:
             change_type: Type of change
         """
         try:
-            logger.info(
-                "Processing documentation change: %s (%s)", file_path.name, change_type
-            )
+            logger.info("Processing documentation change: %s (%s)", file_path.name, change_type)
 
             if change_type == "deleted":
                 await self._handle_deletion(file_path)

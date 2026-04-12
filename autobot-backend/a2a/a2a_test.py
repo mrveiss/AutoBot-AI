@@ -284,6 +284,7 @@ class TestTaskManagerEviction:
 
         # Cancel the real handle and inject a fast one
         handle.cancel()
+
         async def _fast_evict():
             await asyncio.sleep(0.01)
             self.mgr._tasks.pop(task.id, None)
@@ -305,6 +306,7 @@ class TestTaskManagerEviction:
         assert handle is not None
 
         handle.cancel()
+
         async def _fast_evict():
             await asyncio.sleep(0.01)
             self.mgr._tasks.pop(task.id, None)
@@ -325,6 +327,7 @@ class TestTaskManagerEviction:
         assert handle is not None
 
         handle.cancel()
+
         async def _fast_evict():
             await asyncio.sleep(0.01)
             self.mgr._tasks.pop(task.id, None)

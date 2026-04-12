@@ -58,9 +58,7 @@ class TestWorkflowStepJudge:
         }
 
     @pytest.mark.asyncio
-    async def test_evaluate_safe_step(
-        self, judge, sample_step_data, sample_workflow_context, sample_user_context
-    ):
+    async def test_evaluate_safe_step(self, judge, sample_step_data, sample_workflow_context, sample_user_context):
         """Test evaluation of a safe workflow step"""
         # Mock successful LLM response
         mock_response = {
@@ -90,9 +88,7 @@ class TestWorkflowStepJudge:
         judge.llm_interface.chat_completion.return_value = mock_response
 
         # Test evaluation
-        result = await judge.evaluate_workflow_step(
-            sample_step_data, sample_workflow_context, sample_user_context
-        )
+        result = await judge.evaluate_workflow_step(sample_step_data, sample_workflow_context, sample_user_context)
 
         assert isinstance(result, JudgmentResult)
         assert result.overall_score == 0.9
@@ -104,9 +100,7 @@ class TestWorkflowStepJudge:
         judge.llm_interface.chat_completion.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_evaluate_risky_step(
-        self, judge, sample_workflow_context, sample_user_context
-    ):
+    async def test_evaluate_risky_step(self, judge, sample_workflow_context, sample_user_context):
         """Test evaluation of a risky workflow step"""
         risky_step_data = {
             "step_id": "risky_step",
@@ -138,9 +132,7 @@ class TestWorkflowStepJudge:
 
         judge.llm_interface.chat_completion.return_value = mock_response
 
-        result = await judge.evaluate_workflow_step(
-            risky_step_data, sample_workflow_context, sample_user_context
-        )
+        result = await judge.evaluate_workflow_step(risky_step_data, sample_workflow_context, sample_user_context)
 
         assert result.overall_score == 0.4
         assert result.recommendation == "CONDITIONAL"
@@ -186,9 +178,7 @@ class TestWorkflowStepJudge:
         assert "Approved" in reason
 
     @pytest.mark.asyncio
-    async def test_should_approve_step_unsafe(
-        self, judge, sample_workflow_context, sample_user_context
-    ):
+    async def test_should_approve_step_unsafe(self, judge, sample_workflow_context, sample_user_context):
         """Test approval logic for unsafe step"""
         unsafe_step_data = {
             "step_id": "unsafe_step",
@@ -235,9 +225,7 @@ class TestWorkflowStepJudge:
         assert "Safety score" in reason
 
     @pytest.mark.asyncio
-    async def test_suggest_improvements(
-        self, judge, sample_step_data, sample_workflow_context, sample_user_context
-    ):
+    async def test_suggest_improvements(self, judge, sample_step_data, sample_workflow_context, sample_user_context):
         """Test improvement suggestion functionality"""
         mock_response = {
             "overall_score": 0.7,
@@ -254,18 +242,14 @@ class TestWorkflowStepJudge:
 
         judge.llm_interface.chat_completion.return_value = mock_response
 
-        suggestions = await judge.suggest_improvements(
-            sample_step_data, sample_workflow_context, sample_user_context
-        )
+        suggestions = await judge.suggest_improvements(sample_step_data, sample_workflow_context, sample_user_context)
 
         assert len(suggestions) == 3
         assert "Add error handling" in suggestions
         assert "Include progress feedback" in suggestions
 
     @pytest.mark.asyncio
-    async def test_compare_alternatives(
-        self, judge, sample_workflow_context, sample_user_context
-    ):
+    async def test_compare_alternatives(self, judge, sample_workflow_context, sample_user_context):
         """Test comparison of alternative workflow steps"""
         primary_step = {
             "step_id": "primary",
@@ -356,9 +340,7 @@ class TestWorkflowStepJudge:
         assert len(system_prompt) > 500  # Should be comprehensive
 
     @pytest.mark.asyncio
-    async def test_judgment_logging(
-        self, judge, sample_step_data, sample_workflow_context, sample_user_context
-    ):
+    async def test_judgment_logging(self, judge, sample_step_data, sample_workflow_context, sample_user_context):
         """Test that judgments are logged correctly"""
         mock_response = {
             "overall_score": 0.8,
@@ -372,9 +354,7 @@ class TestWorkflowStepJudge:
         judge.llm_interface.chat_completion.return_value = mock_response
 
         # Evaluate step
-        await judge.evaluate_workflow_step(
-            sample_step_data, sample_workflow_context, sample_user_context
-        )
+        await judge.evaluate_workflow_step(sample_step_data, sample_workflow_context, sample_user_context)
 
         # Check that judgment was stored
         assert len(judge.judgment_history) == 1
@@ -429,9 +409,7 @@ class TestWorkflowStepJudge:
         assert avg_confidence in ["low", "medium", "high", "very_low", "very_high"]
 
     @pytest.mark.asyncio
-    async def test_prompt_preparation(
-        self, judge, sample_step_data, sample_workflow_context, sample_user_context
-    ):
+    async def test_prompt_preparation(self, judge, sample_step_data, sample_workflow_context, sample_user_context):
         """Test judgment prompt preparation"""
         criteria = [JudgmentDimension.SAFETY, JudgmentDimension.QUALITY]
         context = {
@@ -440,9 +418,7 @@ class TestWorkflowStepJudge:
             "risk_tolerance": "medium",
         }
 
-        prompt = await judge._prepare_judgment_prompt(
-            sample_step_data, criteria, context
-        )
+        prompt = await judge._prepare_judgment_prompt(sample_step_data, criteria, context)
 
         assert "workflow step" in prompt.lower()
         assert "safety" in prompt.lower()

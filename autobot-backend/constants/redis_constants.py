@@ -101,9 +101,7 @@ class RedisKeyConstants:
 
     # Workflow management
     WORKFLOW_CLASSIFICATION_RULES: str = f"{NAMESPACE}:workflow:classification:rules"
-    WORKFLOW_CLASSIFICATION_KEYWORDS: str = (
-        f"{NAMESPACE}:workflow:classification:keywords"
-    )
+    WORKFLOW_CLASSIFICATION_KEYWORDS: str = f"{NAMESPACE}:workflow:classification:keywords"
     # Workflow state machine (#1380)
     WORKFLOW_STATE_PREFIX: str = f"{NAMESPACE}:workflow:state"
 

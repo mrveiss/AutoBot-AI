@@ -29,9 +29,7 @@ class MetadataExtractor(BaseExtractor):
     def __init__(self, **kwargs):
         """Initialize metadata extractor."""
 
-    async def process(
-        self, input_data: Any, context: PipelineContext
-    ) -> AsyncIterator[Dict[str, Any]]:
+    async def process(self, input_data: Any, context: PipelineContext) -> AsyncIterator[Dict[str, Any]]:
         """
         Extract metadata and yield metadata dict.
 

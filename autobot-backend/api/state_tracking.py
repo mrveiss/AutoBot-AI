@@ -63,16 +63,10 @@ async def get_state_tracking_status():
             "tracking_active": True,
             "snapshot_count": summary["snapshot_count"],
             "change_count": summary["change_count"],
-            "latest_snapshot": (
-                summary["current_state"]["validation_results"]
-                if summary["current_state"]
-                else None
-            ),
+            "latest_snapshot": (summary["current_state"]["validation_results"] if summary["current_state"] else None),
         }
     except (ImportError, AttributeError) as e:
-        logger.error(
-            f"Error getting state tracking status due to missing dependency: {e}"
-        )
+        logger.error(f"Error getting state tracking status due to missing dependency: {e}")
         raise HTTPException(status_code=503, detail="State tracker not available")
     except Exception as e:
         logger.error("Error getting state tracking status: %s", e)
@@ -202,9 +196,7 @@ async def get_milestones():
         return {
             "status": "success",
             "milestones": summary["milestones"],
-            "achieved_count": sum(
-                1 for m in summary["milestones"].values() if m["achieved"]
-            ),
+            "achieved_count": sum(1 for m in summary["milestones"].values() if m["achieved"]),
             "total_count": len(summary["milestones"]),
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
@@ -244,9 +236,7 @@ async def get_metric_trends(metric: str, days: int = Query(7, ge=1, le=90)):
         cutoff_date = datetime.now(tz=timezone.utc) - timedelta(days=days)
 
         # Filter snapshots within time range
-        relevant_snapshots = [
-            s for s in tracker.state_history if s.timestamp >= cutoff_date
-        ]
+        relevant_snapshots = [s for s in tracker.state_history if s.timestamp >= cutoff_date]
 
         # Extract metric values
         trend_data = []
@@ -281,9 +271,7 @@ async def get_metric_trends(metric: str, days: int = Query(7, ge=1, le=90)):
     error_code_prefix="STATE",
 )
 @router.get("/changes")
-async def get_recent_changes(
-    limit: int = Query(10, ge=1, le=100), change_type: Optional[str] = None
-):
+async def get_recent_changes(limit: int = Query(10, ge=1, le=100), change_type: Optional[str] = None):
     """Get recent state changes"""
     try:
         tracker = get_state_tracker()
@@ -355,9 +343,7 @@ async def generate_state_report():
         raise HTTPException(status_code=503, detail="State tracker not available")
     except (OSError, IOError) as e:
         logger.error("Error generating report due to file system error: %s", e)
-        raise HTTPException(
-            status_code=500, detail="File system error during report generation"
-        )
+        raise HTTPException(status_code=500, detail="File system error during report generation")
     except Exception as e:
         logger.error("Error generating report: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -462,10 +448,7 @@ async def get_phase_history(phase_name: str, days: int = Query(30, ge=1, le=365)
 
         phase_history = []
         for snapshot in tracker.state_history:
-            if (
-                snapshot.timestamp >= cutoff_date
-                and phase_name in snapshot.phase_states
-            ):
+            if snapshot.timestamp >= cutoff_date and phase_name in snapshot.phase_states:
                 phase_data = snapshot.phase_states[phase_name]
                 phase_history.append(
                     {

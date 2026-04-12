@@ -198,14 +198,10 @@ class BlueGreenService:
         self._validate_roles(data.roles)
 
         # Create and persist deployment record
-        deployment = await self._create_deployment_record(
-            db, data, green_node, triggered_by
-        )
+        deployment = await self._create_deployment_record(db, data, green_node, triggered_by)
 
         # Start deployment in background
-        task = asyncio.create_task(
-            self._execute_deployment(deployment.bg_deployment_id)
-        )
+        task = asyncio.create_task(self._execute_deployment(deployment.bg_deployment_id))
         self._running_deployments[deployment.bg_deployment_id] = task
 
         logger.info(
@@ -218,9 +214,7 @@ class BlueGreenService:
 
         return BlueGreenResponse.model_validate(deployment)
 
-    async def get_deployment(
-        self, db: AsyncSession, bg_deployment_id: str
-    ) -> Optional[BlueGreenResponse]:
+    async def get_deployment(self, db: AsyncSession, bg_deployment_id: str) -> Optional[BlueGreenResponse]:
         """Get a blue-green deployment by ID."""
         deployment = await self._get_deployment(db, bg_deployment_id)
         if deployment:
@@ -243,9 +237,7 @@ class BlueGreenService:
         query = query.order_by(BlueGreenDeployment.created_at.desc())
 
         # Count total
-        count_result = await db.execute(
-            select(BlueGreenDeployment.id).where(query.whereclause or True)
-        )
+        count_result = await db.execute(select(BlueGreenDeployment.id).where(query.whereclause or True))
         total = len(count_result.all())
 
         # Paginate
@@ -258,9 +250,7 @@ class BlueGreenService:
             total,
         )
 
-    async def switch_traffic(
-        self, db: AsyncSession, bg_deployment_id: str
-    ) -> Tuple[bool, str]:
+    async def switch_traffic(self, db: AsyncSession, bg_deployment_id: str) -> Tuple[bool, str]:
         """Manually trigger traffic switch from blue to green."""
         deployment = await self._get_deployment(db, bg_deployment_id)
         if not deployment:
@@ -275,9 +265,7 @@ class BlueGreenService:
 
         return True, "Traffic switch initiated"
 
-    async def rollback(
-        self, db: AsyncSession, bg_deployment_id: str
-    ) -> Tuple[bool, str]:
+    async def rollback(self, db: AsyncSession, bg_deployment_id: str) -> Tuple[bool, str]:
         """Rollback a blue-green deployment."""
         deployment = await self._get_deployment(db, bg_deployment_id)
         if not deployment:
@@ -323,9 +311,7 @@ class BlueGreenService:
 
         return True, "Deployment cancelled"
 
-    async def retry(
-        self, db: AsyncSession, bg_deployment_id: str, triggered_by: str
-    ) -> Tuple[bool, str]:
+    async def retry(self, db: AsyncSession, bg_deployment_id: str, triggered_by: str) -> Tuple[bool, str]:
         """Retry a failed blue-green deployment."""
         deployment = await self._get_deployment(db, bg_deployment_id)
         if not deployment:
@@ -369,13 +355,9 @@ class BlueGreenService:
 
         return True, "Deployment retry initiated"
 
-    async def find_eligible_nodes(
-        self, db: AsyncSession, roles: List[str]
-    ) -> List[EligibleNodeResponse]:
+    async def find_eligible_nodes(self, db: AsyncSession, roles: List[str]) -> List[EligibleNodeResponse]:
         """Find nodes eligible to borrow the specified roles."""
-        result = await db.execute(
-            select(Node).where(Node.status == NodeStatus.ONLINE.value)
-        )
+        result = await db.execute(select(Node).where(Node.status == NodeStatus.ONLINE.value))
         nodes = result.scalars().all()
 
         eligible = []
@@ -451,9 +433,7 @@ class BlueGreenService:
         else:
             return False, "Purge playbook failed", stopped_services
 
-    async def complete_monitoring(
-        self, db: AsyncSession, bg_deployment_id: str
-    ) -> Tuple[bool, str]:
+    async def complete_monitoring(self, db: AsyncSession, bg_deployment_id: str) -> Tuple[bool, str]:
         """Complete a deployment that is in monitoring phase (manual completion).
 
         Stops the monitoring task and marks deployment as completed.
@@ -503,13 +483,9 @@ class BlueGreenService:
         """Validate all roles against allowlist. Raises ValueError if invalid."""
         for role in roles:
             if not _validate_role(role):
-                raise ValueError(
-                    f"Invalid role: {role}. Valid roles: {', '.join(sorted(VALID_ROLES))}"
-                )
+                raise ValueError(f"Invalid role: {role}. Valid roles: {', '.join(sorted(VALID_ROLES))}")
 
-    async def _validate_deployment_nodes(
-        self, db: AsyncSession, data: BlueGreenCreate
-    ) -> Tuple[Node, Node]:
+    async def _validate_deployment_nodes(self, db: AsyncSession, data: BlueGreenCreate) -> Tuple[Node, Node]:
         """Validate blue and green nodes for deployment.
 
         Returns tuple of (blue_node, green_node) if valid.
@@ -531,9 +507,7 @@ class BlueGreenService:
 
         # Check green node has capacity for borrowed roles
         if not await self._check_node_capacity(green_node):
-            raise ValueError(
-                f"Green node {data.green_node_id} lacks capacity for role borrowing"
-            )
+            raise ValueError(f"Green node {data.green_node_id} lacks capacity for role borrowing")
 
         return blue_node, green_node
 
@@ -578,14 +552,10 @@ class BlueGreenService:
         result = await db.execute(select(Node).where(Node.node_id == node_id))
         return result.scalar_one_or_none()
 
-    async def _get_deployment(
-        self, db: AsyncSession, bg_deployment_id: str
-    ) -> Optional[BlueGreenDeployment]:
+    async def _get_deployment(self, db: AsyncSession, bg_deployment_id: str) -> Optional[BlueGreenDeployment]:
         """Get a deployment by ID."""
         result = await db.execute(
-            select(BlueGreenDeployment).where(
-                BlueGreenDeployment.bg_deployment_id == bg_deployment_id
-            )
+            select(BlueGreenDeployment).where(BlueGreenDeployment.bg_deployment_id == bg_deployment_id)
         )
         return result.scalar_one_or_none()
 
@@ -593,9 +563,7 @@ class BlueGreenService:
         """Check if a node has capacity for role borrowing."""
         cpu_headroom = 100 - (node.cpu_percent or 0)
         memory_headroom = 100 - (node.memory_percent or 0)
-        return (
-            cpu_headroom >= MIN_CPU_HEADROOM and memory_headroom >= MIN_MEMORY_HEADROOM
-        )
+        return cpu_headroom >= MIN_CPU_HEADROOM and memory_headroom >= MIN_MEMORY_HEADROOM
 
     async def _calculate_capacity(self, node: Node) -> float:
         """Calculate available capacity (average of CPU and memory headroom)."""
@@ -657,9 +625,7 @@ class BlueGreenService:
                 # Phase 3: Health verification
                 healthy = await self._phase_verify_health(db, deployment)
                 if not healthy:
-                    await self._handle_verification_failure(
-                        db, deployment, bg_deployment_id
-                    )
+                    await self._handle_verification_failure(db, deployment, bg_deployment_id)
                     return
 
                 # Phase 4: Switch traffic
@@ -713,9 +679,7 @@ class BlueGreenService:
         deployment.progress_percent = 50
         await db.commit()
 
-    async def _phase_verify_health(
-        self, db: AsyncSession, deployment: BlueGreenDeployment
-    ) -> bool:
+    async def _phase_verify_health(self, db: AsyncSession, deployment: BlueGreenDeployment) -> bool:
         """Phase 3: Verify green node health. Returns True if healthy."""
         deployment.status = BlueGreenStatus.VERIFYING.value
         deployment.progress_percent = 60
@@ -769,9 +733,7 @@ class BlueGreenService:
         # Update node roles
         green_node = await self._get_node(db, deployment.green_node_id)
         blue_node.roles = list(set(blue_node.roles or []) - set(deployment.blue_roles))
-        green_node.roles = list(
-            set(green_node.roles or []) | set(deployment.blue_roles)
-        )
+        green_node.roles = list(set(green_node.roles or []) | set(deployment.blue_roles))
         deployment.switched_at = datetime.utcnow()
         await db.commit()
 
@@ -788,15 +750,11 @@ class BlueGreenService:
         deployment.current_step = "Green node is now live"
         await db.commit()
 
-        await self._broadcast_deployment_event(
-            bg_deployment_id, "active", "Traffic switched to green node - now live"
-        )
+        await self._broadcast_deployment_event(bg_deployment_id, "active", "Traffic switched to green node - now live")
 
         # Phase 6: Optional monitoring
         if deployment.post_deploy_monitor_duration > 0 and deployment.auto_rollback:
-            await self._start_post_deployment_monitoring(
-                db, deployment, bg_deployment_id
-            )
+            await self._start_post_deployment_monitoring(db, deployment, bg_deployment_id)
             return  # Monitoring task handles completion
 
         # No monitoring - complete now
@@ -824,9 +782,7 @@ class BlueGreenService:
         )
 
         # Start monitoring task (non-blocking)
-        monitoring_task = asyncio.create_task(
-            self._monitor_deployment_health(bg_deployment_id)
-        )
+        monitoring_task = asyncio.create_task(self._monitor_deployment_health(bg_deployment_id))
         self._monitoring_tasks[bg_deployment_id] = monitoring_task
 
         logger.info(
@@ -908,9 +864,7 @@ class BlueGreenService:
                 deployment.completed_at = datetime.utcnow()
                 await db.commit()
 
-    async def _rollback_restore_blue(
-        self, db: AsyncSession, deployment: BlueGreenDeployment
-    ) -> None:
+    async def _rollback_restore_blue(self, db: AsyncSession, deployment: BlueGreenDeployment) -> None:
         """Restore services on blue node during rollback."""
         deployment.status = BlueGreenStatus.ROLLING_BACK.value
         deployment.current_step = "Rolling back to blue node"
@@ -929,14 +883,10 @@ class BlueGreenService:
         green_node.roles = deployment.green_original_roles
         await db.commit()
 
-    async def _rollback_cleanup_green(
-        self, db: AsyncSession, deployment: BlueGreenDeployment
-    ) -> None:
+    async def _rollback_cleanup_green(self, db: AsyncSession, deployment: BlueGreenDeployment) -> None:
         """Purge borrowed roles from green node during rollback."""
         if deployment.borrowed_roles:
-            await self.purge_roles(
-                db, deployment.green_node_id, deployment.borrowed_roles
-            )
+            await self.purge_roles(db, deployment.green_node_id, deployment.borrowed_roles)
 
     async def _rollback_complete(
         self,
@@ -977,9 +927,7 @@ class BlueGreenService:
             async with db_service.session() as db:
                 deployment = await self._get_deployment(db, bg_deployment_id)
                 if not deployment:
-                    logger.error(
-                        "Deployment not found for monitoring: %s", bg_deployment_id
-                    )
+                    logger.error("Deployment not found for monitoring: %s", bg_deployment_id)
                     return
 
                 monitoring_config = self._get_monitoring_config(deployment)
@@ -989,9 +937,7 @@ class BlueGreenService:
                     "successful_checks": 0,
                 }
 
-                await self._run_monitoring_loop(
-                    bg_deployment_id, deployment, monitoring_config, stats
-                )
+                await self._run_monitoring_loop(bg_deployment_id, deployment, monitoring_config, stats)
 
         except asyncio.CancelledError:
             logger.info("Health monitoring cancelled for %s", bg_deployment_id)
@@ -1008,8 +954,7 @@ class BlueGreenService:
         """Extract monitoring configuration from deployment."""
         monitoring_start = deployment.monitoring_started_at or datetime.utcnow()
         return {
-            "deadline": monitoring_start
-            + timedelta(seconds=deployment.post_deploy_monitor_duration),
+            "deadline": monitoring_start + timedelta(seconds=deployment.post_deploy_monitor_duration),
             "interval": deployment.health_check_interval,
             "failure_threshold": deployment.health_failure_threshold,
             "green_node_id": deployment.green_node_id,
@@ -1027,9 +972,7 @@ class BlueGreenService:
 
         while datetime.utcnow() < config["deadline"]:
             # Check if deployment status changed externally
-            should_continue = await self._check_monitoring_should_continue(
-                bg_deployment_id
-            )
+            should_continue = await self._check_monitoring_should_continue(bg_deployment_id)
             if not should_continue:
                 return
 
@@ -1056,17 +999,13 @@ class BlueGreenService:
                 await self._handle_health_check_failure(bg_deployment_id, config, stats)
 
                 if stats["consecutive_failures"] >= config["failure_threshold"]:
-                    await self._trigger_monitoring_rollback(
-                        bg_deployment_id, config, stats
-                    )
+                    await self._trigger_monitoring_rollback(bg_deployment_id, config, stats)
                     return
 
             await asyncio.sleep(config["interval"])
 
         # Monitoring completed successfully
-        await self._complete_monitoring_successfully(
-            bg_deployment_id, deployment, stats
-        )
+        await self._complete_monitoring_successfully(bg_deployment_id, deployment, stats)
 
     async def _check_monitoring_should_continue(self, bg_deployment_id: str) -> bool:
         """Check if monitoring should continue based on deployment status."""
@@ -1088,9 +1027,7 @@ class BlueGreenService:
                 return False
         return True
 
-    async def _handle_health_check_failure(
-        self, bg_deployment_id: str, config: dict, stats: dict
-    ) -> None:
+    async def _handle_health_check_failure(self, bg_deployment_id: str, config: dict, stats: dict) -> None:
         """Handle a single health check failure."""
         from services.database import db_service
 
@@ -1118,9 +1055,7 @@ class BlueGreenService:
             f"Health check failed ({stats['consecutive_failures']}/{config['failure_threshold']} failures)",
         )
 
-    async def _trigger_monitoring_rollback(
-        self, bg_deployment_id: str, config: dict, stats: dict
-    ) -> None:
+    async def _trigger_monitoring_rollback(self, bg_deployment_id: str, config: dict, stats: dict) -> None:
         """Trigger automatic rollback due to health failure threshold."""
         from services.database import db_service
 
@@ -1175,9 +1110,7 @@ class BlueGreenService:
             if deployment.purge_on_complete:
                 deployment.current_step = "Purging roles from blue node"
                 await complete_db.commit()
-                await self.purge_roles(
-                    complete_db, deployment.blue_node_id, deployment.blue_roles
-                )
+                await self.purge_roles(complete_db, deployment.blue_node_id, deployment.blue_roles)
 
             deployment.status = BlueGreenStatus.COMPLETED.value
             deployment.progress_percent = 100
@@ -1195,9 +1128,7 @@ class BlueGreenService:
             f"({stats['successful_checks']}/{stats['total_checks']} checks)",
         )
 
-    async def _handle_monitoring_error(
-        self, bg_deployment_id: str, error: Exception
-    ) -> None:
+    async def _handle_monitoring_error(self, bg_deployment_id: str, error: Exception) -> None:
         """Handle unexpected error during health monitoring."""
         from services.database import db_service
 
@@ -1282,9 +1213,7 @@ class BlueGreenService:
                     service,
                 )
 
-    async def _stop_service_via_ssh(
-        self, ip_address: str, ssh_user: str, ssh_port: int, service: str
-    ) -> bool:
+    async def _stop_service_via_ssh(self, ip_address: str, ssh_user: str, ssh_port: int, service: str) -> bool:
         """Stop a systemd service via SSH."""
         # Validate service name to prevent command injection
         if not _validate_service_name(service):
@@ -1353,9 +1282,7 @@ class BlueGreenService:
     async def _check_health_url(self, url: str) -> bool:
         """Check a health endpoint URL."""
         try:
-            async with httpx.AsyncClient(
-                verify=self._verify_ssl, timeout=10.0
-            ) as client:
+            async with httpx.AsyncClient(verify=self._verify_ssl, timeout=10.0) as client:
                 response = await client.get(url)
                 return response.status_code == 200
         except Exception as e:
@@ -1428,9 +1355,7 @@ class BlueGreenService:
         path.write_text(_PURGE_PLAYBOOK_TEMPLATE, encoding="utf-8")
         logger.info("Created purge playbook: %s", path)
 
-    async def _broadcast_deployment_event(
-        self, bg_deployment_id: str, event_type: str, message: str
-    ) -> None:
+    async def _broadcast_deployment_event(self, bg_deployment_id: str, event_type: str, message: str) -> None:
         """Broadcast deployment event via WebSocket."""
         try:
             from api.websocket import ws_manager

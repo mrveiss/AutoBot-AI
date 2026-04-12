@@ -52,9 +52,7 @@ async def list_deployments(
     per_page: int = Query(20, ge=1, le=100),
 ) -> BlueGreenListResponse:
     """List blue-green deployments with optional status filter."""
-    deployments, total = await blue_green_service.list_deployments(
-        db, status_filter, page, per_page
-    )
+    deployments, total = await blue_green_service.list_deployments(db, status_filter, page, per_page)
 
     return BlueGreenListResponse(
         deployments=deployments,
@@ -253,9 +251,7 @@ async def retry_deployment(
     )
 
 
-@router.post(
-    "/{bg_deployment_id}/stop-monitoring", response_model=BlueGreenActionResponse
-)
+@router.post("/{bg_deployment_id}/stop-monitoring", response_model=BlueGreenActionResponse)
 async def stop_monitoring(
     bg_deployment_id: DeploymentIdPath,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -266,9 +262,7 @@ async def stop_monitoring(
     Issue #726 Phase 3: Allows manual completion of deployment during monitoring phase.
     Use this to skip remaining monitoring time when confident the deployment is healthy.
     """
-    success, message = await blue_green_service.complete_monitoring(
-        db, bg_deployment_id
-    )
+    success, message = await blue_green_service.complete_monitoring(db, bg_deployment_id)
 
     if not success:
         raise HTTPException(

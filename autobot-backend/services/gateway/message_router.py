@@ -43,9 +43,7 @@ class MessageRouter:
         """
         self._agent_router = agent_router
 
-    async def _route_non_text_message(
-        self, message: UnifiedMessage
-    ) -> Optional[RoutingDecision]:
+    async def _route_non_text_message(self, message: UnifiedMessage) -> Optional[RoutingDecision]:
         """Helper for route_message. Ref: #1088."""
         if self._is_system_message(message):
             return RoutingDecision(
@@ -141,9 +139,7 @@ class MessageRouter:
         # Stats tracking is not yet implemented. Raise explicitly so callers
         # cannot silently consume zeroed-out metrics as real data.
         # Issue #2869: wire to real counter/accumulator when ready.
-        logger.warning(
-            "get_routing_stats called but routing stats tracking is not implemented. (#2869)"
-        )
+        logger.warning("get_routing_stats called but routing stats tracking is not implemented. (#2869)")
         raise NotImplementedError(
             "get_routing_stats: routing stats tracking is not implemented. "
             "Add counter accumulation in route_message before enabling metrics. (#2869)"

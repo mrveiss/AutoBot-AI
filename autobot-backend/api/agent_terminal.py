@@ -229,11 +229,11 @@ import logging
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from constants.error_constants import ERR_SESSION_NOT_FOUND
 from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from constants.error_constants import ERR_SESSION_NOT_FOUND
 from dependencies import get_redis_client
 from services.agent_terminal import AgentSessionState, AgentTerminalService
 from services.command_approval_manager import AgentRole
@@ -256,9 +256,7 @@ class CreateSessionRequest(BaseModel):
         ...,
         description="Role of the agent (chat_agent, automation_agent, system_agent, admin_agent)",
     )
-    conversation_id: Optional[str] = Field(
-        None, description="Chat conversation ID to link"
-    )
+    conversation_id: Optional[str] = Field(None, description="Chat conversation ID to link")
     host: str = Field(
         "main",
         description="Target host (main, frontend, npu-worker, redis, ai-stack, browser)",
@@ -270,12 +268,8 @@ class ExecuteCommandRequest(BaseModel):
     """Request to execute command in agent session"""
 
     command: str = Field(..., description="Command to execute")
-    description: Optional[str] = Field(
-        None, description="Description of what command does"
-    )
-    force_approval: bool = Field(
-        False, description="Force user approval even for safe commands"
-    )
+    description: Optional[str] = Field(None, description="Description of what command does")
+    force_approval: bool = Field(False, description="Force user approval even for safe commands")
 
 
 class ApproveCommandRequest(BaseModel):
@@ -283,19 +277,11 @@ class ApproveCommandRequest(BaseModel):
 
     approved: bool = Field(..., description="Whether command is approved")
     user_id: Optional[str] = Field(None, description="User who made the decision")
-    comment: Optional[str] = Field(
-        None, description="Optional comment or reason for the decision"
-    )
-    auto_approve_future: bool = Field(
-        False, description="Auto-approve similar commands in the future"
-    )
+    comment: Optional[str] = Field(None, description="Optional comment or reason for the decision")
+    auto_approve_future: bool = Field(False, description="Auto-approve similar commands in the future")
     # Permission v2: Project memory fields
-    remember_for_project: bool = Field(
-        False, description="Remember approval for this project"
-    )
-    project_path: Optional[str] = Field(
-        None, description="Project path for approval memory"
-    )
+    remember_for_project: bool = Field(False, description="Remember approval for this project")
+    project_path: Optional[str] = Field(None, description="Project path for approval memory")
 
 
 class InterruptRequest(BaseModel):
@@ -307,17 +293,11 @@ class InterruptRequest(BaseModel):
 class HostSelectionRequest(BaseModel):
     """Request for agent to select an infrastructure host"""
 
-    agent_session_id: Optional[str] = Field(
-        None, description="Agent terminal session ID"
-    )
+    agent_session_id: Optional[str] = Field(None, description="Agent terminal session ID")
     command: Optional[str] = Field(None, description="Command to execute on host")
     purpose: Optional[str] = Field(None, description="Purpose of the SSH action")
-    preferred_host_id: Optional[str] = Field(
-        None, description="Preferred host ID if any"
-    )
-    allow_auto_select: bool = Field(
-        True, description="Allow auto-selection if default host is set"
-    )
+    preferred_host_id: Optional[str] = Field(None, description="Preferred host ID if any")
+    allow_auto_select: bool = Field(True, description="Allow auto-selection if default host is set")
 
 
 class HostSelectionResponse(BaseModel):
@@ -327,9 +307,7 @@ class HostSelectionResponse(BaseModel):
     status: str = Field(..., description="pending_selection, selected, or cancelled")
     selected_host_id: Optional[str] = Field(None, description="Selected host ID")
     selected_host_name: Optional[str] = Field(None, description="Selected host name")
-    connection_info: Optional[Dict] = Field(
-        None, description="Connection details (host, port, username)"
-    )
+    connection_info: Optional[Dict] = Field(None, description="Connection details (host, port, username)")
 
 
 # Dependency for AgentTerminalService
@@ -360,9 +338,7 @@ def get_agent_terminal_service(
             # Double-check after acquiring lock
             if _agent_terminal_service_instance is None:
                 logger.info("Initializing AgentTerminalService singleton")
-                _agent_terminal_service_instance = AgentTerminalService(
-                    redis_client=redis_client
-                )
+                _agent_terminal_service_instance = AgentTerminalService(redis_client=redis_client)
 
     return _agent_terminal_service_instance
 
@@ -419,9 +395,7 @@ async def create_agent_terminal_session(
         "host": session.host,
         "state": session.state.value,
         "created_at": session.created_at,
-        "pty_session_id": (
-            session.pty_session_id
-        ),  # CRITICAL: Frontend needs this for WebSocket connection
+        "pty_session_id": (session.pty_session_id),  # CRITICAL: Frontend needs this for WebSocket connection
     }
 
 
@@ -465,9 +439,7 @@ async def list_agent_terminal_sessions(
                 "created_at": s.created_at,
                 "last_activity": s.last_activity,
                 "command_count": len(s.command_history),
-                "pty_session_id": (
-                    s.pty_session_id
-                ),  # CRITICAL: Frontend needs this for WebSocket connection
+                "pty_session_id": (s.pty_session_id),  # CRITICAL: Frontend needs this for WebSocket connection
             }
             for s in sessions
         ],
@@ -601,9 +573,7 @@ async def approve_agent_command(
         project_path=request.project_path,
     )
 
-    logger.info(
-        f"[API] Approval result: {result.get('status')}, error={result.get('error')}"
-    )
+    logger.info(f"[API] Approval result: {result.get('status')}, error={result.get('error')}")
     return result
 
 
@@ -707,9 +677,7 @@ async def get_command_state(
     command = await queue.get_command(command_id)
 
     if not command:
-        raise HTTPException(
-            status_code=404, detail=f"Command {command_id} not found in queue"
-        )
+        raise HTTPException(status_code=404, detail=f"Command {command_id} not found in queue")
 
     # Return command state and output
     return {
@@ -750,9 +718,7 @@ async def agent_terminal_info(
     return {
         "name": "Agent Terminal API",
         "version": "1.0.0",
-        "description": (
-            "Secure terminal access for AI agents with approval workflow and user control"
-        ),
+        "description": ("Secure terminal access for AI agents with approval workflow and user control"),
         "features": [
             "Agent session management",
             "Command execution with risk assessment",
@@ -769,9 +735,7 @@ async def agent_terminal_info(
             "list_sessions": "GET /api/agent-terminal/sessions",
             "get_session": "GET /api/agent-terminal/sessions/{session_id}",
             "delete_session": "DELETE /api/agent-terminal/sessions/{session_id}",
-            "execute_command": (
-                "POST /api/agent-terminal/execute?session_id={session_id}"
-            ),
+            "execute_command": ("POST /api/agent-terminal/execute?session_id={session_id}"),
             "approve_command": "POST /api/agent-terminal/sessions/{session_id}/approve",
             "get_command_state": "GET /api/agent-terminal/commands/{command_id}",
             "interrupt": "POST /api/agent-terminal/sessions/{session_id}/interrupt",
@@ -878,9 +842,7 @@ async def get_host_selection(
     - If selected: includes host details and connection info
     """
     if request_id not in _pending_host_selections:
-        raise HTTPException(
-            status_code=404, detail=f"Host selection request {request_id} not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Host selection request {request_id} not found")
 
     selection = _pending_host_selections[request_id]
 
@@ -928,9 +890,7 @@ async def submit_host_selection(
         remember_choice: Whether to use this host for future SSH commands
     """
     if request_id not in _pending_host_selections:
-        raise HTTPException(
-            status_code=404, detail=f"Host selection request {request_id} not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Host selection request {request_id} not found")
 
     selection = _pending_host_selections[request_id]
 
@@ -952,9 +912,7 @@ async def submit_host_selection(
     selection["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
     selection["remember_choice"] = remember_choice
 
-    logger.info(
-        f"Host selected for request {request_id}: {host_name} ({username}@{host}:{ssh_port})"
-    )
+    logger.info(f"Host selected for request {request_id}: {host_name} ({username}@{host}:{ssh_port})")
 
     return {
         "status": "selected",
@@ -983,9 +941,7 @@ async def cancel_host_selection(
     Called by frontend when user closes the dialog without selecting.
     """
     if request_id not in _pending_host_selections:
-        raise HTTPException(
-            status_code=404, detail=f"Host selection request {request_id} not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Host selection request {request_id} not found")
 
     selection = _pending_host_selections[request_id]
 

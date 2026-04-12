@@ -126,16 +126,12 @@ class WorkflowExecutor:
         self._error_handler = StepErrorHandler()
         # Issue #2143: sub-workflow executor (None when fetcher not provided)
         self._sub_workflow_executor: Optional[SubWorkflowExecutor] = (
-            SubWorkflowExecutor(
-                workflow_executor=self, workflow_fetcher=workflow_fetcher
-            )
+            SubWorkflowExecutor(workflow_executor=self, workflow_fetcher=workflow_fetcher)
             if workflow_fetcher is not None
             else None
         )
 
-    def _group_steps_by_dependency(
-        self, steps: List[Dict[str, Any]]
-    ) -> List[List[Dict[str, Any]]]:
+    def _group_steps_by_dependency(self, steps: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
         """
         Group workflow steps for parallel execution.
 
@@ -157,17 +153,11 @@ class WorkflowExecutor:
 
         while remaining:
             ready_ids = [
-                sid
-                for sid in remaining
-                if all(
-                    dep in completed for dep in step_map[sid].get("dependencies", [])
-                )
+                sid for sid in remaining if all(dep in completed for dep in step_map[sid].get("dependencies", []))
             ]
 
             if not ready_ids:
-                logger.error(
-                    "Circular dependency in workflow steps; falling back to sequential"
-                )
+                logger.error("Circular dependency in workflow steps; falling back to sequential")
                 for sid in remaining:
                     groups.append([step_map[sid]])
                 break
@@ -179,9 +169,7 @@ class WorkflowExecutor:
 
         return groups
 
-    def _determine_workflow_status(
-        self, steps: List[Dict[str, Any]], execution_context: Dict[str, Any]
-    ) -> None:
+    def _determine_workflow_status(self, steps: List[Dict[str, Any]], execution_context: Dict[str, Any]) -> None:
         """Determine overall workflow status from step results (Issue #398: extracted)."""
         successful_steps = sum(1 for step in steps if step.get("status") == TaskStatus.COMPLETED.value)
         total_steps = len(steps)
@@ -193,16 +181,10 @@ class WorkflowExecutor:
         else:
             execution_context["status"] = TaskStatus.FAILED.value
 
-        execution_context["success_rate"] = (
-            successful_steps / total_steps if total_steps > 0 else 0
-        )
-        execution_context["agents_involved"] = list(
-            execution_context["agents_involved"]
-        )
+        execution_context["success_rate"] = successful_steps / total_steps if total_steps > 0 else 0
+        execution_context["agents_involved"] = list(execution_context["agents_involved"])
 
-    def _resolve_notification_config(
-        self, workflow_id: str, execution_context: Dict[str, Any]
-    ):
+    def _resolve_notification_config(self, workflow_id: str, execution_context: Dict[str, Any]):
         """Resolve the workflow's NotificationConfig (#3168).
 
         Looks for ``notification_config`` in ``execution_context`` (injected
@@ -220,9 +202,7 @@ class WorkflowExecutor:
             return NotificationConfig(workflow_id=workflow_id, **raw)
         return None
 
-    async def _send_workflow_notification(
-        self, workflow_id: str, execution_context: Dict[str, Any]
-    ) -> None:
+    async def _send_workflow_notification(self, workflow_id: str, execution_context: Dict[str, Any]) -> None:
         """Fire a notification for a terminal workflow status (#3101, #3168)."""
         from services.notification_service import NotificationEvent
 
@@ -284,9 +264,7 @@ class WorkflowExecutor:
                 exc_info=True,
             )
 
-    def _resolve_step_variables(
-        self, step: Dict[str, Any], step_outputs: Dict[str, StepOutput]
-    ) -> None:
+    def _resolve_step_variables(self, step: Dict[str, Any], step_outputs: Dict[str, StepOutput]) -> None:
         """
         Resolve ``${steps.<id>.<accessor>}`` tokens in *step* in-place.
 
@@ -300,18 +278,14 @@ class WorkflowExecutor:
         if isinstance(command, str):
             resolved = self._variable_resolver.resolve(command, step_outputs)
             if resolved != command:
-                logger.debug(
-                    "Step %s: resolved command variables (#2141)", step.get("id")
-                )
+                logger.debug("Step %s: resolved command variables (#2141)", step.get("id"))
                 step["command"] = resolved
 
         inputs = step.get("inputs")
         if isinstance(inputs, dict):
             for key, value in inputs.items():
                 if isinstance(value, str):
-                    resolved_value = self._variable_resolver.resolve(
-                        value, step_outputs
-                    )
+                    resolved_value = self._variable_resolver.resolve(value, step_outputs)
                     if resolved_value != value:
                         logger.debug(
                             "Step %s: resolved input '%s' variable (#2141)",
@@ -350,9 +324,7 @@ class WorkflowExecutor:
             self._reserve_agent(agent_id)
 
         try:
-            step_result = await self._execute_step_with_retry(
-                step, execution_context, context
-            )
+            step_result = await self._execute_step_with_retry(step, execution_context, context)
             elapsed = time.time() - step_start_time
 
             step["status"] = TaskStatus.COMPLETED.value if step_result.get("success") else TaskStatus.FAILED.value
@@ -371,21 +343,15 @@ class WorkflowExecutor:
 
             # Issue #2141: Record typed StepOutput so later steps can reference it.
             if "step_outputs" in execution_context:
-                execution_context["step_outputs"][step_id] = (
-                    StepOutput.from_step_result(step_result)
-                )
+                execution_context["step_outputs"][step_id] = StepOutput.from_step_result(step_result)
 
             # Issue #2154: Checkpoint after successful completion.
             # Issue #3825: Checkpoint failure must never surface as a step failure.
             if step_result.get("success"):
                 try:
-                    self._save_checkpoint(
-                        execution_context.get("workflow_id", ""), step_id, step_result
-                    )
+                    self._save_checkpoint(execution_context.get("workflow_id", ""), step_id, step_result)
                 except Exception as exc:
-                    logger.warning(
-                        "Checkpoint save failed for step %s (non-fatal): %s", step_id, exc
-                    )
+                    logger.warning("Checkpoint save failed for step %s (non-fatal): %s", step_id, exc)
 
             if agent_id:
                 execution_context["agents_involved"].add(agent_id)
@@ -438,9 +404,7 @@ class WorkflowExecutor:
             return
 
         sub_step = extract_sub_workflow_step(step)
-        parent_step_outputs: Dict[str, StepOutput] = execution_context.get(
-            "step_outputs", {}
-        )
+        parent_step_outputs: Dict[str, StepOutput] = execution_context.get("step_outputs", {})
 
         try:
             step_result = await self._sub_workflow_executor.execute(
@@ -483,13 +447,9 @@ class WorkflowExecutor:
         # Issue #3825: Checkpoint failure must never surface as a step failure.
         if step_result.get("success"):
             try:
-                self._save_checkpoint(
-                    execution_context.get("workflow_id", ""), step_id, step_result
-                )
+                self._save_checkpoint(execution_context.get("workflow_id", ""), step_id, step_result)
             except Exception as exc:
-                logger.warning(
-                    "Checkpoint save failed for step %s (non-fatal): %s", step_id, exc
-                )
+                logger.warning("Checkpoint save failed for step %s (non-fatal): %s", step_id, exc)
 
     async def _execute_step_with_retry(
         self,
@@ -508,13 +468,9 @@ class WorkflowExecutor:
         attempt = 1
         while True:
             try:
-                return await self._execute_coordinated_step(
-                    step, execution_context, context
-                )
+                return await self._execute_coordinated_step(step, execution_context, context)
             except Exception as exc:
-                outcome = await self._error_handler.handle_error(
-                    step, exc, attempt, execution_context
-                )
+                outcome = await self._error_handler.handle_error(step, exc, attempt, execution_context)
                 action = outcome["action"]
 
                 if action == StepErrorAction.RETRY:
@@ -527,9 +483,7 @@ class WorkflowExecutor:
                     return {"success": True, "skipped": True, "step_id": step.get("id")}
 
                 if action == StepErrorAction.FALLBACK:
-                    return await self._execute_fallback_step(
-                        outcome["fallback_id"], step, execution_context, context
-                    )
+                    return await self._execute_fallback_step(outcome["fallback_id"], step, execution_context, context)
 
                 if action == StepErrorAction.PAUSE:
                     execution_context["status"] = TaskStatus.PAUSED.value
@@ -559,9 +513,7 @@ class WorkflowExecutor:
 
         Issue #2154.
         """
-        step_registry: Dict[str, Dict[str, Any]] = execution_context.get(
-            "step_registry", {}
-        )
+        step_registry: Dict[str, Dict[str, Any]] = execution_context.get("step_registry", {})
         fallback_step = step_registry.get(fallback_step_id)
 
         if fallback_step is None:
@@ -581,18 +533,14 @@ class WorkflowExecutor:
             original_step.get("id"),
         )
         try:
-            result = await self._execute_coordinated_step(
-                fallback_step, execution_context, context
-            )
+            result = await self._execute_coordinated_step(fallback_step, execution_context, context)
             result["fallback_for"] = original_step.get("id")
             return result
         except Exception as exc:
             logger.error("Fallback step %s also failed: %s", fallback_step_id, exc)
             raise
 
-    def _save_checkpoint(
-        self, workflow_id: str, step_id: str, step_result: Dict[str, Any]
-    ) -> None:
+    def _save_checkpoint(self, workflow_id: str, step_id: str, step_result: Dict[str, Any]) -> None:
         """
         Persist a checkpoint for *step_id* after successful execution.
 
@@ -796,9 +744,7 @@ class WorkflowExecutor:
                 continue
             step["status"] = TaskStatus.COMPLETED.value
             execution_context["step_results"][step_id] = cp.output
-            execution_context["step_outputs"][step_id] = StepOutput.from_step_result(
-                cp.output
-            )
+            execution_context["step_outputs"][step_id] = StepOutput.from_step_result(cp.output)
 
     async def _execute_dag_workflow(
         self,
@@ -917,10 +863,7 @@ class WorkflowExecutor:
             for _ in group
         ]
         await asyncio.gather(
-            *(
-                self._execute_step_with_agent(step, iso_ctx, context)
-                for step, iso_ctx in zip(group, isolated_contexts)
-            )
+            *(self._execute_step_with_agent(step, iso_ctx, context) for step, iso_ctx in zip(group, isolated_contexts))
         )
         for iso_ctx in isolated_contexts:
             execution_context["step_results"].update(iso_ctx["step_results"])
@@ -928,11 +871,7 @@ class WorkflowExecutor:
             execution_context["interactions"].extend(iso_ctx["interactions"])
             # Merge new step outputs written during this group into the main context.
             if "step_outputs" in execution_context:
-                new_outputs = {
-                    k: v
-                    for k, v in iso_ctx["step_outputs"].items()
-                    if k not in shared_prior_outputs
-                }
+                new_outputs = {k: v for k, v in iso_ctx["step_outputs"].items() if k not in shared_prior_outputs}
                 execution_context["step_outputs"].update(new_outputs)
 
     def _create_agent_interaction(
@@ -1025,9 +964,7 @@ class WorkflowExecutor:
         failure_threshold=CircuitBreakerDefaults.LLM_FAILURE_THRESHOLD,
         recovery_timeout=CircuitBreakerDefaults.LLM_RECOVERY_TIMEOUT,
     )
-    @retry_async(
-        max_attempts=RetryConfig.MIN_RETRIES, strategy=RetryStrategy.EXPONENTIAL_BACKOFF
-    )
+    @retry_async(max_attempts=RetryConfig.MIN_RETRIES, strategy=RetryStrategy.EXPONENTIAL_BACKOFF)
     async def _execute_coordinated_step(
         self,
         step: Dict[str, Any],
@@ -1105,8 +1042,7 @@ class WorkflowExecutor:
         step_id = step.get("id", "<unknown>")
         action = step.get("action", "<unknown>")
         logger.warning(
-            "Workflow step %s (action=%s) cannot be executed: "
-            "agent dispatch is not implemented. (#2869)",
+            "Workflow step %s (action=%s) cannot be executed: " "agent dispatch is not implemented. (#2869)",
             step_id,
             action,
         )

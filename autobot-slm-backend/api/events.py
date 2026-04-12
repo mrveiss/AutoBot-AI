@@ -57,9 +57,7 @@ async def sync_events(
     rejected = 0
 
     for evt in events:
-        node_result = await db.execute(
-            select(Node.id).where(Node.node_id == evt.node_id)
-        )
+        node_result = await db.execute(select(Node.id).where(Node.node_id == evt.node_id))
         if not node_result.scalar_one_or_none():
             rejected += 1
             continue

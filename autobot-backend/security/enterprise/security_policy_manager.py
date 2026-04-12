@@ -107,9 +107,7 @@ class SecurityPolicyManager:
 
     def __init__(
         self,
-        config_path: str = str(
-            PATH.get_config_path("security", "security_policies.yaml")
-        ),
+        config_path: str = str(PATH.get_config_path("security", "security_policies.yaml")),
     ):
         """Initialize security policy manager with config and policy storage."""
         # Thread-safe file operations - must be initialized first (Issue #378)
@@ -208,32 +206,20 @@ class SecurityPolicyManager:
                     policy_data = json.load(f)
 
                 # Convert datetime strings back to objects
-                policy_data["created_at"] = datetime.fromisoformat(
-                    policy_data["created_at"]
-                )
-                policy_data["updated_at"] = datetime.fromisoformat(
-                    policy_data["updated_at"]
-                )
+                policy_data["created_at"] = datetime.fromisoformat(policy_data["created_at"])
+                policy_data["updated_at"] = datetime.fromisoformat(policy_data["updated_at"])
 
                 if policy_data.get("approved_at"):
-                    policy_data["approved_at"] = datetime.fromisoformat(
-                        policy_data["approved_at"]
-                    )
+                    policy_data["approved_at"] = datetime.fromisoformat(policy_data["approved_at"])
                 if policy_data.get("effective_date"):
-                    policy_data["effective_date"] = datetime.fromisoformat(
-                        policy_data["effective_date"]
-                    )
+                    policy_data["effective_date"] = datetime.fromisoformat(policy_data["effective_date"])
                 if policy_data.get("expiry_date"):
-                    policy_data["expiry_date"] = datetime.fromisoformat(
-                        policy_data["expiry_date"]
-                    )
+                    policy_data["expiry_date"] = datetime.fromisoformat(policy_data["expiry_date"])
 
                 # Convert enums
                 policy_data["policy_type"] = PolicyType(policy_data["policy_type"])
                 policy_data["status"] = PolicyStatus(policy_data["status"])
-                policy_data["enforcement_mode"] = EnforcementMode(
-                    policy_data["enforcement_mode"]
-                )
+                policy_data["enforcement_mode"] = EnforcementMode(policy_data["enforcement_mode"])
 
                 policy = SecurityPolicy(**policy_data)
                 self.policies[policy.policy_id] = policy
@@ -321,10 +307,7 @@ class SecurityPolicyManager:
                         "numbers": True,
                         "special_chars": True,
                     },
-                    "description": (
-                        "Passwords must contain uppercase, lowercase, numbers, "
-                        "and special characters"
-                    ),
+                    "description": ("Passwords must contain uppercase, lowercase, numbers, " "and special characters"),
                 },
                 {
                     "name": "password_history",
@@ -398,9 +381,7 @@ class SecurityPolicyManager:
                         "anonymization_required": True,
                         "consent_tracking": True,
                     },
-                    "description": (
-                        "PII must be detected, anonymized, and consent tracked"
-                    ),
+                    "description": ("PII must be detected, anonymized, and consent tracked"),
                 },
             ],
         }
@@ -528,9 +509,7 @@ class SecurityPolicyManager:
             updated_at=datetime.utcnow(),
             version="1.0",
             author=author,
-            approval_required=self.config.get("policy_management", {}).get(
-                "require_approval", True
-            ),
+            approval_required=self.config.get("policy_management", {}).get("require_approval", True),
             effective_date=effective_date,
             expiry_date=expiry_date,
         )
@@ -624,9 +603,7 @@ class SecurityPolicyManager:
         logger.info("Deactivated policy %s", policy_id)
         return True
 
-    def _create_violation(
-        self, policy: "SecurityPolicy", check_result: Dict, context: Dict
-    ) -> "PolicyViolation":
+    def _create_violation(self, policy: "SecurityPolicy", check_result: Dict, context: Dict) -> "PolicyViolation":
         """Create a PolicyViolation from check result (Issue #315 - extracted helper)."""
         return PolicyViolation(
             violation_id=str(uuid4()),
@@ -652,9 +629,7 @@ class SecurityPolicyManager:
                 enforcement_result.update({"allowed": False}),
                 enforcement_result["violations"].append(violation),
             ),
-            EnforcementMode.WARN: lambda: enforcement_result["warnings"].append(
-                violation
-            ),
+            EnforcementMode.WARN: lambda: enforcement_result["warnings"].append(violation),
             EnforcementMode.MONITOR: lambda: None,  # Log only, no action
         }
         action = mode_actions.get(policy.enforcement_mode)
@@ -671,9 +646,7 @@ class SecurityPolicyManager:
         }
 
         active_policies = [
-            p
-            for p in self.policies.values()
-            if p.policy_type == policy_type and p.status == PolicyStatus.ACTIVE
+            p for p in self.policies.values() if p.policy_type == policy_type and p.status == PolicyStatus.ACTIVE
         ]
 
         for policy in active_policies:
@@ -701,9 +674,7 @@ class SecurityPolicyManager:
         }
         return policy_checkers.get(policy_type)
 
-    async def _check_policy_compliance(
-        self, policy: SecurityPolicy, context: Dict
-    ) -> Dict:
+    async def _check_policy_compliance(self, policy: SecurityPolicy, context: Dict) -> Dict:
         """Check if context complies with a specific policy (Issue #315 - refactored)."""
         result = {
             "policy_id": policy.policy_id,
@@ -721,9 +692,7 @@ class SecurityPolicyManager:
 
         return result
 
-    def _check_password_complexity(
-        self, password: str, requirements: Dict, result: Dict
-    ) -> None:
+    def _check_password_complexity(self, password: str, requirements: Dict, result: Dict) -> None:
         """Check password complexity requirements."""
         checks = [
             ("uppercase", lambda p: any(c.isupper() for c in p), "uppercase_letter"),
@@ -742,9 +711,7 @@ class SecurityPolicyManager:
                 result["severity"] = "medium"
                 result["details"]["missing"] = missing_type
 
-    async def _check_password_policy(
-        self, policy: SecurityPolicy, context: Dict, result: Dict
-    ) -> Dict:
+    async def _check_password_policy(self, policy: SecurityPolicy, context: Dict, result: Dict) -> Dict:
         """Check password policy compliance."""
         # CodeQL: false positive — password is checked for policy compliance, never logged
         password = context.get("password", "")  # noqa: S105
@@ -767,9 +734,7 @@ class SecurityPolicyManager:
 
         return result
 
-    async def _check_session_policy(
-        self, policy: SecurityPolicy, context: Dict, result: Dict
-    ) -> Dict:
+    async def _check_session_policy(self, policy: SecurityPolicy, context: Dict, result: Dict) -> Dict:
         """Check session management policy compliance"""
         session_data = context.get("session", {})
 
@@ -796,9 +761,7 @@ class SecurityPolicyManager:
 
         return result
 
-    async def _check_access_policy(
-        self, policy: SecurityPolicy, context: Dict, result: Dict
-    ) -> Dict:
+    async def _check_access_policy(self, policy: SecurityPolicy, context: Dict, result: Dict) -> Dict:
         """Check access control policy compliance"""
         user_role = context.get("user_role", "")
         requested_action = context.get("action", "")
@@ -806,11 +769,7 @@ class SecurityPolicyManager:
 
         for rule in policy.rules:
             if rule["name"] == "admin_access_approval":
-                if (
-                    rule["value"]
-                    and user_role == "admin"
-                    and not context.get("manager_approved", False)
-                ):
+                if rule["value"] and user_role == "admin" and not context.get("manager_approved", False):
                     result["compliant"] = False
                     result["violation_type"] = "admin_access_not_approved"
                     result["severity"] = "high"
@@ -819,9 +778,7 @@ class SecurityPolicyManager:
 
         return result
 
-    async def _check_data_protection_policy(
-        self, policy: SecurityPolicy, context: Dict, result: Dict
-    ) -> Dict:
+    async def _check_data_protection_policy(self, policy: SecurityPolicy, context: Dict, result: Dict) -> Dict:
         """Check data protection policy compliance"""
         data_classification = context.get("data_classification", "")
         encryption_status = context.get("encryption_status", {})
@@ -847,20 +804,14 @@ class SecurityPolicyManager:
 
         return result
 
-    async def _check_audit_policy(
-        self, policy: SecurityPolicy, context: Dict, result: Dict
-    ) -> Dict:
+    async def _check_audit_policy(self, policy: SecurityPolicy, context: Dict, result: Dict) -> Dict:
         """Check audit logging policy compliance"""
         event_type = context.get("event_type", "")
         logging_enabled = context.get("logging_enabled", False)
 
         for rule in policy.rules:
             if rule["name"] == "log_authentication_events":
-                if (
-                    rule["value"]
-                    and event_type == "authentication"
-                    and not logging_enabled
-                ):
+                if rule["value"] and event_type == "authentication" and not logging_enabled:
                     result["compliant"] = False
                     result["violation_type"] = "authentication_not_logged"
                     result["severity"] = "medium"
@@ -872,9 +823,7 @@ class SecurityPolicyManager:
         """Log policy violation for monitoring and compliance"""
         self.stats["policy_violations"] += 1
         violation_type = violation.violation_type
-        self.stats["violations_by_type"][violation_type] = (
-            self.stats["violations_by_type"].get(violation_type, 0) + 1
-        )
+        self.stats["violations_by_type"][violation_type] = self.stats["violations_by_type"].get(violation_type, 0) + 1
 
         logger.warning(
             "POLICY VIOLATION: %s | Policy: %s | User: %s | Severity: %s | Resource: %s",
@@ -906,9 +855,7 @@ class SecurityPolicyManager:
 
         return policies
 
-    def get_compliance_mapping(
-        self, policy_type: PolicyType, framework: str
-    ) -> List[str]:
+    def get_compliance_mapping(self, policy_type: PolicyType, framework: str) -> List[str]:
         """Get compliance framework mappings for a policy type"""
         return self.compliance_mappings.get(framework, {}).get(policy_type.value, [])
 
@@ -918,17 +865,13 @@ class SecurityPolicyManager:
         for policy_type_str, controls in framework_mappings.items():
             policy_type = PolicyType(policy_type_str)
             active_policies = [
-                p
-                for p in self.policies.values()
-                if p.policy_type == policy_type and p.status == PolicyStatus.ACTIVE
+                p for p in self.policies.values() if p.policy_type == policy_type and p.status == PolicyStatus.ACTIVE
             ]
             coverage[policy_type_str] = {
                 "required_controls": controls,
                 "active_policies": len(active_policies),
                 "policy_names": [p.name for p in active_policies],
-                "coverage_percentage": (
-                    len(active_policies) / len(controls) * 100 if controls else 100
-                ),
+                "coverage_percentage": (len(active_policies) / len(controls) * 100 if controls else 100),
             }
         return coverage
 
@@ -946,9 +889,7 @@ class SecurityPolicyManager:
         """Calculate overall compliance score."""
         if not policy_coverage:
             return 0.0
-        total_coverage = sum(
-            pc["coverage_percentage"] for pc in policy_coverage.values()
-        )
+        total_coverage = sum(pc["coverage_percentage"] for pc in policy_coverage.values())
         avg_coverage = total_coverage / len(policy_coverage)
         violation_penalty = min(20, len(self.policy_violations[-30:]))
         return max(0, (avg_coverage - violation_penalty) / 100)
@@ -980,17 +921,13 @@ class SecurityPolicyManager:
     def _update_policy_statistics(self):
         """Update policy statistics"""
         self.stats["total_policies"] = len(self.policies)
-        self.stats["active_policies"] = len(
-            [p for p in self.policies.values() if p.status == PolicyStatus.ACTIVE]
-        )
+        self.stats["active_policies"] = len([p for p in self.policies.values() if p.status == PolicyStatus.ACTIVE])
         self.stats["last_policy_update"] = datetime.utcnow().isoformat()
 
         # Calculate compliance score
         if self.stats["total_policies"] > 0:
             active_ratio = self.stats["active_policies"] / self.stats["total_policies"]
-            violation_penalty = min(
-                0.3, self.stats["policy_violations"] / 100
-            )  # Max 30% penalty
+            violation_penalty = min(0.3, self.stats["policy_violations"] / 100)  # Max 30% penalty
             self.stats["compliance_score"] = max(0, active_ratio - violation_penalty)
 
     def get_statistics(self) -> Dict:
@@ -998,23 +935,14 @@ class SecurityPolicyManager:
         return {
             **self.stats,
             "policies_by_type": {
-                policy_type.value: len(
-                    [p for p in self.policies.values() if p.policy_type == policy_type]
-                )
+                policy_type.value: len([p for p in self.policies.values() if p.policy_type == policy_type])
                 for policy_type in PolicyType
             },
             "policies_by_status": {
-                status.value: len(
-                    [p for p in self.policies.values() if p.status == status]
-                )
-                for status in PolicyStatus
+                status.value: len([p for p in self.policies.values() if p.status == status]) for status in PolicyStatus
             },
             "recent_violations": len(
-                [
-                    v
-                    for v in self.policy_violations
-                    if (datetime.utcnow() - v.timestamp).days <= 30
-                ]
+                [v for v in self.policy_violations if (datetime.utcnow() - v.timestamp).days <= 30]
             ),
         }
 

@@ -31,18 +31,14 @@ class CodePattern(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
 
     # Pattern identification
-    pattern_type = Column(
-        String(50), nullable=False, index=True
-    )  # function, error_handling, api_usage, etc.
+    pattern_type = Column(String(50), nullable=False, index=True)  # function, error_handling, api_usage, etc.
     language = Column(String(20), nullable=False, index=True)  # python, typescript, vue
     category = Column(String(50), index=True)  # fastapi, redis, vue_composable, etc.
 
     # Pattern content
     signature = Column(Text, nullable=False)  # Function signature or pattern template
     body = Column(Text)  # Function body or implementation
-    context = Column(
-        JSONB
-    )  # Additional context: imports, decorators, parent class, etc.
+    context = Column(JSONB)  # Additional context: imports, decorators, parent class, etc.
 
     # Pattern metadata
     file_path = Column(String(500))  # Source file where pattern was found
@@ -56,12 +52,8 @@ class CodePattern(Base):
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
-    )
-    last_seen = Column(
-        DateTime, default=datetime.utcnow
-    )  # Last time pattern was found in codebase
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    last_seen = Column(DateTime, default=datetime.utcnow)  # Last time pattern was found in codebase
 
     # Indexes for fast lookup
     __table_args__ = (
@@ -92,16 +84,11 @@ class CodePattern(Base):
         }
 
     @classmethod
-    def get_redis_key(
-        cls, pattern_type: str, language: str, category: Optional[str] = None
-    ) -> str:
+    def get_redis_key(cls, pattern_type: str, language: str, category: Optional[str] = None) -> str:
         """Generate Redis key for caching hot patterns."""
         if category:
             return f"patterns:{language}:{pattern_type}:{category}"
         return f"patterns:{language}:{pattern_type}"
 
     def __repr__(self) -> str:
-        return (
-            f"<CodePattern(id={self.id}, type={self.pattern_type}, "
-            f"lang={self.language}, freq={self.frequency})>"
-        )
+        return f"<CodePattern(id={self.id}, type={self.pattern_type}, " f"lang={self.language}, freq={self.frequency})>"

@@ -109,9 +109,7 @@ class CausalExecutor:
 
         # Wrap executor to capture state snapshots
         original_step_executor = self.executor._execute_step
-        self.executor._execute_step = self._make_tracing_executor(
-            original_step_executor, context or {}
-        )
+        self.executor._execute_step = self._make_tracing_executor(original_step_executor, context or {})
 
         try:
             # Run the actual DAG execution
@@ -129,14 +127,10 @@ class CausalExecutor:
     # Effect tracing
     # -----------------------------------------------------------------------
 
-    def _make_tracing_executor(
-        self, original_executor: Any, context: Dict[str, Any]
-    ) -> Any:
+    def _make_tracing_executor(self, original_executor: Any, context: Dict[str, Any]) -> Any:
         """Create a step executor that wraps the original with state tracking."""
 
-        async def tracing_executor(
-            node: Any, ctx: DAGExecutionContext
-        ) -> Dict[str, Any]:
+        async def tracing_executor(node: Any, ctx: DAGExecutionContext) -> Dict[str, Any]:
             """Execute a step and record state mutations."""
             step_id = node.node_id
             t0 = time.time()
@@ -244,9 +238,7 @@ class CausalExecutor:
 
         failure_reason = ""
         if isinstance(execution_ctx.step_results.get(failed_step_id), dict):
-            failure_reason = execution_ctx.step_results[failed_step_id].get(
-                "error", "Unknown error"
-            )
+            failure_reason = execution_ctx.step_results[failed_step_id].get("error", "Unknown error")
 
         report = CascadeReport(
             failed_step_id=failed_step_id,
@@ -275,9 +267,7 @@ class CausalExecutor:
 
             # If step failed, consider it affected
             if is_affected:
-                is_direct = step_id in self._get_direct_successors(
-                    failed_step_id, execution_ctx
-                )
+                is_direct = step_id in self._get_direct_successors(failed_step_id, execution_ctx)
                 report.add_affected(step_id, reason, direct=is_direct)
 
         # Suggest mitigation
@@ -286,9 +276,7 @@ class CausalExecutor:
         logger.info("Cascade analysis: %s", report)
         return report
 
-    def _get_direct_successors(
-        self, step_id: str, execution_ctx: DAGExecutionContext
-    ) -> list[str]:
+    def _get_direct_successors(self, step_id: str, execution_ctx: DAGExecutionContext) -> list[str]:
         """Get steps that directly depend on the given step."""
         successors = []
         for metadata in self.metadata_map.values():
@@ -297,9 +285,7 @@ class CausalExecutor:
                     successors.append(effect.target_step_id)
         return successors
 
-    def _suggest_mitigations(
-        self, report: CascadeReport, execution_ctx: DAGExecutionContext
-    ) -> list[str]:
+    def _suggest_mitigations(self, report: CascadeReport, execution_ctx: DAGExecutionContext) -> list[str]:
         """Suggest workflow restructuring to prevent cascades."""
         suggestions = []
 
@@ -320,14 +306,11 @@ class CausalExecutor:
         affected_steps = set(report.directly_affected + report.indirectly_affected)
         if len(affected_steps) > 0:
             suggestions.append(
-                f"Add error_config with SKIP or FALLBACK action to affected steps "
-                f"to prevent cascading failures."
+                f"Add error_config with SKIP or FALLBACK action to affected steps " f"to prevent cascading failures."
             )
 
         if not suggestions:
-            suggestions.append(
-                "Workflow structure allows failure isolation. No major restructuring recommended."
-            )
+            suggestions.append("Workflow structure allows failure isolation. No major restructuring recommended.")
 
         return suggestions
 

@@ -114,9 +114,11 @@ def _try_publish(event_type: str, payload: dict) -> None:
             loop = asyncio.get_running_loop()
             task = loop.create_task(event_manager.publish(event_type, payload))
             task.add_done_callback(
-                lambda t: logger.debug("cot_events: publish error: %s", t.exception())
-                if not t.cancelled() and t.exception()
-                else None
+                lambda t: (
+                    logger.debug("cot_events: publish error: %s", t.exception())
+                    if not t.cancelled() and t.exception()
+                    else None
+                )
             )
         except RuntimeError:
             # No running loop — caller is in a sync context; skip silently.

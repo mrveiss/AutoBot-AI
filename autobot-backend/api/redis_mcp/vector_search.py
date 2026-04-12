@@ -91,9 +91,7 @@ async def handle_redis_vector_create_index(
 ) -> Metadata:
     """Create a RediSearch vector index using HNSW."""
     client = await _get_client(database)
-    schema_args = _build_index_schema(
-        vector_field, dimensions, distance_metric, extra_fields
-    )
+    schema_args = _build_index_schema(vector_field, dimensions, distance_metric, extra_fields)
     try:
         await client.execute_command(
             "FT.CREATE",

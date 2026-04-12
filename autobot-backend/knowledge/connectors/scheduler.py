@@ -164,9 +164,7 @@ class ConnectorScheduler:
                 logger.info("Scheduler loop cancelled for connector %s", connector_id)
                 break
             except Exception as exc:
-                logger.error(
-                    "Scheduler loop error for connector %s: %s", connector_id, exc
-                )
+                logger.error("Scheduler loop error for connector %s: %s", connector_id, exc)
                 # Continue loop — a transient error should not stop scheduling
 
     async def _trigger_sync(self, connector_id: str) -> None:
@@ -186,8 +184,7 @@ class ConnectorScheduler:
         try:
             result = await connector.sync(incremental=True)
             logger.info(
-                "Scheduled sync complete: connector=%s status=%s "
-                "added=%d updated=%d deleted=%d errors=%d",
+                "Scheduled sync complete: connector=%s status=%s " "added=%d updated=%d deleted=%d errors=%d",
                 connector_id,
                 result.status,
                 result.added,

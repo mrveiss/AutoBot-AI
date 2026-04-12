@@ -47,17 +47,13 @@ class SkillActionRequest(BaseModel):
     """Request body for executing a skill action."""
 
     action: str = Field(..., description="Tool/action name to execute")
-    params: Dict[str, Any] = Field(
-        default_factory=dict, description="Action parameters"
-    )
+    params: Dict[str, Any] = Field(default_factory=dict, description="Action parameters")
 
 
 class UserSkillPreferences(BaseModel):
     """Request body for updating user skill preferences."""
 
-    preferences: Dict[str, bool] = Field(
-        ..., description="Mapping of skill_name -> enabled"
-    )
+    preferences: Dict[str, bool] = Field(..., description="Mapping of skill_name -> enabled")
 
 
 # --- Endpoints ---

@@ -23,16 +23,14 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
+from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.security.path_validator import validate_path
-from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
 
 logger = logging.getLogger(__name__)
-router = APIRouter(
-    tags=["code-evolution", "analytics"]
-)  # Prefix set in router_registry
+router = APIRouter(tags=["code-evolution", "analytics"])  # Prefix set in router_registry
 
 
 # Performance optimization: O(1) lookup for aggregation granularities (Issue #326)
@@ -163,17 +161,13 @@ def _fetch_timeline_snapshots(
     Returns:
         List of parsed snapshot dictionaries
     """
-    snapshot_keys = redis_client.zrangebyscore(
-        f"{evolution_prefix}timeline", start_ts, end_ts
-    )
+    snapshot_keys = redis_client.zrangebyscore(f"{evolution_prefix}timeline", start_ts, end_ts)
 
     if not snapshot_keys:
         return []
 
     # Decode all keys first
-    decoded_keys = [
-        key.decode("utf-8") if isinstance(key, bytes) else key for key in snapshot_keys
-    ]
+    decoded_keys = [key.decode("utf-8") if isinstance(key, bytes) else key for key in snapshot_keys]
 
     # Issue #480: Use pipeline to batch all GET operations
     pipe = redis_client.pipeline()
@@ -273,9 +267,7 @@ async def store_quality_snapshot(snapshot: QualitySnapshot) -> bool:
     try:
         # Store snapshot with timestamp-based key
         key = f"{SNAPSHOT_PREFIX}{snapshot.timestamp}"
-        timestamp_score = datetime.fromisoformat(
-            snapshot.timestamp.replace("Z", "+00:00")
-        ).timestamp()
+        timestamp_score = datetime.fromisoformat(snapshot.timestamp.replace("Z", "+00:00")).timestamp()
 
         # Issue #361: Execute sync Redis ops in thread pool
         def _store_snapshot():
@@ -304,9 +296,7 @@ async def store_pattern_snapshot(snapshot: PatternSnapshot) -> bool:
 
     try:
         key = f"{PATTERNS_PREFIX}{snapshot.pattern_type}:{snapshot.timestamp}"
-        timestamp_score = datetime.fromisoformat(
-            snapshot.timestamp.replace("Z", "+00:00")
-        ).timestamp()
+        timestamp_score = datetime.fromisoformat(snapshot.timestamp.replace("Z", "+00:00")).timestamp()
         timeline_key = f"{PATTERNS_PREFIX}{snapshot.pattern_type}:timeline"
 
         # Issue #361: Execute sync Redis ops in thread pool
@@ -330,11 +320,7 @@ def _parse_date_range(start_date: Optional[str], end_date: Optional[str]) -> tup
         if start_date
         else (datetime.now(tz=timezone.utc) - timedelta(days=30)).timestamp()
     )
-    end_ts = (
-        datetime.fromisoformat(end_date).timestamp()
-        if end_date
-        else datetime.now(tz=timezone.utc).timestamp()
-    )
+    end_ts = datetime.fromisoformat(end_date).timestamp() if end_date else datetime.now(tz=timezone.utc).timestamp()
     return start_ts, end_ts
 
 
@@ -351,9 +337,7 @@ def _no_data_response(
     }
 
 
-def _build_timeline_response(
-    timeline: list, start_date: str, end_date: str, granularity: str, metrics: list
-) -> dict:
+def _build_timeline_response(timeline: list, start_date: str, end_date: str, granularity: str, metrics: list) -> dict:
     """Build timeline success response (Issue #398: extracted)."""
     return {
         "status": "success",
@@ -374,9 +358,7 @@ def _build_timeline_response(
 async def get_evolution_timeline(
     start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
     end_date: Optional[str] = Query(None, description="End date (ISO format)"),
-    granularity: str = Query(
-        "daily", description="Data granularity: hourly, daily, weekly, monthly"
-    ),
+    granularity: str = Query("daily", description="Data granularity: hourly, daily, weekly, monthly"),
     metrics: str = Query(
         "overall_score,complexity,maintainability",
         description="Comma-separated metrics",
@@ -415,13 +397,9 @@ async def get_evolution_timeline(
         if granularity in AGGREGATION_GRANULARITIES and len(timeline_data) > 1:
             timeline_data = _aggregate_by_granularity(timeline_data, granularity)
 
-        filtered_timeline = _filter_timeline_by_metrics(
-            timeline_data, requested_metrics
-        )
+        filtered_timeline = _filter_timeline_by_metrics(timeline_data, requested_metrics)
         return JSONResponse(
-            _build_timeline_response(
-                filtered_timeline, start_date, end_date, granularity, requested_metrics
-            )
+            _build_timeline_response(filtered_timeline, start_date, end_date, granularity, requested_metrics)
         )
 
     except Exception as e:
@@ -442,9 +420,7 @@ async def get_evolution_timeline(
 )
 @router.get("/patterns")
 async def get_pattern_evolution(
-    pattern_type: Optional[str] = Query(
-        None, description="Filter by pattern type (e.g., god_class, long_method)"
-    ),
+    pattern_type: Optional[str] = Query(None, description="Filter by pattern type (e.g., god_class, long_method)"),
     start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
     end_date: Optional[str] = Query(None, description="End date (ISO format)"),
     admin_check: bool = Depends(check_admin_permission),
@@ -478,17 +454,11 @@ async def get_pattern_evolution(
         def _fetch_patterns():
             result = {}
             if pattern_type:
-                pattern_keys = (
-                    redis_client.keys(f"{patterns_prefix}{pattern_type}:*") or []
-                )
-                result[pattern_type] = _get_pattern_snapshots(
-                    redis_client, pattern_keys
-                )
+                pattern_keys = redis_client.keys(f"{patterns_prefix}{pattern_type}:*") or []
+                result[pattern_type] = _get_pattern_snapshots(redis_client, pattern_keys)
             else:
                 all_keys = redis_client.keys(f"{patterns_prefix}*")
-                pattern_types_list = _extract_pattern_types_from_prefix(
-                    all_keys, patterns_prefix
-                )
+                pattern_types_list = _extract_pattern_types_from_prefix(all_keys, patterns_prefix)
                 for ptype in pattern_types_list:
                     ptype_keys = redis_client.keys(f"{patterns_prefix}{ptype}:2*")
                     result[ptype] = _get_pattern_snapshots(redis_client, ptype_keys)
@@ -533,9 +503,7 @@ def _fetch_trend_snapshots_sync(
         return []
 
     # Decode all keys first
-    decoded_keys = [
-        key.decode("utf-8") if isinstance(key, bytes) else key for key in keys
-    ]
+    decoded_keys = [key.decode("utf-8") if isinstance(key, bytes) else key for key in keys]
 
     # Issue #480: Use pipeline to batch all GET operations
     pipe = redis_client.pipeline()
@@ -568,9 +536,7 @@ def _calculate_metric_trend(snapshots: List[Dict], metric: str) -> Optional[Dict
         "last_value": last_value,
         "change": round(change, 2),
         "percent_change": round(percent_change, 2),
-        "direction": (
-            "improving" if change > 0 else "declining" if change < 0 else "stable"
-        ),
+        "direction": ("improving" if change > 0 else "declining" if change < 0 else "stable"),
         "data_points": len(values),
     }
 
@@ -589,16 +555,10 @@ _TREND_METRICS = [
 
 def _calculate_all_trends(snapshots: list) -> dict:
     """Calculate trends for all metrics (Issue #398: extracted)."""
-    return {
-        metric: data
-        for metric in _TREND_METRICS
-        if (data := _calculate_metric_trend(snapshots, metric))
-    }
+    return {metric: data for metric in _TREND_METRICS if (data := _calculate_metric_trend(snapshots, metric))}
 
 
-def _build_trends_success_response(
-    trends: dict, days: int, snapshot_count: int
-) -> dict:
+def _build_trends_success_response(trends: dict, days: int, snapshot_count: int) -> dict:
     """Build trends success response (Issue #398: extracted)."""
     return {
         "status": "success",
@@ -656,19 +616,14 @@ async def get_quality_trends(
                 {
                     "status": "no_data",
                     "message": (
-                        f"Insufficient data for trend analysis. "
-                        f"Need at least 2 snapshots, found {len(snapshots)}."
+                        f"Insufficient data for trend analysis. " f"Need at least 2 snapshots, found {len(snapshots)}."
                     ),
                     "trends": {},
                 }
             )
 
         snapshots.sort(key=lambda x: x.get("timestamp", ""))
-        return JSONResponse(
-            _build_trends_success_response(
-                _calculate_all_trends(snapshots), days, len(snapshots)
-            )
-        )
+        return JSONResponse(_build_trends_success_response(_calculate_all_trends(snapshots), days, len(snapshots)))
 
     except Exception as e:
         logger.error("Error calculating quality trends: %s", e)
@@ -755,32 +710,22 @@ async def record_pattern_snapshot(
         )
 
 
-def _parse_export_date_range(
-    start_date: Optional[str], end_date: Optional[str]
-) -> tuple:
+def _parse_export_date_range(start_date: Optional[str], end_date: Optional[str]) -> tuple:
     """Parse export date range with defaults (Issue #398: extracted)."""
     start_ts = datetime.fromisoformat(start_date).timestamp() if start_date else 0
-    end_ts = (
-        datetime.fromisoformat(end_date).timestamp()
-        if end_date
-        else datetime.now(tz=timezone.utc).timestamp()
-    )
+    end_ts = datetime.fromisoformat(end_date).timestamp() if end_date else datetime.now(tz=timezone.utc).timestamp()
     return start_ts, end_ts
 
 
 def _fetch_export_data_sync(redis_client, start_ts: float, end_ts: float) -> list:
     """Fetch export data from Redis synchronously (Issue #398, #480: pipeline batching)."""
-    snapshot_keys = redis_client.zrangebyscore(
-        f"{EVOLUTION_PREFIX}timeline", start_ts, end_ts
-    )
+    snapshot_keys = redis_client.zrangebyscore(f"{EVOLUTION_PREFIX}timeline", start_ts, end_ts)
 
     if not snapshot_keys:
         return []
 
     # Decode all keys first
-    decoded_keys = [
-        key.decode("utf-8") if isinstance(key, bytes) else key for key in snapshot_keys
-    ]
+    decoded_keys = [key.decode("utf-8") if isinstance(key, bytes) else key for key in snapshot_keys]
 
     # Issue #480: Use pipeline to batch all GET operations
     pipe = redis_client.pipeline()
@@ -791,11 +736,7 @@ def _fetch_export_data_sync(redis_client, start_ts: float, end_ts: float) -> lis
     results = []
     for snapshot_json in snapshot_data:
         if snapshot_json:
-            snapshot_json = (
-                snapshot_json.decode("utf-8")
-                if isinstance(snapshot_json, bytes)
-                else snapshot_json
-            )
+            snapshot_json = snapshot_json.decode("utf-8") if isinstance(snapshot_json, bytes) else snapshot_json
             results.append(json.loads(snapshot_json))
     return results
 
@@ -817,8 +758,7 @@ def _generate_csv_response(timeline_data: list) -> StreamingResponse:
         media_type="text/csv",
         headers={
             "Content-Disposition": (
-                "attachment; filename=evolution_data_"
-                f"{datetime.now(tz=timezone.utc).strftime('%Y%m%d')}.csv"
+                "attachment; filename=evolution_data_" f"{datetime.now(tz=timezone.utc).strftime('%Y%m%d')}.csv"
             )
         },
     )
@@ -866,9 +806,7 @@ async def export_evolution_data(
 
     try:
         start_ts, end_ts = _parse_export_date_range(start_date, end_date)
-        timeline_data = await asyncio.to_thread(
-            _fetch_export_data_sync, redis_client, start_ts, end_ts
-        )
+        timeline_data = await asyncio.to_thread(_fetch_export_data_sync, redis_client, start_ts, end_ts)
 
         if not timeline_data:
             return JSONResponse(
@@ -881,9 +819,7 @@ async def export_evolution_data(
             )
 
         return (
-            _generate_csv_response(timeline_data)
-            if format == "csv"
-            else _generate_json_export_response(timeline_data)
+            _generate_csv_response(timeline_data) if format == "csv" else _generate_json_export_response(timeline_data)
         )
 
     except Exception as e:
@@ -935,19 +871,13 @@ async def get_evolution_summary(
                 first_data = None
                 last_data = None
                 if total > 0:
-                    first_keys = redis_client.zrange(
-                        f"{EVOLUTION_PREFIX}timeline", 0, 0
-                    )
-                    last_keys = redis_client.zrange(
-                        f"{EVOLUTION_PREFIX}timeline", -1, -1
-                    )
+                    first_keys = redis_client.zrange(f"{EVOLUTION_PREFIX}timeline", 0, 0)
+                    last_keys = redis_client.zrange(f"{EVOLUTION_PREFIX}timeline", -1, -1)
                     first_data = _get_snapshot_data(redis_client, first_keys)
                     last_data = _get_snapshot_data(redis_client, last_keys)
                 return total, first_data, last_data
 
-            total_snapshots, first_data, last_data = await asyncio.to_thread(
-                _fetch_summary_data
-            )
+            total_snapshots, first_data, last_data = await asyncio.to_thread(_fetch_summary_data)
             summary["total_snapshots"] = total_snapshots
 
             if first_data:
@@ -967,9 +897,7 @@ async def get_evolution_summary(
     return JSONResponse({"status": "success", "summary": summary})
 
 
-def _aggregate_by_granularity(
-    data: List[Dict[str, Any]], granularity: str
-) -> List[Dict[str, Any]]:
+def _aggregate_by_granularity(data: List[Dict[str, Any]], granularity: str) -> List[Dict[str, Any]]:
     """Aggregate timeline data by week or month"""
     from collections import defaultdict
 
@@ -1029,9 +957,7 @@ def _get_granularity_step(granularity: str) -> timedelta:
     return steps.get(granularity, timedelta(days=1))
 
 
-def _create_demo_data_point(  # nosec B311
-    current: datetime, start: datetime, base_score: float
-) -> dict:
+def _create_demo_data_point(current: datetime, start: datetime, base_score: float) -> dict:  # nosec B311
     """Create a single demo data point (Issue #398: extracted).
 
     Note: Uses random.uniform for demo variance, not cryptographic purposes.
@@ -1061,11 +987,7 @@ def _generate_demo_timeline(
 
     TEST ONLY - Not used in production responses (Issue #543).
     """
-    start = (
-        datetime.fromisoformat(start_date)
-        if start_date
-        else datetime.now(tz=timezone.utc) - timedelta(days=30)
-    )
+    start = datetime.fromisoformat(start_date) if start_date else datetime.now(tz=timezone.utc) - timedelta(days=30)
     end = datetime.fromisoformat(end_date) if end_date else datetime.now(tz=timezone.utc)
     step = _get_granularity_step(granularity)
 
@@ -1140,9 +1062,7 @@ _DEMO_TREND_CONFIG = {
 }
 
 
-def _build_demo_trend_entry(
-    first: float, last: float, direction: str, days: int
-) -> dict:
+def _build_demo_trend_entry(first: float, last: float, direction: str, days: int) -> dict:
     """Build a single demo trend entry (Issue #398: extracted)."""
     change = last - first
     percent_change = round((change / first * 100) if first > 0 else 0, 2)
@@ -1176,15 +1096,9 @@ class EvolutionAnalysisRequest(BaseModel):
     """Request to trigger code evolution analysis"""
 
     repo_path: str = Field(description="Path to git repository to analyze")
-    start_date: Optional[str] = Field(
-        None, description="Start date for analysis (ISO format)"
-    )
-    end_date: Optional[str] = Field(
-        None, description="End date for analysis (ISO format)"
-    )
-    commit_limit: int = Field(
-        100, description="Maximum number of commits to analyze", ge=1, le=1000
-    )
+    start_date: Optional[str] = Field(None, description="Start date for analysis (ISO format)")
+    end_date: Optional[str] = Field(None, description="End date for analysis (ISO format)")
+    commit_limit: int = Field(100, description="Maximum number of commits to analyze", ge=1, le=1000)
 
 
 class EvolutionAnalysisResponse(BaseModel):
@@ -1290,12 +1204,8 @@ async def trigger_evolution_analysis(
             return err
 
         # Parse dates
-        start_date = (
-            datetime.fromisoformat(request.start_date) if request.start_date else None
-        )
-        end_date = (
-            datetime.fromisoformat(request.end_date) if request.end_date else None
-        )
+        start_date = datetime.fromisoformat(request.start_date) if request.start_date else None
+        end_date = datetime.fromisoformat(request.end_date) if request.end_date else None
 
         # Run analysis in thread pool to avoid blocking
         def _run_analysis():

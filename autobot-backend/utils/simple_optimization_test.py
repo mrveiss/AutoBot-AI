@@ -81,21 +81,13 @@ async def test_performance_stats():
         if hasattr(chunker, "get_performance_stats"):
             stats = chunker.get_performance_stats()
             print("  ✅ Performance stats available:")  # noqa: print
-            print(  # noqa: print
-                f"    - Total sentences processed: {stats.get('total_sentences_processed', 0)}"
-            )
-            print(  # noqa: print
-                f"    - Total processing time: {stats.get('total_processing_time', 0):.2f}s"
-            )
+            print(f"    - Total sentences processed: {stats.get('total_sentences_processed', 0)}")  # noqa: print
+            print(f"    - Total processing time: {stats.get('total_processing_time', 0):.2f}s")  # noqa: print
             print(  # noqa: print
                 f"    - Average performance: {stats.get('average_sentences_per_second', 0):.1f} sent/sec"
             )
-            print(  # noqa: print
-                f"    - GPU memory pool: {stats.get('gpu_memory_pool_enabled', False)}"
-            )
-            print(  # noqa: print
-                f"    - Optimization level: {stats.get('optimization_level', 'unknown')}"
-            )
+            print(f"    - GPU memory pool: {stats.get('gpu_memory_pool_enabled', False)}")  # noqa: print
+            print(f"    - Optimization level: {stats.get('optimization_level', 'unknown')}")  # noqa: print
             return True
         else:
             print("  ⚠️  Performance stats not available")  # noqa: print

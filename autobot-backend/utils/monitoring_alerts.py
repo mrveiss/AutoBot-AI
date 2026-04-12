@@ -118,9 +118,7 @@ class LogNotificationChannel(AlertNotificationChannel):
     async def send_recovery(self, alert: Alert) -> bool:
         """Log the recovery"""
         try:
-            logger.info(
-                f"✅ RESOLVED [{alert.severity.value.upper()}] {alert.rule_name}: Alert resolved"
-            )
+            logger.info(f"✅ RESOLVED [{alert.severity.value.upper()}] {alert.rule_name}: Alert resolved")
             return True
         except Exception as e:
             logger.error(f"Failed to send log recovery: {e}")
@@ -140,9 +138,7 @@ class RedisNotificationChannel(AlertNotificationChannel):
         try:
             from autobot_shared.redis_client import get_redis_client
 
-            self.redis_client = get_redis_client(
-                async_client=False, database="analytics"
-            )
+            self.redis_client = get_redis_client(async_client=False, database="analytics")
         except Exception as e:
             logger.warning(f"Could not initialize Redis for alerts: {e}")
 
@@ -185,9 +181,7 @@ class RedisNotificationChannel(AlertNotificationChannel):
                 "rule_name": alert.rule_name,
                 "severity": alert.severity.value,
                 "resolved_at": (
-                    alert.resolved_at.isoformat()
-                    if alert.resolved_at
-                    else datetime.now(tz=timezone.utc).isoformat()
+                    alert.resolved_at.isoformat() if alert.resolved_at else datetime.now(tz=timezone.utc).isoformat()
                 ),
                 "tags": alert.tags,
             }
@@ -274,9 +268,7 @@ class MonitoringAlertsManager:
         self.alert_rules: Dict[str, AlertRule] = {}
         self.active_alerts: Dict[str, Alert] = {}
         self.notification_channels: Dict[str, AlertNotificationChannel] = {}
-        self.metric_history: Dict[str, List[Tuple[float, float]]] = (
-            {}
-        )  # metric_path -> [(timestamp, value)]
+        self.metric_history: Dict[str, List[Tuple[float, float]]] = {}  # metric_path -> [(timestamp, value)]
         self.redis_client = None
         self.running = False
         self.check_interval = 30  # seconds
@@ -294,18 +286,14 @@ class MonitoringAlertsManager:
         try:
             from autobot_shared.redis_client import get_redis_client
 
-            self.redis_client = get_redis_client(
-                async_client=False, database="analytics"
-            )
+            self.redis_client = get_redis_client(async_client=False, database="analytics")
         except Exception as e:
             logger.warning(f"Could not initialize Redis for alert storage: {e}")
 
     def _setup_default_channels(self):
         """Setup default notification channels"""
         # Log channel (always enabled)
-        self.notification_channels["log"] = LogNotificationChannel(
-            "log", {"enabled": True}
-        )
+        self.notification_channels["log"] = LogNotificationChannel("log", {"enabled": True})
 
         # Redis pub/sub channel
         self.notification_channels["redis"] = RedisNotificationChannel(
@@ -318,9 +306,7 @@ class MonitoringAlertsManager:
         )
 
         # WebSocket channel (will be enabled when WebSocket manager is available)
-        self.notification_channels["websocket"] = WebSocketNotificationChannel(
-            "websocket", {"enabled": False}
-        )
+        self.notification_channels["websocket"] = WebSocketNotificationChannel("websocket", {"enabled": False})
 
     def _create_cpu_alert_rules(self) -> List[AlertRule]:
         """
@@ -527,15 +513,11 @@ class MonitoringAlertsManager:
     def set_websocket_manager(self, websocket_manager):
         """Set WebSocket manager for real-time notifications"""
         if "websocket" in self.notification_channels:
-            self.notification_channels["websocket"].set_websocket_manager(
-                websocket_manager
-            )
+            self.notification_channels["websocket"].set_websocket_manager(websocket_manager)
             self.notification_channels["websocket"].enabled = True
             logger.info("Enabled WebSocket notifications")
 
-    def _evaluate_operator(
-        self, current_value: float, threshold: float, operator: str
-    ) -> bool:
+    def _evaluate_operator(self, current_value: float, threshold: float, operator: str) -> bool:
         """Evaluate if condition is met based on operator"""
         if operator == "gt":
             return current_value > threshold
@@ -597,9 +579,7 @@ class MonitoringAlertsManager:
 
         # Keep only relevant history (duration + buffer)
         cutoff_time = current_time - (rule.duration + 300)  # Add 5 min buffer
-        self.metric_history[rule.metric_path] = [
-            (t, v) for t, v in history if t > cutoff_time
-        ]
+        self.metric_history[rule.metric_path] = [(t, v) for t, v in history if t > cutoff_time]
 
         # Check if condition has been met for the required duration
         condition_start_time = None
@@ -737,17 +717,13 @@ class MonitoringAlertsManager:
                 continue
 
             try:
-                current_value = self._get_nested_value(
-                    infrastructure_data, rule.metric_path
-                )
+                current_value = self._get_nested_value(infrastructure_data, rule.metric_path)
 
                 if current_value is None:
                     logger.debug(f"No value found for metric path: {rule.metric_path}")
                     continue
 
-                condition_met = self._evaluate_operator(
-                    current_value, rule.threshold, rule.operator
-                )
+                condition_met = self._evaluate_operator(current_value, rule.threshold, rule.operator)
 
                 if condition_met:
                     # Check if alert should be triggered based on duration
@@ -782,16 +758,12 @@ class MonitoringAlertsManager:
         # This legacy monitoring_alerts.py was replaced by Prometheus AlertManager (Issue #69)
         # Infrastructure data now available via SLM API instead of
         # backend.api.infrastructure_monitor
-        logger.warning(
-            "⚠️ Infrastructure monitoring deprecated - use SLM server and Prometheus AlertManager"
-        )
+        logger.warning("⚠️ Infrastructure monitoring deprecated - use SLM server and Prometheus AlertManager")
 
         while self.running:
             try:
                 # Infrastructure APIs moved to SLM; monitoring loop is disabled
-                logger.info(
-                    "Monitoring loop running (infrastructure checks disabled - see Issue #729)"
-                )
+                logger.info("Monitoring loop running (infrastructure checks disabled - see Issue #729)")
 
                 await asyncio.sleep(self.check_interval)
 
@@ -834,13 +806,9 @@ class MonitoringAlertsManager:
                         },
                     )
                 except Exception as e:
-                    logger.warning(
-                        f"Could not update alert acknowledgment in Redis: {e}"
-                    )
+                    logger.warning(f"Could not update alert acknowledgment in Redis: {e}")
 
-            logger.info(
-                f"👤 Alert acknowledged: {alert.rule_name} by {acknowledged_by}"
-            )
+            logger.info(f"👤 Alert acknowledged: {alert.rule_name} by {acknowledged_by}")
             return True
         return False
 

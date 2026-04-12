@@ -77,9 +77,7 @@ class PromptAnalysisResult:
 
         # Add length-based suggestions
         if self.estimated_tokens > 2000:
-            suggestions.append(
-                f"Consider reducing prompt length (~{self.estimated_tokens} tokens)"
-            )
+            suggestions.append(f"Consider reducing prompt length (~{self.estimated_tokens} tokens)")
 
         return suggestions
 
@@ -124,9 +122,7 @@ class PromptTemplate:
         tokens = PromptAnalyzer.estimate_tokens(self.template_text)
         variables = PromptAnalyzer.extract_variables(self.template_text)
 
-        return PromptAnalysisResult(
-            issues=issues, estimated_tokens=tokens, variables=variables
-        )
+        return PromptAnalysisResult(issues=issues, estimated_tokens=tokens, variables=variables)
 
     def get_optimization_potential(self) -> float:
         """Calculate optimization potential based on issues."""
@@ -177,10 +173,7 @@ class CacheOpportunity:
             return True
 
         # Low effort with any savings is worth it
-        if (
-            self.implementation_effort == "low"
-            and self.estimated_savings_percent > 10.0
-        ):
+        if self.implementation_effort == "low" and self.estimated_savings_percent > 10.0:
             return True
 
         return False
@@ -263,11 +256,7 @@ class RetryPattern:
         Fixes Feature Envy: Pattern evaluates itself (Issue #312)
         """
         # Optimal patterns have exponential backoff, reasonable retries, and timeout
-        return (
-            self.backoff_strategy == "exponential"
-            and self.max_retries <= 3
-            and self.has_timeout
-        )
+        return self.backoff_strategy == "exponential" and self.max_retries <= 3 and self.has_timeout
 
     def get_optimization_recommendations(self) -> List[str]:
         """Get specific recommendations for this retry pattern."""
@@ -360,10 +349,7 @@ class OptimizationRecommendation:
 
     def should_prioritize(self) -> bool:
         """Determine if this recommendation should be prioritized."""
-        return (
-            self.priority in HIGH_PRIORITY_LEVELS
-            or self.estimated_savings_percent > 30.0
-        )
+        return self.priority in HIGH_PRIORITY_LEVELS or self.estimated_savings_percent > 30.0
 
 
 # =============================================================================

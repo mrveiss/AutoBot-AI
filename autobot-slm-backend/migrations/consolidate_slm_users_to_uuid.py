@@ -85,8 +85,7 @@ def migrate(db_url: str) -> None:
                 return
 
             cur.execute(
-                "SELECT id, username, password_hash, is_active, is_admin, "
-                "created_at, last_login FROM slm_users"
+                "SELECT id, username, password_hash, is_active, is_admin, " "created_at, last_login FROM slm_users"
             )
             rows = cur.fetchall()
 
@@ -179,6 +178,4 @@ def _migrate_row(cur, row: tuple) -> None:
             last_login,
         ),
     )
-    logger.info(
-        "Migrated user '%s' from slm_users to users (new id=%s)", username, new_id
-    )
+    logger.info("Migrated user '%s' from slm_users to users (new id=%s)", username, new_id)

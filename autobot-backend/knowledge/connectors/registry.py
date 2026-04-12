@@ -63,10 +63,7 @@ class ConnectorRegistry:
         klass = cls._connectors.get(config.connector_type)
         if klass is None:
             registered = list(cls._connectors.keys())
-            raise ValueError(
-                "Unknown connector type '%s'. Registered types: %s"
-                % (config.connector_type, registered)
-            )
+            raise ValueError("Unknown connector type '%s'. Registered types: %s" % (config.connector_type, registered))
         instance = klass(config)
         logger.info(
             "Created connector instance: id=%s type=%s",

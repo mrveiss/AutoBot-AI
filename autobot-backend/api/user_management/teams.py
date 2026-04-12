@@ -40,9 +40,7 @@ class TeamCreate(BaseModel):
     """Request model for creating a team."""
 
     name: str = Field(..., min_length=1, max_length=255, description="Team name")
-    description: Optional[str] = Field(
-        None, max_length=500, description="Team description"
-    )
+    description: Optional[str] = Field(None, max_length=500, description="Team description")
     settings: Optional[dict] = Field(default_factory=dict, description="Team settings")
     is_default: bool = Field(False, description="Whether this is the default team")
 
@@ -50,12 +48,8 @@ class TeamCreate(BaseModel):
 class TeamUpdate(BaseModel):
     """Request model for updating a team."""
 
-    name: Optional[str] = Field(
-        None, min_length=1, max_length=255, description="Team name"
-    )
-    description: Optional[str] = Field(
-        None, max_length=500, description="Team description"
-    )
+    name: Optional[str] = Field(None, min_length=1, max_length=255, description="Team name")
+    description: Optional[str] = Field(None, max_length=500, description="Team description")
     settings: Optional[dict] = Field(None, description="Team settings")
 
 
@@ -386,9 +380,7 @@ async def update_member_role(
 ):
     """Update member role."""
     try:
-        membership = await team_service.change_member_role(
-            team_id, user_id, update_data.role
-        )
+        membership = await team_service.change_member_role(team_id, user_id, update_data.role)
         return _membership_to_response(membership)
 
     except MembershipError:
@@ -432,11 +424,7 @@ async def get_my_teams(
 
 def _team_to_response(team) -> TeamResponse:
     """Convert Team model to TeamResponse schema."""
-    member_count = (
-        len(team.memberships)
-        if hasattr(team, "memberships") and team.memberships
-        else 0
-    )
+    member_count = len(team.memberships) if hasattr(team, "memberships") and team.memberships else 0
 
     return TeamResponse(
         id=team.id,

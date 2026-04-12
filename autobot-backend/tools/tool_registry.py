@@ -109,9 +109,7 @@ class ToolRegistry:
         return {
             "tool_name": "query_system_information",
             "tool_args": {},
-            "result": result.get(
-                "output", result.get("message", "System info retrieved")
-            ),
+            "result": result.get("output", result.get("message", "System info retrieved")),
             "status": result.get("status", "success"),
         }
 
@@ -144,9 +142,7 @@ class ToolRegistry:
             "status": result.get("status", "success"),
         }
 
-    async def get_process_info(
-        self, process_name: Optional[str] = None, pid: Optional[str] = None
-    ) -> Dict[str, Any]:
+    async def get_process_info(self, process_name: Optional[str] = None, pid: Optional[str] = None) -> Dict[str, Any]:
         """Get process information."""
         task = self._create_base_task("system_get_process_info")
         if process_name:
@@ -158,9 +154,7 @@ class ToolRegistry:
         return {
             "tool_name": "get_process_info",
             "tool_args": {"process_name": process_name, "pid": pid},
-            "result": result.get(
-                "output", result.get("message", "Process info retrieved")
-            ),
+            "result": result.get("output", result.get("message", "Process info retrieved")),
             "status": result.get("status", "success"),
         }
 
@@ -173,9 +167,7 @@ class ToolRegistry:
         return {
             "tool_name": "terminate_process",
             "tool_args": {"pid": pid},
-            "result": result.get(
-                "output", result.get("message", f"Process {pid} terminated")
-            ),
+            "result": result.get("output", result.get("message", f"Process {pid} terminated")),
             "status": result.get("status", "success"),
         }
 
@@ -188,17 +180,13 @@ class ToolRegistry:
         return {
             "tool_name": "web_fetch",
             "tool_args": {"url": url},
-            "result": result.get(
-                "output", result.get("message", "Web content fetched")
-            ),
+            "result": result.get("output", result.get("message", "Web content fetched")),
             "status": result.get("status", "success"),
         }
 
     # Knowledge Base Tools
 
-    async def search_knowledge_base(
-        self, query: str, n_results: int = 5
-    ) -> Dict[str, Any]:
+    async def search_knowledge_base(self, query: str, n_results: int = 5) -> Dict[str, Any]:
         """Search the knowledge base."""
         if not self.knowledge_base:
             return {
@@ -215,20 +203,14 @@ class ToolRegistry:
                 formatted_results = []
                 for result in results:
                     content_preview = (
-                        result["content"][:200] + "..."
-                        if len(result["content"]) > 200
-                        else result["content"]
+                        result["content"][:200] + "..." if len(result["content"]) > 200 else result["content"]
                     )
                     metadata = result.get("metadata", {})
                     filename = metadata.get("filename", "N/A")
                     chunk_index = metadata.get("chunk_index", "N/A")
-                    formatted_results.append(
-                        f"[{filename} - Chunk {chunk_index}]: " f"{content_preview}"
-                    )
+                    formatted_results.append(f"[{filename} - Chunk {chunk_index}]: " f"{content_preview}")
 
-                result_text = f"Found {len(results)} relevant results:\n" + "\n".join(
-                    formatted_results
-                )
+                result_text = f"Found {len(results)} relevant results:\n" + "\n".join(formatted_results)
             else:
                 result_text = "No relevant information found in knowledge base"
 
@@ -260,9 +242,7 @@ class ToolRegistry:
             }
 
         try:
-            result = await self.knowledge_base.add_file(
-                file_path, file_type, metadata or {}
-            )
+            result = await self.knowledge_base.add_file(file_path, file_type, metadata or {})
             return {
                 "tool_name": "add_file_to_knowledge_base",
                 "tool_args": {
@@ -270,9 +250,7 @@ class ToolRegistry:
                     "file_type": file_type,
                     "metadata": metadata,
                 },
-                "result": result.get(
-                    "message", f"File {file_path} added to knowledge base"
-                ),
+                "result": result.get("message", f"File {file_path} added to knowledge base"),
                 "status": result.get("status", "success"),
             }
         except Exception as e:
@@ -288,9 +266,7 @@ class ToolRegistry:
                 "status": "error",
             }
 
-    async def store_fact(
-        self, content: str, metadata: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    async def store_fact(self, content: str, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Store a fact in the knowledge base."""
         if not self.knowledge_base:
             return {
@@ -317,9 +293,7 @@ class ToolRegistry:
                 "status": "error",
             }
 
-    async def get_fact(
-        self, fact_id: Optional[int] = None, query: Optional[str] = None
-    ) -> Dict[str, Any]:
+    async def get_fact(self, fact_id: Optional[int] = None, query: Optional[str] = None) -> Dict[str, Any]:
         """Get facts from the knowledge base."""
         if not self.knowledge_base:
             return {
@@ -376,9 +350,7 @@ class ToolRegistry:
         return {
             "tool_name": "type_text",
             "tool_args": {"text": text},
-            "result": result.get(
-                "output", result.get("message", f"Typed text: {text}")
-            ),
+            "result": result.get("output", result.get("message", f"Typed text: {text}")),
             "status": result.get("status", "success"),
         }
 
@@ -416,9 +388,7 @@ class ToolRegistry:
 
     # User Interaction Tools
 
-    async def ask_user_for_manual(
-        self, program_name: str, question_text: str
-    ) -> Dict[str, Any]:
+    async def ask_user_for_manual(self, program_name: str, question_text: str) -> Dict[str, Any]:
         """Ask user for manual information."""
         task = self._create_base_task("ask_user_for_manual")
         task["program_name"] = program_name
@@ -431,9 +401,7 @@ class ToolRegistry:
                 "program_name": program_name,
                 "question_text": question_text,
             },
-            "result": result.get(
-                "output", result.get("message", "User manual request sent")
-            ),
+            "result": result.get("output", result.get("message", "User manual request sent")),
             "status": result.get("status", "success"),
         }
 
@@ -463,13 +431,9 @@ class ToolRegistry:
         if tool_name in LIST_SERVICES_VARIANTS:
             return lambda args: self.list_system_services()
         if tool_name in MANAGE_SERVICE_VARIANTS:
-            return lambda args: self.manage_service(
-                args.get("service_name", ""), args.get("action", "")
-            )
+            return lambda args: self.manage_service(args.get("service_name", ""), args.get("action", ""))
         if tool_name in GET_PROCESS_INFO_VARIANTS:
-            return lambda args: self.get_process_info(
-                args.get("process_name"), args.get("pid")
-            )
+            return lambda args: self.get_process_info(args.get("process_name"), args.get("pid"))
         if tool_name in TERMINATE_PROCESS_VARIANTS:
             return lambda args: self.terminate_process(args.get("pid", ""))
 
@@ -484,29 +448,19 @@ class ToolRegistry:
                 args.get("file_type", ""),
                 args.get("metadata"),
             ),
-            "storefact": lambda args: self.store_fact(
-                args.get("content", ""), args.get("metadata")
-            ),
-            "getfact": lambda args: self.get_fact(
-                args.get("fact_id"), args.get("query")
-            ),
+            "storefact": lambda args: self.store_fact(args.get("content", ""), args.get("metadata")),
+            "getfact": lambda args: self.get_fact(args.get("fact_id"), args.get("query")),
             "typetext": lambda args: self.type_text(args.get("text", "")),
             "clickelement": lambda args: self.click_element(args.get("image_path", "")),
-            "bringwindowtofront": lambda args: self.bring_window_to_front(
-                args.get("window_title", "")
-            ),
+            "bringwindowtofront": lambda args: self.bring_window_to_front(args.get("window_title", "")),
             "askuserformanual": lambda args: self.ask_user_for_manual(
                 args.get("program_name", ""), args.get("question_text", "")
             ),
-            "respondconversationally": lambda args: self.respond_conversationally(
-                args.get("response_text", "")
-            ),
+            "respondconversationally": lambda args: self.respond_conversationally(args.get("response_text", "")),
         }
         return dispatch.get(tool_name)
 
-    async def _try_sdk_dispatch(
-        self, tool_name: str, tool_args: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    async def _try_sdk_dispatch(self, tool_name: str, tool_args: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Attempt to dispatch via ToolSDKRegistry.
 
         Returns None if the tool is not registered in the SDK registry so the
@@ -545,14 +499,10 @@ class ToolRegistry:
                 "status": "success" if result.success else "error",
             }
         except Exception as exc:
-            self.logger.error(
-                "SDK tool dispatch failed for '%s': %s", tool_name, exc, exc_info=True
-            )
+            self.logger.error("SDK tool dispatch failed for '%s': %s", tool_name, exc, exc_info=True)
             return None
 
-    async def execute_tool(
-        self, tool_name: str, tool_args: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_tool(self, tool_name: str, tool_args: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a tool by name with arguments.
 
         Checks ToolSDKRegistry first for schema-validated tools registered via

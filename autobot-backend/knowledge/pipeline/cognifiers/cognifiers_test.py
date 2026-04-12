@@ -130,9 +130,7 @@ class TestEntityExtractorConversion:
                 "confidence": 0.9,
             }
         ]
-        entities = entity_extractor._convert_to_entities(
-            raw, sample_chunk, sample_chunk.document_id
-        )
+        entities = entity_extractor._convert_to_entities(raw, sample_chunk, sample_chunk.document_id)
         assert len(entities) == 1
         assert entities[0].name == "Python"
         assert entities[0].entity_type == "TECHNOLOGY"
@@ -140,24 +138,18 @@ class TestEntityExtractorConversion:
 
     def test_invalid_type_defaults_concept(self, entity_extractor, sample_chunk):
         raw = [{"name": "X", "type": "INVALID_TYPE"}]
-        entities = entity_extractor._convert_to_entities(
-            raw, sample_chunk, sample_chunk.document_id
-        )
+        entities = entity_extractor._convert_to_entities(raw, sample_chunk, sample_chunk.document_id)
         assert len(entities) == 1
         assert entities[0].entity_type == "CONCEPT"
 
     def test_missing_name_skipped(self, entity_extractor, sample_chunk):
         raw = [{"type": "PERSON"}]
-        entities = entity_extractor._convert_to_entities(
-            raw, sample_chunk, sample_chunk.document_id
-        )
+        entities = entity_extractor._convert_to_entities(raw, sample_chunk, sample_chunk.document_id)
         assert len(entities) == 0
 
     def test_default_confidence(self, entity_extractor, sample_chunk):
         raw = [{"name": "Test"}]
-        entities = entity_extractor._convert_to_entities(
-            raw, sample_chunk, sample_chunk.document_id
-        )
+        entities = entity_extractor._convert_to_entities(raw, sample_chunk, sample_chunk.document_id)
         assert len(entities) == 1
         assert entities[0].confidence == 0.8
 
@@ -297,9 +289,7 @@ class TestRelationshipExtractorConversion:
                 "confidence": 0.9,
             }
         ]
-        rels = relationship_extractor._convert_to_relationships(
-            raw, sample_chunk, entity_map
-        )
+        rels = relationship_extractor._convert_to_relationships(raw, sample_chunk, entity_map)
         assert len(rels) == 1
         assert rels[0].relationship_type == "DEPENDS_ON"
         assert rels[0].source_entity_id == entity_a.id
@@ -319,15 +309,11 @@ class TestRelationshipExtractorConversion:
         )
         entity_map = {"a": e, "b": e}
         raw = [{"source": "A", "target": "B", "type": "MADE_UP"}]
-        rels = relationship_extractor._convert_to_relationships(
-            raw, sample_chunk, entity_map
-        )
+        rels = relationship_extractor._convert_to_relationships(raw, sample_chunk, entity_map)
         assert len(rels) == 1
         assert rels[0].relationship_type == "RELATES_TO"
 
-    def test_symmetric_relation_is_bidirectional(
-        self, relationship_extractor, sample_chunk
-    ):
+    def test_symmetric_relation_is_bidirectional(self, relationship_extractor, sample_chunk):
         doc_id = uuid4()
         e = Entity(
             name="A",
@@ -337,9 +323,7 @@ class TestRelationshipExtractorConversion:
         )
         entity_map = {"a": e, "b": e}
         raw = [{"source": "A", "target": "B", "type": "SIMILAR_TO"}]
-        rels = relationship_extractor._convert_to_relationships(
-            raw, sample_chunk, entity_map
-        )
+        rels = relationship_extractor._convert_to_relationships(raw, sample_chunk, entity_map)
         assert rels[0].bidirectional is True
 
 
@@ -477,9 +461,7 @@ class TestSummarizerParsing:
     """Tests for HierarchicalSummarizer._parse_llm_response."""
 
     def test_parse_valid_json(self, summarizer):
-        raw = json.dumps(
-            {"summary": "Key points", "key_topics": ["AI"], "key_entities": []}
-        )
+        raw = json.dumps({"summary": "Key points", "key_topics": ["AI"], "key_entities": []})
         result = summarizer._parse_llm_response(raw)
         assert result["summary"] == "Key points"
         assert "AI" in result["key_topics"]
@@ -504,20 +486,14 @@ class TestSummarizerGrouping:
 
     def test_even_groups(self, summarizer):
         summarizer.section_size = 2
-        chunks = [
-            ProcessedChunk(content=f"Chunk {i}", document_id=uuid4(), chunk_index=i)
-            for i in range(4)
-        ]
+        chunks = [ProcessedChunk(content=f"Chunk {i}", document_id=uuid4(), chunk_index=i) for i in range(4)]
         sections = summarizer._group_into_sections(chunks)
         assert len(sections) == 2
         assert len(sections[0]) == 2
 
     def test_uneven_groups(self, summarizer):
         summarizer.section_size = 3
-        chunks = [
-            ProcessedChunk(content=f"Chunk {i}", document_id=uuid4(), chunk_index=i)
-            for i in range(5)
-        ]
+        chunks = [ProcessedChunk(content=f"Chunk {i}", document_id=uuid4(), chunk_index=i) for i in range(5)]
         sections = summarizer._group_into_sections(chunks)
         assert len(sections) == 2
         assert len(sections[0]) == 3
@@ -619,9 +595,7 @@ class TestContextGeneratorEnabled:
         cog.llm = MagicMock()
         summary_resp = self._mock_llm_response("Doc summary.")
         chunk_resp = self._mock_llm_response("Chunk context.")
-        cog.llm.chat_completion = AsyncMock(
-            side_effect=[summary_resp, chunk_resp, chunk_resp]
-        )
+        cog.llm.chat_completion = AsyncMock(side_effect=[summary_resp, chunk_resp, chunk_resp])
 
         ctx = _make_context(n_chunks=2)
         result = asyncio.run(cog.process(ctx))
@@ -641,9 +615,7 @@ class TestContextGeneratorEnabled:
             ContextGeneratorCognifier,
         )
 
-        cached_payload = json.dumps(
-            {"summary": "cached summary", "model": "llama3.2:1b"}
-        )
+        cached_payload = json.dumps({"summary": "cached summary", "model": "llama3.2:1b"})
         mock_get_redis.return_value = self._mock_redis(cached=cached_payload)
         cog = ContextGeneratorCognifier()
         cog.llm = MagicMock()

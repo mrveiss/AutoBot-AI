@@ -76,9 +76,7 @@ class ReconcilerService:
         self._running = False
         self._task: Optional[asyncio.Task] = None
         # Default: 3 missed heartbeats = unhealthy
-        self._heartbeat_timeout = (
-            settings.heartbeat_interval * settings.unhealthy_threshold
-        )
+        self._heartbeat_timeout = settings.heartbeat_interval * settings.unhealthy_threshold
         # Track remediation attempts per node: {node_id: {"count": int, "last_attempt": datetime}}
         self._remediation_tracker: Dict[str, Dict] = {}
         # Track service restart attempts: {(node_id, svc_name): {"count": int, "last_attempt": dt}}
@@ -135,9 +133,7 @@ class ReconcilerService:
 
             await asyncio.sleep(settings.reconcile_interval)
 
-    async def _handle_degraded_node(
-        self, db: AsyncSession, node: Node, old_status: str
-    ) -> None:
+    async def _handle_degraded_node(self, db: AsyncSession, node: Node, old_status: str) -> None:
         """Mark node as degraded, create event, and broadcast status.
 
         Helper for _check_node_health (Issue #665).
@@ -157,13 +153,9 @@ class ReconcilerService:
             node.node_id,
             node.ip_address,
         )
-        await self._broadcast_node_status(
-            node.node_id, NodeStatus.DEGRADED.value, node.hostname
-        )
+        await self._broadcast_node_status(node.node_id, NodeStatus.DEGRADED.value, node.hostname)
 
-    async def _handle_offline_node(
-        self, db: AsyncSession, node: Node, old_status: str
-    ) -> None:
+    async def _handle_offline_node(self, db: AsyncSession, node: Node, old_status: str) -> None:
         """Mark node as offline, create event, and broadcast status.
 
         Helper for _check_node_health (Issue #665).
@@ -183,9 +175,7 @@ class ReconcilerService:
             node.node_id,
             node.ip_address,
         )
-        await self._broadcast_node_status(
-            node.node_id, NodeStatus.OFFLINE.value, node.hostname
-        )
+        await self._broadcast_node_status(node.node_id, NodeStatus.OFFLINE.value, node.hostname)
 
     async def _check_node_health(self) -> None:
         """Check node health based on heartbeats and network reachability."""
@@ -194,9 +184,7 @@ class ReconcilerService:
         from services.database import db_service
 
         async with db_service.session() as db:
-            timeout_setting = await db.execute(
-                select(Setting).where(Setting.key == "heartbeat_timeout")
-            )
+            timeout_setting = await db.execute(select(Setting).where(Setting.key == "heartbeat_timeout"))
             setting = timeout_setting.scalar_one_or_none()
             if setting and setting.value:
                 self._heartbeat_timeout = int(setting.value)
@@ -251,9 +239,7 @@ class ReconcilerService:
             logger.debug("Ping failed for %s: %s", ip_address, e)
             return False
 
-    async def _broadcast_node_status(
-        self, node_id: str, status: str, hostname: str = None
-    ) -> None:
+    async def _broadcast_node_status(self, node_id: str, status: str, hostname: str = None) -> None:
         """Broadcast node status change via WebSocket."""
         try:
             from api.websocket import ws_manager
@@ -269,9 +255,7 @@ class ReconcilerService:
         try:
             from api.websocket import ws_manager
 
-            await ws_manager.send_remediation_event(
-                node_id, event_type, success, message
-            )
+            await ws_manager.send_remediation_event(node_id, event_type, success, message)
         except Exception as e:
             logger.debug("Failed to broadcast remediation event: %s", e)
 
@@ -288,18 +272,14 @@ class ReconcilerService:
 
         async with db_service.session() as db:
             # Check if auto-remediation is enabled
-            auto_remediate = await db.execute(
-                select(Setting).where(Setting.key == "auto_remediate")
-            )
+            auto_remediate = await db.execute(select(Setting).where(Setting.key == "auto_remediate"))
             setting = auto_remediate.scalar_one_or_none()
 
             if not setting or setting.value != "true":
                 return
 
             # Get degraded nodes (reachable but agent not responding)
-            result = await db.execute(
-                select(Node).where(Node.status == NodeStatus.DEGRADED.value)
-            )
+            result = await db.execute(select(Node).where(Node.status == NodeStatus.DEGRADED.value))
             degraded_nodes = result.scalars().all()
 
             for node in degraded_nodes:
@@ -313,9 +293,7 @@ class ReconcilerService:
 
                 await self._remediate_node(db, node)
 
-    def _check_remediation_limits(
-        self, node_id: str, now: datetime
-    ) -> tuple[bool, Optional[str], dict]:
+    def _check_remediation_limits(self, node_id: str, now: datetime) -> tuple[bool, Optional[str], dict]:
         """Check if remediation can proceed based on cooldown and attempt limits.
 
         Helper for _remediate_node (Issue #665).
@@ -326,9 +304,7 @@ class ReconcilerService:
             - skip_reason: "cooldown" or "max_attempts" if skipped, None otherwise
             - tracker: The remediation tracker dict for this node
         """
-        tracker = self._remediation_tracker.get(
-            node_id, {"count": 0, "last_attempt": None}
-        )
+        tracker = self._remediation_tracker.get(node_id, {"count": 0, "last_attempt": None})
 
         # Check cooldown
         if tracker["last_attempt"]:
@@ -352,9 +328,7 @@ class ReconcilerService:
 
         return True, None, tracker
 
-    async def _create_max_attempts_event(
-        self, db: AsyncSession, node: Node, tracker: dict
-    ) -> None:
+    async def _create_max_attempts_event(self, db: AsyncSession, node: Node, tracker: dict) -> None:
         """Create event when max remediation attempts exceeded.
 
         Helper for _remediate_node (Issue #665).
@@ -376,9 +350,7 @@ class ReconcilerService:
         db.add(event)
         await db.commit()
 
-    async def _record_remediation_result(
-        self, db: AsyncSession, node: Node, success: bool, tracker: dict
-    ) -> None:
+    async def _record_remediation_result(self, db: AsyncSession, node: Node, success: bool, tracker: dict) -> None:
         """Create completion event and broadcast for remediation result.
 
         Helper for _remediate_node (Issue #665).
@@ -411,9 +383,7 @@ class ReconcilerService:
                 details={
                     "action": "restart_agent",
                     "success": False,
-                    "attempts_remaining": MAX_REMEDIATION_ATTEMPTS
-                    - tracker["count"]
-                    - 1,
+                    "attempts_remaining": MAX_REMEDIATION_ATTEMPTS - tracker["count"] - 1,
                 },
             )
             logger.warning("Remediation failed for node %s", node_id)
@@ -534,9 +504,7 @@ class ReconcilerService:
             del self._remediation_tracker[node_id]
             logger.info("Reset remediation tracker for node %s", node_id)
 
-    def reset_service_remediation_tracker(
-        self, node_id: str, service_name: str = None
-    ) -> None:
+    def reset_service_remediation_tracker(self, node_id: str, service_name: str = None) -> None:
         """Reset service remediation tracker for a node/service."""
         if service_name:
             key = (node_id, service_name)
@@ -548,15 +516,11 @@ class ReconcilerService:
                     node_id,
                 )
         else:
-            keys_to_remove = [
-                k for k in self._service_remediation_tracker if k[0] == node_id
-            ]
+            keys_to_remove = [k for k in self._service_remediation_tracker if k[0] == node_id]
             for key in keys_to_remove:
                 del self._service_remediation_tracker[key]
             if keys_to_remove:
-                logger.info(
-                    "Reset all service remediation trackers for node %s", node_id
-                )
+                logger.info("Reset all service remediation trackers for node %s", node_id)
 
     async def _remediate_failed_services(self) -> None:
         """Auto-restart failed services that are enabled.
@@ -571,9 +535,7 @@ class ReconcilerService:
 
         async with db_service.session() as db:
             # Check if auto-restart services is enabled
-            auto_restart = await db.execute(
-                select(Setting).where(Setting.key == "auto_restart_services")
-            )
+            auto_restart = await db.execute(select(Setting).where(Setting.key == "auto_restart_services"))
             setting = auto_restart.scalar_one_or_none()
 
             if not setting or setting.value != "true":
@@ -600,9 +562,7 @@ class ReconcilerService:
                     continue
 
                 # Get node for SSH details
-                node_result = await db.execute(
-                    select(Node).where(Node.node_id == service.node_id)
-                )
+                node_result = await db.execute(select(Node).where(Node.node_id == service.node_id))
                 node = node_result.scalar_one_or_none()
                 if not node:
                     continue
@@ -613,9 +573,7 @@ class ReconcilerService:
 
                 await self._remediate_failed_service(db, node, service)
 
-    def _check_service_cooldown(
-        self, node_id: str, service_name: str, tracker: dict, now: datetime
-    ) -> bool:
+    def _check_service_cooldown(self, node_id: str, service_name: str, tracker: dict, now: datetime) -> bool:
         """Check if service is in remediation cooldown.
 
         Helper for _remediate_failed_service (Issue #665).
@@ -642,8 +600,7 @@ class ReconcilerService:
         Helper for _remediate_failed_service (Issue #665).
         """
         logger.warning(
-            "Service %s on %s exceeded max restart attempts (%d). "
-            "Human intervention required.",
+            "Service %s on %s exceeded max restart attempts (%d). " "Human intervention required.",
             service.service_name,
             node.node_id,
             MAX_SERVICE_RESTART_ATTEMPTS,
@@ -712,9 +669,7 @@ class ReconcilerService:
             )
         await db.commit()
 
-    async def _remediate_failed_service(
-        self, db: AsyncSession, node: Node, service: Service
-    ) -> bool:
+    async def _remediate_failed_service(self, db: AsyncSession, node: Node, service: Service) -> bool:
         """Attempt to restart a single failed service.
 
         Returns True if remediation was attempted, False if skipped.
@@ -722,22 +677,16 @@ class ReconcilerService:
         key = (node.node_id, service.service_name)
         now = datetime.utcnow()
 
-        tracker = self._service_remediation_tracker.get(
-            key, {"count": 0, "last_attempt": None}
-        )
+        tracker = self._service_remediation_tracker.get(key, {"count": 0, "last_attempt": None})
 
         # Check cooldown
-        if self._check_service_cooldown(
-            node.node_id, service.service_name, tracker, now
-        ):
+        if self._check_service_cooldown(node.node_id, service.service_name, tracker, now):
             return False
 
         # Check attempt limit
         if tracker["count"] >= MAX_SERVICE_RESTART_ATTEMPTS:
             if not tracker.get("exhausted"):
-                await self._create_max_attempts_service_event(
-                    db, node, service, tracker
-                )
+                await self._create_max_attempts_service_event(db, node, service, tracker)
                 tracker["exhausted"] = True
                 self._service_remediation_tracker[key] = tracker
             return False
@@ -791,11 +740,7 @@ class ReconcilerService:
             await ws_manager.send_service_status(
                 node_id,
                 service_name,
-                status=(
-                    "restarting"
-                    if event_type == "started"
-                    else ("running" if success else "failed")
-                ),
+                status=("restarting" if event_type == "started" else ("running" if success else "failed")),
                 action="auto_restart",
                 success=success if event_type == "completed" else None,
                 message=message,
@@ -815,30 +760,22 @@ class ReconcilerService:
 
         async with db_service.session() as db:
             # Check if auto-rollback is enabled
-            auto_rollback = await db.execute(
-                select(Setting).where(Setting.key == "auto_rollback")
-            )
+            auto_rollback = await db.execute(select(Setting).where(Setting.key == "auto_rollback"))
             setting = auto_rollback.scalar_one_or_none()
 
             if not setting or setting.value != "true":
                 return
 
             # Get rollback window setting
-            rollback_window_setting = await db.execute(
-                select(Setting).where(Setting.key == "rollback_window_seconds")
-            )
+            rollback_window_setting = await db.execute(select(Setting).where(Setting.key == "rollback_window_seconds"))
             window_setting = rollback_window_setting.scalar_one_or_none()
-            rollback_window = (
-                int(window_setting.value) if window_setting else DEFAULT_ROLLBACK_WINDOW
-            )
+            rollback_window = int(window_setting.value) if window_setting else DEFAULT_ROLLBACK_WINDOW
 
             cutoff = datetime.utcnow() - timedelta(seconds=rollback_window)
 
             # Find nodes that are degraded/error with recent completed deployments
             degraded_nodes = await db.execute(
-                select(Node).where(
-                    Node.status.in_([NodeStatus.DEGRADED.value, NodeStatus.ERROR.value])
-                )
+                select(Node).where(Node.status.in_([NodeStatus.DEGRADED.value, NodeStatus.ERROR.value]))
             )
             degraded_nodes = degraded_nodes.scalars().all()
 
@@ -866,16 +803,12 @@ class ReconcilerService:
             return None
 
         # Check if already rolled back
-        if recent_deployment.extra_data and recent_deployment.extra_data.get(
-            "auto_rollback_attempted"
-        ):
+        if recent_deployment.extra_data and recent_deployment.extra_data.get("auto_rollback_attempted"):
             return None
 
         return recent_deployment
 
-    async def _create_rollback_started_event(
-        self, db: AsyncSession, node: Node, deployment: Deployment
-    ) -> None:
+    async def _create_rollback_started_event(self, db: AsyncSession, node: Node, deployment: Deployment) -> None:
         """Create and broadcast rollback started event.
 
         Helper for _check_node_for_rollback (Issue #665).
@@ -959,13 +892,9 @@ class ReconcilerService:
         db.add(event)
         await db.commit()
 
-    async def _check_node_for_rollback(
-        self, db: AsyncSession, node: Node, cutoff: datetime
-    ) -> None:
+    async def _check_node_for_rollback(self, db: AsyncSession, node: Node, cutoff: datetime) -> None:
         """Check if a degraded/error node should have its recent deployment rolled back."""
-        recent_deployment = await self._find_recent_deployment_for_rollback(
-            db, node, cutoff
-        )
+        recent_deployment = await self._find_recent_deployment_for_rollback(db, node, cutoff)
 
         if not recent_deployment:
             return
@@ -976,9 +905,7 @@ class ReconcilerService:
 
         await self._handle_rollback_result(db, node, recent_deployment, success)
 
-    async def _perform_auto_rollback(
-        self, db: AsyncSession, deployment: Deployment, node: Node
-    ) -> bool:
+    async def _perform_auto_rollback(self, db: AsyncSession, deployment: Deployment, node: Node) -> bool:
         """Perform the actual rollback of a deployment.
 
         Returns True if successful, False otherwise.
@@ -1066,18 +993,14 @@ class ReconcilerService:
         from services.database import db_service
 
         async with db_service.session() as db:
-            auto_reconcile = await db.execute(
-                select(Setting).where(Setting.key == "auto_reconcile")
-            )
+            auto_reconcile = await db.execute(select(Setting).where(Setting.key == "auto_reconcile"))
             setting = auto_reconcile.scalar_one_or_none()
 
             if not setting or setting.value != "true":
                 return
 
             result = await db.execute(
-                select(Node).where(
-                    Node.status.in_([NodeStatus.DEGRADED.value, NodeStatus.ERROR.value])
-                )
+                select(Node).where(Node.status.in_([NodeStatus.DEGRADED.value, NodeStatus.ERROR.value]))
             )
             degraded_nodes = result.scalars().all()
 
@@ -1088,9 +1011,7 @@ class ReconcilerService:
                     node.status,
                 )
 
-    async def _find_node_by_id_or_hostname(
-        self, db: AsyncSession, node_id: str
-    ) -> Optional[Node]:
+    async def _find_node_by_id_or_hostname(self, db: AsyncSession, node_id: str) -> Optional[Node]:
         """Find node by node_id or fallback to hostname.
 
         Helper for update_node_heartbeat (Issue #665).
@@ -1131,9 +1052,7 @@ class ReconcilerService:
         if extra_data:
             node.extra_data = {**(node.extra_data or {}), **extra_data}
 
-            services_data = extra_data.get("discovered_services") or extra_data.get(
-                "services"
-            )
+            services_data = extra_data.get("discovered_services") or extra_data.get("services")
             if services_data:
                 await self._sync_discovered_services(db, node.node_id, services_data)
 
@@ -1175,9 +1094,7 @@ class ReconcilerService:
             },
         )
         db.add(event)
-        logger.info(
-            "Node %s status changed: %s -> %s", node.node_id, old_status, new_status
-        )
+        logger.info("Node %s status changed: %s -> %s", node.node_id, old_status, new_status)
         await self._broadcast_node_status(node.node_id, new_status, node.hostname)
 
     async def _broadcast_heartbeat_update(
@@ -1201,9 +1118,7 @@ class ReconcilerService:
                 memory_percent,
                 disk_percent,
                 new_status,
-                last_heartbeat=(
-                    node.last_heartbeat.isoformat() if node.last_heartbeat else None
-                ),
+                last_heartbeat=(node.last_heartbeat.isoformat() if node.last_heartbeat else None),
             )
         except Exception as e:
             logger.debug("Failed to broadcast health update: %s", e)
@@ -1236,9 +1151,7 @@ class ReconcilerService:
         )
 
         old_status = node.status
-        new_status = self._calculate_node_status(
-            cpu_percent, memory_percent, disk_percent, extra_data
-        )
+        new_status = self._calculate_node_status(cpu_percent, memory_percent, disk_percent, extra_data)
 
         await self._handle_node_status_change(
             db, node, old_status, new_status, cpu_percent, memory_percent, disk_percent
@@ -1249,9 +1162,7 @@ class ReconcilerService:
         await db.commit()
         await db.refresh(node)
 
-        await self._broadcast_heartbeat_update(
-            node, cpu_percent, memory_percent, disk_percent, new_status
-        )
+        await self._broadcast_heartbeat_update(node, cpu_percent, memory_percent, disk_percent, new_status)
 
         return node
 
@@ -1346,9 +1257,7 @@ class ReconcilerService:
             if service:
                 self._update_existing_service(service, svc_data, status, error_msg, now)
             else:
-                service = self._create_new_service(
-                    node_id, service_name, svc_data, status, svc_extra, now
-                )
+                service = self._create_new_service(node_id, service_name, svc_data, status, svc_extra, now)
                 db.add(service)
         except Exception as exc:
             logger.warning(
@@ -1469,9 +1378,7 @@ class ReconcilerService:
                     continue
 
                 # Replace localhost/127.0.0.1 with the node's actual IP
-                url = endpoint.replace("localhost", node_ip).replace(
-                    "127.0.0.1", node_ip
-                )
+                url = endpoint.replace("localhost", node_ip).replace("127.0.0.1", node_ip)
 
                 new_status = await self._http_health_check(url)
                 if new_status != node_role.status:
@@ -1540,8 +1447,7 @@ class ReconcilerService:
             threshold = loader.get_tls_rotate_days_before(role_name)
             if days_left <= threshold:
                 logger.warning(
-                    "TLS cert for %s expires in %d day(s) (threshold: %d). "
-                    "Run rotate-certs.yml to renew.",
+                    "TLS cert for %s expires in %d day(s) (threshold: %d). " "Run rotate-certs.yml to renew.",
                     role_name,
                     days_left,
                     threshold,

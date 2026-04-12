@@ -80,9 +80,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
         ]
         self.results: List[SecurityFinding] = []
         self.total_files_scanned: int = 0
-        self.use_semantic_analysis = (
-            use_semantic_analysis and HAS_ANALYTICS_INFRASTRUCTURE
-        )
+        self.use_semantic_analysis = use_semantic_analysis and HAS_ANALYTICS_INFRASTRUCTURE
         self.use_shared_cache = use_shared_cache and HAS_SHARED_CACHE
 
         if self.use_semantic_analysis:
@@ -128,9 +126,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
 
         return findings
 
-    def _check_hardcoded_secrets(
-        self, file_path: str, content: str, lines: List[str]
-    ) -> List[SecurityFinding]:
+    def _check_hardcoded_secrets(self, file_path: str, content: str, lines: List[str]) -> List[SecurityFinding]:
         """Check for hardcoded secrets."""
         findings: List[SecurityFinding] = []
 
@@ -164,9 +160,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
 
         return findings
 
-    def _check_sql_injection(
-        self, file_path: str, content: str, lines: List[str]
-    ) -> List[SecurityFinding]:
+    def _check_sql_injection(self, file_path: str, content: str, lines: List[str]) -> List[SecurityFinding]:
         """Check for SQL injection patterns."""
         findings: List[SecurityFinding] = []
 
@@ -194,9 +188,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
 
         return findings
 
-    def _check_path_traversal(
-        self, file_path: str, content: str, lines: List[str]
-    ) -> List[SecurityFinding]:
+    def _check_path_traversal(self, file_path: str, content: str, lines: List[str]) -> List[SecurityFinding]:
         """Check for path traversal vulnerabilities."""
         findings: List[SecurityFinding] = []
         path_traversal_pattern = r'open\s*\(\s*[^)]*\+[^)]*\)|open\s*\(\s*f["\']'
@@ -231,9 +223,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
 
         return findings
 
-    def _regex_analysis(
-        self, file_path: str, content: str, lines: List[str]
-    ) -> List[SecurityFinding]:
+    def _regex_analysis(self, file_path: str, content: str, lines: List[str]) -> List[SecurityFinding]:
         """Perform regex-based security analysis."""
         findings: List[SecurityFinding] = []
         findings.extend(self._check_hardcoded_secrets(file_path, content, lines))
@@ -241,9 +231,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
         findings.extend(self._check_path_traversal(file_path, content, lines))
         return findings
 
-    def analyze_directory(
-        self, directory: Optional[str] = None
-    ) -> List[SecurityFinding]:
+    def analyze_directory(self, directory: Optional[str] = None) -> List[SecurityFinding]:
         """Analyze all Python files in a directory."""
         target = Path(directory) if directory else self.project_root
         self.results = []
@@ -293,9 +281,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
         critical_count = by_severity.get("critical", 0)
         high_count = by_severity.get("high", 0)
         files_analyzed = (
-            self.total_files_scanned
-            if self.total_files_scanned > 0
-            else len(set(f.file_path for f in self.results))
+            self.total_files_scanned if self.total_files_scanned > 0 else len(set(f.file_path for f in self.results))
         )
 
         return {
@@ -343,16 +329,12 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
         """Get top security recommendations based on findings."""
         recommendations = []
         severity_priority = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-        sorted_findings = sorted(
-            self.results, key=lambda f: severity_priority.get(f.severity.value, 4)
-        )
+        sorted_findings = sorted(self.results, key=lambda f: severity_priority.get(f.severity.value, 4))
 
         seen_types = set()
         for finding in sorted_findings[:10]:
             if finding.vulnerability_type not in seen_types:
-                recommendations.append(
-                    f"[{finding.severity.value.upper()}] {finding.recommendation}"
-                )
+                recommendations.append(f"[{finding.severity.value.upper()}] {finding.recommendation}")
                 seen_types.add(finding.vulnerability_type)
 
         return recommendations
@@ -380,9 +362,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
             for finding in report["findings"][:20]:
                 md.append(f"### {finding['vulnerability_type']}\n")
                 md.append(f"- **Severity**: {finding['severity']}\n")
-                md.append(
-                    f"- **File**: {finding['file_path']}:{finding['line_start']}\n"
-                )
+                md.append(f"- **File**: {finding['file_path']}:{finding['line_start']}\n")
                 md.append(f"- **Description**: {finding['description']}\n")
                 md.append(f"- **OWASP**: {finding['owasp_category']}\n")
                 if finding.get("cwe_id"):
@@ -433,9 +413,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
                     "description": "description",
                     "owasp_category": "owasp_category",
                 },
-                min_similarity=(
-                    SIMILARITY_MEDIUM if HAS_ANALYTICS_INFRASTRUCTURE else 0.7
-                ),
+                min_similarity=(SIMILARITY_MEDIUM if HAS_ANALYTICS_INFRASTRUCTURE else 0.7),
             )
         except Exception as e:
             logger.warning("Semantic duplicate detection failed: %s", e)

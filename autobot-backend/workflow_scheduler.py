@@ -301,10 +301,7 @@ class WorkflowQueue:
 
     def list_queued(self) -> List[ScheduledWorkflow]:
         """List all queued workflows"""
-        return [
-            qw.workflow
-            for qw in sorted(self._queue, key=lambda x: x.priority_score, reverse=True)
-        ]
+        return [qw.workflow for qw in sorted(self._queue, key=lambda x: x.priority_score, reverse=True)]
 
     def list_running(self) -> List[ScheduledWorkflow]:
         """List all running workflows"""
@@ -339,10 +336,7 @@ class WorkflowQueue:
         # Add estimated duration factor (shorter workflows get slight priority)
         duration_factor = max(
             WorkflowConfig.MIN_DURATION_FACTOR,
-            1.0
-            - (
-                workflow.estimated_duration_minutes / WorkflowConfig.DEFAULT_TIMEOUT_MIN
-            ),
+            1.0 - (workflow.estimated_duration_minutes / WorkflowConfig.DEFAULT_TIMEOUT_MIN),
         )
 
         return base_score * complexity_factor * duration_factor
@@ -382,8 +376,7 @@ class WorkflowQueue:
         for dep_id in dep_ids:
             if dep_id == origin_id or dep_id in visited:
                 logger.warning(
-                    "Circular dependency detected for workflow %s (dep %s) — treating as"
-                    " unsatisfied",
+                    "Circular dependency detected for workflow %s (dep %s) — treating as" " unsatisfied",
                     origin_id,
                     dep_id,
                 )
@@ -493,9 +486,7 @@ class WorkflowScheduler:
 
         return scheduled_time, priority, complexity
 
-    def _extract_request_params(
-        self, request: WorkflowScheduleRequest, kwargs: Dict[str, Any]
-    ) -> tuple:
+    def _extract_request_params(self, request: WorkflowScheduleRequest, kwargs: Dict[str, Any]) -> tuple:
         """
         Extract parameters from WorkflowScheduleRequest object. Issue #620.
 
@@ -506,9 +497,7 @@ class WorkflowScheduler:
         Returns:
             Tuple of extracted parameters
         """
-        kwargs.setdefault(
-            "estimated_duration_minutes", request.estimated_duration_minutes
-        )
+        kwargs.setdefault("estimated_duration_minutes", request.estimated_duration_minutes)
         kwargs.setdefault("timeout_minutes", request.timeout_minutes)
         kwargs.setdefault("max_retries", request.max_retries)
         return (
@@ -556,13 +545,9 @@ class WorkflowScheduler:
                 user_id,
             ) = self._extract_request_params(request, kwargs)
         elif user_message is None or scheduled_time is None:
-            raise ValueError(
-                "Either 'request' or 'user_message'/'scheduled_time' required"
-            )
+            raise ValueError("Either 'request' or 'user_message'/'scheduled_time' required")
 
-        scheduled_time, priority, complexity = self._parse_schedule_params(
-            scheduled_time, priority, complexity
-        )
+        scheduled_time, priority, complexity = self._parse_schedule_params(scheduled_time, priority, complexity)
 
         return self._build_workflow_params_dict(
             user_message,
@@ -773,10 +758,7 @@ class WorkflowScheduler:
             status_key = workflow.status.value
             status_counts[status_key] = status_counts.get(status_key, 0) + 1
 
-            if (
-                workflow.status == WorkflowStatus.SCHEDULED
-                and workflow.scheduled_time <= now
-            ):
+            if workflow.status == WorkflowStatus.SCHEDULED and workflow.scheduled_time <= now:
                 overdue_count += 1
 
         return {
@@ -806,10 +788,7 @@ class WorkflowScheduler:
         now = datetime.now(tz=timezone.utc)
 
         for workflow in list(self.scheduled_workflows.values()):
-            if (
-                workflow.status == WorkflowStatus.SCHEDULED
-                and workflow.scheduled_time <= now
-            ):
+            if workflow.status == WorkflowStatus.SCHEDULED and workflow.scheduled_time <= now:
                 # Move to queue
                 self.queue.add(workflow)
                 logger.info("Queued workflow %s: %s", workflow.id, workflow.name)
@@ -853,21 +832,15 @@ class WorkflowScheduler:
 
         if workflow.retry_count < workflow.max_retries:
             # Reschedule for retry
-            retry_delay = min(
-                300 * (2**workflow.retry_count), 3600
-            )  # Exponential backoff, max 1 hour
+            retry_delay = min(300 * (2**workflow.retry_count), 3600)  # Exponential backoff, max 1 hour
             workflow.scheduled_time = datetime.now(tz=timezone.utc) + timedelta(seconds=retry_delay)
             workflow.status = WorkflowStatus.SCHEDULED
-            logger.info(
-                f"Rescheduling workflow {workflow.id} for retry {workflow.retry_count}"
-            )
+            logger.info(f"Rescheduling workflow {workflow.id} for retry {workflow.retry_count}")
         else:
             # Mark as failed
             self.queue.complete_workflow(workflow.id, WorkflowStatus.FAILED)
             self._move_to_completed(workflow)
-            logger.warning(
-                "Workflow %s failed after %s retries", workflow.id, workflow.retry_count
-            )
+            logger.warning("Workflow %s failed after %s retries", workflow.id, workflow.retry_count)
 
     def _move_to_completed(self, workflow: ScheduledWorkflow) -> None:
         """Move workflow to completed storage"""
@@ -915,14 +888,8 @@ class WorkflowScheduler:
                 os.makedirs(os.path.dirname(self.storage_path), exist_ok=True)
 
                 data = {
-                    "scheduled": {
-                        wf_id: wf.to_dict()
-                        for wf_id, wf in self.scheduled_workflows.items()
-                    },
-                    "completed": {
-                        wf_id: wf.to_dict()
-                        for wf_id, wf in self.completed_workflows.items()
-                    },
+                    "scheduled": {wf_id: wf.to_dict() for wf_id, wf in self.scheduled_workflows.items()},
+                    "completed": {wf_id: wf.to_dict() for wf_id, wf in self.completed_workflows.items()},
                 }
 
                 with open(self.storage_path, "w", encoding="utf-8") as f:
@@ -931,9 +898,7 @@ class WorkflowScheduler:
             except Exception as e:
                 logger.error("Failed to save workflows: %s", e)
 
-    def _load_workflow_dict(
-        self, data: Dict[str, Any], key: str, target: Dict[str, ScheduledWorkflow]
-    ) -> None:
+    def _load_workflow_dict(self, data: Dict[str, Any], key: str, target: Dict[str, ScheduledWorkflow]) -> None:
         """Load workflows from data dict into target (Issue #315 - extracted helper)."""
         for wf_id, wf_data in data.get(key, {}).items():
             try:

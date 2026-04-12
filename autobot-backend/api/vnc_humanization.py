@@ -64,9 +64,7 @@ def humanize_mouse_movement_delay() -> float:
     return random.uniform(0.01, 0.03)
 
 
-def simulate_mouse_curve(
-    x1: int, y1: int, x2: int, y2: int, steps: int = 10
-) -> list[Tuple[int, int]]:
+def simulate_mouse_curve(x1: int, y1: int, x2: int, y2: int, steps: int = 10) -> list[Tuple[int, int]]:
     """
     Generate intermediate points for realistic curved mouse movement.
 

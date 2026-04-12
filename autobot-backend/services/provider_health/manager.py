@@ -156,10 +156,7 @@ class ProviderHealthManager:
         providers = cls._initialize_providers()
 
         # Create tasks for all providers
-        tasks = {
-            provider: cls.check_provider_health(provider, timeout, use_cache)
-            for provider in providers
-        }
+        tasks = {provider: cls.check_provider_health(provider, timeout, use_cache) for provider in providers}
 
         # Execute all checks in parallel
         results = await asyncio.gather(*tasks.values(), return_exceptions=True)
@@ -168,9 +165,7 @@ class ProviderHealthManager:
         health_status = {}
         for provider, result in zip(tasks, results):
             if isinstance(result, Exception):
-                logger.error(
-                    f"Provider {provider} health check raised exception: {str(result)}"
-                )
+                logger.error(f"Provider {provider} health check raised exception: {str(result)}")
                 health_status[provider] = ProviderHealthResult(
                     status=ProviderStatus.UNKNOWN,
                     available=False,

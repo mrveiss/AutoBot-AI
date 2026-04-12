@@ -65,9 +65,7 @@ class ITemporalManager(Protocol):
     with automatic expiration and freshness scoring.
     """
 
-    def register_content(
-        self, content_id: str, metadata: Dict[str, Any], content_hash: str
-    ) -> TemporalMetadata:
+    def register_content(self, content_id: str, metadata: Dict[str, Any], content_hash: str) -> TemporalMetadata:
         """Register content with temporal tracking"""
         ...
 
@@ -117,9 +115,7 @@ class IMachineAwareManager(Protocol):
     with profile detection and tool filtering.
     """
 
-    async def initialize_machine_aware_knowledge(
-        self, force_reinstall: bool = False
-    ) -> None:
+    async def initialize_machine_aware_knowledge(self, force_reinstall: bool = False) -> None:
         """Initialize with machine-specific adaptation"""
         ...
 
@@ -225,13 +221,11 @@ class UnifiedKnowledgeManager:
         # Core component: System knowledge manager
         # Use MachineAware if enabled, otherwise base SystemKnowledgeManager
         if enable_machine_aware:
-            self._system_manager: ISystemKnowledgeManager = (
-                system_manager or MachineAwareSystemKnowledgeManager(knowledge_base)
+            self._system_manager: ISystemKnowledgeManager = system_manager or MachineAwareSystemKnowledgeManager(
+                knowledge_base
             )
         else:
-            self._system_manager: ISystemKnowledgeManager = (
-                system_manager or SystemKnowledgeManager(knowledge_base)
-            )
+            self._system_manager: ISystemKnowledgeManager = system_manager or SystemKnowledgeManager(knowledge_base)
 
         # Optional component: Temporal knowledge manager
         self._temporal_manager: Optional[ITemporalManager] = temporal_manager or (
@@ -243,8 +237,7 @@ class UnifiedKnowledgeManager:
         self._init_lock = asyncio.Lock()
 
         logger.info(
-            f"UnifiedKnowledgeManager created (temporal={enable_temporal}, "
-            f"machine_aware={enable_machine_aware})"
+            f"UnifiedKnowledgeManager created (temporal={enable_temporal}, " f"machine_aware={enable_machine_aware})"
         )
 
     async def _ensure_initialized(self):
@@ -294,9 +287,7 @@ class UnifiedKnowledgeManager:
         """
         try:
             if self.enable_machine_aware:
-                await self._system_manager.initialize_machine_aware_knowledge(
-                    force_reinstall
-                )
+                await self._system_manager.initialize_machine_aware_knowledge(force_reinstall)
             else:
                 await self._system_manager.initialize_system_knowledge(force_reinstall)
 
@@ -388,9 +379,7 @@ class UnifiedKnowledgeManager:
             >>> print(f"OS: {machine_info['os_type']}")  # noqa: print
         """
         if not self.enable_machine_aware:
-            raise RuntimeError(
-                "Machine awareness not enabled. Create manager with enable_machine_aware=True"
-            )
+            raise RuntimeError("Machine awareness not enabled. Create manager with enable_machine_aware=True")
 
         await self._ensure_initialized()
         # Already initialized in _initialize_managers(), this is for explicit calls
@@ -425,9 +414,7 @@ class UnifiedKnowledgeManager:
 
         # Access machine profile from MachineAwareSystemKnowledgeManager
         if hasattr(self._system_manager, "current_machine_profile"):
-            profile: Optional[MachineProfile] = (
-                self._system_manager.current_machine_profile
-            )
+            profile: Optional[MachineProfile] = self._system_manager.current_machine_profile
             if profile:
                 return profile.to_dict()
 
@@ -448,9 +435,7 @@ class UnifiedKnowledgeManager:
             >>> print(f"Known machines: {machines}")  # noqa: print
         """
         if not self.enable_machine_aware:
-            raise RuntimeError(
-                "Machine awareness not enabled. Create manager with enable_machine_aware=True"
-            )
+            raise RuntimeError("Machine awareness not enabled. Create manager with enable_machine_aware=True")
 
         await self._ensure_initialized()
 
@@ -488,8 +473,7 @@ class UnifiedKnowledgeManager:
         """
         if not self.enable_machine_aware:
             raise RuntimeError(
-                "Man page search requires machine awareness. "
-                "Create manager with enable_machine_aware=True"
+                "Man page search requires machine awareness. " "Create manager with enable_machine_aware=True"
             )
 
         if not query or not query.strip():
@@ -518,8 +502,7 @@ class UnifiedKnowledgeManager:
         """
         if not self.enable_machine_aware:
             raise RuntimeError(
-                "Man page summary requires machine awareness. "
-                "Create manager with enable_machine_aware=True"
+                "Man page summary requires machine awareness. " "Create manager with enable_machine_aware=True"
             )
 
         await self._ensure_initialized()
@@ -572,9 +555,7 @@ class UnifiedKnowledgeManager:
         if not self._temporal_manager:
             return None
 
-        return self._temporal_manager.register_content(
-            content_id, metadata, content_hash
-        )
+        return self._temporal_manager.register_content(content_id, metadata, content_hash)
 
     def update_content_access(self, content_id: str):
         """
@@ -661,9 +642,7 @@ class UnifiedKnowledgeManager:
             raise ValueError("job cannot be None")
 
         if not self._temporal_manager:
-            raise RuntimeError(
-                "Temporal tracking not enabled. Create manager with enable_temporal=True"
-            )
+            raise RuntimeError("Temporal tracking not enabled. Create manager with enable_temporal=True")
 
         await self._temporal_manager.process_invalidation_job(job, self.knowledge_base)
 
@@ -696,9 +675,7 @@ class UnifiedKnowledgeManager:
         analytics["temporal_tracking_enabled"] = True
         return analytics
 
-    async def start_temporal_background_processing(
-        self, check_interval_minutes: int = 30
-    ):
+    async def start_temporal_background_processing(self, check_interval_minutes: int = 30):
         """
         Start background processing for temporal management
 
@@ -722,16 +699,12 @@ class UnifiedKnowledgeManager:
             >>> await manager.stop_temporal_background_processing()
         """
         if not self._temporal_manager:
-            raise RuntimeError(
-                "Temporal tracking not enabled. Create manager with enable_temporal=True"
-            )
+            raise RuntimeError("Temporal tracking not enabled. Create manager with enable_temporal=True")
 
         if check_interval_minutes <= 0:
             raise ValueError("check_interval_minutes must be positive")
 
-        await self._temporal_manager.start_background_processing(
-            self.knowledge_base, check_interval_minutes
-        )
+        await self._temporal_manager.start_background_processing(self.knowledge_base, check_interval_minutes)
 
     async def stop_temporal_background_processing(self):
         """
@@ -779,9 +752,7 @@ class UnifiedKnowledgeManager:
     # INTEGRATED OPERATIONS - Unified functionality
     # ========================================================================
 
-    async def _process_import_file(
-        self, file_path: str, category: str, metadata: Optional[Dict[str, Any]]
-    ) -> bool:
+    async def _process_import_file(self, file_path: str, category: str, metadata: Optional[Dict[str, Any]]) -> bool:
         """
         Process a single file for import and temporal tracking.
 
@@ -925,9 +896,7 @@ class UnifiedKnowledgeManager:
 
         return status
 
-    async def _search_man_pages_if_enabled(
-        self, query: str, results: Dict[str, Any]
-    ) -> None:
+    async def _search_man_pages_if_enabled(self, query: str, results: Dict[str, Any]) -> None:
         """
         Search man pages and update results if machine-aware is enabled.
 
@@ -943,9 +912,7 @@ class UnifiedKnowledgeManager:
         except Exception as e:
             logger.warning("Man page search failed: %s", e)
 
-    async def search_knowledge(
-        self, query: str, include_man_pages: bool = False
-    ) -> Dict[str, Any]:
+    async def search_knowledge(self, query: str, include_man_pages: bool = False) -> Dict[str, Any]:
         """
         Search across all knowledge sources.
 
@@ -1026,9 +993,7 @@ class UnifiedKnowledgeManager:
         if not hasattr(self._system_manager, "runtime_knowledge_dir"):
             return
 
-        temporal_backup_path = (
-            self._system_manager.runtime_knowledge_dir / "temporal_metadata_backup.json"
-        )
+        temporal_backup_path = self._system_manager.runtime_knowledge_dir / "temporal_metadata_backup.json"
         temporal_data = self._build_temporal_data()
 
         # Issue #358 - avoid blocking
@@ -1136,9 +1101,7 @@ def get_unified_knowledge_manager(
             # Double-check after acquiring lock
             if _unified_knowledge_manager_instance is None:
                 if knowledge_base is None:
-                    raise ValueError(
-                        "knowledge_base required on first call to get_unified_knowledge_manager()"
-                    )
+                    raise ValueError("knowledge_base required on first call to get_unified_knowledge_manager()")
 
                 _unified_knowledge_manager_instance = UnifiedKnowledgeManager(
                     knowledge_base=knowledge_base,

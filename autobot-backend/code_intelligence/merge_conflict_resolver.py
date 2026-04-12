@@ -116,9 +116,7 @@ class ConflictBlock:
         ]
 
         ours_complex = any(ind in self.ours_content for ind in complexity_indicators)
-        theirs_complex = any(
-            ind in self.theirs_content for ind in complexity_indicators
-        )
+        theirs_complex = any(ind in self.theirs_content for ind in complexity_indicators)
 
         if ours_complex and theirs_complex:
             return ConflictSeverity.COMPLEX
@@ -272,9 +270,7 @@ class ConflictParser:
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
-            return (
-                "<<<<<<<" in content and "=======" in content and ">>>>>>>" in content
-            )
+            return "<<<<<<<" in content and "=======" in content and ">>>>>>>" in content
         except Exception as e:
             logger.error("Failed to check conflicts in %s: %s", file_path, e)
             return False
@@ -409,9 +405,7 @@ class MergeConflictResolver:
 
             if is_valid:
                 # Additional validation
-                valid_imports, import_errors = self.validator.validate_imports(
-                    resolved_content
-                )
+                valid_imports, import_errors = self.validator.validate_imports(resolved_content)
                 if not valid_imports:
                     errors.extend(import_errors)
                     is_valid = False
@@ -508,9 +502,7 @@ class MergeConflictResolver:
             # Pattern-based resolution
             resolved = self._pattern_based_resolution(conflict)
             confidence = 0.7 if resolved else 0.0
-            explanation = (
-                "Applied historical pattern" if resolved else "No pattern found"
-            )
+            explanation = "Applied historical pattern" if resolved else "No pattern found"
             return (resolved or conflict.ours_content, confidence, explanation)
 
         else:  # MANUAL_REVIEW
@@ -555,9 +547,7 @@ class MergeConflictResolver:
         """
         # Common pattern: Import order conflicts
         if "import " in conflict.ours_content and "import " in conflict.theirs_content:
-            all_imports = conflict.ours_content.strip().split(
-                "\n"
-            ) + conflict.theirs_content.strip().split("\n")
+            all_imports = conflict.ours_content.strip().split("\n") + conflict.theirs_content.strip().split("\n")
             unique_imports = list(set(all_imports))
             return "\n".join(sorted(unique_imports)) + "\n"
 

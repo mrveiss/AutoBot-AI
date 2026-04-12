@@ -78,12 +78,8 @@ class IncrementalTrainer:
         targets = []
 
         for feedback in feedback_events:
-            context_ids = self.trainer.train_loader.dataset.tokenizer.encode(
-                feedback.context, max_length=128
-            )
-            target_ids = self.trainer.train_loader.dataset.tokenizer.encode(
-                feedback.suggestion, max_length=128
-            )
+            context_ids = self.trainer.train_loader.dataset.tokenizer.encode(feedback.context, max_length=128)
+            target_ids = self.trainer.train_loader.dataset.tokenizer.encode(feedback.suggestion, max_length=128)
 
             contexts.append(torch.tensor(context_ids, dtype=torch.long))
             targets.append(torch.tensor(target_ids, dtype=torch.long))
@@ -155,9 +151,7 @@ class IncrementalTrainer:
             .all()
         )
 
-    def update_from_feedback(
-        self, time_window_hours: int = 24, min_feedback: int = 10
-    ) -> dict:
+    def update_from_feedback(self, time_window_hours: int = 24, min_feedback: int = 10) -> dict:
         """
         Update model based on recent feedback.
 
@@ -185,12 +179,8 @@ class IncrementalTrainer:
                     }
 
                 # Prepare and train
-                context_batch, target_batch = self._prepare_training_data(
-                    feedback_events
-                )
-                avg_loss, num_batches = self._run_training_loop(
-                    context_batch, target_batch
-                )
+                context_batch, target_batch = self._prepare_training_data(feedback_events)
+                avg_loss, num_batches = self._run_training_loop(context_batch, target_batch)
 
                 # Save updated model
                 self.trainer.save_checkpoint(is_best=False)
@@ -217,9 +207,7 @@ class IncrementalTrainer:
                     "timestamp": datetime.utcnow().isoformat(),
                 }
 
-    def trigger_full_retrain(
-        self, language: Optional[str] = None, num_epochs: int = 5
-    ) -> dict:
+    def trigger_full_retrain(self, language: Optional[str] = None, num_epochs: int = 5) -> dict:
         """
         Trigger full model retraining.
 
@@ -231,9 +219,7 @@ class IncrementalTrainer:
             Dictionary with training status
         """
         try:
-            logger.info(
-                f"Starting full retrain: language={language}, epochs={num_epochs}"
-            )
+            logger.info(f"Starting full retrain: language={language}, epochs={num_epochs}")
 
             # Create new trainer
             trainer = CompletionTrainer(language=language)
@@ -250,10 +236,7 @@ class IncrementalTrainer:
             # Get final metrics
             final_metrics = history["metrics"][-1] if history["metrics"] else {}
 
-            logger.info(
-                f"Full retrain complete: "
-                f"val_loss={final_metrics.get('val_loss', 0):.4f}"
-            )
+            logger.info(f"Full retrain complete: " f"val_loss={final_metrics.get('val_loss', 0):.4f}")
 
             return {
                 "status": "success",

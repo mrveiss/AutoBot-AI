@@ -94,9 +94,7 @@ class TestRAGQueryBenchmarks:
             scored_docs = []
             for doc in documents:
                 # Simple dot product for speed
-                score = sum(
-                    a * b for a, b in zip(query_vector[:10], doc["embedding"][:10])
-                )
+                score = sum(a * b for a, b in zip(query_vector[:10], doc["embedding"][:10]))
                 scored_docs.append((score, doc))
 
             # Get top k
@@ -122,8 +120,7 @@ class TestRAGQueryBenchmarks:
         """Benchmark context window assembly from retrieved documents"""
         retrieved_docs = [
             {
-                "content": f"Document {i} contains important information about the topic. "
-                * 10,
+                "content": f"Document {i} contains important information about the topic. " * 10,
                 "metadata": {"source": f"source_{i}", "relevance": 0.9 - i * 0.1},
             }
             for i in range(10)
@@ -171,9 +168,7 @@ class TestRAGQueryBenchmarks:
             while start < len(long_document):
                 end = min(start + chunk_size, len(long_document))
                 chunks.append(long_document[start:end])
-                start = (
-                    end - overlap if end < len(long_document) else len(long_document)
-                )
+                start = end - overlap if end < len(long_document) else len(long_document)
             return chunks
 
         result = runner.run_benchmark(
@@ -195,11 +190,7 @@ class TestRAGQueryBenchmarks:
         """Benchmark metadata filtering performance"""
 
         def filter_by_metadata(source_filter="test"):
-            return [
-                doc
-                for doc in mock_documents
-                if doc["metadata"]["source"] == source_filter
-            ]
+            return [doc for doc in mock_documents if doc["metadata"]["source"] == source_filter]
 
         result = runner.run_benchmark(
             name="rag_metadata_filtering_1000_docs",
@@ -304,15 +295,11 @@ class TestRAGPipelineBenchmarks:
         def simulate_rag_pipeline():
             # 1. Query embedding (simulated)
             query = "What is the best approach for performance optimization?"
-            _query_embedding = [
-                hash(query + str(i)) % 1000 / 1000.0 for i in range(384)
-            ]
+            _query_embedding = [hash(query + str(i)) % 1000 / 1000.0 for i in range(384)]
 
             # 2. Vector search (simulated - quick sleep for realism)
             time.sleep(0.001)  # Simulate 1ms DB query
-            retrieved_docs = [
-                {"content": f"Doc {i}", "score": 0.9 - i * 0.05} for i in range(5)
-            ]
+            retrieved_docs = [{"content": f"Doc {i}", "score": 0.9 - i * 0.05} for i in range(5)]
 
             # 3. Reranking (simulated)
             reranked = sorted(retrieved_docs, key=lambda x: x["score"], reverse=True)

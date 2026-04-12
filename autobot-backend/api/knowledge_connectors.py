@@ -54,9 +54,7 @@ _SUPPORTED_TYPES = ["file_server", "web_crawler", "database"]
 class CreateConnectorRequest(BaseModel):
     """Request body for POST /connectors."""
 
-    connector_type: str = Field(
-        ..., description="One of: file_server, web_crawler, database"
-    )
+    connector_type: str = Field(..., description="One of: file_server, web_crawler, database")
     name: str = Field(..., min_length=1, max_length=128)
     config: Dict[str, Any] = Field(default_factory=dict)
     enabled: bool = True
@@ -162,9 +160,7 @@ async def _list_connector_ids() -> List[str]:
     redis = get_redis_client(database="knowledge")
     pattern = "%s*" % _REDIS_KEY_PREFIX
     ids: List[str] = []
-    async_scan = hasattr(redis, "scan_iter") and asyncio.iscoroutinefunction(
-        getattr(redis, "scan_iter", None)
-    )
+    async_scan = hasattr(redis, "scan_iter") and asyncio.iscoroutinefunction(getattr(redis, "scan_iter", None))
 
     if async_scan:
         async for key in redis.scan_iter(match=pattern):
@@ -237,11 +233,7 @@ async def _run_sync_background(connector_id: str, incremental: bool) -> None:
         history_entry = {
             "connector_id": connector_id,
             "started_at": sync_result.started_at.isoformat(),
-            "completed_at": (
-                sync_result.completed_at.isoformat()
-                if sync_result.completed_at
-                else None
-            ),
+            "completed_at": (sync_result.completed_at.isoformat() if sync_result.completed_at else None),
             "status": sync_result.status,
             "added": sync_result.added,
             "updated": sync_result.updated,
@@ -377,9 +369,7 @@ async def trigger_sync(
     if cfg is None:
         raise HTTPException(status_code=404, detail=ERR_CONNECTOR_NOT_FOUND)
     background_tasks.add_task(_run_sync_background, connector_id, incremental)
-    logger.info(
-        "Triggered sync for connector %s (incremental=%s)", connector_id, incremental
-    )
+    logger.info("Triggered sync for connector %s (incremental=%s)", connector_id, incremental)
     return {
         "connector_id": connector_id,
         "status": "sync_started",
@@ -435,9 +425,7 @@ async def _get_status_for_config(cfg: ConnectorConfig) -> Dict[str, Any]:
         return {
             "connector_id": status.connector_id,
             "is_healthy": status.is_healthy,
-            "last_sync_at": (
-                status.last_sync_at.isoformat() if status.last_sync_at else None
-            ),
+            "last_sync_at": (status.last_sync_at.isoformat() if status.last_sync_at else None),
             "last_sync_status": status.last_sync_status,
             "documents_indexed": status.documents_indexed,
             "last_error": status.last_error,

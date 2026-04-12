@@ -223,20 +223,14 @@ class AdvancedCacheManager:
             "session_data": CacheConfig(CacheStrategy.TEMPORARY, ttl=TTL_5_MINUTES),
             "api_rate_limits": CacheConfig(CacheStrategy.TEMPORARY, ttl=60),
             # Knowledge base data - medium TTL with size limits
-            "knowledge_queries": CacheConfig(
-                CacheStrategy.KNOWLEDGE, ttl=TTL_5_MINUTES, max_size=1000
-            ),  # 5 min
-            "knowledge_embeddings": CacheConfig(
-                CacheStrategy.KNOWLEDGE, ttl=TTL_1_HOUR, max_size=5000
-            ),  # 1 hour
+            "knowledge_queries": CacheConfig(CacheStrategy.KNOWLEDGE, ttl=TTL_5_MINUTES, max_size=1000),  # 5 min
+            "knowledge_embeddings": CacheConfig(CacheStrategy.KNOWLEDGE, ttl=TTL_1_HOUR, max_size=5000),  # 1 hour
         }
 
         if self.sync_redis_client:
             logger.info("AdvancedCacheManager initialized with Redis backend")
         else:
-            logger.warning(
-                "AdvancedCacheManager initialized without Redis - caching disabled"
-            )
+            logger.warning("AdvancedCacheManager initialized without Redis - caching disabled")
 
     async def _ensure_redis_client(self):
         """Ensure async Redis client is initialized (thread-safe)"""
@@ -257,13 +251,9 @@ class AdvancedCacheManager:
                 self.redis_client = None
                 self._redis_client_initialized = True  # Prevent retry loops
 
-    def _make_cache_key(
-        self, data_type: str, key: str, user_id: Optional[str] = None
-    ) -> str:
+    def _make_cache_key(self, data_type: str, key: str, user_id: Optional[str] = None) -> str:
         """Generate hierarchical cache key"""
-        config = self.cache_configs.get(
-            data_type, CacheConfig(CacheStrategy.DYNAMIC, TTL_5_MINUTES)
-        )
+        config = self.cache_configs.get(data_type, CacheConfig(CacheStrategy.DYNAMIC, TTL_5_MINUTES))
 
         if config.strategy == CacheStrategy.USER_SCOPED and user_id:
             return f"{self.cache_prefix}{data_type}:user:{user_id}:{key}"
@@ -274,9 +264,7 @@ class AdvancedCacheManager:
         """Generate statistics key"""
         return f"{self.stats_prefix}{data_type}"
 
-    async def get(
-        self, data_type: str, key: str, user_id: Optional[str] = None
-    ) -> Optional[Any]:
+    async def get(self, data_type: str, key: str, user_id: Optional[str] = None) -> Optional[Any]:
         """Get cached data with automatic deserialization"""
         await self._ensure_redis_client()
         if not self.redis_client:
@@ -322,9 +310,7 @@ class AdvancedCacheManager:
 
         try:
             cache_key = self._make_cache_key(data_type, key, user_id)
-            config = self.cache_configs.get(
-                data_type, CacheConfig(CacheStrategy.DYNAMIC, TTL_5_MINUTES)
-            )
+            config = self.cache_configs.get(data_type, CacheConfig(CacheStrategy.DYNAMIC, TTL_5_MINUTES))
             ttl = custom_ttl or config.ttl
 
             # Add metadata
@@ -383,9 +369,7 @@ class AdvancedCacheManager:
             logger.error("Error computing data for %s:%s: %s", data_type, key, e)
             raise
 
-    async def invalidate(
-        self, data_type: str, key: str = "*", user_id: Optional[str] = None
-    ) -> int:
+    async def invalidate(self, data_type: str, key: str = "*", user_id: Optional[str] = None) -> int:
         """Invalidate cache entries by pattern"""
         await self._ensure_redis_client()
         if not self.redis_client:
@@ -405,9 +389,7 @@ class AdvancedCacheManager:
             keys = await self.redis_client.keys(pattern)
             if keys:
                 deleted_count = await self.redis_client.delete(*keys)
-                logger.info(
-                    "Cache INVALIDATE: %d keys deleted for %s", deleted_count, data_type
-                )
+                logger.info("Cache INVALIDATE: %d keys deleted for %s", deleted_count, data_type)
                 return deleted_count
             return 0
 
@@ -571,9 +553,7 @@ class AdvancedCacheManager:
 
         total_hits, total_misses = await self._aggregate_stats(stats_keys)
         total_requests = total_hits + total_misses
-        global_hit_rate = (
-            (total_hits / total_requests * 100) if total_requests > 0 else 0
-        )
+        global_hit_rate = (total_hits / total_requests * 100) if total_requests > 0 else 0
 
         memory_usage = await self._get_redis_memory_usage()
 
@@ -629,9 +609,7 @@ class AdvancedCacheManager:
     # KNOWLEDGE-SPECIFIC CACHING METHODS (from knowledge_cache.py)
     # =========================================================================
 
-    def _generate_knowledge_key(
-        self, query: str, top_k: int, filters: Optional[Dict] = None
-    ) -> str:
+    def _generate_knowledge_key(self, query: str, top_k: int, filters: Optional[Dict] = None) -> str:
         """Generate cache key for knowledge base queries"""
         cache_data = {
             "query": query.lower().strip(),
@@ -681,9 +659,7 @@ class AdvancedCacheManager:
         if success:
             # Manage cache size for knowledge queries
             await self._manage_cache_size("knowledge_queries")
-            logger.debug(
-                "Cached %d knowledge results for query: '%s'", len(results), query
-            )
+            logger.debug("Cached %d knowledge results for query: '%s'", len(results), query)
 
         return success
 
@@ -728,9 +704,7 @@ class AdvancedCacheManager:
 
         return keys_with_time
 
-    async def _evict_excess_keys(
-        self, keys_with_time: List[tuple], max_size: int, data_type: str
-    ) -> int:
+    async def _evict_excess_keys(self, keys_with_time: List[tuple], max_size: int, data_type: str) -> int:
         """Evict excess keys using LRU policy (Issue #315: extracted).
 
         Args:
@@ -845,9 +819,9 @@ def smart_cache(
                 cache_key = key_func(*args, **kwargs)
             else:
                 # Default key generation from function name and args
-                args_hash = hashlib.md5(
-                    str(args + tuple(kwargs.items())).encode(), usedforsecurity=False
-                ).hexdigest()[:8]
+                args_hash = hashlib.md5(str(args + tuple(kwargs.items())).encode(), usedforsecurity=False).hexdigest()[
+                    :8
+                ]
                 cache_key = f"{func.__name__}:{args_hash}"
 
             # Extract user ID if needed
@@ -1049,9 +1023,7 @@ class SimpleCacheManager:
         try:
             # Count keys with cache prefix
             cache_keys = []
-            async for key in self._cache.redis_client.scan_iter(
-                match=f"{self.cache_prefix}*"
-            ):
+            async for key in self._cache.redis_client.scan_iter(match=f"{self.cache_prefix}*"):
                 cache_keys.append(key)
             total_keys = len(cache_keys)
 
@@ -1109,8 +1081,7 @@ class SimpleCacheManager:
                         if result is not None:
                             return result
                         logger.warning(
-                            "Cache entry for key %s could not be deserialised; "
-                            "treating as cache miss",
+                            "Cache entry for key %s could not be deserialised; " "treating as cache miss",
                             key,
                         )
                 except Exception as e:

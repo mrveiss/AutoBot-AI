@@ -11,9 +11,9 @@ between tests so each test starts with a cold cache.
 
 from __future__ import annotations
 
+import sys
 import textwrap
 import types
-import sys
 from pathlib import Path
 from typing import Any, Dict
 from unittest.mock import patch
@@ -36,6 +36,7 @@ def _stub_module(name: str, **attrs) -> types.ModuleType:
 
 if "xxhash" not in sys.modules:
     from unittest.mock import MagicMock
+
     _stub_module(
         "xxhash",
         xxh64=MagicMock(return_value=MagicMock(hexdigest=MagicMock(return_value="0" * 16))),
@@ -53,7 +54,6 @@ from llm_providers.model_param_registry import (  # noqa: E402
     get_provider_model_id,
     resolve_model_name,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -141,7 +141,7 @@ class TestGetModelKwargs:
             _clear_cache()
             kwargs = get_model_kwargs("test-model", provider="myprovider")
         assert kwargs["temperature"] == 0.5  # from default
-        assert kwargs["max_tokens"] == 2000   # overridden by provider
+        assert kwargs["max_tokens"] == 2000  # overridden by provider
 
     def test_returned_dict_is_copy(self):
         """Mutating the returned dict must not affect subsequent calls."""

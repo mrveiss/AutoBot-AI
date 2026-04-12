@@ -79,15 +79,10 @@ def _validate_port(value: Any, label: str, result: ConfigValidationResult) -> No
     try:
         port = int(value)
     except (TypeError, ValueError):
-        result.add_error(
-            f"Config key '{label}' is not a valid integer (got {value!r})"
-        )
+        result.add_error(f"Config key '{label}' is not a valid integer (got {value!r})")
         return
     if not (_PORT_MIN <= port <= _PORT_MAX):
-        result.add_error(
-            f"Config key '{label}' has invalid port value {port} "
-            f"(must be {_PORT_MIN}–{_PORT_MAX})"
-        )
+        result.add_error(f"Config key '{label}' has invalid port value {port} " f"(must be {_PORT_MIN}–{_PORT_MAX})")
 
 
 # Keys whose values must be valid TCP ports.
@@ -116,9 +111,7 @@ def validate_startup_config(raw_config: Dict[str, Any]) -> ConfigValidationResul
         path = dotted_key.split(".")
         value = _get_nested_value(raw_config, path)
         if value is None:
-            result.add_error(
-                f"Required config key '{dotted_key}' is missing"
-            )
+            result.add_error(f"Required config key '{dotted_key}' is missing")
 
     # --- 1b. Conditionally required keys (gated on a feature flag) ---
     for required_key, guard_path, guard_enabled_value in _CONDITIONAL_REQUIRED_CONFIG_KEYS:
@@ -190,8 +183,7 @@ def log_startup_config_summary(raw_config: Dict[str, Any]) -> None:
     log_level = _get_nested_value(raw_config, ["logging", "log_level"])
 
     logger.info(
-        "Config summary — backend=%s:%s  redis=%s:%s  ollama=%s  "
-        "model=%s  log_level=%s",
+        "Config summary — backend=%s:%s  redis=%s:%s  ollama=%s  " "model=%s  log_level=%s",
         backend_host,
         backend_port,
         redis_host,

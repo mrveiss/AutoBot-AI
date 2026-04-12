@@ -119,9 +119,7 @@ class TestLazyInitSingleton:
         storage = SingletonStorage()
 
         # Pass arguments to factory
-        service = lazy_init_singleton(
-            storage, "test_service", SimpleService, value="custom"
-        )
+        service = lazy_init_singleton(storage, "test_service", SimpleService, value="custom")
 
         assert service is not None
         assert service.value == "custom"
@@ -131,9 +129,7 @@ class TestLazyInitSingleton:
         storage = SingletonStorage()
 
         # Pass keyword arguments
-        service = lazy_init_singleton(
-            storage, "test_service", SimpleService, value="keyword"
-        )
+        service = lazy_init_singleton(storage, "test_service", SimpleService, value="keyword")
 
         assert service is not None
         assert service.value == "keyword"
@@ -212,15 +208,11 @@ class TestLazyInitSingletonAsync:
         storage = SingletonStorage()
 
         # Create first instance
-        service1 = await lazy_init_singleton_async(
-            storage, "test_service", AsyncService
-        )
+        service1 = await lazy_init_singleton_async(storage, "test_service", AsyncService)
         service1.custom_attr = "modified"
 
         # Second call returns same instance
-        service2 = await lazy_init_singleton_async(
-            storage, "test_service", AsyncService
-        )
+        service2 = await lazy_init_singleton_async(storage, "test_service", AsyncService)
 
         assert service1 is service2
         assert hasattr(service2, "custom_attr")
@@ -232,9 +224,7 @@ class TestLazyInitSingletonAsync:
         storage = SingletonStorage()
 
         # Use async factory
-        service = await lazy_init_singleton_async(
-            storage, "test_service", async_factory
-        )
+        service = await lazy_init_singleton_async(storage, "test_service", async_factory)
 
         assert service is not None
         assert isinstance(service, AsyncService)
@@ -249,9 +239,7 @@ class TestLazyInitSingletonAsync:
             raise RuntimeError("Async failure")
 
         # Initialize with failing factory
-        service = await lazy_init_singleton_async(
-            storage, "test_service", failing_async_factory
-        )
+        service = await lazy_init_singleton_async(storage, "test_service", failing_async_factory)
 
         # Should return None on failure
         assert service is None
@@ -287,9 +275,7 @@ class TestLazyInitSingletonWithCheck:
             return service.is_healthy()
 
         # Initialize with valid service
-        service = lazy_init_singleton_with_check(
-            storage, "test_service", ValidatedService, validator, valid=True
-        )
+        service = lazy_init_singleton_with_check(storage, "test_service", ValidatedService, validator, valid=True)
 
         assert service is not None
         assert service.is_healthy() is True
@@ -302,9 +288,7 @@ class TestLazyInitSingletonWithCheck:
             return service.is_healthy()
 
         # Initialize with invalid service
-        service = lazy_init_singleton_with_check(
-            storage, "test_service", ValidatedService, validator, valid=False
-        )
+        service = lazy_init_singleton_with_check(storage, "test_service", ValidatedService, validator, valid=False)
 
         # Should return None when validation fails
         assert service is None
@@ -320,17 +304,13 @@ class TestLazyInitSingletonWithCheck:
             return service.is_healthy()
 
         # First initialization
-        service1 = lazy_init_singleton_with_check(
-            storage, "test_service", ValidatedService, validator, valid=True
-        )
+        service1 = lazy_init_singleton_with_check(storage, "test_service", ValidatedService, validator, valid=True)
 
         assert service1 is not None
         assert validation_count["count"] == 1
 
         # Second call revalidates existing instance
-        service2 = lazy_init_singleton_with_check(
-            storage, "test_service", ValidatedService, validator, valid=True
-        )
+        service2 = lazy_init_singleton_with_check(storage, "test_service", ValidatedService, validator, valid=True)
 
         assert service2 is service1
         assert validation_count["count"] == 2

@@ -39,12 +39,8 @@ def _create_fleet_sync_jobs(cursor) -> None:
             completed_at TIMESTAMP
         )
     """)
-    create_index_if_not_exists(
-        cursor, "idx_fleet_sync_jobs_status", "fleet_sync_jobs", "status"
-    )
-    create_index_if_not_exists(
-        cursor, "idx_fleet_sync_jobs_created", "fleet_sync_jobs", "created_at"
-    )
+    create_index_if_not_exists(cursor, "idx_fleet_sync_jobs_status", "fleet_sync_jobs", "status")
+    create_index_if_not_exists(cursor, "idx_fleet_sync_jobs_created", "fleet_sync_jobs", "created_at")
     logger.info("Created fleet_sync_jobs table")
 
 

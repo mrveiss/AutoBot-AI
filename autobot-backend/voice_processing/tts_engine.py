@@ -75,9 +75,7 @@ class TextToSpeechEngine:
                     self.tts_engine.setProperty("rate", request.voice_settings["rate"])
 
                 if "volume" in request.voice_settings:
-                    self.tts_engine.setProperty(
-                        "volume", request.voice_settings["volume"]
-                    )
+                    self.tts_engine.setProperty("volume", request.voice_settings["volume"])
 
                 # Generate speech
                 if request.output_format.lower() == "wav":
@@ -93,9 +91,7 @@ class TextToSpeechEngine:
                     }
                 )
 
-                logger.info(
-                    f"Speech synthesis completed: {len(audio_data)} bytes generated"
-                )
+                logger.info(f"Speech synthesis completed: {len(audio_data)} bytes generated")
                 return audio_data
 
             except Exception as e:

@@ -83,14 +83,10 @@ async def test_topology_consulted_flag():
     topology_with = _make_topology(collaborator_ids=["agent-b"])
     topology_without = _make_topology(collaborator_ids=[])
 
-    result_with = await TopologyAwareRouter(
-        topology=topology_with
-    ).route_with_collaborators(
+    result_with = await TopologyAwareRouter(topology=topology_with).route_with_collaborators(
         request="q", context={"complexity": "multi_hop"}, primary_agent_id="a"
     )
-    result_without = await TopologyAwareRouter(
-        topology=topology_without
-    ).route_with_collaborators(
+    result_without = await TopologyAwareRouter(topology=topology_without).route_with_collaborators(
         request="q", context={"complexity": "complex"}, primary_agent_id="a"
     )
 

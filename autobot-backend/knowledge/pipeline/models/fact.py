@@ -16,12 +16,12 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, ConfigDict, Field
 
 FactType = Literal[
-    "statement",      # Simple declarative fact (e.g., "X is Y")
-    "relationship",   # Relationship fact (e.g., "X enables Y")
-    "property",       # Property fact (e.g., "X has property Y")
-    "definition",     # Definitional fact (e.g., "X is defined as...")
-    "rule",           # Rule or constraint (e.g., "If X then Y")
-    "measurement",    # Quantitative fact (e.g., "X has value Y")
+    "statement",  # Simple declarative fact (e.g., "X is Y")
+    "relationship",  # Relationship fact (e.g., "X enables Y")
+    "property",  # Property fact (e.g., "X has property Y")
+    "definition",  # Definitional fact (e.g., "X is defined as...")
+    "rule",  # Rule or constraint (e.g., "If X then Y")
+    "measurement",  # Quantitative fact (e.g., "X has value Y")
 ]
 
 
@@ -49,43 +49,27 @@ class AtomicFact(BaseModel):
     )
 
     id: UUID = Field(default_factory=uuid4, description="Unique fact ID")
-    subject: str = Field(
-        ..., description="Subject entity or concept (e.g., 'AutoBot')"
-    )
-    predicate: str = Field(
-        ..., description="Relationship or property (e.g., 'is', 'enables', 'has'"
-    )
-    object_: str = Field(
-        ..., alias="object", description="Object entity or value (e.g., 'AI platform')"
-    )
+    subject: str = Field(..., description="Subject entity or concept (e.g., 'AutoBot')")
+    predicate: str = Field(..., description="Relationship or property (e.g., 'is', 'enables', 'has'")
+    object_: str = Field(..., alias="object", description="Object entity or value (e.g., 'AI platform')")
     fact_type: FactType = Field(
         default="statement",
         description="Type of factual statement",
     )
-    description: str = Field(
-        default="", description="Natural language description of the fact"
-    )
+    description: str = Field(default="", description="Natural language description of the fact")
     context: str = Field(
         default="",
         description="Supporting context from original text (max 500 chars)",
     )
-    source_chunk_ids: List[UUID] = Field(
-        default_factory=list, description="Chunks where fact was extracted"
-    )
+    source_chunk_ids: List[UUID] = Field(default_factory=list, description="Chunks where fact was extracted")
     source_document_id: UUID = Field(..., description="Source document ID")
-    confidence: float = Field(
-        default=1.0, ge=0.0, le=1.0, description="Extraction confidence score"
-    )
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Extraction confidence score")
     supported_by_count: int = Field(
         default=1,
         description="Number of chunks supporting this fact (cross-validation)",
     )
-    created_at: datetime = Field(
-        default_factory=_utcnow, description="Fact creation timestamp"
-    )
-    updated_at: datetime = Field(
-        default_factory=_utcnow, description="Last update timestamp"
-    )
+    created_at: datetime = Field(default_factory=_utcnow, description="Fact creation timestamp")
+    updated_at: datetime = Field(default_factory=_utcnow, description="Last update timestamp")
 
     def as_triple(self) -> tuple[str, str, str]:
         """Return fact as (subject, predicate, object) triple for graph representation."""

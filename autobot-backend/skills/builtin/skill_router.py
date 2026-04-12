@@ -114,9 +114,7 @@ class SkillRouterSkill(BaseSkill):
             },
         )
 
-    async def _llm_rerank(
-        self, task: str, candidates: List[Dict[str, Any]]
-    ) -> Tuple[str, str]:
+    async def _llm_rerank(self, task: str, candidates: List[Dict[str, Any]]) -> Tuple[str, str]:
         """Re-rank candidates via LLM. Returns (skill_name, reason).
 
         Raises ValueError if LLM unavailable or response unparseable.
@@ -125,8 +123,7 @@ class SkillRouterSkill(BaseSkill):
             raise ValueError("LLMInterface not available")
 
         summaries = [
-            f"- {c['name']}: {c['description']} "
-            f"(tags: {', '.join(c['tags'])}, tools: {', '.join(c['tools'])})"
+            f"- {c['name']}: {c['description']} " f"(tags: {', '.join(c['tags'])}, tools: {', '.join(c['tools'])})"
             for c in candidates
         ]
         prompt = (
@@ -146,9 +143,7 @@ class SkillRouterSkill(BaseSkill):
         try:
             data = json.loads(match.group())
         except json.JSONDecodeError as exc:
-            raise ValueError(
-                f"Malformed JSON in LLM response: {match.group()[:100]}"
-            ) from exc
+            raise ValueError(f"Malformed JSON in LLM response: {match.group()[:100]}") from exc
         return data["skill"], data.get("reason", "")
 
     async def execute(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -172,9 +167,7 @@ class SkillRouterSkill(BaseSkill):
             return await self._build_missing_skill(task, registry, dry_run)
 
         winner, reason, method = await self._pick_winner(task, candidates)
-        return await self._enable_and_respond(
-            winner, reason, method, candidates, registry, dry_run
-        )
+        return await self._enable_and_respond(winner, reason, method, candidates, registry, dry_run)
 
     def _build_candidates(self, task: str, registry: Any) -> List[Dict[str, Any]]:
         """Score all registered skills and return top-K candidates."""
@@ -199,9 +192,7 @@ class SkillRouterSkill(BaseSkill):
         scored.sort(key=lambda x: x["score"], reverse=True)
         return [c for c in scored[:top_k] if c["score"] > 0]
 
-    async def _pick_winner(
-        self, task: str, candidates: List[Dict[str, Any]]
-    ) -> Tuple[str, str, str]:
+    async def _pick_winner(self, task: str, candidates: List[Dict[str, Any]]) -> Tuple[str, str, str]:
         """Run LLM re-ranking; fall back to keyword winner on failure."""
         winner = candidates[0]["name"]
         reason = "top keyword match"
@@ -217,9 +208,7 @@ class SkillRouterSkill(BaseSkill):
                     winner,
                 )
         except Exception as exc:
-            self.logger.warning(
-                "LLM re-ranking failed, using keyword fallback: %s", exc
-            )
+            self.logger.warning("LLM re-ranking failed, using keyword fallback: %s", exc)
         return winner, reason, method
 
     async def _enable_and_respond(
@@ -245,15 +234,11 @@ class SkillRouterSkill(BaseSkill):
             "enabled_skill": winner,
             "reason": reason,
             "method": method,
-            "candidates": [
-                {"name": c["name"], "score": c["score"]} for c in candidates
-            ],
+            "candidates": [{"name": c["name"], "score": c["score"]} for c in candidates],
             "dry_run": dry_run,
         }
 
-    async def _build_missing_skill(
-        self, task: str, registry: Any, dry_run: bool
-    ) -> Dict[str, Any]:
+    async def _build_missing_skill(self, task: str, registry: Any, dry_run: bool) -> Dict[str, Any]:
         """Three-step gap-fill pipeline: research → build.
 
         Called when _build_candidates returns an empty list (empty registry or
@@ -265,10 +250,7 @@ class SkillRouterSkill(BaseSkill):
                 "success": True,
                 "enabled_skill": None,
                 "build_triggered": False,
-                "reason": (
-                    "No matching skill; would research then trigger "
-                    "autonomous-skill-development"
-                ),
+                "reason": ("No matching skill; would research then trigger " "autonomous-skill-development"),
                 "dry_run": True,
             }
         # Step 2: Research the capability from multiple angles.
@@ -292,10 +274,7 @@ class SkillRouterSkill(BaseSkill):
             "build_triggered": True,
             "research_performed": bool(research),
             "build_result": result,
-            "reason": (
-                "No matching skill; researched and delegated to "
-                "autonomous-skill-development"
-            ),
+            "reason": ("No matching skill; researched and delegated to " "autonomous-skill-development"),
             "dry_run": False,
         }
 
@@ -305,9 +284,7 @@ class SkillRouterSkill(BaseSkill):
         if not researcher:
             return {}
         try:
-            result = await researcher.execute(
-                "research_capability", {"capability": task}
-            )
+            result = await researcher.execute("research_capability", {"capability": task})
             return result if result.get("success") else {}
         except Exception as exc:
             self.logger.warning("Research phase failed, proceeding without: %s", exc)

@@ -46,9 +46,7 @@ class BridgePolicy:
 
 # Per-bridge risk categorisation (#3229 issue table).
 _HIGH_RISK = frozenset({"filesystem_mcp", "browser_mcp", "vnc_mcp"})
-_ALWAYS_INPROCESS = frozenset(
-    {"knowledge_mcp", "sequential_thinking_mcp", "structured_thinking_mcp"}
-)
+_ALWAYS_INPROCESS = frozenset({"knowledge_mcp", "sequential_thinking_mcp", "structured_thinking_mcp"})
 
 
 def _env_int(name: str, default: int) -> int:

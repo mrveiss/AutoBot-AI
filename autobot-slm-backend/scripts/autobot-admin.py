@@ -12,6 +12,7 @@ Reads DB connection from /etc/autobot/slm-secrets.env or
 /opt/autobot/autobot-slm-backend/.env (later file wins per key).
 Works without the SLM backend running (direct PostgreSQL access).
 """
+
 import argparse
 import os
 import re
@@ -56,14 +57,9 @@ def cmd_reset_password(args: argparse.Namespace) -> None:
         import bcrypt  # noqa: PLC0415
         import psycopg2  # noqa: PLC0415
     except ImportError as exc:
-        sys.exit(
-            f"Missing dependency: {exc}. "
-            "Install with: pip install bcrypt psycopg2-binary"
-        )
+        sys.exit(f"Missing dependency: {exc}. " "Install with: pip install bcrypt psycopg2-binary")
 
-    password_hash = bcrypt.hashpw(
-        args.new_password.encode("utf-8"), bcrypt.gensalt(rounds=12)
-    ).decode("utf-8")
+    password_hash = bcrypt.hashpw(args.new_password.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")
 
     db_url = get_db_url()
     conn = psycopg2.connect(db_url)

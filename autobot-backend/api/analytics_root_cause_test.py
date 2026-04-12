@@ -478,9 +478,7 @@ class TestRootCauseAnalyzerIntegration:
         """Analyzing task with causal chain should return report."""
         with (
             patch("services.root_cause_analyzer.get_async_redis_client") as mock_redis,
-            patch(
-                "services.root_cause_analyzer.TemporalSearchService"
-            ) as mock_temporal,
+            patch("services.root_cause_analyzer.TemporalSearchService") as mock_temporal,
         ):
             mock_client = AsyncMock()
             mock_redis.return_value = mock_client
@@ -550,9 +548,7 @@ class TestRootCauseAnalyzerErrorHandling:
         """Causal chain traversal errors should be handled gracefully."""
         with (
             patch("services.root_cause_analyzer.get_async_redis_client") as mock_redis,
-            patch(
-                "services.root_cause_analyzer.TemporalSearchService"
-            ) as mock_temporal,
+            patch("services.root_cause_analyzer.TemporalSearchService") as mock_temporal,
         ):
             mock_client = AsyncMock()
             mock_redis.return_value = mock_client
@@ -578,9 +574,7 @@ class TestRootCauseAPIEndpoint:
         """Endpoint should return serialized RootCauseReport."""
         from api.analytics import analyze_root_cause
 
-        with patch(
-            "api.analytics._root_cause_analyzer.analyze_task_failure"
-        ) as mock_analyze:
+        with patch("api.analytics._root_cause_analyzer.analyze_task_failure") as mock_analyze:
             root = CausalEvent(
                 event_id="root-1",
                 event_type="failure",
@@ -615,9 +609,7 @@ class TestRootCauseAPIEndpoint:
 
         from api.analytics import analyze_root_cause
 
-        with patch(
-            "api.analytics._root_cause_analyzer.analyze_task_failure"
-        ) as mock_analyze:
+        with patch("api.analytics._root_cause_analyzer.analyze_task_failure") as mock_analyze:
             report = RootCauseReport(
                 task_id="missing-task",
                 analysis_status="failed",

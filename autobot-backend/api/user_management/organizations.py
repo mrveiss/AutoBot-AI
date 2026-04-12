@@ -39,18 +39,14 @@ logger = logging.getLogger(__name__)
 class OrganizationCreate(BaseModel):
     """Request model for creating an organization."""
 
-    name: str = Field(
-        ..., min_length=1, max_length=255, description="Organization name"
-    )
+    name: str = Field(..., min_length=1, max_length=255, description="Organization name")
     slug: Optional[str] = Field(
         None,
         max_length=100,
         description="URL-safe slug (auto-generated if not provided)",
     )
     description: Optional[str] = Field(None, max_length=500, description="Description")
-    settings: Optional[dict] = Field(
-        default_factory=dict, description="Organization settings"
-    )
+    settings: Optional[dict] = Field(default_factory=dict, description="Organization settings")
     subscription_tier: str = Field("free", description="Subscription tier")
     max_users: int = Field(-1, description="Maximum users (-1 for unlimited)")
 

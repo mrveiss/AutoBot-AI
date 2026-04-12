@@ -41,16 +41,10 @@ class EncryptionService:
         """
         self.master_key = master_key or self._load_master_key()
         if not self.master_key:
-            raise ValueError(
-                "No encryption key provided. Set SLM_ENCRYPTION_KEY "
-                "environment variable."
-            )
+            raise ValueError("No encryption key provided. Set SLM_ENCRYPTION_KEY " "environment variable.")
 
         if len(self.master_key) < 32:
-            logger.warning(
-                "Encryption key shorter than recommended 32 characters. "
-                "Consider using a stronger key."
-            )
+            logger.warning("Encryption key shorter than recommended 32 characters. " "Consider using a stronger key.")
 
     def _load_master_key(self) -> Optional[str]:
         """Load master key from environment variables."""
@@ -60,9 +54,7 @@ class EncryptionService:
             key = os.getenv("SLM_SECRET_KEY")
 
         if not key:
-            logger.error(
-                "No encryption key found. Set SLM_ENCRYPTION_KEY environment variable."
-            )
+            logger.error("No encryption key found. Set SLM_ENCRYPTION_KEY environment variable.")
             return None
 
         return key

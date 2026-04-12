@@ -66,12 +66,8 @@ class WorkflowState(BaseModel):
     mailbox: List[ServiceMessage] = Field(default_factory=list)
     done: bool = False
     errors: List[str] = Field(default_factory=list)
-    created_at: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
-    updated_at: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     metadata: Dict = Field(default_factory=dict)
 
 

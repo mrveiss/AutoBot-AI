@@ -81,9 +81,7 @@ class PlanStep:
             "depends_on": self.depends_on,
             "blocks": self.blocks,
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": (
-                self.completed_at.isoformat() if self.completed_at else None
-            ),
+            "completed_at": (self.completed_at.isoformat() if self.completed_at else None),
             "reflection": self.reflection,
             "tools_used": self.tools_used,
             "action_event_ids": self.action_event_ids,
@@ -101,16 +99,8 @@ class PlanStep:
             status=StepStatus(data.get("status", "pending")),
             depends_on=data.get("depends_on", []),
             blocks=data.get("blocks", []),
-            started_at=(
-                datetime.fromisoformat(data["started_at"])
-                if data.get("started_at")
-                else None
-            ),
-            completed_at=(
-                datetime.fromisoformat(data["completed_at"])
-                if data.get("completed_at")
-                else None
-            ),
+            started_at=(datetime.fromisoformat(data["started_at"]) if data.get("started_at") else None),
+            completed_at=(datetime.fromisoformat(data["completed_at"]) if data.get("completed_at") else None),
             reflection=data.get("reflection"),
             tools_used=data.get("tools_used", []),
             action_event_ids=data.get("action_event_ids", []),
@@ -119,10 +109,7 @@ class PlanStep:
         )
 
     def __repr__(self) -> str:
-        return (
-            f"PlanStep({self.step_number}: {self.description[:30]}... "
-            f"[{self.status.value}])"
-        )
+        return f"PlanStep({self.step_number}: {self.description[:30]}... " f"[{self.status.value}])"
 
 
 @dataclass
@@ -167,9 +154,7 @@ class ExecutionPlan:
 
     def get_next_executable_steps(self) -> list[PlanStep]:
         """Get steps that can be executed (dependencies satisfied)"""
-        completed_ids = {
-            s.step_id for s in self.steps if s.status == StepStatus.COMPLETED
-        }
+        completed_ids = {s.step_id for s in self.steps if s.status == StepStatus.COMPLETED}
         executable = []
 
         for step in self.steps:
@@ -192,10 +177,7 @@ class ExecutionPlan:
         for step in executable[1:]:
             can_parallel = True
             for parallel_step in parallel:
-                if (
-                    parallel_step.step_id in step.depends_on
-                    or step.step_id in parallel_step.depends_on
-                ):
+                if parallel_step.step_id in step.depends_on or step.step_id in parallel_step.depends_on:
                     can_parallel = False
                     break
             if can_parallel:
@@ -220,9 +202,7 @@ class ExecutionPlan:
     def update_metrics(self) -> None:
         """Recalculate plan metrics"""
         self.total_steps = len(self.steps)
-        self.completed_steps = sum(
-            1 for s in self.steps if s.status == StepStatus.COMPLETED
-        )
+        self.completed_steps = sum(1 for s in self.steps if s.status == StepStatus.COMPLETED)
         self.failed_steps = sum(1 for s in self.steps if s.status == StepStatus.FAILED)
 
         # Update current step number
@@ -235,9 +215,7 @@ class ExecutionPlan:
 
     def is_complete(self) -> bool:
         """Check if plan is fully completed"""
-        return all(
-            s.status in (StepStatus.COMPLETED, StepStatus.SKIPPED) for s in self.steps
-        )
+        return all(s.status in (StepStatus.COMPLETED, StepStatus.SKIPPED) for s in self.steps)
 
     def has_failures(self) -> bool:
         """Check if any steps have failed"""
@@ -261,9 +239,7 @@ class ExecutionPlan:
             "current_step_number": self.current_step_number,
             "created_at": self.created_at.isoformat(),
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": (
-                self.completed_at.isoformat() if self.completed_at else None
-            ),
+            "completed_at": (self.completed_at.isoformat() if self.completed_at else None),
             "version": self.version,
             "update_history": self.update_history,
             "total_steps": self.total_steps,
@@ -281,21 +257,9 @@ class ExecutionPlan:
             steps=[PlanStep.from_dict(s) for s in data.get("steps", [])],
             status=PlanStatus(data.get("status", "planning")),
             current_step_number=data.get("current_step_number", 0),
-            created_at=(
-                datetime.fromisoformat(data["created_at"])
-                if data.get("created_at")
-                else datetime.utcnow()
-            ),
-            started_at=(
-                datetime.fromisoformat(data["started_at"])
-                if data.get("started_at")
-                else None
-            ),
-            completed_at=(
-                datetime.fromisoformat(data["completed_at"])
-                if data.get("completed_at")
-                else None
-            ),
+            created_at=(datetime.fromisoformat(data["created_at"]) if data.get("created_at") else datetime.utcnow()),
+            started_at=(datetime.fromisoformat(data["started_at"]) if data.get("started_at") else None),
+            completed_at=(datetime.fromisoformat(data["completed_at"]) if data.get("completed_at") else None),
             version=data.get("version", 1),
             update_history=data.get("update_history", []),
         )

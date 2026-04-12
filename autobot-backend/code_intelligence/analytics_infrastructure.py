@@ -220,12 +220,8 @@ class AnalyticsInfrastructureMixin:
                     try:
                         from autobot_shared.redis_client import get_redis_client
 
-                        self._redis_client = get_redis_client(
-                            async_client=True, database=self._redis_database
-                        )
-                        logger.info(
-                            "Redis client initialized for '%s'", self._redis_database
-                        )
+                        self._redis_client = get_redis_client(async_client=True, database=self._redis_database)
+                        logger.info("Redis client initialized for '%s'", self._redis_database)
                     except Exception as e:
                         logger.warning("Redis not available for caching: %s", e)
                         self._metrics.add_error(f"Redis init failed: {e}")
@@ -382,9 +378,7 @@ class AnalyticsInfrastructureMixin:
 
         return None
 
-    async def _get_embeddings_batch(
-        self, texts: List[str], max_concurrent: int = 5
-    ) -> List[Optional[List[float]]]:
+    async def _get_embeddings_batch(self, texts: List[str], max_concurrent: int = 5) -> List[Optional[List[float]]]:
         """
         Generate embeddings for multiple texts in parallel.
 
@@ -424,9 +418,7 @@ class AnalyticsInfrastructureMixin:
         # Convert exceptions to None
         return [r if isinstance(r, list) else None for r in results]
 
-    async def _get_embeddings_batch_via_npu(
-        self, texts: List[str]
-    ) -> Optional[List[Optional[List[float]]]]:
+    async def _get_embeddings_batch_via_npu(self, texts: List[str]) -> Optional[List[Optional[List[float]]]]:
         """
         Generate embeddings batch using NPU worker.
 
@@ -627,9 +619,7 @@ class AnalyticsInfrastructureMixin:
             self._metrics.chromadb_operations += 1
 
             if query_result and query_result.get("distances"):
-                for i, (distance, doc_id) in enumerate(
-                    zip(query_result["distances"][0], query_result["ids"][0])
-                ):
+                for i, (distance, doc_id) in enumerate(zip(query_result["distances"][0], query_result["ids"][0])):
                     similarity = 1 - distance
                     if similarity >= min_similarity:
                         result = {"id": doc_id, "similarity": similarity}
@@ -772,9 +762,7 @@ class SemanticAnalysisMixin(AnalyticsInfrastructureMixin):
                         results.append((i, j, sim))
         return results
 
-    async def _normalize_code_for_embedding(
-        self, code: str, language: str = "python"
-    ) -> str:
+    async def _normalize_code_for_embedding(self, code: str, language: str = "python") -> str:
         """Normalize code to language-independent representation."""
         lines = []
         in_multiline_comment = False
@@ -830,9 +818,7 @@ class SemanticAnalysisMixin(AnalyticsInfrastructureMixin):
                 return 0.0
             return dot_product / (norm1 * norm2)
 
-    async def _compute_semantic_similarity(
-        self, code1: str, code2: str, language: str = "python"
-    ) -> float:
+    async def _compute_semantic_similarity(self, code1: str, code2: str, language: str = "python") -> float:
         """Compute semantic similarity between two code snippets."""
         if not self._use_llm:
             return 0.0
@@ -947,15 +933,11 @@ class SemanticAnalysisMixin(AnalyticsInfrastructureMixin):
 
         items_with_code = []
         for item in items:
-            extracted = self._extract_code_and_metadata(
-                item, code_extractors, metadata_keys, min_code_length
-            )
+            extracted = self._extract_code_and_metadata(item, code_extractors, metadata_keys, min_code_length)
             if extracted:
                 items_with_code.append(extracted)
 
         if len(items_with_code) < 2:
             return []
 
-        return await self._find_semantic_duplicates(
-            items_with_code, code_key="code", min_similarity=min_similarity
-        )
+        return await self._find_semantic_duplicates(items_with_code, code_key="code", min_similarity=min_similarity)

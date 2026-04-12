@@ -88,9 +88,7 @@ class DistributedAgentManager:
             await self._initialize_distributed_agents()
 
             # Start health monitoring (includes work-stealing cycle)
-            self.health_monitor_task = asyncio.create_task(
-                self._health_monitor_loop(event_emitter)
-            )
+            self.health_monitor_task = asyncio.create_task(self._health_monitor_loop(event_emitter))
 
             logger.info("Distributed agent mode started successfully")
             return True
@@ -125,9 +123,7 @@ class DistributedAgentManager:
                 await self.register_agent(agent)
                 logger.info("Initialized distributed agent: %s", agent_type)
             except Exception as e:
-                logger.error(
-                    f"Failed to initialize distributed agent {agent_type}: {e}"
-                )
+                logger.error(f"Failed to initialize distributed agent {agent_type}: {e}")
 
     async def register_agent(self, agent: "BaseAgent") -> bool:
         """Register a distributed agent."""
@@ -195,9 +191,7 @@ class DistributedAgentManager:
             return
 
         if error:
-            logger.error(
-                f"Health check failed for distributed agent {agent_id}: {error}"
-            )
+            logger.error(f"Health check failed for distributed agent {agent_id}: {error}")
             return
 
         if not health:
@@ -207,17 +201,12 @@ class DistributedAgentManager:
         agent_info.last_health_check = datetime.now(tz=timezone.utc)
 
         if health.status.value != "healthy":
-            logger.warning(
-                f"Distributed agent {agent_id} health issue: {health.status.value}"
-            )
+            logger.warning(f"Distributed agent {agent_id} health issue: {health.status.value}")
 
     async def _run_health_checks(self, agents_snapshot: list) -> None:
         """Run parallel health checks on agents (Issue #334 - extracted helper)."""
         results = await asyncio.gather(
-            *[
-                self._check_single_agent_health(aid, ainfo)
-                for aid, ainfo in agents_snapshot
-            ],
+            *[self._check_single_agent_health(aid, ainfo) for aid, ainfo in agents_snapshot],
             return_exceptions=True,
         )
 
@@ -255,11 +244,7 @@ class DistributedAgentManager:
 
     def get_healthy_agents(self) -> list:
         """Get list of healthy distributed agents."""
-        return [
-            info.agent
-            for info in self.distributed_agents.values()
-            if info.health.status.value == "healthy"
-        ]
+        return [info.agent for info in self.distributed_agents.values() if info.health.status.value == "healthy"]
 
     def get_agent_info(self, agent_id: str) -> Optional[DistributedAgentInfo]:
         """Get info for a specific agent."""
@@ -403,9 +388,7 @@ class DistributedAgentManager:
 
         return True
 
-    async def _detect_and_steal_stale_tasks(
-        self, event_emitter: Optional[Any] = None
-    ) -> int:
+    async def _detect_and_steal_stale_tasks(self, event_emitter: Optional[Any] = None) -> int:
         """Scan all active tasks and steal those that are stale.
 
         Returns the number of tasks reassigned in this cycle.
@@ -424,9 +407,7 @@ class DistributedAgentManager:
                 reassigned += 1
 
         if reassigned:
-            logger.info(
-                "Work-stealing: reassigned %d stale task(s) this cycle", reassigned
-            )
+            logger.info("Work-stealing: reassigned %d stale task(s) this cycle", reassigned)
         return reassigned
 
     def get_statistics(self) -> Dict[str, Any]:
@@ -443,9 +424,7 @@ class DistributedAgentManager:
                 "last_health_check": agent_info.last_health_check.isoformat(),
                 "active_tasks": len(task_list),
                 "active_task_list": task_list,
-                "task_reassignment_counts": {
-                    t: self._task_reassignment_count.get(t, 0) for t in task_list
-                },
+                "task_reassignment_counts": {t: self._task_reassignment_count.get(t, 0) for t in task_list},
             }
         stats["_work_stealing"] = {
             "stale_task_timeout_seconds": self.stale_task_timeout_seconds,

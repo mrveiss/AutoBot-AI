@@ -48,16 +48,10 @@ class AgentClientConfig:
         # Load from config if provided
         if config_dict:
             self.default_mode = DeploymentMode(config_dict.get("default_mode", "local"))
-            self.container_base_url = config_dict.get(
-                "container_base_url", self.container_base_url
-            )
-            self.request_timeout = config_dict.get(
-                "request_timeout", self.request_timeout
-            )
+            self.container_base_url = config_dict.get("container_base_url", self.container_base_url)
+            self.request_timeout = config_dict.get("request_timeout", self.request_timeout)
             self.retry_attempts = config_dict.get("retry_attempts", self.retry_attempts)
-            self.health_check_interval = config_dict.get(
-                "health_check_interval", self.health_check_interval
-            )
+            self.health_check_interval = config_dict.get("health_check_interval", self.health_check_interval)
 
     def get_agent_config(self, agent_type: str) -> Dict[str, Any]:
         """Get configuration for specific agent type"""
@@ -84,9 +78,7 @@ class AgentRegistry:
     def register_agent(self, agent_type: str, agent: BaseAgent):
         """Register an agent in the registry"""
         self.agents[agent_type] = agent
-        logger.info(
-            f"Registered {agent_type} agent in {agent.deployment_mode.value} mode"
-        )
+        logger.info(f"Registered {agent_type} agent in {agent.deployment_mode.value} mode")
 
     def unregister_agent(self, agent_type: str):
         """Remove agent from registry"""
@@ -312,9 +304,7 @@ class AgentClient:
                 execution_time=execution_time,
             )
 
-    async def _execute_with_retries(
-        self, agent: BaseAgent, request: AgentRequest
-    ) -> AgentResponse:
+    async def _execute_with_retries(self, agent: BaseAgent, request: AgentRequest) -> AgentResponse:
         """Execute request with retry logic"""
         last_error = None
 
@@ -323,10 +313,7 @@ class AgentClient:
                 response = await agent.execute_with_tracking(request)
 
                 # Return immediately on success or non-retryable errors
-                if (
-                    response.status == "success"
-                    or attempt == self.config.retry_attempts - 1
-                ):
+                if response.status == "success" or attempt == self.config.retry_attempts - 1:
                     return response
 
                 # Wait before retry
@@ -370,18 +357,12 @@ class AgentClient:
         else:
             stats["failed_requests"] += 1
 
-    async def get_agent_health_status(
-        self, agent_type: Optional[str] = None
-    ) -> Dict[str, Any]:
+    async def get_agent_health_status(self, agent_type: Optional[str] = None) -> Dict[str, Any]:
         """Get health status for all agents or specific agent"""
         if agent_type:
             await self.registry.update_agent_health(agent_type, force=True)
             health = self.registry.agent_health.get(agent_type)
-            return (
-                health.to_dict()
-                if health
-                else {"error": f"Agent {agent_type} not found"}
-            )
+            return health.to_dict() if health else {"error": f"Agent {agent_type} not found"}
 
         # Get all agent health
         health_status = {}
@@ -397,15 +378,10 @@ class AgentClient:
         """Get performance statistics for all agents"""
         return {
             "client_stats": self.request_stats.copy(),
-            "agent_stats": {
-                agent_type: agent.get_statistics()
-                for agent_type, agent in self.registry.agents.items()
-            },
+            "agent_stats": {agent_type: agent.get_statistics() for agent_type, agent in self.registry.agents.items()},
         }
 
-    async def discover_container_agents(
-        self, base_url: Optional[str] = None
-    ) -> List[str]:
+    async def discover_container_agents(self, base_url: Optional[str] = None) -> List[str]:
         """Discover available container agents"""
         url = base_url or self.config.container_base_url
         discovered = []

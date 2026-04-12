@@ -46,9 +46,7 @@ def get_screen_analyzer() -> ScreenAnalyzer:
 class ScreenAnalysisRequest(BaseModel):
     """Request for screen analysis"""
 
-    session_id: Optional[str] = Field(
-        None, description="Optional session ID for context"
-    )
+    session_id: Optional[str] = Field(None, description="Optional session ID for context")
     include_multimodal: bool = Field(True, description="Include multi-modal analysis")
 
 
@@ -56,9 +54,7 @@ class ElementDetectionRequest(BaseModel):
     """Request for element detection"""
 
     element_type: Optional[str] = Field(None, description="Filter by element type")
-    min_confidence: float = Field(
-        0.5, ge=0.0, le=1.0, description="Minimum confidence threshold"
-    )
+    min_confidence: float = Field(0.5, ge=0.0, le=1.0, description="Minimum confidence threshold")
     session_id: Optional[str] = None
 
 
@@ -67,10 +63,7 @@ class OCRRequest(BaseModel):
 
     region: Optional[Dict[str, int]] = Field(
         None,
-        description=(
-            "Region to extract text from {x, y, width, height}. If None,"
-            "analyzes full screen."
-        ),
+        description=("Region to extract text from {x, y, width, height}. If None," "analyzes full screen."),
     )
     session_id: Optional[str] = None
 
@@ -80,9 +73,7 @@ class ElementInteractionRequest(BaseModel):
 
     element_id: str = Field(..., description="ID of element to interact with")
     interaction_type: str = Field(..., description="Type of interaction to perform")
-    parameters: Optional[Metadata] = Field(
-        None, description="Additional interaction parameters"
-    )
+    parameters: Optional[Metadata] = Field(None, description="Additional interaction parameters")
 
 
 class UIElementResponse(BaseModel):
@@ -188,9 +179,7 @@ async def analyze_screen(
         analyzer = get_screen_analyzer()
         analyzer.enable_multimodal_analysis = request.include_multimodal
 
-        screen_state = await analyzer.analyze_current_screen(
-            session_id=request.session_id
-        )
+        screen_state = await analyzer.analyze_current_screen(session_id=request.session_id)
 
         # Convert UIElements to response format
         ui_elements_response = []
@@ -204,9 +193,7 @@ async def analyze_screen(
                     confidence=element.confidence,
                     text_content=element.text_content,
                     attributes=element.attributes,
-                    possible_interactions=[
-                        i.value for i in element.possible_interactions
-                    ],
+                    possible_interactions=[i.value for i in element.possible_interactions],
                 )
             )
 
@@ -245,19 +232,14 @@ async def detect_elements(
     """
     try:
         analyzer = get_screen_analyzer()
-        screen_state = await analyzer.analyze_current_screen(
-            session_id=request.session_id
-        )
+        screen_state = await analyzer.analyze_current_screen(session_id=request.session_id)
 
         # Filter elements based on request
         filtered_elements = []
         for element in screen_state.ui_elements:
             if element.confidence < request.min_confidence:
                 continue
-            if (
-                request.element_type
-                and element.element_type.value != request.element_type
-            ):
+            if request.element_type and element.element_type.value != request.element_type:
                 continue
 
             filtered_elements.append(
@@ -268,9 +250,7 @@ async def detect_elements(
                     "center_point": list(element.center_point),
                     "confidence": element.confidence,
                     "text_content": element.text_content,
-                    "possible_interactions": [
-                        i.value for i in element.possible_interactions
-                    ],
+                    "possible_interactions": [i.value for i in element.possible_interactions],
                 }
             )
 
@@ -307,9 +287,7 @@ async def extract_text_ocr(
     """
     try:
         analyzer = get_screen_analyzer()
-        screen_state = await analyzer.analyze_current_screen(
-            session_id=request.session_id
-        )
+        screen_state = await analyzer.analyze_current_screen(session_id=request.session_id)
 
         # If region specified, filter text regions
         if request.region:

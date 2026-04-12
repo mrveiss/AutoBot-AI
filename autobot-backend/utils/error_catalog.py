@@ -362,16 +362,11 @@ def _parse_error_category(category_str: str, error_code: str) -> ErrorCategory:
     try:
         return ErrorCategory(category_str)
     except ValueError:
-        logger.warning(
-            f"Invalid category '{category_str}' for {error_code}, "
-            f"defaulting to SERVER_ERROR"
-        )
+        logger.warning(f"Invalid category '{category_str}' for {error_code}, " f"defaulting to SERVER_ERROR")
         return ErrorCategory.SERVER_ERROR
 
 
-def _parse_single_error(
-    error_code: str, error_data: dict
-) -> Optional["ErrorDefinition"]:
+def _parse_single_error(error_code: str, error_data: dict) -> Optional["ErrorDefinition"]:
     """Parse single error definition from catalog data. (Issue #315 - extracted)"""
     required_keys = ("category", "message", "status_code", "retry")
     if not all(key in error_data for key in required_keys):
@@ -608,9 +603,7 @@ class ErrorCatalog:
         if not self._initialized:
             self.load_catalog()
 
-        return [
-            code for code in self._catalog if code.startswith(component_prefix + "_")
-        ]
+        return [code for code in self._catalog if code.startswith(component_prefix + "_")]
 
     def get_catalog_stats(self) -> dict:
         """
@@ -638,9 +631,7 @@ class ErrorCatalog:
             "total_errors": len(self._catalog),
             "catalog_path": str(self._catalog_path) if self._catalog_path else None,
             "version": self._raw_data.get("version") if self._raw_data else None,
-            "last_updated": (
-                self._raw_data.get("last_updated") if self._raw_data else None
-            ),
+            "last_updated": (self._raw_data.get("last_updated") if self._raw_data else None),
             "by_category": category_counts,
             "by_component": component_counts,
         }

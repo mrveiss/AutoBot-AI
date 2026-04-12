@@ -72,9 +72,7 @@ async def validation_health():
     error_code_prefix="SYSTEM_VALIDATION",
 )
 @router.post("/validate/comprehensive", response_model=ValidationResult)
-async def run_comprehensive_validation(
-    request: ValidationRequest, background_tasks: BackgroundTasks
-):
+async def run_comprehensive_validation(request: ValidationRequest, background_tasks: BackgroundTasks):
     """Run comprehensive system validation"""
     try:
         validator = get_system_validator()
@@ -153,11 +151,7 @@ async def run_quick_validation():
         # Calculate overall status
         all_scores = [result["score"] for result in quick_results.values()]
         overall_score = sum(all_scores) / len(all_scores) if all_scores else 0
-        overall_status = (
-            "healthy"
-            if overall_score >= 80
-            else "degraded" if overall_score >= 60 else "unhealthy"
-        )
+        overall_status = "healthy" if overall_score >= 80 else "degraded" if overall_score >= 60 else "unhealthy"
 
         return {
             "status": overall_status,
@@ -237,40 +231,28 @@ async def get_optimization_recommendations():
         cache_result = await validator.validate_knowledge_base_caching()
         if "recommendations" in cache_result:
             recommendations.extend(
-                [
-                    {"component": "cache", "recommendation": rec}
-                    for rec in cache_result["recommendations"]
-                ]
+                [{"component": "cache", "recommendation": rec} for rec in cache_result["recommendations"]]
             )
 
         # Search recommendations
         search_result = await validator.validate_hybrid_search()
         if "recommendations" in search_result:
             recommendations.extend(
-                [
-                    {"component": "search", "recommendation": rec}
-                    for rec in search_result["recommendations"]
-                ]
+                [{"component": "search", "recommendation": rec} for rec in search_result["recommendations"]]
             )
 
         # Monitoring recommendations
         monitoring_result = await validator.validate_monitoring_system()
         if "recommendations" in monitoring_result:
             recommendations.extend(
-                [
-                    {"component": "monitoring", "recommendation": rec}
-                    for rec in monitoring_result["recommendations"]
-                ]
+                [{"component": "monitoring", "recommendation": rec} for rec in monitoring_result["recommendations"]]
             )
 
         # Model optimization recommendations
         model_result = await validator.validate_model_optimization()
         if "recommendations" in model_result:
             recommendations.extend(
-                [
-                    {"component": "model_optimization", "recommendation": rec}
-                    for rec in model_result["recommendations"]
-                ]
+                [{"component": "model_optimization", "recommendation": rec} for rec in model_result["recommendations"]]
             )
 
         return {

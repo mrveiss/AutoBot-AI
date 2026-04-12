@@ -62,9 +62,7 @@ async def _update_npu_data(db: AsyncSession, node: Node, updates: dict) -> None:
     await db.commit()
 
 
-async def _detect_npu_capabilities(
-    ip_address: str, port: int
-) -> tuple[Optional[NPUCapabilities], str]:
+async def _detect_npu_capabilities(ip_address: str, port: int) -> tuple[Optional[NPUCapabilities], str]:
     """Query NPU worker health endpoint to detect capabilities.
 
     Helper for trigger_npu_detection (Issue #813).
@@ -193,26 +191,18 @@ async def trigger_npu_detection(
             detail="Node does not have npu-worker role",
         )
 
-    await _update_npu_data(
-        db, node, {"detection_status": "pending", "detection_error": None}
-    )
+    await _update_npu_data(db, node, {"detection_status": "pending", "detection_error": None})
 
     # Query the NPU worker health endpoint (Issue #813)
-    capabilities, error_msg = await _detect_npu_capabilities(
-        node.ip_address, node.ssh_port or 8081
-    )
+    capabilities, error_msg = await _detect_npu_capabilities(node.ip_address, node.ssh_port or 8081)
     result_data = {"last_health_check": datetime.utcnow().isoformat()}
     if capabilities:
-        result_data.update(
-            detection_status="completed", capabilities=capabilities.model_dump()
-        )
+        result_data.update(detection_status="completed", capabilities=capabilities.model_dump())
     else:
         result_data.update(detection_status="failed", detection_error=error_msg)
 
     await _update_npu_data(db, node, result_data)
-    logger.info(
-        "NPU detection for %s: %s", node_id, "success" if capabilities else error_msg
-    )
+    logger.info("NPU detection for %s: %s", node_id, "success" if capabilities else error_msg)
 
     return NPUDetectionResponse(
         success=capabilities is not None,
@@ -235,16 +225,12 @@ async def get_load_balancing_config(
     import json
 
     # Get strategy
-    strategy_result = await db.execute(
-        select(Setting).where(Setting.key == NPU_LB_STRATEGY_KEY)
-    )
+    strategy_result = await db.execute(select(Setting).where(Setting.key == NPU_LB_STRATEGY_KEY))
     strategy_setting = strategy_result.scalar_one_or_none()
     strategy = strategy_setting.value if strategy_setting else "round-robin"
 
     # Get model affinity
-    affinity_result = await db.execute(
-        select(Setting).where(Setting.key == NPU_MODEL_AFFINITY_KEY)
-    )
+    affinity_result = await db.execute(select(Setting).where(Setting.key == NPU_MODEL_AFFINITY_KEY))
     affinity_setting = affinity_result.scalar_one_or_none()
     model_affinity = {}
     if affinity_setting and affinity_setting.value:
@@ -281,9 +267,7 @@ async def update_load_balancing_config(
         )
 
     # Update or create strategy setting
-    strategy_result = await db.execute(
-        select(Setting).where(Setting.key == NPU_LB_STRATEGY_KEY)
-    )
+    strategy_result = await db.execute(select(Setting).where(Setting.key == NPU_LB_STRATEGY_KEY))
     strategy_setting = strategy_result.scalar_one_or_none()
 
     if strategy_setting:
@@ -298,9 +282,7 @@ async def update_load_balancing_config(
         db.add(strategy_setting)
 
     # Update or create model affinity setting
-    affinity_result = await db.execute(
-        select(Setting).where(Setting.key == NPU_MODEL_AFFINITY_KEY)
-    )
+    affinity_result = await db.execute(select(Setting).where(Setting.key == NPU_MODEL_AFFINITY_KEY))
     affinity_setting = affinity_result.scalar_one_or_none()
 
     affinity_json = json.dumps(config.model_affinity)
@@ -429,9 +411,7 @@ async def remove_npu_role(
 # --- Metrics & Configuration Endpoints (Issue #590) ---
 
 
-async def _build_node_metrics(
-    node: Node, ip_address: str, port: int
-) -> NPUWorkerMetrics:
+async def _build_node_metrics(node: Node, ip_address: str, port: int) -> NPUWorkerMetrics:
     """Query NPU worker for live metrics, fall back to stored data.
 
     Helper for get_fleet_metrics / get_node_metrics (Issue #590).
@@ -524,9 +504,7 @@ async def get_node_metrics(
     node = result.scalar_one_or_none()
 
     if not node:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Node not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
     if not node.roles or "npu-worker" not in node.roles:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -548,9 +526,7 @@ async def get_worker_config(
     node = result.scalar_one_or_none()
 
     if not node:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Node not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
     if not node.roles or "npu-worker" not in node.roles:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -584,9 +560,7 @@ async def update_worker_config(
     node = result.scalar_one_or_none()
 
     if not node:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Node not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
     if not node.roles or "npu-worker" not in node.roles:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

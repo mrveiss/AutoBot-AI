@@ -345,9 +345,7 @@ EXAMPLE_3_MULTI_FACTOR = {
             "recommendation_type": "long_term",
             "impact_rank": 3,
             "confidence": 0.75,
-            "evidence": [
-                "Confounder: network flakiness normally tolerated via retries"
-            ],
+            "evidence": ["Confounder: network flakiness normally tolerated via retries"],
         },
     ],
     "severity": "critical",

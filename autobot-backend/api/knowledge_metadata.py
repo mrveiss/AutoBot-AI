@@ -16,7 +16,6 @@ Endpoints:
 
 import logging
 
-from constants.error_constants import ERR_TEMPLATE_NOT_FOUND
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.knowledge_models import (
@@ -28,6 +27,7 @@ from api.knowledge_models import (
     ValidateMetadataRequest,
 )
 from auth_middleware import check_admin_permission
+from constants.error_constants import ERR_TEMPLATE_NOT_FOUND
 from knowledge import get_knowledge_base
 
 logger = logging.getLogger(__name__)
@@ -140,9 +140,7 @@ async def get_metadata_template(template_id: str):
 
 
 @router.put("/metadata/templates/{template_id}")
-async def update_metadata_template(
-    template_id: str, request: UpdateMetadataTemplateRequest
-):
+async def update_metadata_template(template_id: str, request: UpdateMetadataTemplateRequest):
     """Update an existing metadata template."""
     try:
         kb = await get_knowledge_base()
@@ -376,9 +374,7 @@ async def revert_to_version(fact_id: str, request: RevertToVersionRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(
-            "Failed to revert %s to version %d: %s", fact_id, request.version, e
-        )
+        logger.error("Failed to revert %s to version %d: %s", fact_id, request.version, e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

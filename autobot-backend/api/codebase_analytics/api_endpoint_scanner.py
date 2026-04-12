@@ -38,14 +38,10 @@ _ROUTER_DECORATOR_RE = re.compile(
 )
 
 # Pattern for router variable names to detect prefix
-_ROUTER_INCLUDE_RE = re.compile(
-    r'include_router\s*\([^,]+,\s*prefix\s*=\s*[\'"]([^\'"]+)[\'"]', re.IGNORECASE
-)
+_ROUTER_INCLUDE_RE = re.compile(r'include_router\s*\([^,]+,\s*prefix\s*=\s*[\'"]([^\'"]+)[\'"]', re.IGNORECASE)
 
 # Pattern for router prefix in APIRouter() initialization
-_APIROUTER_PREFIX_RE = re.compile(
-    r'APIRouter\s*\([^)]*prefix\s*=\s*[\'"]([^\'"]+)[\'"]', re.IGNORECASE
-)
+_APIROUTER_PREFIX_RE = re.compile(r'APIRouter\s*\([^)]*prefix\s*=\s*[\'"]([^\'"]+)[\'"]', re.IGNORECASE)
 
 # Frontend patterns for API calls
 _API_CALL_PATTERNS = [
@@ -112,8 +108,7 @@ _FOUR_ELEMENT_TUPLE_RE = re.compile(
 )
 # Issue #552: Dynamic router loading pattern
 _DYNAMIC_ROUTER_TUPLE_RE = re.compile(
-    r'\(\s*(\w+_router)\s*,\s*["\']([^"\']*)["\'],'
-    r'\s*\[[^\]]*\]\s*,\s*["\'](\w+)["\']',
+    r'\(\s*(\w+_router)\s*,\s*["\']([^"\']*)["\'],' r'\s*\[[^\]]*\]\s*,\s*["\'](\w+)["\']',
     re.MULTILINE,
 )
 
@@ -180,9 +175,7 @@ class BackendEndpointScanner:
         - backend/initialization/router_registry/terminal_routers.py (config tuples)
         - backend/initialization/router_registry/mcp_routers.py (config tuples)
         """
-        router_registry_path = (
-            self.project_root / "backend" / "initialization" / "router_registry"
-        )
+        router_registry_path = self.project_root / "backend" / "initialization" / "router_registry"
 
         # Parse core_routers.py for module -> prefix mapping (uses tuple format)
         core_routers_file = router_registry_path / "core_routers.py"
@@ -208,9 +201,7 @@ class BackendEndpointScanner:
         # e.g., knowledge.py includes knowledge_vectorization and knowledge_maintenance
         self._scan_include_router_patterns()
 
-        logger.debug(
-            "Collected %d module prefix mappings", len(self._module_prefix_map)
-        )
+        logger.debug("Collected %d module prefix mappings", len(self._module_prefix_map))
 
     def _compile_router_patterns(self):
         """Return pre-compiled regex patterns for router import detection.
@@ -307,9 +298,7 @@ class BackendEndpointScanner:
             if child_dir:
                 subdir_key = f"api/{child_dir}/{child_module}.py"
                 if subdir_key not in self._module_prefix_map:
-                    self._module_prefix_map[subdir_key] = self._module_prefix_map[
-                        child_module
-                    ]
+                    self._module_prefix_map[subdir_key] = self._module_prefix_map[child_module]
             logger.debug(
                 "Skipping nested router %s (already registered at %s)",
                 child_module,
@@ -439,9 +428,7 @@ class BackendEndpointScanner:
             return
 
         # Compile patterns (Issue #665: extracted)
-        import_pattern, import_modules_pattern, include_pattern = (
-            self._compile_router_patterns()
-        )
+        import_pattern, import_modules_pattern, include_pattern = self._compile_router_patterns()
 
         # Issue #2652: Use rglob to include subdirectory router files
         for py_file in self.backend_path.rglob("*.py"):
@@ -456,18 +443,12 @@ class BackendEndpointScanner:
                     child_dir,
                     imported_routers,
                     imported_modules,
-                ) = self._resolve_router_context(
-                    py_file, content, import_pattern, import_modules_pattern
-                )
+                ) = self._resolve_router_context(py_file, content, import_pattern, import_modules_pattern)
 
                 # Check which routers are included
                 for match in include_pattern.finditer(content):
-                    router_ref = match.group(
-                        1
-                    )  # e.g., "vectorization_router" or "pattern_analysis.router"
-                    child_module = imported_routers.get(
-                        router_ref
-                    ) or imported_modules.get(router_ref)
+                    router_ref = match.group(1)  # e.g., "vectorization_router" or "pattern_analysis.router"
+                    child_module = imported_routers.get(router_ref) or imported_modules.get(router_ref)
                     if child_module:
                         # Register nested router (Issue #665: extracted, #2652: extended)
                         self._register_nested_router(
@@ -534,9 +515,7 @@ class BackendEndpointScanner:
                 prefix = match.group(2)  # e.g., "/analytics"
                 self._register_module_prefix(module_path, prefix)
 
-    def _apply_dynamic_router_pattern(
-        self, content: str, dynamic_router_pattern
-    ) -> None:
+    def _apply_dynamic_router_pattern(self, content: str, dynamic_router_pattern) -> None:
         """Helper for _parse_config_tuple_registry. Ref: #1088."""
         # Issue #552: Also check for dynamic router patterns (terminal_routers.py)
         # These have router variable names instead of module paths
@@ -549,9 +528,7 @@ class BackendEndpointScanner:
             module_name = router_var.replace("_router", "")
             module_path = f"api.{module_name}"
             self._register_module_prefix(module_path, prefix)
-            logger.debug(
-                "Dynamic router: %s -> %s%s", module_name, self.API_PREFIX, prefix
-            )
+            logger.debug("Dynamic router: %s -> %s%s", module_name, self.API_PREFIX, prefix)
 
     def _parse_config_tuple_registry(self, file_path: Path) -> None:
         """
@@ -670,9 +647,7 @@ class BackendEndpointScanner:
 
         return endpoints
 
-    def _scan_with_ast(
-        self, tree: ast.AST, file_path: Path, lines: List[str]
-    ) -> List[APIEndpointItem]:
+    def _scan_with_ast(self, tree: ast.AST, file_path: Path, lines: List[str]) -> List[APIEndpointItem]:
         """Scan using AST for accurate decorator detection."""
         endpoints: List[APIEndpointItem] = []
         relative_path = str(file_path.relative_to(self.project_root))
@@ -750,9 +725,7 @@ class BackendEndpointScanner:
                         file_path=relative_path,
                         line_number=i,
                         function_name=func_name,
-                        is_async=(
-                            "async def" in lines[i - 1] if i <= len(lines) else False
-                        ),
+                        is_async=("async def" in lines[i - 1] if i <= len(lines) else False),
                     )
                 )
 
@@ -799,11 +772,7 @@ class FrontendAPICallScanner:
                 if file.name.endswith(".d.ts"):
                     continue
                 # Skip test files - they contain mock data, not real API calls
-                if (
-                    "__tests__" in str(file)
-                    or ".test." in file.name
-                    or ".spec." in file.name
-                ):
+                if "__tests__" in str(file) or ".test." in file.name or ".spec." in file.name:
                     continue
 
                 try:
@@ -842,9 +811,7 @@ class FrontendAPICallScanner:
                     for path_match in _API_PATH_RE.finditer(line):
                         path = path_match.group(1)
                         # Check if this is already captured
-                        if not any(
-                            c.path == path and c.line_number == i for c in calls
-                        ):
+                        if not any(c.path == path and c.line_number == i for c in calls):
                             calls.append(
                                 FrontendAPICallItem(
                                     method="UNKNOWN",
@@ -1004,9 +971,7 @@ class EndpointMatcher:
                     used_endpoint_ids.add(ep_idx)
 
                     # Find or create usage item
-                    usage_item = next(
-                        (u for u in used_endpoints if u.endpoint == ep), None
-                    )
+                    usage_item = next((u for u in used_endpoints if u.endpoint == ep), None)
                     if usage_item:
                         usage_item.call_count += 1
                         usage_item.callers.append(call)
@@ -1080,9 +1045,7 @@ class EndpointMatcher:
         missing_endpoints: List[EndpointMismatchItem] = []
 
         # Match calls to endpoints (Issue #665: uses helper)
-        used_endpoint_ids = self._match_calls_to_endpoints(
-            used_endpoints, missing_endpoints
-        )
+        used_endpoint_ids = self._match_calls_to_endpoints(used_endpoints, missing_endpoints)
 
         # Find orphaned endpoints (Issue #665: uses helper)
         orphaned_endpoints = self._find_orphaned_endpoints(used_endpoint_ids)

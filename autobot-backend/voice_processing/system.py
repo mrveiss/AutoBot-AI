@@ -69,9 +69,7 @@ class VoiceProcessingSystem:
         if len(self.voice_command_history) > self.max_history:
             self.voice_command_history = self.voice_command_history[-self.max_history :]
 
-    def _build_task_outputs(
-        self, speech_result, command_analysis: VoiceCommandAnalysis
-    ) -> Dict[str, Any]:
+    def _build_task_outputs(self, speech_result, command_analysis: VoiceCommandAnalysis) -> Dict[str, Any]:
         """Issue #665: Extracted from process_voice_command to reduce function length.
 
         Build task context outputs dict from speech and command analysis results.
@@ -101,28 +99,20 @@ class VoiceProcessingSystem:
         ) as task_context:
             try:
                 # Step 1: Speech Recognition
-                speech_result = await self.speech_recognition.transcribe_audio(
-                    audio_input
-                )
+                speech_result = await self.speech_recognition.transcribe_audio(audio_input)
 
                 if not speech_result.transcription or speech_result.confidence < 0.3:
                     return self._build_low_confidence_response(speech_result)
 
                 # Step 2: Natural Language Processing
-                command_analysis = await self.nlp_processor.analyze_voice_command(
-                    speech_result.transcription, context
-                )
+                command_analysis = await self.nlp_processor.analyze_voice_command(speech_result.transcription, context)
 
                 # Step 3: Generate response and actions
-                response = await self._generate_command_response(
-                    command_analysis, speech_result, context
-                )
+                response = await self._generate_command_response(command_analysis, speech_result, context)
 
                 # Step 4: Update history and set task outputs
                 self._update_command_history(command_analysis)
-                task_context.set_outputs(
-                    self._build_task_outputs(speech_result, command_analysis)
-                )
+                task_context.set_outputs(self._build_task_outputs(speech_result, command_analysis))
 
                 logger.info(
                     "Voice command processed successfully: %s",
@@ -135,9 +125,7 @@ class VoiceProcessingSystem:
                 logger.error("Voice command processing failed: %s", e)
                 raise
 
-    def _build_base_response(
-        self, command_analysis: VoiceCommandAnalysis, speech_result
-    ) -> Dict[str, Any]:
+    def _build_base_response(self, command_analysis: VoiceCommandAnalysis, speech_result) -> Dict[str, Any]:
         """Build base response structure for voice command.
 
         Constructs the core response dictionary with speech recognition
@@ -189,9 +177,7 @@ class VoiceProcessingSystem:
         if command_analysis.context_needed:
             response["context_required"] = {
                 "message": "Additional context needed for command execution",
-                "required_info": await self._determine_required_context(
-                    command_analysis
-                ),
+                "required_info": await self._determine_required_context(command_analysis),
                 "suggestions": [
                     "Take screenshot",
                     "Analyze current screen",
@@ -217,22 +203,16 @@ class VoiceProcessingSystem:
             "suggested_actions": command_analysis.suggested_actions,
             "requires_confirmation": command_analysis.requires_confirmation,
             "context_needed": command_analysis.context_needed,
-            "estimated_duration": await self._estimate_execution_duration(
-                command_analysis
-            ),
+            "estimated_duration": await self._estimate_execution_duration(command_analysis),
         }
-        response["next_steps"] = await self._determine_next_steps(
-            command_analysis, context
-        )
+        response["next_steps"] = await self._determine_next_steps(command_analysis, context)
 
         # Issue #620: Use helper for conditional parts
         await self._add_conditional_response_parts(response, command_analysis)
 
         return response
 
-    async def _estimate_execution_duration(
-        self, command_analysis: VoiceCommandAnalysis
-    ) -> float:
+    async def _estimate_execution_duration(self, command_analysis: VoiceCommandAnalysis) -> float:
         """Estimate how long command execution will take"""
         base_durations = {
             VoiceCommand.AUTOMATION: 2.0,
@@ -264,9 +244,7 @@ class VoiceProcessingSystem:
 
         return "low"
 
-    async def _determine_required_context(
-        self, command_analysis: VoiceCommandAnalysis
-    ) -> List[str]:
+    async def _determine_required_context(self, command_analysis: VoiceCommandAnalysis) -> List[str]:
         """Determine what context information is needed"""
         required_context = []
 
@@ -295,19 +273,14 @@ class VoiceProcessingSystem:
         if command_analysis.context_needed and not context:
             next_steps.append("gather_required_context")
 
-        if (
-            not command_analysis.requires_confirmation
-            and not command_analysis.context_needed
-        ):
+        if not command_analysis.requires_confirmation and not command_analysis.context_needed:
             next_steps.extend(command_analysis.suggested_actions[:3])  # First 3 actions
 
         next_steps.append("monitor_execution_progress")
 
         return next_steps
 
-    async def synthesize_response(
-        self, text: str, voice_settings: Optional[Dict[str, Any]] = None
-    ) -> bytes:
+    async def synthesize_response(self, text: str, voice_settings: Optional[Dict[str, Any]] = None) -> bytes:
         """Generate spoken response"""
 
         synthesis_request = SpeechSynthesisRequest(
@@ -340,9 +313,7 @@ class VoiceProcessingSystem:
     def get_system_status(self) -> Dict[str, Any]:
         """Get voice processing system status"""
         return {
-            "speech_recognition_available": (
-                self.speech_recognition.recognizer is not None
-            ),
+            "speech_recognition_available": (self.speech_recognition.recognizer is not None),
             "tts_available": self.tts_engine.tts_engine is not None,
             "command_history_count": len(self.voice_command_history),
             "supported_commands": [cmd.value for cmd in VoiceCommand],
@@ -356,9 +327,7 @@ class VoiceProcessingSystem:
                 "most_common_command": (
                     max(
                         [cmd.command_type for cmd in self.voice_command_history],
-                        key=[
-                            cmd.command_type for cmd in self.voice_command_history
-                        ].count,
+                        key=[cmd.command_type for cmd in self.voice_command_history].count,
                     ).value
                     if self.voice_command_history
                     else "none"

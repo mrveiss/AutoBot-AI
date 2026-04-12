@@ -245,9 +245,7 @@ class TestRememberApproval:
         mock_redis = AsyncMock()
         mock_redis.get.return_value = None
 
-        with patch(
-            "services.approval_memory.get_redis_client", return_value=mock_redis
-        ):
+        with patch("services.approval_memory.get_redis_client", return_value=mock_redis):
             result = await manager.remember_approval(
                 project_path="/home/user/project",
                 command="npm install lodash",
@@ -279,9 +277,7 @@ class TestRememberApproval:
         mock_redis = AsyncMock()
         mock_redis.get.return_value = json.dumps(existing)
 
-        with patch(
-            "services.approval_memory.get_redis_client", return_value=mock_redis
-        ):
+        with patch("services.approval_memory.get_redis_client", return_value=mock_redis):
             await manager.remember_approval(
                 project_path="/home/user/project",
                 command="npm install new-pkg",
@@ -341,9 +337,7 @@ class TestCheckRemembered:
         mock_redis = AsyncMock()
         mock_redis.get.return_value = json.dumps(records)
 
-        with patch(
-            "services.approval_memory.get_redis_client", return_value=mock_redis
-        ):
+        with patch("services.approval_memory.get_redis_client", return_value=mock_redis):
             result = await manager.check_remembered(
                 project_path="/home/user/project",
                 command="npm install express",
@@ -366,9 +360,7 @@ class TestCheckRemembered:
         mock_redis = AsyncMock()
         mock_redis.get.return_value = json.dumps(records)
 
-        with patch(
-            "services.approval_memory.get_redis_client", return_value=mock_redis
-        ):
+        with patch("services.approval_memory.get_redis_client", return_value=mock_redis):
             result = await manager.check_remembered(
                 project_path="/home/user/project",
                 command="npm install express",
@@ -391,9 +383,7 @@ class TestCheckRemembered:
         mock_redis = AsyncMock()
         mock_redis.get.return_value = json.dumps(records)
 
-        with patch(
-            "services.approval_memory.get_redis_client", return_value=mock_redis
-        ):
+        with patch("services.approval_memory.get_redis_client", return_value=mock_redis):
             result = await manager.check_remembered(
                 project_path="/home/user/project",
                 command="npm install express",
@@ -408,9 +398,7 @@ class TestCheckRemembered:
         mock_redis = AsyncMock()
         mock_redis.get.return_value = None
 
-        with patch(
-            "services.approval_memory.get_redis_client", return_value=mock_redis
-        ):
+        with patch("services.approval_memory.get_redis_client", return_value=mock_redis):
             result = await manager.check_remembered("/path", "ls", "user", "safe")
         assert result is False
 
@@ -428,9 +416,7 @@ class TestCheckRemembered:
         mock_redis = AsyncMock()
         mock_redis.get.return_value = json.dumps(records)
 
-        with patch(
-            "services.approval_memory.get_redis_client", return_value=mock_redis
-        ):
+        with patch("services.approval_memory.get_redis_client", return_value=mock_redis):
             result = await manager.check_remembered(
                 project_path="/home/user/project",
                 command="pip install requests",
@@ -453,9 +439,7 @@ class TestCheckRemembered:
         mock_redis = AsyncMock()
         mock_redis.get.return_value = json.dumps(records)
 
-        with patch(
-            "services.approval_memory.get_redis_client", return_value=mock_redis
-        ):
+        with patch("services.approval_memory.get_redis_client", return_value=mock_redis):
             result = await manager.check_remembered(
                 project_path="/home/user/project",
                 command="npm install express",
@@ -471,9 +455,7 @@ class TestCheckRemembered:
         mock_redis = AsyncMock()
         mock_redis.get.return_value = "not valid json{"
 
-        with patch(
-            "services.approval_memory.get_redis_client", return_value=mock_redis
-        ):
+        with patch("services.approval_memory.get_redis_client", return_value=mock_redis):
             result = await manager.check_remembered("/path", "ls", "user", "safe")
         assert result is False
 

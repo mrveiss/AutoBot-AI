@@ -60,9 +60,7 @@ class GovernanceEngine:
                 reason="full_auto mode",
                 trust_level=self.default_trust,
             )
-        return await self._create_pending_approval(
-            skill_name, requested_by, reason, skill_id=skill_id
-        )
+        return await self._create_pending_approval(skill_name, requested_by, reason, skill_id=skill_id)
 
     async def approve(
         self,
@@ -106,9 +104,7 @@ class GovernanceEngine:
         )
 
     @staticmethod
-    async def _notify_admin(
-        skill_name: str, approval_id: str, requested_by: str, reason: str
-    ) -> None:
+    async def _notify_admin(skill_name: str, approval_id: str, requested_by: str, reason: str) -> None:
         """Publish pending approval to Redis for SLM dashboard notification."""
         try:
             from autobot_shared.redis_client import get_async_redis_client
@@ -129,9 +125,7 @@ class GovernanceEngine:
             logger.warning("Failed to notify admin of skill approval: %s", exc)
 
 
-async def _persist_approval(
-    approval_id: str, skill_id: str, requested_by: str, reason: str
-) -> None:
+async def _persist_approval(approval_id: str, skill_id: str, requested_by: str, reason: str) -> None:
     """Write a SkillApproval row to the skills DB (non-fatal on failure).
 
     Helper for GovernanceEngine._create_pending_approval (Issue #951).

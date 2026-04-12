@@ -113,8 +113,7 @@ class BaseService:
         """Raise error if no organization context is set."""
         if not self.context.org_id:
             raise ValueError(
-                "Organization context required for this operation. "
-                "Ensure deployment mode supports multi-tenancy."
+                "Organization context required for this operation. " "Ensure deployment mode supports multi-tenancy."
             )
 
     def _require_auth_context(self):
@@ -125,6 +124,4 @@ class BaseService:
     def _require_platform_admin(self):
         """Raise error if current user is not a platform admin."""
         if not self.context.is_platform_admin:
-            raise PermissionError(
-                "Platform admin privileges required for this operation."
-            )
+            raise PermissionError("Platform admin privileges required for this operation.")

@@ -221,9 +221,7 @@ class SSHTerminalWebSocket:
 
     async def send_to_terminal(self, text: str) -> None:
         """Send text input — not supported, redirects to SLM."""
-        await self._send_error(
-            "SSH terminal not available. Use SLM for infrastructure connections."
-        )
+        await self._send_error("SSH terminal not available. Use SLM for infrastructure connections.")
 
     async def send_output(self, content: str) -> None:
         """Send terminal output — stub."""
@@ -315,9 +313,7 @@ async def create_terminal_session(
     session_config = {
         "session_id": session_id,
         "user_id": request.user_id,
-        "conversation_id": (
-            request.conversation_id
-        ),  # For linking chat to terminal logging
+        "conversation_id": (request.conversation_id),  # For linking chat to terminal logging
         "chat_id": request.chat_id,  # For chat-scoped SSH keys (Issue #211)
         "security_level": request.security_level,
         "enable_logging": request.enable_logging,
@@ -580,9 +576,7 @@ async def add_key_to_ssh_agent(
             "message": f"Key '{key_name}' added to ssh-agent",
         }
     else:
-        raise HTTPException(
-            status_code=400, detail=f"Failed to add key '{key_name}' to ssh-agent"
-        )
+        raise HTTPException(status_code=400, detail=f"Failed to add key '{key_name}' to ssh-agent")
 
 
 @with_error_handling(
@@ -650,9 +644,7 @@ async def execute_single_command(
                 break
 
     # Log command execution attempt
-    logger.info(
-        f"Single command execution: {request.command} (risk: {risk_level.value})"
-    )
+    logger.info(f"Single command execution: {request.command} (risk: {risk_level.value})")
 
     # For now, return the assessment (actual execution would need subprocess)
     return {
@@ -819,9 +811,7 @@ async def _init_terminal_handler(
         Started ConsolidatedTerminalWebSocket instance
     """
     config = session_manager.session_configs.get(session_id, {})
-    security_level = SecurityLevel(
-        config.get("security_level", SecurityLevel.STANDARD.value)
-    )
+    security_level = SecurityLevel(config.get("security_level", SecurityLevel.STANDARD.value))
     conversation_id = config.get("conversation_id")
 
     # Issue #666: Use async Redis client since TerminalLogger uses await with Redis ops
@@ -833,9 +823,7 @@ async def _init_terminal_handler(
     except Exception as e:
         logger.warning("Could not get Redis client for terminal logging: %s", e)
 
-    terminal = ConsolidatedTerminalWebSocket(
-        websocket, session_id, security_level, conversation_id, redis_client
-    )
+    terminal = ConsolidatedTerminalWebSocket(websocket, session_id, security_level, conversation_id, redis_client)
     session_manager.add_connection(session_id, terminal)
     await terminal.start()
     return terminal
@@ -967,9 +955,7 @@ async def _setup_ssh_terminal(
     return terminal
 
 
-async def _run_ssh_message_loop(
-    websocket: WebSocket, terminal: "SSHTerminalWebSocket", session_id: str
-) -> None:
+async def _run_ssh_message_loop(websocket: WebSocket, terminal: "SSHTerminalWebSocket", session_id: str) -> None:
     """
     Run SSH WebSocket message handling loop.
 
@@ -1034,18 +1020,14 @@ async def ssh_terminal_websocket(
         redis_client = await _init_ssh_redis_client()
 
         # Issue #620: Use helper for terminal setup
-        terminal = await _setup_ssh_terminal(
-            websocket, session_id, host_id, conversation_id, redis_client
-        )
+        terminal = await _setup_ssh_terminal(websocket, session_id, host_id, conversation_id, redis_client)
 
         # Start SSH session
         if not await terminal.start():
             logger.error("Failed to start SSH terminal session for host: %s", host_id)
             return
 
-        logger.info(
-            "SSH WebSocket connection established: %s -> host %s", session_id, host_id
-        )
+        logger.info("SSH WebSocket connection established: %s -> host %s", session_id, host_id)
 
         # Issue #620: Use helper for message loop
         await _run_ssh_message_loop(websocket, terminal, session_id)
@@ -1213,9 +1195,7 @@ async def get_terminal_capabilities(
         "session_management": True,
         "terminal_types": {
             "tools_terminal": {
-                "description": (
-                    "Standalone system terminal for direct command execution"
-                ),
+                "description": ("Standalone system terminal for direct command execution"),
                 "features": ["direct_execution", "no_approval", "system_admin"],
             },
             "chat_terminal": {
@@ -1328,9 +1308,7 @@ async def get_terminal_features(
         ],
         "features": {
             "pty_shell": "Full PTY shell support with SimplePTY implementation",
-            "websocket_streaming": (
-                "Real-time bidirectional communication via WebSocket"
-            ),
+            "websocket_streaming": ("Real-time bidirectional communication via WebSocket"),
             "security_validation": "Command risk assessment via SecureCommandExecutor",
             "session_cleanup": "Proper resource cleanup on disconnect",
             "approval_workflow": "User approval for high-risk commands (Chat Terminal)",

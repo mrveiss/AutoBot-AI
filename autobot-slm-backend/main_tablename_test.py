@@ -68,9 +68,7 @@ class TestCheckTablenameCollisions:
         with caplog.at_level(logging.WARNING):
             check_tablename_collisions(slm_meta, um_meta)
 
-        warning_msgs = [
-            r.message for r in caplog.records if r.levelno >= logging.WARNING
-        ]
+        warning_msgs = [r.message for r in caplog.records if r.levelno >= logging.WARNING]
         assert len(warning_msgs) >= 1
         # Should mention count of 3
         assert "3 shared" in warning_msgs[0]

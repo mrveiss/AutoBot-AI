@@ -104,9 +104,7 @@ class EnhancedMemoryManager(UnifiedMemoryManager):
         ⚠️ WARNING: This is a synchronous method. DO NOT call from async code.
         """
         # Generate task_id using same pattern as enhanced_memory_manager.py
-        task_id = hashlib.sha256(
-            f"{task_name}_{datetime.now(tz=timezone.utc).isoformat()}".encode()
-        ).hexdigest()[:16]
+        task_id = hashlib.sha256(f"{task_name}_{datetime.now(tz=timezone.utc).isoformat()}".encode()).hexdigest()[:16]
 
         # Create TaskExecutionRecord
         record = TaskExecutionRecord(
@@ -140,9 +138,7 @@ class EnhancedMemoryManager(UnifiedMemoryManager):
         ⚠️ WARNING: This is a synchronous method. DO NOT call from async code.
         """
         result = self._run_sync(
-            self.update_task_status(
-                task_id, TaskStatus.IN_PROGRESS, started_at=datetime.now(tz=timezone.utc)
-            )
+            self.update_task_status(task_id, TaskStatus.IN_PROGRESS, started_at=datetime.now(tz=timezone.utc))
         )
         if result:
             logger.info("Started task: %s", task_id)
@@ -293,9 +289,7 @@ class LongTermMemoryManager:
     - analysis/refactoring/test_memory_path_utils.py
     """
 
-    def __init__(
-        self, config_path: Optional[str] = None, db_path: str = "data/agent_memory.db"
-    ):
+    def __init__(self, config_path: Optional[str] = None, db_path: str = "data/agent_memory.db"):
         """
         Initialize with memory_manager.py defaults
 
@@ -309,9 +303,7 @@ class LongTermMemoryManager:
             enable_monitoring=False,
             retention_days=90,
         )
-        logger.info(
-            "LongTermMemoryManager compatibility wrapper initialized at %s", db_path
-        )
+        logger.info("LongTermMemoryManager compatibility wrapper initialized at %s", db_path)
 
     async def store_memory(
         self,
@@ -327,9 +319,7 @@ class LongTermMemoryManager:
         except (KeyError, AttributeError):
             cat = category  # Use as-is if not in enum
 
-        return await self._unified.store_memory(
-            cat, content, metadata, embedding=embedding
-        )
+        return await self._unified.store_memory(cat, content, metadata, embedding=embedding)
 
     async def retrieve_memories(
         self, category: str, filters: Optional[Dict] = None, limit: int = 100

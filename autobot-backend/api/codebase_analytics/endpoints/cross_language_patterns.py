@@ -248,16 +248,8 @@ async def get_api_contract_mismatches() -> JSONResponse:
             )
         analysis = _analysis_cache["latest"]
 
-    orphaned = [
-        m
-        for m in analysis.api_contract_mismatches
-        if m.mismatch_type == "orphaned_endpoint"
-    ]
-    missing = [
-        m
-        for m in analysis.api_contract_mismatches
-        if m.mismatch_type == "missing_endpoint"
-    ]
+    orphaned = [m for m in analysis.api_contract_mismatches if m.mismatch_type == "orphaned_endpoint"]
+    missing = [m for m in analysis.api_contract_mismatches if m.mismatch_type == "missing_endpoint"]
 
     return JSONResponse(
         {
@@ -304,9 +296,7 @@ async def get_semantic_matches(
         analysis = _analysis_cache["latest"]
 
     # Filter by similarity threshold
-    filtered_matches = [
-        m for m in analysis.pattern_matches if m.similarity_score >= min_similarity
-    ]
+    filtered_matches = [m for m in analysis.pattern_matches if m.similarity_score >= min_similarity]
 
     # Sort by similarity (highest first)
     filtered_matches.sort(key=lambda x: x.similarity_score, reverse=True)

@@ -143,10 +143,7 @@ def build_agent_card(base_url: str) -> AgentCard:
     try:
         from agents.agent_orchestration.types import DEFAULT_AGENT_CAPABILITIES
 
-        skills = [
-            _capability_to_skill(agent_type.value, cap)
-            for agent_type, cap in DEFAULT_AGENT_CAPABILITIES.items()
-        ]
+        skills = [_capability_to_skill(agent_type.value, cap) for agent_type, cap in DEFAULT_AGENT_CAPABILITIES.items()]
     except ImportError as exc:
         logger.warning("Could not load agent capabilities for card: %s", exc)
         skills = []

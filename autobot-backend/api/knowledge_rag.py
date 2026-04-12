@@ -41,21 +41,15 @@ class AdvancedSearchRequest(BaseModel):
         le=50,
         description="Maximum results",
     )
-    enable_reranking: bool = Field(
-        default=True, description="Enable cross-encoder reranking"
-    )
-    return_context: bool = Field(
-        default=False, description="Return optimized context for RAG"
-    )
+    enable_reranking: bool = Field(default=True, description="Enable cross-encoder reranking")
+    return_context: bool = Field(default=False, description="Return optimized context for RAG")
     timeout: float = Field(default=None, description="Optional timeout in seconds")
 
 
 class RerankRequest(BaseModel):
     """Request model for reranking existing search results"""
 
-    query: str = Field(
-        ..., min_length=1, max_length=1000, description="Original search query"
-    )
+    query: str = Field(..., min_length=1, max_length=1000, description="Original search query")
     results: List[Metadata] = Field(..., description="Search results to rerank")
 
 
@@ -237,9 +231,7 @@ async def rerank_results(
     - **reranked_results**: Results sorted by rerank score
     - **original_count**: Number of input results
     """
-    logger.info(
-        f"Reranking {len(request.results)} results for query: '{request.query}'"
-    )
+    logger.info(f"Reranking {len(request.results)} results for query: '{request.query}'")
 
     # Perform reranking
     reranked_results = await rag_service.rerank_results(

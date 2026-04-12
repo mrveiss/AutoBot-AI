@@ -181,23 +181,15 @@ if __name__ == "__main__":
 
         # Collect metrics
         metrics = await performance_monitor.collect_all_metrics()
-        print(  # noqa: print
-            f"Collected metrics: {json.dumps(metrics, indent=2, default=str)}"
-        )  # noqa: print
+        print(f"Collected metrics: {json.dumps(metrics, indent=2, default=str)}")  # noqa: print  # noqa: print
 
         # Get dashboard
         dashboard = await performance_monitor.get_current_performance_dashboard()
-        print(  # noqa: print
-            f"Performance dashboard: {json.dumps(dashboard, indent=2, default=str)}"
-        )  # noqa: print
+        print(f"Performance dashboard: {json.dumps(dashboard, indent=2, default=str)}")  # noqa: print  # noqa: print
 
         # Get recommendations
-        recommendations = (
-            await performance_monitor.get_performance_optimization_recommendations()
-        )
-        print(  # noqa: print
-            f"Optimization recommendations: {json.dumps(recommendations, indent=2)}"
-        )  # noqa: print
+        recommendations = await performance_monitor.get_performance_optimization_recommendations()
+        print(f"Optimization recommendations: {json.dumps(recommendations, indent=2)}")  # noqa: print  # noqa: print
 
     # Run test
     asyncio.run(test_monitoring())

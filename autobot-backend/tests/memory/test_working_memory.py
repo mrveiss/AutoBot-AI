@@ -45,11 +45,10 @@ def redis_mock():
 # store
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_store_sets_key_with_default_ttl(service, redis_mock):
-    with patch(
-        "memory.working_memory.get_redis_client", new=AsyncMock(return_value=redis_mock)
-    ):
+    with patch("memory.working_memory.get_redis_client", new=AsyncMock(return_value=redis_mock)):
         await service.store(SESSION, KEY, VALUE)
         redis_mock.set.assert_awaited_once()
         call_args = redis_mock.set.call_args
@@ -60,9 +59,7 @@ async def test_store_sets_key_with_default_ttl(service, redis_mock):
 
 @pytest.mark.asyncio
 async def test_store_uses_custom_ttl(service, redis_mock):
-    with patch(
-        "memory.working_memory.get_redis_client", new=AsyncMock(return_value=redis_mock)
-    ):
+    with patch("memory.working_memory.get_redis_client", new=AsyncMock(return_value=redis_mock)):
         await service.store(SESSION, KEY, VALUE, ttl=120)
         assert redis_mock.set.call_args.kwargs["ex"] == 120
 
@@ -71,11 +68,10 @@ async def test_store_uses_custom_ttl(service, redis_mock):
 # get
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_get_returns_deserialised_value(service, redis_mock):
-    with patch(
-        "memory.working_memory.get_redis_client", new=AsyncMock(return_value=redis_mock)
-    ):
+    with patch("memory.working_memory.get_redis_client", new=AsyncMock(return_value=redis_mock)):
         result = await service.get(SESSION, KEY)
         assert result == VALUE
 
@@ -84,9 +80,7 @@ async def test_get_returns_deserialised_value(service, redis_mock):
 async def test_get_returns_none_on_missing_key(service):
     missing_mock = _make_redis_mock(get_return=None)
     missing_mock.get = AsyncMock(return_value=None)
-    with patch(
-        "memory.working_memory.get_redis_client", new=AsyncMock(return_value=missing_mock)
-    ):
+    with patch("memory.working_memory.get_redis_client", new=AsyncMock(return_value=missing_mock)):
         result = await service.get(SESSION, "nonexistent")
         assert result is None
 
@@ -94,6 +88,7 @@ async def test_get_returns_none_on_missing_key(service):
 # ---------------------------------------------------------------------------
 # list
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_list_returns_key_suffixes(service):
@@ -105,9 +100,7 @@ async def test_list_returns_key_suffixes(service):
 
     mock.scan_iter = _scan_iter
 
-    with patch(
-        "memory.working_memory.get_redis_client", new=AsyncMock(return_value=mock)
-    ):
+    with patch("memory.working_memory.get_redis_client", new=AsyncMock(return_value=mock)):
         keys = await service.list(SESSION)
         assert sorted(keys) == sorted([KEY, "other"])
 
@@ -122,9 +115,7 @@ async def test_list_returns_empty_when_no_keys(service):
 
     mock.scan_iter = _empty_scan
 
-    with patch(
-        "memory.working_memory.get_redis_client", new=AsyncMock(return_value=mock)
-    ):
+    with patch("memory.working_memory.get_redis_client", new=AsyncMock(return_value=mock)):
         keys = await service.list(SESSION)
         assert keys == []
 
@@ -132,6 +123,7 @@ async def test_list_returns_empty_when_no_keys(service):
 # ---------------------------------------------------------------------------
 # clear
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_clear_deletes_all_session_keys(service):
@@ -143,9 +135,7 @@ async def test_clear_deletes_all_session_keys(service):
     mock.scan_iter = _scan_iter
     mock.delete = AsyncMock(return_value=1)
 
-    with patch(
-        "memory.working_memory.get_redis_client", new=AsyncMock(return_value=mock)
-    ):
+    with patch("memory.working_memory.get_redis_client", new=AsyncMock(return_value=mock)):
         deleted = await service.clear(SESSION)
         assert deleted == 1
         mock.delete.assert_awaited_once()
@@ -161,9 +151,7 @@ async def test_clear_returns_zero_when_no_keys(service):
 
     mock.scan_iter = _empty_scan
 
-    with patch(
-        "memory.working_memory.get_redis_client", new=AsyncMock(return_value=mock)
-    ):
+    with patch("memory.working_memory.get_redis_client", new=AsyncMock(return_value=mock)):
         deleted = await service.clear(SESSION)
         assert deleted == 0
         mock.delete.assert_not_awaited()
@@ -172,6 +160,7 @@ async def test_clear_returns_zero_when_no_keys(service):
 # ---------------------------------------------------------------------------
 # manager integration
 # ---------------------------------------------------------------------------
+
 
 def test_manager_exposes_working_memory_property():
     """UnifiedMemoryManager.working_memory returns a WorkingMemoryService singleton."""

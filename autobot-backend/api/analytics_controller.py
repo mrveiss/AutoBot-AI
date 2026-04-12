@@ -61,9 +61,7 @@ _DYNAMIC_SEGMENT_PATTERNS = [
     re.compile(r"^\d+$"),
     # Alphanumeric slugs that look generated: starts with alpha/digit, contains
     # both letters and digits, length ≥ 8.  Avoids collapsing short word slugs.
-    re.compile(
-        r"^(?=[a-z0-9_-]{0,200}[a-z])(?=[a-z0-9_-]{0,200}\d)[a-z0-9_-]{8,}$", re.I
-    ),
+    re.compile(r"^(?=[a-z0-9_-]{0,200}[a-z])(?=[a-z0-9_-]{0,200}\d)[a-z0-9_-]{8,}$", re.I),
 ]
 
 
@@ -164,9 +162,7 @@ class AnalyticsController:
         if len(self.api_frequencies) <= MAX_API_FREQUENCY_ENTRIES:
             return
         keep_count = MAX_API_FREQUENCY_ENTRIES // 2
-        top_entries = sorted(
-            self.api_frequencies.items(), key=lambda kv: kv[1], reverse=True
-        )
+        top_entries = sorted(self.api_frequencies.items(), key=lambda kv: kv[1], reverse=True)
         keep_keys = {k for k, _ in top_entries[:keep_count]}
         drop_keys = set(self.api_frequencies) - keep_keys
         for key in drop_keys:
@@ -182,19 +178,13 @@ class AnalyticsController:
     async def get_redis_connection(self, database: RedisDatabase) -> redis.Redis:
         """Get Redis connection for specific database"""
         try:
-            db_name = (
-                database.name.lower()
-                if isinstance(database, RedisDatabase)
-                else database
-            )
+            db_name = database.name.lower() if isinstance(database, RedisDatabase) else database
             return await get_async_redis_client(database=db_name)
         except Exception as e:
             logger.error("Failed to get Redis connection for %s: %s", database, e)
             return None
 
-    async def track_api_call(
-        self, endpoint: str, response_time: float, status_code: int
-    ):
+    async def track_api_call(self, endpoint: str, response_time: float, status_code: int):
         """Track API call for pattern analysis"""
         timestamp = datetime.now(tz=timezone.utc).isoformat()
 
@@ -263,9 +253,7 @@ class AnalyticsController:
                 if self.response_times[endpoint]
                 else 0
             )
-            error_rate = (
-                self.error_counts[endpoint] / frequency * 100 if frequency > 0 else 0
-            )
+            error_rate = self.error_counts[endpoint] / frequency * 100 if frequency > 0 else 0
 
             api_patterns.append(
                 CommunicationPattern(
@@ -285,9 +273,9 @@ class AnalyticsController:
         patterns["websocket_activity"] = dict(self.websocket_activity)
         patterns["total_api_calls"] = sum(self.api_frequencies.values())
         patterns["unique_endpoints"] = len(self.api_frequencies)
-        patterns["avg_response_time"] = sum(
-            sum(times) for times in self.response_times.values()
-        ) / max(sum(len(times) for times in self.response_times.values()), 1)
+        patterns["avg_response_time"] = sum(sum(times) for times in self.response_times.values()) / max(
+            sum(len(times) for times in self.response_times.values()), 1
+        )
 
         return patterns
 
@@ -315,10 +303,7 @@ class AnalyticsController:
             # Run code indexing if available
             # Issue #358 - avoid blocking
             code_index_exists = await asyncio.to_thread(self.code_index_path.exists)
-            if (
-                code_index_exists
-                and request.analysis_type in CODE_INDEXING_ANALYSIS_TYPES
-            ):
+            if code_index_exists and request.analysis_type in CODE_INDEXING_ANALYSIS_TYPES:
                 await self._run_code_indexing(request, analysis_results)
 
             # Store results in cache (thread-safe)
@@ -333,9 +318,7 @@ class AnalyticsController:
 
         return analysis_results
 
-    async def _run_code_analysis_suite(
-        self, request: CodeAnalysisRequest, results: Dict
-    ):
+    async def _run_code_analysis_suite(self, request: CodeAnalysisRequest, results: Dict):
         """Run the code analysis suite"""
         try:
             cmd = [
@@ -357,16 +340,12 @@ class AnalyticsController:
                 cwd=str(self.code_analysis_path),
             )
 
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(), timeout=TimingConstants.VERY_LONG_TIMEOUT
-            )
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=TimingConstants.VERY_LONG_TIMEOUT)
 
             if process.returncode == 0:
                 analysis_data = json.loads(stdout.decode())
                 results["code_analysis"] = analysis_data
-                results["communication_chains"] = analysis_data.get(
-                    "communication_patterns", {}
-                )
+                results["communication_chains"] = analysis_data.get("communication_patterns", {})
             else:
                 results["code_analysis_error"] = stderr.decode()
 
@@ -422,9 +401,7 @@ class AnalyticsController:
             "cpu_percent": cpu_percent,
             "memory_percent": memory.percent,
             "disk_percent": (disk.used / disk.total) * 100,
-            "load_average": (
-                psutil.getloadavg() if hasattr(psutil, "getloadavg") else [0, 0, 0]
-            ),
+            "load_average": (psutil.getloadavg() if hasattr(psutil, "getloadavg") else [0, 0, 0]),
         }
 
     def _collect_api_performance(self) -> Dict:
@@ -438,11 +415,7 @@ class AnalyticsController:
                     "max_response_time": max(times),
                     "total_calls": self.api_frequencies[endpoint],
                     "error_rate": (
-                        (
-                            self.error_counts[endpoint]
-                            / self.api_frequencies[endpoint]
-                            * 100
-                        )
+                        (self.error_counts[endpoint] / self.api_frequencies[endpoint] * 100)
                         if self.api_frequencies[endpoint] > 0
                         else 0
                     ),
@@ -499,23 +472,16 @@ class AnalyticsController:
         try:
             # API usage statistics
             total_calls = sum(self.api_frequencies.values())
-            most_used_endpoints = sorted(
-                self.api_frequencies.items(), key=lambda x: x[1], reverse=True
-            )[:10]
+            most_used_endpoints = sorted(self.api_frequencies.items(), key=lambda x: x[1], reverse=True)[:10]
 
             stats["api_usage"] = {
                 "total_calls": total_calls,
                 "unique_endpoints": len(self.api_frequencies),
                 "most_used_endpoints": [
-                    {"endpoint": endpoint, "calls": calls}
-                    for endpoint, calls in most_used_endpoints
+                    {"endpoint": endpoint, "calls": calls} for endpoint, calls in most_used_endpoints
                 ],
                 "total_errors": sum(self.error_counts.values()),
-                "overall_error_rate": (
-                    (sum(self.error_counts.values()) / total_calls * 100)
-                    if total_calls > 0
-                    else 0
-                ),
+                "overall_error_rate": ((sum(self.error_counts.values()) / total_calls * 100) if total_calls > 0 else 0),
             }
 
             # WebSocket usage (thread-safe access)
@@ -543,9 +509,7 @@ class AnalyticsController:
                     kb_info = await redis_conn.info()
                     stats["knowledge_base_usage"] = {
                         "keys_count": kb_info.get("db1", {}).get("keys", 0),
-                        "memory_usage_mb": (
-                            kb_info.get("used_memory", 0) / (1024 * 1024)
-                        ),
+                        "memory_usage_mb": (kb_info.get("used_memory", 0) / (1024 * 1024)),
                     }
             except Exception:
                 stats["knowledge_base_usage"] = {"error": "Unable to retrieve KB stats"}
@@ -570,19 +534,13 @@ class AnalyticsController:
                 recent_performance = performance_history_copy[-50:]
 
                 # Calculate trends
-                cpu_trend = self._calculate_trend(
-                    [p.get("cpu_percent", 0) for p in recent_performance]
-                )
-                memory_trend = self._calculate_trend(
-                    [p.get("memory_percent", 0) for p in recent_performance]
-                )
+                cpu_trend = self._calculate_trend([p.get("cpu_percent", 0) for p in recent_performance])
+                memory_trend = self._calculate_trend([p.get("memory_percent", 0) for p in recent_performance])
 
                 trends["performance_trends"] = {
                     "cpu_trend": cpu_trend,
                     "memory_trend": memory_trend,
-                    "trend_period_minutes": (
-                        len(recent_performance) * 2
-                    ),  # Assuming 2-minute intervals
+                    "trend_period_minutes": (len(recent_performance) * 2),  # Assuming 2-minute intervals
                 }
 
             # API usage trends
@@ -600,9 +558,7 @@ class AnalyticsController:
             # Error trends
             error_calls = [call for call in recent_calls if call["status_code"] >= 400]
             trends["error_trends"] = {
-                "recent_error_rate": (
-                    len(error_calls) / len(recent_calls) * 100 if recent_calls else 0
-                ),
+                "recent_error_rate": (len(error_calls) / len(recent_calls) * 100 if recent_calls else 0),
                 "total_recent_errors": len(error_calls),
             }
 
@@ -624,9 +580,7 @@ class AnalyticsController:
         first_avg = sum(first_half) / len(first_half)
         second_avg = sum(second_half) / len(second_half)
 
-        change_percent = (
-            ((second_avg - first_avg) / first_avg * 100) if first_avg > 0 else 0
-        )
+        change_percent = ((second_avg - first_avg) / first_avg * 100) if first_avg > 0 else 0
 
         if abs(change_percent) < 5:
             return "stable"

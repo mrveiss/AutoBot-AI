@@ -37,7 +37,6 @@ from orchestration.graph_runner import (
     StepEventType,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -56,6 +55,7 @@ async def _set_key(key: str, value: Any):
 
 async def _fail_then_succeed(call_count: list[int]):
     """Node that raises on first call, succeeds on second."""
+
     async def _fn(state: dict, **kwargs: Any) -> dict:
         call_count.append(1)
         if len(call_count) == 1:
@@ -212,9 +212,7 @@ class TestGraphRunnerLinear:
 
     def test_state_accumulates(self, simple_graph):
         runner = GraphRunner(simple_graph, graph_id="test", enable_checkpoints=False)
-        state = asyncio.get_event_loop().run_until_complete(
-            runner.run({"initial": 42})
-        )
+        state = asyncio.get_event_loop().run_until_complete(runner.run({"initial": 42}))
         assert state["initial"] == 42
         assert state["a_done"] is True
         assert state["b_done"] is True
@@ -450,9 +448,7 @@ class TestStepEventEmitter:
         emitter.add_sink(sink_a)
         emitter.add_sink(sink_b)
 
-        event = GraphStepEvent(
-            event_type=StepEventType.NODE_START, node_name="n", graph_id="g"
-        )
+        event = GraphStepEvent(event_type=StepEventType.NODE_START, node_name="n", graph_id="g")
         asyncio.get_event_loop().run_until_complete(emitter.emit(event))
         assert sorted(counter) == [1, 2]
 
@@ -474,9 +470,7 @@ class TestStepEventEmitter:
         builder.add_edge("a", END)
         graph = builder.compile()
 
-        runner = GraphRunner(
-            graph, graph_id="t", emitter=emitter, enable_checkpoints=False
-        )
+        runner = GraphRunner(graph, graph_id="t", emitter=emitter, enable_checkpoints=False)
         asyncio.get_event_loop().run_until_complete(runner.run({}))
 
         assert StepEventType.NODE_START in emitted
@@ -496,10 +490,7 @@ class TestDAGGraphExecutor:
         from orchestration.dag_executor import WorkflowDAG
 
         nodes = [{"id": f"s{i}", "type": "step", "data": {}} for i in range(num_steps)]
-        edges = [
-            {"source": f"s{i}", "target": f"s{i + 1}"}
-            for i in range(num_steps - 1)
-        ]
+        edges = [{"source": f"s{i}", "target": f"s{i + 1}"} for i in range(num_steps - 1)]
         return WorkflowDAG(nodes, edges)
 
     def _build_condition_dag(self, condition_value: bool):
@@ -541,9 +532,7 @@ class TestDAGGraphExecutor:
         step_executor, executed = self._make_step_executor()
 
         executor = DAGGraphExecutor(step_executor_callback=step_executor, enable_checkpoints=False)
-        ctx = asyncio.get_event_loop().run_until_complete(
-            executor.execute(dag, "wf-linear")
-        )
+        ctx = asyncio.get_event_loop().run_until_complete(executor.execute(dag, "wf-linear"))
 
         assert ctx.status == "completed"
         assert ctx.error is None
@@ -558,9 +547,7 @@ class TestDAGGraphExecutor:
         step_executor, _ = self._make_step_executor()
 
         executor = DAGGraphExecutor(step_executor_callback=step_executor, enable_checkpoints=False)
-        ctx = asyncio.get_event_loop().run_until_complete(
-            executor.execute(dag, "wf-empty")
-        )
+        ctx = asyncio.get_event_loop().run_until_complete(executor.execute(dag, "wf-empty"))
 
         assert ctx.status == "failed"
         assert ctx.error is not None
@@ -581,9 +568,7 @@ class TestDAGGraphExecutor:
         step_executor, _ = self._make_step_executor()
 
         executor = DAGGraphExecutor(step_executor_callback=step_executor, enable_checkpoints=False)
-        ctx = asyncio.get_event_loop().run_until_complete(
-            executor.execute(dag, "wf-cycle")
-        )
+        ctx = asyncio.get_event_loop().run_until_complete(executor.execute(dag, "wf-cycle"))
 
         assert ctx.status == "failed"
         assert "Cycle detected" in (ctx.error or "")
@@ -595,9 +580,7 @@ class TestDAGGraphExecutor:
         step_executor, executed = self._make_step_executor()
 
         executor = DAGGraphExecutor(step_executor_callback=step_executor, enable_checkpoints=False)
-        ctx = asyncio.get_event_loop().run_until_complete(
-            executor.execute(dag, "wf-cond-true")
-        )
+        ctx = asyncio.get_event_loop().run_until_complete(executor.execute(dag, "wf-cond-true"))
 
         assert ctx.status == "completed"
         # true_branch should be in step_results; false_branch should be skipped.
@@ -616,9 +599,7 @@ class TestDAGGraphExecutor:
         )
 
         executor = DAGGraphExecutor(step_executor_callback=step_executor, enable_checkpoints=False)
-        ctx = asyncio.get_event_loop().run_until_complete(
-            executor.execute(dag, "wf-results")
-        )
+        ctx = asyncio.get_event_loop().run_until_complete(executor.execute(dag, "wf-results"))
 
         assert ctx.status == "completed"
         assert ctx.step_results.get("s0", {}).get("output") == "hello"

@@ -97,9 +97,7 @@ class ConnectionManager:
         """Send a message to all watchers of a specific deployment."""
         await self.broadcast(f"deployment:{deployment_id}", message)
 
-    async def send_deployment_log(
-        self, deployment_id: str, log_type: str, message: str
-    ) -> None:
+    async def send_deployment_log(self, deployment_id: str, log_type: str, message: str) -> None:
         """Send a log line to deployment watchers."""
         await self.send_to_deployment(
             deployment_id,
@@ -155,9 +153,7 @@ class ConnectionManager:
         # Broadcast to node-specific channel
         await self.broadcast(f"node:{node_id}", message)
 
-    async def send_node_status(
-        self, node_id: str, status: str, hostname: str = None
-    ) -> None:
+    async def send_node_status(self, node_id: str, status: str, hostname: str = None) -> None:
         """Send node status change to global and node-specific event channels."""
         message = {
             "type": "node_status",
@@ -219,9 +215,7 @@ class ConnectionManager:
         # Broadcast to node-specific channel
         await self.broadcast(f"node:{node_id}", event_message)
 
-    async def send_node_lifecycle_event(
-        self, node_id: str, event_type: str, details: dict = None
-    ) -> None:
+    async def send_node_lifecycle_event(self, node_id: str, event_type: str, details: dict = None) -> None:
         """Send a general node lifecycle event (enrollment, deletion, etc.)."""
         event_message = {
             "type": "lifecycle_event",
@@ -321,9 +315,7 @@ async def events_websocket(websocket: WebSocket):
     await ws_manager.connect(websocket, channel)
 
     try:
-        await websocket.send_json(
-            {"type": "connected", "message": "Connected to event stream"}
-        )
+        await websocket.send_json({"type": "connected", "message": "Connected to event stream"})
 
         while True:
             try:
@@ -402,9 +394,7 @@ async def provision_websocket(websocket: WebSocket):
     await ws_manager.connect(websocket, channel)
 
     try:
-        await websocket.send_json(
-            {"type": "connected", "message": "Connected to provision stream"}
-        )
+        await websocket.send_json({"type": "connected", "message": "Connected to provision stream"})
 
         while True:
             try:

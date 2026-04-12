@@ -224,9 +224,7 @@ class AtomicFact:
             "extraction_method": self.extraction_method,
             "valid_from": self.valid_from.isoformat(),
             "valid_until": self.valid_until.isoformat() if self.valid_until else None,
-            "last_verified": (
-                self.last_verified.isoformat() if self.last_verified else None
-            ),
+            "last_verified": (self.last_verified.isoformat() if self.last_verified else None),
             "entities": self.entities,
             "related_facts": self.related_facts,
             "context": self.context,
@@ -243,16 +241,8 @@ class AtomicFact:
         """Create an AtomicFact from a dictionary representation."""
         # Parse datetime fields
         valid_from = datetime.fromisoformat(data["valid_from"])
-        valid_until = (
-            datetime.fromisoformat(data["valid_until"])
-            if data.get("valid_until")
-            else None
-        )
-        last_verified = (
-            datetime.fromisoformat(data["last_verified"])
-            if data.get("last_verified")
-            else None
-        )
+        valid_until = datetime.fromisoformat(data["valid_until"]) if data.get("valid_until") else None
+        last_verified = datetime.fromisoformat(data["last_verified"]) if data.get("last_verified") else None
 
         return cls(
             fact_id=data["fact_id"],
@@ -352,9 +342,7 @@ class AtomicFact:
             f"facts_by_temporal:{self.temporal_type.value}",
         ]
 
-    def mark_invalidated(
-        self, reason: Optional[Dict[str, Any]] = None, service: str = "unknown"
-    ) -> None:
+    def mark_invalidated(self, reason: Optional[Dict[str, Any]] = None, service: str = "unknown") -> None:
         """Mark this fact as invalidated with metadata (Issue #372 - reduces feature envy).
 
         Args:
@@ -375,10 +363,7 @@ class AtomicFact:
     def __str__(self) -> str:
         """String representation of the atomic fact."""
         status = "ACTIVE" if self.is_active else "INVALIDATED"
-        return (
-            f"{self.subject} {self.predicate} {self.object} "
-            f"[{self.fact_type.value}, {status}]"
-        )
+        return f"{self.subject} {self.predicate} {self.object} " f"[{self.fact_type.value}, {status}]"
 
     def __repr__(self) -> str:
         """Detailed string representation."""
@@ -410,19 +395,13 @@ class FactExtractionResult:
             return
 
         # Calculate confidence distribution using helper
-        self.confidence_distribution = _count_distribution(
-            self.facts, lambda f: _classify_confidence(f.confidence)
-        )
+        self.confidence_distribution = _count_distribution(self.facts, lambda f: _classify_confidence(f.confidence))
 
         # Calculate fact type distribution
-        self.fact_type_distribution = _count_distribution(
-            self.facts, lambda f: f.fact_type.value
-        )
+        self.fact_type_distribution = _count_distribution(self.facts, lambda f: f.fact_type.value)
 
         # Calculate temporal type distribution
-        self.temporal_type_distribution = _count_distribution(
-            self.facts, lambda f: f.temporal_type.value
-        )
+        self.temporal_type_distribution = _count_distribution(self.facts, lambda f: f.temporal_type.value)
 
     @property
     def total_facts(self) -> int:

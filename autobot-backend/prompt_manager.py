@@ -184,10 +184,7 @@ class PromptManager:
             fallback_prompt = self._try_fallbacks(prompt_key)
             if fallback_prompt is None:
                 available_keys = sorted(self.prompts)
-                raise KeyError(
-                    f"Prompt '{prompt_key}' not found. Available prompts: "
-                    f"{available_keys}"
-                )
+                raise KeyError(f"Prompt '{prompt_key}' not found. Available prompts: " f"{available_keys}")
             return fallback_prompt
 
         try:
@@ -209,18 +206,14 @@ class PromptManager:
         # Strategy 1: Case insensitive match
         for key in self.prompts:
             if key.lower() == prompt_key.lower():
-                logger.warning(
-                    f"Using case-insensitive match '{key}' for '{prompt_key}'"
-                )
+                logger.warning(f"Using case-insensitive match '{key}' for '{prompt_key}'")
                 return self.prompts[key]
 
         # Strategy 2: Look for default variant
         if not prompt_key.startswith("default."):
             default_key = f"default.{prompt_key}"
             if default_key in self.prompts:
-                logger.warning(
-                    f"Using default variant '{default_key}' for '{prompt_key}'"
-                )
+                logger.warning(f"Using default variant '{default_key}' for '{prompt_key}'")
                 return self.prompts[default_key]
 
         # Strategy 3: Look for similar patterns
@@ -327,16 +320,10 @@ class PromptManager:
             Dictionary of prompt keys and content for the category
         """
         if category == "root":
-            return {
-                key: content for key, content in self.prompts.items() if "." not in key
-            }
+            return {key: content for key, content in self.prompts.items() if "." not in key}
 
         prefix = f"{category}."
-        return {
-            key: content
-            for key, content in self.prompts.items()
-            if key.startswith(prefix)
-        }
+        return {key: content for key, content in self.prompts.items() if key.startswith(prefix)}
 
     def _check_prompt_changes(self) -> tuple[bool, List[str]]:
         """Check if prompt files have changed since last load"""
@@ -391,9 +378,7 @@ class PromptManager:
                 try:
                     # Get file content hash
                     content = file_path.read_text(encoding="utf-8")
-                    file_hash = hashlib.md5(
-                        content.encode(), usedforsecurity=False
-                    ).hexdigest()
+                    file_hash = hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()
 
                     # Use relative path as key
                     relative_path = str(file_path.relative_to(self.prompts_dir))
@@ -455,9 +440,7 @@ class PromptManager:
                 ),
             )
 
-            logger.debug(
-                "Updated prompt change cache with %s files", len(current_state)
-            )
+            logger.debug("Updated prompt change cache with %s files", len(current_state))
 
         except Exception as e:
             logger.debug("Failed to update prompt change cache: %s", e)
@@ -468,17 +451,12 @@ class PromptManager:
             # Get all prompt file paths and their modification times
             files_info = []
             for file_path in self.prompts_dir.rglob("*"):
-                if (
-                    file_path.is_file()
-                    and file_path.suffix in _SUPPORTED_PROMPT_EXTENSIONS
-                ):
+                if file_path.is_file() and file_path.suffix in _SUPPORTED_PROMPT_EXTENSIONS:
                     files_info.append(f"{file_path}:{file_path.stat().st_mtime}")
 
             # Create hash of file info
             content = "\n".join(sorted(files_info))
-            cache_hash = hashlib.md5(
-                content.encode(), usedforsecurity=False
-            ).hexdigest()[:12]
+            cache_hash = hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()[:12]
             return f"autobot:prompts:cache:{cache_hash}"
         except Exception as e:
             logger.warning("Failed to generate cache key: %s", e)
@@ -512,9 +490,7 @@ class PromptManager:
 
             # Cache for 24 hours in dedicated prompts database (DB 2)
             redis_client.setex(cache_key, TTL_24_HOURS, json.dumps(data))
-            logger.debug(
-                "Saved prompts to Redis prompts database (DB 2): %s", cache_key
-            )
+            logger.debug("Saved prompts to Redis prompts database (DB 2): %s", cache_key)
         except Exception as e:
             logger.debug("Redis prompts cache save failed: %s", e)
 
@@ -576,9 +552,7 @@ def _build_dynamic_context(
             additional_params=additional_params or {},
         )
     except KeyError:
-        logger.warning(
-            "Dynamic context template not found, using minimal dynamic section"
-        )
+        logger.warning("Dynamic context template not found, using minimal dynamic section")
         return (
             f"\n\n## Session Context\nSession ID: {session_id or 'N/A'}\nDate:"
             f"{datetime.now(tz=timezone.utc).strftime('%Y-%m-%d')}"

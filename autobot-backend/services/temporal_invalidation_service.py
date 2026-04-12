@@ -68,9 +68,7 @@ class InvalidationRule:
         self.predicate_filters = predicate_filters or []
         self.created_at = datetime.now(tz=timezone.utc)
 
-    def matches_fact(
-        self, fact: AtomicFact
-    ) -> Tuple[bool, Optional[InvalidationReason]]:
+    def matches_fact(self, fact: AtomicFact) -> Tuple[bool, Optional[InvalidationReason]]:
         """Check if this rule applies to the given fact."""
         if not self.enabled:
             return False, None
@@ -161,12 +159,8 @@ class TemporalInvalidationService:
 
         # Service settings
         self.batch_size = config_manager.get("temporal_invalidation.batch_size", 100)
-        self.enable_auto_invalidation = config_manager.get(
-            "temporal_invalidation.auto_invalidation", True
-        )
-        self.invalidation_interval_hours = config_manager.get(
-            "temporal_invalidation.interval_hours", 24
-        )
+        self.enable_auto_invalidation = config_manager.get("temporal_invalidation.auto_invalidation", True)
+        self.invalidation_interval_hours = config_manager.get("temporal_invalidation.interval_hours", 24)
 
         logger.info("Temporal Invalidation Service initialized")
 
@@ -537,9 +531,7 @@ class TemporalInvalidationService:
             rule_statistics,
         ) = self._process_facts_against_rules(all_facts, enabled_rules)
         processing_time = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
-        invalidated_count = await self._execute_invalidation(
-            dry_run, facts_to_invalidate, invalidation_reasons
-        )
+        invalidated_count = await self._execute_invalidation(dry_run, facts_to_invalidate, invalidation_reasons)
 
         await self._record_invalidation_sweep(
             source_filter=source_filter,
@@ -568,9 +560,7 @@ class TemporalInvalidationService:
             "result": result,
         }
 
-    def _build_sweep_error_response(
-        self, message: str, processing_time: Optional[float] = None
-    ) -> Dict[str, Any]:
+    def _build_sweep_error_response(self, message: str, processing_time: Optional[float] = None) -> Dict[str, Any]:
         """
         Build error response for invalidation sweep.
 
@@ -624,33 +614,23 @@ class TemporalInvalidationService:
 
         try:
             if not self.fact_extraction_service:
-                return self._build_sweep_error_response(
-                    "Fact extraction service not available"
-                )
+                return self._build_sweep_error_response("Fact extraction service not available")
 
             # Load rules and facts (Issue #665: uses helper)
             rules, all_facts = await self._load_rules_and_facts(source_filter)
 
             if not rules:
-                return self._build_sweep_error_response(
-                    "No invalidation rules available"
-                )
+                return self._build_sweep_error_response("No invalidation rules available")
 
             # Execute core sweep logic (Issue #620: uses helper)
-            return await self._execute_sweep_core(
-                start_time, source_filter, dry_run, rules, all_facts
-            )
+            return await self._execute_sweep_core(start_time, source_filter, dry_run, rules, all_facts)
 
         except Exception as e:
             logger.error("Error in invalidation sweep: %s", e)
             processing_time = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
-            return self._build_sweep_error_response(
-                "Invalidation sweep failed", processing_time
-            )
+            return self._build_sweep_error_response("Invalidation sweep failed", processing_time)
 
-    def _prepare_fact_for_invalidation(
-        self, pipe, fact: AtomicFact, reasons: Dict[str, Dict[str, Any]]
-    ) -> bool:
+    def _prepare_fact_for_invalidation(self, pipe, fact: AtomicFact, reasons: Dict[str, Dict[str, Any]]) -> bool:
         """Prepare single fact for invalidation in pipeline (Issue #315: extracted helper).
 
         Args:
@@ -665,9 +645,7 @@ class TemporalInvalidationService:
             fact_key = f"atomic_fact:{fact.fact_id}"
 
             # Update fact data using model method (Issue #372 - reduces feature envy)
-            fact.mark_invalidated(
-                reason=reasons.get(fact.fact_id, {}), service="temporal_invalidation"
-            )
+            fact.mark_invalidated(reason=reasons.get(fact.fact_id, {}), service="temporal_invalidation")
 
             # Store updated fact
             fact_data = fact.to_dict()
@@ -682,14 +660,10 @@ class TemporalInvalidationService:
                 pipe.srem(index_key, fact.fact_id)
             return True
         except Exception as e:
-            logger.error(
-                "Error preparing fact %s for invalidation: %s", fact.fact_id, e
-            )
+            logger.error("Error preparing fact %s for invalidation: %s", fact.fact_id, e)
             return False
 
-    async def _invalidate_facts(
-        self, facts: List[AtomicFact], reasons: Dict[str, Dict[str, Any]]
-    ) -> int:
+    async def _invalidate_facts(self, facts: List[AtomicFact], reasons: Dict[str, Dict[str, Any]]) -> int:
         """
         Invalidate a list of facts.
 
@@ -746,9 +720,7 @@ class TemporalInvalidationService:
             }
 
             # Store in history list (keep last 100 entries)
-            await self.redis_client.lpush(
-                self.invalidation_history_key, json.dumps(history_entry)
-            )
+            await self.redis_client.lpush(self.invalidation_history_key, json.dumps(history_entry))
             await self.redis_client.ltrim(self.invalidation_history_key, 0, 99)
 
             logger.debug("Recorded invalidation sweep history")
@@ -756,9 +728,7 @@ class TemporalInvalidationService:
         except Exception as e:
             logger.error("Error recording invalidation history: %s", e)
 
-    def _find_contradictory_facts(
-        self, new_fact: AtomicFact, similar_facts: List[AtomicFact]
-    ) -> List[AtomicFact]:
+    def _find_contradictory_facts(self, new_fact: AtomicFact, similar_facts: List[AtomicFact]) -> List[AtomicFact]:
         """
         Find facts that contradict the new fact.
 
@@ -823,9 +793,7 @@ class TemporalInvalidationService:
         if not contradictory_facts:
             return 0
 
-        high_confidence = [
-            f for f in contradictory_facts if new_fact.confidence > f.confidence
-        ]
+        high_confidence = [f for f in contradictory_facts if new_fact.confidence > f.confidence]
 
         if not high_confidence:
             return 0
@@ -833,9 +801,7 @@ class TemporalInvalidationService:
         reasons = self._build_contradiction_reasons(new_fact, high_confidence)
         return await self._invalidate_facts(high_confidence, reasons)
 
-    async def invalidate_contradictory_facts(
-        self, new_fact: AtomicFact
-    ) -> Dict[str, Any]:
+    async def invalidate_contradictory_facts(self, new_fact: AtomicFact) -> Dict[str, Any]:
         """
         Invalidate facts that contradict a new fact.
 
@@ -852,21 +818,13 @@ class TemporalInvalidationService:
                     "message": "Fact extraction service not available",
                 }
 
-            logger.info(
-                "Checking for contradictions with new fact: %s", new_fact.fact_id
-            )
+            logger.info("Checking for contradictions with new fact: %s", new_fact.fact_id)
 
-            similar_facts = await self.fact_extraction_service.get_facts_by_criteria(
-                active_only=True, limit=1000
-            )
+            similar_facts = await self.fact_extraction_service.get_facts_by_criteria(active_only=True, limit=1000)
 
-            contradictory_facts = self._find_contradictory_facts(
-                new_fact, similar_facts
-            )
+            contradictory_facts = self._find_contradictory_facts(new_fact, similar_facts)
 
-            invalidated_count = await self._invalidate_high_confidence_contradictions(
-                new_fact, contradictory_facts
-            )
+            invalidated_count = await self._invalidate_high_confidence_contradictions(new_fact, contradictory_facts)
 
             return {
                 "status": "success",
@@ -882,9 +840,7 @@ class TemporalInvalidationService:
                 "message": "Temporal invalidation operation failed",
             }
 
-    def _aggregate_history_statistics(
-        self, recent_history: List[str]
-    ) -> Tuple[int, int, float, Dict[str, int]]:
+    def _aggregate_history_statistics(self, recent_history: List[str]) -> Tuple[int, int, float, Dict[str, int]]:
         """
         Aggregate statistics from invalidation history entries.
 
@@ -927,12 +883,8 @@ class TemporalInvalidationService:
             if not self.redis_client:
                 return {"error": "Redis client not available"}
 
-            total_invalidated = await self.redis_client.scard(
-                self.invalidated_facts_key
-            )
-            recent_history = await self.redis_client.lrange(
-                self.invalidation_history_key, 0, 49
-            )
+            total_invalidated = await self.redis_client.scard(self.invalidated_facts_key)
+            recent_history = await self.redis_client.lrange(self.invalidation_history_key, 0, 49)
 
             total_sweeps = len(recent_history)
             (
@@ -946,9 +898,7 @@ class TemporalInvalidationService:
             enabled_rules = sum(1 for r in rules.values() if r.enabled)
 
             avg_time = processing_time / total_sweeps if total_sweeps > 0 else 0
-            inv_rate = (
-                facts_invalidated / facts_processed * 100 if facts_processed > 0 else 0
-            )
+            inv_rate = facts_invalidated / facts_processed * 100 if facts_processed > 0 else 0
 
             return {
                 "total_invalidated_facts": total_invalidated,
@@ -1017,9 +967,7 @@ class TemporalInvalidationService:
 
         while True:
             try:
-                await asyncio.sleep(
-                    self.invalidation_interval_hours * 3600
-                )  # Convert to seconds
+                await asyncio.sleep(self.invalidation_interval_hours * 3600)  # Convert to seconds
 
                 logger.info("Running scheduled invalidation sweep")
                 result = await self.run_invalidation_sweep(dry_run=False)
@@ -1027,9 +975,7 @@ class TemporalInvalidationService:
                 if result["status"] == "success":
                     logger.info("Scheduled invalidation completed: ")
                 else:
-                    logger.error(
-                        f"Scheduled invalidation failed: {result.get('message')}"
-                    )
+                    logger.error(f"Scheduled invalidation failed: {result.get('message')}")
 
             except asyncio.CancelledError:
                 logger.info("Periodic invalidation cancelled")
@@ -1048,7 +994,5 @@ def get_temporal_invalidation_service(fact_extraction_service=None):
     """Get or create temporal invalidation service instance."""
     global temporal_invalidation_service
     if temporal_invalidation_service is None:
-        temporal_invalidation_service = TemporalInvalidationService(
-            fact_extraction_service
-        )
+        temporal_invalidation_service = TemporalInvalidationService(fact_extraction_service)
     return temporal_invalidation_service

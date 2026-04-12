@@ -58,9 +58,7 @@ class TestRepairableException:
 
     def test_to_llm_context(self):
         """Test LLM context formatting."""
-        exc = RepairableException(
-            "Command timed out", suggestion="Break into smaller steps"
-        )
+        exc = RepairableException("Command timed out", suggestion="Break into smaller steps")
         context = exc.to_llm_context()
         assert "Tool Error (Recoverable)" in context
         assert "Command timed out" in context
@@ -107,20 +105,14 @@ class TestWrapAsRepairable:
         original = PermissionError("Access denied")
         result = wrap_as_repairable(original)
         assert isinstance(result, RepairableException)
-        assert (
-            "sudo" in result.suggestion.lower()
-            or "directory" in result.suggestion.lower()
-        )
+        assert "sudo" in result.suggestion.lower() or "directory" in result.suggestion.lower()
 
     def test_wrap_timeout_error(self):
         """TimeoutError should be wrapped as repairable."""
         original = TimeoutError("Operation timed out")
         result = wrap_as_repairable(original)
         assert isinstance(result, RepairableException)
-        assert (
-            "timeout" in result.suggestion.lower()
-            or "smaller" in result.suggestion.lower()
-        )
+        assert "timeout" in result.suggestion.lower() or "smaller" in result.suggestion.lower()
 
     def test_memory_error_not_repairable(self):
         """MemoryError should NOT be repairable - should re-raise."""
@@ -201,10 +193,7 @@ class TestErrorClassification:
         )
         assert result is not None
         assert isinstance(result, RepairableException)
-        assert (
-            "sudo" in result.suggestion.lower()
-            or "permission" in result.suggestion.lower()
-        )
+        assert "sudo" in result.suggestion.lower() or "permission" in result.suggestion.lower()
 
     def test_classify_command_not_found(self):
         """Command not found errors should be repairable."""
@@ -218,25 +207,17 @@ class TestErrorClassification:
         )
         assert result is not None
         assert isinstance(result, RepairableException)
-        assert (
-            "install" in result.suggestion.lower()
-            or "alternative" in result.suggestion.lower()
-        )
+        assert "install" in result.suggestion.lower() or "alternative" in result.suggestion.lower()
 
     def test_classify_timeout(self):
         """Timeout errors should be repairable."""
         from chat_workflow.tool_handler import ToolHandlerMixin
 
         handler = ToolHandlerMixin()
-        result = handler._classify_command_error(
-            command="ping 10.0.0.1", error="Operation timed out", stderr=""
-        )
+        result = handler._classify_command_error(command="ping 10.0.0.1", error="Operation timed out", stderr="")
         assert result is not None
         assert isinstance(result, RepairableException)
-        assert (
-            "timeout" in result.suggestion.lower()
-            or "smaller" in result.suggestion.lower()
-        )
+        assert "timeout" in result.suggestion.lower() or "smaller" in result.suggestion.lower()
 
     def test_classify_connection_error(self):
         """Connection errors should be repairable."""
@@ -248,19 +229,14 @@ class TestErrorClassification:
         )
         assert result is not None
         assert isinstance(result, RepairableException)
-        assert (
-            "network" in result.suggestion.lower()
-            or "connectivity" in result.suggestion.lower()
-        )
+        assert "network" in result.suggestion.lower() or "connectivity" in result.suggestion.lower()
 
     def test_classify_out_of_memory(self):
         """Out of memory errors should NOT be repairable."""
         from chat_workflow.tool_handler import ToolHandlerMixin
 
         handler = ToolHandlerMixin()
-        result = handler._classify_command_error(
-            command="python huge_script.py", error="Out of memory", stderr=""
-        )
+        result = handler._classify_command_error(command="python huge_script.py", error="Out of memory", stderr="")
         assert result is None  # Critical error
 
     def test_classify_generic_error_is_repairable(self):
@@ -268,9 +244,7 @@ class TestErrorClassification:
         from chat_workflow.tool_handler import ToolHandlerMixin
 
         handler = ToolHandlerMixin()
-        result = handler._classify_command_error(
-            command="some_cmd", error="Some random error occurred", stderr=""
-        )
+        result = handler._classify_command_error(command="some_cmd", error="Some random error occurred", stderr="")
         assert result is not None
         assert isinstance(result, RepairableException)
 
@@ -282,17 +256,13 @@ class TestRepairableExceptionMapping:
         """All repairable exceptions should have suggestions."""
         for exc_type, mapping in REPAIRABLE_EXCEPTIONS.items():
             if mapping["repairable"]:
-                assert (
-                    mapping["suggestion"] is not None
-                ), f"{exc_type.__name__} is repairable but has no suggestion"
+                assert mapping["suggestion"] is not None, f"{exc_type.__name__} is repairable but has no suggestion"
 
     def test_critical_exceptions_no_suggestion(self):
         """Critical exceptions should not have suggestions."""
         for exc_type, mapping in REPAIRABLE_EXCEPTIONS.items():
             if not mapping["repairable"]:
-                assert (
-                    mapping["suggestion"] is None
-                ), f"{exc_type.__name__} is critical but has a suggestion"
+                assert mapping["suggestion"] is None, f"{exc_type.__name__} is critical but has a suggestion"
 
     def test_expected_repairable_types(self):
         """Verify expected exception types are marked repairable."""

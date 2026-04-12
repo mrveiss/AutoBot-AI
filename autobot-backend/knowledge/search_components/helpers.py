@@ -49,15 +49,9 @@ def score_fact_by_terms(decoded: Dict[str, str], query_terms: Set[str]) -> float
     return matches / len(query_terms) if matches > 0 else 0
 
 
-def build_search_result(
-    decoded: Dict[str, str], key: bytes, score: float
-) -> Dict[str, Any]:
+def build_search_result(decoded: Dict[str, str], key: bytes, score: float) -> Dict[str, Any]:
     """Build search result dict from decoded fact (Issue #315)."""
-    fact_id = (
-        key.decode("utf-8").replace("fact:", "")
-        if isinstance(key, bytes)
-        else key.replace("fact:", "")
-    )
+    fact_id = key.decode("utf-8").replace("fact:", "") if isinstance(key, bytes) else key.replace("fact:", "")
     metadata = _parse_metadata(decoded.get("metadata", "{}"))
 
     return {

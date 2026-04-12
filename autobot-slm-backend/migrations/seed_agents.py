@@ -86,9 +86,7 @@ async def seed_agents():
             logger.info("Created agent: %s (%s)", agent_id, config["name"])
 
         await db.commit()
-        logger.info(
-            "Seed complete: %d created, %d skipped", created_count, skipped_count
-        )
+        logger.info("Seed complete: %d created, %d skipped", created_count, skipped_count)
 
     await db_service.close()
     return True

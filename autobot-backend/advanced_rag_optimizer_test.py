@@ -169,9 +169,7 @@ class TestQueryContextAnalysis:
         optimizer = AdvancedRAGOptimizer()
 
         # Use "problem" which is in TROUBLESHOOTING_KEYWORDS but not technical_keywords
-        context = optimizer._analyze_query_context(
-            "I have a problem with my connection"
-        )
+        context = optimizer._analyze_query_context("I have a problem with my connection")
 
         assert context.query_type == "troubleshooting"
         assert context.complexity_score == 0.9

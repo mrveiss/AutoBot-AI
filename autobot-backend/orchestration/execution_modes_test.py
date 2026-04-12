@@ -162,9 +162,7 @@ class TestDryRunValidator:
         assert any("ghost_step" in w for w in report.warnings)
 
     def test_unassigned_agent_is_a_warning(self) -> None:
-        steps = [
-            {"id": "orphan", "action": "do_thing", "inputs": {}, "dependencies": []}
-        ]
+        steps = [{"id": "orphan", "action": "do_thing", "inputs": {}, "dependencies": []}]
         report = self.validator.validate("wf_no_agent", steps)
 
         assert report.valid is True
@@ -203,9 +201,7 @@ class TestDryRunValidator:
 class TestDryRunReport:
     def test_to_dict_shape(self) -> None:
         plan = [StepPlan("s1", "act", "ag", [], [])]
-        report = DryRunReport(
-            valid=True, execution_plan=plan, issues=[], warnings=["w1"]
-        )
+        report = DryRunReport(valid=True, execution_plan=plan, issues=[], warnings=["w1"])
 
         d = report.to_dict()
         assert d["valid"] is True
@@ -231,9 +227,7 @@ class TestDebugController:
     def test_resume_signal(self) -> None:
         async def _run() -> None:
             ctrl = DebugController()
-            asyncio.get_event_loop().call_soon(
-                lambda: asyncio.ensure_future(ctrl.resume())
-            )
+            asyncio.get_event_loop().call_soon(lambda: asyncio.ensure_future(ctrl.resume()))
             signal = await ctrl.wait_for_resume("step_1")
             assert signal == DebugController.Signal.RESUME
 
@@ -242,9 +236,7 @@ class TestDebugController:
     def test_skip_signal(self) -> None:
         async def _run() -> None:
             ctrl = DebugController()
-            asyncio.get_event_loop().call_soon(
-                lambda: asyncio.ensure_future(ctrl.skip())
-            )
+            asyncio.get_event_loop().call_soon(lambda: asyncio.ensure_future(ctrl.skip()))
             signal = await ctrl.wait_for_resume("step_1")
             assert signal == DebugController.Signal.SKIP
 
@@ -253,9 +245,7 @@ class TestDebugController:
     def test_retry_signal(self) -> None:
         async def _run() -> None:
             ctrl = DebugController()
-            asyncio.get_event_loop().call_soon(
-                lambda: asyncio.ensure_future(ctrl.retry())
-            )
+            asyncio.get_event_loop().call_soon(lambda: asyncio.ensure_future(ctrl.retry()))
             signal = await ctrl.wait_for_resume("step_1")
             assert signal == DebugController.Signal.RETRY
 
@@ -395,9 +385,7 @@ class TestWorkflowExecutorDebugMode:
         executor = _make_executor()
         steps = _make_steps(1)
 
-        with caplog.at_level(
-            logging.WARNING, logger="autobot-backend.orchestration.workflow_executor"
-        ):
+        with caplog.at_level(logging.WARNING, logger="autobot-backend.orchestration.workflow_executor"):
             asyncio.get_event_loop().run_until_complete(
                 executor.execute_coordinated_workflow(
                     "wf_dbg_no_ctrl",
@@ -502,9 +490,7 @@ class TestWorkflowExecutorDebugMode:
         cfg = {"workflow_id": "wf_dag_notif", "channels": {}}
 
         mock_notify = unittest.mock.AsyncMock()
-        with unittest.mock.patch.object(
-            executor, "_send_workflow_notification", mock_notify
-        ):
+        with unittest.mock.patch.object(executor, "_send_workflow_notification", mock_notify):
             asyncio.get_event_loop().run_until_complete(
                 executor.execute_coordinated_workflow(
                     "wf_dag_notif",

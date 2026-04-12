@@ -33,13 +33,9 @@ async def test_workflow_endpoints():
                 if response.status == 200:
                     result = await response.json()
                     print("✅ Workflows endpoint working")  # noqa: print
-                    print(  # noqa: print
-                        f"   Active workflows: {result.get('active_workflows', 0)}"
-                    )  # noqa: print
+                    print(f"   Active workflows: {result.get('active_workflows', 0)}")  # noqa: print  # noqa: print
                 else:
-                    print(  # noqa: print
-                        f"❌ Workflows endpoint failed: {response.status}"
-                    )  # noqa: print
+                    print(f"❌ Workflows endpoint failed: {response.status}")  # noqa: print  # noqa: print
                     return False
         except Exception as e:
             print(f"❌ Connection error: {e}")  # noqa: print
@@ -58,9 +54,7 @@ async def test_workflow_endpoints():
         workflow_id = None
 
         try:
-            async with session.post(
-                f"{base_url}/execute", json=workflow_request
-            ) as response:
+            async with session.post(f"{base_url}/execute", json=workflow_request) as response:
                 if response.status == 200:
                     result = await response.json()
                     print("✅ Workflow execute endpoint working")  # noqa: print
@@ -75,26 +69,17 @@ async def test_workflow_endpoints():
                     workflow_response = result.get("workflow_response", {})
                     if workflow_response:
                         print(  # noqa: print
-                            "   🎯 Classification: "
-                            f"{workflow_response.get('message_classification')}"
+                            "   🎯 Classification: " f"{workflow_response.get('message_classification')}"
                         )
                         print(  # noqa: print
-                            "   🤖 Agents: "
-                            f"{', '.join(workflow_response.get('agents_involved', []))}"
+                            "   🤖 Agents: " f"{', '.join(workflow_response.get('agents_involved', []))}"
                         )
-                        print(  # noqa: print
-                            "   ⏱️  Duration: "
-                            f"{workflow_response.get('estimated_duration')}"
-                        )
-                        print(  # noqa: print
-                            f"   📋 Steps: {workflow_response.get('planned_steps')}"
-                        )  # noqa: print
+                        print("   ⏱️  Duration: " f"{workflow_response.get('estimated_duration')}")  # noqa: print
+                        print(f"   📋 Steps: {workflow_response.get('planned_steps')}")  # noqa: print  # noqa: print
 
                 else:
                     error_text = await response.text()
-                    print(  # noqa: print
-                        f"❌ Workflow execute failed: {response.status}"
-                    )  # noqa: print
+                    print(f"❌ Workflow execute failed: {response.status}")  # noqa: print  # noqa: print
                     print(f"   Error: {error_text}")  # noqa: print
                     return False
 
@@ -108,25 +93,17 @@ async def test_workflow_endpoints():
             print("-" * 40)  # noqa: print
 
             try:
-                async with session.get(
-                    f"{base_url}/workflow/{workflow_id}/status"
-                ) as response:
+                async with session.get(f"{base_url}/workflow/{workflow_id}/status") as response:
                     if response.status == 200:
                         status = await response.json()
                         print("✅ Workflow status endpoint working")  # noqa: print
-                        print(  # noqa: print
-                            f"   Status: {status.get('status', 'unknown')}"
-                        )  # noqa: print
-                        print(  # noqa: print
-                            f"   Progress: {status.get('progress', 0):.1%}"
-                        )  # noqa: print
+                        print(f"   Status: {status.get('status', 'unknown')}")  # noqa: print  # noqa: print
+                        print(f"   Progress: {status.get('progress', 0):.1%}")  # noqa: print  # noqa: print
                         print(  # noqa: print
                             f"   Current step: {status.get('current_step', 0) + 1}/{status.get('total_steps', 0)}"
                         )
                     else:
-                        print(  # noqa: print
-                            f"❌ Status endpoint failed: {response.status}"
-                        )  # noqa: print
+                        print(f"❌ Status endpoint failed: {response.status}")  # noqa: print  # noqa: print
             except Exception as e:
                 print(f"❌ Status endpoint error: {e}")  # noqa: print
 
@@ -140,9 +117,7 @@ async def test_workflow_endpoints():
         }
 
         try:
-            async with session.post(
-                get_test_backend_url() + "/api/chat", json=chat_request
-            ) as response:
+            async with session.post(get_test_backend_url() + "/api/chat", json=chat_request) as response:
                 if response.status == 200:
                     result = await response.json()
                     print("✅ Chat integration working")  # noqa: print
@@ -157,21 +132,15 @@ async def test_workflow_endpoints():
                             "agents",
                         ]
                     ):
-                        print(  # noqa: print
-                            "   🎯 Workflow orchestration detected in chat!"
-                        )  # noqa: print
+                        print("   🎯 Workflow orchestration detected in chat!")  # noqa: print  # noqa: print
                         print("   Response contains workflow keywords")  # noqa: print
                     else:
                         print("   💬 Standard chat response")  # noqa: print
 
-                    print(  # noqa: print
-                        f"   Response preview: {response_text[:150]}..."
-                    )  # noqa: print
+                    print(f"   Response preview: {response_text[:150]}...")  # noqa: print  # noqa: print
 
                 else:
-                    print(  # noqa: print
-                        f"❌ Chat integration failed: {response.status}"
-                    )  # noqa: print
+                    print(f"❌ Chat integration failed: {response.status}")  # noqa: print  # noqa: print
                     error_text = await response.text()
                     print(f"   Error: {error_text[:200]}")  # noqa: print
         except Exception as e:
@@ -214,28 +183,20 @@ async def demonstrate_workflow_orchestration():
             workflow_request = {"user_message": request, "auto_approve": True}
 
             try:
-                async with session.post(
-                    f"{base_url}/workflow/execute", json=workflow_request
-                ) as response:
+                async with session.post(f"{base_url}/workflow/execute", json=workflow_request) as response:
                     if response.status == 200:
                         result = await response.json()
 
                         if result.get("type") == "workflow_orchestration":
                             workflow_response = result.get("workflow_response", {})
-                            classification = workflow_response.get(
-                                "message_classification", "unknown"
-                            )
+                            classification = workflow_response.get("message_classification", "unknown")
 
-                            print(  # noqa: print
-                                f"   🎯 Result: {classification.title()} workflow planned"
-                            )
+                            print(f"   🎯 Result: {classification.title()} workflow planned")  # noqa: print
 
                             if classification == "complex":
                                 agents = workflow_response.get("agents_involved", [])
                                 steps = workflow_response.get("planned_steps", 0)
-                                print(  # noqa: print
-                                    f"   🤖 Agents: {', '.join(agents)}"
-                                )  # noqa: print
+                                print(f"   🤖 Agents: {', '.join(agents)}")  # noqa: print  # noqa: print
                                 print(f"   📋 Steps: {steps}")  # noqa: print
 
                                 # Show first few workflow steps
@@ -245,14 +206,10 @@ async def demonstrate_workflow_orchestration():
                                     for j, step in enumerate(preview[:3], 1):
                                         print(f"      {j}. {step}")  # noqa: print
                                     if len(preview) > 3:
-                                        print(  # noqa: print
-                                            f"      ... and {len(preview) - 3} more steps"
-                                        )
+                                        print(f"      ... and {len(preview) - 3} more steps")  # noqa: print
 
                         else:
-                            print(  # noqa: print
-                                f"   💬 Direct response: {result.get('type', 'unknown')}"
-                            )
+                            print(f"   💬 Direct response: {result.get('type', 'unknown')}")  # noqa: print
 
                     else:
                         print(f"   ❌ Request failed: {response.status}")  # noqa: print

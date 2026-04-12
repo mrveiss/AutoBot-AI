@@ -69,9 +69,7 @@ class PerformanceOptimizedDiagnostics:
             cpu_info = {
                 "physical_cores": psutil.cpu_count(logical=False),
                 "logical_cores": psutil.cpu_count(logical=True),
-                "current_frequency": (
-                    psutil.cpu_freq().current if psutil.cpu_freq() else None
-                ),
+                "current_frequency": (psutil.cpu_freq().current if psutil.cpu_freq() else None),
                 "usage_percent": psutil.cpu_percent(interval=1),
             }
 
@@ -123,17 +121,13 @@ class PerformanceOptimizedDiagnostics:
                         "memory_total_mb": int(gpu_data[1]),
                         "memory_used_mb": int(gpu_data[2]),
                         "utilization_percent": int(gpu_data[3]),
-                        "memory_usage_percent": round(
-                            (int(gpu_data[2]) / int(gpu_data[1])) * 100, 1
-                        ),
+                        "memory_usage_percent": round((int(gpu_data[2]) / int(gpu_data[1])) * 100, 1),
                     }
             return {"status": "nvidia-smi not available or no GPU detected"}
         except Exception as e:
             return {"status": "GPU detection error"}
 
-    async def _publish_permission_request(
-        self, task_id: str, report: Dict[str, Any], attempt: int
-    ) -> asyncio.Future:
+    async def _publish_permission_request(self, task_id: str, report: Dict[str, Any], attempt: int) -> asyncio.Future:
         """Publish permission request and return future (Issue #315 - extracted helper)."""
         permission_future = asyncio.Future()
         await event_manager.publish(
@@ -156,14 +150,10 @@ class PerformanceOptimizedDiagnostics:
             attempt + 1,
             self.permission_retry_attempts,
         )
-        logger.info(
-            "Waiting up to %ds for response...", self.max_user_permission_timeout
-        )
+        logger.info("Waiting up to %ds for response...", self.max_user_permission_timeout)
         return permission_future
 
-    async def _handle_permission_timeout(
-        self, task_id: str, attempt: int, start_time: float
-    ) -> bool:
+    async def _handle_permission_timeout(self, task_id: str, attempt: int, start_time: float) -> bool:
         """Handle permission timeout with retry logic (Issue #315 - extracted helper)."""
         elapsed_time = time.time() - start_time
         logger.warning(
@@ -189,9 +179,7 @@ class PerformanceOptimizedDiagnostics:
         await self._handle_permission_timeout_fallback(task_id, elapsed_time)
         return False  # No more retries
 
-    async def request_user_permission_optimized(
-        self, task_id: str, report: Dict[str, Any]
-    ) -> bool:
+    async def request_user_permission_optimized(self, task_id: str, report: Dict[str, Any]) -> bool:
         """
         PERFORMANCE OPTIMIZED: Request user permission (Issue #315 - refactored depth 5 to 3).
         """
@@ -204,9 +192,7 @@ class PerformanceOptimizedDiagnostics:
                     task_id,
                     attempt + 1,
                 )
-                permission_future = await self._publish_permission_request(
-                    task_id, report, attempt
-                )
+                permission_future = await self._publish_permission_request(task_id, report, attempt)
 
                 try:
                     permission_granted = await asyncio.wait_for(
@@ -221,25 +207,19 @@ class PerformanceOptimizedDiagnostics:
                     return permission_granted
 
                 except asyncio.TimeoutError:
-                    should_retry = await self._handle_permission_timeout(
-                        task_id, attempt, start_time
-                    )
+                    should_retry = await self._handle_permission_timeout(task_id, attempt, start_time)
                     if not should_retry:
                         return False
 
             except Exception as e:
-                logger.error(
-                    "Error in permission request (attempt %s): %s", attempt + 1, e
-                )
+                logger.error("Error in permission request (attempt %s): %s", attempt + 1, e)
                 if attempt == self.permission_retry_attempts - 1:
                     return False
                 await asyncio.sleep(TimingConstants.STANDARD_DELAY)
 
         return False
 
-    async def _handle_permission_timeout_fallback(
-        self, task_id: str, elapsed_time: float
-    ):
+    async def _handle_permission_timeout_fallback(self, task_id: str, elapsed_time: float):
         """Handle user permission timeout with intelligent fallback"""
         await event_manager.publish(
             "log_message",
@@ -296,9 +276,7 @@ class PerformanceOptimizedDiagnostics:
             analysis["optimal_areas"].append(
                 {
                     "type": "cpu",
-                    "message": (
-                        f"CPU usage low at {cpu_usage}% - good performance headroom"
-                    ),
+                    "message": (f"CPU usage low at {cpu_usage}% - good performance headroom"),
                 }
             )
 
@@ -315,8 +293,7 @@ class PerformanceOptimizedDiagnostics:
                         "type": "gpu",
                         "severity": "medium",
                         "message": (
-                            f"GPU utilization low at {gpu_util}% - "
-                            f"AI workloads may not be GPU-accelerated"
+                            f"GPU utilization low at {gpu_util}% - " f"AI workloads may not be GPU-accelerated"
                         ),
                     }
                 )
@@ -325,18 +302,14 @@ class PerformanceOptimizedDiagnostics:
                     {
                         "type": "gpu",
                         "severity": "medium",
-                        "message": (
-                            f"GPU utilization at {gpu_util}% - may be saturated"
-                        ),
+                        "message": (f"GPU utilization at {gpu_util}% - may be saturated"),
                     }
                 )
             else:
                 analysis["optimal_areas"].append(
                     {
                         "type": "gpu",
-                        "message": (
-                            f"GPU utilization at {gpu_util}% - good performance"
-                        ),
+                        "message": (f"GPU utilization at {gpu_util}% - good performance"),
                     }
                 )
 
@@ -355,10 +328,7 @@ class PerformanceOptimizedDiagnostics:
                     {
                         "type": "memory",
                         "severity": "high",
-                        "message": (
-                            f"Memory usage at {memory_info.get('used_percent', 0)}% "
-                            f"- approaching limit"
-                        ),
+                        "message": (f"Memory usage at {memory_info.get('used_percent', 0)}% " f"- approaching limit"),
                     }
                 )
 
@@ -384,8 +354,7 @@ class PerformanceOptimizedDiagnostics:
                 "category": "memory",
                 "priority": "high",
                 "recommendation": (
-                    "Consider implementing more aggressive memory "
-                    "cleanup in chat history and conversation managers"
+                    "Consider implementing more aggressive memory " "cleanup in chat history and conversation managers"
                 ),
                 "action": "Add memory limits and periodic cleanup routines",
             }
@@ -405,8 +374,7 @@ class PerformanceOptimizedDiagnostics:
                 "category": "gpu",
                 "priority": "medium",
                 "recommendation": (
-                    "GPU underutilized - verify semantic chunking "
-                    "and AI workloads are GPU-accelerated"
+                    "GPU underutilized - verify semantic chunking " "and AI workloads are GPU-accelerated"
                 ),
                 "action": "Check CUDA availability and batch sizes in AI processing",
             }
@@ -424,8 +392,7 @@ class PerformanceOptimizedDiagnostics:
                 "category": "cpu",
                 "priority": "low",
                 "recommendation": (
-                    f"High-core system ({cpu_cores} cores) - ensure "
-                    f"parallel processing is optimized"
+                    f"High-core system ({cpu_cores} cores) - ensure " f"parallel processing is optimized"
                 ),
                 "action": "Verify thread pool sizes and async concurrency limits",
             }
@@ -503,9 +470,7 @@ performance_diagnostics = PerformanceOptimizedDiagnostics()
 # Legacy compatibility functions (with performance improvements)
 async def request_user_permission(task_id: str, report: Dict[str, Any]) -> bool:
     """PERFORMANCE OPTIMIZED: Legacy wrapper with new timeout handling"""
-    return await performance_diagnostics.request_user_permission_optimized(
-        task_id, report
-    )
+    return await performance_diagnostics.request_user_permission_optimized(task_id, report)
 
 
 def get_system_info() -> Dict[str, Any]:
@@ -525,9 +490,7 @@ def get_performance_metrics() -> Dict[str, Any]:
         "system_resources": performance_diagnostics.check_system_resources(),
         "memory_cleanup_available": True,
         "timeout_optimizations_active": True,
-        "max_user_permission_timeout": (
-            performance_diagnostics.max_user_permission_timeout
-        ),
+        "max_user_permission_timeout": (performance_diagnostics.max_user_permission_timeout),
         "performance_mode": "optimized",
     }
 

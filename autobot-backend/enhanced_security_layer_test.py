@@ -100,9 +100,7 @@ class TestEnhancedSecurityLayer:
 
         # Test different roles for shell execution
         assert self.security.check_permission("admin", "allow_shell_execute") is True
-        assert (
-            self.security.check_permission("developer", "allow_shell_execute") is True
-        )
+        assert self.security.check_permission("developer", "allow_shell_execute") is True
         assert self.security.check_permission("user", "allow_shell_execute") is False
         assert self.security.check_permission("guest", "allow_shell_execute") is False
 
@@ -111,9 +109,7 @@ class TestEnhancedSecurityLayer:
         self.security.enable_auth = True
 
         # Developer should have safe shell execution permission
-        assert (
-            self.security.check_permission("developer", "allow_shell_execute") is True
-        )
+        assert self.security.check_permission("developer", "allow_shell_execute") is True
 
         # User should not have shell execution permission
         assert self.security.check_permission("user", "allow_shell_execute") is False
@@ -121,19 +117,11 @@ class TestEnhancedSecurityLayer:
     def test_check_permission_custom_roles(self):
         """Test permission checking with custom role configuration"""
         self.security.enable_auth = True
-        self.security.roles = {
-            "custom_role": {"permissions": ["allow_shell_execute", "custom_permission"]}
-        }
+        self.security.roles = {"custom_role": {"permissions": ["allow_shell_execute", "custom_permission"]}}
 
-        assert (
-            self.security.check_permission("custom_role", "allow_shell_execute") is True
-        )
-        assert (
-            self.security.check_permission("custom_role", "custom_permission") is True
-        )
-        assert (
-            self.security.check_permission("custom_role", "forbidden_action") is False
-        )
+        assert self.security.check_permission("custom_role", "allow_shell_execute") is True
+        assert self.security.check_permission("custom_role", "custom_permission") is True
+        assert self.security.check_permission("custom_role", "forbidden_action") is False
 
     def test_check_permission_wildcard(self):
         """Test wildcard permission matching"""
@@ -185,9 +173,7 @@ class TestEnhancedSecurityLayer:
         }
 
         # Start approval in background
-        approval_task = asyncio.create_task(
-            self.security._command_approval_callback(approval_data)
-        )
+        approval_task = asyncio.create_task(self.security._command_approval_callback(approval_data))
 
         # Wait a moment then approve
         await asyncio.sleep(0.1)
@@ -254,9 +240,7 @@ class TestEnhancedSecurityLayer:
     @pytest.mark.asyncio
     async def test_execute_command_with_permission(self):
         """Test command execution with proper permissions"""
-        with patch.object(
-            self.security.command_executor, "run_shell_command"
-        ) as mock_run:
+        with patch.object(self.security.command_executor, "run_shell_command") as mock_run:
             mock_run.return_value = {
                 "stdout": "file1 file2",
                 "stderr": "",
@@ -265,9 +249,7 @@ class TestEnhancedSecurityLayer:
                 "security": {"risk": "safe"},
             }
 
-            result = await self.security.execute_command(
-                "ls -la", "admin_user", "admin"
-            )
+            result = await self.security.execute_command("ls -la", "admin_user", "admin")
 
             assert result["status"] == "success"
             assert result["stdout"] == "file1 file2"
@@ -278,14 +260,10 @@ class TestEnhancedSecurityLayer:
         """Test command execution with forced approval for restricted roles"""
         self.security.enable_auth = True
 
-        with patch.object(
-            self.security.command_executor, "assess_command_risk"
-        ) as mock_assess:
+        with patch.object(self.security.command_executor, "assess_command_risk") as mock_assess:
             mock_assess.return_value = (CommandRisk.HIGH, ["High risk command"])
 
-            with patch.object(
-                self.security.command_executor, "run_shell_command"
-            ) as mock_run:
+            with patch.object(self.security.command_executor, "run_shell_command") as mock_run:
                 mock_run.return_value = {
                     "stdout": "",
                     "stderr": "Command execution denied by user",
@@ -295,9 +273,7 @@ class TestEnhancedSecurityLayer:
                 }
 
                 # Developer can only execute safe commands without approval
-                await self.security.execute_command(
-                    "rm file.txt", "dev_user", "developer"
-                )
+                await self.security.execute_command("rm file.txt", "dev_user", "developer")
 
                 # Should force approval for non-safe command
                 mock_run.assert_called_once_with("rm file.txt", force_approval=True)
@@ -313,9 +289,7 @@ class TestEnhancedSecurityLayer:
             mock_process.returncode = 0
             mock_subprocess.return_value = mock_process
 
-            result = await self.security.execute_command(
-                "echo hello", "test_user", "user"
-            )
+            result = await self.security.execute_command("echo hello", "test_user", "user")
 
             assert result["status"] == "success"
             assert result["stdout"] == "output"
@@ -346,9 +320,7 @@ class TestEnhancedSecurityLayer:
         self.security.audit_log_file = "/invalid/path/audit.log"
 
         # Should not raise exception
-        self.security.audit_log(
-            action="test_action", user="test_user", outcome="success", details={}
-        )
+        self.security.audit_log(action="test_action", user="test_user", outcome="success", details={})
 
     def test_get_command_history_empty(self):
         """Test getting command history when empty"""
@@ -472,9 +444,7 @@ class TestEnhancedSecurityLayerIntegration:
             mock_process.returncode = 0
             mock_subprocess.return_value = mock_process
 
-            result = await self.security.execute_command(
-                "echo 'hello world'", "test_user", "admin"
-            )
+            result = await self.security.execute_command("echo 'hello world'", "test_user", "admin")
 
             assert result["status"] == "success"
             assert result["stdout"] == "hello world"

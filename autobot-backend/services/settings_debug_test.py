@@ -13,10 +13,9 @@ import requests
 # Add the project root to Python path
 sys.path.insert(0, os.getcwd())
 
-from tests.test_helpers import get_test_backend_url
-
 from config import global_config_manager
 from services.config_service import ConfigService
+from tests.test_helpers import get_test_backend_url
 
 
 async def test_config_service():
@@ -28,9 +27,7 @@ async def test_config_service():
         config = ConfigService.get_full_config()
         end_time = time.time()
 
-        print(  # noqa: print
-            f"✅ ConfigService.get_full_config() completed in {end_time - start_time:.2f} seconds"
-        )
+        print(f"✅ ConfigService.get_full_config() completed in {end_time - start_time:.2f} seconds")  # noqa: print
         print(f"Config keys: {list(config.keys())}")  # noqa: print
         return True
     except Exception as e:
@@ -54,16 +51,12 @@ async def test_global_config_manager():
         value = global_config_manager.get_nested("message_display.show_thoughts", True)
         end_time = time.time()
 
-        print(  # noqa: print
-            f"✅ global_config_manager test completed in {end_time - start_time:.2f} seconds"
-        )
+        print(f"✅ global_config_manager test completed in {end_time - start_time:.2f} seconds")  # noqa: print
         print(f"Retrieved value: {value}")  # noqa: print
         return True
     except Exception as e:
         end_time = time.time()
-        print(  # noqa: print
-            f"❌ global_config_manager test failed after {end_time - start_time:.2f} seconds: {e}"
-        )
+        print(f"❌ global_config_manager test failed after {end_time - start_time:.2f} seconds: {e}")  # noqa: print
         import traceback
 
         traceback.print_exc()
@@ -80,30 +73,20 @@ async def test_api_endpoint():
         end_time = time.time()
 
         if response.status_code == 200:
-            print(  # noqa: print
-                f"✅ API endpoint responded in {end_time - start_time:.2f} seconds"
-            )  # noqa: print
+            print(f"✅ API endpoint responded in {end_time - start_time:.2f} seconds")  # noqa: print  # noqa: print
             data = response.json()
-            print(  # noqa: print
-                f"Response keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}"
-            )
+            print(f"Response keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")  # noqa: print
             return True
         else:
-            print(  # noqa: print
-                f"❌ API endpoint returned status {response.status_code}"
-            )  # noqa: print
+            print(f"❌ API endpoint returned status {response.status_code}")  # noqa: print  # noqa: print
             return False
     except requests.exceptions.Timeout:
         end_time = time.time()
-        print(  # noqa: print
-            f"❌ API endpoint timed out after {end_time - start_time:.2f} seconds"
-        )  # noqa: print
+        print(f"❌ API endpoint timed out after {end_time - start_time:.2f} seconds")  # noqa: print  # noqa: print
         return False
     except Exception as e:
         end_time = time.time()
-        print(  # noqa: print
-            f"❌ API endpoint error after {end_time - start_time:.2f} seconds: {e}"
-        )  # noqa: print
+        print(f"❌ API endpoint error after {end_time - start_time:.2f} seconds: {e}")  # noqa: print  # noqa: print
         return False
 
 

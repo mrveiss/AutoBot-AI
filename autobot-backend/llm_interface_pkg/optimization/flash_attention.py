@@ -11,6 +11,7 @@ GQA expansion. Graceful fallback: Flash Attn -> SDPA -> vanilla.
 
 Issue #1955: Flash Attention v2 with variable-length sequence optimization.
 """
+
 # Issue #3009: from __future__ import annotations defers annotation evaluation
 # so torch types in dataclass fields / function signatures are strings at runtime.
 from __future__ import annotations
@@ -38,6 +39,7 @@ def _get_torch() -> Any:
 
         _torch = torch
     return _torch
+
 
 # Lazy imports for optional dependencies
 _flash_attn_available: Optional[bool] = None
@@ -114,9 +116,7 @@ def _probe_flash_attn() -> bool:
         from flash_attn.bert_padding import pad_input, unpad_input
 
         _flash_attn_modules["flash_attn_kvpacked_func"] = flash_attn_kvpacked_func
-        _flash_attn_modules["flash_attn_varlen_kvpacked_func"] = (
-            flash_attn_varlen_kvpacked_func
-        )
+        _flash_attn_modules["flash_attn_varlen_kvpacked_func"] = flash_attn_varlen_kvpacked_func
         _flash_attn_modules["unpad_input"] = unpad_input
         _flash_attn_modules["pad_input"] = pad_input
         _flash_attn_available = True
@@ -219,9 +219,7 @@ class GrowingKVCache:
     ):
         _t = _get_torch()
         self.chunk_size = chunk_size
-        self.device = device or _t.device(
-            "cuda" if _t.cuda.is_available() else "cpu"
-        )
+        self.device = device or _t.device("cuda" if _t.cuda.is_available() else "cpu")
         self.dtype = dtype if dtype is not None else _t.float16
         self._state = KVCacheState(chunk_size=chunk_size)
 
@@ -374,9 +372,7 @@ class FlashAttentionV2:
             output = self._flash_padded(q, kv)
         else:
             output = self._flash_unpadded(q, kv, key_padding_mask)
-        return AttentionOutput(
-            output=output, backend_used=AttentionBackend.FLASH_ATTN_V2
-        )
+        return AttentionOutput(output=output, backend_used=AttentionBackend.FLASH_ATTN_V2)
 
     def _flash_padded(self, q: torch.Tensor, kv: torch.Tensor) -> torch.Tensor:
         """Fastest path: no padding mask needed.
@@ -480,9 +476,7 @@ class FlashAttentionV2:
         mask = None
         if self.config.causal and key_padding_mask is not None:
             _t = _get_torch()
-            causal = _t.tril(
-                _t.ones(seq_len, seq_len, device=device, dtype=_t.bool)
-            )
+            causal = _t.tril(_t.ones(seq_len, seq_len, device=device, dtype=_t.bool))
             pad_mask = key_padding_mask[:, None, None, :]
             mask = causal[None, None, :, :] & pad_mask
         elif key_padding_mask is not None:
@@ -511,9 +505,7 @@ class FlashAttentionV2:
 
         _t = _get_torch()
         scores = _t.matmul(q_t, k_t.transpose(-2, -1)) * scale
-        scores = self._apply_masks_to_scores(
-            scores, key_padding_mask, q.shape[1], q.device
-        )
+        scores = self._apply_masks_to_scores(scores, key_padding_mask, q.shape[1], q.device)
         weights = _t.softmax(scores, dim=-1)
 
         output = _t.matmul(weights, v_t)

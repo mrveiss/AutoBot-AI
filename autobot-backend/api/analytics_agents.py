@@ -79,9 +79,7 @@ class CompleteTaskRequest(BaseModel):
     """Request to complete a task"""
 
     task_id: str = Field(..., description="Task identifier")
-    status: str = Field(
-        ..., description="Final status (completed, failed, cancelled, timeout)"
-    )
+    status: str = Field(..., description="Final status (completed, failed, cancelled, timeout)")
     output_size: Optional[int] = Field(None, description="Size of output data")
     tokens_used: Optional[int] = Field(None, description="Tokens consumed")
     error_message: Optional[str] = Field(None, description="Error message if failed")
@@ -119,9 +117,7 @@ async def get_all_agents_performance(
             "total_completed": sum(m.completed_tasks for m in metrics_list),
             "total_failed": sum(m.failed_tasks for m in metrics_list),
             "avg_success_rate": (
-                round(sum(m.success_rate for m in metrics_list) / len(metrics_list), 2)
-                if metrics_list
-                else 0
+                round(sum(m.success_rate for m in metrics_list) / len(metrics_list), 2) if metrics_list else 0
             ),
         },
     }
@@ -236,9 +232,7 @@ async def get_recent_tasks(
 )
 @router.get("/comparison")
 async def compare_agents(
-    agent_ids: Optional[str] = Query(
-        None, description="Comma-separated agent IDs to compare (all if not specified)"
-    ),
+    agent_ids: Optional[str] = Query(None, description="Comma-separated agent IDs to compare (all if not specified)"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -354,11 +348,7 @@ async def get_agent_recommendations(
             )
 
     severity_order = {"high": 0, "medium": 1, "low": 2}
-    recommendations.sort(
-        key=lambda x: min(
-            severity_order.get(r["severity"], 3) for r in x["recommendations"]
-        )
-    )
+    recommendations.sort(key=lambda x: min(severity_order.get(r["severity"], 3) for r in x["recommendations"]))
 
     return {
         "recommendations": recommendations,
@@ -379,9 +369,7 @@ async def get_agent_recommendations(
 )
 @router.get("/trends")
 async def get_performance_trends(
-    agent_id: Optional[str] = Query(
-        None, description="Specific agent ID (all if not specified)"
-    ),
+    agent_id: Optional[str] = Query(None, description="Specific agent ID (all if not specified)"),
     days: int = Query(default=7, ge=1, le=90, description="Number of days to analyze"),
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -481,9 +469,7 @@ async def track_task_complete(
     try:
         status = TaskStatus(request.status)
     except ValueError:
-        status = (
-            TaskStatus.COMPLETED if request.status == "success" else TaskStatus.FAILED
-        )
+        status = TaskStatus.COMPLETED if request.status == "success" else TaskStatus.FAILED
 
     record = await analytics.track_task_complete(
         task_id=request.task_id,
