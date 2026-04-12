@@ -5,6 +5,7 @@
 > AutoBot is a **self-hosted AI platform** that brings conversational AI to distributed Linux administration, fleet management, and infrastructure automation — all from a beautiful, modern interface. Own your data. Control your infrastructure. No vendor lock-in.
 
 [![Docker Smoke Test](https://github.com/mrveiss/AutoBot-AI/actions/workflows/docker-smoke-test.yml/badge.svg)](https://github.com/mrveiss/AutoBot-AI/actions/workflows/docker-smoke-test.yml)
+[![codecov](https://codecov.io/gh/mrveiss/AutoBot-AI/branch/main/graph/badge.svg)](https://codecov.io/gh/mrveiss/AutoBot-AI)
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/mrveiss?label=Sponsor&logo=GitHub&style=flat-square)](https://github.com/sponsors/mrveiss)
 
 ## Quick Start (3 Steps)
