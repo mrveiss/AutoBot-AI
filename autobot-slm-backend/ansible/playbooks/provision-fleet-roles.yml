@@ -74,6 +74,34 @@
       changed_when: false
       tags: [always]
 
+    - name: "[PRE-FLIGHT] Fix log directory and file ownership (#4309)"
+      block:
+        - name: "[PRE-FLIGHT] Ensure log directory exists with correct ownership"
+          ansible.builtin.file:
+            path: /var/log/autobot
+            state: directory
+            owner: autobot
+            group: autobot
+            mode: "0755"
+          become: true
+          failed_when: false
+
+        - name: "[PRE-FLIGHT] Fix log file ownership so Ansible can write"
+          ansible.builtin.file:
+            path: "{{ item }}"
+            owner: autobot
+            group: autobot
+            mode: "0644"
+          become: true
+          failed_when: false
+          with_items:
+            - /var/log/autobot/ansible.log
+            - /var/log/autobot/backend.log
+            - /var/log/autobot/backend-error.log
+            - /var/log/autobot/celery.log
+            - /var/log/autobot/celery-error.log
+      tags: [always]
+
     - name: "[PRE-FLIGHT] Sync latest code from GitHub (if reachable)"
       ansible.builtin.git:
         repo: "{{ github_repo }}"
