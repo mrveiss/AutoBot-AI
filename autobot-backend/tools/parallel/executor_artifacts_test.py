@@ -6,7 +6,7 @@
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 
-from events.types import ArtifactType
+from events.types import ArtifactType, build_artifact
 from tools.parallel.executor import (
     ParallelToolExecutor,
     _ArtifactCapture,
@@ -117,7 +117,7 @@ class TestPublishObservationWithArtifacts:
 
         action_event = MagicMock(event_id="action-123")
         call = ToolCall(tool_name="edit_file", arguments={"file_path": "/tmp/test.py"})
-        artifacts = [MagicMock()]
+        artifacts = [build_artifact(ArtifactType.CUSTOM, "test artifact content", label="test")]
 
         await executor._publish_observation_event(
             action_event=action_event,
