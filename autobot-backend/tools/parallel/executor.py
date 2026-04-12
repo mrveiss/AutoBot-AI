@@ -31,71 +31,13 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# Result Normalization (Issue #4174)
-# =============================================================================
-
-# Canonical key aliases for file-mutation results.
-# Any tool may return any of these; all collapse to the canonical name.
-_FILE_RESULT_ALIASES: dict[str, list[str]] = {
-    "original": ["original", "before"],   # content before the edit
-    "modified": ["modified", "content", "after"],  # content after the edit
-}
-
-# Canonical key aliases for test-runner results.
-_TEST_RESULT_ALIASES: dict[str, list[str]] = {
-    "stdout": ["stdout", "output"],
-    "stderr": ["stderr"],
-    "exit_code": ["exit_code", "returncode", "return_code"],
-}
-
-
-def _normalize_result(tool_name: str, result: Any) -> dict[str, Any]:
-    """Return a normalized copy of *result* with canonical key names.
-
-    Accepts dict, str, or None.  String results from test runners are promoted
-    to ``{"stdout": <value>}``.  All other non-dict values are returned as an
-    empty dict so callers can safely use ``.get()`` without type checks.
-
-    The function is intentionally tool-aware: file-mutation alias expansion is
-    only applied for file-modifying tools, and test-output alias expansion is
-    only applied for test-runner tools.  This prevents key collisions when a
-    tool coincidentally uses a key that belongs to the other category.
-    """
-    if result is None:
-        return {}
-
-    if isinstance(result, str):
-        if tool_name in _TEST_RUNNER_TOOLS:
-            return {"stdout": result}
-        return {}
-
-    if not isinstance(result, dict):
-        return {}
-
-    normalized: dict[str, Any] = dict(result)  # shallow copy; preserve unknown keys
-
-    if tool_name in _FILE_MODIFYING_TOOLS:
-        for canonical, aliases in _FILE_RESULT_ALIASES.items():
-            if canonical not in normalized:
-                for alias in aliases:
-                    if alias in normalized:
-                        normalized[canonical] = normalized[alias]
-                        break
-
-    if tool_name in _TEST_RUNNER_TOOLS:
-        for canonical, aliases in _TEST_RESULT_ALIASES.items():
-            if canonical not in normalized:
-                for alias in aliases:
-                    if alias in normalized:
-                        normalized[canonical] = normalized[alias]
-                        break
-
-    return normalized
-
-
-# =============================================================================
 # Artifact Capture (Issue #4094)
 # =============================================================================
+
+# Size limits for artifact content (Issue #4173)
+_TEST_OUTPUT_MAX_BYTES: int = 100 * 1024   # 100 KB
+_CODE_DIFF_MAX_BYTES: int = 50 * 1024      # 50 KB
+_TRUNCATION_MARKER: str = "\n[TRUNCATED]"
 
 # Tools that mutate files — artifact capture is enabled for these
 _FILE_MODIFYING_TOOLS: frozenset[str] = frozenset({
@@ -113,24 +55,6 @@ _TEST_RUNNER_TOOLS: frozenset[str] = frozenset({
     "execute_tests",
     "pytest",
     "run_pytest",
-})
-
-# Tools that produce deployment/infrastructure output (Issue #4175)
-_DEPLOYMENT_TOOLS: frozenset[str] = frozenset({
-    "ansible",
-    "ansible_playbook",
-    "run_ansible",
-    "run_playbook",
-    "terraform",
-    "terraform_apply",
-    "terraform_plan",
-    "run_terraform",
-    "shell",
-    "bash",
-    "run_shell",
-    "run_bash",
-    "execute_shell",
-    "execute_bash",
 })
 
 
@@ -441,18 +365,34 @@ class ParallelToolExecutor:
         filepath = call.arguments.get("file_path") or call.arguments.get("path")
         return _ArtifactCapture(filepath=filepath)
 
+    @staticmethod
+    def _truncate_artifact(content: str, max_bytes: int, label: str) -> tuple[str, bool]:
+        """Return (content, was_truncated) trimmed to max_bytes (UTF-8). Issue #4173.
+
+        Content is sliced at the byte boundary and a marker appended so readers
+        know the artifact is incomplete.  The caller must propagate was_truncated
+        to TaskArtifact.truncated so the flag survives TaskArtifact.__post_init__.
+        """
+        encoded = content.encode("utf-8")
+        if len(encoded) <= max_bytes:
+            return content, False
+        trimmed = encoded[:max_bytes].decode("utf-8", errors="ignore") + _TRUNCATION_MARKER
+        logger.warning(
+            "Artifact '%s' truncated from %d to %d bytes",
+            label,
+            len(encoded),
+            max_bytes,
+        )
+        return trimmed, True
+
     def _build_artifacts(
         self,
         call: ToolCall,
         capture: _ArtifactCapture,
         result: Any,
     ) -> list[TaskArtifact]:
-        """Build artifact data from execution result. Issue #4094, #4174."""
+        """Build artifact data from execution result. Issue #4094."""
         artifacts: list[TaskArtifact] = []
-
-        # Normalize result to canonical key names once; all reads below use
-        # only the canonical names so no alias logic leaks into this method.
-        norm = _normalize_result(call.tool_name, result)
 
         # --- file changes ---
         if call.tool_name in _FILE_MODIFYING_TOOLS and capture.filepath:
@@ -469,50 +409,48 @@ class ParallelToolExecutor:
             )
 
             # --- code diffs ---
-            # Only generate a diff when normalized result provides both sides.
-            original = norm.get("original")
-            modified = norm.get("modified")
-            if original is not None and modified is not None:
-                diff_str = DiffGenerator.generate_diff(
-                    original, modified, filename=capture.filepath
-                )
-                artifacts.append(
-                    build_artifact(
+            # Only generate a diff if the tool result provides before/after content.
+            if isinstance(result, dict):
+                original = result.get("original") or result.get("before")
+                modified = result.get("content") or result.get("after")
+                if original is not None and modified is not None:
+                    diff_str = DiffGenerator.generate_diff(
+                        original, modified, filename=capture.filepath
+                    )
+                    diff_label = f"Code Diff: {capture.filepath}"
+                    diff_str, diff_truncated = self._truncate_artifact(
+                        diff_str, _CODE_DIFF_MAX_BYTES, diff_label
+                    )
+                    diff_artifact = build_artifact(
                         ArtifactType.CODE_DIFF,
                         diff_str,
-                        label=f"Code Diff: {capture.filepath}",
+                        label=diff_label,
                         file_path=capture.filepath,
                     )
-                )
+                    if diff_truncated:
+                        diff_artifact.truncated = True
+                    artifacts.append(diff_artifact)
 
         # --- test output ---
         if call.tool_name in _TEST_RUNNER_TOOLS:
-            test_output = norm.get("stdout")
-            if test_output:
-                artifacts.append(
-                    build_artifact(
-                        ArtifactType.TEST_OUTPUT,
-                        test_output,
-                        label="Test Output",
-                    )
-                )
-
-        # --- deployment/infrastructure output (Issue #4175) ---
-        if call.tool_name in _DEPLOYMENT_TOOLS:
-            deployment_output = None
+            test_output = None
             if isinstance(result, dict):
-                deployment_output = result.get("output") or result.get("stdout")
+                test_output = result.get("output") or result.get("stdout")
             elif isinstance(result, str):
-                deployment_output = result
+                test_output = result
 
-            if deployment_output:
-                artifacts.append(
-                    build_artifact(
-                        ArtifactType.DEPLOYMENT_LOG,
-                        deployment_output,
-                        label="Deployment Output",
-                    )
+            if test_output:
+                test_output, test_truncated = self._truncate_artifact(
+                    test_output, _TEST_OUTPUT_MAX_BYTES, "Test Output"
                 )
+                test_artifact = build_artifact(
+                    ArtifactType.TEST_OUTPUT,
+                    test_output,
+                    label="Test Output",
+                )
+                if test_truncated:
+                    test_artifact.truncated = True
+                artifacts.append(test_artifact)
 
         return artifacts
 

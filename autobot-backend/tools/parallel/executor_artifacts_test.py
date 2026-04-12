@@ -10,91 +10,13 @@ from events.types import ArtifactType
 from tools.parallel.executor import (
     ParallelToolExecutor,
     _ArtifactCapture,
+    _CODE_DIFF_MAX_BYTES,
     _FILE_MODIFYING_TOOLS,
+    _TEST_OUTPUT_MAX_BYTES,
     _TEST_RUNNER_TOOLS,
-    _normalize_result,
+    _TRUNCATION_MARKER,
 )
 from tools.parallel.types import ToolCall
-
-
-class TestNormalizeResult:
-    """Tests for _normalize_result (Issue #4174) — canonical key standardization."""
-
-    # --- None / non-dict inputs ---
-
-    def test_none_returns_empty_dict(self):
-        assert _normalize_result("edit_file", None) == {}
-
-    def test_non_dict_non_str_returns_empty_dict(self):
-        assert _normalize_result("edit_file", 42) == {}
-
-    # --- File-mutation tools: original/before -> canonical "original" ---
-
-    def test_before_alias_maps_to_original(self):
-        norm = _normalize_result("edit_file", {"before": "old", "after": "new"})
-        assert norm["original"] == "old"
-
-    def test_after_alias_maps_to_modified(self):
-        norm = _normalize_result("edit_file", {"before": "old", "after": "new"})
-        assert norm["modified"] == "new"
-
-    def test_content_alias_maps_to_modified(self):
-        norm = _normalize_result("write_file", {"original": "x", "content": "y"})
-        assert norm["modified"] == "y"
-
-    def test_canonical_original_not_overwritten(self):
-        """When canonical key is already present it must not be replaced."""
-        norm = _normalize_result("edit_file", {"original": "keep", "before": "drop"})
-        assert norm["original"] == "keep"
-
-    def test_canonical_modified_not_overwritten(self):
-        norm = _normalize_result("edit_file", {"modified": "keep", "content": "drop"})
-        assert norm["modified"] == "keep"
-
-    def test_unknown_keys_preserved(self):
-        norm = _normalize_result("edit_file", {"original": "a", "modified": "b", "extra": 1})
-        assert norm["extra"] == 1
-
-    # --- File-mutation aliases NOT applied to non-file-modifying tools ---
-
-    def test_file_aliases_not_applied_to_read_tool(self):
-        norm = _normalize_result("read_file", {"before": "x", "after": "y"})
-        assert "original" not in norm
-        assert "modified" not in norm
-
-    # --- Test-runner tools: output -> canonical "stdout" ---
-
-    def test_output_alias_maps_to_stdout(self):
-        norm = _normalize_result("pytest", {"output": "PASSED", "returncode": 0})
-        assert norm["stdout"] == "PASSED"
-
-    def test_returncode_alias_maps_to_exit_code(self):
-        norm = _normalize_result("run_tests", {"stdout": "ok", "returncode": 0})
-        assert norm["exit_code"] == 0
-
-    def test_return_code_alias_maps_to_exit_code(self):
-        norm = _normalize_result("pytest", {"stdout": "ok", "return_code": 1})
-        assert norm["exit_code"] == 1
-
-    def test_canonical_stdout_not_overwritten_by_output(self):
-        norm = _normalize_result("pytest", {"stdout": "keep", "output": "drop"})
-        assert norm["stdout"] == "keep"
-
-    # --- Test-runner: str result promoted to stdout ---
-
-    def test_string_result_for_test_tool_becomes_stdout(self):
-        norm = _normalize_result("pytest", "PASSED: 5 tests")
-        assert norm == {"stdout": "PASSED: 5 tests"}
-
-    def test_string_result_for_non_test_tool_returns_empty(self):
-        norm = _normalize_result("edit_file", "some string")
-        assert norm == {}
-
-    # --- Test aliases NOT applied to file-modifying tools ---
-
-    def test_test_aliases_not_applied_to_file_tool(self):
-        norm = _normalize_result("edit_file", {"output": "log line"})
-        assert "stdout" not in norm
 
 
 class TestArtifactCapture:
@@ -165,37 +87,93 @@ class TestBuildArtifacts:
         artifacts = executor._build_artifacts(call, capture, {"content": "file content"})
         assert len(artifacts) == 0
 
-    def test_before_after_aliases_produce_diff(self):
-        """before/after aliases are normalized and produce a CODE_DIFF artifact."""
-        executor = ParallelToolExecutor(config=MagicMock())
-        call = ToolCall(tool_name="edit_file", arguments={"file_path": "/tmp/test.py"})
-        capture = _ArtifactCapture(filepath="/tmp/test.py")
-        result = {"before": "line 1\n", "after": "line 1 modified\n"}
-        artifacts = executor._build_artifacts(call, capture, result)
-        diff_artifacts = [a for a in artifacts if a.artifact_type == ArtifactType.CODE_DIFF]
-        assert len(diff_artifacts) == 1
-        assert "@@" in diff_artifacts[0].content
 
-    def test_output_alias_produces_test_artifact(self):
-        """'output' alias is normalized to stdout and produces a TEST_OUTPUT artifact."""
-        executor = ParallelToolExecutor(config=MagicMock())
+class TestTruncateArtifact:
+    """Tests for _truncate_artifact static method (Issue #4173)"""
+
+    def test_content_within_limit_unchanged(self):
+        """Content below max_bytes returns unmodified string and False flag."""
+        content = "x" * 100
+        result, was_truncated = ParallelToolExecutor._truncate_artifact(content, 200, "test")
+        assert result == content
+        assert was_truncated is False
+
+    def test_content_at_exact_limit_unchanged(self):
+        """Content exactly at max_bytes returns unmodified and False."""
+        content = "a" * _CODE_DIFF_MAX_BYTES
+        result, was_truncated = ParallelToolExecutor._truncate_artifact(
+            content, _CODE_DIFF_MAX_BYTES, "diff"
+        )
+        assert result == content
+        assert was_truncated is False
+
+    def test_oversized_content_truncated_with_marker(self):
+        """Content exceeding max_bytes is truncated, marker appended, flag True."""
+        oversized = "b" * (_TEST_OUTPUT_MAX_BYTES + 1000)
+        result, was_truncated = ParallelToolExecutor._truncate_artifact(
+            oversized, _TEST_OUTPUT_MAX_BYTES, "Test Output"
+        )
+        assert was_truncated is True
+        assert result.endswith(_TRUNCATION_MARKER)
+        assert len(result.encode("utf-8")) <= _TEST_OUTPUT_MAX_BYTES + len(
+            _TRUNCATION_MARKER.encode("utf-8")
+        )
+
+    def test_truncation_logs_warning(self, caplog):
+        """Warning is logged when truncation occurs."""
+        import logging
+
+        oversized = "c" * (_CODE_DIFF_MAX_BYTES + 500)
+        with caplog.at_level(logging.WARNING, logger="tools.parallel.executor"):
+            ParallelToolExecutor._truncate_artifact(
+                oversized, _CODE_DIFF_MAX_BYTES, "Code Diff: /tmp/big.py"
+            )
+        assert any("truncated" in r.message for r in caplog.records)
+
+
+class TestBuildArtifactsSizeLimits:
+    """Tests that _build_artifacts enforces size limits (Issue #4173)"""
+
+    def test_oversized_test_output_is_truncated(self):
+        """Test output exceeding 100 KB sets artifact.truncated = True."""
+        executor = ParallelToolExecutor(tool_dispatcher=AsyncMock(), config=MagicMock())
         call = ToolCall(tool_name="pytest", arguments={})
         capture = _ArtifactCapture()
-        result = {"output": "1 passed in 0.01s"}
+        big_output = "line\n" * 25000  # well over 100 KB
+        result = {"output": big_output}
         artifacts = executor._build_artifacts(call, capture, result)
         test_artifacts = [a for a in artifacts if a.artifact_type == ArtifactType.TEST_OUTPUT]
         assert len(test_artifacts) == 1
-        assert test_artifacts[0].content == "1 passed in 0.01s"
+        assert test_artifacts[0].truncated is True
 
-    def test_string_result_produces_test_artifact(self):
-        """Plain string result from test runner is normalized to stdout."""
-        executor = ParallelToolExecutor(config=MagicMock())
-        call = ToolCall(tool_name="run_tests", arguments={})
+    def test_oversized_code_diff_is_truncated(self):
+        """Code diff exceeding 50 KB sets artifact.truncated = True."""
+        executor = ParallelToolExecutor(tool_dispatcher=AsyncMock(), config=MagicMock())
+        call = ToolCall(tool_name="edit_file", arguments={"file_path": "/tmp/big.py"})
+        capture = _ArtifactCapture(filepath="/tmp/big.py")
+        big_content = "x" * 20000
+        result = {"original": big_content, "content": big_content + "y"}
+
+        with patch(
+            "tools.parallel.executor.DiffGenerator.generate_diff",
+            return_value="+" + "z" * (_CODE_DIFF_MAX_BYTES + 1000),
+        ):
+            artifacts = executor._build_artifacts(call, capture, result)
+
+        diff_artifacts = [a for a in artifacts if a.artifact_type == ArtifactType.CODE_DIFF]
+        assert len(diff_artifacts) == 1
+        assert diff_artifacts[0].truncated is True
+
+    def test_small_test_output_not_truncated(self):
+        """Test output within limit leaves artifact.truncated = False."""
+        executor = ParallelToolExecutor(tool_dispatcher=AsyncMock(), config=MagicMock())
+        call = ToolCall(tool_name="pytest", arguments={})
         capture = _ArtifactCapture()
-        artifacts = executor._build_artifacts(call, capture, "All 3 passed")
+        result = {"output": "PASSED: 3 tests"}
+        artifacts = executor._build_artifacts(call, capture, result)
         test_artifacts = [a for a in artifacts if a.artifact_type == ArtifactType.TEST_OUTPUT]
         assert len(test_artifacts) == 1
-        assert test_artifacts[0].content == "All 3 passed"
+        assert test_artifacts[0].truncated is False
 
 
 class TestPublishObservationWithArtifacts:
