@@ -21,7 +21,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
@@ -37,26 +37,33 @@ const KnowledgeEntries = () => import('./KnowledgeEntries.vue')
 const KnowledgeUpload = () => import('./KnowledgeUpload.vue')
 const KnowledgeStats = () => import('./KnowledgeStats.vue')
 const KnowledgeAdvanced = () => import('./KnowledgeAdvanced.vue')
+// Issue #3270: wire up existing but previously unreachable components
+const KnowledgeSystemDocs = () => import('./KnowledgeSystemDocs.vue')
+const KnowledgePromptEditor = () => import('./KnowledgePromptEditor.vue')
 
 const store = useKnowledgeStore()
 
-// Tab configuration - Added Advanced tab
+// Tab configuration
 const tabs = computed(() => [
   { id: 'search', label: t('knowledge.manager.tabSearch') },
   { id: 'categories', label: t('knowledge.manager.tabCategories') },
   { id: 'upload', label: t('knowledge.manager.tabUpload') },
   { id: 'manage', label: t('knowledge.manager.tabManage') },
   { id: 'stats', label: t('knowledge.manager.tabStatistics') },
+  { id: 'system-docs', label: t('knowledge.manager.tabSystemDocs') },
+  { id: 'prompt-editor', label: t('knowledge.manager.tabPromptEditor') },
   { id: 'advanced', label: t('knowledge.manager.tabAdvanced') }
 ])
 
-// Component mapping - Added KnowledgeAdvanced
+// Component mapping
 const componentMap = {
   search: KnowledgeSearch,
   categories: KnowledgeCategories,
   upload: KnowledgeUpload,
   manage: KnowledgeEntries,
   stats: KnowledgeStats,
+  'system-docs': KnowledgeSystemDocs,
+  'prompt-editor': KnowledgePromptEditor,
   advanced: KnowledgeAdvanced
 } as const
 
