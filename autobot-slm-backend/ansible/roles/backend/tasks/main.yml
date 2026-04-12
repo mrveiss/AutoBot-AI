@@ -49,9 +49,12 @@
     - backend_ai_stack_host == '127.0.0.1'
   tags: ['backend', 'config']
 
-- name: "Backend | Set backend_chromadb_host on WSL2 hosts (#3541, #4084)"
+- name: "Backend | Set backend_chromadb_host on WSL2 hosts (#3541, #4084, #4087)"
   ansible.builtin.set_fact:
-    backend_chromadb_host: "{{ '127.0.0.1' if ('ai-stack' in node_roles | default([])) else '10.255.255.254' }}"
+    # ChromaDB always runs on the same host as AI Stack.
+    # On WSL2: use 127.0.0.1 when ai-stack is co-located on this node,
+    # otherwise mirror backend_ai_stack_host (already WSL2-adjusted above).
+    backend_chromadb_host: "{{ '127.0.0.1' if ('ai-stack' in node_roles | default([])) else backend_ai_stack_host }}"
   when:
     - _proc_version.content is defined
     - (_proc_version.content | b64decode | lower) is search('microsoft')
