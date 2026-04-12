@@ -130,7 +130,6 @@ class TestPublishObservationWithArtifacts:
                 file_path="/tmp/test.py"
             )
         ]
->>>>>>> 5c4f059bc (fix(tests): ParallelToolExecutor test fixture - fix JSON serialization in artifact test (#4226))
 
         await executor._publish_observation_event(
             action_event=action_event,
