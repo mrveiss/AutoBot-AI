@@ -118,9 +118,6 @@ class TestPublishObservationWithArtifacts:
 
         action_event = MagicMock(event_id="action-123")
         call = ToolCall(tool_name="edit_file", arguments={"file_path": "/tmp/test.py"})
-<<<<<<< HEAD
-        artifacts = [build_artifact(ArtifactType.CUSTOM, "test artifact content", label="test")]
-=======
         # Create a valid artifact using build_artifact to ensure JSON serializability
         artifacts = [
             build_artifact(
