@@ -153,3 +153,76 @@ After ALL PRs merged:
 5. **File discovery issues:** For ALL gaps found, file GitHub issues. DO NOT fix inline. Keep audit trail clean.
 
 **Why:** Bugs like removed `_init_redis()` breaking 9+ call sites get caught here before reaching production.
+
+---
+
+## Pre-Implementation Validation (NEW)
+
+**Before spawning agents for issue implementation, verify:**
+
+1. **Main session branch check:** `git branch --show-current` — must be `Dev_new_gui`
+2. **Main session clean:** `git status --porcelain` — no uncommitted changes
+3. **Issue not already resolved:** Check if `#<issue>` is already in `origin/Dev_new_gui` commits
+4. **No stale worktrees:** Clean up any existing `.worktrees/issue-<number>/` directories
+5. **Issue preconditions:** Verify issue dependencies are resolved before starting work
+
+**Why:** Prevents wasted agent cycles on already-fixed issues, ensures clean isolation, catches branch violations early.
+
+---
+
+## Sub-Agent Permission Enforcement (NEW)
+
+**When spawning agents for parallel work:**
+
+1. **Verify permissions upfront:** Ensure agents have Bash, Read, Edit, Grep tool access
+2. **Document in agent prompt:** "If you lose Bash permissions, STOP and report — don't retry"
+3. **Monitor for permission failures:** After each batch, check for "Permission denied" errors
+4. **Main session as fallback:** If agent fails on git push, main session handles it (main session has full credentials)
+
+**Key principle:** Agents commit locally only. Main session (with SSH/credentials) always handles pushes.
+
+---
+
+## Mandatory Post-Merge Gap Audit (NEW)
+
+**After merging all PRs in a batch:**
+
+1. **Run `/dead-code-audit`** to discover new gaps introduced by merged code
+2. **File discovery issues** for any new dead/orphaned code found
+3. **Do NOT fix gaps inline** — keep audit trail clean by filing issues for later prioritization
+4. **Track in GitHub** under `dead-code` and `not-wired` labels for batch cleanup
+
+**Why:** Catches regressions (missing imports, orphaned functions, new dead code) immediately.
+
+---
+
+## Validation Gates Before Merging (NEW)
+
+**Use `/pre-merge-validate <PR>` before merging any code:**
+
+1. **Syntax + Imports:** Catches SyntaxError, ImportError
+2. **Call-Site Impact:** Finds removed functions with live callers (prevents `_init_redis()` incidents)
+3. **Function Signatures:** Detects signature changes with existing callers
+4. **Targeted Tests:** Runs tests only for changed files (fast validation)
+5. **Type Check:** Frontend TypeScript validation
+6. **Linting:** Catches errors (not warnings)
+
+**Integration:** `/team-implement` automatically validates before creating PRs.
+
+---
+
+## Headless / Automated Audit (NEW - Optional)
+
+**For CI/CD integration, use Claude CLI headless mode:**
+
+```bash
+# Validate all open PRs before merge window
+for pr in $(gh pr list --state open --limit 20 --json number -q '.[].number'); do
+  /pre-merge-validate $pr || gh pr comment $pr -b "❌ Validation failed"
+done
+
+# Nightly codebase audit (cron: 0 23 * * *)
+/dead-code-audit >> /var/log/codebase-audit.log
+```
+
+**Benefits:** Catch failures before human review, file discovery issues automatically, maintain codebase health continuously.
