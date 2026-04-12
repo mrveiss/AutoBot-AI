@@ -1105,8 +1105,9 @@ class NPUSemanticSearch:
             return False
 
         try:
+            # Issue #3290: prefer NPU for embedding generation; fall back to GPU
             embedding = await accelerated_embedding_generation(
-                content=content, modality=modality, preferred_device=HardwareDevice.GPU
+                content=content, modality=modality, preferred_device=HardwareDevice.NPU
             )
             doc_metadata = self._prepare_document_metadata(content, modality, metadata)
             doc_id = self._generate_document_id(modality, doc_id)

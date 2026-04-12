@@ -22,7 +22,7 @@ import aiofiles
 
 from autobot_shared.redis_client import get_redis_client, get_async_redis_client
 from autobot_shared.security.path_validator import validate_path
-from constants.ttl_constants import TTL_24_HOURS
+from constants.ttl_constants import TTL_1_HOUR, TTL_24_HOURS
 from code_embedding_generator import get_code_embedding_generator
 from npu_semantic_search import get_npu_search_engine
 from worker_node import WorkerNode
@@ -914,10 +914,10 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 json.dumps(serializable_results),
             )
 
+            # Issue #3290: preserve npu_acceleration_used set by the search
+            # sub-methods (_run_npu_semantic_search / _search_code_embeddings)
+            # so stats reflect actual device used, not just npu_available flag.
             self.stats.search_time_ms = (time.time() - start_time) * 1000
-            self.stats.npu_acceleration_used = (
-                self.npu_available and search_type == "semantic"
-            )
             self.stats.redis_cache_hit = False
             self.stats.results_count = len(results)
             return results
@@ -1359,10 +1359,11 @@ class NPUCodeSearchAgent(StandardizedAgent):
     async def _fallback_word_matching(
         self, query: str, language: Optional[str], max_results: int
     ) -> List[CodeSearchResult]:
-        """
-        Fallback word-matching when embedding search unavailable.
+        """Fallback word-matching when embedding search unavailable.
 
         Issue #207: Deprecated fallback, prefer semantic search.
+        Issue #3290: Marks npu_acceleration_used=False so stats accurately
+        reflect that the NPU was NOT used for this query.
         """
         results = []
         query_words = query.lower().split()
@@ -1383,6 +1384,8 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 )
 
         results.sort(key=lambda x: x.confidence, reverse=True)
+        # Issue #3290: word-matching never uses NPU — record this accurately
+        self.stats.npu_acceleration_used = False
         return results[:max_results]
 
     async def _search_semantic(
@@ -1513,6 +1516,11 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 "languages": language_stats,
                 "npu_available": self.npu_available,
                 "cache_keys": cache_count,
+                # Issue #3290: surface NPU utilisation so it can be monitored
+                "npu_acceleration_used": self.stats.npu_acceleration_used,
+                "last_search_device": (
+                    "npu" if self.stats.npu_acceleration_used else "cpu"
+                ),
             }
 
         except Exception as e:
