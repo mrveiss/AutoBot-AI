@@ -29,6 +29,7 @@ from prometheus_client import (
 # Issue #469: Added PerformanceMetricsRecorder for GPU/NPU metrics
 # Issue #470: Added KnowledgeBase, LLMProvider, WebSocket, Redis recorders
 # Issue #476: Added FrontendMetricsRecorder for RUM metrics
+# Issue #4109: Added MCPWorkerMetricsRecorder for worker restart monitoring
 from .metrics import (
     ClaudeAPIMetricsRecorder,
     FrontendMetricsRecorder,
@@ -36,6 +37,7 @@ from .metrics import (
     InferenceProfilerMetricsRecorder,
     KnowledgeBaseMetricsRecorder,
     LLMProviderMetricsRecorder,
+    MCPWorkerMetricsRecorder,
     PerformanceMetricsRecorder,
     RedisMetricsRecorder,
     ServiceHealthMetricsRecorder,
@@ -77,6 +79,7 @@ class PrometheusMetricsManager:
     - WebSocketMetricsRecorder: WebSocket connection metrics (Issue #470)
     - RedisMetricsRecorder: Redis operation metrics (Issue #470)
     - FrontendMetricsRecorder: Frontend RUM metrics (Issue #476)
+    - MCPWorkerMetricsRecorder: MCP worker restart budget metrics (Issue #4109)
     """
 
     def __init__(self, registry: Optional[CollectorRegistry] = None):
@@ -109,6 +112,8 @@ class PrometheusMetricsManager:
         self._frontend = FrontendMetricsRecorder(self.registry)
         # Issue #1956: Initialize inference profiler metrics recorder
         self._inference_profiler = InferenceProfilerMetricsRecorder(self.registry)
+        # Issue #4109: Initialize MCP worker metrics recorder
+        self._mcp_worker = MCPWorkerMetricsRecorder(self.registry)
 
     # =========================================================================
     # Core Infrastructure Metrics Initialization
@@ -822,6 +827,34 @@ class PrometheusMetricsManager:
         self._inference_profiler.record_session_complete(
             model_name, total_duration_seconds
         )
+
+    # =========================================================================
+    # MCP Worker Metrics (Issue #4109: Delegates to MCPWorkerMetricsRecorder)
+    # =========================================================================
+
+    def record_mcp_worker_restart(self, bridge: str, restart_count: int) -> None:
+        """Record a worker restart and update restart count."""
+        self._mcp_worker.record_restart(bridge, restart_count)
+
+    def record_mcp_restart_budget_exhaustion(self, bridge: str) -> None:
+        """Record that a worker exceeded its restart budget."""
+        self._mcp_worker.record_restart_budget_exhaustion(bridge)
+
+    def record_mcp_worker_crash_interval(self, bridge: str, seconds: float) -> None:
+        """Record time interval between consecutive worker crashes."""
+        self._mcp_worker.record_crash_interval(bridge, seconds)
+
+    def set_mcp_circuit_breaker_activated(self, bridge: str, activated: bool) -> None:
+        """Set circuit breaker activation state for a bridge."""
+        self._mcp_worker.set_circuit_breaker_activated(bridge, activated)
+
+    def set_mcp_worker_uptime(self, bridge: str, seconds: float) -> None:
+        """Set worker uptime in seconds."""
+        self._mcp_worker.set_worker_uptime(bridge, seconds)
+
+    def set_mcp_worker_permanently_failed(self, bridge: str, failed: bool) -> None:
+        """Set permanent failure flag for a worker."""
+        self._mcp_worker.set_permanently_failed(bridge, failed)
 
     # =========================================================================
     # Metrics Export
