@@ -13,6 +13,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAgentRegistry, type SpecializedAgent, type BackendAgent } from '@/composables/useAgentRegistry'
+import { useAvailableModels } from '@/composables/useAvailableModels'
 import AgentSettingsPanel from '@/components/agents/AgentSettingsPanel.vue'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -31,6 +32,15 @@ const {
   fetchAllAgents,
   fetchAgentDetail,
 } = useAgentRegistry()
+
+const {
+  availableModelNames,
+  isLoading: isLoadingModels,
+  error: modelsError,
+  hasErrors: modelsHaveErrors,
+  providersErrored,
+  fetchModels,
+} = useAvailableModels()
 
 const activeTab = ref<'backend' | 'specialized' | 'settings'>('backend')
 const showDetailModal = ref(false)
@@ -80,7 +90,7 @@ function closeDetailModal() {
 
 onMounted(async () => {
   logger.debug('AgentRegistryView mounted')
-  await fetchAllAgents()
+  await Promise.all([fetchAllAgents(), fetchModels()])
 })
 </script>
 
@@ -206,12 +216,37 @@ onMounted(async () => {
                 {{ agent.status }}
               </span>
             </div>
-            <div class="mt-3 flex items-center gap-2 flex-wrap">
-              <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                {{ agent.model || $t('agent.registry.noModel') }}
-              </span>
-              <span class="text-xs text-tertiary">P{{ agent.priority }}</span>
-              <span class="text-xs text-tertiary">{{ agent.config_source }}</span>
+            <div class="mt-3 space-y-1.5">
+              <div class="flex items-center gap-2">
+                <label class="text-xs text-tertiary shrink-0">{{ $t('agent.registry.modelLabel', 'Model') }}</label>
+                <select
+                  v-if="availableModelNames.length > 0"
+                  :value="agent.model"
+                  class="flex-1 min-w-0 rounded border border-default bg-card px-2 py-0.5 text-xs text-primary focus:border-autobot-info focus:ring-1 focus:ring-autobot-info"
+                  @change="(e) => logger.debug('Model changed for %s: %s', agent.id, (e.target as HTMLSelectElement).value)"
+                >
+                  <option v-if="agent.model && !availableModelNames.includes(agent.model)" :value="agent.model">
+                    {{ agent.model }}
+                  </option>
+                  <option v-for="name in availableModelNames" :key="name" :value="name">
+                    {{ name }}
+                  </option>
+                </select>
+                <span
+                  v-else
+                  class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                >
+                  {{ agent.model || $t('agent.registry.noModel') }}
+                </span>
+                <span v-if="isLoadingModels" class="text-xs text-tertiary animate-pulse">...</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-tertiary">P{{ agent.priority }}</span>
+                <span class="text-xs text-tertiary">{{ agent.config_source }}</span>
+                <span v-if="modelsHaveErrors" class="text-xs text-autobot-warning" :title="$t('agent.registry.providerErrors', { providers: providersErrored.join(', ') })">
+                  {{ $t('agent.registry.someProvidersUnavailable', 'Some providers unavailable') }}
+                </span>
+              </div>
             </div>
             <div v-if="agent.tasks.length > 0" class="mt-2">
               <div class="flex flex-wrap gap-1">

@@ -20,7 +20,6 @@ from api.auth import router as auth_router
 from api.browser_mcp import router as browser_mcp_router
 from api.chat import router as chat_router
 from api.collaboration import router as collaboration_router
-from api.presence_ws import router as presence_ws_router
 from api.config_revisions import router as config_revisions_router  # #1404
 from api.data_storage import router as data_storage_router
 from api.database_mcp import router as database_mcp_router
@@ -50,7 +49,7 @@ from api.knowledge_verification import router as knowledge_verification_router
 from api.knowledge_rag_feedback import router as knowledge_rag_feedback_router
 from api.llm import router as llm_router
 from api.llm_providers import router as llm_providers_router
-from api.manual_mcp import router as manual_mcp_router  # Issue #3287
+from api.models import router as models_router
 from api.mcp_registry import router as mcp_registry_router
 from api.memory import router as memory_router
 from api.overseer_handlers import router as overseer_router
@@ -62,7 +61,6 @@ from api.redis_mcp import router as redis_mcp_router  # Issue #2511
 from api.sequential_thinking_mcp import router as sequential_thinking_mcp_router
 from api.service_messages import router as service_messages_router
 from api.settings import router as settings_router
-from api.self_capabilities import router as self_capabilities_router  # Issue #3295
 from api.structured_thinking_mcp import router as structured_thinking_mcp_router
 from api.system import router as system_router
 from api.vnc_manager import router as vnc_router
@@ -78,21 +76,18 @@ from services.knowledge_sync_service import router as knowledge_sync_router
 
 
 def _get_system_routers() -> list:
-    """Get system and settings routers (Issue #560: extracted, #1281: audit, #3295: self)."""
+    """Get system and settings routers (Issue #560: extracted, #1281: audit)."""
     return [
         (audit_router, "", ["audit"], "audit"),
         (auth_router, "/auth", ["auth"], "auth"),
         (service_messages_router, "", ["service-messages"], "service_messages"),
         (chat_router, "", ["chat"], "chat"),
         (collaboration_router, "", ["collaboration"], "collaboration"),
-        (presence_ws_router, "", ["collaboration", "websocket"], "presence_ws"),
         (system_router, "/system", ["system"], "system"),
         (settings_router, "/settings", ["settings"], "settings"),
         (data_storage_router, "", ["data-storage"], "data_storage"),
         (prompts_router, "/prompts", ["prompts"], "prompts"),
         (frontend_config_router, "", ["frontend-config"], "frontend_config"),
-        # Issue #3295: dynamic endpoint discovery for LLM self-awareness
-        (self_capabilities_router, "/self", ["self", "capabilities"], "self_capabilities"),
     ]
 
 
@@ -229,6 +224,7 @@ def _get_service_routers() -> list:
     routers = [
         (llm_router, "/llm", ["llm"], "llm"),
         (llm_providers_router, "/llm", ["llm", "providers"], "llm_providers"),
+        (models_router, "/models", ["models"], "models"),
         (adapters_router, "/adapters", ["adapters"], "adapters"),
         (redis_router, "/redis", ["redis"], "redis"),
         (voice_router, "/voice", ["voice"], "voice"),
@@ -281,7 +277,6 @@ def _get_mcp_routers() -> list:
             "prometheus_mcp",
         ),
         (redis_mcp_router, "/redis", ["redis_mcp", "mcp"], "redis_mcp"),  # Issue #2511
-        (manual_mcp_router, "/manual", ["manual_mcp", "mcp"], "manual_mcp"),  # Issue #3287
     ]
 
 

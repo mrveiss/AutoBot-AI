@@ -91,19 +91,19 @@ async def _get_agent_config_from_slm(agent_id: str) -> Optional[dict]:
 
 async def _get_available_models() -> list:
     """
-    Fetch available models from the model manager.
+    Fetch available model names from all configured providers.
+
+    Delegates to ModelManagerService (#3280) which caches results for 60 s
+    and aggregates Ollama, OpenAI, Anthropic, and vLLM providers.
 
     Returns:
-        list: List of available model names from Ollama or other providers.
-              Returns empty list if model service is unavailable.
+        list: List of available model name strings.
+              Returns empty list if all providers are unreachable.
     """
     try:
-        result = await ModelManager.get_available_models()
-        if result and "models" in result:
-            return [
-                m.get("name", m) if isinstance(m, dict) else m for m in result["models"]
-            ]
-        return []
+        from services.model_manager_service import get_model_names
+
+        return await get_model_names()
     except Exception as e:
         logger.warning("Could not fetch available models: %s", e)
         return []
