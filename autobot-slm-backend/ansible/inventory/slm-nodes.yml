@@ -27,6 +27,7 @@ all:
           slm_node_id: "00-SLM-Manager"
           slm_node_role: "slm-manager"
           slm_services_to_monitor:
+            - slm-agent
             - autobot-slm-backend
             - slm-admin-ui
             - nginx
@@ -38,6 +39,7 @@ all:
           slm_node_id: "01-Backend"
           slm_node_role: "backend"
           slm_services_to_monitor:
+            - slm-agent
             - autobot-backend
             - ollama
             - nginx
@@ -47,6 +49,7 @@ all:
           ansible_host: "{{ lookup('env', 'AUTOBOT_FRONTEND_HOST') | default('127.0.0.1', true) }}"
           slm_node_id: "02-Frontend"
           slm_services_to_monitor:
+            - slm-agent
             - nginx
 
         # NPU Worker
@@ -54,6 +57,7 @@ all:
           ansible_host: "{{ lookup('env', 'AUTOBOT_NPU_WORKER_HOST') | default('127.0.0.1', true) }}"
           slm_node_id: "npu-worker"
           slm_services_to_monitor:
+            - slm-agent
             - autobot-npu-worker
             - nginx
 
@@ -62,6 +66,7 @@ all:
           ansible_host: "{{ lookup('env', 'AUTOBOT_AI_STACK_HOST') | default('127.0.0.1', true) }}"
           slm_node_id: "03-AI-Stack"
           slm_services_to_monitor:
+            - slm-agent
             - autobot-ai-stack
             - autobot-chromadb
             - autobot-tts-worker
@@ -72,6 +77,7 @@ all:
           ansible_host: "{{ lookup('env', 'AUTOBOT_REDIS_HOST') | default('127.0.0.1', true) }}"
           slm_node_id: "04-Databases"
           slm_services_to_monitor:
+            - slm-agent
             - redis-stack-server
             - redis_exporter
             - nginx
@@ -81,6 +87,7 @@ all:
           ansible_host: "{{ lookup('env', 'AUTOBOT_BROWSER_SERVICE_HOST') | default('127.0.0.1', true) }}"
           slm_node_id: "browser-automation"
           slm_services_to_monitor:
+            - slm-agent
             - autobot-playwright
             - nginx
 
@@ -93,6 +100,7 @@ all:
             - llm
             - vnc
           slm_services_to_monitor:
+            - slm-agent
             - ollama
             - vnc-server
             - vnc-websockify
