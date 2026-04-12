@@ -326,12 +326,6 @@
       @close="showProfileModal = false"
     />
 
-    <!-- Command Palette (Issue #4095) -->
-    <CommandPalette
-      :is-open="isCommandPaletteOpen"
-      @close="isCommandPaletteOpen = false"
-    />
-
     <!-- System Status Notifications (limit to last 5 to prevent teleport accumulation) -->
     <SystemStatusNotification
       v-for="notif in (appStore?.systemNotifications || []).filter(n => n.visible).slice(-5)"
@@ -366,6 +360,9 @@
       @cancelled="onHostSelectionCancelled"
       @close="onHostSelectionClose"
     />
+
+    <!-- Offline mode banner — #3275 -->
+    <OfflineBanner />
 
     <!-- Main Content Area with Router -->
     <main id="main-content" class="flex-1 overflow-hidden" role="main">
@@ -415,8 +412,8 @@ import ToastContainer from '@/components/ui/ToastContainer.vue';
 import HostSelectionDialog from '@/components/ui/HostSelectionDialog.vue';
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue';
 import ProfileModal from '@/components/profile/ProfileModal.vue';
-import ErrorBoundary from '@/components/common/ErrorBoundary.vue';
-import CommandPalette from '@/components/CommandPalette.vue';
+import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
+import OfflineBanner from '@/components/ui/OfflineBanner.vue';
 
 const logger = createLogger('App');
 
@@ -425,13 +422,13 @@ export default {
 
   components: {
     SystemStatusNotification,
+    OfflineBanner,
     CaptchaNotification,
     ToastContainer,
     HostSelectionDialog,
     UnifiedLoadingView,
     ProfileModal,
     ErrorBoundary,
-    CommandPalette,
     DarkModeToggle: defineAsyncComponent(() => import('@/components/ui/DarkModeToggle.vue')),
     LanguageSwitcher: defineAsyncComponent(() => import('@/components/layout/LanguageSwitcher.vue')),
   },
@@ -507,7 +504,6 @@ export default {
     // Reactive data (non-status related)
     const showMobileNav = ref(false);
     const showProfileModal = ref(false);
-    const isCommandPaletteOpen = ref(false);
     let notificationCleanup: number | null = null;
 
     // Computed properties
@@ -690,15 +686,6 @@ export default {
       // Add global click listener for mobile nav
       document.addEventListener('click', closeNavbarOnClickOutside);
 
-      // Add hotkey listener for command palette (Cmd/Ctrl+K)
-      const handleCommandPaletteHotkey = (e: KeyboardEvent) => {
-        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-          e.preventDefault();
-          isCommandPaletteOpen.value = !isCommandPaletteOpen.value;
-        }
-      };
-      document.addEventListener('keydown', handleCommandPaletteHotkey);
-
       // Set up global error handling (#2849: use named handlers for cleanup)
       window.addEventListener('error', handleWindowError);
       window.addEventListener('unhandledrejection', handleUnhandledRejection);
@@ -805,7 +792,6 @@ export default {
       // Reactive data
       showMobileNav,
       showProfileModal,
-      isCommandPaletteOpen,
 
       // System status (from composable)
       showSystemStatus,
