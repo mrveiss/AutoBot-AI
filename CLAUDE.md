@@ -65,7 +65,7 @@ You are the world's best AI developer working on AutoBot. Every decision must op
 - **Pre-commit:** Never `--no-verify`. PostToolUse hook auto-formats `.py` files.
 - **Worktrees:** No nesting. Manual creation for PRs (not `isolation: "worktree"`). Clean up after issue closure.
 - **Agents:** Prefer direct implementation. Reserve subagents for research/exploration. Subagents can't acquire Bash permission.
-- **Deployment:** All via Ansible playbooks on SLM Manager (.19). Never manual SSH changes.
+- **Deployment:** All via Ansible playbooks. Never manual SSH changes.
 - **No temporary fixes:** Zero tolerance for workarounds, TODO comments, try/catch hiding errors.
 - **One issue per session:** Don't auto-start other issues after completing one.
 - **Edit strategy:** `Edit` for files >50 lines, `Write` for new/small files.

@@ -19,7 +19,7 @@
 
 ## Deployment Architecture
 
-**All fleet deployments go through the SLM Manager (.19) via Ansible playbooks.**
+**All fleet deployments go through the SLM Manager via Ansible playbooks.**
 
 - **Code flow:** GitHub repo → SLM Manager pulls latest → Ansible deploys to fleet nodes
 - **Primary playbook:** `autobot-slm-backend/ansible/playbooks/update-all-nodes.yml`
