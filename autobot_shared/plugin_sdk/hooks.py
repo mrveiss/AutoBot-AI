@@ -40,6 +40,16 @@ class Hook(str, Enum):
     ON_MESSAGE_RECEIVED = "on_message_received"
     ON_MESSAGE_SENT = "on_message_sent"
 
+    # Knowledge base hooks (Issue #3278)
+    ON_KB_SEARCH = "on_kb_search"
+    ON_KB_DOCUMENT_ADDED = "on_kb_document_added"
+    ON_KB_DOCUMENT_REMOVED = "on_kb_document_removed"
+
+    # Workflow hooks (Issue #3278)
+    ON_WORKFLOW_START = "on_workflow_start"
+    ON_WORKFLOW_COMPLETE = "on_workflow_complete"
+    ON_WORKFLOW_ERROR = "on_workflow_error"
+
     # Custom hooks (plugins can define their own)
     CUSTOM = "custom"
 
