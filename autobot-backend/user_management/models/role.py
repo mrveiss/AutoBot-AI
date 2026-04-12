@@ -14,14 +14,14 @@ from sqlalchemy import Boolean, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
-from user_management.models.base import Base, TimestampMixin
+from user_management.models.base import Base
 
 if TYPE_CHECKING:
     from user_management.models.organization import Organization
     from user_management.models.user import User
 
 
-class Permission(Base, TimestampMixin):
+class Permission(Base):
     """
     Permission model.
 
@@ -83,7 +83,7 @@ class Permission(Base, TimestampMixin):
         return f"{resource}:{action}"
 
 
-class Role(Base, TimestampMixin):
+class Role(Base):
     """
     Role model.
 
@@ -203,7 +203,7 @@ class RolePermission(Base):
         return f"<RolePermission(role_id={self.role_id}, permission_id={self.permission_id})>"
 
 
-class UserRole(Base, TimestampMixin):
+class UserRole(Base):
     """
     User-Role assignment table.
 

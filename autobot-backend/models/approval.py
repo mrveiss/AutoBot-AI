@@ -15,7 +15,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import Uuid
 
-from user_management.models.base import Base, TimestampMixin
+from user_management.models.base import Base
 
 
 class ApprovalStatus(str, Enum):
@@ -36,7 +36,7 @@ class ApprovalType(str, Enum):
     WORKFLOW_GATE = "workflow_gate"
 
 
-class Approval(Base, TimestampMixin):
+class Approval(Base):
     """A human-in-the-loop approval gate request (#1402)."""
 
     __tablename__ = "approvals"
@@ -95,7 +95,7 @@ class Approval(Base, TimestampMixin):
         )
 
 
-class ApprovalComment(Base, TimestampMixin):
+class ApprovalComment(Base):
     """A comment on an approval gate (#1402)."""
 
     __tablename__ = "approval_comments"

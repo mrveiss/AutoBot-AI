@@ -16,7 +16,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
-from user_management.models.base import Base, TimestampMixin
+from user_management.models.base import Base
 
 if TYPE_CHECKING:
     from models.activities import (
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from user_management.models.team import TeamMembership
 
 
-class User(Base, TimestampMixin):
+class User(Base):
     """
     User model.
 

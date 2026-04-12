@@ -25,13 +25,13 @@ from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
-from user_management.models.base import Base, TimestampMixin
+from user_management.models.base import Base
 
 if TYPE_CHECKING:
     from user_management.models.user import User
 
 
-class TerminalActivityModel(Base, TimestampMixin):
+class TerminalActivityModel(Base):
     """
     Terminal command execution activity.
 
@@ -106,7 +106,7 @@ class TerminalActivityModel(Base, TimestampMixin):
         )
 
 
-class FileActivityModel(Base, TimestampMixin):
+class FileActivityModel(Base):
     """
     File system operation activity.
 
@@ -183,7 +183,7 @@ class FileActivityModel(Base, TimestampMixin):
         )
 
 
-class BrowserActivityModel(Base, TimestampMixin):
+class BrowserActivityModel(Base):
     """
     Browser automation activity.
 
@@ -262,7 +262,7 @@ class BrowserActivityModel(Base, TimestampMixin):
         )
 
 
-class DesktopActivityModel(Base, TimestampMixin):
+class DesktopActivityModel(Base):
     """
     Desktop automation activity.
 
@@ -342,7 +342,7 @@ class DesktopActivityModel(Base, TimestampMixin):
         )
 
 
-class SecretUsageModel(Base, TimestampMixin):
+class SecretUsageModel(Base):
     """
     Secret access audit trail.
 

@@ -18,7 +18,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import Uuid
 
-from user_management.models.base import Base, TimestampMixin
+from user_management.models.base import Base
 
 
 class PermissionLevel(str, Enum):
@@ -29,7 +29,7 @@ class PermissionLevel(str, Enum):
     VIEWER = "viewer"  # Read-only access
 
 
-class SessionCollaboration(Base, TimestampMixin):
+class SessionCollaboration(Base):
     """
     Session collaboration model with owner and multi-user permissions.
 

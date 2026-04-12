@@ -8,12 +8,12 @@ Tracks user feedback on code completion suggestions.
 """
 
 from datetime import datetime
-from typing import Dict
+from typing import Dict, Optional
 
-from sqlalchemy import Column, DateTime, Integer, String, Text
-from sqlalchemy.orm import declarative_base
+from sqlalchemy import DateTime, Integer, String, Text, func
+from sqlalchemy.orm import Mapped, mapped_column
 
-Base = declarative_base()
+from user_management.models.base import Base
 
 
 class CompletionFeedback(Base):
@@ -26,29 +26,31 @@ class CompletionFeedback(Base):
     __tablename__ = "completion_feedback"
 
     # Primary key
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # Timestamp
-    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
 
     # User context
-    user_id = Column(String(100), index=True)  # Optional: for personalization
+    user_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
 
     # Completion context
-    context = Column(Text, nullable=False)  # Code context before completion
-    suggestion = Column(Text, nullable=False)  # Suggested completion
-    language = Column(String(20))  # Programming language
-    file_path = Column(String(500))  # File where completion occurred
+    context: Mapped[str] = mapped_column(Text, nullable=False)
+    suggestion: Mapped[str] = mapped_column(Text, nullable=False)
+    language: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    file_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     # Feedback
-    action = Column(String(20), nullable=False, index=True)  # 'accepted' or 'rejected'
+    action: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
 
     # Pattern reference
-    pattern_id = Column(Integer, index=True)  # Link to CodePattern if applicable
+    pattern_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
 
     # Additional metadata
-    confidence_score = Column(String(10))  # Model confidence at suggestion time
-    completion_rank = Column(Integer)  # Position in top-k suggestions (1-indexed)
+    confidence_score: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    completion_rank: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     def to_dict(self) -> Dict:
         """Convert feedback to dictionary for API responses."""

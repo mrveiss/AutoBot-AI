@@ -15,7 +15,7 @@ from sqlalchemy import Column, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.types import Uuid
 
-from user_management.models.base import Base, TimestampMixin
+from user_management.models.base import Base
 
 
 class DelegationStatus(str, Enum):
@@ -29,7 +29,7 @@ class DelegationStatus(str, Enum):
     ESCALATED = "escalated"
 
 
-class TaskDelegation(Base, TimestampMixin):
+class TaskDelegation(Base):
     """
     A task assigned from a manager to a direct report (#1753).
 
