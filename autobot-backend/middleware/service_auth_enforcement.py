@@ -305,9 +305,57 @@ async def _enforce_auth_on_path(request: Request, path: str):
         raise
 
 
+async def _log_only_auth_on_path(request: Request, path: str) -> None:
+    """Validate service auth and log the result without blocking the request.
+
+    Used when SERVICE_AUTH_ENFORCEMENT_MODE is disabled (logging mode).
+    Mirrors ServiceAuthLoggingMiddleware behavior so the transition from
+    logging to enforcement mode is a single env-var flip.
+
+    Args:
+        request: FastAPI request object
+        path: Request path (used for structured logging)
+    """
+    try:
+        service_info = await validate_service_auth(request)
+        request.state.service_id = service_info["service_id"]
+        request.state.authenticated = True
+        logger.info(
+            "Service auth valid (logging mode - not enforced)",
+            service_id=service_info["service_id"],
+            path=path,
+            method=request.method,
+        )
+    except HTTPException as e:
+        logger.warning(
+            "Service auth failed (logging mode - request allowed)",
+            path=path,
+            method=request.method,
+            error=str(e.detail),
+            headers={
+                "X-Service-ID": request.headers.get("X-Service-ID", "missing"),
+                "X-Service-Signature": (
+                    request.headers.get("X-Service-Signature", "missing")[:20]
+                    if request.headers.get("X-Service-Signature")
+                    else "missing"
+                ),
+                "X-Service-Timestamp": request.headers.get(
+                    "X-Service-Timestamp", "missing"
+                ),
+            },
+        )
+
+
 async def enforce_service_auth(request: Request, call_next):
     """
     Enforce service authentication on required endpoints.
+
+    When SERVICE_AUTH_ENFORCEMENT_MODE=true (default): blocks unauthenticated
+    requests to service-only paths with 401/429 responses.
+
+    When SERVICE_AUTH_ENFORCEMENT_MODE=false: logs auth results without
+    blocking (logging mode) — use during initial rollout to validate services
+    before activating enforcement.
 
     Supports override token, circuit breaker, and rate limiting (Issue #255).
 
@@ -324,6 +372,10 @@ async def enforce_service_auth(request: Request, call_next):
         return await call_next(request)
 
     if requires_service_auth(path):
+        if not get_enforcement_mode():
+            await _log_only_auth_on_path(request, path)
+            return await call_next(request)
+
         if _has_override_token(request):
             await _handle_override_bypass(request, path)
             return await call_next(request)
