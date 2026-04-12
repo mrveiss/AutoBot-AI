@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 # Issue #281: Centralized router configuration for maintainability
 # Issue #729: Removed infrastructure routers - now served by slm-server
 MONITORING_ROUTER_CONFIGS = [
+    ("api.branch_health", "router", "", ["branch-health"], "branch_health"),
     ("api.monitoring", "router", "/monitoring", ["monitoring"], "monitoring"),
     ("api.metrics", "router", "/metrics", ["metrics"], "metrics"),
     # Issue #1288: Prometheus scrape endpoint at /api/metrics/prometheus
