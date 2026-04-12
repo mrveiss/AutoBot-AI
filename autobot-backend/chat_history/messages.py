@@ -43,6 +43,7 @@ class MessagesMixin:
         message_type: str,
         raw_data: Any,
         tool_markers: Optional[List[Dict[str, Any]]],
+        author_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Build a message dictionary with standard fields.
@@ -53,6 +54,7 @@ class MessagesMixin:
             message_type: The type of message.
             raw_data: Additional raw data (metadata).
             tool_markers: Optional list of tool usage markers.
+            author_id: Optional user ID for multi-user attribution (Issue #3282).
 
         Returns:
             Constructed message dictionary.
@@ -69,6 +71,8 @@ class MessagesMixin:
         }
         if tool_markers:
             message["toolMarkers"] = tool_markers
+        if author_id:
+            message["authorId"] = author_id
         return message
 
     async def _add_message_to_session(
@@ -142,6 +146,7 @@ class MessagesMixin:
         raw_data: Any = None,
         session_id: Optional[str] = None,
         tool_markers: Optional[List[Dict[str, Any]]] = None,
+        author_id: Optional[str] = None,
     ):
         """
         Adds a new message to the history and saves it to file.
@@ -155,11 +160,13 @@ class MessagesMixin:
             raw_data (Any): Additional raw data associated with the message.
             session_id (str): Optional session ID to add message to specific session.
             tool_markers (List[Dict[str, Any]]): Optional list of tool usage markers.
+            author_id (str): Optional user ID for multi-user message attribution
+                (Issue #3282).
 
         Issue #620: Refactored to use extracted helper methods.
         """
         message = self._build_message_dict(
-            sender, text, message_type, raw_data, tool_markers
+            sender, text, message_type, raw_data, tool_markers, author_id
         )
 
         # If session_id provided, add to that session

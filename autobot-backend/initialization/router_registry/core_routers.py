@@ -20,6 +20,7 @@ from api.auth import router as auth_router
 from api.browser_mcp import router as browser_mcp_router
 from api.chat import router as chat_router
 from api.collaboration import router as collaboration_router
+from api.presence_ws import router as presence_ws_router
 from api.config_revisions import router as config_revisions_router  # #1404
 from api.data_storage import router as data_storage_router
 from api.database_mcp import router as database_mcp_router
@@ -82,6 +83,7 @@ def _get_system_routers() -> list:
         (service_messages_router, "", ["service-messages"], "service_messages"),
         (chat_router, "", ["chat"], "chat"),
         (collaboration_router, "", ["collaboration"], "collaboration"),
+        (presence_ws_router, "", ["collaboration", "websocket"], "presence_ws"),
         (system_router, "/system", ["system"], "system"),
         (settings_router, "/settings", ["settings"], "settings"),
         (data_storage_router, "", ["data-storage"], "data_storage"),
