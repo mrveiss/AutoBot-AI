@@ -226,3 +226,56 @@ done
 ```
 
 **Benefits:** Catch failures before human review, file discovery issues automatically, maintain codebase health continuously.
+
+---
+
+## Issue Closure Verification Gate (MANDATORY)
+
+**NEVER close an issue without 100% verification. Issues remain OPEN until ALL acceptance criteria are proven met.**
+
+### Before Closing an Issue
+
+1. **Read the issue description fully** — identify ALL acceptance criteria (stated and implicit)
+2. **Find the merged commit(s)** — use `git log --all --grep="<issue-number>"` to locate implementation commit(s)
+3. **Verify each acceptance criterion**
+   - Is the feature/fix actually implemented? (check diff)
+   - Does it work correctly? (test output, curl test, UI verification)
+   - Are all edge cases handled? (review code, check error handling)
+   - Are tests passing? (run test suite for changed modules)
+   - Is documentation updated if needed? (check docs/)
+4. **Document the proof**
+   - Commit hash(es): `<hash>: <commit message>`
+   - Acceptance criteria met: `✅ Criterion 1`, `✅ Criterion 2`, etc.
+   - Evidence: test output, curl response, screenshot, or CI check reference
+5. **Close with proof comment**
+
+```bash
+gh api repos/mrveiss/AutoBot-AI/issues/<number>/comments -f body="✅ Closed with proof of implementation
+
+**Commit(s):** <hash1> (<msg1>), <hash2> (<msg2>)
+
+**Acceptance Criteria Met:**
+- ✅ Criterion 1 — evidence here
+- ✅ Criterion 2 — evidence here
+- ✅ Criterion 3 — evidence here"
+```
+
+### If ANY Criterion Not Met
+
+- **DO NOT close the issue** — leave it OPEN
+- Comment on the issue with what's missing: `⚠️ Criterion X not met: <reason>`
+- File a follow-up issue if needed: `discovery: <gap found>`
+
+### Examples of Incomplete Closure (AVOID)
+
+❌ "Fixed in PR #1234" (no proof of acceptance criteria)  
+❌ Closing based on PR status alone (PR merged ≠ issue resolved)  
+❌ No test output or verification (feature might be broken)  
+❌ Missing acceptance criteria check (incomplete implementation)
+
+### Examples of Complete Closure (GOOD)
+
+✅ Commit hash + all criteria verified + test output attached  
+✅ Feature tested end-to-end in dev environment  
+✅ All edge cases documented as handled  
+✅ Follow-up issues filed for any gaps found
