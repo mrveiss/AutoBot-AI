@@ -1,0 +1,484 @@
+<!-- AutoBot - AI-Powered Automation Platform -->
+<!-- Copyright (c) 2025 mrveiss -->
+<!-- Issue #3245: Knowledge Base - persistent editable AI output documents -->
+<template>
+  <div class="documents-view">
+    <div class="documents-sidebar">
+      <div class="sidebar-header">
+        <h2 class="sidebar-title">AI Documents</h2>
+        <BaseButton
+          variant="primary"
+          size="sm"
+          :disabled="composable.isLoading.value"
+          title="Refresh document list"
+          @click="composable.fetchDocuments()"
+        >
+          <i class="fas fa-sync-alt" aria-hidden="true"></i>
+        </BaseButton>
+      </div>
+
+      <div v-if="composable.isLoading.value && !composable.hasDocuments.value" class="loading-state">
+        <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+        <span>Loading documents…</span>
+      </div>
+
+      <div v-else-if="!composable.hasDocuments.value" class="empty-state">
+        <i class="fas fa-file-alt empty-icon" aria-hidden="true"></i>
+        <p>No AI documents yet.</p>
+        <p class="empty-hint">
+          Save an AI response from the
+          <RouterLink to="/chat" class="chat-link">chat view</RouterLink>
+          to create a document.
+        </p>
+      </div>
+
+      <ul v-else class="document-list" role="listbox" aria-label="Your AI documents">
+        <li
+          v-for="doc in composable.documents.value"
+          :key="doc.id"
+          class="document-item"
+          :class="{ active: selectedDocId === doc.id }"
+          role="option"
+          :aria-selected="selectedDocId === doc.id"
+          tabindex="0"
+          @click="selectDocument(doc.id)"
+          @keyup.enter="selectDocument(doc.id)"
+        >
+          <span class="doc-title">{{ doc.title }}</span>
+          <span class="doc-meta">{{ formatDate(doc.updated_at) }}</span>
+          <BaseButton
+            variant="ghost"
+            size="xs"
+            class="delete-btn"
+            title="Delete document"
+            :aria-label="`Delete ${doc.title}`"
+            @click.stop="confirmDelete(doc.id, doc.title)"
+          >
+            <i class="fas fa-trash" aria-hidden="true"></i>
+          </BaseButton>
+        </li>
+      </ul>
+
+      <div v-if="composable.total.value > PAGE_SIZE" class="pagination">
+        <BaseButton
+          variant="ghost"
+          size="sm"
+          :disabled="currentOffset === 0"
+          @click="prevPage"
+        >
+          Prev
+        </BaseButton>
+        <span class="page-info">
+          {{ currentOffset + 1 }}–{{ Math.min(currentOffset + PAGE_SIZE, composable.total.value) }}
+          of {{ composable.total.value }}
+        </span>
+        <BaseButton
+          variant="ghost"
+          size="sm"
+          :disabled="currentOffset + PAGE_SIZE >= composable.total.value"
+          @click="nextPage"
+        >
+          Next
+        </BaseButton>
+      </div>
+    </div>
+
+    <div class="documents-main">
+      <div v-if="!selectedDocId" class="no-selection">
+        <i class="fas fa-file-alt no-selection-icon" aria-hidden="true"></i>
+        <p>Select a document from the list to view and edit it.</p>
+      </div>
+
+      <AIDocumentEditor
+        v-else
+        :doc-id="selectedDocId"
+        class="editor-panel"
+        @saved="onDocumentSaved"
+        @refined="onDocumentRefined"
+        @error="onEditorError"
+      />
+    </div>
+
+    <!-- Delete confirmation dialog -->
+    <div
+      v-if="deleteTarget"
+      class="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="`Confirm deletion of ${deleteTarget.title}`"
+    >
+      <div class="modal-card">
+        <h3 class="modal-title">Delete document?</h3>
+        <p class="modal-body">
+          "<strong>{{ deleteTarget.title }}</strong>" will be permanently deleted.
+        </p>
+        <div class="modal-actions">
+          <BaseButton variant="ghost" size="sm" @click="deleteTarget = null">
+            Cancel
+          </BaseButton>
+          <BaseButton
+            variant="danger"
+            size="sm"
+            :disabled="composable.isLoading.value"
+            @click="executeDelete"
+          >
+            Delete
+          </BaseButton>
+        </div>
+      </div>
+    </div>
+
+    <!-- Error toast -->
+    <div v-if="errorMessage" class="error-toast" role="alert">
+      {{ errorMessage }}
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { RouterLink } from 'vue-router'
+import BaseButton from '@/components/base/BaseButton.vue'
+import AIDocumentEditor from '@/components/documents/AIDocumentEditor.vue'
+import { useAIDocument, type AIDocument } from '@/composables/useAIDocument'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('DocumentsView')
+
+const PAGE_SIZE = 50
+
+const composable = useAIDocument()
+const selectedDocId = ref<string | null>(null)
+const currentOffset = ref(0)
+const deleteTarget = ref<{ id: string; title: string } | null>(null)
+const errorMessage = ref<string | null>(null)
+
+// ---------------------------------------------------------------------------
+// Lifecycle
+// ---------------------------------------------------------------------------
+
+onMounted(async () => {
+  await loadPage()
+})
+
+// ---------------------------------------------------------------------------
+// Navigation
+// ---------------------------------------------------------------------------
+
+async function loadPage() {
+  try {
+    await composable.fetchDocuments(PAGE_SIZE, currentOffset.value)
+  } catch {
+    showError(composable.error.value ?? 'Failed to load documents')
+  }
+}
+
+function selectDocument(id: string) {
+  selectedDocId.value = id
+}
+
+async function prevPage() {
+  currentOffset.value = Math.max(0, currentOffset.value - PAGE_SIZE)
+  await loadPage()
+}
+
+async function nextPage() {
+  currentOffset.value += PAGE_SIZE
+  await loadPage()
+}
+
+// ---------------------------------------------------------------------------
+// Delete
+// ---------------------------------------------------------------------------
+
+function confirmDelete(id: string, title: string) {
+  deleteTarget.value = { id, title }
+}
+
+async function executeDelete() {
+  if (!deleteTarget.value) return
+  const { id } = deleteTarget.value
+  deleteTarget.value = null
+  try {
+    await composable.deleteDocument(id)
+    if (selectedDocId.value === id) {
+      selectedDocId.value = null
+    }
+    logger.info('Deleted document', id)
+  } catch {
+    showError(composable.error.value ?? 'Delete failed')
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Editor callbacks
+// ---------------------------------------------------------------------------
+
+function onDocumentSaved(doc: AIDocument) {
+  logger.info('Document saved', doc.id)
+}
+
+function onDocumentRefined(doc: AIDocument) {
+  logger.info('Document refined', doc.id)
+}
+
+function onEditorError(message: string) {
+  showError(message)
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function formatDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    })
+  } catch {
+    return iso
+  }
+}
+
+let errorTimer: ReturnType<typeof setTimeout> | null = null
+
+function showError(msg: string) {
+  errorMessage.value = msg
+  if (errorTimer) clearTimeout(errorTimer)
+  errorTimer = setTimeout(() => {
+    errorMessage.value = null
+  }, 5000)
+}
+</script>
+
+<style scoped>
+.documents-view {
+  display: flex;
+  height: 100%;
+  background: var(--color-background, #1a1a1a);
+  color: var(--color-text, #e0e0e0);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Sidebar */
+.documents-sidebar {
+  width: 280px;
+  min-width: 220px;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--color-border, #333);
+  background: var(--color-background-secondary, #222);
+  overflow: hidden;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-border, #333);
+  flex-shrink: 0;
+}
+
+.sidebar-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+/* States */
+.loading-state,
+.empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+  color: var(--color-text-muted, #888);
+  font-size: 0.9rem;
+}
+
+.empty-icon {
+  font-size: 2rem;
+  margin-bottom: 8px;
+  color: var(--color-text-muted, #555);
+}
+
+.empty-hint {
+  font-size: 0.8rem;
+  color: var(--color-text-muted, #666);
+}
+
+.chat-link {
+  color: var(--color-primary, #4caf50);
+  text-decoration: none;
+}
+
+.chat-link:hover {
+  text-decoration: underline;
+}
+
+/* Document list */
+.document-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.document-item {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--color-border, #2a2a2a);
+  gap: 2px;
+  position: relative;
+  transition: background 0.12s;
+}
+
+.document-item:hover {
+  background: var(--color-background-hover, #2a2a2a);
+}
+
+.document-item.active {
+  background: var(--color-primary-dim, #1e3a1e);
+  border-left: 3px solid var(--color-primary, #4caf50);
+}
+
+.doc-title {
+  font-size: 0.9rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 28px;
+}
+
+.doc-meta {
+  font-size: 0.72rem;
+  color: var(--color-text-muted, #888);
+}
+
+.delete-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.document-item:hover .delete-btn,
+.document-item:focus .delete-btn {
+  opacity: 1;
+}
+
+/* Pagination */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-top: 1px solid var(--color-border, #333);
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+.page-info {
+  color: var(--color-text-muted, #888);
+}
+
+/* Main panel */
+.documents-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.no-selection {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--color-text-muted, #888);
+  font-size: 0.95rem;
+}
+
+.no-selection-icon {
+  font-size: 3rem;
+  color: var(--color-text-muted, #444);
+}
+
+.editor-panel {
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Modal */
+.modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal-card {
+  background: var(--color-background-secondary, #252525);
+  border: 1px solid var(--color-border, #444);
+  border-radius: 8px;
+  padding: 24px;
+  width: 360px;
+  max-width: 90vw;
+}
+
+.modal-title {
+  margin: 0 0 12px;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.modal-body {
+  margin: 0 0 20px;
+  font-size: 0.9rem;
+  color: var(--color-text-muted, #bbb);
+  line-height: 1.5;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Error toast */
+.error-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-error-bg, #3c1515);
+  color: var(--color-error, #f87171);
+  border: 1px solid var(--color-error, #f87171);
+  border-radius: 6px;
+  padding: 10px 20px;
+  font-size: 0.875rem;
+  z-index: 200;
+  max-width: 90vw;
+  text-align: center;
+}
+</style>
