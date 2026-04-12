@@ -17,7 +17,10 @@ import logging
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, Optional, Union
+
+if TYPE_CHECKING:
+    from services.llm_service import LLMService
 
 from constants.ttl_constants import TTL_24_HOURS
 
@@ -190,7 +193,7 @@ class LLMJudgeScorer(PromptScorer):
 
     def __init__(
         self,
-        llm_service: Any,
+        llm_service: "LLMService",
         criteria: list[str],
     ) -> None:
         self._llm = llm_service

@@ -162,6 +162,18 @@ class ExperimentStore:
         session_tags = [t for t in experiment.tags if t.startswith("session:")]
         if session_tags:
             parts.append(f"Session: {session_tags[0].split(':', 1)[1]}")
+        # Iteration number within the session
+        iteration_tags = [t for t in experiment.tags if t.startswith("iteration:")]
+        if iteration_tags:
+            parts.append(f"Iteration: {iteration_tags[0].split(':', 1)[1]}")
+        # Prior results trend direction
+        trend_tags = [t for t in experiment.tags if t.startswith("trend:")]
+        if trend_tags:
+            parts.append(f"Trend: {trend_tags[0].split(':', 1)[1]}")
+        # Prompt variant ID when optimizer is active
+        variant_tags = [t for t in experiment.tags if t.startswith("variant:")]
+        if variant_tags:
+            parts.append(f"Variant: {variant_tags[0].split(':', 1)[1]}")
         return "\n".join(parts)
 
     def _build_metadata(self, experiment: Experiment) -> Dict[str, Any]:
@@ -185,6 +197,25 @@ class ExperimentStore:
         for tag in experiment.tags:
             if tag.startswith("session:"):
                 meta["session_id"] = tag.split(":", 1)[1]
+                break
+        # Extract iteration number from tags
+        for tag in experiment.tags:
+            if tag.startswith("iteration:"):
+                raw = tag.split(":", 1)[1]
+                try:
+                    meta["iteration"] = int(raw)
+                except ValueError:
+                    pass
+                break
+        # Extract trend direction from tags
+        for tag in experiment.tags:
+            if tag.startswith("trend:"):
+                meta["trend_direction"] = tag.split(":", 1)[1]
+                break
+        # Extract prompt variant ID from tags
+        for tag in experiment.tags:
+            if tag.startswith("variant:"):
+                meta["variant_id"] = tag.split(":", 1)[1]
                 break
         return meta
 
