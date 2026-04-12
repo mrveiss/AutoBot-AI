@@ -407,3 +407,112 @@ class TestEnforceServiceAuth:
         assert isinstance(result, JSONResponse)
         assert result.status_code == 429
         call_next.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Enforcement mode gating (SERVICE_AUTH_ENFORCEMENT_MODE env var)
+# ---------------------------------------------------------------------------
+
+
+class TestEnforcementModeGating:
+    """Verify that SERVICE_AUTH_ENFORCEMENT_MODE controls enforce-vs-log behaviour."""
+
+    @pytest.mark.asyncio
+    async def test_logging_mode_allows_request_with_invalid_auth(self):
+        """When enforcement mode is disabled, bad auth is logged but not blocked."""
+        from fastapi import HTTPException
+
+        call_next = AsyncMock(return_value="logging-mode-response")
+
+        with (
+            patch.dict(os.environ, {"SERVICE_AUTH_ENFORCEMENT_MODE": "false"}),
+            patch(
+                "middleware.service_auth_enforcement.validate_service_auth",
+                side_effect=HTTPException(
+                    status_code=401, detail="Missing required headers"
+                ),
+            ),
+        ):
+            req = _make_request("/api/npu/results")
+            result = await enforce_service_auth(req, call_next)
+
+        # Request must pass through in logging mode even with bad auth
+        call_next.assert_awaited_once_with(req)
+        assert result == "logging-mode-response"
+
+    @pytest.mark.asyncio
+    async def test_enforcement_mode_blocks_invalid_auth(self):
+        """When enforcement mode is enabled, bad auth returns 401."""
+        from fastapi import HTTPException
+        from fastapi.responses import JSONResponse
+
+        call_next = AsyncMock(return_value="should-not-reach")
+
+        with (
+            patch.dict(os.environ, {"SERVICE_AUTH_ENFORCEMENT_MODE": "true"}),
+            patch(
+                "middleware.service_auth_enforcement._should_enforce_by_circuit_breaker",
+                return_value=True,
+            ),
+            patch(
+                "middleware.service_auth_enforcement._is_rate_limited",
+                return_value=False,
+            ),
+            patch(
+                "middleware.service_auth_enforcement.validate_service_auth",
+                side_effect=HTTPException(
+                    status_code=401, detail="Missing required headers"
+                ),
+            ),
+        ):
+            req = _make_request("/api/npu/results")
+            result = await enforce_service_auth(req, call_next)
+
+        assert isinstance(result, JSONResponse)
+        assert result.status_code == 401
+        call_next.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_logging_mode_records_valid_auth(self):
+        """In logging mode, valid auth is recorded on request.state without blocking."""
+        call_next = AsyncMock(return_value="ok")
+
+        with (
+            patch.dict(os.environ, {"SERVICE_AUTH_ENFORCEMENT_MODE": "false"}),
+            patch(
+                "middleware.service_auth_enforcement.validate_service_auth",
+                return_value={"service_id": "npu-worker", "authenticated": True},
+            ),
+        ):
+            req = _make_request("/api/npu/heartbeat")
+            result = await enforce_service_auth(req, call_next)
+
+        call_next.assert_awaited_once_with(req)
+        assert req.state.service_id == "npu-worker"
+        assert req.state.authenticated is True
+        assert result == "ok"
+
+    @pytest.mark.asyncio
+    async def test_enforcement_mode_default_is_false(self):
+        """Without SERVICE_AUTH_ENFORCEMENT_MODE set, enforcement is disabled."""
+        from fastapi import HTTPException
+
+        call_next = AsyncMock(return_value="default-mode-ok")
+
+        with (
+            # Remove the env var entirely
+            patch.dict(os.environ, {}, clear=False) as env,
+        ):
+            env.pop("SERVICE_AUTH_ENFORCEMENT_MODE", None)
+            with patch(
+                "middleware.service_auth_enforcement.validate_service_auth",
+                side_effect=HTTPException(
+                    status_code=401, detail="Missing required headers"
+                ),
+            ):
+                req = _make_request("/api/npu/results")
+                result = await enforce_service_auth(req, call_next)
+
+        # Default is logging mode — request passes through
+        call_next.assert_awaited_once_with(req)
+        assert result == "default-mode-ok"
