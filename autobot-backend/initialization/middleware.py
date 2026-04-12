@@ -120,6 +120,32 @@ def configure_service_auth(app: FastAPI):
         logger.warning("⚠️ Service auth middleware not available: %s", e2)
 
 
+def configure_audit(app: FastAPI):
+    """Configure audit logging middleware.
+
+    Registers AuditMiddleware which captures all authenticated API requests to
+    security-sensitive endpoints (modifying methods + sensitive path prefixes).
+    If the middleware module is unavailable, logs a warning and continues.
+
+    Issue #3277: wires AuditMiddleware into the FastAPI application.
+
+    Args:
+        app: FastAPI application instance
+
+    Example:
+        ```python
+        configure_audit(app)
+        ```
+    """
+    try:
+        from middleware.audit_middleware import AuditMiddleware
+
+        app.add_middleware(AuditMiddleware)
+        logger.info("Audit middleware enabled")
+    except ImportError as e:
+        logger.warning("Audit middleware not available: %s", e)
+
+
 def configure_llm_awareness(app: FastAPI):
     """
     Configure LLM awareness middleware
@@ -152,6 +178,7 @@ def configure_middleware(
     gzip_minimum_size: int = 1000,
     enable_service_auth: bool = True,
     enable_llm_awareness: bool = True,
+    enable_audit: bool = True,
 ):
     """
     Configure all middleware for FastAPI application
@@ -162,6 +189,7 @@ def configure_middleware(
         gzip_minimum_size: Minimum size for GZip compression (default: 1000 bytes)
         enable_service_auth: Enable service authentication middleware (default: True)
         enable_llm_awareness: Enable LLM awareness context injection (default: True)
+        enable_audit: Enable audit logging middleware (default: True)
 
     Example:
         ```python
@@ -183,6 +211,11 @@ def configure_middleware(
     if enable_service_auth:
         configure_service_auth(app)
 
+    # Configure Audit Logging (issue #3277) — must be after service auth so
+    # user context (request.state.user) is already populated for audit entries.
+    if enable_audit:
+        configure_audit(app)
+
     # Configure LLM Awareness context injection (optional)
     # Must be registered after service auth so awareness context is applied
     # only to authenticated requests that reach the route handlers.
@@ -197,5 +230,6 @@ __all__ = [
     "configure_cors",
     "configure_gzip",
     "configure_service_auth",
+    "configure_audit",
     "configure_llm_awareness",
 ]

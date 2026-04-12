@@ -1223,6 +1223,17 @@ class AutoBotConfig(BaseSettings):
     debug: bool = Field(default=False, alias="AUTOBOT_DEBUG")
     log_level: str = Field(default="INFO", alias="AUTOBOT_LOG_LEVEL")
 
+    # Audit logging — issue #3277
+    audit_retention_days: int = Field(
+        default=90,
+        alias="AUTOBOT_AUDIT_RETENTION_DAYS",
+        description=(
+            "Number of days to retain security audit logs in Redis. "
+            "Default 90 days satisfies most compliance requirements. "
+            "Range: 7–365."
+        ),
+    )
+
     # Issue #858: Handle PORT env var from uvicorn without breaking port config
     @field_validator("port", mode="before")
     @classmethod
