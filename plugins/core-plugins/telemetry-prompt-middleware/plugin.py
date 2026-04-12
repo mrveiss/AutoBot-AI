@@ -71,7 +71,10 @@ class TelemetryPromptMiddleware(Extension):
             logger.debug("[#3405] Telemetry plugin: Prometheus unavailable, skipping")
             return None
 
-        logger.debug("[#3405] Telemetry plugin: current CPU %.1f%% (threshold %.1f%%)", cpu_pct, self._threshold)
+        logger.debug(
+            "[#3405] Telemetry plugin: current CPU %.1f%% (threshold %.1f%%)",
+            cpu_pct, self._threshold,
+        )
         if cpu_pct < self._threshold:
             return None
 

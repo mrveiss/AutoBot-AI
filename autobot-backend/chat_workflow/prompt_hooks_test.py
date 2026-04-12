@@ -14,13 +14,12 @@ Tests verify:
 """
 
 from typing import Optional
-from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from extensions.base import Extension, HookContext
 from extensions.hooks import HookPoint
-from extensions.manager import ExtensionManager, reset_extension_manager
+from extensions.manager import reset_extension_manager
 from chat_workflow.llm_handler import _emit_system_prompt_ready, _emit_full_prompt_ready
 
 
