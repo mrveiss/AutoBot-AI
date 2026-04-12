@@ -1,0 +1,169 @@
+# Detect and warn about stale branches
+#
+# This workflow identifies branches with no commits for 30+ days
+# and creates/updates a GitHub Issue to track stale work.
+#
+# Stale branches indicate:
+# - Work abandoned mid-phase
+# - Branches forgotten and need manual review
+# - Potential technical debt
+#
+# See: https://github.com/mrveiss/AutoBot-AI/issues/4110
+
+name: Stale branches warning
+
+on:
+  schedule:
+    # Run weekly on Mondays at 03:00 UTC
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+jobs:
+  detect-stale:
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Fetch latest refs
+        run: |
+          git fetch --all
+
+      - name: Find stale branches
+        id: stale
+        run: |
+          DAYS_STALE=30
+          CUTOFF_DATE=$(date -d "$DAYS_STALE days ago" +%s)
+          stale_branches=""
+          count=0
+
+          echo "Looking for branches with no commits for $DAYS_STALE+ days..."
+
+          # Get all remote branches
+          all_branches=$(git branch -r \
+            | sed 's|^ *origin/||' \
+            | grep -v "HEAD\|main\|master\|Dev_new_gui" || true)
+
+          if [ -z "$all_branches" ]; then
+            echo "No candidate branches found."
+          else
+            while IFS= read -r branch; do
+              [ -z "$branch" ] && continue
+
+              # Get last commit timestamp
+              last_commit_ts=$(git log -1 --format=%ct "origin/$branch" 2>/dev/null || echo "0")
+              last_commit_date=$(git log -1 --format=%ai "origin/$branch" 2>/dev/null || echo "unknown")
+
+              if [ "$last_commit_ts" -lt "$CUTOFF_DATE" ]; then
+                stale_branches="${stale_branches}| ${branch} | ${last_commit_date} |\n"
+                count=$((count + 1))
+              fi
+            done <<< "$all_branches"
+          fi
+
+          # Output formatted for issue body
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          if [ "$count" -gt 0 ]; then
+            echo "stale_branches<<EOF" >> "$GITHUB_OUTPUT"
+            printf "%b" "$stale_branches" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create or update stale branches issue
+        if: steps.stale.outputs.count > 0
+        uses: actions/github-script@v8
+        env:
+          STALE_COUNT: ${{ steps.stale.outputs.count }}
+          STALE_LIST: ${{ steps.stale.outputs.stale_branches }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const staleCount = process.env.STALE_COUNT;
+            const staleList = process.env.STALE_LIST || '';
+            const issueTitle = 'Stale branches detected';
+
+            const issueBody = [
+              '## Stale Branches Warning',
+              '',
+              staleCount + ' branch(es) have not received commits for 30+ days:',
+              '',
+              '| Branch | Last Commit |',
+              '|--------|-------------|',
+              staleList,
+              '',
+              '### Action Items',
+              '- Review each branch for abandoned work',
+              '- Delete if work was completed on another branch',
+              '- Commit progress or document blockers if work is ongoing',
+              '- Close associated GitHub issues if work is no longer needed',
+              '',
+              'See: https://github.com/mrveiss/AutoBot-AI/issues/4110'
+            ].join('\n');
+
+            // Find existing stale branches issue
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'automation',
+            });
+
+            let existingIssue = issues.data.find((issue) =>
+              issue.title === issueTitle && !issue.pull_request
+            );
+
+            if (existingIssue) {
+              // Update existing issue
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingIssue.number,
+                body: issueBody,
+              });
+              console.log('Updated issue #' + existingIssue.number);
+            } else {
+              // Create new issue
+              const newIssue = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: issueTitle,
+                body: issueBody,
+                labels: ['automation', 'infrastructure'],
+              });
+              console.log('Created new issue #' + newIssue.data.number);
+            }
+
+      - name: Close stale branches issue if no stale branches
+        if: steps.stale.outputs.count == 0
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issueTitle = 'Stale branches detected';
+
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'automation',
+            });
+
+            const staleIssue = issues.data.find((issue) =>
+              issue.title === issueTitle && !issue.pull_request
+            );
+
+            if (staleIssue) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: staleIssue.number,
+                state: 'closed',
+              });
+              console.log('Closed issue #' + staleIssue.number + ' - no stale branches found');
+            }

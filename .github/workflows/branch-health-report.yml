@@ -1,0 +1,182 @@
+# Monthly branch health report
+#
+# This workflow generates a comprehensive report on branch health metrics:
+# - Total branches (local/remote)
+# - Merged vs. active branches
+# - Stale branches
+# - Worktree status
+# - Recommendations
+#
+# Reports via GitHub Issue for visibility and historical tracking.
+#
+# See: https://github.com/mrveiss/AutoBot-AI/issues/4110
+
+name: Monthly branch health report
+
+on:
+  schedule:
+    # Run on the 1st of each month at 05:00 UTC
+    - cron: '0 5 1 * *'
+  workflow_dispatch:
+
+jobs:
+  generate-report:
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Fetch latest refs
+        run: |
+          git fetch --all
+
+      - name: Collect metrics
+        id: metrics
+        run: |
+          # Count branches
+          total_local=$(git branch | wc -l)
+          total_remote=$(git branch -r | wc -l)
+
+          # Count merged branches
+          merged_count=$(git branch -r --merged origin/Dev_new_gui \
+            | grep -v "HEAD\|main\|master\|Dev_new_gui" | wc -l)
+
+          # Count stale branches (30+ days)
+          DAYS_STALE=30
+          CUTOFF_DATE=$(date -d "$DAYS_STALE days ago" +%s)
+          stale_count=0
+
+          all_branches=$(git branch -r \
+            | sed 's|^ *origin/||' \
+            | grep -v "HEAD\|main\|master\|Dev_new_gui" || true)
+
+          while IFS= read -r branch; do
+            [ -z "$branch" ] && continue
+            last_commit_ts=$(git log -1 --format=%ct "origin/$branch" 2>/dev/null || echo "0")
+            if [ "$last_commit_ts" -lt "$CUTOFF_DATE" ]; then
+              stale_count=$((stale_count + 1))
+            fi
+          done <<< "$all_branches"
+
+          # Count worktrees
+          worktree_count=0
+          if [ -d ".worktrees" ]; then
+            worktree_count=$(find .worktrees -maxdepth 1 -type d -not -name ".worktrees" | wc -l)
+          fi
+
+          # Count open PRs
+          open_prs=0
+          if command -v gh &>/dev/null; then
+            open_prs=$(gh pr list --state open --json number -q 'length' 2>/dev/null || echo "0")
+          fi
+
+          # Count open issues
+          open_issues=0
+          if command -v gh &>/dev/null; then
+            open_issues=$(gh issue list --state open --json number -q 'length' 2>/dev/null || echo "0")
+          fi
+
+          echo "total_local=$total_local" >> "$GITHUB_OUTPUT"
+          echo "total_remote=$total_remote" >> "$GITHUB_OUTPUT"
+          echo "merged=$merged_count" >> "$GITHUB_OUTPUT"
+          echo "stale=$stale_count" >> "$GITHUB_OUTPUT"
+          echo "worktrees=$worktree_count" >> "$GITHUB_OUTPUT"
+          echo "open_prs=$open_prs" >> "$GITHUB_OUTPUT"
+          echo "open_issues=$open_issues" >> "$GITHUB_OUTPUT"
+
+      - name: Create health report issue
+        uses: actions/github-script@v8
+        env:
+          TOTAL_LOCAL: ${{ steps.metrics.outputs.total_local }}
+          TOTAL_REMOTE: ${{ steps.metrics.outputs.total_remote }}
+          MERGED: ${{ steps.metrics.outputs.merged }}
+          STALE: ${{ steps.metrics.outputs.stale }}
+          WORKTREES: ${{ steps.metrics.outputs.worktrees }}
+          OPEN_PRS: ${{ steps.metrics.outputs.open_prs }}
+          OPEN_ISSUES: ${{ steps.metrics.outputs.open_issues }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const totalLocal = process.env.TOTAL_LOCAL;
+            const totalRemote = process.env.TOTAL_REMOTE;
+            const merged = process.env.MERGED;
+            const stale = process.env.STALE;
+            const worktrees = process.env.WORKTREES;
+            const openPrs = process.env.OPEN_PRS;
+            const openIssues = process.env.OPEN_ISSUES;
+
+            const now = new Date();
+            const timestamp = now.getFullYear() + '-' +
+                             String(now.getMonth() + 1).padStart(2, '0') + '-' +
+                             String(now.getDate()).padStart(2, '0');
+
+            const issueTitle = 'Branch health report: ' + timestamp;
+
+            const issueBody = '## Repository Branch Health Report\n' +
+              '\n' +
+              '**Report Date:** ' + timestamp + '\n' +
+              '\n' +
+              '### Key Metrics\n' +
+              '\n' +
+              '| Metric | Count |\n' +
+              '|--------|-------|\n' +
+              '| Local branches | ' + totalLocal + ' |\n' +
+              '| Remote branches | ' + totalRemote + ' |\n' +
+              '| Merged branches | ' + merged + ' |\n' +
+              '| Stale branches (30+ days) | ' + stale + ' |\n' +
+              '| Active worktrees | ' + worktrees + ' |\n' +
+              '| Open PRs | ' + openPrs + ' |\n' +
+              '| Open issues | ' + openIssues + ' |\n' +
+              '\n' +
+              '### Health Assessment\n' +
+              '\n' +
+              'Active development: ' + openPrs + ' open PRs, ' + openIssues + ' open issues\n' +
+              '\n' +
+              'Branch cleanup: ' + merged + ' merged, ' + stale + ' stale\n' +
+              '\n' +
+              '### Recommendations\n' +
+              '\n' +
+              '1. Review ' + merged + ' merged branches for cleanup\n' +
+              '2. Investigate ' + stale + ' stale branches\n' +
+              '3. Manage ' + worktrees + ' active worktrees\n' +
+              '4. Address ' + openPrs + ' open PRs\n' +
+              '\n' +
+              '---\n' +
+              'Generated by branch-health-report workflow\n' +
+              'See: https://github.com/mrveiss/AutoBot-AI/issues/4110';
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: issueTitle,
+              body: issueBody,
+              labels: ['automation', 'infrastructure', 'report'],
+            });
+
+            console.log('Created health report for ' + timestamp);
+
+      - name: Generate summary
+        if: always()
+        env:
+          TOTAL_LOCAL: ${{ steps.metrics.outputs.total_local }}
+          TOTAL_REMOTE: ${{ steps.metrics.outputs.total_remote }}
+          MERGED: ${{ steps.metrics.outputs.merged }}
+          STALE: ${{ steps.metrics.outputs.stale }}
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## Monthly Branch Health Report
+
+          **Summary:**
+          - Total local branches: $TOTAL_LOCAL
+          - Total remote branches: $TOTAL_REMOTE
+          - Merged branches: $MERGED
+          - Stale branches: $STALE
+
+          See generated GitHub Issue for full details.
+          EOF
