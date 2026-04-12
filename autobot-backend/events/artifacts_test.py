@@ -5,6 +5,8 @@
 Tests for task artifact capture on OBSERVATION events (#4094).
 """
 
+import json
+
 import pytest
 
 from events.stream_manager import InMemoryEventStreamManager
@@ -12,6 +14,7 @@ from events.types import (
     ArtifactType,
     ObservationContent,
     TaskArtifact,
+    _validate_artifact_serialization,
     build_artifact,
     create_observation_event,
 )
@@ -204,3 +207,101 @@ class TestGetTaskArtifacts:
         await mgr.publish(evt)
         arts = await mgr.get_task_artifacts(task_id)
         assert arts == []
+
+
+# ---------------------------------------------------------------------------
+# Artifact serialization / round-trip validation (#4178)
+# ---------------------------------------------------------------------------
+
+
+class TestArtifactSerializationValidation:
+    """Validate that artifacts serialize to JSON and round-trip without loss."""
+
+    def test_valid_artifact_passes_validation(self):
+        art = build_artifact(ArtifactType.CODE_DIFF, "--- a\n+++ b", label="patch")
+        # Must not raise
+        _validate_artifact_serialization([art])
+
+    def test_multiple_valid_artifacts_pass_validation(self):
+        arts = [
+            build_artifact(ArtifactType.CODE_DIFF, "diff text"),
+            build_artifact(ArtifactType.TEST_OUTPUT, "3 passed"),
+            build_artifact(ArtifactType.DEPLOYMENT_LOG, "deployed ok", file_path="/tmp/log"),
+        ]
+        _validate_artifact_serialization(arts)
+
+    def test_empty_list_passes_validation(self):
+        _validate_artifact_serialization([])
+
+    def test_artifact_to_dict_is_json_serializable(self):
+        art = build_artifact(ArtifactType.CUSTOM, "payload", label="lbl", file_path="/a/b.py")
+        serialized = json.dumps(art.to_dict(), ensure_ascii=False)
+        restored = json.loads(serialized)
+        assert restored["artifact_type"] == "custom"
+        assert restored["content"] == "payload"
+        assert restored["label"] == "lbl"
+        assert restored["file_path"] == "/a/b.py"
+        assert restored["truncated"] is False
+
+    def test_round_trip_through_json_preserves_all_fields(self):
+        art = build_artifact(
+            ArtifactType.FILE_CHANGE,
+            "new content",
+            label="new file",
+            file_path="autobot-backend/new.py",
+        )
+        serialized = json.dumps(art.to_dict(), ensure_ascii=False)
+        restored = TaskArtifact.from_dict(json.loads(serialized))
+        assert restored.artifact_type == art.artifact_type
+        assert restored.content == art.content
+        assert restored.label == art.label
+        assert restored.file_path == art.file_path
+        assert restored.truncated == art.truncated
+
+    def test_create_observation_event_validates_artifacts(self):
+        """create_observation_event must accept clean artifacts without raising."""
+        art = build_artifact(ArtifactType.COMMAND_OUTPUT, "exit 0")
+        evt = create_observation_event("act-v", "shell", True, artifacts=[art])
+        obs = ObservationContent.from_dict(evt.content)
+        assert len(obs.artifacts) == 1
+        assert obs.artifacts[0].artifact_type == ArtifactType.COMMAND_OUTPUT
+
+    def test_full_event_json_round_trip_with_artifacts(self):
+        """Full path: artifact → event → JSON → event → artifact."""
+        from events.types import AgentEvent
+
+        art = build_artifact(ArtifactType.TEST_OUTPUT, "5 passed, 0 failed", label="pytest")
+        evt = create_observation_event("act-rt", "pytest_runner", True, task_id="t-rt", artifacts=[art])
+
+        json_str = evt.to_json()
+        restored_evt = AgentEvent.from_json(json_str)
+        obs = ObservationContent.from_dict(restored_evt.content)
+
+        assert len(obs.artifacts) == 1
+        r = obs.artifacts[0]
+        assert r.artifact_type == ArtifactType.TEST_OUTPUT
+        assert r.content == "5 passed, 0 failed"
+        assert r.label == "pytest"
+        assert r.truncated is False
+
+    def test_truncated_artifact_still_passes_validation(self):
+        """Truncated artifacts must still be JSON-serializable."""
+        big_content = "x" * 20_000
+        art = TaskArtifact(artifact_type=ArtifactType.COMMAND_OUTPUT, content=big_content)
+        assert art.truncated is True
+        # Validation must not raise even for truncated artifacts
+        _validate_artifact_serialization([art])
+
+    def test_artifact_unicode_content_round_trips(self):
+        """Unicode characters in content must survive JSON serialization."""
+        art = build_artifact(ArtifactType.CUSTOM, "日本語テスト \u2603 emoji \U0001f600")
+        serialized = json.dumps(art.to_dict(), ensure_ascii=False)
+        restored = TaskArtifact.from_dict(json.loads(serialized))
+        assert restored.content == art.content
+
+    def test_create_observation_event_without_artifacts_skips_validation(self):
+        """No artifacts → validation is skipped; no error raised."""
+        evt = create_observation_event("act-nv", "noop", False, error="oops")
+        obs = ObservationContent.from_dict(evt.content)
+        assert obs.artifacts == []
+        assert obs.error == "oops"
