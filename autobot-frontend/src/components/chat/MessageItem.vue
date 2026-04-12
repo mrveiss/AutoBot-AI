@@ -39,6 +39,19 @@
         >
           <i class="fas fa-copy" aria-hidden="true"></i>
         </BaseButton>
+        <!-- Issue #3245: Save assistant response as a persistent AI document -->
+        <BaseButton
+          v-if="message.sender === 'assistant'"
+          variant="ghost"
+          size="xs"
+          :disabled="isSavingDocument"
+          class="action-btn"
+          aria-label="Save as document"
+          title="Save as document"
+          @click="handleSaveAsDocument"
+        >
+          <i class="fas fa-file-alt" aria-hidden="true"></i>
+        </BaseButton>
         <BaseButton
           variant="ghost"
           size="xs"
@@ -155,7 +168,7 @@
  * Issue #184: Split oversized Vue components
  */
 
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ChatMessage } from '@/stores/useChatStore'
 import { formatTime } from '@/utils/formatHelpers'
@@ -167,6 +180,7 @@ import ApprovalRequestCard from './ApprovalRequestCard.vue'
 import CitationsDisplay from './CitationsDisplay.vue'
 import MessageAttachments from './MessageAttachments.vue'
 import { sanitizeChatHtml } from '@/utils/sanitize'
+import { useAIDocument } from '@/composables/useAIDocument'
 
 interface Props {
   message: ChatMessage
@@ -189,6 +203,8 @@ interface Emits {
   (e: 'approve', data: unknown): void
   (e: 'deny', data: unknown): void
   (e: 'auto-approve-changed', value: boolean): void
+  /** Issue #3245: emitted after an assistant message is saved as an AI document */
+  (e: 'save-as-document', docId: string): void
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -199,7 +215,25 @@ const props = withDefaults(defineProps<Props>(), {
   processingApproval: false
 })
 
-defineEmits<Emits>()
+const emit = defineEmits<Emits>()
+
+// Issue #3245: Save-as-document integration
+const { saveMessageAsDocument } = useAIDocument()
+const isSavingDocument = ref(false)
+
+async function handleSaveAsDocument() {
+  if (isSavingDocument.value) return
+  isSavingDocument.value = true
+  try {
+    const doc = await saveMessageAsDocument({
+      content: props.message.content,
+      messageId: props.message.id,
+    })
+    emit('save-as-document', doc.id)
+  } finally {
+    isSavingDocument.value = false
+  }
+}
 
 // Computed properties
 const messageWrapperClass = computed(() => {
