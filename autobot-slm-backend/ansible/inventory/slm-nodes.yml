@@ -28,7 +28,6 @@ all:
           slm_node_role: "slm-manager"
           slm_services_to_monitor:
             - autobot-slm-backend
-            - slm-admin-ui
             - nginx
             - postgresql@16-main
 
