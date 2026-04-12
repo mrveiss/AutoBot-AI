@@ -226,11 +226,18 @@ class ProviderRegistry:
             if name not in candidates:
                 candidates.append(name)
 
+        primary = candidates[0] if candidates else None
         for name in candidates:
             provider = await self.get_provider(name)
             if provider is not None:
                 if request is not None:
                     self.enrich_request(request, name)
+                if name != primary:
+                    logger.debug(
+                        "Fallback chain selected non-primary provider: %s (preferred: %s)",
+                        name,
+                        primary,
+                    )
                 return provider
 
         logger.error("All providers unavailable or not configured")

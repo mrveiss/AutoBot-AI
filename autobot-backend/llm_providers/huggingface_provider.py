@@ -119,9 +119,12 @@ class HuggingFaceProvider(BaseProvider):
                 data = await resp.json()
             choice = data["choices"][0]
             usage = data.get("usage", {})
+            api_model = data.get("model", model)
+            payload = self._build_chat_payload(request, model)
+            total_tokens = usage.get("total_tokens", 0)
             return LLMResponse(
                 content=choice["message"]["content"] or "",
-                model=data.get("model", model),
+                model=api_model,
                 provider=self.provider_name,
                 processing_time=time.time() - start,
                 request_id=request.request_id,
@@ -129,8 +132,13 @@ class HuggingFaceProvider(BaseProvider):
                 usage={
                     "prompt_tokens": usage.get("prompt_tokens", 0),
                     "completion_tokens": usage.get("completion_tokens", 0),
-                    "total_tokens": usage.get("total_tokens", 0),
+                    "total_tokens": total_tokens,
                 },
+                provider_metadata=self._build_provider_metadata(
+                    model_api_name=api_model,
+                    api_kwargs_applied=payload,
+                    total_tokens=total_tokens,
+                ),
             )
         except Exception as exc:
             self._total_errors += 1
