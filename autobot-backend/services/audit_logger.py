@@ -986,7 +986,9 @@ class AuditLogger(AsyncInitializable):
                 logger.debug("Batch task cancelled during shutdown")
 
         logger.info(
-            f"Audit logger shutdown complete: {self._total_logged} entries logged, {self._total_failed} failed"
+            "Audit logger shutdown complete: %d entries logged, %d failed",
+            self._total_logged,
+            self._total_failed,
         )
 
 
@@ -996,13 +998,23 @@ _logger_lock = asyncio.Lock()
 
 
 async def get_audit_logger() -> AuditLogger:
-    """Get or create global audit logger instance"""
+    """Get or create global audit logger instance.
+
+    Retention period is read from AUTOBOT_AUDIT_RETENTION_DAYS (default 90 days).
+    Issue #3277: wired from ssot_config so the value is operator-configurable.
+    """
     global _audit_logger
 
     if _audit_logger is None:
         async with _logger_lock:
             if _audit_logger is None:
-                _audit_logger = AuditLogger()
+                try:
+                    from autobot_shared.ssot_config import get_config
+
+                    retention_days = get_config().audit_retention_days
+                except Exception:
+                    retention_days = 90
+                _audit_logger = AuditLogger(retention_days=retention_days)
                 await _audit_logger.initialize()
     return _audit_logger
 

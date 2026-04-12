@@ -1256,6 +1256,15 @@ async def cleanup_services(app: FastAPI):
         # Issue #697: Flush and shutdown OpenTelemetry tracing
         await shutdown_tracing()
 
+        # Issue #3277: Flush and close audit logger before exit
+        try:
+            from services.audit_logger import close_audit_logger
+
+            await close_audit_logger()
+            logger.info("Audit logger flushed and closed")
+        except Exception as audit_error:
+            logger.warning("Audit logger shutdown failed: %s", audit_error)
+
         # Redis connections automatically managed by get_redis_client()
         logger.info("✅ Cleanup completed successfully")
     except Exception as e:
