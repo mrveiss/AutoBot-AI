@@ -289,6 +289,25 @@
   tags: ['slm', 'backend', 'systemd']
 
 # ==========================================================
+# SLM Admin UI health monitor service
+# ==========================================================
+- name: "SLM | Deploy slm-admin-ui health monitor service"
+  ansible.builtin.template:
+    src: slm-admin-ui.service.j2
+    dest: /etc/systemd/system/slm-admin-ui.service
+    mode: "0644"
+  notify:
+    - reload systemd
+  tags: ['slm', 'frontend', 'systemd']
+
+- name: "SLM | Enable slm-admin-ui service"
+  ansible.builtin.systemd:
+    name: slm-admin-ui
+    enabled: true
+    daemon_reload: true
+  tags: ['slm', 'frontend', 'systemd']
+
+# ==========================================================
 # Co-located frontend detection (#3013)
 # Must run BEFORE frontend builds so VITE_API_URL is correct.
 # Auto-detect: if the user frontend code exists on this host,

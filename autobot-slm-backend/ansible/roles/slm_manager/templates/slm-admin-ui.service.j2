@@ -1,0 +1,28 @@
+[Unit]
+Description=AutoBot SLM Admin UI - Frontend Health Monitor
+Documentation=https://github.com/mrveiss/AutoBot-AI
+After=nginx.service
+Requires=nginx.service
+PartOf=nginx.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+
+# Health check: verify SLM frontend is built and nginx can serve it
+ExecStart=/bin/sh -c 'test -f /opt/autobot/autobot-slm-frontend/dist/index.html && curl -sf https://127.0.0.1/slm/ > /dev/null'
+
+# Mark service as successful if health check passes
+RemainAfterExit=yes
+
+# Restart on failure
+OnFailure=
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=slm-admin-ui
+
+[Install]
+WantedBy=multi-user.target
