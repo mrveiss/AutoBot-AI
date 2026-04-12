@@ -12,12 +12,15 @@ Provides integrations with external tools and services:
 - Communication (Slack, Teams, Discord)
 - Version control (GitLab, Bitbucket)
 - Monitoring (Datadog, New Relic)
+- Knowledge/productivity (Notion) — Issue #4099
 """
 
 from integrations.base import BaseIntegration, IntegrationConfig, IntegrationStatus
+from integrations.notion_integration import NotionIntegration
 
 __all__ = [
     "BaseIntegration",
     "IntegrationConfig",
     "IntegrationStatus",
+    "NotionIntegration",
 ]

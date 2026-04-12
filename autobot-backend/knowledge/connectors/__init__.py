@@ -38,6 +38,7 @@ Example usage::
 # Trigger registration of built-in connector types
 import knowledge.connectors.database  # noqa: F401
 import knowledge.connectors.file_server  # noqa: F401
+import knowledge.connectors.notion  # noqa: F401
 import knowledge.connectors.web_crawler  # noqa: F401
 from knowledge.connectors.base import AbstractConnector
 from knowledge.connectors.models import (
