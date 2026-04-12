@@ -60,6 +60,33 @@ class ExperimentState(str, enum.Enum):
 
 
 @dataclass
+class ExperimentTask:
+    """Per-task prompt overrides for experiment runner.
+
+    Issue #3259: Allow temperature and system_prompt overrides at the task level.
+    """
+
+    prompt: str
+    required_temperature: Optional[float] = None
+    system_prompt: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "prompt": self.prompt,
+            "required_temperature": self.required_temperature,
+            "system_prompt": self.system_prompt,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ExperimentTask":
+        return cls(
+            prompt=data["prompt"],
+            required_temperature=data.get("required_temperature"),
+            system_prompt=data.get("system_prompt"),
+        )
+
+
+@dataclass
 class HyperParams:
     """Training hyperparameters for a single experiment."""
 

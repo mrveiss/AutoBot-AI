@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from .config import AutoResearchConfig
-from .models import Experiment, ExperimentResult, ExperimentState, ScorerResult
+from .models import Experiment, ExperimentResult, ExperimentState, ExperimentTask, ScorerResult
 from .parser import ExperimentOutputParser
 from .store import ExperimentStore
 
@@ -186,6 +186,40 @@ def filter_prompts(
     return pending
 
 
+def build_task_inference_params(
+    task: ExperimentTask, experiment: Experiment
+) -> Dict[str, str | float | None]:
+    """Build inference parameters from per-task and experiment-level overrides.
+
+    Issue #3259: Apply per-task temperature and system_prompt overrides on top
+    of the experiment-level hyperparams.extra defaults.
+
+    Args:
+        task: Per-task prompt and override settings.
+        experiment: Experiment with baseline hyperparams and temperature fallback.
+
+    Returns:
+        Dict with merged inference parameters:
+        - "prompt": task.prompt
+        - "temperature": task.required_temperature (if set) else hp.extra.get("temperature")
+        - "system_prompt": task.system_prompt (if set) else None
+    """
+    hp = experiment.hyperparams
+
+    # Task-level temperature overrides experiment-level
+    if task.required_temperature is not None:
+        temperature = task.required_temperature
+    else:
+        # Fall back to experiment-level temperature from extra, or None
+        temperature = hp.extra.get("temperature")
+
+    return {
+        "prompt": task.prompt,
+        "temperature": temperature,
+        "system_prompt": task.system_prompt,
+    }
+
+
 class ExperimentRunner:
     """Run autoresearch experiments as isolated subprocesses or Docker containers."""
 
@@ -202,6 +236,15 @@ class ExperimentRunner:
         self._lock = asyncio.Lock()
         self._current_process: Optional[asyncio.subprocess.Process] = None
         self._current_container_name: Optional[str] = None
+
+    def build_task_inference_params(
+        self, task: ExperimentTask, experiment: Experiment
+    ) -> Dict[str, str | float | None]:
+        """Instance-method delegate to module-level build_task_inference_params.
+
+        Issue #3259: Thin wrapper for convenience when called from instance context.
+        """
+        return build_task_inference_params(task, experiment)
 
     async def run_experiment(self, experiment: Experiment) -> Experiment:
         """Execute a single experiment and persist results.
