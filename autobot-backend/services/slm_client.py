@@ -610,6 +610,76 @@ class SLMClient:
         """
         return self._ws_connected
 
+    # -------------------------------------------------------------------------
+    # Deployment API methods (Issue #3407)
+    # -------------------------------------------------------------------------
+
+    async def create_deployment(self, payload: dict) -> dict:
+        """
+        Create a new deployment via POST /api/deployments.
+
+        Args:
+            payload: Dict with node_id, roles, and optional extra_data.
+
+        Returns:
+            Raw SLM response dict with deployment_id, node_id, status, etc.
+
+        Raises:
+            aiohttp.ClientResponseError: On non-2xx HTTP responses.
+        """
+        session = await self._get_session()
+        url = f"{self.slm_url}/api/deployments"
+        async with session.post(url, json=payload) as response:
+            response.raise_for_status()
+            data = await response.json()
+        logger.info(
+            "SLM deployment created: %s on node %s",
+            data.get("deployment_id"),
+            data.get("node_id"),
+        )
+        return data
+
+    async def get_deployment(self, deployment_id: str) -> dict:
+        """
+        Fetch a deployment by ID via GET /api/deployments/{deployment_id}.
+
+        Args:
+            deployment_id: SLM deployment identifier.
+
+        Returns:
+            Raw SLM response dict.
+
+        Raises:
+            aiohttp.ClientResponseError: On non-2xx HTTP responses.
+        """
+        session = await self._get_session()
+        url = f"{self.slm_url}/api/deployments/{deployment_id}"
+        async with session.get(url) as response:
+            response.raise_for_status()
+            return await response.json()
+
+    async def list_deployments(self, node_id: Optional[str] = None) -> dict:
+        """
+        List deployments via GET /api/deployments, optionally filtered by node.
+
+        Args:
+            node_id: Optional node identifier filter.
+
+        Returns:
+            Raw SLM response dict with a ``deployments`` key.
+
+        Raises:
+            aiohttp.ClientResponseError: On non-2xx HTTP responses.
+        """
+        session = await self._get_session()
+        params = {}
+        if node_id is not None:
+            params["node_id"] = node_id
+        url = f"{self.slm_url}/api/deployments"
+        async with session.get(url, params=params) as response:
+            response.raise_for_status()
+            return await response.json()
+
 
 # Module-level singleton instance
 _slm_client: Optional[SLMClient] = None

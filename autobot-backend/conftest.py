@@ -11,6 +11,7 @@ Author: mrveiss
 import asyncio
 import os
 import sys
+import types
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -21,13 +22,51 @@ project_root = Path(__file__).parent.parent
 backend_root = Path(__file__).parent
 shared_root = project_root / "autobot_shared"
 sys.path.insert(0, str(project_root))
-sys.path.insert(0, str(backend_root))
+# Insert shared_root before backend_root so that backend_root ends up at
+# position 0 (highest priority).  This ensures bare `models.*` imports in
+# autobot-backend code resolve to autobot-backend/models/, not the similarly-
+# named package in autobot_shared/.
 sys.path.insert(0, str(shared_root))
+sys.path.insert(0, str(backend_root))
+
+
+def _make_pkg_stub(name: str) -> types.ModuleType:
+    """Create a minimal package stub that Python's import machinery accepts.
+
+    A bare MagicMock() cannot serve as a package because the importer
+    requires ``__path__`` to be set for submodule resolution (e.g. when the
+    code does ``from sqlalchemy.dialects.postgresql import ARRAY``).  We
+    create a real ModuleType with ``__path__ = []`` so the dotted import chain
+    succeeds while leaving every attribute access as a MagicMock via
+    ``__getattr__``.
+    """
+    mod = types.ModuleType(name)
+    mod.__path__ = []  # marks this as a package to the import system
+    mod.__package__ = name
+    mock_attr = MagicMock()
+
+    def _getattr(attr: str) -> MagicMock:  # noqa: ANN001
+        return mock_attr
+
+    mod.__getattr__ = _getattr  # type: ignore[attr-defined]
+    sys.modules[name] = mod
+    return mod
+
 
 # Stub optional heavy dependencies that may not be installed in the dev venv.
 # These are only needed at runtime on the target VM; tests use mocks.
-_OPTIONAL_STUBS = ["prometheus_client", "xxhash", "torch", "torch.nn", "torch.cuda"]
-for _mod in _OPTIONAL_STUBS:
+# Simple (leaf) modules that don't need submodule resolution:
+_SIMPLE_STUBS = [
+    "prometheus_client",
+    "xxhash",
+    "torch",
+    "torch.nn",
+    "torch.cuda",
+    "asyncpg",
+    "psycopg2",
+    "alembic",
+]
+for _mod in _SIMPLE_STUBS:
     if _mod not in sys.modules:
         try:
             import importlib
@@ -35,6 +74,54 @@ for _mod in _OPTIONAL_STUBS:
             importlib.import_module(_mod)
         except ImportError:
             sys.modules[_mod] = MagicMock()
+
+# Package stubs for SQLAlchemy and alembic sub-packages (need __path__ so
+# dotted sub-module imports like ``sqlalchemy.dialects.postgresql`` resolve).
+_PKG_STUBS = [
+    "sqlalchemy",
+    "sqlalchemy.ext",
+    "sqlalchemy.ext.asyncio",
+    "sqlalchemy.orm",
+    "sqlalchemy.orm.declarative",
+    "sqlalchemy.dialects",
+    "sqlalchemy.dialects.postgresql",
+    "sqlalchemy.types",
+    "sqlalchemy.engine",
+    "sqlalchemy.pool",
+    "sqlalchemy.sql",
+    "sqlalchemy.sql.sqltypes",
+    "alembic.op",
+    "alembic.context",
+]
+for _pkg in _PKG_STUBS:
+    try:
+        import importlib as _il
+
+        _il.import_module(_pkg)
+    except ImportError:
+        if _pkg not in sys.modules:
+            _make_pkg_stub(_pkg)
+
+# Pre-register models.infrastructure directly so that ``from models.infrastructure
+# import ...`` succeeds without triggering models/__init__.py (which requires the
+# full SQLAlchemy stack that is not installed in the dev/CI venv).
+# This must run AFTER the sqlalchemy stubs above so that any subsequent import of
+# models/__init__.py itself (if forced by other test files) has sqlalchemy stubs
+# already in place.
+if "models" not in sys.modules:
+    import importlib.util as _ilu
+
+    _infra_path = str(backend_root / "models" / "infrastructure.py")
+    _spec = _ilu.spec_from_file_location("models.infrastructure", _infra_path)
+    if _spec and _spec.loader:
+        # Create a lightweight 'models' namespace package to hold the sub-module
+        _models_pkg = _make_pkg_stub("models")
+        _models_pkg.__path__ = [str(backend_root / "models")]
+        _infra_mod = _ilu.module_from_spec(_spec)
+        _infra_mod.__package__ = "models"
+        sys.modules["models.infrastructure"] = _infra_mod
+        _spec.loader.exec_module(_infra_mod)  # type: ignore[union-attr]
+        setattr(_models_pkg, "infrastructure", _infra_mod)
 
 
 @pytest.fixture(scope="session")
