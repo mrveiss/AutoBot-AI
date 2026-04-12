@@ -226,6 +226,35 @@ class Experiment:
 
 
 @dataclass
+class ExperimentTask:
+    """A single inference task within an experiment.
+
+    Issue #3259: Per-task overrides for temperature and system_prompt so that
+    individual benchmark tasks can declare their own inference requirements
+    independent of the experiment-level HyperParams.
+    """
+
+    prompt: str
+    required_temperature: Optional[float] = None  # overrides HyperParams.temperature
+    system_prompt: Optional[str] = None  # injected as system message before user turn
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "prompt": self.prompt,
+            "required_temperature": self.required_temperature,
+            "system_prompt": self.system_prompt,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> ExperimentTask:
+        return cls(
+            prompt=data["prompt"],
+            required_temperature=data.get("required_temperature"),
+            system_prompt=data.get("system_prompt"),
+        )
+
+
+@dataclass
 class ExperimentStats:
     """Aggregate statistics across experiment runs."""
 

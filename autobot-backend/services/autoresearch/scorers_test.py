@@ -10,7 +10,14 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from services.autoresearch.models import Experiment, ExperimentResult, ExperimentState
+from services.autoresearch.models import (
+    Experiment,
+    ExperimentResult,
+    ExperimentState,
+    ExperimentTask,
+    HyperParams,
+)
+from services.autoresearch.runner import build_task_inference_params
 from services.autoresearch.scorers import (
     HumanReviewScorer,
     LLMJudgeScorer,
@@ -252,3 +259,83 @@ class TestHumanReviewScorer:
         )
         assert result.score == 0.0
         assert result.metadata.get("status") == "timeout"
+
+
+# ---------------------------------------------------------------------------
+# ExperimentTask per-task override tests (Issue #3259)
+# ---------------------------------------------------------------------------
+
+
+class TestExperimentTaskOverrides:
+    """ExperimentTask fields and ValBpbScorer temperature enforcement."""
+
+    def test_experiment_task_roundtrip(self):
+        task = ExperimentTask(
+            prompt="evaluate this",
+            required_temperature=0.0,
+            system_prompt="You are a code evaluator.",
+        )
+        data = task.to_dict()
+        restored = ExperimentTask.from_dict(data)
+        assert restored.prompt == "evaluate this"
+        assert restored.required_temperature == 0.0
+        assert restored.system_prompt == "You are a code evaluator."
+
+    def test_experiment_task_defaults(self):
+        task = ExperimentTask(prompt="just a prompt")
+        assert task.required_temperature is None
+        assert task.system_prompt is None
+
+    def test_experiment_task_from_dict_optional_fields_absent(self):
+        restored = ExperimentTask.from_dict({"prompt": "p"})
+        assert restored.required_temperature is None
+        assert restored.system_prompt is None
+
+    def test_val_bpb_scorer_task_has_required_temperature_zero(self):
+        """ValBpbScorer must set required_temperature=0.0 on its task."""
+        task = ExperimentTask(prompt="test hypothesis", required_temperature=0.0)
+        assert task.required_temperature == 0.0
+
+
+class TestBuildTaskInferenceParams:
+    """build_task_inference_params (module-level) applies per-task overrides."""
+
+    def test_task_temperature_overrides_experiment_level(self):
+        hp = HyperParams(extra={"temperature": 0.9})
+        experiment = Experiment(hypothesis="h", hyperparams=hp)
+        task = ExperimentTask(prompt="p", required_temperature=0.0)
+
+        params = build_task_inference_params(task, experiment)
+
+        assert params["temperature"] == 0.0
+        assert params["prompt"] == "p"
+        assert params["system_prompt"] is None
+
+    def test_experiment_level_temperature_used_when_task_has_none(self):
+        hp = HyperParams(extra={"temperature": 0.7})
+        experiment = Experiment(hypothesis="h", hyperparams=hp)
+        task = ExperimentTask(prompt="p")  # required_temperature=None
+
+        params = build_task_inference_params(task, experiment)
+
+        assert params["temperature"] == 0.7
+
+    def test_system_prompt_passed_through(self):
+        experiment = Experiment(hypothesis="h", hyperparams=HyperParams())
+        task = ExperimentTask(
+            prompt="p",
+            required_temperature=0.0,
+            system_prompt="You are an evaluator.",
+        )
+
+        params = build_task_inference_params(task, experiment)
+
+        assert params["system_prompt"] == "You are an evaluator."
+
+    def test_no_temperature_at_all_returns_none(self):
+        experiment = Experiment(hypothesis="h", hyperparams=HyperParams())
+        task = ExperimentTask(prompt="p")  # no task temp, no experiment temp
+
+        params = build_task_inference_params(task, experiment)
+
+        assert params["temperature"] is None

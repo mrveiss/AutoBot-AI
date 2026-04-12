@@ -30,6 +30,7 @@ from .models import (
     ExperimentResult,
     ExperimentState,
     ExperimentStats,
+    ExperimentTask,
     HyperParams,
     VariantArchiveEntry,
 )
@@ -55,7 +56,7 @@ from .prompt_optimizer import (
     PromptVariant,
 )
 from .routes import router
-from .runner import ExperimentRunner
+from .runner import ExperimentRunner, build_task_inference_params
 from .scorers import (
     HumanReviewScorer,
     LLMJudgeScorer,
@@ -71,6 +72,7 @@ __all__ = [
     "ExperimentResult",
     "ExperimentState",
     "ExperimentStats",
+    "ExperimentTask",
     "HyperParams",
     # Config
     "AutoResearchConfig",
@@ -78,6 +80,7 @@ __all__ = [
     "ExperimentOutputParser",
     "ExperimentRunner",
     "ExperimentStore",
+    "build_task_inference_params",
     # M2: Orchestrated loop + web search (Issue #2599)
     "AutoResearchAgent",
     "ApprovalGate",
