@@ -21,7 +21,6 @@ directly — it does not require a running AutoBot backend server.
 """
 
 import asyncio
-import json
 import logging
 import os
 import sys
@@ -38,9 +37,7 @@ from orchestration.dag_executor import (  # noqa: E402
     DAGExecutionContext,
     DAGExecutor,
     DAGNode,
-    NodeType,
     WorkflowDAG,
-    execute_distributed_shell,
 )
 
 logging.basicConfig(
