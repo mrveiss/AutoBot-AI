@@ -60,6 +60,8 @@ class CodeEmbeddingGenerator:
         self.gpu_available = False
         self.initialized = False
         self._init_lock = asyncio.Lock()
+        # Issue #3290: track actual OpenVINO compiled device for accurate metrics
+        self._openvino_device = "cpu"
 
     async def initialize(self) -> None:
         """Initialize the CodeBERT model with hardware detection."""
@@ -126,14 +128,18 @@ class CodeEmbeddingGenerator:
         await asyncio.to_thread(_load_sync)
 
     def _convert_to_openvino(self) -> None:
-        """Convert CodeBERT to OpenVINO IR for NPU acceleration."""
+        """Convert CodeBERT to OpenVINO IR and compile on NPU when available.
+
+        Issue #3290: Explicitly targets NPU device; records the compiled device
+        so _compute_with_openvino can report the correct device label in metrics.
+        """
         try:
             import torch
             from openvino import convert_model
             from openvino.runtime import Core
 
             logger.info("Converting CodeBERT to OpenVINO IR for NPU...")
-            self.model.eval()
+            self.model.train(False)
 
             dummy_input_ids = torch.zeros(1, 512, dtype=torch.long)
             dummy_attention_mask = torch.ones(1, 512, dtype=torch.long)
@@ -148,14 +154,27 @@ class CodeEmbeddingGenerator:
 
             core = Core()
             devices = core.available_devices
-            target_device = "NPU" if "NPU" in devices else "CPU"
+            # Issue #3290: prefer NPU, fall back to GPU then CPU
+            if "NPU" in devices:
+                target_device = "NPU"
+            elif "GPU" in devices:
+                target_device = "GPU"
+            else:
+                target_device = "CPU"
 
             self.openvino_model = core.compile_model(ov_model, target_device)
-            logger.info("CodeBERT compiled for %s", target_device)
+            # Record the actual device so _compute_with_openvino reports correctly
+            self._openvino_device = target_device.lower()
+            logger.info(
+                "CodeBERT compiled for %s (NPU available: %s)",
+                target_device,
+                "NPU" in devices,
+            )
 
         except Exception as e:
             logger.warning("OpenVINO conversion failed: %s, using PyTorch", e)
             self.openvino_model = None
+            self._openvino_device = "cpu"
             self.npu_available = False
 
     def _get_cache_key(self, code: str, language: str) -> str:
@@ -218,7 +237,11 @@ class CodeEmbeddingGenerator:
             return await self._compute_with_cpu(formatted_code)
 
     async def _compute_with_openvino(self, code: str) -> Tuple[np.ndarray, str]:
-        """Compute embedding using OpenVINO/NPU."""
+        """Compute embedding using OpenVINO on the compiled device (NPU/GPU/CPU).
+
+        Issue #3290: Returns the actual compiled device label instead of
+        hard-coding "npu", enabling accurate device reporting in search metrics.
+        """
 
         def _compute_sync():
             import numpy as np
@@ -243,7 +266,8 @@ class CodeEmbeddingGenerator:
             return embedding
 
         embedding = await asyncio.to_thread(_compute_sync)
-        return embedding, "npu"
+        # Issue #3290: report the actual device the model was compiled for
+        return embedding, self._openvino_device
 
     async def _compute_with_gpu(self, code: str) -> Tuple[np.ndarray, str]:
         """Compute embedding using GPU."""
@@ -296,15 +320,59 @@ class CodeEmbeddingGenerator:
         embedding = await asyncio.to_thread(_compute_sync)
         return embedding, "cpu"
 
+    async def _batch_compute_with_openvino(
+        self, formatted_snippets: List[str]
+    ) -> List[Tuple[np.ndarray, str]]:
+        """Batch-compute embeddings via OpenVINO for NPU/GPU efficiency.
+
+        Issue #3290: Running a single batched inference on the NPU is
+        significantly faster than N sequential single-sample calls because it
+        amortises the host-device transfer overhead.
+
+        Args:
+            formatted_snippets: Pre-formatted code strings
+
+        Returns:
+            List of (embedding, device_label) tuples
+        """
+        device_label = self._openvino_device
+
+        def _batch_sync() -> List[np.ndarray]:
+            import numpy as np
+
+            inputs = self.tokenizer(
+                formatted_snippets,
+                return_tensors="np",
+                padding="max_length",
+                truncation=True,
+                max_length=512,
+            )
+            result = self.openvino_model(
+                {
+                    "input_ids": inputs["input_ids"],
+                    "attention_mask": inputs["attention_mask"],
+                }
+            )
+            # result[0] shape: (batch, seq_len, hidden_dim) → mean over seq_len
+            last_hidden_state = result[0]
+            return [np.mean(last_hidden_state[i], axis=0) for i in range(len(formatted_snippets))]
+
+        embeddings = await asyncio.to_thread(_batch_sync)
+        return [(emb, device_label) for emb in embeddings]
+
     async def batch_generate(
         self, code_snippets: List[Tuple[str, str]], batch_size: int = 8
     ) -> List[CodeEmbeddingResult]:
-        """
-        Generate embeddings for multiple code snippets.
+        """Generate embeddings for multiple code snippets.
+
+        Issue #3290: When the OpenVINO model is compiled on NPU/GPU the entire
+        batch is submitted as a single inference request for maximum throughput.
+        Falls back to parallel individual calls when only a PyTorch CPU/GPU
+        backend is available.
 
         Args:
             code_snippets: List of (code, language) tuples
-            batch_size: Number of snippets to process in parallel
+            batch_size: Number of snippets per inference batch
 
         Returns:
             List of CodeEmbeddingResult for each snippet
@@ -312,14 +380,34 @@ class CodeEmbeddingGenerator:
         if not self.initialized:
             await self.initialize()
 
-        results = []
+        results: List[CodeEmbeddingResult] = []
 
         for i in range(0, len(code_snippets), batch_size):
             batch = code_snippets[i : i + batch_size]
-            batch_results = await asyncio.gather(
-                *[self.generate_embedding(code, lang) for code, lang in batch]
-            )
-            results.extend(batch_results)
+            start_time = time.time()
+
+            if self.openvino_model is not None:
+                # Issue #3290: single batched NPU inference — much faster than N serial calls
+                formatted = [f"# {lang}\n{code}" for code, lang in batch]
+                raw_pairs = await self._batch_compute_with_openvino(formatted)
+                for j, (embedding, device_used) in enumerate(raw_pairs):
+                    code, lang = batch[j]
+                    cache_key = self._get_cache_key(code, lang)
+                    await self.embedding_cache.put(cache_key, embedding.tolist())
+                    results.append(
+                        CodeEmbeddingResult(
+                            embedding=embedding,
+                            device_used=device_used,
+                            processing_time_ms=(time.time() - start_time) * 1000,
+                            model_name=self.model_name,
+                            cache_hit=False,
+                        )
+                    )
+            else:
+                batch_results = await asyncio.gather(
+                    *[self.generate_embedding(code, lang) for code, lang in batch]
+                )
+                results.extend(batch_results)
 
         return results
 
@@ -328,15 +416,23 @@ class CodeEmbeddingGenerator:
         return self.embedding_dim
 
     async def get_stats(self) -> Dict[str, Any]:
-        """Get generator statistics."""
+        """Get generator statistics including NPU utilisation.
+
+        Issue #3290: adds compiled_device and npu_utilization_reported fields
+        so callers can confirm the NPU is actually being used.
+        """
         cache_stats = self.embedding_cache.get_stats()
+        using_openvino = self.openvino_model is not None
         return {
             "model_name": self.model_name,
             "embedding_dim": self.embedding_dim,
             "initialized": self.initialized,
             "npu_available": self.npu_available,
             "gpu_available": self.gpu_available,
-            "using_openvino": self.openvino_model is not None,
+            "using_openvino": using_openvino,
+            # Issue #3290: report the actual compiled device for metrics
+            "compiled_device": self._openvino_device if using_openvino else "pytorch",
+            "npu_utilization_reported": using_openvino and self._openvino_device == "npu",
             "cache_stats": cache_stats,
         }
 
