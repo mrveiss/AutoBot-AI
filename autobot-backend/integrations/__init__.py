@@ -17,10 +17,13 @@ Provides integrations with external tools and services:
 
 from integrations.base import BaseIntegration, IntegrationConfig, IntegrationStatus
 from integrations.notion_integration import NotionIntegration
+from integrations.slack_integration import SlackChannelMapping, SlackNotificationIntegration
 
 __all__ = [
     "BaseIntegration",
     "IntegrationConfig",
     "IntegrationStatus",
     "NotionIntegration",
+    "SlackChannelMapping",
+    "SlackNotificationIntegration",
 ]
