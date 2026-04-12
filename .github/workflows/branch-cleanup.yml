@@ -1,0 +1,209 @@
+# Automated cleanup for merged and stale branches
+#
+# This workflow runs on a schedule (daily) to:
+# 1. Delete merged branches older than 7 days
+# 2. Delete branches for closed GitHub issues
+# 3. Clean up stale worktrees
+#
+# Preserves:
+# - Main development branches (main, Dev_new_gui)
+# - Branches with active work or recent commits
+# - Protected branches
+#
+# See: https://github.com/mrveiss/AutoBot-AI/issues/4110
+
+name: Automated branch cleanup
+
+on:
+  schedule:
+    # Run daily at 02:00 UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run mode (no deletions)'
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  cleanup:
+    runs-on: self-hosted
+    permissions:
+      contents: write
+      issues: read
+      pull-requests: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up environment
+        id: env
+        env:
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          DRY_RUN="${INPUT_DRY_RUN:-false}"
+          # For scheduled runs, always do real cleanup (not dry-run)
+          if [ "$EVENT_NAME" = "schedule" ]; then
+            DRY_RUN="false"
+          fi
+          echo "dry_run=$DRY_RUN" >> "$GITHUB_OUTPUT"
+          echo "Running with dry_run=$DRY_RUN"
+
+      - name: Fetch latest refs
+        run: |
+          git fetch --all --prune
+          git fetch origin --tags
+
+      - name: Delete merged branches (7+ days old)
+        id: merged
+        env:
+          DRY_RUN: ${{ steps.env.outputs.dry_run }}
+        run: |
+          BASE_BRANCH="Dev_new_gui"
+          DAYS_OLD=7
+          CUTOFF_DATE=$(date -d "$DAYS_OLD days ago" +%s)
+          deleted_count=0
+          skipped_count=0
+
+          echo "Looking for merged branches older than $DAYS_OLD days..."
+
+          # Get all branches merged into Dev_new_gui
+          merged_branches=$(git branch -r --merged "origin/$BASE_BRANCH" \
+            | grep -v "HEAD\|$BASE_BRANCH\|main\|master" \
+            | sed 's|^ *origin/||' || true)
+
+          if [ -z "$merged_branches" ]; then
+            echo "  No merged branches found."
+          else
+            while IFS= read -r branch; do
+              [ -z "$branch" ] && continue
+
+              # Get last commit timestamp
+              last_commit_ts=$(git log -1 --format=%ct "origin/$branch" 2>/dev/null || echo "0")
+
+              if [ "$last_commit_ts" -lt "$CUTOFF_DATE" ]; then
+                if [ "$DRY_RUN" = "true" ]; then
+                  echo "  WOULD DELETE: origin/$branch (merged, age > $DAYS_OLD days)"
+                else
+                  if git push origin --delete "$branch" 2>/dev/null; then
+                    echo "  DELETED: origin/$branch (merged, age > $DAYS_OLD days)"
+                    deleted_count=$((deleted_count + 1))
+                  else
+                    echo "  SKIP (deletion failed): origin/$branch"
+                    skipped_count=$((skipped_count + 1))
+                  fi
+                fi
+              else
+                skipped_count=$((skipped_count + 1))
+              fi
+            done <<< "$merged_branches"
+          fi
+
+          echo "deleted=$deleted_count" >> "$GITHUB_OUTPUT"
+          echo "skipped=$skipped_count" >> "$GITHUB_OUTPUT"
+
+      - name: Delete branches for closed issues
+        id: closed_issues
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRY_RUN: ${{ steps.env.outputs.dry_run }}
+        run: |
+          deleted_count=0
+          skipped_count=0
+          errors=0
+
+          echo "Looking for branches tied to closed issues..."
+
+          # Get all remote branches with issue numbers
+          remote_branches=$(git branch -r \
+            | sed 's|^ *origin/||' \
+            | grep -v "HEAD\|main\|master\|Dev_new_gui" || true)
+
+          if [ -z "$remote_branches" ]; then
+            echo "  No candidate branches found."
+          else
+            while IFS= read -r branch; do
+              [ -z "$branch" ] && continue
+
+              # Extract issue number (4+ digits)
+              issue_number=$(echo "$branch" | grep -oP '\d{4,}' | head -1 || true)
+              [ -z "$issue_number" ] && continue
+
+              # Check issue state
+              issue_state=$(gh issue view "$issue_number" --json state --jq '.state' 2>/dev/null || echo "")
+
+              if [ "$issue_state" = "CLOSED" ]; then
+                # Verify there's a merged PR for this issue
+                merged_pr=$(gh pr list --search "$issue_number" --state merged --json number -q '.[0].number' 2>/dev/null || true)
+
+                if [ -n "$merged_pr" ]; then
+                  if [ "$DRY_RUN" = "true" ]; then
+                    echo "  WOULD DELETE: origin/$branch (issue closed, PR merged)"
+                  else
+                    if git push origin --delete "$branch" 2>/dev/null; then
+                      echo "  DELETED: origin/$branch (issue closed, PR merged)"
+                      deleted_count=$((deleted_count + 1))
+                    else
+                      echo "  ERROR deleting: origin/$branch"
+                      errors=$((errors + 1))
+                    fi
+                  fi
+                fi
+              fi
+            done <<< "$remote_branches"
+          fi
+
+          echo "deleted=$deleted_count" >> "$GITHUB_OUTPUT"
+          echo "skipped=$skipped_count" >> "$GITHUB_OUTPUT"
+          echo "errors=$errors" >> "$GITHUB_OUTPUT"
+
+      - name: Run cleanup script
+        if: always()
+        env:
+          DRY_RUN: ${{ steps.env.outputs.dry_run }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            bash scripts/cleanup-worktrees.sh --dry-run --branches-only
+          else
+            bash scripts/cleanup-worktrees.sh --branches-only
+          fi
+
+      - name: Final prune
+        if: ${{ steps.env.outputs.dry_run == 'false' }}
+        run: |
+          git fetch --all --prune
+          echo "Repository cleaned and pruned."
+
+      - name: Generate summary
+        if: always()
+        env:
+          MERGED_DELETED: ${{ steps.merged.outputs.deleted || '0' }}
+          MERGED_SKIPPED: ${{ steps.merged.outputs.skipped || '0' }}
+          CLOSED_DELETED: ${{ steps.closed_issues.outputs.deleted || '0' }}
+          CLOSED_SKIPPED: ${{ steps.closed_issues.outputs.skipped || '0' }}
+          CLOSED_ERRORS: ${{ steps.closed_issues.outputs.errors || '0' }}
+          DRY_RUN_MODE: ${{ steps.env.outputs.dry_run }}
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## Branch Cleanup Summary
+
+          **Merged branches (7+ days old):**
+          EOF
+          echo "- Deleted: $MERGED_DELETED" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Skipped: $MERGED_SKIPPED" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Branches for closed issues:**" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Deleted: $CLOSED_DELETED" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Skipped: $CLOSED_SKIPPED" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Errors: $CLOSED_ERRORS" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$DRY_RUN_MODE" = "true" ]; then
+            echo "**Mode:** Dry-run (no changes)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "**Mode:** Live (changes applied)" >> "$GITHUB_STEP_SUMMARY"
+          fi
