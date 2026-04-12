@@ -23,8 +23,9 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel
 
+from circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from constants.security_constants import SecurityConstants
-from constants.threshold_constants import TimingConstants
+from constants.threshold_constants import CircuitBreakerDefaults, TimingConstants
 from services.captcha_human_loop import get_captcha_human_loop
 
 # Issue #380: Module-level frozenset for CAPTCHA detection keywords
@@ -103,14 +104,6 @@ class ResearchType(Enum):
     BASIC = "basic"
     ADVANCED = "advanced"
     API_BASED = "api_based"
-
-
-class CircuitBreakerState(Enum):
-    """Circuit breaker states for research services."""
-
-    CLOSED = "closed"
-    OPEN = "open"
-    HALF_OPEN = "half_open"
 
 
 # ---------------------------------------------------------------------------
@@ -278,62 +271,6 @@ class BrowserFingerprint:
         self.current_fingerprint = self._generate_fingerprint()
 
 
-class CircuitBreaker:
-    """Circuit breaker for web research services (thread-safe)."""
-
-    def __init__(
-        self,
-        failure_threshold: int = 5,
-        recovery_timeout: int = TimingConstants.STANDARD_TIMEOUT,
-    ):
-        """Initialize with failure threshold and recovery timeout."""
-        self.failure_threshold = failure_threshold
-        self.recovery_timeout = recovery_timeout
-        self.failure_count = 0
-        self.last_failure_time = None
-        self.state = CircuitBreakerState.CLOSED
-        self._lock = threading.Lock()
-
-    def call_succeeded(self):
-        """Record successful call (thread-safe)."""
-        with self._lock:
-            self.failure_count = 0
-            self.state = CircuitBreakerState.CLOSED
-
-    def call_failed(self):
-        """Record failed call (thread-safe)."""
-        with self._lock:
-            self.failure_count += 1
-            self.last_failure_time = time.time()
-            if self.failure_count >= self.failure_threshold:
-                self.state = CircuitBreakerState.OPEN
-                logger.warning(
-                    "Circuit breaker opened after %s failures",
-                    self.failure_count,
-                )
-
-    def can_execute(self) -> bool:
-        """Check if a call can execute (thread-safe)."""
-        with self._lock:
-            if self.state == CircuitBreakerState.CLOSED:
-                return True
-            if self.state == CircuitBreakerState.OPEN:
-                elapsed = time.time() - self.last_failure_time
-                if elapsed > self.recovery_timeout:
-                    self.state = CircuitBreakerState.HALF_OPEN
-                    logger.info("Circuit breaker transitioning to half-open")
-                    return True
-                return False
-            return True  # HALF_OPEN
-
-    def reset(self):
-        """Reset circuit breaker (thread-safe)."""
-        with self._lock:
-            self.failure_count = 0
-            self.last_failure_time = None
-            self.state = CircuitBreakerState.CLOSED
-
-
 class RateLimiter:
     """Rate limiter for web research requests (async-safe)."""
 
@@ -394,11 +331,13 @@ class WebResearcher:
         self._domain_rate_limiter: Dict[str, float] = {}
         self._domain_rate_lock = asyncio.Lock()
 
-        # Circuit breaker for search operations
-        self.circuit_breaker = CircuitBreaker(
-            failure_threshold=5,
-            recovery_timeout=TimingConstants.STANDARD_TIMEOUT,
+        # Circuit breaker for search operations (shared implementation - issue #3271)
+        _cb_config = CircuitBreakerConfig(
+            failure_threshold=CircuitBreakerDefaults.NETWORK_FAILURE_THRESHOLD,
+            recovery_timeout=float(TimingConstants.STANDARD_TIMEOUT),
+            monitored_exceptions=(ConnectionError, TimeoutError, OSError),
         )
+        self.circuit_breaker = CircuitBreaker("web_research", _cb_config)
 
         # Global rate limiter
         self.rate_limiter = RateLimiter(
@@ -1059,14 +998,15 @@ class WebResearcher:
         max_res = max_results or self.max_results_default
         timeout_secs = timeout or self.timeout_seconds
 
-        if not self.circuit_breaker.can_execute():
+        if not self.circuit_breaker._can_execute():
             logger.warning("Circuit breaker open, skipping search")
             return self._build_failure_response(query)
 
+        _start = time.time()
         try:
             task = asyncio.create_task(self.search_web(query, max_res))
             result = await asyncio.wait_for(task, timeout=timeout_secs)
-            self.circuit_breaker.call_succeeded()
+            self.circuit_breaker._record_success(time.time() - _start)
             result["method_used"] = "web_search"
             result["timestamp"] = datetime.now(tz=timezone.utc).isoformat()
             if result.get("status") == "success":
@@ -1074,11 +1014,13 @@ class WebResearcher:
             return result
         except asyncio.TimeoutError:
             logger.warning("Research timed out after %ss", timeout_secs)
-            self.circuit_breaker.call_failed()
+            self.circuit_breaker._record_failure(
+                time.time() - _start, TimeoutError("web research timed out")
+            )
             return self._build_failure_response(query)
         except Exception as e:
             logger.error("Research failed: %s", e)
-            self.circuit_breaker.call_failed()
+            self.circuit_breaker._record_failure(time.time() - _start, e)
             return self._build_failure_response(query)
 
     def _build_disabled_response(self, query: str) -> Dict[str, Any]:
@@ -1485,14 +1427,7 @@ class WebResearcher:
 
     def get_circuit_breaker_status(self) -> Dict[str, Any]:
         """Get status of circuit breaker."""
-        cb = self.circuit_breaker
-        return {
-            "search": {
-                "state": cb.state.value,
-                "failure_count": cb.failure_count,
-                "last_failure": cb.last_failure_time,
-            }
-        }
+        return {"search": self.circuit_breaker.get_state()}
 
     def reset_circuit_breakers(self):
         """Reset circuit breaker."""
