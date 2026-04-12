@@ -1,201 +1,315 @@
-# AutoBot: Self-Hosted AI Automation Platform
+# AutoBot
 
-> **Self-Hosted Infrastructure Automation with Conversational AI**
->
-> AutoBot is a **self-hosted AI platform** that brings conversational AI to distributed Linux administration, fleet management, and infrastructure automation — all from a beautiful, modern interface. Own your data. Control your infrastructure. No vendor lock-in.
+**Self-hosted AI platform for infrastructure automation. One dashboard. Your infrastructure. Complete control.**
 
-[![Docker Smoke Test](https://github.com/mrveiss/AutoBot-AI/actions/workflows/docker-smoke-test.yml/badge.svg)](https://github.com/mrveiss/AutoBot-AI/actions/workflows/docker-smoke-test.yml)
-[![GitHub Sponsors](https://img.shields.io/github/sponsors/mrveiss?label=Sponsor&logo=GitHub&style=flat-square)](https://github.com/sponsors/mrveiss)
-
-## Quick Start (3 Steps)
-
-### 1. Clone the Repository
-```bash
-git clone https://github.com/mrveiss/AutoBot-AI.git
-cd AutoBot-AI
-```
-
-### 2. Start with Docker
-```bash
-cp .env.example .env
-docker compose up -d
-```
-
-### 3. Open Your Dashboard
-Visit **http://localhost** in your browser. AutoBot is ready to use.
+[![Docker Smoke Test](https://github.com/mrveiss/AutoBot-AI/actions/workflows/docker-smoke-test.yml/badge.svg)](https://github.com/mrveiss/AutoBot-AI/actions/workflows/docker-smoke-test.yml) [![GitHub Stars](https://img.shields.io/github/stars/mrveiss/AutoBot-AI?style=social)](https://github.com/mrveiss/AutoBot-AI) 
 
 ---
 
-## What AutoBot Does
+## Table of Contents
 
-AutoBot is a **self-hosted infrastructure automation platform** that combines conversational AI with distributed automation. Deploy it on your own hardware and keep complete control:
+- [What is AutoBot?](#what-is-autobot)
+- [Quick Start (3 Steps)](#quick-start-3-steps)
+- [Key Features](#key-features)
+- [Why Self-Hosted?](#why-self-hosted)
+- [Architecture](#architecture)
+- [System Requirements](#system-requirements)
+- [Full Deployment Guide](#full-deployment-guide)
+- [Contributing](#contributing)
+- [Support](#support)
+- [Technology Stack](#technology-stack)
+- [Roadmap](#roadmap)
 
-- **Unified Self-Hosted Dashboard** — Manage infrastructure, fleet operations, and analytics from one place on your servers
-- **Natural Language Control** — Issue commands in plain English; AutoBot handles the complexity locally
-- **Self-Hosted Knowledge Bases** — Build custom knowledge bases from your infrastructure docs, runbooks, and workflows — all stored locally
-- **Code Analytics** — Understand codebases, extract insights, identify risks without sending data to external services
-- **Vision Processing** — Analyze screenshots and diagrams locally to guide infrastructure decisions
-- **Self-Hosted Fleet Management** — Orchestrate multi-server deployments, updates, and monitoring with Ansible across your infrastructure
-- **Complete Data Privacy** — Full data control, no external dependencies, runs entirely on your hardware, no cloud vendor lock-in
+---
+
+## What is AutoBot?
+
+AutoBot is a **self-hosted AI platform that turns your infrastructure into a conversational partner**. Instead of juggling multiple tools, SSH sessions, and documentation—ask AutoBot what you need to know, and it executes the actions.
+
+- **Conversational Interface** — Chat with your infrastructure in natural language
+- **Fleet Management** — Manage 1 server or 100+ servers equally
+- **Knowledge Bases** — Upload your runbooks, ask questions about your own docs
+- **Vision Processing** — Analyze screenshots, diagrams, infrastructure visuals
+- **Workflow Automation** — Trigger complex deployments with a message
+- **Privacy First** — Everything stays on your hardware. No external APIs. No data leaks.
+
+### For DevOps & SysAdmins
+
+Spend less time context-switching. More time solving problems. AutoBot is built for teams managing distributed infrastructure, from small fleets to enterprise scale.
+
+### For Developers
+
+Infrastructure shouldn't require a specialized language. Ask AutoBot in English. It translates to Ansible, Terraform, Docker, or custom integrations.
+
+---
+
+## Quick Start (3 Steps)
+
+### Step 1: Clone the Repository
+
+```bash
+git clone https://github.com/mrveiss/AutoBot-AI.git
+cd AutoBot-AI
+cp .env.example .env
+```
+
+### Step 2: Start with Docker Compose
+
+```bash
+docker compose up -d
+```
+
+This starts AutoBot with all default services: FastAPI backend, Vue.js frontend, ChromaDB knowledge base, Redis cache, and the AI engine.
+
+### Step 3: Open Your Browser
+
+```
+http://localhost:8000
+```
+
+You'll see the AutoBot dashboard. Click around, try a chat message. That's it—AutoBot is running.
+
+**Expected output:** Dashboard loads, chat interface ready, backend logs show `INFO: Application startup complete`.
+
+> **New to Docker?** We provide native installation instructions and development setup further down. [Jump to full deployment guide](#full-deployment-guide).
+
+---
+
+## Key Features
+
+### 🎯 Natural Language Control
+
+Skip the command line. Talk to your infrastructure.
+
+```
+You: "How many containers are running?"
+AutoBot: "I found 14 containers. 12 are running, 2 are exited."
+
+You: "Deploy version 2.1.0 to production."
+AutoBot: "Deploying... Stage 1 complete. Stage 2 in progress..."
+```
+
+### 📚 Knowledge Bases (RAG)
+
+Upload your runbooks, deployment guides, incident playbooks. AutoBot indexes them and answers questions using your own documentation—not generic training data.
+
+- Supports PDF, Markdown, text files
+- Automatically vectorized for semantic search
+- Cached for instant retrieval
+
+### 🖥️ Fleet Management
+
+One-command deployments to 50+ servers. Health checks, dependency management, rollback procedures.
+
+- Manage servers across multiple data centers
+- Rolling deployments, canary releases, blue-green patterns
+- Real-time status visibility
+
+### 👁️ Vision Processing
+
+AutoBot can analyze screenshots, system diagrams, and infrastructure visuals.
+
+- Diagnose problems from error screenshots
+- Parse architecture diagrams
+- Understand visual infrastructure layouts
+
+### ⚙️ Workflow Automation
+
+Complex multi-step deployments become one message.
+
+- Conditional logic (if service A fails, do X)
+- Dependency chains (service B waits for A)
+- Rollback triggers and incident automation
+
+### 🔒 Privacy & Compliance
+
+Everything runs on your hardware. No external APIs. No SaaS fees.
+
+- HIPAA/SOC2 compatible deployments
+- Air-gapped network support
+- Full audit trails of all actions
+
+---
+
+## Why Self-Hosted?
+
+When you send infrastructure data to cloud AI services:
+- Your runbooks and secrets travel over the internet
+- Processed by models you didn't train
+- Stored on vendor infrastructure
+- Subject to terms you didn't write
+
+**Self-hosted AutoBot:** Everything stays in your VPC. No external dependencies. Full compliance control.
+
+| Feature | AutoBot (Self-Hosted) | Cloud AI Services |
+|---------|----------------------|-------------------|
+| **Data Privacy** | Your servers only | Vendor's cloud |
+| **Cost** | Free + hardware | SaaS subscription |
+| **Compliance** | HIPAA/SOC2 ready | Limited guarantees |
+| **Vendor Lock-in** | None—it's open source | High—API dependent |
+| **Customization** | Full source access | Limited options |
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Browser / Client                        │
+└────────────────┬────────────────────────────────────────────┘
+                 │ HTTPS
+                 │
+┌────────────────▼────────────────────────────────────────────┐
+│              Vue.js Frontend (Port 8000)                     │
+│         Dashboard • Chat • Fleet Mgmt • Settings             │
+└────────────────┬────────────────────────────────────────────┘
+                 │
+┌────────────────▼────────────────────────────────────────────┐
+│       FastAPI Backend (Port 8001 - Internal)                │
+│  • Chat Processing  • Action Execution  • Knowledge Mgmt    │
+└────────────────┬───────────────────┬──────────────────┬─────┘
+                 │                   │                  │
+      ┌──────────▼────┐   ┌─────────▼─────┐  ┌────────▼──────┐
+      │  ChromaDB     │   │   Redis Cache │  │  Ansible      │
+      │  Knowledge    │   │   (Sessions)  │  │  Executor     │
+      │  Bases        │   └───────────────┘  └───────────────┘
+      └───────────────┘
+           │
+      ┌────▼───────────────────────────────────────┐
+      │  AI Engine (Claude / Local LLM)            │
+      │  • Reasoning  • Planning  • Action Gen     │
+      └──────────────────────────────────────────┘
+           │
+      ┌────▼───────────────────────────────────────┐
+      │  Fleet Orchestration Layer                 │
+      │  • Ansible Playbooks  • Terraform  • CLI   │
+      └──────────────────────────────────────────┘
+           │
+      ┌────▼───────────────────────────────────────┐
+      │  Target Infrastructure                     │
+      │  • Linux Servers  • Kubernetes  • Networking
+      └──────────────────────────────────────────┘
+```
 
 ---
 
 ## System Requirements
 
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| **CPU** | 4 cores | 8+ cores |
-| **RAM** | 8 GB | 16+ GB |
-| **Storage** | 20 GB SSD | 50+ GB SSD |
-| **GPU** | None (CPU-only mode) | NVIDIA GPU for faster inference |
-| **OS** | Ubuntu 20.04+ / Debian 11+ | Ubuntu 22.04 LTS |
-| **Docker** | 24.0+ | 25.0+ |
+### Minimum (Single Server Setup)
+
+- **CPU:** 4 cores
+- **RAM:** 8 GB
+- **Storage:** 50 GB SSD
+- **OS:** Linux (Ubuntu 20.04+, Debian 11+, CentOS 8+)
+- **Docker:** 20.10+
+
+### Recommended (Production)
+
+- **CPU:** 8+ cores
+- **RAM:** 16 GB
+- **Storage:** 200+ GB SSD (for knowledge base growth)
+- **OS:** Ubuntu 22.04 LTS or later
+- **Docker:** 24.0+
+- **Docker Compose:** 2.0+
+
+### For Fleet Management (50+ servers)
+
+- Add dedicated ChromaDB instance (separate hardware for knowledge bases)
+- Redis cluster for multi-instance deployments
+- Dedicated Ansible execution server
 
 ---
 
-## Features at a Glance
+## Full Deployment Guide
 
-| Feature | Capability |
-|---------|-----------|
-| **Chat** | Multi-turn conversations with function calling, streaming responses |
-| **Knowledge Bases** | RAG-powered retrieval from documents, code, infrastructure docs |
-| **Workflow Builder** | Visual and code-based workflow creation for infrastructure tasks |
-| **Codebase Analytics** | Code structure analysis, risk detection, dependency insights |
-| **Vision** | Image/screenshot analysis for infrastructure troubleshooting |
-| **Fleet Management** | Ansible-powered multi-server orchestration and monitoring |
-
----
-
-## Why Self-Hosted? AutoBot vs Cloud Alternatives
-
-| Aspect | AutoBot (Self-Hosted) | Cloud AI Tools | 
-|--------|----------------------|----------------|
-| **Data Privacy** | Your data stays on your hardware | Data sent to external servers |
-| **Cost** | One-time setup, no per-request fees | Recurring API costs, usage-based pricing |
-| **Control** | Full customization, no vendor lock-in | Limited by cloud provider's roadmap |
-| **Compliance** | Meet HIPAA, GDPR, SOC2 requirements | Subject to cloud provider's compliance |
-| **Latency** | Local inference, millisecond response times | Network latency to cloud APIs |
-| **Offline Capability** | Works without internet connection | Requires constant cloud connectivity |
-| **Customization** | Run custom models, modify code | Locked to cloud provider's models |
-| **Scalability** | Scale within your infrastructure | Limited by cloud provider's quotas |
-
-For teams prioritizing **data privacy, cost efficiency, and infrastructure control**, self-hosted automation with AutoBot is the ideal choice.
-
-📚 **Learn more:** [Why Self-Hosted Infrastructure Automation?](docs/self-hosted-advantages.md)
-
----
-
-## Architecture Overview
-
-```mermaid
-graph TB
-    User["👤 User<br/>(Browser)"]
-    Frontend["🎨 Frontend<br/>(Vue.js)"]
-    Backend["⚡ Backend<br/>(FastAPI)"]
-    
-    Redis["🔴 Redis<br/>(Cache/Queue)"]
-    PostgreSQL["🐘 PostgreSQL<br/>(Data)"]
-    ChromaDB["🔍 ChromaDB<br/>(Vectors)"]
-    
-    SLM["🧠 Small LLM<br/>(Ollama)"]
-    
-    Ansible["🔧 Ansible<br/>(Fleet Ops)"]
-    Browser["🌐 Browser Automation<br/>(Chromium)"]
-
-    User -->|HTTP/WS| Frontend
-    Frontend -->|API| Backend
-    
-    Backend -->|Read/Write| Redis
-    Backend -->|Query| PostgreSQL
-    Backend -->|Vector Search| ChromaDB
-    Backend -->|Inference| SLM
-    
-    Backend -->|Execute| Ansible
-    Backend -->|Control| Browser
-
-    style User fill:#e1f5ff
-    style Frontend fill:#f3e5f5
-    style Backend fill:#fff3e0
-    style Redis fill:#ffebee
-    style PostgreSQL fill:#e8f5e9
-    style ChromaDB fill:#fce4ec
-    style SLM fill:#f1f8e9
-    style Ansible fill:#ede7f6
-    style Browser fill:#e0f2f1
-```
-
----
-
-## Deployment Options
-
-### Docker (Recommended for Most Users)
-Fastest way to get started. Includes all services pre-configured.
+### Option 1: Docker Compose (Easiest)
 
 ```bash
+git clone https://github.com/mrveiss/AutoBot-AI.git
+cd AutoBot-AI
+cp .env.example .env
 docker compose up -d
 ```
 
-### Native Installation
-For development or custom setups. See [INSTALL.md](INSTALL.md).
+**Ports:** Frontend on `8000`, Backend on `8001`.
 
-### Development Mode
-For contributing to AutoBot:
+### Option 2: Native Installation
+
+For production or development without Docker:
+
 ```bash
-docker compose -f docker-compose.dev.yml up -d
+# Prerequisites
+sudo apt-get update
+sudo apt-get install python3.10 python3.10-venv nodejs npm
+
+# Clone & setup
+git clone https://github.com/mrveiss/AutoBot-AI.git
+cd AutoBot-AI
+
+# Backend setup
+cd backend
+python3.10 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --host 0.0.0.0 --port 8001
+
+# Frontend (in new terminal)
+cd frontend
+npm install
+npm run dev
 ```
+
+### Option 3: Development Mode
+
+For contributing and local testing:
+
+```bash
+make dev  # Runs all services with live reload
+```
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for full development setup.
 
 ---
 
 ## Core Services
 
-AutoBot runs as a coordinated set of services:
+| Service | Port | Purpose |
+|---------|------|---------|
+| **Frontend** | 8000 | Vue.js dashboard and chat interface |
+| **Backend API** | 8001 | FastAPI REST + WebSocket (internal) |
+| **ChromaDB** | 8002 | Vector database for knowledge bases |
+| **Redis** | 6379 | Session cache and job queue (internal) |
 
-| Service | Role | Port |
-|---------|------|------|
-| **Frontend** | Vue.js UI, TLS termination | 80, 443 |
-| **Backend** | FastAPI API server | 8001 |
-| **Redis** | Cache, message queue | 6379 |
-| **PostgreSQL** | Relational database | 5432 |
-| **ChromaDB** | Vector embeddings store | 8100 |
-| **SLM (Ollama)** | Small language model inference | 11434 (optional) |
-| **Prometheus** | Metrics collection | 9090 (optional) |
-| **Grafana** | Monitoring dashboards | 3000 (optional) |
-
----
-
-## Usage Guide
-
-### Dashboard Overview
-Once running, navigate to **http://localhost** to access:
-- **Chat Interface** — Start conversing with AutoBot about your infrastructure
-- **Knowledge Bases** — Upload and manage documents, codebases, runbooks
-- **Workflows** — Create automated tasks and infrastructure operations
-- **Fleet Management** — View and orchestrate multiple servers
-- **Analytics** — Monitor system health, performance, and activity
-
-### Example: Managing a Fleet
-```bash
-# In the AutoBot chat:
-# "Deploy the latest application version to all production servers"
-# AutoBot handles the Ansible orchestration automatically
-```
-
-### Example: Infrastructure Insights
-```bash
-# Ask AutoBot to analyze your codebase:
-# "What are the critical dependencies in the auth module?"
-```
+All internal ports (8001+) are firewalled by default. Only port 8000 is exposed to the network.
 
 ---
 
 ## Configuration
 
-All configuration uses environment variables in `.env`. See `.env.example` for all options.
+### Environment Variables
 
-Key settings:
-- `AUTOBOT_DEPLOYMENT_MODE` — `hybrid` or `distributed`
-- `AUTOBOT_LLM_PROVIDER` — `ollama` (default) or others
-- `AUTOBOT_SINGLE_USER_MODE` — `true` (development) or `false` (multi-user)
+Create a `.env` file in the project root:
+
+```bash
+# AI Model Configuration
+LLM_PROVIDER=anthropic  # or openai, local
+LLM_MODEL=claude-opus-4-6
+ANTHROPIC_API_KEY=your_key_here
+
+# Infrastructure Access
+ANSIBLE_INVENTORY=/etc/ansible/hosts
+TERRAFORM_PATH=/usr/local/bin/terraform
+
+# Knowledge Base
+CHROMA_DB_PATH=/data/chroma
+CHROMA_ANONYMIZED_TELEMETRY=false
+
+# Security
+ENABLE_AUTH=true
+JWT_SECRET=your_random_secret_here
+```
+
+For full configuration options, see `.env.example` and [docs/configuration.md](./docs/configuration.md).
 
 ---
 
@@ -203,103 +317,108 @@ Key settings:
 
 We welcome contributions! Whether you're fixing bugs, adding features, or improving documentation:
 
-1. Check out [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
-2. Look for issues tagged `good-first-issue` if you're new
-3. Bounty opportunities available on some issues — see the `bounty` label
+1. **Pick an issue** — [Browse good-first-issue labels](https://github.com/mrveiss/AutoBot-AI/issues?q=label%3Agood-first-issue)
+2. **Read guidelines** — See [CONTRIBUTING.md](./CONTRIBUTING.md) for process and setup
+3. **Open a PR** — We review within 48 hours
+
+### Get Help
+
+- **Questions?** Start a [GitHub Discussion](https://github.com/mrveiss/AutoBot-AI/discussions)
+- **Found a bug?** [Open an issue](https://github.com/mrveiss/AutoBot-AI/issues)
+- **Want to chat?** Join our [community Discord](https://discord.gg/your-discord-link) (coming soon)
 
 ---
 
-## Support
+## Support & Sponsorship
 
-- 💬 **Questions?** Start a discussion in [GitHub Discussions](https://github.com/mrveiss/AutoBot-AI/discussions)
-- 🐛 **Found a bug?** Open an [issue](https://github.com/mrveiss/AutoBot-AI/issues)
-- 💡 **Have an idea?** Share it in [Discussions → Ideas](https://github.com/mrveiss/AutoBot-AI/discussions/categories/ideas)
+AutoBot is free and open source. To support the project:
 
----
-
-## How to Contribute
-
-AutoBot is open source and we welcome contributions from the community!
-
-**New to open source?** Start with [good-first-issue](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Agood-first-issue) issues — these are beginner-friendly and designed as learning opportunities.
-
-**Experienced developer?** Find issues matching your skill:
-- [Frontend (Vue.js, TypeScript)](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Afrontend+label%3Ahelp-wanted)
-- [Backend (FastAPI, Python)](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Abackend+label%3Ahelp-wanted)
-- [Infrastructure (Docker, Ansible)](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Ainfrastructure+label%3Ahelp-wanted)
-- [Documentation](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Adocs+label%3Ahelp-wanted)
-
-See [CONTRIBUTORS.md](CONTRIBUTORS.md) for detailed contribution guidelines.
-
----
-
-## Sponsors & Supporters
-
-Support AutoBot's development:
-
-- **[GitHub Sponsors](https://github.com/sponsors/mrveiss)** — Get updates and direct support
-- **[Ko-fi](https://ko-fi.com/mrveiss)** — One-time or recurring donations
-
-Your support helps us:
-- Maintain and improve the codebase
-- Add new features and capabilities
-- Expand documentation and examples
-- Grow the community
-
----
-
-## License
-
-AutoBot is open source. See [LICENSE](LICENSE) for details.
-
----
-
-## Roadmap
-
-### Upcoming
-- [ ] Multi-user authentication and RBAC
-- [ ] Kubernetes orchestration support
-- [ ] Advanced analytics dashboards
-- [ ] Custom integrations marketplace
-- [ ] Mobile companion app
-
-### Under Consideration
-- Cloud deployment templates
-- Managed hosting option
-- Enterprise features (SAML, audit logs)
+[![GitHub Sponsors](https://img.shields.io/badge/GitHub-Sponsor-ea4aaa?logo=github&style=for-the-badge)](https://github.com/sponsors/mrveiss)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Tip-blue?logo=ko-fi&style=for-the-badge)](https://ko-fi.com/mrveiss)
 
 ---
 
 ## Technology Stack
 
-- **Frontend**: Vue.js, TypeScript, Vite
-- **Backend**: FastAPI, Python, AsyncIO
-- **Database**: PostgreSQL, Redis, ChromaDB
-- **LLM**: Ollama (local), LangChain
-- **Orchestration**: Ansible, Docker, Kubernetes (coming)
-- **Infrastructure**: Docker Compose, systemd
+### Frontend
+- **Vue 3** — Progressive JavaScript framework
+- **TypeScript** — Type safety
+- **Vite** — Next-generation build tool
+- **Tailwind CSS** — Utility-first styling
+
+### Backend
+- **FastAPI** — Modern Python API framework
+- **SQLAlchemy** — ORM for database queries
+- **Pydantic** — Data validation
+- **Claude API / LLM** — AI reasoning engine
+
+### Infrastructure & Orchestration
+- **Ansible** — Configuration management
+- **Docker** — Container orchestration
+- **Kubernetes** support (via Ansible)
+- **Terraform** — Infrastructure as code integration
+
+### Data & Search
+- **ChromaDB** — Vector database for knowledge bases
+- **Redis** — Caching and job queue
+- **PostgreSQL** — Primary database (optional)
 
 ---
 
-## Documentation
+## Roadmap
 
-Full documentation coming soon. In the meantime:
-- See [INSTALL.md](INSTALL.md) for detailed setup instructions
-- Check [CONTRIBUTING.md](CONTRIBUTING.md) to get involved
-- Explore [docs/](docs/) for architecture details
+### Current (v1.5.0)
+
+- ✅ Conversational interface
+- ✅ Knowledge base indexing (RAG)
+- ✅ Fleet management with Ansible
+- ✅ Vision processing
+- ✅ Custom workflow creation
+
+### Q2 2026 (v2.0 - Planned)
+
+- 🚀 Web-based workflow editor (drag-and-drop)
+- 🚀 Multi-user RBAC (role-based access control)
+- 🚀 Incident response automation
+- 🚀 Real-time alerting and notifications
+- 🚀 Terraform integration (full provider support)
+
+### Under Consideration
+
+- Kubernetes-native operator
+- GraphQL API
+- Mobile app companion
+- Git-based configuration sync
+- Advanced telemetry and analytics
+
+---
+
+## License
+
+AutoBot is open source under the [MIT License](./LICENSE).
 
 ---
 
 ## Status
 
-**Current Version**: v1.5.0 (Active Development)
+**Current Version:** v1.5.0  
+**Maintenance:** Active development  
+**Production Ready:** Yes, for small-to-medium deployments (1-50 servers)  
+**Enterprise Ready:** In progress (v2.0 roadmap)
 
-AutoBot is actively developed and used for infrastructure automation. It's suitable for:
-- ✅ Self-hosted deployments on your infrastructure
-- ✅ Development and testing environments
-- ✅ Learning AI-driven automation
-- 🚀 Production use (with monitoring and backups)
+**Use Cases:**
+- ✅ DevOps automation for teams
+- ✅ SysAdmin efficiency boost
+- ✅ Compliance-required self-hosted deployments
+- ✅ Air-gapped / offline infrastructure
+- 🟡 Enterprise multi-team deployments (v2.0+)
 
 ---
 
-**Made with ❤️ by the AutoBot community**
+## Questions?
+
+- **Docs:** [github.com/mrveiss/AutoBot-AI](https://github.com/mrveiss/AutoBot-AI)
+- **Issues:** [Open an issue](https://github.com/mrveiss/AutoBot-AI/issues)
+- **Discussions:** [Start a discussion](https://github.com/mrveiss/AutoBot-AI/discussions)
+
+**Built with ❤️ for infrastructure automation.**
