@@ -98,6 +98,12 @@ aliases:
 | [DISTRIBUTED_TRACING](DISTRIBUTED_TRACING.md) | Distributed tracing |
 | [BACKEND_DEBUGGING](BACKEND_DEBUGGING.md) | Backend debugging |
 
+## Testing
+
+| Document | Description |
+| --- | --- |
+| [FRONTEND_TESTING](FRONTEND_TESTING.md) | Frontend testing guide (Pinia setup, vue-i18n, mocks) |
+
 ## Authentication & Security
 
 | Document | Description |
