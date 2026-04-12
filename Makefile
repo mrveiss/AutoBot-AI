@@ -1,0 +1,41 @@
+# AutoBot Makefile — standard entry points for testing and coverage (#3285)
+# Requires: pytest, pytest-cov, pytest-asyncio installed in the active venv
+# Frontend targets require Node.js 20+ and npm ci run inside autobot-frontend/
+
+.PHONY: test test-coverage test-backend test-frontend test-e2e help
+
+# Default target: run all backend unit tests without coverage
+test: test-backend
+
+## Run backend unit tests with 70% coverage gate
+test-coverage:
+	pytest \
+	    --cov=autobot-backend \
+	    --cov=autobot-slm-backend \
+	    --cov=autobot_shared \
+	    --cov-report=term-missing \
+	    --cov-report=html:reports/coverage-backend \
+	    --cov-report=xml:reports/coverage-backend.xml \
+	    --cov-fail-under=70 \
+	    -m "not integration and not slow and not distributed and not performance"
+
+## Run backend unit tests (no coverage)
+test-backend:
+	pytest \
+	    -m "not integration and not slow and not distributed and not performance"
+
+## Run frontend unit tests with 70% coverage gate
+test-frontend:
+	cd autobot-frontend && npm run test:coverage
+
+## Run Playwright E2E tests (requires running backend+frontend)
+test-e2e:
+	cd autobot-frontend && npm run test:playwright
+
+## Show this help
+help:
+	@echo "AutoBot test targets:"
+	@echo "  make test            - backend unit tests (no coverage)"
+	@echo "  make test-coverage   - backend tests + coverage gate (>=70%)"
+	@echo "  make test-frontend   - frontend vitest coverage (>=70%)"
+	@echo "  make test-e2e        - Playwright E2E tests"

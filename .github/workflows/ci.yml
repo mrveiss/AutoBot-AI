@@ -121,23 +121,22 @@ jobs:
           python -m json.tool < bandit-report.json || true
         fi
 
-    - name: Run unit tests for security modules
+    - name: Run unit tests with coverage gate
       run: |
         source .venv/bin/activate
-        echo "🧪 Running security unit tests..."
-        # Tests are colocated with source files (#734)
-        TEST_FILES=""
-        for file in autobot-backend/security/secure_command_executor_test.py autobot-backend/security/enhanced_security_layer_test.py autobot-backend/api/security_api_test.py; do
-          if [ -f "$file" ]; then
-            TEST_FILES="$TEST_FILES $file"
-          fi
-        done
-
-        if [ -n "$TEST_FILES" ]; then
-          python -m pytest $TEST_FILES -v --tb=short --cov=autobot-backend --cov-report=xml --cov-report=term
-        else
-          echo "⚠️ No security unit test files found - skipping"
-        fi
+        echo "Running unit tests with 70% coverage gate (#3285)..."
+        # Run all unit tests excluding slow/integration/distributed/performance markers.
+        # --cov-fail-under=70 enforces the minimum 70% coverage threshold.
+        python -m pytest \
+          -m "not integration and not slow and not distributed and not performance" \
+          --cov=autobot-backend \
+          --cov=autobot-slm-backend \
+          --cov=autobot_shared \
+          --cov-report=xml:coverage.xml \
+          --cov-report=term-missing \
+          --cov-fail-under=70 \
+          --tb=short \
+          -q
 
     - name: Run integration tests
       run: |
@@ -194,10 +193,11 @@ jobs:
         cd autobot-frontend
         npm run build
 
-    - name: Run frontend unit tests
+    - name: Run frontend unit tests with coverage gate
       run: |
         cd autobot-frontend
-        npm run test:unit
+        # test:coverage enforces 70% threshold via vitest.config.ts thresholds (#3285)
+        npm run test:coverage
 
     - name: Cleanup
       if: always()
