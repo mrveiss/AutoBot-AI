@@ -141,6 +141,7 @@ class PortConfig(BaseSettings):
     slm: int = Field(default=8000, alias="AUTOBOT_SLM_PORT")  # Issue #768
     prometheus: int = Field(default=9090, alias="AUTOBOT_PROMETHEUS_PORT")
     grafana: int = Field(default=3000, alias="AUTOBOT_GRAFANA_PORT")
+    chrome_cdp: int = Field(default=9222, alias="AUTOBOT_CHROME_CDP_PORT")  # Issue #3829: Chrome DevTools Protocol
 
 
 class LLMConfig(BaseSettings):
@@ -1333,6 +1334,14 @@ class AutoBotConfig(BaseSettings):
     def browser_service_url(self) -> str:
         """Get the Browser automation service URL."""
         return f"http://{self.vm.browser}:{self.port.browser}"
+
+    @property
+    def chrome_cdp_url(self) -> str:
+        """Get the Chrome DevTools Protocol (CDP) URL for browser automation.
+
+        Issue #3829: Replaces ConfigManager.get_service_url('chrome', '/devtools').
+        """
+        return f"http://{self.vm.browser}:{self.port.chrome_cdp}"
 
     @property
     def vnc_url(self) -> str:

@@ -16,6 +16,7 @@ from typing import Any, Dict, Optional
 
 import aiofiles
 
+from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 
 try:
@@ -159,8 +160,7 @@ class ResearchBrowserSession:
         """
         try:
             self.browser = await self.playwright.chromium.connect_over_cdp(
-                config.get_service_url("chrome", "/devtools")
-                or ServiceURLs.CHROME_DEBUGGER_LOCAL
+                f"{ssot_config.chrome_cdp_url}/devtools"
             )
             logger.info(
                 "Connected to existing browser via CDP for session %s",

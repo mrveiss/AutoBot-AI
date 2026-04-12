@@ -585,7 +585,7 @@ export default {
       ];
 
       let risk = 'low';
-      let reasons = [];
+      const reasons = [];
 
       // Check for critical patterns
       for (const pattern of criticalPatterns) {

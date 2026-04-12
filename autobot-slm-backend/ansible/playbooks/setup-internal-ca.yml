@@ -70,7 +70,7 @@
         slm_api_url: "{{ slm_admin_url }}"
 
 # ---------------------------------------------------------------------------
-# Play 1: Set up Internal CA on SLM server (00-SLM-Manager, .19)
+# Play 1: Set up Internal CA on SLM server (00-SLM-Manager)
 # ---------------------------------------------------------------------------
 - name: "CA Setup: Create Internal CA on SLM Server"
   hosts: 00-SLM-Manager

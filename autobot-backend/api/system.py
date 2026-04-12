@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 from constants.model_constants import ModelConstants as ModelConsts
 
@@ -92,18 +93,18 @@ def _build_frontend_services_config(ollama_url: str, redis_config: dict) -> dict
             ),
         },
         "playwright": {
-            "vnc_url": config.get_service_url("playwright-vnc"),
-            "api_url": config.get_service_url("playwright"),
+            "vnc_url": ssot_config.browser_service_url,
+            "api_url": ssot_config.browser_service_url,
         },
         "redis": {
-            "host": redis_config.get("host", config.get_host("redis")),
-            "port": redis_config.get("port", config.get_port("redis")),
+            "host": redis_config.get("host", ssot_config.vm.redis),
+            "port": redis_config.get("port", ssot_config.port.redis),
             "enabled": redis_config.get("enabled", True),
         },
         "lmstudio": {
             "url": config.get(
                 "backend.llm.local.providers.lmstudio.endpoint",
-                config.get_service_url("lmstudio"),
+                f"http://localhost:1234",
             ),
         },
     }
@@ -157,8 +158,12 @@ async def get_frontend_config(admin_check: bool = Depends(check_admin_permission
     Issue #1088: Refactored config building into _build_frontend_services_config
     and _build_frontend_meta_config helpers.
     """
-    ollama_url = config.get_service_url("ollama")
-    redis_config = config.get_redis_config()
+    ollama_url = ssot_config.ollama_url
+    redis_config = {
+        "host": ssot_config.vm.redis,
+        "port": ssot_config.port.redis,
+        "enabled": ssot_config.redis.enabled,
+    }
     frontend_config = {
         "services": _build_frontend_services_config(ollama_url, redis_config),
         **_build_frontend_meta_config(),
@@ -209,7 +214,7 @@ async def get_system_health(
 
         # Test configuration access
         try:
-            config.get_service_url("ollama")
+            ssot_config.ollama_url
             health_status["components"]["config"] = "healthy"
         except Exception:
             health_status["components"]["config"] = "error"

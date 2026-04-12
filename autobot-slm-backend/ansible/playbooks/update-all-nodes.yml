@@ -1,7 +1,7 @@
 ---
 # AutoBot - Update All Fleet Nodes (Git-Based Deploy)
 # Deploys committed code from a specific branch to all fleet VMs.
-# Pulls directly from GitHub to /opt/autobot/code_source on the SLM node (.19),
+# Pulls directly from GitHub to /opt/autobot/code_source on the SLM manager,
 # then uses git archive to create deploy tarballs. (#1170)
 #
 # Runs FROM: SLM Manager host (see inventory) — NOT from the dev machine.

@@ -70,12 +70,14 @@ const footerClasses = computed(() => ({
 
 <style scoped>
 /* Issue #901: Technical Precision Card Design */
+/* Issue #4005: Added CSS containment for performance optimization */
 
 .base-card {
   background-color: var(--bg-card);
   transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
+  contain: layout style;
 }
 
 /* Variant Styles */

@@ -63,7 +63,7 @@
   tags: ['check']
 
 # ===========================================================================
-# Phase 1: SLM Server (.19) — nginx + uvicorn
+# Phase 1: SLM Server — nginx + uvicorn
 # ===========================================================================
 - name: "Rotate Certs | Phase 1 - SLM Server"
   hosts: slm
@@ -153,7 +153,7 @@
   tags: ['slm', 'phase1']
 
 # ===========================================================================
-# Phase 2: Backend (.20 — WSL) — uvicorn only (no nginx on this node)
+# Phase 2: Backend — uvicorn only (no nginx on this node)
 # ===========================================================================
 - name: "Rotate Certs | Phase 2 - Backend"
   hosts: backend
@@ -232,7 +232,7 @@
   tags: ['backend', 'phase2']
 
 # ===========================================================================
-# Phase 3: Frontend (.21) — nginx only
+# Phase 3: Frontend — nginx only
 # ===========================================================================
 - name: "Rotate Certs | Phase 3 - Frontend"
   hosts: frontend
@@ -316,7 +316,7 @@
           - "=========================================================="
           - "AutoBot TLS Certificate Rotation - COMPLETE"
           - "=========================================================="
-          - "Nodes rotated: SLM (.19), Backend (.20), Frontend (.21)"
+          - "Nodes rotated: SLM manager, Backend, Frontend"
           - ""
           - "Backup certs saved as server-cert.pem.bak on each node."
           - "Run with --tags check to verify new expiry dates."
