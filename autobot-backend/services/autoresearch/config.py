@@ -131,6 +131,19 @@ class AutoResearchConfig:
         )
     )
 
+    # Human-in-the-loop research checkpoints (issue #3291)
+    checkpoints_enabled: bool = field(
+        default_factory=lambda: os.getenv(
+            "AUTOBOT_RESEARCH_CHECKPOINTS_ENABLED", "true"
+        ).lower()
+        == "true"
+    )
+    checkpoint_timeout_seconds: float = field(
+        default_factory=lambda: float(
+            os.getenv("AUTOBOT_RESEARCH_CHECKPOINT_TIMEOUT", "300")
+        )
+    )
+
     @property
     def train_script(self) -> Path:
         return self.autoresearch_dir / "train.py"

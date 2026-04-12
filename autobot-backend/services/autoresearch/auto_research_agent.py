@@ -58,6 +58,11 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
+# Research checkpoint types (issue #3291)
+_CHECKPOINT_QUERY_PLAN = "query_plan"
+_CHECKPOINT_SOURCE_SELECTION = "source_selection"
+_CHECKPOINT_DRAFT_CONCLUSIONS = "draft_conclusions"
+
 _ARXIV_SEARCH_URL = "https://export.arxiv.org/api/query"
 _GITHUB_SEARCH_URL = "https://api.github.com/search/repositories"
 _DEFAULT_HTTP_TIMEOUT = 15.0  # seconds per HTTP request
@@ -155,6 +160,166 @@ class ExperimentSession:
             "completed_at": self.completed_at,
             "error_message": self.error_message,
         }
+
+
+# ---------------------------------------------------------------------------
+# Research checkpoint types and gate (issue #3291)
+# ---------------------------------------------------------------------------
+
+
+class ResearchCheckpointType(str, Enum):
+    """Defined checkpoints within a research session where human input is solicited."""
+
+    QUERY_PLAN = _CHECKPOINT_QUERY_PLAN
+    SOURCE_SELECTION = _CHECKPOINT_SOURCE_SELECTION
+    DRAFT_CONCLUSIONS = _CHECKPOINT_DRAFT_CONCLUSIONS
+
+
+class CheckpointDecision(str, Enum):
+    """A human's response at a research checkpoint."""
+
+    APPROVED = "approved"
+    REDIRECT = "redirect"
+    CANCELLED = "cancelled"
+    TIMEOUT = "timeout"
+
+
+@dataclass
+class CheckpointResult:
+    """The outcome of a checkpoint pause."""
+
+    decision: CheckpointDecision
+    redirect_instructions: Optional[str] = None
+
+
+class ResearchCheckpointGate:
+    """
+    Redis-backed gate that pauses a research session at defined checkpoints
+    and waits for a human to approve, redirect, or cancel.
+
+    Three checkpoint types (issue #3291):
+      - query_plan: user reviews the query before sources are fetched
+      - source_selection: user reviews selected sources before scraping
+      - draft_conclusions: user reviews the hypothesis before the experiment runs
+
+    State layout in Redis (TTL = 24 h):
+      checkpoint:<session_id>:<cp_type>:context  JSON blob with checkpoint data
+      checkpoint:<session_id>:<cp_type>:decision  "pending" | "approved" |
+                                                   "redirect:<instructions>" |
+                                                   "cancelled"
+    """
+
+    _CONTEXT_KEY = "autoresearch:checkpoint:{session_id}:{cp_type}:context"
+    _DECISION_KEY = "autoresearch:checkpoint:{session_id}:{cp_type}:decision"
+    _TTL = TTL_24_HOURS
+
+    def __init__(self, config: Optional["AutoResearchConfig"] = None):
+        from .config import AutoResearchConfig as _Cfg
+
+        self.config = config or _Cfg()
+        self._redis = None
+
+    async def _get_redis(self):
+        if self._redis is None:
+            from autobot_shared.redis_client import get_redis_client
+
+            self._redis = get_redis_client(
+                async_client=True,
+                database=self.config.redis_database,
+            )
+        return self._redis
+
+    def _keys(self, session_id: str, cp_type: str):
+        ctx_key = self._CONTEXT_KEY.format(session_id=session_id, cp_type=cp_type)
+        dec_key = self._DECISION_KEY.format(session_id=session_id, cp_type=cp_type)
+        return ctx_key, dec_key
+
+    async def request(
+        self,
+        session_id: str,
+        cp_type: str,
+        context: Dict[str, Any],
+    ) -> str:
+        """Persist checkpoint data and return the decision key for polling.
+
+        Args:
+            session_id: Owning session ID.
+            cp_type: One of the ResearchCheckpointType values.
+            context: Serialisable dict describing what the human should review.
+
+        Returns:
+            Redis decision key.
+        """
+        ctx_key, dec_key = self._keys(session_id, cp_type)
+        redis = await self._get_redis()
+        payload = json.dumps(
+            {
+                "session_id": session_id,
+                "checkpoint_type": cp_type,
+                "context": context,
+                "requested_at": time.time(),
+            }
+        )
+        await redis.set(ctx_key, payload, ex=self._TTL)
+        await redis.set(dec_key, "pending", ex=self._TTL)
+        logger.info(
+            "ResearchCheckpointGate: checkpoint=%s requested for session %s",
+            cp_type,
+            session_id,
+        )
+        return dec_key
+
+    async def get_decision(self, session_id: str, cp_type: str) -> str:
+        """Return the current raw decision string from Redis."""
+        _, dec_key = self._keys(session_id, cp_type)
+        redis = await self._get_redis()
+        raw = await redis.get(dec_key)
+        if raw is None:
+            return "unknown"
+        return raw if isinstance(raw, str) else raw.decode("utf-8")
+
+    async def wait_for_decision(
+        self,
+        session_id: str,
+        cp_type: str,
+        timeout: float,
+        poll_interval: float = 5.0,
+    ) -> CheckpointResult:
+        """Poll until a decision is recorded or timeout fires.
+
+        On timeout the checkpoint auto-proceeds (approved) to avoid blocking
+        a session indefinitely.
+
+        Args:
+            session_id: Session ID.
+            cp_type: Checkpoint type string.
+            timeout: Seconds to wait before auto-proceed.
+            poll_interval: Seconds between polls.
+
+        Returns:
+            CheckpointResult with the final decision and optional redirect text.
+        """
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            raw = await self.get_decision(session_id, cp_type)
+            if raw == "approved":
+                return CheckpointResult(decision=CheckpointDecision.APPROVED)
+            if raw == "cancelled":
+                return CheckpointResult(decision=CheckpointDecision.CANCELLED)
+            if raw.startswith("redirect:"):
+                instructions = raw[len("redirect:"):]
+                return CheckpointResult(
+                    decision=CheckpointDecision.REDIRECT,
+                    redirect_instructions=instructions or None,
+                )
+            await asyncio.sleep(poll_interval)
+
+        logger.info(
+            "ResearchCheckpointGate: checkpoint=%s session=%s timed out — auto-proceeding",
+            cp_type,
+            session_id,
+        )
+        return CheckpointResult(decision=CheckpointDecision.TIMEOUT)
 
 
 # ---------------------------------------------------------------------------
@@ -437,12 +602,14 @@ class AutoResearchAgent:
         store: Optional[ExperimentStore] = None,
         runner: Optional[ExperimentRunner] = None,
         approval_gate: Optional[ApprovalGate] = None,
+        checkpoint_gate: Optional[ResearchCheckpointGate] = None,
         http_client: Optional[httpx.AsyncClient] = None,
     ):
         self.config = config or AutoResearchConfig()
         self.store = store or ExperimentStore(self.config)
         self.runner = runner or ExperimentRunner(config=self.config, store=self.store)
         self.approval_gate = approval_gate or ApprovalGate(self.config)
+        self.checkpoint_gate = checkpoint_gate or ResearchCheckpointGate(self.config)
         self._http_client = http_client
         self._cancel_event: asyncio.Event = asyncio.Event()
         self._redis = None
@@ -477,7 +644,12 @@ class AutoResearchAgent:
             status=SessionStatus.RUNNING,
             started_at=time.time(),
         )
-        self._cancel_event.clear()
+        # Only clear the cancel event when it was not already set before entry
+        # — a caller that called cancel() before run_experiment_loop() intends
+        # for the session to start as cancelled (pre-cancellation pattern).
+        already_cancelled = self._cancel_event.is_set()
+        if not already_cancelled:
+            self._cancel_event.clear()
 
         logger.info(
             "AutoResearchAgent: starting session %s for topic %r", session.id, topic
@@ -561,32 +733,127 @@ class AutoResearchAgent:
         """Execute one full search→hypothesis→experiment→evaluate cycle.
 
         Mutates *session* in place by appending to results/hypotheses/search_results.
+
+        When checkpoints are enabled (issue #3291), the loop pauses at three
+        points and waits for human input:
+          1. After the query plan is formed — before sources are fetched.
+          2. After sources are selected — before scraping/content enrichment.
+          3. After the hypothesis is drafted — before the experiment runs.
         """
-        # 1. Web search
+        query = session.topic
+
+        # 1a. Checkpoint: query plan — let the user review / redirect the query
+        if self.config.checkpoints_enabled:
+            result = await self._pause_at_checkpoint(
+                session=session,
+                cp_type=ResearchCheckpointType.QUERY_PLAN,
+                context={
+                    "query": query,
+                    "iteration": iteration,
+                    "description": "Review the search query before fetching sources.",
+                },
+            )
+            if result.decision == CheckpointDecision.CANCELLED:
+                session.status = SessionStatus.CANCELLED
+                return
+            if result.decision == CheckpointDecision.REDIRECT and result.redirect_instructions:
+                query = result.redirect_instructions
+                logger.info(
+                    "_run_single_iteration: query redirected by user to: %r", query
+                )
+        # Track whether the query was redirected so the hypothesis can note it
+        query_redirected = query != session.topic
+
+        # 1b. Web search
         search_hits = await self._web_search(
             client=client,
-            query=session.topic,
+            query=query,
             max_results_per_source=search_results_per_source,
         )
         session.search_results.append(search_hits)
 
-        # 2. Generate hypothesis
+        # 2. Checkpoint: source selection — let the user approve the fetched sources
+        if self.config.checkpoints_enabled:
+            source_summary = [
+                {"title": r.title, "url": r.url, "source": r.source}
+                for r in search_hits[:10]
+            ]
+            result = await self._pause_at_checkpoint(
+                session=session,
+                cp_type=ResearchCheckpointType.SOURCE_SELECTION,
+                context={
+                    "query": query,
+                    "iteration": iteration,
+                    "sources": source_summary,
+                    "description": "Review selected sources before hypothesis generation.",
+                },
+            )
+            if result.decision == CheckpointDecision.CANCELLED:
+                session.status = SessionStatus.CANCELLED
+                return
+            # Redirect at source selection: apply as a filter hint on the hypothesis
+            source_redirect = (
+                result.redirect_instructions
+                if result.decision == CheckpointDecision.REDIRECT
+                else None
+            )
+        else:
+            source_redirect = None
+
+        # 3. Generate hypothesis
         hypothesis = self._generate_hypothesis(
             search_results=search_hits,
             prior_results=session.results,
             iteration=iteration,
         )
+        if source_redirect:
+            hypothesis = ResearchHypothesis(
+                statement=f"[User redirect: {source_redirect}] {hypothesis.statement}",
+                rationale=hypothesis.rationale,
+                suggested_hyperparams=hypothesis.suggested_hyperparams,
+                tags=hypothesis.tags,
+            )
         session.hypotheses.append(hypothesis)
 
-        # 3. Run experiment
+        # 4. Checkpoint: draft conclusions — let the user review the hypothesis
+        if self.config.checkpoints_enabled:
+            result = await self._pause_at_checkpoint(
+                session=session,
+                cp_type=ResearchCheckpointType.DRAFT_CONCLUSIONS,
+                context={
+                    "iteration": iteration,
+                    "hypothesis": hypothesis.to_dict(),
+                    "description": "Review the hypothesis before running the experiment.",
+                },
+            )
+            if result.decision == CheckpointDecision.CANCELLED:
+                session.status = SessionStatus.CANCELLED
+                return
+            if (
+                result.decision == CheckpointDecision.REDIRECT
+                and result.redirect_instructions
+            ):
+                hypothesis = ResearchHypothesis(
+                    statement=(
+                        f"[User override: {result.redirect_instructions}] "
+                        f"{hypothesis.statement}"
+                    ),
+                    rationale=hypothesis.rationale,
+                    suggested_hyperparams=hypothesis.suggested_hyperparams,
+                    tags=hypothesis.tags,
+                )
+                # Update the hypothesis already appended to the session
+                session.hypotheses[-1] = hypothesis
+
+        # 5. Run experiment
         experiment = self._build_experiment(hypothesis, session)
         experiment = await self._run_experiment(experiment)
 
-        # 4. Evaluate
+        # 6. Evaluate
         metrics = self._evaluate_results(experiment)
         session.results.append(metrics)
 
-        # 5. Approval gate for significant improvements
+        # 7. Approval gate for significant improvements
         if metrics.improved and self.approval_gate.check_approval_needed(
             metrics.improvement_pct, approval_threshold_pct
         ):
@@ -850,6 +1117,70 @@ class AutoResearchAgent:
                 experiment.id,
                 decision,
             )
+
+    # ------------------------------------------------------------------
+    # Private: research checkpoint handler (issue #3291)
+    # ------------------------------------------------------------------
+
+    async def _pause_at_checkpoint(
+        self,
+        session: ExperimentSession,
+        cp_type: ResearchCheckpointType,
+        context: Dict[str, Any],
+    ) -> CheckpointResult:
+        """Pause at a named checkpoint and wait for human input.
+
+        Publishes a WebSocket notification so the frontend can prompt the user.
+        Returns the human's decision (approve / redirect / cancel / timeout).
+        On timeout, auto-proceeds (treated as approved).
+
+        Args:
+            session: Current research session.
+            cp_type: Which checkpoint to pause at.
+            context: Serialisable dict describing the checkpoint to the user.
+
+        Returns:
+            CheckpointResult with the final decision.
+        """
+        dec_key = await self.checkpoint_gate.request(
+            session_id=session.id,
+            cp_type=cp_type.value,
+            context=context,
+        )
+        logger.info(
+            "_pause_at_checkpoint: session=%s checkpoint=%s — awaiting decision at %s",
+            session.id,
+            cp_type.value,
+            dec_key,
+        )
+
+        try:
+            from event_manager import event_manager
+
+            await event_manager.publish(
+                event_type="research_checkpoint_pending",
+                payload={
+                    "session_id": session.id,
+                    "checkpoint_type": cp_type.value,
+                    "decision_key": dec_key,
+                    "context": context,
+                    "timeout_seconds": self.config.checkpoint_timeout_seconds,
+                },
+            )
+        except Exception:
+            logger.warning(
+                "_pause_at_checkpoint: failed to publish checkpoint notification "
+                "for session %s checkpoint %s",
+                session.id,
+                cp_type.value,
+                exc_info=True,
+            )
+
+        return await self.checkpoint_gate.wait_for_decision(
+            session_id=session.id,
+            cp_type=cp_type.value,
+            timeout=self.config.checkpoint_timeout_seconds,
+        )
 
     def _get_notification_config(self, session_id: str):
         """Return a default notification config for autoresearch approval events.

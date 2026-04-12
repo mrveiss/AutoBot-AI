@@ -19,8 +19,12 @@ import pytest
 from services.autoresearch.auto_research_agent import (
     ApprovalGate,
     AutoResearchAgent,
+    CheckpointDecision,
+    CheckpointResult,
     ExperimentSession,
     ImprovementMetrics,
+    ResearchCheckpointGate,
+    ResearchCheckpointType,
     SearchResult,
     SessionStatus,
     _extract_themes,
@@ -361,13 +365,34 @@ class TestApprovalGate:
 # ---------------------------------------------------------------------------
 
 
-def _make_agent(runner_mock=None, store_mock=None) -> AutoResearchAgent:
+def _make_checkpoint_gate(decision: CheckpointDecision = CheckpointDecision.APPROVED,
+                          redirect_text: Optional[str] = None) -> MagicMock:
+    """Return a mock ResearchCheckpointGate that returns the given decision."""
+    gate = MagicMock(spec=ResearchCheckpointGate)
+    gate.request = AsyncMock(return_value="autoresearch:checkpoint:s:query_plan:decision")
+    gate.wait_for_decision = AsyncMock(
+        return_value=CheckpointResult(
+            decision=decision, redirect_instructions=redirect_text
+        )
+    )
+    return gate
+
+
+def _make_agent(
+    runner_mock=None,
+    store_mock=None,
+    checkpoints_enabled: bool = False,
+    checkpoint_decision: CheckpointDecision = CheckpointDecision.APPROVED,
+    checkpoint_redirect: Optional[str] = None,
+) -> AutoResearchAgent:
     """Build an AutoResearchAgent with all I/O mocked out."""
     config = AutoResearchConfig()
+    config.checkpoints_enabled = checkpoints_enabled
     store = store_mock or AsyncMock()
     runner = runner_mock or AsyncMock()
     approval_gate = MagicMock(spec=ApprovalGate)
     approval_gate.check_approval_needed = MagicMock(return_value=False)
+    checkpoint_gate = _make_checkpoint_gate(checkpoint_decision, checkpoint_redirect)
 
     # Build a fake httpx client so no real network calls are made
     import httpx
@@ -380,6 +405,7 @@ def _make_agent(runner_mock=None, store_mock=None) -> AutoResearchAgent:
         store=store,
         runner=runner,
         approval_gate=approval_gate,
+        checkpoint_gate=checkpoint_gate,
         http_client=http_client,
     )
     agent._redis = AsyncMock()
@@ -489,12 +515,14 @@ class TestAutoResearchAgentLoop:
         http_client = httpx.AsyncClient(transport=transport)
 
         config = AutoResearchConfig()
+        config.checkpoints_enabled = False  # not under test here
         store = AsyncMock()
         agent = AutoResearchAgent(
             config=config,
             store=store,
             runner=runner,
             approval_gate=approval_gate,
+            checkpoint_gate=_make_checkpoint_gate(),
             http_client=http_client,
         )
         agent._redis = AsyncMock()
@@ -525,12 +553,14 @@ class TestAutoResearchAgentLoop:
         http_client = httpx.AsyncClient(transport=transport)
 
         config = AutoResearchConfig()
+        config.checkpoints_enabled = False  # not under test here
         store = AsyncMock()
         agent = AutoResearchAgent(
             config=config,
             store=store,
             runner=runner,
             approval_gate=approval_gate,
+            checkpoint_gate=_make_checkpoint_gate(),
             http_client=http_client,
         )
         agent._redis = AsyncMock()
@@ -607,3 +637,192 @@ class TestShouldContinue:
         results = [_make_metrics(improved=False), _make_metrics(improved=True)]
         session = self._session_with(results)
         assert agent._should_continue(session, plateau_window=2) is True
+
+
+# ---------------------------------------------------------------------------
+# ResearchCheckpointGate unit tests (issue #3291)
+# ---------------------------------------------------------------------------
+
+
+class TestResearchCheckpointGate:
+    """ResearchCheckpointGate stores state in Redis and returns correct decisions."""
+
+    def _gate(self) -> ResearchCheckpointGate:
+        gate = ResearchCheckpointGate(config=AutoResearchConfig())
+        gate._redis = AsyncMock()
+        return gate
+
+    @pytest.mark.asyncio
+    async def test_request_stores_pending_decision(self):
+        gate = self._gate()
+        dec_key = await gate.request(
+            session_id="s1",
+            cp_type=ResearchCheckpointType.QUERY_PLAN.value,
+            context={"query": "attention"},
+        )
+        assert "query_plan" in dec_key
+        calls = [str(c) for c in gate._redis.set.call_args_list]
+        assert any("pending" in c for c in calls)
+
+    @pytest.mark.asyncio
+    async def test_get_decision_decodes_bytes(self):
+        gate = self._gate()
+        gate._redis.get = AsyncMock(return_value=b"approved")
+        result = await gate.get_decision("s1", ResearchCheckpointType.QUERY_PLAN.value)
+        assert result == "approved"
+
+    @pytest.mark.asyncio
+    async def test_get_decision_returns_unknown_when_missing(self):
+        gate = self._gate()
+        gate._redis.get = AsyncMock(return_value=None)
+        result = await gate.get_decision("s1", "missing_type")
+        assert result == "unknown"
+
+    @pytest.mark.asyncio
+    async def test_wait_returns_approved_immediately(self):
+        gate = self._gate()
+        gate.get_decision = AsyncMock(return_value="approved")
+        result = await gate.wait_for_decision(
+            "s1", ResearchCheckpointType.QUERY_PLAN.value,
+            timeout=5.0, poll_interval=0.01,
+        )
+        assert result.decision == CheckpointDecision.APPROVED
+
+    @pytest.mark.asyncio
+    async def test_wait_returns_cancelled(self):
+        gate = self._gate()
+        gate.get_decision = AsyncMock(return_value="cancelled")
+        result = await gate.wait_for_decision(
+            "s1", ResearchCheckpointType.SOURCE_SELECTION.value,
+            timeout=5.0, poll_interval=0.01,
+        )
+        assert result.decision == CheckpointDecision.CANCELLED
+
+    @pytest.mark.asyncio
+    async def test_wait_returns_redirect_with_instructions(self):
+        gate = self._gate()
+        gate.get_decision = AsyncMock(return_value="redirect:focus on regularisation")
+        result = await gate.wait_for_decision(
+            "s1", ResearchCheckpointType.DRAFT_CONCLUSIONS.value,
+            timeout=5.0, poll_interval=0.01,
+        )
+        assert result.decision == CheckpointDecision.REDIRECT
+        assert result.redirect_instructions == "focus on regularisation"
+
+    @pytest.mark.asyncio
+    async def test_wait_times_out_and_auto_proceeds(self):
+        gate = self._gate()
+        gate.get_decision = AsyncMock(return_value="pending")
+        result = await gate.wait_for_decision(
+            "s1", ResearchCheckpointType.QUERY_PLAN.value,
+            timeout=0.05, poll_interval=0.01,
+        )
+        assert result.decision == CheckpointDecision.TIMEOUT
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint integration tests on AutoResearchAgent (issue #3291)
+# ---------------------------------------------------------------------------
+
+
+class TestAutoResearchAgentCheckpoints:
+    """Verify checkpoint gate interactions during run_experiment_loop."""
+
+    @pytest.mark.asyncio
+    async def test_checkpoints_disabled_skips_gate(self):
+        """When checkpoints_enabled=False the gate is never called."""
+        runner = AsyncMock()
+        runner.run_experiment = AsyncMock(side_effect=lambda e: _make_experiment())
+        agent = _make_agent(
+            runner_mock=runner,
+            checkpoints_enabled=False,
+        )
+        session = await agent.run_experiment_loop(topic="dropout", max_iterations=1)
+        agent.checkpoint_gate.request.assert_not_called()
+        assert session.status == SessionStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_checkpoint_approve_continues_normally(self):
+        """Approval at all checkpoints lets the loop complete normally."""
+        runner = AsyncMock()
+        runner.run_experiment = AsyncMock(side_effect=lambda e: _make_experiment())
+        agent = _make_agent(
+            runner_mock=runner,
+            checkpoints_enabled=True,
+            checkpoint_decision=CheckpointDecision.APPROVED,
+        )
+        session = await agent.run_experiment_loop(topic="attention", max_iterations=1)
+        assert session.status == SessionStatus.COMPLETED
+        # Three checkpoints per iteration
+        assert agent.checkpoint_gate.request.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_checkpoint_cancel_stops_session(self):
+        """Cancel at the first checkpoint marks session CANCELLED."""
+        runner = AsyncMock()
+        runner.run_experiment = AsyncMock(side_effect=lambda e: _make_experiment())
+        agent = _make_agent(
+            runner_mock=runner,
+            checkpoints_enabled=True,
+            checkpoint_decision=CheckpointDecision.CANCELLED,
+        )
+        session = await agent.run_experiment_loop(topic="batch", max_iterations=2)
+        assert session.status == SessionStatus.CANCELLED
+        # No experiment should have run
+        runner.run_experiment.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_checkpoint_redirect_query_plan_changes_query(self):
+        """Redirect at QUERY_PLAN checkpoint applies redirect text as new query."""
+        runner = AsyncMock()
+        runner.run_experiment = AsyncMock(side_effect=lambda e: _make_experiment())
+        # Only the first call (QUERY_PLAN) redirects; subsequent calls approve
+        gate = _make_checkpoint_gate(CheckpointDecision.APPROVED)
+        gate.wait_for_decision = AsyncMock(
+            side_effect=[
+                CheckpointResult(
+                    decision=CheckpointDecision.REDIRECT,
+                    redirect_instructions="learning rate schedule",
+                ),
+                CheckpointResult(decision=CheckpointDecision.APPROVED),
+                CheckpointResult(decision=CheckpointDecision.APPROVED),
+            ]
+        )
+
+        config = AutoResearchConfig()
+        config.checkpoints_enabled = True
+        import httpx
+        transport = httpx.MockTransport(handler=_mock_http_handler)
+        http_client = httpx.AsyncClient(transport=transport)
+        agent = AutoResearchAgent(
+            config=config,
+            store=AsyncMock(),
+            runner=runner,
+            approval_gate=MagicMock(spec=ApprovalGate,
+                                    check_approval_needed=MagicMock(return_value=False)),
+            checkpoint_gate=gate,
+            http_client=http_client,
+        )
+        agent._redis = AsyncMock()
+
+        session = await agent.run_experiment_loop(topic="original topic", max_iterations=1)
+        assert session.status == SessionStatus.COMPLETED
+        # The hypothesis statement should mention the user's redirect
+        assert any(
+            "learning rate schedule" in h.statement
+            for h in session.hypotheses
+        )
+
+    @pytest.mark.asyncio
+    async def test_checkpoint_timeout_auto_proceeds(self):
+        """Timeout at a checkpoint auto-proceeds (treated as approved)."""
+        runner = AsyncMock()
+        runner.run_experiment = AsyncMock(side_effect=lambda e: _make_experiment())
+        agent = _make_agent(
+            runner_mock=runner,
+            checkpoints_enabled=True,
+            checkpoint_decision=CheckpointDecision.TIMEOUT,
+        )
+        session = await agent.run_experiment_loop(topic="architecture", max_iterations=1)
+        assert session.status == SessionStatus.COMPLETED
+        assert len(session.results) == 1
