@@ -872,3 +872,29 @@ async def clear_cache(
     except Exception as e:
         logger.error("Error clearing cache %s: %s", cache_name, str(e))
         raise HTTPException(status_code=500, detail="Error clearing cache")
+
+
+@router.get("/system/backup/status")
+async def get_backup_status(
+    request: Request,
+    _: None = Depends(check_admin_permission),
+):
+    """Return the status of the knowledge-base backup scheduler.
+
+    Issue #3294: Monitoring endpoint for automated backup health.
+    Requires admin authentication.
+    """
+    try:
+        scheduler = getattr(request.app.state, "backup_scheduler", None)
+        if scheduler is None:
+            return {
+                "status": "unavailable",
+                "message": "Backup scheduler not initialized",
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+            }
+        status = scheduler.get_status()
+        status["timestamp"] = datetime.now(tz=timezone.utc).isoformat()
+        return status
+    except Exception as e:
+        logger.error("Backup status check failed: %s", e)
+        raise HTTPException(status_code=500, detail="Error retrieving backup status")
