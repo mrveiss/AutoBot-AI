@@ -5,6 +5,7 @@ Author: mrveiss
 
 PreferencesPanel.vue - User Preferences Configuration Panel
 Issue #753: Additional Customization (Font Size, Accent Colors, Layout Density)
+Issue #3286: Comprehensive Theming System
 -->
 
 <template>
@@ -26,6 +27,17 @@ Issue #753: Additional Customization (Font Size, Accent Colors, Layout Density)
     </div>
 
     <div class="panel-content">
+      <!-- Theme Preference -->
+      <fieldset class="preference-section">
+        <legend class="preference-label">
+          <i class="fas fa-paint-brush" aria-hidden="true"></i>
+          {{ t('ui.preferences.theme') }}
+        </legend>
+        <div class="theme-options">
+          <ThemeToggle mode="buttons" />
+        </div>
+      </fieldset>
+
       <!-- Font Size Preference -->
       <fieldset class="preference-section">
         <legend class="preference-label">
@@ -110,6 +122,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePreferences, type FontSize, type AccentColor, type LayoutDensity } from '@/composables/usePreferences'
 import { createLogger } from '@/utils/debugUtils'
+import ThemeToggle from '@/components/ui/ThemeToggle.vue'
 
 const logger = createLogger('PreferencesPanel')
 const { t } = useI18n()
@@ -300,6 +313,15 @@ function handleReset() {
 .preference-label i {
   font-size: var(--font-size-xs);
   color: var(--text-tertiary);
+}
+
+/* ============================================
+ * THEME OPTIONS
+ * ============================================ */
+
+.theme-options {
+  display: flex;
+  justify-content: flex-start;
 }
 
 /* ============================================
