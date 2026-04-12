@@ -22,7 +22,7 @@ import aiofiles
 
 from autobot_shared.redis_client import get_redis_client, get_async_redis_client
 from autobot_shared.security.path_validator import validate_path
-from constants.ttl_constants import TTL_24_HOURS
+from constants.ttl_constants import TTL_1_HOUR, TTL_24_HOURS
 from code_embedding_generator import get_code_embedding_generator
 from npu_semantic_search import get_npu_search_engine
 from worker_node import WorkerNode

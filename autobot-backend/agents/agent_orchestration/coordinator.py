@@ -28,8 +28,6 @@ from .distributed_management import DistributedAgentManager
 from .routing import AgentRouter
 from .types import (
     DEFAULT_AGENT_CAPABILITIES,
-    AgentCapability,
-    AgentType,
     DistributedAgentInfo,
 )
 

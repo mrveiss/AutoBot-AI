@@ -156,7 +156,7 @@ async def _check_redis_db(db) -> Tuple[str, str]:
             await redis_conn.ping()
             return db.name, "connected"
         return db.name, "failed"
-    except Exception as e:
+    except Exception:
         return db.name, "connection error"
 
 

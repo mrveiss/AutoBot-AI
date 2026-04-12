@@ -11,7 +11,6 @@ Covers:
 - GET /api/agent_config/agents/usage endpoint aggregation logic
 """
 
-import asyncio
 import json
 import uuid
 from datetime import datetime, timezone
