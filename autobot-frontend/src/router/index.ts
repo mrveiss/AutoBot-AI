@@ -548,6 +548,30 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true
     }
   },
+  // Issue #3245: AI Document editor — persistent editable AI output documents
+  {
+    path: '/documents',
+    name: 'documents',
+    component: () => import('@/views/DocumentsView.vue'),
+    meta: {
+      title: 'AI Documents',
+      icon: 'fas fa-file-alt',
+      description: 'View and edit AI-generated documents saved from chat',
+      requiresAuth: true,
+    },
+    children: [
+      {
+        path: ':docId',
+        name: 'document-detail',
+        component: () => import('@/views/DocumentsView.vue'),
+        props: true,
+        meta: {
+          title: 'AI Document',
+          parent: 'documents',
+        },
+      },
+    ],
+  },
   // Issue #3201: AutoResearch Experiment Dashboard
   {
     path: '/experiments',
