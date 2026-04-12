@@ -29,6 +29,14 @@ export interface LiveEvent {
   payload: Record<string, unknown>
 }
 
+/** Approval decision sent to the backend agent loop (#4092) */
+export interface ApprovalDecision {
+  approval_id: string
+  approved: boolean
+  comment?: string
+  task_id?: string
+}
+
 type ServerMessage =
   | LiveEvent
   | { type: 'connection_established'; message: string }
@@ -218,6 +226,34 @@ class LiveEventService {
         this._sendAction('unsubscribe', channel)
       }
     }
+  }
+
+  /**
+   * Send an approval decision to the agent loop (#4092).
+   *
+   * The backend polls for APPROVAL_RESPONSE events on the event stream;
+   * this method publishes the decision via the existing WebSocket connection
+   * using an "approval_response" action so the server can relay it into Redis.
+   *
+   * Returns true if the message was sent, false if the socket was unavailable.
+   */
+  sendApprovalDecision(decision: ApprovalDecision): boolean {
+    const sent = this._send({
+      action: 'approval_response',
+      approval_id: decision.approval_id,
+      approved: decision.approved,
+      comment: decision.comment ?? null,
+      task_id: decision.task_id ?? null,
+    })
+    if (sent) {
+      logger.debug('Sent approval decision', {
+        approval_id: decision.approval_id,
+        approved: decision.approved,
+      })
+    } else {
+      logger.error('Failed to send approval decision — WebSocket not open')
+    }
+    return sent
   }
 
   disconnect(): void {
