@@ -15,8 +15,18 @@ from typing import Any, Dict
 from fastapi import FastAPI, Request
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from circuit_breaker import circuit_breaker_manager
 
 logger = logging.getLogger(__name__)
+
+
+def _get_circuit_breaker_states() -> Dict[str, Any]:
+    """Return all registered circuit breaker states for health reporting."""
+    try:
+        return circuit_breaker_manager.get_all_states()
+    except Exception:
+        logger.debug("Could not retrieve circuit breaker states", exc_info=True)
+        return {}
 
 
 def _service_status(state: Any, attr: str) -> str:
@@ -126,6 +136,7 @@ def register_root_endpoints(app: FastAPI) -> None:
             "ai_enhanced": ai_stack_ready,
             "agent_count": _get_agent_count(state),
             "capabilities": _build_capabilities(ai_stack_ready, ai_agents_ready),
+            "circuit_breakers": _get_circuit_breaker_states(),
         }
 
     @app.get("/api/health/ai-stack")
@@ -133,6 +144,19 @@ def register_root_endpoints(app: FastAPI) -> None:
     async def ai_stack_health(request: Request):
         """Dedicated AI Stack health endpoint."""
         return await _ai_stack_health_response(request.app.state)
+
+    @app.get("/api/health/circuit-breakers")
+    @with_error_handling(category=ErrorCategory.SYSTEM)
+    async def circuit_breakers_health():
+        """Detailed circuit breaker states for all registered services."""
+        states = _get_circuit_breaker_states()
+        open_count = sum(1 for s in states.values() if s.get("state") == "open")
+        return {
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+            "total": len(states),
+            "open": open_count,
+            "circuit_breakers": states,
+        }
 
     @app.get("/api/version")
     @with_error_handling(category=ErrorCategory.SYSTEM)
@@ -153,8 +177,8 @@ def register_root_endpoints(app: FastAPI) -> None:
         return await _build_agent_card_response(request)
 
     logger.info(
-        "✅ Root endpoints registered: /api/health, /api/health/ai-stack, "
-        "/api/version, /.well-known/agent.json"
+        "Root endpoints registered: /api/health, /api/health/ai-stack, "
+        "/api/health/circuit-breakers, /api/version, /.well-known/agent.json"
     )
 
 
