@@ -49,6 +49,7 @@ from api.knowledge_verification import router as knowledge_verification_router
 from api.knowledge_rag_feedback import router as knowledge_rag_feedback_router
 from api.llm import router as llm_router
 from api.llm_providers import router as llm_providers_router
+from api.manual_mcp import router as manual_mcp_router  # Issue #3287
 from api.mcp_registry import router as mcp_registry_router
 from api.memory import router as memory_router
 from api.overseer_handlers import router as overseer_router
@@ -275,6 +276,7 @@ def _get_mcp_routers() -> list:
             "prometheus_mcp",
         ),
         (redis_mcp_router, "/redis", ["redis_mcp", "mcp"], "redis_mcp"),  # Issue #2511
+        (manual_mcp_router, "/manual", ["manual_mcp", "mcp"], "manual_mcp"),  # Issue #3287
     ]
 
 
