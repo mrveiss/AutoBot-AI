@@ -1,4 +1,4 @@
-name: Auto-Triage Issues
+name: Issue Triage
 
 on:
   issues:
@@ -9,64 +9,116 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: write
-
     steps:
       - name: Triage issue
         uses: actions/github-script@v7
         with:
           script: |
             const issue = context.payload.issue;
-            const title = issue.title.toLowerCase();
-            const body = issue.body ? issue.body.toLowerCase() : '';
-            const content = `${title} ${body}`;
-
-            const labels = [];
-
-            // Skill-based detection
-            if (content.match(/\b(vue|frontend|typescript|ui|css|vite|component)\b/i)) {
-              labels.push('frontend');
+            const issueBody = (issue.body || '').toLowerCase();
+            const issueTitle = (issue.title || '').toLowerCase();
+            const issueText = `${issueTitle} ${issueBody}`;
+            
+            // Skip if issue already has many labels (likely already triaged)
+            if (issue.labels.length > 3) {
+              console.log('Issue already has labels, skipping auto-triage');
+              return;
             }
-            if (content.match(/\b(fastapi|python|api|database|async|backend|service)\b/i)) {
-              labels.push('backend');
+            
+            let labelsToAdd = [];
+            let confidence = { skill: 'low', difficulty: 'low' };
+            
+            // === SKILL DETECTION ===
+            
+            // Frontend detection
+            const frontendKeywords = ['vue', 'frontend', 'typescript', 'ui', 'css', 'vite', 'component', 'dashboard', 'interface', 'button', 'modal', 'sidebar'];
+            if (frontendKeywords.some(k => issueText.includes(k))) {
+              labelsToAdd.push('frontend');
+              confidence.skill = 'high';
             }
-            if (content.match(/\b(docker|ansible|deploy|infrastructure|devops|ci\/cd|kubernetes)\b/i)) {
-              labels.push('infrastructure');
+            
+            // Backend detection
+            const backendKeywords = ['fastapi', 'python', 'api', 'database', 'async', 'backend', 'endpoint', 'route', 'sqlalchemy', 'orm', 'authentication', 'websocket'];
+            if (backendKeywords.some(k => issueText.includes(k))) {
+              labelsToAdd.push('backend');
+              confidence.skill = 'high';
             }
-            if (content.match(/\b(docs|readme|documentation|guide|tutorial|example)\b/i)) {
-              labels.push('docs');
+            
+            // Infrastructure detection
+            const infraKeywords = ['docker', 'ansible', 'deploy', 'infrastructure', 'devops', 'ci/cd', 'kubernetes', 'container', 'networking', 'deployment', 'orchestr', 'scale'];
+            if (infraKeywords.some(k => issueText.includes(k))) {
+              labelsToAdd.push('infrastructure');
+              confidence.skill = 'high';
             }
-            if (content.match(/\b(test|coverage|qa|pytest|testing)\b/i)) {
-              labels.push('testing');
+            
+            // Documentation detection
+            const docsKeywords = ['docs', 'readme', 'documentation', 'guide', 'tutorial', 'example', 'example', 'comment', 'docstring'];
+            if (docsKeywords.some(k => issueText.includes(k))) {
+              labelsToAdd.push('docs');
+              confidence.skill = 'high';
             }
-
-            // Difficulty detection
-            if (content.match(/\b(beginner|simple|easy|first issue|for newcomers|good-first|starter)\b/i)) {
-              labels.push('good-first-issue');
-            } else if (content.match(/\b(intermediate|moderate|some experience|moderate complexity)\b/i)) {
-              labels.push('intermediate');
-            } else if (content.match(/\b(advanced|complex|architecture|deep knowledge|refactor|system-wide)\b/i)) {
-              labels.push('advanced');
+            
+            // Testing detection
+            const testKeywords = ['test', 'coverage', 'qa', 'pytest', 'unit test', 'integration test', 'mock', 'fixture', 'assertion'];
+            if (testKeywords.some(k => issueText.includes(k))) {
+              labelsToAdd.push('testing');
+              confidence.skill = 'high';
             }
-
-            // Apply labels if found
-            if (labels.length > 0) {
-              // Remove duplicates
-              const uniqueLabels = [...new Set(labels)];
-              await github.rest.issues.addLabels({
+            
+            // === DIFFICULTY DETECTION ===
+            
+            // Good first issue detection
+            const firstIssueKeywords = ['beginner', 'simple', 'easy', 'first issue', 'newcomer', 'newbie', 'starter', 'onboarding'];
+            if (firstIssueKeywords.some(k => issueText.includes(k))) {
+              labelsToAdd.push('good-first-issue');
+              confidence.difficulty = 'high';
+            }
+            
+            // Intermediate detection
+            const intermediateKeywords = ['intermediate', 'moderate', 'some experience', 'moderate complexity'];
+            if (intermediateKeywords.some(k => issueText.includes(k))) {
+              labelsToAdd.push('intermediate');
+              confidence.difficulty = 'high';
+            }
+            
+            // Advanced detection
+            const advancedKeywords = ['advanced', 'complex', 'architecture', 'refactor', 'optimization', 'performance', 'scalability', 'deep knowledge'];
+            if (advancedKeywords.some(k => issueText.includes(k))) {
+              labelsToAdd.push('advanced');
+              confidence.difficulty = 'high';
+            }
+            
+            // Remove duplicates
+            labelsToAdd = [...new Set(labelsToAdd)];
+            
+            // Filter out labels that already exist
+            const existingLabelNames = issue.labels.map(l => l.name);
+            labelsToAdd = labelsToAdd.filter(l => !existingLabelNames.includes(l));
+            
+            if (labelsToAdd.length === 0) {
+              console.log('No labels to add');
+              return;
+            }
+            
+            // Apply labels
+            console.log(`Applying labels: ${labelsToAdd.join(', ')}`);
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              labels: labelsToAdd
+            });
+            
+            // Comment with low confidence suggestions
+            if (confidence.skill === 'low' && confidence.difficulty === 'low') {
+              const comment = `👋 Hello! I've analyzed this issue but I'm not entirely sure about the skill area and difficulty level. Can a maintainer review and add the appropriate labels (\`frontend\`, \`backend\`, \`infrastructure\`, \`docs\`, \`testing\` and \`good-first-issue\`, \`intermediate\`, \`advanced\`)?`;
+              
+              await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: issue.number,
-                labels: uniqueLabels
+                body: comment
               });
-              console.log(`Applied labels: ${uniqueLabels.join(', ')}`);
-            } else {
-              // Comment if no skill label detected
-              if (!content.match(/\b(frontend|backend|infrastructure|docs|testing)\b/i)) {
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.number,
-                  body: '👋 Thanks for opening an issue! I couldn\'t automatically determine the skill area (frontend, backend, infrastructure, docs, testing). Could a maintainer help triage this?'
-                });
-              }
             }
+            
+            console.log(`Triage complete! Applied labels: ${labelsToAdd.join(', ')}`);
