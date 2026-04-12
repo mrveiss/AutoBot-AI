@@ -36,10 +36,19 @@ readonly REQUIRED_MEM_MB=2048
 UNATTENDED=false
 REINSTALL=false
 UNINSTALL=false
+VALIDATE=false
 CONFIRM_YES=false
 GIT_BRANCH="${DEFAULT_BRANCH}"
 ADMIN_PASSWORD=""
 OVERRIDE_IP=""  # --ip= override for multi-interface hosts (#2832)
+
+# Critical service directories that must be present for a valid deployment (#4130)
+readonly CRITICAL_DIRS=(
+    "autobot-slm-backend"
+    "autobot-slm-frontend"
+    "autobot_shared"
+    "autobot-infrastructure"
+)
 
 # Phase tracking
 TOTAL_PHASES=7
@@ -197,6 +206,7 @@ Options:
   --unattended          Run without prompts, use all defaults
   --reinstall           Force reinstall over existing installation
   --uninstall           Completely remove AutoBot and all dependencies (#2706)
+  --validate            Verify installation integrity (check required service distributions)
   --yes                 Skip confirmation prompts (use with --uninstall)
   --branch=BRANCH       Git branch to install (default: ${DEFAULT_BRANCH})
   --admin-pass=PASS     SLM admin password (auto-generated if not set)
@@ -408,44 +418,25 @@ code_deployment() {
 
     # Copy code from code_source to service directories where Ansible expects them
     info "Distributing code to service directories..."
-    local dirs_to_copy=(
-        "autobot-slm-agent"
-        "autobot-slm-backend"
-        "autobot-slm-frontend"
-        "autobot_shared"
-        "autobot-infrastructure"
-    )
-    for dir in "${dirs_to_copy[@]}"; do
+    local missing_dirs=()
+    for dir in "${CRITICAL_DIRS[@]}"; do
         if [[ -d "${CODE_SOURCE}/${dir}" ]]; then
             run_ok "Copying ${dir} to ${AUTOBOT_BASE}/${dir}" \
                 sudo -u autobot rsync -a --delete "${CODE_SOURCE}/${dir}/" "${AUTOBOT_BASE}/${dir}/"
+            if [[ ! -d "${AUTOBOT_BASE}/${dir}" ]]; then
+                fatal "Distribution of ${dir} failed — destination directory not created"
+            fi
         else
-            warn "${dir} not found in code source — skipping"
+            warn "${dir} not found in code source"
+            missing_dirs+=("${dir}")
         fi
     done
 
-    # Validate that all critical services were distributed successfully
-    # This check catches issues early before Ansible deployment
-    info "Validating critical service directories..."
-    local critical_services=(
-        "autobot-slm-agent"
-        "autobot-slm-backend"
-        "autobot-slm-frontend"
-        "autobot_shared"
-    )
-    local validation_failed=0
-    for service in "${critical_services[@]}"; do
-        if [[ ! -d "${AUTOBOT_BASE}/${service}" ]]; then
-            error "Critical service not found: ${AUTOBOT_BASE}/${service}"
-            validation_failed=1
-        fi
-    done
-
-    if [[ $validation_failed -eq 1 ]]; then
-        error "Code distribution validation failed — critical services missing"
-        exit 1
+    if [[ ${#missing_dirs[@]} -gt 0 ]]; then
+        fatal "Required service directories missing from code source: ${missing_dirs[*]}. Cannot proceed with deployment."
     fi
 
+    success "All required service directories distributed successfully"
     success "Codebase ready at ${CODE_SOURCE}"
 }
 
@@ -819,6 +810,30 @@ prompt_config() {
 }
 
 # =============================================================================
+# Distribution Validation (#4130)
+# =============================================================================
+
+validate_distributions() {
+    # Verify all critical service directories are present in AUTOBOT_BASE.
+    # Called standalone via --validate or at the end of code_deployment().
+    info "Validating required service distributions..."
+    local failed=()
+    for dir in "${CRITICAL_DIRS[@]}"; do
+        if [[ -d "${AUTOBOT_BASE}/${dir}" ]]; then
+            success "  ${dir}: present"
+        else
+            error "  ${dir}: MISSING at ${AUTOBOT_BASE}/${dir}"
+            failed+=("${dir}")
+        fi
+    done
+
+    if [[ ${#failed[@]} -gt 0 ]]; then
+        fatal "Installation integrity check failed — missing: ${failed[*]}"
+    fi
+    success "All required service distributions are present"
+}
+
+# =============================================================================
 # Argument Parsing
 # =============================================================================
 
@@ -828,6 +843,7 @@ parse_args() {
             --unattended)     UNATTENDED=true;        shift ;;
             --reinstall)      REINSTALL=true;          shift ;;
             --uninstall)      UNINSTALL=true;          shift ;;
+            --validate)       VALIDATE=true;           shift ;;
             --yes|-y)         CONFIRM_YES=true;        shift ;;
             --branch=*)       GIT_BRANCH="${1#*=}";    shift ;;
             --admin-pass=*)   ADMIN_PASSWORD="${1#*=}"; shift ;;
@@ -1036,6 +1052,12 @@ main() {
 
     if ${UNINSTALL}; then
         uninstall
+        exit 0
+    fi
+
+    if ${VALIDATE}; then
+        _log_init
+        validate_distributions
         exit 0
     fi
 
