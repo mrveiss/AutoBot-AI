@@ -13,11 +13,11 @@ Covers:
   - get_endpoint_categories summary dict
   - enforce_service_auth: exempt path passthrough, blocked path rejection,
     circuit-breaker bypass, override-token bypass
+  - enforcement mode gating: logging vs enforcement mode behavior
 """
 
 import os
 import time
-from collections import defaultdict
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -130,7 +130,6 @@ class TestCircuitBreaker:
         with patch.dict(
             os.environ, {"SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE": "50"}
         ):
-            # Run enough iterations to hit both branches
             results = {_should_enforce_by_circuit_breaker() for _ in range(200)}
             assert True in results and False in results
 
@@ -265,7 +264,11 @@ def _make_request(path: str, ip: str = "10.0.0.99") -> MagicMock:
 
 
 class TestEnforceServiceAuth:
-    """Integration-level tests for the enforce_service_auth middleware function."""
+    """Integration-level tests for the enforce_service_auth middleware function.
+
+    All tests that check blocking behavior explicitly set SERVICE_AUTH_ENFORCEMENT_MODE=true.
+    See TestEnforcementModeGating for logging-vs-enforcement mode tests.
+    """
 
     @pytest.mark.asyncio
     async def test_exempt_path_passes_through(self):
@@ -292,10 +295,8 @@ class TestEnforceServiceAuth:
 
         call_next = AsyncMock(return_value="should-not-reach")
 
-        async def raise_401(request):
-            raise HTTPException(status_code=401, detail="Missing required headers")
-
         with (
+            patch.dict(os.environ, {"SERVICE_AUTH_ENFORCEMENT_MODE": "true"}),
             patch(
                 "middleware.service_auth_enforcement._should_enforce_by_circuit_breaker",
                 return_value=True,
@@ -324,6 +325,7 @@ class TestEnforceServiceAuth:
         call_next = AsyncMock(return_value="auth-ok-response")
 
         with (
+            patch.dict(os.environ, {"SERVICE_AUTH_ENFORCEMENT_MODE": "true"}),
             patch(
                 "middleware.service_auth_enforcement._should_enforce_by_circuit_breaker",
                 return_value=True,
@@ -348,9 +350,12 @@ class TestEnforceServiceAuth:
         """When circuit breaker returns False, request is allowed without auth."""
         call_next = AsyncMock(return_value="circuit-bypass")
 
-        with patch(
-            "middleware.service_auth_enforcement._should_enforce_by_circuit_breaker",
-            return_value=False,
+        with (
+            patch.dict(os.environ, {"SERVICE_AUTH_ENFORCEMENT_MODE": "true"}),
+            patch(
+                "middleware.service_auth_enforcement._should_enforce_by_circuit_breaker",
+                return_value=False,
+            ),
         ):
             req = _make_request("/api/internal/sync")
             result = await enforce_service_auth(req, call_next)
@@ -364,7 +369,11 @@ class TestEnforceServiceAuth:
 
         with (
             patch.dict(
-                os.environ, {"SERVICE_AUTH_OVERRIDE_TOKEN": "emergency-token"}
+                os.environ,
+                {
+                    "SERVICE_AUTH_OVERRIDE_TOKEN": "emergency-token",
+                    "SERVICE_AUTH_ENFORCEMENT_MODE": "true",
+                },
             ),
             patch(
                 "middleware.service_auth_enforcement._should_enforce_by_circuit_breaker",
@@ -376,7 +385,6 @@ class TestEnforceServiceAuth:
             ),
         ):
             req = _make_request("/api/npu/heartbeat")
-            # Inject override header
             req.headers = {"X-Override-Token": "emergency-token"}
             req.headers.get = lambda k, d=None: {"X-Override-Token": "emergency-token"}.get(k, d)
 
@@ -392,6 +400,7 @@ class TestEnforceServiceAuth:
         call_next = AsyncMock(return_value="should-not-reach")
 
         with (
+            patch.dict(os.environ, {"SERVICE_AUTH_ENFORCEMENT_MODE": "true"}),
             patch(
                 "middleware.service_auth_enforcement._should_enforce_by_circuit_breaker",
                 return_value=True,
@@ -436,7 +445,6 @@ class TestEnforcementModeGating:
             req = _make_request("/api/npu/results")
             result = await enforce_service_auth(req, call_next)
 
-        # Request must pass through in logging mode even with bad auth
         call_next.assert_awaited_once_with(req)
         assert result == "logging-mode-response"
 
@@ -499,10 +507,7 @@ class TestEnforcementModeGating:
 
         call_next = AsyncMock(return_value="default-mode-ok")
 
-        with (
-            # Remove the env var entirely
-            patch.dict(os.environ, {}, clear=False) as env,
-        ):
+        with patch.dict(os.environ, {}, clear=False) as env:
             env.pop("SERVICE_AUTH_ENFORCEMENT_MODE", None)
             with patch(
                 "middleware.service_auth_enforcement.validate_service_auth",
@@ -513,6 +518,5 @@ class TestEnforcementModeGating:
                 req = _make_request("/api/npu/results")
                 result = await enforce_service_auth(req, call_next)
 
-        # Default is logging mode — request passes through
         call_next.assert_awaited_once_with(req)
         assert result == "default-mode-ok"
