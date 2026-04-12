@@ -18,11 +18,14 @@ Event Types:
 """
 
 import json
+import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
 from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class ArtifactType(str, Enum):
@@ -378,6 +381,49 @@ class KnowledgeContent:
 
 
 # =============================================================================
+# Serialization Validation
+# =============================================================================
+
+
+def _validate_artifact_serialization(artifacts: list["TaskArtifact"]) -> None:
+    """
+    Validate that every artifact serializes to JSON and round-trips without data
+    loss.  Raises ``ValueError`` if an artifact fails either check so callers
+    learn about the problem immediately rather than storing corrupt data.
+
+    Args:
+        artifacts: List of TaskArtifact instances to validate.
+
+    Raises:
+        ValueError: When an artifact cannot be serialized to JSON or its
+            round-trip dict does not match the original.
+    """
+    for idx, artifact in enumerate(artifacts):
+        artifact_dict = artifact.to_dict()
+        try:
+            serialized = json.dumps(artifact_dict, ensure_ascii=False)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"Artifact at index {idx} (label={artifact.label!r}) is not "
+                f"JSON-serializable: {exc}"
+            ) from exc
+
+        try:
+            restored_dict = json.loads(serialized)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"Artifact at index {idx} (label={artifact.label!r}) produced "
+                f"invalid JSON: {exc}"
+            ) from exc
+
+        if restored_dict != artifact_dict:
+            raise ValueError(
+                f"Artifact at index {idx} (label={artifact.label!r}) failed "
+                "round-trip integrity check: serialized and deserialized dicts differ"
+            )
+
+
+# =============================================================================
 # Helper Functions
 # =============================================================================
 
@@ -434,7 +480,22 @@ def create_observation_event(
     device_used: Optional[str] = None,
     artifacts: Optional[list["TaskArtifact"]] = None,
 ) -> AgentEvent:
-    """Helper to create an OBSERVATION event, optionally with task artifacts."""
+    """Helper to create an OBSERVATION event, optionally with task artifacts.
+
+    Validates that all provided artifacts serialize to JSON and pass a
+    round-trip integrity check before embedding them in the event payload.
+    Raises ``ValueError`` immediately if any artifact fails validation so
+    callers discover the problem rather than silently persisting corrupt data.
+    """
+    validated_artifacts: list[TaskArtifact] = artifacts or []
+    if validated_artifacts:
+        _validate_artifact_serialization(validated_artifacts)
+        logger.debug(
+            "Artifact serialization validated: %d artifact(s) for action %s",
+            len(validated_artifacts),
+            action_id,
+        )
+
     content = ObservationContent(
         action_id=action_id,
         tool_name=tool_name,
@@ -443,7 +504,7 @@ def create_observation_event(
         error=error,
         execution_time_ms=execution_time_ms,
         device_used=device_used,
-        artifacts=artifacts or [],
+        artifacts=validated_artifacts,
     )
     return AgentEvent(
         event_type=EventType.OBSERVATION,
