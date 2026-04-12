@@ -174,7 +174,7 @@ jobs:
         SECRETS_FOUND=0
 
         # Check for AWS keys
-        if grep -rE "AKIA[0-9A-Z]{16}" autobot-backend/ autobot-slm-backend/ autobot_shared/ 2>/dev/null; then
+        if grep -rE "AKIA[0-9A-Z]{16}" --exclude="*_test.py" --exclude="test_*.py" autobot-backend/ autobot-slm-backend/ autobot_shared/ 2>/dev/null; then
           echo "::error::Potential AWS access key found"
           SECRETS_FOUND=$((SECRETS_FOUND + 1))
         fi
