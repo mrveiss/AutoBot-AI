@@ -33,11 +33,15 @@ from events.stream_manager import EventStreamManager, RedisEventStreamManager
 from events.types import (
     ActionContent,
     AgentEvent,
+    ArtifactType,
     EventType,
     KnowledgeContent,
     MessageContent,
     ObservationContent,
     PlanContent,
+    TaskArtifact,
+    build_artifact,
+    create_observation_event,
 )
 
 __all__ = [
@@ -49,6 +53,11 @@ __all__ = [
     "ObservationContent",
     "PlanContent",
     "KnowledgeContent",
+    # Artifact support (#4094)
+    "ArtifactType",
+    "TaskArtifact",
+    "build_artifact",
+    "create_observation_event",
     # Managers
     "EventStreamManager",
     "RedisEventStreamManager",

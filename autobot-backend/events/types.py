@@ -25,6 +25,62 @@ from enum import Enum, auto
 from typing import Any, Optional
 
 
+class ArtifactType(str, Enum):
+    """Types of task completion artifacts captured as evidence"""
+
+    CODE_DIFF = "code_diff"  # Git-style diff of file modifications
+    FILE_CHANGE = "file_change"  # New/deleted/renamed file
+    TEST_OUTPUT = "test_output"  # stdout/stderr from test runs
+    COMMAND_OUTPUT = "command_output"  # Generic shell command output
+    DEPLOYMENT_LOG = "deployment_log"  # Deployment / build output
+    CUSTOM = "custom"  # Caller-defined artifact type
+
+
+@dataclass
+class TaskArtifact:
+    """
+    A single piece of evidence produced during task execution.
+
+    Artifacts are attached to OBSERVATION events so they travel through
+    the existing event pipeline (Redis Streams + Pub/Sub) without any
+    new storage layer.
+    """
+
+    artifact_type: ArtifactType
+    content: str  # Raw text content (diff, log line, etc.)
+    label: str = ""  # Human-readable label, e.g. "pytest output"
+    file_path: Optional[str] = None  # Source file if applicable
+    truncated: bool = False  # True when content was capped to MAX_ARTIFACT_BYTES
+
+    # Maximum bytes stored per artifact to guard against runaway tool output
+    MAX_ARTIFACT_BYTES: int = field(default=16_384, init=False, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        limit = 16_384
+        if len(self.content.encode("utf-8")) > limit:
+            self.content = self.content.encode("utf-8")[:limit].decode("utf-8", errors="replace")
+            self.truncated = True
+
+    def to_dict(self) -> dict:
+        return {
+            "artifact_type": self.artifact_type.value,
+            "content": self.content,
+            "label": self.label,
+            "file_path": self.file_path,
+            "truncated": self.truncated,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "TaskArtifact":
+        return cls(
+            artifact_type=ArtifactType(data.get("artifact_type", ArtifactType.CUSTOM.value)),
+            content=data.get("content", ""),
+            label=data.get("label", ""),
+            file_path=data.get("file_path"),
+            truncated=data.get("truncated", False),
+        )
+
+
 class EventType(Enum):
     """Typed events for the agent event stream (Manus-inspired)"""
 
@@ -211,6 +267,9 @@ class ObservationContent:
     execution_time_ms: float = 0.0
     device_used: Optional[str] = None  # For NPU/GPU operations
 
+    # Task evidence — artifacts produced during this observation (#4094)
+    artifacts: list["TaskArtifact"] = field(default_factory=list)
+
     def to_dict(self) -> dict:
         return {
             "action_id": self.action_id,
@@ -220,10 +279,12 @@ class ObservationContent:
             "error": self.error,
             "execution_time_ms": self.execution_time_ms,
             "device_used": self.device_used,
+            "artifacts": [a.to_dict() for a in self.artifacts],
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> "ObservationContent":
+        raw_artifacts = data.get("artifacts") or []
         return cls(
             action_id=data.get("action_id", ""),
             tool_name=data.get("tool_name", ""),
@@ -232,6 +293,7 @@ class ObservationContent:
             error=data.get("error"),
             execution_time_ms=data.get("execution_time_ms", 0.0),
             device_used=data.get("device_used"),
+            artifacts=[TaskArtifact.from_dict(a) for a in raw_artifacts],
         )
 
 
@@ -370,8 +432,9 @@ def create_observation_event(
     execution_time_ms: float = 0.0,
     task_id: Optional[str] = None,
     device_used: Optional[str] = None,
+    artifacts: Optional[list["TaskArtifact"]] = None,
 ) -> AgentEvent:
-    """Helper to create an OBSERVATION event"""
+    """Helper to create an OBSERVATION event, optionally with task artifacts."""
     content = ObservationContent(
         action_id=action_id,
         tool_name=tool_name,
@@ -380,6 +443,7 @@ def create_observation_event(
         error=error,
         execution_time_ms=execution_time_ms,
         device_used=device_used,
+        artifacts=artifacts or [],
     )
     return AgentEvent(
         event_type=EventType.OBSERVATION,
@@ -387,6 +451,21 @@ def create_observation_event(
         source="tool",
         task_id=task_id,
         parent_event_id=action_id,
+    )
+
+
+def build_artifact(
+    artifact_type: ArtifactType,
+    content: str,
+    label: str = "",
+    file_path: Optional[str] = None,
+) -> TaskArtifact:
+    """Convenience factory for TaskArtifact with explicit type."""
+    return TaskArtifact(
+        artifact_type=artifact_type,
+        content=content,
+        label=label,
+        file_path=file_path,
     )
 
 

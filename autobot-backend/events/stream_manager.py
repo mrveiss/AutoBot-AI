@@ -40,7 +40,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, AsyncIterator, Callable, Optional
 
-from events.types import AgentEvent, EventType
+from events.types import AgentEvent, EventType, ObservationContent, TaskArtifact
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +105,10 @@ class EventStreamManager(ABC):
     @abstractmethod
     async def get_event(self, event_id: str) -> Optional[AgentEvent]:
         """Get a specific event by ID"""
+
+    @abstractmethod
+    async def get_task_artifacts(self, task_id: str) -> list[TaskArtifact]:
+        """Return all TaskArtifacts from OBSERVATION events for the given task."""
 
     @abstractmethod
     async def close(self) -> None:
@@ -499,6 +503,40 @@ class RedisEventStreamManager(EventStreamManager):
         logger.info("Deleted %d events for task %s", len(event_ids), task_id)
         return len(event_ids)
 
+    async def get_task_artifacts(self, task_id: str) -> list[TaskArtifact]:
+        """
+        Collect all TaskArtifacts from OBSERVATION events for a task.
+
+        Iterates task events in chronological order and aggregates the
+        ``artifacts`` list embedded in each ObservationContent payload.
+
+        Args:
+            task_id: Task identifier
+
+        Returns:
+            Ordered list of TaskArtifacts (oldest observation first)
+        """
+        events = await self.get_task_events(task_id)
+        artifacts: list[TaskArtifact] = []
+
+        for event in events:
+            if event.event_type != EventType.OBSERVATION:
+                continue
+            try:
+                obs = ObservationContent.from_dict(event.content)
+                artifacts.extend(obs.artifacts)
+            except Exception as exc:
+                logger.warning(
+                    "Could not parse ObservationContent for event %s: %s",
+                    event.event_id,
+                    exc,
+                )
+
+        logger.debug(
+            "Collected %d artifact(s) for task %s", len(artifacts), task_id
+        )
+        return artifacts
+
     async def close(self) -> None:
         """Close Redis connections"""
         if self._pubsub:
@@ -603,6 +641,24 @@ class InMemoryEventStreamManager(EventStreamManager):
     async def get_event(self, event_id: str) -> Optional[AgentEvent]:
         """Get event by ID"""
         return self._events.get(event_id)
+
+    async def get_task_artifacts(self, task_id: str) -> list[TaskArtifact]:
+        """Collect all TaskArtifacts from OBSERVATION events for a task."""
+        events = await self.get_task_events(task_id)
+        artifacts: list[TaskArtifact] = []
+        for event in events:
+            if event.event_type != EventType.OBSERVATION:
+                continue
+            try:
+                obs = ObservationContent.from_dict(event.content)
+                artifacts.extend(obs.artifacts)
+            except Exception as exc:
+                logger.warning(
+                    "Could not parse ObservationContent for event %s: %s",
+                    event.event_id,
+                    exc,
+                )
+        return artifacts
 
     async def close(self) -> None:
         """Clear subscribers"""

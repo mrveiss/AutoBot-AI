@@ -14,13 +14,50 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Optional
 
+from code_intelligence.code_generation.diff import DiffGenerator
 from constants.status_enums import TaskStatus
 from constants.threshold_constants import BatchConfig, RetryConfig
-from events.types import create_action_event, create_observation_event
+from events.types import (
+    ArtifactType,
+    TaskArtifact,
+    build_artifact,
+    create_action_event,
+    create_observation_event,
+)
 from tools.parallel.analyzer import DependencyAnalyzer
 from tools.parallel.types import ExecutionMetrics, ToolCall
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Artifact Capture (Issue #4094)
+# =============================================================================
+
+# Tools that mutate files — artifact capture is enabled for these
+_FILE_MODIFYING_TOOLS: frozenset[str] = frozenset({
+    "edit_file",
+    "write_file",
+    "create_file",
+    "delete_file",
+    "move_file",
+    "rename_file",
+})
+
+# Tools that produce test output
+_TEST_RUNNER_TOOLS: frozenset[str] = frozenset({
+    "run_tests",
+    "execute_tests",
+    "pytest",
+    "run_pytest",
+})
+
+
+@dataclass
+class _ArtifactCapture:
+    """Holds artifact capture state during tool execution. Issue #4094."""
+
+    filepath: Optional[str] = None
 
 
 # =============================================================================
@@ -315,6 +352,74 @@ class ParallelToolExecutor:
             logger.error("Tool %s failed: %s", call.tool_name, e)
             return None, False, "Tool execution failed"
 
+    def _capture_pre_state(self, call: ToolCall) -> _ArtifactCapture:
+        """Extract file path from tool args for artifact capture. Issue #4094."""
+        if call.tool_name not in _FILE_MODIFYING_TOOLS:
+            return _ArtifactCapture()
+
+        filepath = call.arguments.get("file_path") or call.arguments.get("path")
+        return _ArtifactCapture(filepath=filepath)
+
+    def _build_artifacts(
+        self,
+        call: ToolCall,
+        capture: _ArtifactCapture,
+        result: Any,
+    ) -> list[TaskArtifact]:
+        """Build artifact data from execution result. Issue #4094."""
+        artifacts: list[TaskArtifact] = []
+
+        # --- file changes ---
+        if call.tool_name in _FILE_MODIFYING_TOOLS and capture.filepath:
+            change_type = "deleted" if call.tool_name == "delete_file" else (
+                "created" if call.tool_name == "create_file" else "modified"
+            )
+            artifacts.append(
+                build_artifact(
+                    ArtifactType.FILE_CHANGE,
+                    f"{change_type}: {capture.filepath}",
+                    label=f"File Change: {capture.filepath}",
+                    file_path=capture.filepath,
+                )
+            )
+
+            # --- code diffs ---
+            # Only generate a diff if the tool result provides before/after content.
+            if isinstance(result, dict):
+                original = result.get("original") or result.get("before")
+                modified = result.get("content") or result.get("after")
+                if original is not None and modified is not None:
+                    diff_str = DiffGenerator.generate_diff(
+                        original, modified, filename=capture.filepath
+                    )
+                    artifacts.append(
+                        build_artifact(
+                            ArtifactType.CODE_DIFF,
+                            diff_str,
+                            label=f"Code Diff: {capture.filepath}",
+                            file_path=capture.filepath,
+                        )
+                    )
+
+        # --- test output ---
+        if call.tool_name in _TEST_RUNNER_TOOLS:
+            test_output = None
+            if isinstance(result, dict):
+                test_output = result.get("output") or result.get("stdout")
+            elif isinstance(result, str):
+                test_output = result
+
+            if test_output:
+                artifacts.append(
+                    build_artifact(
+                        ArtifactType.TEST_OUTPUT,
+                        test_output,
+                        label="Test Output",
+                    )
+                )
+
+        return artifacts
+
     async def _publish_observation_event(
         self,
         action_event: Any,
@@ -324,8 +429,9 @@ class ParallelToolExecutor:
         error: Optional[str],
         execution_time: float,
         task_id: Optional[str],
+        artifacts: Optional[list[TaskArtifact]] = None,
     ) -> None:
-        """Publish OBSERVATION event to event stream. Issue #620."""
+        """Publish OBSERVATION event to event stream. Issue #620, #4094."""
         if not self.event_stream or not action_event:
             return
 
@@ -337,6 +443,7 @@ class ParallelToolExecutor:
             error=error,
             execution_time_ms=execution_time,
             task_id=task_id,
+            artifacts=artifacts or [],
         )
         await self.event_stream.publish(observation_event)
 
@@ -349,13 +456,25 @@ class ParallelToolExecutor:
         call.status = TaskStatus.RUNNING.value
         action_event = await self._publish_action_event(call, task_id)
 
+        capture = self._capture_pre_state(call)  # Issue #4094: pre-execution snapshot
+
         start_time = time.monotonic()
         result, success, error = await self._execute_tool_with_timeout(call)
         execution_time = (time.monotonic() - start_time) * 1000
         call.execution_time_ms = execution_time
 
+        # Issue #4094: build artifacts from result (synchronous, no I/O)
+        artifacts = self._build_artifacts(call, capture, result)
+
         await self._publish_observation_event(
-            action_event, call, success, result, error, execution_time, task_id
+            action_event,
+            call,
+            success,
+            result,
+            error,
+            execution_time,
+            task_id,
+            artifacts=artifacts,
         )
 
         if not success:
