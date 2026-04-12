@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -61,7 +61,8 @@ class CreateBoardRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=200, description="Human-readable board name")
     description: str = Field(default="", max_length=500, description="Optional description")
 
-    @validator("board_id")
+    @field_validator("board_id", mode="before")
+    @classmethod
     def validate_board_id(cls, v):
         if v is None:
             return v
