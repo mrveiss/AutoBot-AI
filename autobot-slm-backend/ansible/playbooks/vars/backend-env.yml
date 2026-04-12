@@ -41,7 +41,7 @@ backend_chromadb_port: 8100
 
 service_auth_service_id: "main-backend"
 service_auth_keys_dir: "/etc/autobot/service-keys"
-service_auth_enforcement_mode: false
+service_auth_enforcement_mode: true
 service_auth_override_token: ""
 service_auth_circuit_breaker_percentage: 100
 service_auth_timestamp_window: 300
