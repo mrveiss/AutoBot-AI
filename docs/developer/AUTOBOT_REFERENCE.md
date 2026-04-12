@@ -154,7 +154,7 @@ Workflow: Edit Ansible templates locally → commit → deploy via Ansible → v
 
 ### Frontend Deployment
 
-- `.19` serves SLM admin frontend via nginx+SSL (production build)
+- SLM Manager serves SLM admin frontend via nginx+SSL (production build)
 - `.21` serves User frontend via nginx+SSL (production build)
 - **FORBIDDEN**: `npm run dev` on any VM — production builds only
 - Ansible: `ansible-playbook playbooks/deploy-full.yml --tags frontend`
