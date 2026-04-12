@@ -162,15 +162,19 @@ class TestCreateDeployment:
                 },
             )
 
-        assert response.status_code == 400
-        assert "Invalid strategy" in response.json()["detail"]
+        # Pydantic v2 rejects unknown enum values at request validation time (422).
+        assert response.status_code == 422
 
-    def test_create_deployment_missing_fields(self, client):
-        """Test create with missing required fields."""
-        response = client.post(
-            "/v1/slm/deployments",
-            json={"role_name": "worker"},  # Missing target_nodes
-        )
+    def test_create_deployment_missing_fields(self, client, mock_orchestrator):
+        """Test create with missing required fields — Pydantic returns 422."""
+        with patch(
+            "api.slm.deployments.get_orchestrator",
+            return_value=mock_orchestrator,
+        ):
+            response = client.post(
+                "/v1/slm/deployments",
+                json={"role_name": "worker"},  # Missing target_nodes
+            )
 
         assert response.status_code == 422
 
