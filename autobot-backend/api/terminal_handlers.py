@@ -41,6 +41,7 @@ from chat_history import ChatHistoryManager
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 from services.simple_pty import simple_pty_manager
+from services.terminal_completion_service import TerminalCompletionService
 
 # Import extracted modules (Issue #290)
 from services.terminal_websocket import (
@@ -191,6 +192,9 @@ class ConsolidatedTerminalWebSocket:
         else:
             self.terminal_logger = None
             self.chat_history_manager = None
+
+        # Tab completion service (Issue #3279)
+        self._completion_service = TerminalCompletionService()
 
         # Initialize PTY process if security level allows
         if security_level != SecurityLevel.RESTRICTED:
@@ -434,41 +438,42 @@ class ConsolidatedTerminalWebSocket:
 
     async def _handle_tab_completion(self, message: dict) -> None:
         """
-        Handle tab completion request (Issue #756 - Quick Win #5).
+        Handle tab completion request (Issue #3279 - full implementation).
 
-        Provides simple directory listing completion for terminal commands.
-        The frontend sends partial input and cursor position, and this handler
-        returns matching file/directory completions.
+        Uses TerminalCompletionService with bash compgen for authentic
+        shell completions covering commands, file paths, and env variables.
 
         Message format:
             {
                 "type": "tab_completion",
                 "text": "ls /home/user/Doc",  # Current input text
-                "cursor": 18,  # Cursor position
+                "cursor": 18,                 # Cursor position
+                "cwd": "/home/user",          # Optional working directory
             }
 
         Response format:
             {
                 "type": "tab_completion",
                 "completions": ["Documents/", "Downloads/"],
-                "prefix": "/home/user/Doc",
+                "prefix": "Doc",
+                "common_prefix": "Do",
             }
         """
         try:
             text = message.get("text", "")
             cursor_pos = message.get("cursor", len(text))
+            cwd = message.get("cwd") or self._get_session_cwd()
 
-            # Extract the word at cursor position for completion
-            prefix = self._extract_completion_prefix(text, cursor_pos)
-
-            # Get completions for the prefix
-            completions = await self._get_path_completions(prefix)
+            result = await self._completion_service.get_completions(
+                text, cursor_pos, cwd
+            )
 
             await self.send_message(
                 {
                     "type": "tab_completion",
-                    "completions": completions,
-                    "prefix": prefix,
+                    "completions": result.completions,
+                    "prefix": result.prefix,
+                    "common_prefix": result.common_prefix,
                 }
             )
 
@@ -479,9 +484,19 @@ class ConsolidatedTerminalWebSocket:
                     "type": "tab_completion",
                     "completions": [],
                     "prefix": "",
+                    "common_prefix": "",
                     "error": "Internal server error",
                 }
             )
+
+    def _get_session_cwd(self) -> str:
+        """Return the PTY process current working directory, or project root."""
+        try:
+            if self.pty_process and hasattr(self.pty_process, "cwd"):
+                return self.pty_process.cwd or str(PATH.PROJECT_ROOT)
+        except Exception:
+            pass
+        return str(PATH.PROJECT_ROOT)
 
     def _extract_completion_prefix(self, text: str, cursor_pos: int) -> str:
         """
