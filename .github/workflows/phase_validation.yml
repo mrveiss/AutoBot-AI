@@ -31,7 +31,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v4
 
     - name: Install Python 3.12 via deadsnakes PPA
       run: |
@@ -95,7 +95,7 @@ jobs:
         echo "Running AutoBot Phase Validation System..."
 
         # Run the validation system
-        python3 scripts/phase_validation_system.py --output-format json > phase_validation_results.json || echo '{"overall_maturity": 0, "phases": []}' > phase_validation_results.json
+        python3 autobot-infrastructure/shared/scripts/phase_validation_system.py --output-format json > phase_validation_results.json || echo '{"overall_maturity": 0, "phases": []}' > phase_validation_results.json
 
         # Display results summary
         echo "## Phase Validation Results" >> $GITHUB_STEP_SUMMARY
@@ -105,7 +105,7 @@ jobs:
       run: |
         source .venv/bin/activate
         echo "Generating validation dashboard..."
-        python3 scripts/validation_dashboard_generator.py --ci-mode > validation_dashboard.html || echo "Dashboard generation failed"
+        python3 autobot-infrastructure/shared/scripts/validation_dashboard_generator.py --ci-mode > validation_dashboard.html || echo "Dashboard generation failed"
 
     - name: Phase Validation Gate
       run: |
@@ -136,7 +136,7 @@ jobs:
         fi
 
     - name: Upload Validation Reports
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: phase-validation-reports
@@ -205,10 +205,10 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v4
 
     - name: Download validation results
-      uses: actions/download-artifact@v8
+      uses: actions/download-artifact@v4
       with:
         name: phase-validation-reports
 

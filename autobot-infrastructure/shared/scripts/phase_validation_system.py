@@ -22,9 +22,9 @@ import psutil
 import requests
 
 # Import centralized Redis client
-sys.path.append(str(Path(__file__).parent.parent))
-from constants import ServiceURLs
-from utils.redis_client import get_redis_client
+sys.path.append(str(Path(__file__).parent.parent.parent.parent))
+from autobot_shared.network_constants import ServiceURLs
+from autobot_shared.redis_client import get_redis_client
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -630,7 +630,7 @@ class PhaseValidator:
     def _check_ollama_service(self) -> bool:
         """Check if Ollama is accessible (Issue #315: extracted helper)."""
         try:
-            response = requests.get("ServiceURLs.OLLAMA_LOCAL/api/tags", timeout=3)
+            response = requests.get(f"{ServiceURLs.OLLAMA_LOCAL}/api/tags", timeout=3)
             return response.status_code == 200
         except Exception:
             return False
@@ -901,7 +901,7 @@ def _output_json_results(results: Dict[str, Any], output_file: str = None):
     """
     output = {
         "timestamp": datetime.now().isoformat(),
-        "overall_maturity": results.get("overall_maturity", 0),
+        "overall_maturity": results.get("overall_assessment", {}).get("system_maturity_score", 0),
         "phases": [],
         "recommendations": [],
     }
