@@ -115,7 +115,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   const searchResults = ref<SearchResult[]>([])
   const ragSearchResult = ref<RagSearchResult | null>(null)
   const selectedDocument = ref<KnowledgeDocument | null>(null)
-  const activeTab = ref<'search' | 'manage' | 'upload' | 'categories' | 'entries' | 'stats' | 'advanced'>('search')
+  const activeTab = ref<'search' | 'manage' | 'upload' | 'categories' | 'entries' | 'stats' | 'system-docs' | 'prompt-editor' | 'advanced'>('search')
   const isLoading = ref(false)
   const filters = ref<SearchFilters>({
     categories: [],
@@ -257,7 +257,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   })
 
   // Actions
-  function setActiveTab(tab: 'search' | 'manage' | 'upload' | 'categories' | 'entries' | 'stats' | 'advanced') {
+  function setActiveTab(tab: 'search' | 'manage' | 'upload' | 'categories' | 'entries' | 'stats' | 'system-docs' | 'prompt-editor' | 'advanced') {
     activeTab.value = tab
   }
 

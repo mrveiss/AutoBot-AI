@@ -4111,6 +4111,8 @@
   "knowledge.manager.tabUpload": "Upload",
   "knowledge.manager.tabManage": "Manage",
   "knowledge.manager.tabStatistics": "Statistics",
+  "knowledge.manager.tabSystemDocs": "System Docs",
+  "knowledge.manager.tabPromptEditor": "Prompts",
   "knowledge.manager.tabAdvanced": "Advanced",
   "knowledge.memoryOrphan.title": "Memory Entity Cleanup",
   "knowledge.memoryOrphan.description": "Detect and clean up orphaned memory entities from expired or deleted conversations.",
