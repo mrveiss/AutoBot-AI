@@ -20,7 +20,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
 from constants.threshold_constants import CategoryDefaults
-from user_management.models.base import Base, TimestampMixin
+from user_management.models.base import Base
 
 if TYPE_CHECKING:
     from user_management.models.organization import Organization
@@ -43,7 +43,7 @@ class SSOProviderType(str, Enum):
     GITHUB = "github"
 
 
-class SSOProvider(Base, TimestampMixin):
+class SSOProvider(Base):
     """
     SSO Provider configuration.
 
@@ -160,7 +160,7 @@ class SSOProvider(Base, TimestampMixin):
         return self.config.get(key, default)
 
 
-class UserSSOLink(Base, TimestampMixin):
+class UserSSOLink(Base):
     """
     Link between a user and an SSO provider.
 

@@ -26,7 +26,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import Uuid
 
-from user_management.models.base import Base, TimestampMixin
+from user_management.models.base import Base
 
 
 class HeartbeatRunStatus(str, Enum):
@@ -48,7 +48,7 @@ class WakeupTrigger(str, Enum):
     MANUAL = "manual"
 
 
-class AgentRuntimeState(Base, TimestampMixin):
+class AgentRuntimeState(Base):
     """Persistent runtime state per agent, survives restarts (#1407)."""
 
     __tablename__ = "agent_runtime_state"
@@ -80,7 +80,7 @@ class AgentRuntimeState(Base, TimestampMixin):
         return f"<AgentRuntimeState agent={self.agent_id} enabled={self.heartbeat_enabled}>"
 
 
-class HeartbeatRun(Base, TimestampMixin):
+class HeartbeatRun(Base):
     """A single heartbeat execution for an agent (#1407)."""
 
     __tablename__ = "heartbeat_runs"
@@ -144,7 +144,7 @@ class HeartbeatRunEvent(Base):
         return f"<HeartbeatRunEvent run={self.run_id} type={self.event_type}>"
 
 
-class AgentWakeupRequest(Base, TimestampMixin):
+class AgentWakeupRequest(Base):
     """Queued wakeup request consumed on the next heartbeat tick (#1407)."""
 
     __tablename__ = "agent_wakeup_requests"

@@ -102,6 +102,43 @@ for _pkg in _PKG_STUBS:
         if _pkg not in sys.modules:
             _make_pkg_stub(_pkg)
 
+# Fix metaclass conflict (#4300): when SQLAlchemy is not installed the stubs
+# above make sqlalchemy.orm a MagicMock namespace module.  Every attribute
+# access returns the same MagicMock instance, so ``DeclarativeBase`` becomes a
+# MagicMock *instance*.  Inheriting from a MagicMock instance gives the
+# subclass metaclass ``MagicMock`` (not ``type``).  Then any model that does
+# ``class Foo(SomePlainMixin, DeclarativeBase)`` raises:
+#   TypeError: metaclass conflict: the metaclass of a derived class must be a
+#   (non-strict) subclass of the metaclasses of all its bases
+# because ``MagicMock`` and ``type`` are incompatible metaclasses.
+#
+# Fix: patch the ORM stub so that ``DeclarativeBase`` and
+# ``declarative_base`` are real Python classes/callables that produce
+# ``type``-metaclassed base classes.  All other ORM attributes remain as
+# MagicMock so the rest of the stub still works.
+#
+# Detection: real sqlalchemy.orm is a real ModuleType whose __dict__ contains
+# the actual class objects; our stub's __dict__ only has __getattr__ and a few
+# dunder attrs.  Check isinstance to distinguish a real module from the stub.
+if "sqlalchemy.orm" in sys.modules:
+    _orm_mod = sys.modules["sqlalchemy.orm"]
+    # The stub module has __getattr__ set on the module object directly; real
+    # sqlalchemy.orm does not.  Use that as the distinguishing signal.
+    _is_stub = "__getattr__" in vars(_orm_mod)
+    if _is_stub:
+
+        class _DeclarativeBase:
+            """Minimal SQLAlchemy DeclarativeBase stub with correct metaclass."""
+
+            type_annotation_map: dict = {}
+
+        def _declarative_base(**kwargs):
+            """Minimal declarative_base() stub that returns a type-metaclassed class."""
+            return _DeclarativeBase
+
+        _orm_mod.DeclarativeBase = _DeclarativeBase  # type: ignore[attr-defined]
+        _orm_mod.declarative_base = _declarative_base  # type: ignore[attr-defined]
+
 # Pre-register models.infrastructure directly so that ``from models.infrastructure
 # import ...`` succeeds without triggering models/__init__.py (which requires the
 # full SQLAlchemy stack that is not installed in the dev/CI venv).

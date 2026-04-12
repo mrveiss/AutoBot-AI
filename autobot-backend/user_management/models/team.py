@@ -17,7 +17,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
-from user_management.models.base import Base, TenantMixin, TimestampMixin
+from user_management.models.base import Base, TenantMixin
 
 if TYPE_CHECKING:
     from user_management.models.api_key import APIKey
@@ -33,7 +33,7 @@ class TeamRole(str, Enum):
     MEMBER = "member"
 
 
-class Team(Base, TenantMixin, TimestampMixin):
+class Team(Base, TenantMixin):
     """
     Team model.
 
@@ -137,7 +137,7 @@ class Team(Base, TenantMixin, TimestampMixin):
         return self.get_members_by_role(TeamRole.ADMIN)
 
 
-class TeamMembership(Base, TimestampMixin):
+class TeamMembership(Base):
     """
     Team membership model.
 

@@ -16,7 +16,7 @@ from enum import Enum
 from sqlalchemy import Column, String, Text
 from sqlalchemy.types import Uuid
 
-from user_management.models.base import Base, TimestampMixin
+from user_management.models.base import Base
 
 
 class AgentStatus(str, Enum):
@@ -27,7 +27,7 @@ class AgentStatus(str, Enum):
     ARCHIVED = "archived"
 
 
-class Agent(Base, TimestampMixin):
+class Agent(Base):
     """
     Central agent registry row (#1754).
 

@@ -8,13 +8,13 @@ Tracks trained code completion models and their metadata.
 """
 
 from datetime import datetime
-from typing import Dict
+from typing import Dict, Optional
 
-from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import Mapped, mapped_column
 
-Base = declarative_base()
+from user_management.models.base import Base
 
 
 class MLModel(Base):
@@ -27,43 +27,45 @@ class MLModel(Base):
     __tablename__ = "ml_models"
 
     # Primary key
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # Model identification
-    version = Column(String(50), unique=True, nullable=False, index=True)
-    model_type = Column(String(50), nullable=False)  # e.g., "lstm_completion"
-    language = Column(String(20))  # Filter used during training
-    pattern_type = Column(String(50))  # Filter used during training
+    version: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    model_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    language: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    pattern_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     # Model metadata
-    file_path = Column(String(500), nullable=False)  # Path to .pt file
-    config = Column(JSONB)  # Model architecture config
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    config: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
 
     # Training metrics
-    val_loss = Column(Float)
-    accuracy = Column(Float)
-    mrr = Column(Float)  # Mean Reciprocal Rank
-    hit_at_1 = Column(Float)
-    hit_at_5 = Column(Float)
-    hit_at_10 = Column(Float)
+    val_loss: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    accuracy: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    mrr: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    hit_at_1: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    hit_at_5: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    hit_at_10: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     # Training info
-    epochs_trained = Column(Integer)
-    training_duration_seconds = Column(Integer)
-    num_parameters = Column(Integer)
+    epochs_trained: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    training_duration_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    num_parameters: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Deployment status
-    is_active = Column(Boolean, default=False, index=True)  # Currently serving
-    deployed_at = Column(DateTime)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    deployed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
     # Notes
-    notes = Column(Text)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     def to_dict(self) -> Dict:
         """Convert model to dictionary for API responses."""

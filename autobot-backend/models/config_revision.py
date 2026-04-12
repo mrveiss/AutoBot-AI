@@ -14,10 +14,10 @@ from sqlalchemy import Column, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.types import Uuid
 
-from user_management.models.base import Base, TimestampMixin
+from user_management.models.base import Base
 
 
-class ConfigRevision(Base, TimestampMixin):
+class ConfigRevision(Base):
     """One recorded configuration change with before/after snapshots (#1404).
 
     Secret values are redacted before storage to prevent credential leakage.

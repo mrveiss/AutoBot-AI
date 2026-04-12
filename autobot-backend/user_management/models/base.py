@@ -5,9 +5,9 @@
 Base SQLAlchemy Models and Mixins
 
 Provides:
-- Base declarative class for all models
-- TimestampMixin for created_at/updated_at
+- Base declarative class for all models (includes created_at/updated_at)
 - TenantMixin for multi-tenancy support
+- TimestampMixin kept as no-op alias for backward compatibility (#4300)
 """
 
 import uuid
@@ -19,17 +19,14 @@ from sqlalchemy.types import Uuid
 
 
 class Base(DeclarativeBase):
-    """Base class for all SQLAlchemy models."""
+    """Base class for all SQLAlchemy models.
 
-    # Use UUID as default type annotation for id columns
-    type_annotation_map = {
-        uuid.UUID: Uuid(as_uuid=True),
-    }
+    Provides automatic created_at/updated_at timestamp columns to all models.
+    Models should inherit from Base only — do not inherit from TimestampMixin
+    separately, as it will cause metaclass conflicts (#4300).
+    """
 
-
-class TimestampMixin:
-    """Mixin that adds created_at and updated_at timestamps."""
-
+    # Timestamp columns provided to all models
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -42,6 +39,23 @@ class TimestampMixin:
         onupdate=func.now(),
         nullable=False,
     )
+
+    # Use UUID as default type annotation for id columns
+    type_annotation_map = {
+        uuid.UUID: Uuid(as_uuid=True),
+    }
+
+
+class TimestampMixin:
+    """Backward compatibility alias for TimestampMixin.
+
+    NOTE: Do NOT use this in class definitions anymore. All models should
+    inherit from Base only. Base now includes created_at/updated_at columns
+    automatically. This class is kept only for backward compatibility with
+    imports/references (#4300).
+    """
+
+    pass
 
 
 class TenantMixin:

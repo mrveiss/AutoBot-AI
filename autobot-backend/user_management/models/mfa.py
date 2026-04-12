@@ -16,7 +16,7 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
-from user_management.models.base import Base, TimestampMixin
+from user_management.models.base import Base
 
 if TYPE_CHECKING:
     from user_management.models.user import User
@@ -30,7 +30,7 @@ class MFAMethod(str, Enum):
     SMS = "sms"  # Future support
 
 
-class UserMFA(Base, TimestampMixin):
+class UserMFA(Base):
     """
     User MFA configuration.
 

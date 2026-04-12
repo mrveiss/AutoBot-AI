@@ -14,7 +14,7 @@ from enum import Enum
 from sqlalchemy import Column, String, Text
 from sqlalchemy.types import Uuid
 
-from user_management.models.base import Base, TimestampMixin
+from user_management.models.base import Base
 
 
 class OrgRole(str, Enum):
@@ -26,7 +26,7 @@ class OrgRole(str, Enum):
     WORKER = "worker"
 
 
-class AgentOrgNode(Base, TimestampMixin):
+class AgentOrgNode(Base):
     """
     Organizational hierarchy node for an agent (#1405).
 

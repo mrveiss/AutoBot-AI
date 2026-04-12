@@ -16,14 +16,14 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
-from user_management.models.base import Base, TimestampMixin
+from user_management.models.base import Base
 
 if TYPE_CHECKING:
     from user_management.models.team import Team
     from user_management.models.user import User
 
 
-class APIKey(Base, TimestampMixin):
+class APIKey(Base):
     """
     API Key model.
 

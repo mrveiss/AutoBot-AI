@@ -10,11 +10,11 @@ Stores extracted code patterns for ML training and completion suggestions.
 from datetime import datetime
 from typing import Dict, Optional
 
-from sqlalchemy import Column, DateTime, Float, Index, Integer, String, Text
+from sqlalchemy import DateTime, Float, Index, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import Mapped, mapped_column
 
-Base = declarative_base()
+from user_management.models.base import Base
 
 
 class CodePattern(Base):
@@ -28,40 +28,40 @@ class CodePattern(Base):
     __tablename__ = "code_patterns"
 
     # Primary key
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # Pattern identification
-    pattern_type = Column(
+    pattern_type: Mapped[str] = mapped_column(
         String(50), nullable=False, index=True
     )  # function, error_handling, api_usage, etc.
-    language = Column(String(20), nullable=False, index=True)  # python, typescript, vue
-    category = Column(String(50), index=True)  # fastapi, redis, vue_composable, etc.
+    language: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    category: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
 
     # Pattern content
-    signature = Column(Text, nullable=False)  # Function signature or pattern template
-    body = Column(Text)  # Function body or implementation
-    context = Column(
-        JSONB
-    )  # Additional context: imports, decorators, parent class, etc.
+    signature: Mapped[str] = mapped_column(Text, nullable=False)
+    body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    context: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
 
     # Pattern metadata
-    file_path = Column(String(500))  # Source file where pattern was found
-    line_number = Column(Integer)  # Line number in source file
-    frequency = Column(Integer, default=1, index=True)  # How many times pattern appears
+    file_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    line_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    frequency: Mapped[int] = mapped_column(Integer, default=1, index=True)
 
     # Usage statistics (for learning loop - Issue #905)
-    times_suggested = Column(Integer, default=0)
-    times_accepted = Column(Integer, default=0)
-    acceptance_rate = Column(Float, default=0.0, index=True)
+    times_suggested: Mapped[int] = mapped_column(Integer, default=0)
+    times_accepted: Mapped[int] = mapped_column(Integer, default=0)
+    acceptance_rate: Mapped[float] = mapped_column(Float, default=0.0, index=True)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    last_seen = Column(
-        DateTime, default=datetime.utcnow
-    )  # Last time pattern was found in codebase
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    last_seen: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=True
+    )
 
     # Indexes for fast lookup
     __table_args__ = (

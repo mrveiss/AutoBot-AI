@@ -18,7 +18,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import Uuid
 
-from user_management.models.base import Base, TimestampMixin
+from user_management.models.base import Base
 
 
 class SecretScope(str, Enum):
@@ -47,7 +47,7 @@ class SecretType(str, Enum):
     OTHER = "other"
 
 
-class Secret(Base, TimestampMixin):
+class Secret(Base):
     """
     Secret model with ownership and scoping.
 

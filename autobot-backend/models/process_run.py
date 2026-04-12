@@ -17,7 +17,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import Uuid
 
-from user_management.models.base import Base, TimestampMixin
+from user_management.models.base import Base
 
 
 class ProcessRunStatus(str, Enum):
@@ -31,7 +31,7 @@ class ProcessRunStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
-class ProcessRun(Base, TimestampMixin):
+class ProcessRun(Base):
     """A single background process execution spawned by an agent (#1406)."""
 
     __tablename__ = "process_runs"
@@ -65,7 +65,7 @@ class ProcessRun(Base, TimestampMixin):
         return f"<ProcessRun id={self.id} agent={self.agent_id} status={self.status}>"
 
 
-class TaskDecomposition(Base, TimestampMixin):
+class TaskDecomposition(Base):
     """
     One ordered subtask within a decomposed parent task (#1406).
 
@@ -103,7 +103,7 @@ class TaskDecomposition(Base, TimestampMixin):
         )
 
 
-class AgentSession(Base, TimestampMixin):
+class AgentSession(Base):
     """Serialised agent session state with TTL-based expiry (#1406)."""
 
     __tablename__ = "agent_sessions"
