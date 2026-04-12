@@ -5,6 +5,7 @@
 #   display_name   — canonical identifier used internally
 #   api_name       — provider-specific identifiers (provider: api_model_id)
 #   aliases        — alternative names resolved to this entry
+#   prompt_prefix  — optional string prepended to the first user turn (#3263)
 #   api_kwargs:
 #     default      — applied to every provider unless overridden
 #     <provider>   — merged on top of default for that provider only
@@ -406,6 +407,7 @@ models:
       ollama: deepseek-r1
     aliases:
       - deepseek-r1:latest
+    prompt_prefix: "Think step by step before answering."
     api_kwargs:
       default:
         temperature: 0.7

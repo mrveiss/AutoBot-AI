@@ -49,7 +49,9 @@ from llm_providers.model_param_registry import (  # noqa: E402
     _FALLBACK_KWARGS,
     _load_registry,
     apply_model_defaults,
+    apply_prompt_prefix,
     get_model_kwargs,
+    get_prompt_prefix,
     get_provider_model_id,
     resolve_model_name,
 )
@@ -250,3 +252,191 @@ class TestMissingYaml:
             _clear_cache()
             kwargs = get_model_kwargs("gpt-4o")
         assert kwargs == dict(_FALLBACK_KWARGS)
+
+
+# ---------------------------------------------------------------------------
+# Tests: get_prompt_prefix (#3263)
+# ---------------------------------------------------------------------------
+
+
+class TestGetPromptPrefix:
+    def test_model_with_prefix_returns_string(self, tmp_path):
+        yaml_content = textwrap.dedent("""\
+            models:
+              - display_name: prefixed-model
+                api_name:
+                  ollama: prefixed-model
+                aliases: []
+                prompt_prefix: "Think step by step before answering."
+                api_kwargs:
+                  default:
+                    temperature: 0.7
+                    max_tokens: 4096
+        """)
+        yaml_file = tmp_path / "llm_models.yaml"
+        yaml_file.write_text(yaml_content, encoding="utf-8")
+        with patch.dict("os.environ", {"AUTOBOT_LLM_MODELS_YAML": str(yaml_file)}):
+            _clear_cache()
+            prefix = get_prompt_prefix("prefixed-model")
+        assert prefix == "Think step by step before answering."
+
+    def test_model_without_prefix_returns_none(self):
+        prefix = get_prompt_prefix("gpt-4o")
+        assert prefix is None
+
+    def test_unknown_model_returns_none(self):
+        prefix = get_prompt_prefix("totally-unknown-xyz")
+        assert prefix is None
+
+    def test_alias_resolved_before_lookup(self, tmp_path):
+        yaml_content = textwrap.dedent("""\
+            models:
+              - display_name: my-model
+                api_name:
+                  ollama: my-model
+                aliases:
+                  - my-alias
+                prompt_prefix: "Answer concisely."
+                api_kwargs:
+                  default:
+                    temperature: 0.7
+                    max_tokens: 2048
+        """)
+        yaml_file = tmp_path / "llm_models.yaml"
+        yaml_file.write_text(yaml_content, encoding="utf-8")
+        with patch.dict("os.environ", {"AUTOBOT_LLM_MODELS_YAML": str(yaml_file)}):
+            _clear_cache()
+            prefix = get_prompt_prefix("my-alias")
+        assert prefix == "Answer concisely."
+
+    def test_empty_prefix_returns_none(self, tmp_path):
+        yaml_content = textwrap.dedent("""\
+            models:
+              - display_name: empty-prefix-model
+                api_name:
+                  ollama: empty-prefix-model
+                aliases: []
+                prompt_prefix: ""
+                api_kwargs:
+                  default:
+                    temperature: 0.7
+                    max_tokens: 2048
+        """)
+        yaml_file = tmp_path / "llm_models.yaml"
+        yaml_file.write_text(yaml_content, encoding="utf-8")
+        with patch.dict("os.environ", {"AUTOBOT_LLM_MODELS_YAML": str(yaml_file)}):
+            _clear_cache()
+            prefix = get_prompt_prefix("empty-prefix-model")
+        assert prefix is None
+
+    def test_deepseek_r1_has_prefix_in_real_yaml(self):
+        """deepseek-r1 ships a prompt_prefix in the real llm_models.yaml."""
+        prefix = get_prompt_prefix("deepseek-r1")
+        assert prefix is not None
+        assert len(prefix) > 0
+
+
+# ---------------------------------------------------------------------------
+# Tests: apply_prompt_prefix (#3263)
+# ---------------------------------------------------------------------------
+
+
+class TestApplyPromptPrefix:
+    def test_prefix_prepended_to_first_user_message(self, tmp_path):
+        yaml_content = textwrap.dedent("""\
+            models:
+              - display_name: cot-model
+                api_name:
+                  ollama: cot-model
+                aliases: []
+                prompt_prefix: "Think carefully."
+                api_kwargs:
+                  default:
+                    temperature: 0.7
+                    max_tokens: 2048
+        """)
+        yaml_file = tmp_path / "llm_models.yaml"
+        yaml_file.write_text(yaml_content, encoding="utf-8")
+        messages = [
+            {"role": "system", "content": "You are a helper."},
+            {"role": "user", "content": "What is 2+2?"},
+        ]
+        with patch.dict("os.environ", {"AUTOBOT_LLM_MODELS_YAML": str(yaml_file)}):
+            _clear_cache()
+            result = apply_prompt_prefix("cot-model", messages)
+        assert result[1]["content"] == "Think carefully.\nWhat is 2+2?"
+        # system message must be untouched
+        assert result[0]["content"] == "You are a helper."
+
+    def test_no_prefix_leaves_messages_unchanged(self):
+        messages = [{"role": "user", "content": "Hello"}]
+        result = apply_prompt_prefix("gpt-4o", messages)
+        assert result[0]["content"] == "Hello"
+
+    def test_returns_same_list_object(self, tmp_path):
+        yaml_content = textwrap.dedent("""\
+            models:
+              - display_name: cot-model2
+                api_name:
+                  ollama: cot-model2
+                aliases: []
+                prompt_prefix: "Be precise."
+                api_kwargs:
+                  default:
+                    temperature: 0.7
+                    max_tokens: 2048
+        """)
+        yaml_file = tmp_path / "llm_models.yaml"
+        yaml_file.write_text(yaml_content, encoding="utf-8")
+        messages = [{"role": "user", "content": "Hi"}]
+        with patch.dict("os.environ", {"AUTOBOT_LLM_MODELS_YAML": str(yaml_file)}):
+            _clear_cache()
+            result = apply_prompt_prefix("cot-model2", messages)
+        assert result is messages
+
+    def test_only_first_user_message_modified(self, tmp_path):
+        yaml_content = textwrap.dedent("""\
+            models:
+              - display_name: multi-turn-model
+                api_name:
+                  ollama: multi-turn-model
+                aliases: []
+                prompt_prefix: "Step by step:"
+                api_kwargs:
+                  default:
+                    temperature: 0.7
+                    max_tokens: 2048
+        """)
+        yaml_file = tmp_path / "llm_models.yaml"
+        yaml_file.write_text(yaml_content, encoding="utf-8")
+        messages = [
+            {"role": "user", "content": "First question"},
+            {"role": "assistant", "content": "Answer"},
+            {"role": "user", "content": "Second question"},
+        ]
+        with patch.dict("os.environ", {"AUTOBOT_LLM_MODELS_YAML": str(yaml_file)}):
+            _clear_cache()
+            apply_prompt_prefix("multi-turn-model", messages)
+        assert messages[0]["content"] == "Step by step:\nFirst question"
+        assert messages[2]["content"] == "Second question"
+
+    def test_no_user_message_leaves_list_unchanged(self, tmp_path):
+        yaml_content = textwrap.dedent("""\
+            models:
+              - display_name: system-only-model
+                api_name:
+                  ollama: system-only-model
+                aliases: []
+                prompt_prefix: "Prefix here."
+                api_kwargs:
+                  default:
+                    temperature: 0.7
+                    max_tokens: 2048
+        """)
+        yaml_file = tmp_path / "llm_models.yaml"
+        yaml_file.write_text(yaml_content, encoding="utf-8")
+        messages = [{"role": "system", "content": "Only a system message"}]
+        with patch.dict("os.environ", {"AUTOBOT_LLM_MODELS_YAML": str(yaml_file)}):
+            _clear_cache()
+            result = apply_prompt_prefix("system-only-model", messages)
+        assert result[0]["content"] == "Only a system message"
