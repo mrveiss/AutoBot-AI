@@ -61,7 +61,7 @@
       when: not (auto_confirm | bool)
 
 # ===========================================================================
-# Phase 1: SLM manager — update first so Ansible control plane is current
+# Phase 1: SLM server (.19) — update first so Ansible control plane is current
 # ===========================================================================
 - name: "System Update | Phase 1 - SLM Server"
   hosts: slm

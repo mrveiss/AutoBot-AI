@@ -53,9 +53,9 @@
         msg: "{{ inventory_hostname }} [BEFORE]: {{ pre_snapshot.stdout_lines | default([]) }}"
 
 # ---------------------------------------------------------------------------
-# Play 1: SLM Manager — remove wrong-node and legacy dirs
+# Play 1: SLM Manager (.19) — remove wrong-node and legacy dirs
 # ---------------------------------------------------------------------------
-- name: "Cleanup: 00-SLM-Manager"
+- name: "Cleanup: 00-SLM-Manager (.19)"
   hosts: 00-SLM-Manager
   gather_facts: false
   become: true
@@ -466,10 +466,10 @@
           - "╚═══════════════════════════════════════════════════════════════╝"
           - ""
           - "Cleaned nodes:"
-          - "  00-SLM-Manager — removed wrong-node/legacy role dirs"
-          - "  01-Backend     — removed legacy dirs + flat Python files"
-          - "  02-Frontend    — removed wrong-node autobot-slm-frontend"
-          - "  npu-worker     — removed legacy npu-worker dir"
+          - "  .19 (00-SLM-Manager) — removed wrong-node/legacy role dirs"
+          - "  .20 (01-Backend)     — removed legacy dirs + flat Python files"
+          - "  .21 (02-Frontend)    — removed wrong-node autobot-slm-frontend"
+          - "  .22 (npu-worker)     — removed legacy npu-worker dir"
           - "  .23 (04-Databases)   — removed wrong-node/legacy dirs"
           - "  .24 (03-AI-Stack)    — removed legacy ai-stack dir"
           - "  .25 (browser-automation) — removed legacy browser-service dir"

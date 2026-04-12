@@ -19,7 +19,6 @@ from pydantic import BaseModel
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 from constants.network_constants import NetworkConstants
 from constants.error_constants import ERR_SESSION_NOT_FOUND
@@ -82,7 +81,12 @@ async def health_check():
 
     status = "healthy" if research_browser_manager else "not_initialized"
 
-    browser_service_url = ssot_config.browser_service_url
+    try:
+        browser_service_url = config.get_service_url("browser_service")
+    except Exception:
+        browser_service_url = (
+            f"http://localhost:{NetworkConstants.BROWSER_SERVICE_PORT}"
+        )
 
     return {
         "status": status,

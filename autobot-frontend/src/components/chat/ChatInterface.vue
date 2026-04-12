@@ -740,6 +740,18 @@ const startMessagePolling = () => {
   messagePoller.start()
 }
 
+// Handle visibility changes to pause/resume polling (#3999)
+// When tab is hidden, pause polling to reduce network traffic
+// When tab becomes visible, resume polling immediately
+const handleVisibilityChange = () => {
+  if (document.hidden) {
+    logger.debug('Tab hidden - pausing message polling')
+    messagePoller.pause()
+  } else {
+    logger.debug('Tab visible - resuming message polling')
+    messagePoller.resume()
+  }
+}
 
 // Keyboard shortcuts
 const handleKeyboardShortcuts = (event: KeyboardEvent) => {
@@ -847,11 +859,14 @@ onMounted(async () => {
   // Add keyboard shortcuts
   document.addEventListener('keydown', handleKeyboardShortcuts)
 
+  // Add visibility change listener to pause/resume polling (#3999)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 
 onUnmounted(() => {
   // Clean up event listeners
   document.removeEventListener('keydown', handleKeyboardShortcuts)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
 
   // Clean up intervals
   if (heartbeatInterval.value) {

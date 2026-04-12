@@ -315,7 +315,7 @@ let realtimeInterval: ReturnType<typeof setInterval> | null = null
 const filteredPatterns = computed(() => {
   if (!miningResult.value) return []
 
-  const patterns = miningResult.value.patterns
+  let patterns = miningResult.value.patterns
 
   switch (selectedPatternFilter.value) {
     case 'errors':

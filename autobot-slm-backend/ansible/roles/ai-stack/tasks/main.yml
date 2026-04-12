@@ -13,10 +13,25 @@
   tags: ['clean']
 
 # ============================================================
-# Service account setup (#926 Phase 4, #4091: unified autobot account)
+# Per-role service account  (#926 Phase 4)
 # ============================================================
-# AI Stack uses the existing autobot:autobot account created by backend role.
-# No separate account creation needed — all AutoBot services share autobot.
+- name: "AI Stack | Create autobot-ai system group"
+  ansible.builtin.group:
+    name: "{{ ai_group }}"
+    system: true
+    state: present
+  tags: ['ai', 'users']
+
+- name: "AI Stack | Create per-role service account"
+  ansible.builtin.user:
+    name: "{{ ai_user }}"
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+    group: "{{ ai_group }}"
+    comment: "AutoBot AI stack service account"
+    state: present
+  tags: ['ai', 'users']
 
 # ============================================================
 # Per-role env at /etc/autobot/  (#926 Phase 4)

@@ -2,16 +2,15 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 ---
-# AI Stack configuration defaults  (#926 Phase 4: unified service account)
-# All AutoBot services on a host use autobot:autobot regardless of role (#4091).
-# This simplifies permissions and avoids ownership conflicts during co-location.
-ai_service_account: autobot
-ai_user: autobot
-ai_group: autobot
+# AI Stack configuration defaults  (#926 Phase 4: per-role account + scoped dir)
+ai_service_account: autobot-ai
+ai_user: autobot-ai
+ai_group: autobot-ai
 ai_install_dir: /opt/autobot/autobot-ai-stack
 ai_log_dir: /var/log/autobot
-# Issue #3097: ai-stack and backend share /var/lib/autobot for data storage
-ai_data_dir: /var/lib/autobot
+# Issue #3097: ai-stack gets its own /var/lib/autobot-ai to avoid ownership
+# conflict with /var/lib/autobot (owned by autobot:autobot for the backend).
+ai_data_dir: /var/lib/autobot-ai
 
 # Co-located backend (used when ai-stack runs on the same host as autobot-backend)
 backend_install_dir: /opt/autobot/autobot-backend
@@ -21,7 +20,7 @@ ai_host: "0.0.0.0"
 ai_port: 8080
 
 # ChromaDB
-chromadb_persist_dir: /var/lib/autobot/chromadb
+chromadb_persist_dir: /var/lib/autobot-ai/chromadb
 chromadb_host: "0.0.0.0"
 chromadb_port: 8100
 

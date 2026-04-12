@@ -49,12 +49,9 @@
     - backend_ai_stack_host == '127.0.0.1'
   tags: ['backend', 'config']
 
-- name: "Backend | Set backend_chromadb_host on WSL2 hosts (#3541, #4084, #4087)"
+- name: "Backend | Set backend_chromadb_host=10.255.255.254 on WSL2 hosts (#3541)"
   ansible.builtin.set_fact:
-    # ChromaDB always runs on the same host as AI Stack.
-    # On WSL2: use 127.0.0.1 when ai-stack is co-located on this node,
-    # otherwise mirror backend_ai_stack_host (already WSL2-adjusted above).
-    backend_chromadb_host: "{{ '127.0.0.1' if ('ai-stack' in node_roles | default([])) else backend_ai_stack_host }}"
+    backend_chromadb_host: "10.255.255.254"
   when:
     - _proc_version.content is defined
     - (_proc_version.content | b64decode | lower) is search('microsoft')
@@ -228,18 +225,6 @@
     owner: "{{ backend_user }}"
     group: "{{ backend_group }}"
     recurse: true
-
-- name: "Backend | Sync docs directory from code_source (#4100)"
-  ansible.posix.synchronize:
-    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/docs/"
-    dest: "{{ backend_install_dir }}/../docs/"
-    delete: true
-    rsync_opts:
-      - "--exclude=__pycache__"
-      - "--exclude=*.pyc"
-      - "--exclude=.git"
-      - "--exclude=archives"
-  tags: ['backend', 'deploy']
   tags: ['backend', 'deploy']
 
 - name: Create backend symlink for imports

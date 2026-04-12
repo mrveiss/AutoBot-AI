@@ -5,7 +5,6 @@
 
   ImportTreeChart.vue - Interactive tree view of file import relationships
   Issue #707: Added Cytoscape.js network view as default
-  Issue #3998: Lazy-load Cytoscape (300KB) on demand
 -->
 <template>
   <div class="import-tree-chart" :class="{ 'chart-loading': loading, 'fullscreen': isFullscreen }">
@@ -64,89 +63,73 @@
         </div>
       </div>
 
-      <!-- Network view (Cytoscape) - Lazy-loaded on demand -->
+      <!-- Network view (Cytoscape) - DEFAULT -->
       <div v-show="viewMode === 'network'" class="network-view">
-        <!-- Loading Cytoscape library -->
-        <div v-if="cytoscapeLoading && !cy" class="cytoscape-loading">
-          <div class="loading-spinner"></div>
-          <span>{{ $t('charts.importTree.loadingVisualization') }}</span>
+        <div class="network-legend">
+          <span class="legend-item importer"><span class="dot"></span> {{ $t('charts.importTree.legend.importsOthers') }}</span>
+          <span class="legend-item imported"><span class="dot"></span> {{ $t('charts.importTree.legend.importedByOthers') }}</span>
+          <span class="legend-item hub"><span class="dot"></span> {{ $t('charts.importTree.legend.hub') }}</span>
+          <span class="legend-item external"><span class="dot"></span> {{ $t('charts.importTree.legend.externalPackage') }}</span>
+        </div>
+        <div ref="cytoscapeContainer" class="cytoscape-container"></div>
+        <div class="network-controls">
+          <button @click="zoomIn" :title="$t('charts.importTree.controls.zoomIn')">
+            <i class="fas fa-plus"></i>
+          </button>
+          <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
+          <button @click="zoomOut" :title="$t('charts.importTree.controls.zoomOut')">
+            <i class="fas fa-minus"></i>
+          </button>
+          <button @click="fitGraph" :title="$t('charts.importTree.controls.fitToView')">
+            <i class="fas fa-expand"></i>
+          </button>
+          <button @click="toggleLayout" :title="$t('charts.importTree.controls.toggleLayout')">
+            <i class="fas fa-th"></i>
+          </button>
+          <span class="control-separator">|</span>
+          <button @click="toggleFullscreen" :title="isFullscreen ? $t('charts.importTree.controls.exitFullscreen') : $t('charts.importTree.controls.fullscreen')">
+            <i :class="isFullscreen ? 'fas fa-compress' : 'fas fa-expand-arrows-alt'"></i>
+          </button>
         </div>
 
-        <!-- Cytoscape error -->
-        <div v-else-if="cytoscapeError" class="chart-error">
-          <span class="error-icon">!</span>
-          <span>{{ cytoscapeError }}</span>
-          <button @click="retryCytoscape" class="btn-link">{{ $t('charts.importTree.retry') }}</button>
+        <!-- Node Detail Panel -->
+        <div v-if="selectedNode" class="node-detail-panel">
+          <div class="detail-header">
+            <span class="detail-icon">{{ getFileIcon(selectedNode.path) }}</span>
+            <span class="detail-name">{{ selectedNode.shortName }}</span>
+            <button class="close-btn" @click="selectedNode = null" :title="$t('charts.importTree.controls.close')">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <div class="detail-content">
+            <div class="detail-row">
+              <span class="detail-label">{{ $t('charts.importTree.detail.fullPath') }}</span>
+              <span class="detail-value path-value">{{ selectedNode.path }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">{{ $t('charts.importTree.detail.type') }}</span>
+              <span class="detail-value" :class="'node-type-' + selectedNode.nodeType">
+                {{ getNodeTypeLabel(selectedNode.nodeType) }}
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">{{ $t('charts.importTree.detail.imports') }}</span>
+              <span class="detail-value">{{ selectedNode.importsCount }} module{{ selectedNode.importsCount !== 1 ? 's' : '' }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">{{ $t('charts.importTree.detail.importedBy') }}</span>
+              <span class="detail-value">{{ selectedNode.importedByCount }} file{{ selectedNode.importedByCount !== 1 ? 's' : '' }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">{{ $t('charts.importTree.detail.extension') }}</span>
+              <span class="detail-value">{{ getFileExtension(selectedNode.path) }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">{{ $t('charts.importTree.detail.directory') }}</span>
+              <span class="detail-value path-value">{{ getFileDirectory(selectedNode.path) }}</span>
+            </div>
+          </div>
         </div>
-
-        <!-- Cytoscape container (only when loaded) -->
-        <template v-else>
-          <div class="network-legend">
-            <span class="legend-item importer"><span class="dot"></span> {{ $t('charts.importTree.legend.importsOthers') }}</span>
-            <span class="legend-item imported"><span class="dot"></span> {{ $t('charts.importTree.legend.importedByOthers') }}</span>
-            <span class="legend-item hub"><span class="dot"></span> {{ $t('charts.importTree.legend.hub') }}</span>
-            <span class="legend-item external"><span class="dot"></span> {{ $t('charts.importTree.legend.externalPackage') }}</span>
-          </div>
-          <div ref="cytoscapeContainer" class="cytoscape-container"></div>
-          <div class="network-controls">
-            <button @click="zoomIn" :title="$t('charts.importTree.controls.zoomIn')">
-              <i class="fas fa-plus"></i>
-            </button>
-            <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
-            <button @click="zoomOut" :title="$t('charts.importTree.controls.zoomOut')">
-              <i class="fas fa-minus"></i>
-            </button>
-            <button @click="fitGraph" :title="$t('charts.importTree.controls.fitToView')">
-              <i class="fas fa-expand"></i>
-            </button>
-            <button @click="toggleLayout" :title="$t('charts.importTree.controls.toggleLayout')">
-              <i class="fas fa-th"></i>
-            </button>
-            <span class="control-separator">|</span>
-            <button @click="toggleFullscreen" :title="isFullscreen ? $t('charts.importTree.controls.exitFullscreen') : $t('charts.importTree.controls.fullscreen')">
-              <i :class="isFullscreen ? 'fas fa-compress' : 'fas fa-expand-arrows-alt'"></i>
-            </button>
-          </div>
-
-          <!-- Node Detail Panel -->
-          <div v-if="selectedNode" class="node-detail-panel">
-            <div class="detail-header">
-              <span class="detail-icon">{{ getFileIcon(selectedNode.path) }}</span>
-              <span class="detail-name">{{ selectedNode.shortName }}</span>
-              <button class="close-btn" @click="selectedNode = null" :title="$t('charts.importTree.controls.close')">
-                <i class="fas fa-times"></i>
-              </button>
-            </div>
-            <div class="detail-content">
-              <div class="detail-row">
-                <span class="detail-label">{{ $t('charts.importTree.detail.fullPath') }}</span>
-                <span class="detail-value path-value">{{ selectedNode.path }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">{{ $t('charts.importTree.detail.type') }}</span>
-                <span class="detail-value" :class="'node-type-' + selectedNode.nodeType">
-                  {{ getNodeTypeLabel(selectedNode.nodeType) }}
-                </span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">{{ $t('charts.importTree.detail.imports') }}</span>
-                <span class="detail-value">{{ selectedNode.importsCount }} module{{ selectedNode.importsCount !== 1 ? 's' : '' }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">{{ $t('charts.importTree.detail.importedBy') }}</span>
-                <span class="detail-value">{{ selectedNode.importedByCount }} file{{ selectedNode.importedByCount !== 1 ? 's' : '' }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">{{ $t('charts.importTree.detail.extension') }}</span>
-                <span class="detail-value">{{ getFileExtension(selectedNode.path) }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">{{ $t('charts.importTree.detail.directory') }}</span>
-                <span class="detail-value path-value">{{ getFileDirectory(selectedNode.path) }}</span>
-              </div>
-            </div>
-          </div>
-        </template>
       </div>
 
       <!-- Tree view -->
@@ -230,12 +213,14 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
+import cytoscape, { type Core, type NodeSingular } from 'cytoscape'
+// @ts-expect-error - cytoscape-fcose has no type declarations
+import fcose from 'cytoscape-fcose'
 import { getCssVar } from '@/composables/useCssVars'
 import { useDebounce } from '@/composables/useTimeout'
 
-// Type imports only - actual implementation loaded dynamically
-import type cytoscape from 'cytoscape'
-import type { Core, NodeSingular } from 'cytoscape'
+// Register fcose layout
+cytoscape.use(fcose)
 
 const { t } = useI18n()
 
@@ -296,17 +281,9 @@ const selectedNode = ref<{
 } | null>(null)
 const isFullscreen = ref(false)
 
-// Cytoscape lazy-loading state
-const cytoscapeLoading = ref(false)
-const cytoscapeError = ref('')
-
 // Cytoscape instance
 const cytoscapeContainer = ref<HTMLElement | null>(null)
 let cy: Core | null = null
-
-// Dynamic import module reference
-let cytoscapeModule: typeof cytoscape | null = null
-let fcoseModule: any = null
 
 // Computed
 const containerHeight = computed(() => {
@@ -430,50 +407,13 @@ function handleSearch() {
 }
 
 // ============================================================================
-// Cytoscape Lazy Loading
-// ============================================================================
-
-async function loadCytoscapeLibrary() {
-  if (cytoscapeModule) return // Already loaded
-
-  try {
-    cytoscapeLoading.value = true
-    cytoscapeError.value = ''
-
-    // Dynamically import Cytoscape and fcose
-    const [cyModule, fcoseModuleImport] = await Promise.all([
-      import('cytoscape'),
-      import('cytoscape-fcose')
-    ])
-
-    cytoscapeModule = cyModule.default
-    fcoseModule = fcoseModuleImport.default
-
-    // Register fcose layout plugin
-    if (cytoscapeModule) {
-      cytoscapeModule.use(fcoseModule)
-    }
-
-    cytoscapeLoading.value = false
-  } catch (err) {
-    cytoscapeLoading.value = false
-    cytoscapeError.value = `Failed to load visualization library: ${err instanceof Error ? err.message : 'Unknown error'}`
-    console.error('Cytoscape lazy-load error:', err)
-  }
-}
-
-function retryCytoscape() {
-  loadCytoscapeLibrary()
-}
-
-// ============================================================================
 // Cytoscape Methods
 // ============================================================================
 
 function initCytoscape() {
-  if (!cytoscapeModule || !cytoscapeContainer.value) return
+  if (!cytoscapeContainer.value) return
 
-  cy = cytoscapeModule({
+  cy = cytoscape({
     container: cytoscapeContainer.value,
     style: getCytoscapeStyles(),
     elements: [],
@@ -523,7 +463,7 @@ function initCytoscape() {
   })
 }
 
-function getCytoscapeStyles(): Array<{ selector: string; style: Record<string, string | number> }> {
+function getCytoscapeStyles(): cytoscape.StylesheetStyle[] {
   // Read design tokens for theming (Issue #704)
   const textPrimary = getCssVar('--text-primary', '#e2e8f0')
   const bgSecondary = getCssVar('--bg-secondary', '#1e293b')
@@ -602,7 +542,7 @@ function getCytoscapeStyles(): Array<{ selector: string; style: Record<string, s
 function updateCytoscapeElements() {
   if (!cy) return
 
-  const elements: Array<{ data: Record<string, any>; position?: { x: number; y: number } }> = []
+  const elements: cytoscape.ElementDefinition[] = []
   const nodeIds = new Set<string>()
 
   // Build map of imports and importers for quick lookup
@@ -666,22 +606,24 @@ function updateCytoscapeElements() {
         borderColor,
         size,
         importsCount,
-        importedBy,
-        type: determineNodeType(importsCount, importedBy)
+        importedBy
       }
     })
+  }
 
-    // Add edges for imports
-    // const imports = normalizeImports(file.imports)
-    const importsForEdges = normalizeImports(file.imports)
-    for (const imp of importsForEdges) {
-      if (imp.file && nodeIds.has(imp.file)) {
+  // Add edges for imports
+  for (const file of filteredData.value) {
+    const imports = normalizeImports(file.imports)
+
+    for (const imp of imports) {
+      // Only add internal imports (those with resolved file paths)
+      if (imp.file && !imp.is_external && nodeIds.has(imp.file)) {
         elements.push({
           data: {
-            id: `${file.path}→${imp.file}`,
+            id: `${file.path}->${imp.file}`,
             source: file.path,
             target: imp.file,
-            color: getCssVar('--chart-teal', '#14b8a6'),
+            color: getCssVar('--text-tertiary', '#64748b'),
             width: 1.5
           }
         })
@@ -689,91 +631,46 @@ function updateCytoscapeElements() {
     }
   }
 
+  // Update graph
   cy.elements().remove()
   cy.add(elements)
 
-  // Apply layout
-  if (layoutMode.value === 'force') {
-    cy.layout({
-      name: 'fcose',
-      quality: 'default',
-      randomize: true,
-      componentSpacing: 40,
-      nodeRepulsion: 4500,
-      edgeElasticity: 0.5,
-      nestingFactor: 0.1,
-      gravity: 250,
-      numIter: 2500,
-      tile: true,
-      tilingPaddingVertical: 10,
-      tilingPaddingHorizontal: 10,
-      gravityRangeCompound: 1.5,
-      initialEnergyOnMultiLevel: 0.15,
-      multiLevelSpacing: 1.5
-    }).run()
-  } else {
-    const cols = Math.ceil(Math.sqrt(nodeIds.size))
-    let i = 0
-    for (const node of cy.nodes()) {
-      const row = Math.floor(i / cols)
-      const col = i % cols
-      node.position({
-        x: col * 150 + 75,
-        y: row * 150 + 75
-      })
-      i++
-    }
-  }
-
-  fitGraph()
+  // Run layout
+  runLayout()
 }
 
-function zoomIn() {
-  if (!cy) return
-  const currentZoom = cy.zoom()
-  cy.zoom(currentZoom * 1.2)
-}
+function runLayout() {
+  if (!cy || cy.nodes().length === 0) return
 
-function zoomOut() {
-  if (!cy) return
-  const currentZoom = cy.zoom()
-  cy.zoom(currentZoom / 1.2)
-}
+  const layoutOptions = layoutMode.value === 'force'
+    ? {
+        name: 'fcose',
+        animate: true,
+        animationDuration: 400,
+        fit: true,
+        padding: 30,
+        nodeDimensionsIncludeLabels: true,
+        idealEdgeLength: 120,
+        nodeRepulsion: 6000,
+        gravity: 0.3
+      }
+    : {
+        name: 'grid',
+        animate: true,
+        animationDuration: 300,
+        fit: true,
+        padding: 30,
+        avoidOverlap: true
+      }
 
-function fitGraph() {
-  if (!cy) return
-  cy.fit(undefined, 50)
-}
-
-function toggleLayout() {
-  layoutMode.value = layoutMode.value === 'force' ? 'grid' : 'force'
-  updateCytoscapeElements()
-}
-
-function toggleFullscreen() {
-  isFullscreen.value = !isFullscreen.value
-  nextTick(() => {
-    if (cy) {
-      cy.resize()
-      fitGraph()
-    }
-  })
+  cy.layout(layoutOptions as cytoscape.LayoutOptions).run()
 }
 
 function highlightConnected(node: NodeSingular) {
   if (!cy) return
-
-  const connectedEdges = node.connectedEdges()
-  const connectedNodes = node.neighborhood().nodes()
-
+  const neighborhood = node.neighborhood().add(node)
   cy.elements().addClass('dimmed')
-  node.removeClass('dimmed')
-  connectedEdges.removeClass('dimmed')
-  connectedNodes.removeClass('dimmed')
-
-  node.addClass('highlighted')
-  connectedEdges.addClass('highlighted')
-  connectedNodes.addClass('highlighted')
+  neighborhood.removeClass('dimmed').addClass('highlighted')
 }
 
 function clearHighlight() {
@@ -781,162 +678,193 @@ function clearHighlight() {
   cy.elements().removeClass('dimmed').removeClass('highlighted')
 }
 
-// Watch for view mode changes to lazy-load Cytoscape
-watch(() => viewMode.value, async (newMode) => {
-  if (newMode === 'network' && !cy && !cytoscapeLoading.value) {
-    await loadCytoscapeLibrary()
-    await nextTick()
+function zoomIn() {
+  if (!cy) return
+  cy.zoom(cy.zoom() * 1.25)
+  cy.center()
+}
+
+function zoomOut() {
+  if (!cy) return
+  cy.zoom(cy.zoom() * 0.8)
+  cy.center()
+}
+
+function fitGraph() {
+  if (!cy) return
+  cy.fit(undefined, 30)
+  zoomLevel.value = cy.zoom()
+}
+
+function toggleLayout() {
+  layoutMode.value = layoutMode.value === 'force' ? 'grid' : 'force'
+  runLayout()
+}
+
+function toggleFullscreen() {
+  isFullscreen.value = !isFullscreen.value
+  // Re-fit the graph after transition
+  nextTick(() => {
+    setTimeout(() => {
+      if (cy) {
+        cy.resize()
+        fitGraph()
+      }
+    }, 100)
+  })
+}
+
+// ============================================================================
+// Lifecycle
+// ============================================================================
+
+onMounted(async () => {
+  await nextTick()
+  if (cytoscapeContainer.value && props.data?.length) {
     initCytoscape()
     updateCytoscapeElements()
   }
 })
 
-// Watch for data changes to update graph
-watch(() => props.data, () => {
-  if (cy) {
-    updateCytoscapeElements()
-  }
-})
-
-// Watch for filtered data changes
-watch(() => filteredData.value, () => {
-  if (cy) {
-    updateCytoscapeElements()
-  }
-})
-
-// Cleanup on unmount
 onUnmounted(() => {
   if (cy) {
     cy.destroy()
     cy = null
   }
 })
+
+// Watch for data changes and auto-expand highly connected files
+watch(() => props.data, async (newData) => {
+  if (newData && newData.length > 0) {
+    // Auto-expand top 3 most connected files (for tree view)
+    const sorted = [...newData].sort((a, b) => {
+      const aCount = (a.imports?.length || 0) + (a.imported_by?.length || 0)
+      const bCount = (b.imports?.length || 0) + (b.imported_by?.length || 0)
+      return bCount - aCount
+    })
+
+    sorted.slice(0, 3).forEach(file => {
+      if (file.imports?.length || file.imported_by?.length) {
+        expandedNodes.value.add(file.path)
+      }
+    })
+
+    // Update Cytoscape if initialized
+    await nextTick()
+    if (!cy && cytoscapeContainer.value) {
+      initCytoscape()
+    }
+    updateCytoscapeElements()
+  }
+}, { immediate: true })
+
+// Watch for view mode changes
+watch(viewMode, async (newMode) => {
+  if (newMode === 'network') {
+    await nextTick()
+    if (!cy && cytoscapeContainer.value) {
+      initCytoscape()
+      updateCytoscapeElements()
+    }
+  }
+})
 </script>
 
 <style scoped>
+/**
+ * Issue #704: CSS Design System - Using design tokens
+ * All colors reference CSS custom properties from design-tokens.css
+ */
 .import-tree-chart {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: 100%;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  padding: var(--spacing-lg);
+  position: relative;
+  contain: layout style;
 }
 
 .chart-header {
-  padding: var(--spacing-3);
-  border-bottom: 1px solid var(--border-color);
-  background: var(--bg-secondary);
+  margin-bottom: var(--spacing-md);
 }
 
 .chart-title {
-  margin: 0;
-  font-size: 1.125rem;
+  font-size: var(--text-base);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
+  margin: 0 0 var(--spacing-1) 0;
 }
 
 .chart-subtitle {
-  display: block;
-  font-size: 0.875rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
-  margin-top: 4px;
 }
 
-.chart-loading,
+.chart-loading-overlay,
 .chart-error,
 .chart-no-data {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 400px;
-  gap: var(--spacing-2);
-  color: var(--text-secondary);
-  font-size: 0.95rem;
-}
-
-.chart-loading-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.3);
-  z-index: 10;
-  gap: var(--spacing-2);
+  min-height: 200px;
+  color: var(--text-secondary);
+  gap: var(--spacing-sm);
 }
 
 .loading-spinner {
   width: 32px;
   height: 32px;
-  border: 3px solid var(--border-color);
+  border: 3px solid var(--border-default);
   border-top-color: var(--color-primary);
   border-radius: 50%;
-  animation: spin 0.6s linear infinite;
+  animation: spin 1s linear infinite;
 }
 
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
 
-.chart-error {
-  background: var(--bg-error, rgba(239, 68, 68, 0.1));
-  border: 1px solid var(--border-error, #ef4444);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-3);
-  gap: var(--spacing-2);
-}
-
 .error-icon {
-  font-weight: bold;
-  font-size: 1.25rem;
-  color: var(--color-error, #ef4444);
-}
-
-.btn-link {
-  background: none;
-  border: none;
-  color: var(--color-primary);
-  cursor: pointer;
-  text-decoration: underline;
-  font-size: 0.875rem;
-  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: var(--color-error-bg);
+  color: var(--color-error);
+  border-radius: 50%;
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
 }
 
 .tree-container {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  overflow: hidden;
-  position: relative;
 }
 
 .tree-controls {
   display: flex;
-  gap: var(--spacing-2);
   align-items: center;
-  padding: var(--spacing-2);
-  border-bottom: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .tree-search {
   flex: 1;
-  min-width: 200px;
-  padding: var(--spacing-1) var(--spacing-2);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--bg-primary);
+  padding: var(--spacing-2) var(--spacing-3);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
+}
+
+.tree-search:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-focus);
 }
 
 .tree-search::placeholder {
@@ -945,267 +873,25 @@ onUnmounted(() => {
 
 .tree-stats {
   display: flex;
-  gap: var(--spacing-3);
-  font-size: 0.875rem;
+  gap: var(--spacing-md);
+  font-size: var(--text-xs);
   color: var(--text-secondary);
-  white-space: nowrap;
 }
 
-.view-toggle {
-  display: flex;
-  gap: var(--spacing-1);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--bg-primary);
-  padding: 2px;
-}
-
-.view-toggle button {
+.tree-stats span {
   padding: var(--spacing-1) var(--spacing-2);
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-size: 0.875rem;
-  transition: all 0.2s ease;
-}
-
-.view-toggle button.active {
-  background: var(--color-primary-light, rgba(59, 130, 246, 0.1));
-  color: var(--color-primary);
-}
-
-.network-view {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  overflow: hidden;
-  position: relative;
-}
-
-.cytoscape-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  flex: 1;
-  gap: var(--spacing-2);
-  color: var(--text-secondary);
-}
-
-.network-legend {
-  display: flex;
-  gap: var(--spacing-4);
-  padding: var(--spacing-2) var(--spacing-3);
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color);
-  flex-wrap: wrap;
-  font-size: 0.85rem;
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-1);
-  color: var(--text-secondary);
-}
-
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: inline-block;
-}
-
-.legend-item.importer .dot {
-  background: var(--color-success, #10b981);
-}
-
-.legend-item.imported .dot {
-  background: var(--chart-purple, #8b5cf6);
-}
-
-.legend-item.hub .dot {
-  background: var(--color-warning, #f59e0b);
-}
-
-.legend-item.external .dot {
-  background: var(--text-tertiary, #6b7280);
-}
-
-.cytoscape-container {
-  flex: 1;
-  width: 100%;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.network-controls {
-  display: flex;
-  gap: var(--spacing-1);
-  align-items: center;
-  padding: var(--spacing-2) var(--spacing-3);
-  background: var(--bg-secondary);
-  flex-wrap: wrap;
-}
-
-.network-controls button {
-  padding: var(--spacing-1) var(--spacing-2);
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  color: var(--text-primary);
-  cursor: pointer;
-  font-size: 0.875rem;
-  transition: all 0.2s ease;
-}
-
-.network-controls button:hover {
   background: var(--bg-tertiary);
-  border-color: var(--color-primary);
-}
-
-.zoom-level {
-  padding: 0 var(--spacing-1);
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  min-width: 40px;
-  text-align: center;
-}
-
-.control-separator {
-  color: var(--border-color);
-  margin: 0 var(--spacing-1);
-}
-
-.node-detail-panel {
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 280px;
-  max-height: 100%;
-  background: var(--bg-primary);
-  border-left: 1px solid var(--border-color);
-  border-radius: 0;
-  overflow-y: auto;
-  z-index: 100;
-  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.15);
-}
-
-.detail-header {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  padding: var(--spacing-2);
-  border-bottom: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-  position: sticky;
-  top: 0;
-  z-index: 101;
-}
-
-.detail-icon {
-  font-size: 1.5rem;
-  min-width: 24px;
-}
-
-.detail-name {
-  flex: 1;
-  font-weight: var(--font-semibold);
-  color: var(--text-primary);
-  word-break: break-word;
-  font-size: 0.95rem;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-size: 1.125rem;
-  padding: 0;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.close-btn:hover {
-  color: var(--text-primary);
-}
-
-.detail-content {
-  padding: var(--spacing-2);
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-2);
-}
-
-.detail-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.detail-label {
-  font-size: 0.75rem;
-  font-weight: var(--font-semibold);
-  color: var(--text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.detail-value {
-  font-size: 0.875rem;
-  color: var(--text-primary);
-  word-break: break-word;
-}
-
-.detail-value.path-value {
-  font-family: monospace;
-  font-size: 0.8rem;
-  background: var(--bg-secondary);
-  padding: 4px 8px;
   border-radius: var(--radius-sm);
-  overflow-x: auto;
-}
-
-.detail-value.node-type-hub {
-  color: var(--color-warning, #f59e0b);
-  font-weight: var(--font-semibold);
-}
-
-.detail-value.node-type-importer {
-  color: var(--color-success, #10b981);
-  font-weight: var(--font-semibold);
-}
-
-.detail-value.node-type-imported {
-  color: var(--chart-purple, #8b5cf6);
-  font-weight: var(--font-semibold);
-}
-
-.detail-value.node-type-isolated {
-  color: var(--text-tertiary, #6b7280);
-  font-weight: var(--font-semibold);
-}
-
-.tree-view {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  overflow: hidden;
 }
 
 .tree-scroll {
-  flex: 1;
   overflow-y: auto;
-  overflow-x: hidden;
+  flex: 1;
+  padding-right: var(--spacing-2);
 }
 
 .tree-node {
-  border-bottom: 1px solid var(--border-color);
+  margin-bottom: var(--spacing-1);
 }
 
 .node-header {
@@ -1213,170 +899,422 @@ onUnmounted(() => {
   align-items: center;
   gap: var(--spacing-2);
   padding: var(--spacing-2) var(--spacing-3);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  background: var(--bg-primary);
-  transition: background 0.15s ease;
+  transition: all var(--duration-200) ease;
 }
 
 .node-header:hover {
-  background: var(--bg-secondary);
+  background: var(--color-primary-bg);
 }
 
-.tree-node.expanded .node-header {
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color);
+.tree-node.expanded > .node-header {
+  background: var(--color-primary-bg-hover);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 .expand-icon {
-  width: 20px;
-  text-align: center;
-  font-size: 0.8rem;
+  width: 16px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
-  flex-shrink: 0;
 }
 
 .file-icon {
-  font-size: 1rem;
-  flex-shrink: 0;
+  font-size: var(--text-base);
 }
 
 .file-name {
   flex: 1;
+  font-size: var(--text-sm);
   color: var(--text-primary);
-  font-weight: var(--font-medium);
-  font-size: 0.95rem;
+  font-family: var(--font-mono);
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .import-counts {
   display: flex;
-  gap: var(--spacing-1);
-  font-size: 0.8rem;
-  flex-shrink: 0;
+  gap: var(--spacing-2);
+  font-size: var(--text-xs);
 }
 
 .imports-out {
-  color: var(--color-success, #10b981);
-  font-weight: var(--font-medium);
+  color: var(--color-success);
+  padding: var(--spacing-px) var(--spacing-1);
+  background: var(--color-success-bg);
+  border-radius: var(--radius-sm);
 }
 
 .imports-in {
-  color: var(--chart-purple, #8b5cf6);
-  font-weight: var(--font-medium);
+  color: var(--chart-purple);
+  padding: var(--spacing-px) var(--spacing-1);
+  background: var(--chart-purple-bg);
+  border-radius: var(--radius-sm);
 }
 
 .node-children {
-  background: var(--bg-secondary);
-  border-top: 1px solid var(--border-color);
-  padding: var(--spacing-2);
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-2);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-top: none;
+  border-bottom-left-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-lg);
+  padding: var(--spacing-3);
 }
 
 .import-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-1);
+  margin-bottom: var(--spacing-3);
+}
+
+.import-section:last-child {
+  margin-bottom: 0;
 }
 
 .section-header {
   display: flex;
   align-items: center;
-  gap: var(--spacing-1);
-  font-size: 0.8rem;
+  gap: var(--spacing-2);
+  font-size: var(--text-xs);
   font-weight: var(--font-semibold);
   color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 4px;
+  margin-bottom: var(--spacing-2);
+  padding-bottom: var(--spacing-1);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .section-icon {
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
 }
 
 .import-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
   padding-left: var(--spacing-2);
 }
 
 .import-item {
   display: flex;
   align-items: center;
-  gap: var(--spacing-1);
-  padding: 4px 8px;
-  font-size: 0.8rem;
-  border-radius: var(--radius-sm);
-  background: var(--bg-primary);
+  gap: var(--spacing-2);
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   cursor: pointer;
-  transition: all 0.15s ease;
-  color: var(--text-secondary);
+  transition: background var(--duration-200) ease;
 }
 
 .import-item:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
+  background: var(--color-primary-bg);
 }
 
 .import-item.external {
-  color: var(--text-tertiary);
+  opacity: 0.7;
 }
 
-.import-item.internal {
-  color: var(--text-primary);
+.import-item.internal .import-module,
+.import-item.internal .import-file {
+  color: var(--color-success);
 }
 
 .import-icon {
-  flex-shrink: 0;
+  font-size: var(--text-sm);
 }
 
 .import-module {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
 }
 
 .import-file {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
 .import-via {
-  flex-shrink: 0;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
-  font-size: 0.75rem;
+  font-style: italic;
 }
 
-.import-tree-chart.fullscreen {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 1000;
-  border-radius: 0;
+/* View Toggle */
+.view-toggle {
+  display: flex;
+  gap: var(--spacing-1);
 }
 
-.import-tree-chart.fullscreen .cytoscape-container {
-  border-bottom: none;
+.view-toggle button {
+  padding: var(--spacing-2) var(--spacing-3);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--duration-200) ease;
 }
 
-.chart-no-data {
+.view-toggle button.active {
+  background: var(--color-primary);
+  color: var(--text-on-primary);
+  border-color: var(--color-primary);
+}
+
+.view-toggle button:hover:not(.active) {
+  background: var(--color-primary-bg);
+}
+
+/* Network View */
+.network-view {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  min-height: 400px;
+}
+
+.network-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-3);
+  padding: var(--spacing-2) var(--spacing-3);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.legend-item .dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.legend-item.importer .dot {
+  background: var(--color-success);
+  border: 2px solid var(--color-success-light);
+}
+
+.legend-item.imported .dot {
+  background: var(--chart-purple);
+  border: 2px solid var(--chart-purple-light);
+}
+
+.legend-item.hub .dot {
+  background: var(--color-warning);
+  border: 2px solid var(--color-warning-light);
+}
+
+.legend-item.external .dot {
+  background: var(--text-tertiary);
+  border: 2px solid var(--text-secondary);
+}
+
+.cytoscape-container {
+  flex: 1;
+  min-height: 350px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.network-controls {
+  position: absolute;
+  bottom: var(--spacing-3);
+  right: var(--spacing-3);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  background: var(--bg-secondary);
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+.network-controls button {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-secondary);
+  transition: all var(--duration-200);
+}
+
+.network-controls button:hover {
+  background: var(--color-primary);
+  color: var(--text-on-primary);
+  border-color: var(--color-primary);
+}
+
+.zoom-level {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  min-width: 36px;
+  text-align: center;
+}
+
+.control-separator {
+  color: var(--border-default);
+  font-size: var(--text-sm);
+}
+
+/* Tree View */
+.tree-view {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Node Detail Panel */
+.node-detail-panel {
+  position: absolute;
+  top: var(--spacing-3);
+  left: var(--spacing-3);
+  width: 320px;
+  max-width: calc(100% - 24px);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  z-index: var(--z-10);
+  overflow: hidden;
+}
+
+.detail-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3);
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.detail-icon {
+  font-size: var(--text-lg);
+}
+
+.detail-name {
+  flex: 1;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.close-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--duration-200);
+}
+
+.close-btn:hover {
+  background: var(--color-error-bg);
+  color: var(--color-error);
+}
+
+.detail-content {
+  padding: var(--spacing-3);
+}
+
+.detail-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-px);
+  margin-bottom: var(--spacing-2);
+}
+
+.detail-row:last-child {
+  margin-bottom: 0;
+}
+
+.detail-label {
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.detail-value {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+.detail-value.path-value {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  word-break: break-all;
+  padding: var(--spacing-1) var(--spacing-2);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  margin-top: var(--spacing-px);
+}
+
+.node-type-hub {
+  color: var(--color-warning);
+}
+
+.node-type-importer {
+  color: var(--color-success);
+}
+
+.node-type-imported {
+  color: var(--chart-purple);
+}
+
+.node-type-isolated {
+  color: var(--text-tertiary);
+}
+
+/* Fullscreen mode */
+.import-tree-chart.fullscreen {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: var(--z-maximum) !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+  padding: var(--spacing-md) !important;
+}
+
+.import-tree-chart.fullscreen .tree-container {
+  height: calc(100vh - 100px) !important;
+}
+
+.import-tree-chart.fullscreen .network-view {
+  min-height: calc(100vh - 200px);
+}
+
+.import-tree-chart.fullscreen .cytoscape-container {
+  min-height: calc(100vh - 240px);
 }
 </style>

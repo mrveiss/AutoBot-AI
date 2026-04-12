@@ -493,7 +493,7 @@ export class ChatController {
 
     // Strip internal tags that shouldn't be shown to users
     // Handles complete tags and partial/truncated tags from streaming (e.g. [/THO)
-    const preview = content
+    let preview = content
       .replace(/\[\/?(THOUGHT|PLANNING|DEBUG|SOURCES)\]?/gi, '')
       .replace(/\[\/?(?:THO(?:UGH?T?)?|PLA(?:NN?I?N?G?)?|DEB(?:UG?)?|SOU(?:RC?E?S?)?)\]?$/gi, '')
       .replace(/<tool_call[^>]*>.*?<\/tool_call>/gs, '')

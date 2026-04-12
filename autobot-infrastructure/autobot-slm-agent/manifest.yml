@@ -13,7 +13,7 @@ deploy:
 system_dependencies:
   - python3-venv
   - python3-dev
-  - ansible              # Runs playbooks on SLM server
+  - ansible              # Runs playbooks on SLM server (.19)
   - rsync
 
 services:
@@ -27,7 +27,7 @@ ports:
     protocol: http
     public: false
     loopback_only: false
-    description: "Prometheus node_exporter (scraped by monitoring)"
+    description: "Prometheus node_exporter (scraped by monitoring on .19)"
 
 health:
   endpoint: "http://localhost:9100/metrics"
@@ -74,4 +74,4 @@ notes: |
   Must be launched with --node-id <node_id> matching inventory hostname.
   SLM_NODE_ID env var or config.yaml node_id must be set.
   The legacy service name was 'autobot-agent' — removed by slm_agent Ansible role cleanup tasks.
-  Deployed by Ansible from SLM manager to all nodes.
+  Ansible role on .19 installs this to all 9 nodes.

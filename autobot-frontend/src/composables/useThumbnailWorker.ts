@@ -56,7 +56,7 @@ interface ThumbnailResult {
 
 // Worker instance (lazy-loaded)
 let workerInstance: Worker | null = null
-const pendingRequests = new Map<string, (result: ThumbnailResult) => void>()
+let pendingRequests = new Map<string, (result: ThumbnailResult) => void>()
 
 const CACHE_PREFIX = 'autobot-thumbnail-'
 const CACHE_TTL = 24 * 60 * 60 * 1000 // 24 hours in milliseconds

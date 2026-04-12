@@ -5,7 +5,6 @@
 Base Classes for ECL Knowledge Pipeline.
 
 Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
-Issue #3395: RAG optimization — add atomic facts support to pipeline.
 """
 
 from abc import ABC, abstractmethod
@@ -23,7 +22,6 @@ class PipelineContext:
         self.entities: List[Any] = []
         self.relationships: List[Any] = []
         self.events: List[Any] = []
-        self.facts: List[Any] = []  # Issue #3395: Atomic facts extraction
         self.summaries: List[Any] = []
         self.metadata: Dict[str, Any] = {}
         self.document_id: Optional[UUID] = None
@@ -48,7 +46,6 @@ class PipelineResult:
         self.entities_extracted: int = 0
         self.relationships_extracted: int = 0
         self.events_extracted: int = 0
-        self.facts_extracted: int = 0  # Issue #3395: Track fact extraction
         self.summaries_generated: int = 0
         self.errors: List[str] = []
 
@@ -68,11 +65,6 @@ class PipelineResult:
         return self.events_extracted
 
     @property
-    def facts_count(self) -> int:
-        """Alias for API compatibility."""
-        return self.facts_extracted
-
-    @property
     def summaries_count(self) -> int:
         """Alias for API compatibility."""
         return self.summaries_generated
@@ -88,7 +80,7 @@ class PipelineResult:
         stages = []
         if self.chunks_processed > 0:
             stages.append("extract")
-        if self.entities_extracted > 0 or self.events_extracted > 0 or self.facts_extracted > 0:
+        if self.entities_extracted > 0 or self.events_extracted > 0:
             stages.append("cognify")
         if not self.errors:
             stages.append("load")

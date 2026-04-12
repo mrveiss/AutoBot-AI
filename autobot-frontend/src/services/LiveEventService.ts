@@ -11,7 +11,6 @@
 
 import { ref, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
-import config from '@/config/ssot-config'
 
 export type LiveEventConnectionState =
   | 'disconnected'
@@ -56,7 +55,8 @@ class LiveEventService {
   readonly connectionState: Ref<LiveEventConnectionState> = ref('disconnected')
 
   private getUrl(token?: string): string {
-    const base = `${config.websocketUrl}/live`
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const base = `${wsProtocol}//${window.location.host}/api/ws/live`
     return token ? `${base}?token=${encodeURIComponent(token)}` : base
   }
 

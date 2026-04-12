@@ -28,17 +28,6 @@ backend_classification_model: "{{ lookup('env', 'AUTOBOT_CLASSIFICATION_MODEL') 
 backend_light_model: "{{ lookup('env', 'AUTOBOT_LIGHT_PROCESSING_MODEL') | default('phi3:mini', true) }}"
 backend_instruction_model: "{{ lookup('env', 'AUTOBOT_INSTRUCTION_MODEL') | default('mistral:7b-instruct', true) }}"
 backend_system_model: "{{ lookup('env', 'AUTOBOT_SYSTEM_MODEL') | default('dolphin-llama3:8b', true) }}"
-# AI Stack connection (#4087: derive from inventory SSOT — same pattern as redis_host/frontend_host)
-# co-located (single-host): backend_ai_stack_host stays 127.0.0.1
-# distributed (fleet):      backend_ai_stack_host is set from ai_stack_host in production.yml
-backend_ai_stack_host: "{{ ai_stack_host | default('127.0.0.1') }}"
-backend_ai_stack_port: "{{ ai_stack_port | default(8080) }}"
-
-# ChromaDB connection (#4087: always co-located with AI Stack — derive from backend_ai_stack_host)
-# WSL2 override in roles/backend/tasks/main.yml adjusts both vars together when WSL2 is detected.
-backend_chromadb_host: "{{ backend_ai_stack_host }}"
-backend_chromadb_port: 8100
-
 service_auth_service_id: "main-backend"
 service_auth_keys_dir: "/etc/autobot/service-keys"
 service_auth_enforcement_mode: false

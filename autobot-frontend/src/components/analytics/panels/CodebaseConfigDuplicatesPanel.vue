@@ -152,7 +152,7 @@ function truncateValue(value: string, maxLength = 50): string {
   background: rgba(30, 41, 59, 0.5);
   border-radius: 12px;
   border: 1px solid rgba(71, 85, 105, 0.5);
-  contain: layout style;}
+}
 
 .config-duplicates-section h3 {
   display: flex;

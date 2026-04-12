@@ -83,7 +83,12 @@ describe('useAutoResearch', () => {
     await fetchExperiments()
 
     expect(error.value).toBe('network timeout')
-    expect(mockShowSubtleErrorNotification).toHaveBeenCalledExactlyOnceWith('AutoResearch', 'network timeout', 'warning')
+    expect(mockShowSubtleErrorNotification).toHaveBeenCalledOnce()
+    expect(mockShowSubtleErrorNotification).toHaveBeenCalledWith(
+      'AutoResearch',
+      'network timeout',
+      'warning',
+    )
   })
 
   it('fetchStats sets error ref and shows notification on failure', async () => {
@@ -93,7 +98,12 @@ describe('useAutoResearch', () => {
     await fetchStats()
 
     expect(error.value).toBe('stats unavailable')
-    expect(mockShowSubtleErrorNotification).toHaveBeenCalledExactlyOnceWith('AutoResearch', 'stats unavailable', 'warning')
+    expect(mockShowSubtleErrorNotification).toHaveBeenCalledOnce()
+    expect(mockShowSubtleErrorNotification).toHaveBeenCalledWith(
+      'AutoResearch',
+      'stats unavailable',
+      'warning',
+    )
   })
 
   it('fetchExperiments resets loading to false after failure', async () => {

@@ -24,7 +24,6 @@ from redis import asyncio as aioredis
 
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.redis_management.types import DATABASE_MAPPING
-from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 from utils.chromadb_client import get_chromadb_client as create_chromadb_client
 from utils.chromadb_client import wrap_collection_async
@@ -76,9 +75,9 @@ class KnowledgeBaseCore:
 
     def _init_redis_config(self) -> None:
         """Initialize Redis configuration (Issue #398: extracted)."""
-        self.redis_host = ssot_config.vm.redis
-        self.redis_port = ssot_config.port.redis
-        self.redis_password = ssot_config.redis.password
+        self.redis_host = config.get("redis.host")
+        self.redis_port = config.get("redis.port")
+        self.redis_password = config.get("redis.password")
         self.redis_db = DATABASE_MAPPING["knowledge"]  # (#2670)
         self.redis_index_name = config.get(
             "redis.indexes.knowledge_base", "llama_index"

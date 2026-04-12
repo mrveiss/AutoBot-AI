@@ -18,8 +18,8 @@ from typing import Optional
 
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.redis_client import get_redis_client
-from autobot_shared.ssot_config import config as _ssot_config
 from config import config as global_config_manager
+from constants.network_constants import NetworkConstants
 from context_window_manager import ContextWindowManager
 from encryption_service import get_encryption_service, is_encryption_enabled
 
@@ -58,19 +58,21 @@ class ChatHistoryBase:
             redis_port: Optional override for Redis port
         """
         data_config = global_config_manager.get("data", {})
+        redis_config = global_config_manager.get_redis_config()
 
         self.history_file = history_file or data_config.get(
             "chat_history_file",
             os.getenv("AUTOBOT_CHAT_HISTORY_FILE", "data/chat_history.json"),
         )
         self.use_redis = (
-            use_redis if use_redis is not None else _ssot_config.redis.enabled
+            use_redis if use_redis is not None else redis_config.get("enabled", False)
         )
-        self.redis_host = redis_host or os.getenv(
-            "AUTOBOT_REDIS_HOST", _ssot_config.vm.redis
+        self.redis_host = redis_host or redis_config.get(
+            "host", os.getenv("AUTOBOT_REDIS_HOST", global_config_manager.get_host("redis"))
         )
-        self.redis_port = redis_port or int(
-            os.getenv("AUTOBOT_REDIS_PORT", str(_ssot_config.port.redis))
+        self.redis_port = redis_port or redis_config.get(
+            "port",
+            int(os.getenv("AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT))),
         )
 
     def _init_state_and_settings(self) -> None:

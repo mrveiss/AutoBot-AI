@@ -17,19 +17,12 @@ import pytest
 
 
 def _make_config_stub() -> MagicMock:
-    """Return a config manager stub that answers minimal queries for data section."""
+    """Return a config manager stub that answers minimal queries."""
     cfg = MagicMock()
     cfg.get.return_value = {}
+    cfg.get_redis_config.return_value = {"enabled": False}
+    cfg.get_host.return_value = "127.0.0.1"
     return cfg
-
-
-def _make_ssot_stub() -> MagicMock:
-    """Return a ssot_config stub supplying Redis connection defaults."""
-    ssot = MagicMock()
-    ssot.redis.enabled = False
-    ssot.vm.redis = "127.0.0.1"
-    ssot.port.redis = 6379
-    return ssot
 
 
 @pytest.fixture()
@@ -42,7 +35,6 @@ def manager():
     """
     with (
         patch("chat_history.base.global_config_manager", _make_config_stub()),
-        patch("chat_history.base._ssot_config", _make_ssot_stub()),
         patch("chat_history.base.get_redis_client", return_value=None),
         patch("chat_history.base.is_encryption_enabled", return_value=False),
         patch("chat_history.base.ContextWindowManager", return_value=MagicMock()),
@@ -51,6 +43,9 @@ def manager():
         patch("chat_history.base.os.path.exists", return_value=True),
         patch("chat_history.base.os.makedirs"),
         patch("chat_history.base.os.path.dirname", return_value="data"),
+        # ConfigManager is imported inline inside _load_config_values,
+        # so patch at the source module level.
+        patch("config.ConfigManager", return_value=MagicMock()),
     ):
         from chat_history import ChatHistoryManager
 

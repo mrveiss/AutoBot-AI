@@ -347,7 +347,7 @@
       tags: [npu, storage]
 
     # ==========================================
-    # SLM MANAGER HEALTH CHECKS
+    # SLM MANAGER HEALTH CHECKS (.19)
     # ==========================================
 
     - name: Check SLM backend service (SLM)
