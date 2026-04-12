@@ -36,11 +36,57 @@ from agent_loop.types import (
     ThinkCategory,
 )
 from events import EventStreamManager, EventType
-from events.types import create_message_event
+from events.types import create_approval_required_event, create_message_event
 from planner import PlannerModule
 from tools.parallel import ParallelToolExecutor
 
 logger = logging.getLogger(__name__)
+
+# =============================================================================
+# Approval Workflow – Sensitive Tool Classification (Issue #4092)
+# =============================================================================
+
+#: Tools that require explicit user approval before execution.
+#: Covers file modifications, system commands, and deployment operations.
+SENSITIVE_TOOLS: frozenset[str] = frozenset(
+    {
+        # File & filesystem mutations
+        "write_file",
+        "edit_file",
+        "delete_file",
+        "move_file",
+        "copy_file",
+        "create_directory",
+        "remove_directory",
+        # Shell / system commands
+        "bash",
+        "shell",
+        "execute_command",
+        "run_command",
+        "terminal",
+        "system_exec",
+        # Deployment / infrastructure
+        "deploy",
+        "ansible",
+        "docker",
+        "kubectl",
+        "helm",
+        "terraform",
+        # Git mutations (write-side)
+        "git_push",
+        "git_commit",
+        "git_merge",
+        "git_rebase",
+        "git_reset",
+        "git_force_push",
+        # Network / HTTP mutations
+        "http_post",
+        "http_put",
+        "http_patch",
+        "http_delete",
+        "send_request",
+    }
+)
 
 
 # =============================================================================
@@ -454,6 +500,11 @@ class AgentLoop:
                 }
             }
 
+        # Issue #4092: Gate sensitive operations behind user approval.
+        denied_results = await self._check_approvals(tools)
+        if denied_results:
+            return denied_results
+
         # Check if we need to think before certain tools
         await self._think_before_tools(tools)
 
@@ -710,6 +761,119 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
                 )
                 return tool_name
         return None
+
+    # =========================================================================
+    # Approval Workflow (Issue #4092)
+    # =========================================================================
+
+    @staticmethod
+    def _sensitive_tool_name(tool: dict[str, Any]) -> Optional[str]:
+        """Return the tool name if it is in SENSITIVE_TOOLS, else None."""
+        name = tool.get("tool_name", "").lower()
+        if name in SENSITIVE_TOOLS:
+            return name
+        # Also match by prefix so e.g. "bash_run" → "bash" is caught.
+        for sensitive in SENSITIVE_TOOLS:
+            if name.startswith(sensitive):
+                return sensitive
+        return None
+
+    def _requires_approval(self, tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Return the subset of *tools* that require user approval.
+
+        Returns an empty list when approval is disabled in the config.
+        """
+        if not self.config.require_approval_for_sensitive:
+            return []
+        return [t for t in tools if self._sensitive_tool_name(t) is not None]
+
+    async def _check_approvals(
+        self,
+        tools: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Request approval for every sensitive tool in *tools*.
+
+        Iterates sequentially so the user sees one dialog at a time.
+        Returns a non-empty error dict if any tool is denied (the remaining
+        tools are skipped); returns ``{}`` when all are approved or when
+        approval is not required.
+        """
+        for tool in self._requires_approval(tools):
+            tool_name = tool.get("tool_name", "unknown")
+            approval_id = str(uuid.uuid4())
+            approved = await self._request_approval(tool, approval_id)
+            if not approved:
+                logger.warning(
+                    "AgentLoop: tool '%s' denied by user (approval_id=%s)",
+                    tool_name,
+                    approval_id,
+                )
+                return {
+                    tool_name: {
+                        "error": (
+                            f"Tool '{tool_name}' was denied by the user "
+                            f"(approval_id={approval_id})"
+                        )
+                    }
+                }
+        return {}
+
+    async def _request_approval(
+        self,
+        tool: dict[str, Any],
+        approval_id: str,
+    ) -> bool:
+        """Emit APPROVAL_REQUIRED and wait for APPROVAL_RESPONSE.
+
+        Returns True if the user approved, False if denied or timed out.
+        Polls the event stream every second for up to
+        ``config.approval_timeout_seconds`` seconds.
+        """
+        tool_name = tool.get("tool_name", "unknown")
+        args = tool.get("args", tool.get("arguments", tool.get("parameters", {})))
+        task_id = self._current_context.task_id if self._current_context else None
+
+        event = create_approval_required_event(
+            approval_id=approval_id,
+            tool_name=tool_name,
+            arguments=args if isinstance(args, dict) else {"value": repr(args)},
+            reason=f"Tool '{tool_name}' performs a sensitive operation and requires authorization.",
+            risk_level="high",
+            timeout_seconds=self.config.approval_timeout_seconds,
+            task_id=task_id,
+        )
+        await self.event_stream.publish(event)
+        logger.info(
+            "AgentLoop: approval required for tool '%s' (approval_id=%s)",
+            tool_name,
+            approval_id,
+        )
+
+        deadline = asyncio.get_event_loop().time() + self.config.approval_timeout_seconds
+        while asyncio.get_event_loop().time() < deadline:
+            await asyncio.sleep(1)
+            # Fetch recent events and look for a matching APPROVAL_RESPONSE
+            recent = await self.event_stream.get_latest(
+                count=20,
+                event_types=[EventType.APPROVAL_RESPONSE],
+                task_id=task_id,
+            )
+            for resp_event in recent:
+                if resp_event.content.get("approval_id") == approval_id:
+                    approved: bool = resp_event.content.get("approved", False)
+                    logger.info(
+                        "AgentLoop: approval_id=%s decision=%s",
+                        approval_id,
+                        "approved" if approved else "denied",
+                    )
+                    return approved
+
+        logger.warning(
+            "AgentLoop: approval timed out for tool '%s' (approval_id=%s)",
+            tool_name,
+            approval_id,
+        )
+        return False
 
     def _should_continue(self) -> bool:
         """Check if the loop should continue.

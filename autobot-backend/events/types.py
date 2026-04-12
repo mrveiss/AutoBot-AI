@@ -35,6 +35,8 @@ class EventType(Enum):
     KNOWLEDGE = auto()  # Task-relevant knowledge from Knowledge module
     DATASOURCE = auto()  # API documentation and data sources
     SYSTEM = auto()  # System events (startup, shutdown, errors)
+    APPROVAL_REQUIRED = auto()  # Agent requests user approval before executing
+    APPROVAL_RESPONSE = auto()  # User approval decision (approved / denied)
 
 
 @dataclass
@@ -459,4 +461,123 @@ def create_system_event(
             "level": level,
         },
         source="system",
+    )
+
+
+# =============================================================================
+# Approval Event Types (Issue #4092)
+# =============================================================================
+
+
+@dataclass
+class ApprovalContent:
+    """Content schema for APPROVAL_REQUIRED events.
+
+    Emitted by the agent loop before executing sensitive operations to request
+    explicit user authorization.  The ``approval_id`` (== ``correlation_id`` of
+    the corresponding AgentEvent) is used to match the APPROVAL_RESPONSE.
+    """
+
+    approval_id: str  # Stable ID shared with the APPROVAL_RESPONSE
+    tool_name: str  # Tool that requires approval
+    arguments: dict  # Tool arguments (sanitized, no secrets)
+    reason: str  # Human-readable explanation of why approval is needed
+    risk_level: str = "high"  # low | medium | high | critical
+    timeout_seconds: int = 300  # How long to wait before treating as denied
+
+    def to_dict(self) -> dict:
+        return {
+            "approval_id": self.approval_id,
+            "tool_name": self.tool_name,
+            "arguments": self.arguments,
+            "reason": self.reason,
+            "risk_level": self.risk_level,
+            "timeout_seconds": self.timeout_seconds,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ApprovalContent":
+        return cls(
+            approval_id=data["approval_id"],
+            tool_name=data.get("tool_name", ""),
+            arguments=data.get("arguments", {}),
+            reason=data.get("reason", ""),
+            risk_level=data.get("risk_level", "high"),
+            timeout_seconds=data.get("timeout_seconds", 300),
+        )
+
+
+@dataclass
+class ApprovalResponseContent:
+    """Content schema for APPROVAL_RESPONSE events.
+
+    Published by the frontend/user to signal the approval decision for a
+    pending APPROVAL_REQUIRED event.
+    """
+
+    approval_id: str  # Matches ApprovalContent.approval_id
+    approved: bool  # True = approved, False = denied
+    comment: Optional[str] = None  # Optional user comment / reason
+
+    def to_dict(self) -> dict:
+        return {
+            "approval_id": self.approval_id,
+            "approved": self.approved,
+            "comment": self.comment,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ApprovalResponseContent":
+        return cls(
+            approval_id=data["approval_id"],
+            approved=data.get("approved", False),
+            comment=data.get("comment"),
+        )
+
+
+def create_approval_required_event(
+    approval_id: str,
+    tool_name: str,
+    arguments: dict,
+    reason: str,
+    risk_level: str = "high",
+    timeout_seconds: int = 300,
+    task_id: Optional[str] = None,
+) -> AgentEvent:
+    """Helper to create an APPROVAL_REQUIRED event (Issue #4092)."""
+    content = ApprovalContent(
+        approval_id=approval_id,
+        tool_name=tool_name,
+        arguments=arguments,
+        reason=reason,
+        risk_level=risk_level,
+        timeout_seconds=timeout_seconds,
+    )
+    return AgentEvent(
+        event_type=EventType.APPROVAL_REQUIRED,
+        content=content.to_dict(),
+        source="agent",
+        task_id=task_id,
+        correlation_id=approval_id,
+    )
+
+
+def create_approval_response_event(
+    approval_id: str,
+    approved: bool,
+    comment: Optional[str] = None,
+    task_id: Optional[str] = None,
+) -> AgentEvent:
+    """Helper to create an APPROVAL_RESPONSE event (Issue #4092)."""
+    content = ApprovalResponseContent(
+        approval_id=approval_id,
+        approved=approved,
+        comment=comment,
+    )
+    return AgentEvent(
+        event_type=EventType.APPROVAL_RESPONSE,
+        content=content.to_dict(),
+        source="user",
+        task_id=task_id,
+        correlation_id=approval_id,
     )

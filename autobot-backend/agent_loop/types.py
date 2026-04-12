@@ -111,7 +111,8 @@ class IterationResult:
     """Result of a single agent loop iteration."""
 
     iteration_number: int
-    phase_completed: LoopPhase = LoopPhase.ANALYZE_EVENTS  # overwritten by _execute_iteration_phases
+    # overwritten by _execute_iteration_phases
+    phase_completed: LoopPhase = LoopPhase.ANALYZE_EVENTS
     tools_executed: list[str] = field(default_factory=list)
     tool_results: dict[str, Any] = field(default_factory=dict)
     events_analyzed: int = 0
@@ -182,6 +183,10 @@ class AgentLoopConfig:
 
     # Repetitive tool-call detection (#3255)
     max_identical_tool_calls: int = 3  # Halt when same tool+args seen N times
+
+    # Approval workflow (Issue #4092)
+    require_approval_for_sensitive: bool = True  # Gate sensitive ops behind user approval
+    approval_timeout_seconds: int = 300  # Max seconds to wait for user response
 
     # Logging
     log_iterations: bool = True  # Log each iteration

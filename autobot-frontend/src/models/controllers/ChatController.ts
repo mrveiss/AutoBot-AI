@@ -1041,4 +1041,36 @@ export class ChatController {
       this.getAppStore()?.setLoading(false)
     }
   }
+
+  /**
+   * Submit a user approval decision for an agent-loop sensitive operation (#4092).
+   *
+   * Publishes an APPROVAL_RESPONSE via the LiveEventService WebSocket so the
+   * backend ``AgentLoop._request_approval()`` polling loop can pick it up.
+   *
+   * @param approvalId   - Correlation ID from the APPROVAL_REQUIRED event
+   * @param approved     - True to allow the operation, false to deny it
+   * @param comment      - Optional human comment attached to the decision
+   * @returns true if the decision was delivered to the WebSocket, false otherwise
+   */
+  submitApprovalDecision(
+    approvalId: string,
+    approved: boolean,
+    comment?: string
+  ): boolean {
+    // Lazy import to avoid circular dependency at module load time
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const liveEventService = (require('@/services/LiveEventService') as { default: import('@/services/LiveEventService').LiveEventService }).default
+    const taskId = this.chatStore.currentSessionId ?? undefined
+    const sent = liveEventService.sendApprovalDecision({
+      approval_id: approvalId,
+      approved,
+      comment,
+      task_id: taskId,
+    })
+    if (!sent) {
+      logger.error('submitApprovalDecision: LiveEventService WebSocket unavailable')
+    }
+    return sent
+  }
 }
