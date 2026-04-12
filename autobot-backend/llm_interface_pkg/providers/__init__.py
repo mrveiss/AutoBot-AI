@@ -13,6 +13,12 @@ from .openai_provider import OpenAIProvider
 from .transformers_provider import TransformersProvider
 from .vllm_provider import VLLMProviderHandler
 
+# AnthropicProvider and GroqProvider are available as submodule imports:
+#   from llm_interface_pkg.providers.anthropic_provider import AnthropicProvider
+#   from llm_interface_pkg.providers.groq_provider import GroqProvider
+# They are not eagerly imported here to avoid a circular dependency between
+# llm_interface_pkg and llm_providers.
+
 __all__ = [
     "OllamaProvider",
     "OpenAIProvider",

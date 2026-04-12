@@ -295,6 +295,7 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
 
     from .anthropic_provider import AnthropicProvider
     from .custom_openai_provider import CustomOpenAIProvider
+    from .groq_provider import GroqProvider
     from .huggingface_provider import HuggingFaceProvider
     from .openai_provider import OpenAIProvider
 
@@ -333,6 +334,15 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
         fallback.append(anthropic_provider.provider_name)
     else:
         logger.debug("ANTHROPIC_API_KEY not set — Anthropic provider not registered")
+
+    # Groq — registered when API key is present
+    groq_key = os.getenv("GROQ_API_KEY")
+    if groq_key:
+        groq_provider = GroqProvider(settings={"api_key": groq_key})
+        registry.register(groq_provider)
+        fallback.append(groq_provider.provider_name)
+    else:
+        logger.debug("GROQ_API_KEY not set — Groq provider not registered")
 
     # HuggingFace — registered when HF token is present
     hf_token = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_API_TOKEN")

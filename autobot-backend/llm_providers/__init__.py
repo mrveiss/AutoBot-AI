@@ -23,6 +23,7 @@ Registry:
 from .anthropic_provider import AnthropicProvider
 from .base_provider import BaseProvider
 from .custom_openai_provider import CustomOpenAIProvider
+from .groq_provider import GroqProvider
 from .huggingface_provider import HuggingFaceProvider
 from .ollama_provider import OllamaProvider
 from .openai_provider import OpenAIProvider
@@ -36,6 +37,7 @@ __all__ = [
     "OllamaProvider",
     "OpenAIProvider",
     "AnthropicProvider",
+    "GroqProvider",
     "HuggingFaceProvider",
     "CustomOpenAIProvider",
     # vLLM (existing)

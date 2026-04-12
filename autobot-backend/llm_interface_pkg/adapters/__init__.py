@@ -18,6 +18,7 @@ from .base import (
     EnvironmentTestResult,
     SessionCodec,
 )
+from .groq_adapter import GroqAdapter
 from .layer_inference_adapter import LayerInferenceAdapter
 from .ollama_adapter import OllamaAdapter
 from .openai_adapter import OpenAIAdapter
@@ -40,6 +41,7 @@ __all__ = [
     "AIStackAdapter",
     "OpenAIAdapter",
     "AnthropicAdapter",
+    "GroqAdapter",
     "ProcessAdapter",
     "LayerInferenceAdapter",
 ]

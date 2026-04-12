@@ -118,6 +118,14 @@ GOOGLE_GEMINI15_FLASH = "gemini-1.5-flash"
 GOOGLE_GEMINI_PRO = "gemini-pro"          # plain base model (distinct from vision)
 GOOGLE_GEMINI_PRO_VISION = "gemini-pro-vision"
 
+# Groq — hosted inference (OpenAI-compatible API)
+GROQ_LLAMA3_8B = "llama3-8b-8192"
+GROQ_LLAMA3_70B = "llama3-70b-8192"
+GROQ_LLAMA31_8B = "llama-3.1-8b-instant"
+GROQ_LLAMA33_70B = "llama-3.3-70b-versatile"
+GROQ_MIXTRAL_8X7B = "mixtral-8x7b-32768"
+GROQ_GEMMA2_9B = "gemma2-9b-it"
+
 # DeepSeek hosted API
 DEEPSEEK_V3 = "deepseek-v3"
 DEEPSEEK_R1_API = "deepseek-r1-api"

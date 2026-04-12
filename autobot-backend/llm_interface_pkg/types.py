@@ -24,6 +24,7 @@ class ProviderType(Enum):
     AI_STACK = "ai_stack"  # Issue #1403
     PROCESS = "process"  # Issue #1403
     LAYER_INFERENCE = "layer_inference"  # Issue #3104
+    GROQ = "groq"  # Issue #4096
 
 
 class LLMType(Enum):
