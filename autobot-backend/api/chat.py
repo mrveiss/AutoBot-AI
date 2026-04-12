@@ -453,16 +453,19 @@ async def _store_and_log_user_message(
     message: "ChatMessage",
     session_id: str,
     chat_history_manager,
+    author_id: Optional[str] = None,
 ) -> str:
     """
     Store user message and log the event.
 
     Issue #281: Extracted helper for user message handling.
+    Issue #3282: author_id added for multi-user message attribution.
 
     Args:
         message: Chat message object
         session_id: Session ID
         chat_history_manager: Chat history manager instance
+        author_id: Optional user ID of the message author for shared sessions
 
     Returns:
         Generated message ID
@@ -476,9 +479,29 @@ async def _store_and_log_user_message(
         "metadata": message.metadata,
         "session_id": session_id,
     }
+    if author_id:
+        user_message_data["authorId"] = author_id
 
     if hasattr(chat_history_manager, "add_message"):
         await chat_history_manager.add_message(session_id, user_message_data)
+
+    # Issue #3282: Broadcast new user message to all session collaborators
+    try:
+        from websocket.presence import presence_manager
+
+        await presence_manager.broadcast_to_session(
+            session_id,
+            {
+                "type": "new_message",
+                "session_id": session_id,
+                "message_id": user_message_id,
+                "author_id": author_id,
+                "role": message.role,
+                "timestamp": datetime.utcnow().isoformat(),
+            },
+        )
+    except Exception:
+        pass  # Broadcast failure must never break message storage
 
     log_chat_event(
         "message_received",
@@ -655,15 +678,17 @@ async def process_chat_message(
     knowledge_base,
     config: Metadata,
     request_id: str,
+    author_id: Optional[str] = None,
 ) -> Metadata:
-    """Process a chat message and generate response (Issue #398: refactored)."""
+    """Process a chat message and generate response (Issue #398: refactored,
+    Issue #3282: author_id for multi-user attribution)."""
     _validate_session_id(message.session_id)
 
     # Get or create session
     session_id = message.session_id or generate_chat_session_id()
 
-    # Store user message (Issue #281: uses helper)
-    await _store_and_log_user_message(message, session_id, chat_history_manager)
+    # Store user message (Issue #281: uses helper, Issue #3282: author_id)
+    await _store_and_log_user_message(message, session_id, chat_history_manager, author_id)
 
     # Get chat context (Issue #281: uses helper)
     model_name = message.metadata.get("model") if message.metadata else None
@@ -838,6 +863,9 @@ async def send_message(
     llm_service = get_llm_service(request)
     memory_interface = get_memory_interface(request)
 
+    # Issue #3282: Carry author identity for shared-session message attribution
+    author_id = current_user.get("user_id") if current_user else None
+
     # Process the chat message with a configurable timeout (Issue #1907).
     # Override via AUTOBOT_CHAT_TIMEOUT env var (seconds, float). Default: 30.0.
     chat_timeout = float(os.getenv("AUTOBOT_CHAT_TIMEOUT", "30.0"))
@@ -851,6 +879,7 @@ async def send_message(
                 knowledge_base,
                 config,
                 request_id,
+                author_id=author_id,
             ),
             timeout=chat_timeout,
         )

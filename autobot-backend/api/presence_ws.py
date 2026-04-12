@@ -1,0 +1,41 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+Presence WebSocket Router
+
+Exposes the real-time presence WebSocket endpoint for collaborative sessions.
+Issue #3282: collaborative multi-user support — shared sessions and workspaces.
+"""
+
+import logging
+
+from fastapi import APIRouter, Query, WebSocket
+
+from websocket.presence import presence_websocket_handler
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(tags=["collaboration", "websocket"])
+
+
+@router.websocket("/ws/sessions/{session_id}/presence")
+async def session_presence(
+    websocket: WebSocket,
+    session_id: str,
+    user_id: str = Query(..., description="Authenticated user ID"),
+) -> None:
+    """
+    WebSocket endpoint for real-time session presence.
+
+    Clients connect here to receive join/leave events and broadcast
+    messages to other participants in the same session.
+
+    Args:
+        websocket: WebSocket connection
+        session_id: Session to join
+        user_id: Caller's user ID (passed as query param until WS auth middleware
+                 is extended to cover WebSocket handshakes for this path)
+    """
+    logger.info("Presence WS connect: user=%s session=%s", user_id, session_id)
+    await presence_websocket_handler(websocket, session_id, user_id)
