@@ -16,7 +16,7 @@ on:
       - '.github/workflows/frontend-test.yml'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: self-hosted-runner-exclusive
   cancel-in-progress: true
 
 env:

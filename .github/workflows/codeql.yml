@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: self-hosted-runner-exclusive
   # Let CodeQL runs complete — cancelling produces stale 3s failures (#2699)
   cancel-in-progress: false
 
