@@ -27,8 +27,6 @@ import types
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
 # ---------------------------------------------------------------------------
 # Stub all missing runtime packages so graph.py can be imported in isolation.
 # (Pattern from graph_inject_warning_test.py)
