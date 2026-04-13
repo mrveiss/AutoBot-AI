@@ -22,6 +22,85 @@ from constants.ttl_constants import TTL_24_HOURS
 
 logger = logging.getLogger(__name__)
 
+
+def _truncate_large_file(content: str, max_chars: int = 20000) -> str:
+    """
+    Smart head/tail truncation for large file content.
+
+    Issue #4346: Preserves critical first and last sections of large files
+    (>max_chars) with a truncation marker, optimizing LLM context usage.
+
+    Strategy:
+    - Files smaller than max_chars: returned unchanged
+    - Files larger than max_chars: keep first 40% + ellipsis marker + last 40%
+    - Marker format: "[...N chars TRUNCATED...]"
+
+    Args:
+        content: File content to potentially truncate
+        max_chars: Threshold for truncation (default 20000)
+
+    Returns:
+        Truncated content with marker if needed, otherwise original content
+    """
+    if len(content) <= max_chars:
+        return content
+
+    # Calculate sections: preserve first 40% and last 40% of max_chars
+    section_size = (max_chars // 5) * 2  # 40% of max_chars
+    truncated_chars = len(content) - (section_size * 2)
+
+    head = content[:section_size]
+    tail = content[-section_size:]
+
+    marker = f"\n\n[...{truncated_chars} chars TRUNCATED...]\n\n"
+    truncated = f"{head}{marker}{tail}"
+
+    logger.info(
+        "Truncated large file: %d chars -> %d chars (marker: %d chars removed)",
+        len(content),
+        len(truncated),
+        truncated_chars,
+    )
+
+    return truncated
+
+
+def _build_skill_context(skills: Optional[List[Dict]]) -> str:
+    """
+    Build a skill context section from ranked skills.
+
+    Issue #4337: Injects available skills into system prompt for agent awareness.
+
+    Args:
+        skills: List of ranked skill dictionaries (from SkillRanker)
+
+    Returns:
+        Rendered skill context string or empty string if no skills
+    """
+    if not skills:
+        return ""
+
+    skill_lines = []
+    for i, skill in enumerate(skills, 1):
+        name = skill.get("name", "Unknown")
+        description = skill.get("description", "")
+        skill_id = skill.get("id", "")
+
+        # Format: 1. SkillName: brief description
+        if description:
+            skill_lines.append(f"{i}. {name}: {description}")
+        else:
+            skill_lines.append(f"{i}. {name}")
+
+    if not skill_lines:
+        return ""
+
+    skills_text = "\n".join(skill_lines)
+    return (
+        f"\n\n## Available Skills\nThe following skills are available for this agent to use:\n{skills_text}"
+    )
+
+
 # Issue #380: Module-level constant for supported prompt file extensions
 _SUPPORTED_PROMPT_EXTENSIONS = frozenset({".md", ".txt", ".prompt"})
 
@@ -90,6 +169,21 @@ class PromptManager:
             self.templates[key] = self.jinja_env.from_string(content)
         logger.info("Loaded %d prompts from Redis cache (FAST)", len(self.prompts))
         return True
+
+    def truncate_large_file(self, content: str, max_chars: int = 20000) -> str:
+        """
+        Public method to truncate large file content using smart head/tail strategy.
+
+        Issue #4346: Applies smart truncation to preserve context while limiting tokens.
+
+        Args:
+            content: File content to potentially truncate
+            max_chars: Threshold for truncation (default 20000)
+
+        Returns:
+            Truncated content with marker if needed, otherwise original content
+        """
+        return _truncate_large_file(content, max_chars)
 
     def _load_prompt_file(self, file_path: Path) -> None:
         """
