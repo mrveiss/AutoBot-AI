@@ -15,7 +15,7 @@ This module provides:
 
 import logging
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from extensions.base import HookContext
 from extensions.hooks import HookPoint
@@ -120,9 +120,6 @@ class HookInvoker:
         """Register default invocation configurations for all hooks."""
         # Message preparation hooks
         self._configs[HookPoint.BEFORE_MESSAGE_PROCESS] = HookInvocationConfig(
-            mode=InvocationMode.COLLECT
-        )
-        self._configs[HookPoint.BEFORE_PROMPT_BUILD] = HookInvocationConfig(
             mode=InvocationMode.COLLECT
         )
         self._configs[HookPoint.AFTER_PROMPT_BUILD] = HookInvocationConfig(
