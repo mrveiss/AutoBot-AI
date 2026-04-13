@@ -65,7 +65,7 @@ const getPathUpTo = (index: number): string => {
 <style scoped>
 @reference "../../assets/tailwind.css";
 .path-navigation {
-  @apply bg-autobot-bg-secondary border border-autobot-border rounded-lg p-4 mb-4 flex flex-wrap items-center gap-4;
+  @apply flex flex-wrap items-center gap-4 flex-1 min-w-0;
 }
 
 .breadcrumb {
