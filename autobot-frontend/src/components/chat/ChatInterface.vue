@@ -155,7 +155,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, provide } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch, provide } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useBackoffPoller } from '@/composables/useBackoffPoller'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
@@ -873,6 +873,50 @@ onUnmounted(() => {
   }
 
   messagePoller.stop()
+})
+
+// Issue #4356: Handle keep-alive activation (component re-enters view)
+// Resume polling and heartbeat when ChatInterface is activated from keep-alive cache
+onActivated(() => {
+  logger.debug('[ChatInterface] Activated from keep-alive - resuming operations')
+
+  // Resume heartbeat monitoring
+  startHeartbeat()
+
+  // Resume connection checking
+  checkConnection()
+
+  // Resume auto-save
+  enableAutoSave()
+
+  // Resume message polling
+  startMessagePolling()
+
+  // Re-attach keyboard shortcuts
+  document.addEventListener('keydown', handleKeyboardShortcuts)
+})
+
+// Issue #4356: Handle keep-alive deactivation (component leaves view but stays cached)
+// Pause polling and cleanup before caching to reduce background activity
+onDeactivated(() => {
+  logger.debug('[ChatInterface] Deactivated for keep-alive caching - pausing operations')
+
+  // Pause message polling (will resume on onActivated)
+  messagePoller.stop()
+
+  // Clean up intervals while cached
+  if (heartbeatInterval.value) {
+    clearInterval(heartbeatInterval.value)
+    heartbeatInterval.value = null
+  }
+
+  if (autoSaveInterval.value) {
+    clearInterval(autoSaveInterval.value)
+    autoSaveInterval.value = null
+  }
+
+  // Clean up keyboard shortcuts while cached
+  document.removeEventListener('keydown', handleKeyboardShortcuts)
 })
 
 // Watch for session changes to update NoVNC URL
