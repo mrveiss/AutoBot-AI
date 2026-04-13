@@ -51,35 +51,14 @@
     <div class="browser-header">
       <!-- Category Filter Tabs with enhanced transitions (Issue #161) -->
       <div class="category-tabs-container">
-        <div class="category-tabs">
-          <TransitionGroup name="category-tab">
-            <BaseButton
-              v-for="cat in availableCategories"
-              :key="cat.value ?? 'all'"
-              :variant="selectedCategory === cat.value ? 'primary' : 'outline-solid'"
-              size="sm"
-              @click="selectCategory(cat.value)"
-              :class="[
-                'category-tab',
-                { 'category-tab-active': selectedCategory === cat.value }
-              ]"
-              :aria-selected="selectedCategory === cat.value"
-              role="tab"
-            >
-              <i :class="[cat.icon, 'category-tab-icon']"></i>
-              <span class="category-tab-label">{{ cat.label }}</span>
-              <span
-                v-if="cat.count > 0"
-                :class="[
-                  'category-count',
-                  { 'category-count-active': selectedCategory === cat.value }
-                ]"
-              >
-                {{ cat.count }}
-              </span>
-            </BaseButton>
-          </TransitionGroup>
-        </div>
+        <KnowledgeBrowserHeader
+          :categories="availableCategories"
+          :selected-category="selectedCategory"
+          :search-query="searchQuery"
+          @select-category="selectCategory"
+          @search="handleSearch"
+          @clear-search="clearSearch"
+        />
         <!-- Active filter indicator -->
         <transition name="fade">
           <div v-if="selectedCategory" class="active-filter-badge">
@@ -94,28 +73,6 @@
             </button>
           </div>
         </transition>
-      </div>
-
-      <!-- Search bar -->
-      <div class="search-bar">
-        <i class="fas fa-search"></i>
-        <input
-          v-model="searchQuery"
-          type="text"
-          :placeholder="$t('knowledge.browser.searchPlaceholder')"
-          class="search-input"
-          @input="handleSearch"
-        />
-        <BaseButton
-          v-if="searchQuery"
-          variant="ghost"
-          size="xs"
-          @click="clearSearch"
-          class="clear-btn"
-          :aria-label="$t('knowledge.browser.clearSearch')"
-        >
-          <i class="fas fa-times"></i>
-        </BaseButton>
       </div>
 
       <!-- Refresh vectorization status button (Issue #162) -->
@@ -320,6 +277,7 @@ import { usePagination } from '@/composables/usePagination'
 import { useDebounce } from '@/composables/useTimeout'
 import TreeNodeComponent, { type TreeNode } from './TreeNodeComponent.vue'
 import VectorizationProgressModal from './VectorizationProgressModal.vue'
+import KnowledgeBrowserHeader from './KnowledgeBrowserHeader.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 
@@ -1158,8 +1116,9 @@ const clearSelection = () => {
   contentError.value = null
 }
 
-const handleSearch = () => {
-  updateDebouncedSearch(searchQuery.value)
+const handleSearch = (query: string) => {
+  searchQuery.value = query
+  updateDebouncedSearch(query)
 }
 
 const clearSearch = () => {
