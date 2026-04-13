@@ -2,39 +2,12 @@
   <div class="file-browser-header">
     <h2>{{ title || $t('fileBrowser.header.title') }}</h2>
 
-    <!-- Path Navigation (Inline) -->
+    <!-- Path Navigation -->
     <div class="path-navigation-inline">
-      <!-- Breadcrumb Navigation -->
-      <div class="breadcrumb">
-        <button @click="$emit('navigate-to-path', '/')" class="breadcrumb-item" type="button">
-          <i class="fas fa-home"></i> {{ $t('fileBrowser.header.home') }}
-        </button>
-        <span v-for="(part, index) in pathParts" :key="index" class="breadcrumb-item">
-          <i class="fas fa-chevron-right breadcrumb-separator"></i>
-          <button @click="$emit('navigate-to-path', getPathUpTo(index))" class="clickable" type="button">
-            {{ part }}
-          </button>
-        </span>
-      </div>
-
-      <!-- Path Input -->
-      <div class="path-input">
-        <input
-          v-model="pathInput"
-          @keyup.enter="$emit('navigate-to-path', pathInput)"
-          :placeholder="$t('fileBrowser.header.pathPlaceholder')"
-          class="path-field"
-        />
-        <BaseButton
-          variant="primary"
-          size="sm"
-          @click="$emit('navigate-to-path', pathInput)"
-          class="path-go-btn"
-          :aria-label="$t('fileBrowser.header.goToPath')"
-        >
-          <i class="fas fa-arrow-right"></i>
-        </BaseButton>
-      </div>
+      <FilePathNavigation
+        :current-path="currentPath"
+        @navigate-to-path="$emit('navigate-to-path', $event)"
+      />
     </div>
 
     <div class="file-actions">
@@ -59,8 +32,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
+import FilePathNavigation from './FilePathNavigation.vue'
 
 interface Props {
   title?: string
@@ -80,25 +53,6 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<Emits>()
-
-// Local state for path input
-const pathInput = ref(props.currentPath)
-
-// Watch for external path changes
-watch(() => props.currentPath, (newPath) => {
-  pathInput.value = newPath
-})
-
-// Computed properties
-const pathParts = computed(() => {
-  return props.currentPath.split('/').filter(part => part)
-})
-
-// Methods
-const getPathUpTo = (index: number): string => {
-  const parts = pathParts.value.slice(0, index + 1)
-  return '/' + parts.join('/')
-}
 </script>
 
 <style scoped>
@@ -114,30 +68,6 @@ const getPathUpTo = (index: number): string => {
 .path-navigation-inline {
   @apply flex items-center gap-3 flex-1 min-w-0;
   flex-basis: 66%;
-}
-
-.breadcrumb {
-  @apply flex items-center flex-wrap gap-1 shrink min-w-0;
-}
-
-.breadcrumb-item {
-  @apply flex items-center text-sm bg-none border-none cursor-pointer text-blue-600 hover:text-blue-800 hover:underline p-0;
-}
-
-.breadcrumb-item .clickable {
-  @apply cursor-pointer text-blue-600 hover:text-blue-800 hover:underline;
-}
-
-.breadcrumb-separator {
-  @apply text-autobot-text-muted mx-1;
-}
-
-.path-input {
-  @apply flex gap-2 flex-shrink-0;
-}
-
-.path-field {
-  @apply px-3 py-1.5 text-sm border border-autobot-border rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 min-w-[200px];
 }
 
 .file-actions {
