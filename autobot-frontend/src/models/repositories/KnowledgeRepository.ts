@@ -173,7 +173,7 @@ export class KnowledgeRepository extends ApiRepository {
    * Supports both simple and advanced filtering
    */
   async searchKnowledge(request: SearchKnowledgeRequest): Promise<SearchResult[]> {
-    const response = await this.post(`${getApiBase()}/knowledge_base/search`, {
+    const response = await this.post<{ results: BackendSearchResult[] }>(`${getApiBase()}/knowledge_base/search`, {
       query: request.query,
       limit: request.limit || 20,
       category: request.category,
@@ -208,7 +208,7 @@ export class KnowledgeRepository extends ApiRepository {
 
   // RAG-enhanced search using dedicated endpoint
   async ragSearch(request: RagSearchRequest): Promise<RagSearchResponse> {
-    const response = await this.post(`${getApiBase()}/knowledge_base/rag_search`, {
+    const response = await this.post<RagSearchResponse>(`${getApiBase()}/knowledge_base/rag_search`, {
       query: request.query,
       top_k: request.top_k || 10,
       limit: request.limit || 10,
@@ -219,7 +219,7 @@ export class KnowledgeRepository extends ApiRepository {
 
   // Legacy search method for backward compatibility
   async searchKnowledgeBase(query: string, limit: number = 5): Promise<SearchResult[]> {
-    const response = await this.post(`${getApiBase()}/knowledge_base/search`, {
+    const response = await this.post<{ results: SearchResult[] }>(`${getApiBase()}/knowledge_base/search`, {
       query,
       n_results: limit
     })
@@ -241,7 +241,7 @@ export class KnowledgeRepository extends ApiRepository {
   }> {
     // Support both 'text' and 'content' fields
     const textContent = request.text || request.content || ''
-    const response = await this.post(`${getApiBase()}/knowledge_base/facts`, {
+    const response = await this.post<{ success: boolean; document_id?: string; title?: string; content?: string; message?: string }>(`${getApiBase()}/knowledge_base/facts`, {
       content: textContent,
       title: request.title || '',
       source: request.source || 'Manual Entry',
@@ -254,7 +254,7 @@ export class KnowledgeRepository extends ApiRepository {
   // Legacy add text method
   // Issue #552: Fixed path - backend uses /api/knowledge_base/add_text
   async addKnowledge(content: string, metadata: Record<string, any> = {}): Promise<any> {
-    const response = await this.post(`${getApiBase()}/knowledge_base/add_text`, {
+    const response = await this.post<Record<string, unknown>>(`${getApiBase()}/knowledge_base/add_text`, {
       content,
       metadata
     })
@@ -272,7 +272,7 @@ export class KnowledgeRepository extends ApiRepository {
     content?: string
     message?: string
   }> {
-    const response = await this.post(`${getApiBase()}/knowledge_base/url`, {
+    const response = await this.post<{ success: boolean; document_id?: string; title?: string; content?: string; message?: string }>(`${getApiBase()}/knowledge_base/url`, {
       url: request.url,
       title: request.title,
       method: request.method || 'fetch',
@@ -309,7 +309,7 @@ export class KnowledgeRepository extends ApiRepository {
       formData.append('tags', JSON.stringify(options.tags))
     }
 
-    const response = await this.post(`${getApiBase()}/knowledge_base/upload`, formData)
+    const response = await this.post<{ success: boolean; document_id?: string; title?: string; content?: string; word_count?: number; message?: string }>(`${getApiBase()}/knowledge_base/upload`, formData)
     return response.data
   }
 
@@ -318,7 +318,7 @@ export class KnowledgeRepository extends ApiRepository {
    */
   async exportKnowledge(): Promise<Blob> {
     // Issue #552: Fixed path - backend uses /api/knowledge-maintenance/*
-    const response = await this.post(`${getApiBase()}/knowledge-maintenance/export`)
+    const response = await this.post<Blob>(`${getApiBase()}/knowledge-maintenance/export`)
     return response.data
   }
 
@@ -327,7 +327,7 @@ export class KnowledgeRepository extends ApiRepository {
    */
   async cleanupKnowledge(): Promise<{ success: boolean; message: string; removed_count?: number }> {
     // Issue #552: Fixed path - backend uses /api/knowledge-maintenance/*
-    const response = await this.post(`${getApiBase()}/knowledge-maintenance/cleanup`)
+    const response = await this.post<{ success: boolean; message: string; removed_count?: number }>(`${getApiBase()}/knowledge-maintenance/cleanup`)
     return response.data
   }
 
@@ -335,7 +335,7 @@ export class KnowledgeRepository extends ApiRepository {
    * Get basic knowledge base statistics
    */
   async getKnowledgeStats(): Promise<KnowledgeStats> {
-    const response = await this.get(`${getApiBase()}/knowledge_base/stats/basic`)
+    const response = await this.get<KnowledgeStats>(`${getApiBase()}/knowledge_base/stats/basic`)
     return response.data
   }
 
@@ -343,7 +343,7 @@ export class KnowledgeRepository extends ApiRepository {
    * Get detailed knowledge base statistics
    */
   async getDetailedKnowledgeStats(): Promise<DetailedKnowledgeStats> {
-    const response = await this.get(`${getApiBase()}/knowledge_base/detailed_stats`)
+    const response = await this.get<DetailedKnowledgeStats>(`${getApiBase()}/knowledge_base/detailed_stats`)
     return response.data
   }
 

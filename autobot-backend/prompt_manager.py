@@ -14,7 +14,7 @@ import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from jinja2 import Environment, FileSystemLoader, Template
 
@@ -336,6 +336,89 @@ class PromptManager:
         self.prompts[prompt_key] = content
         self.templates[prompt_key] = Template(content)
         logger.debug("Added/updated prompt: %s", prompt_key)
+
+    def _scan_for_injection(
+        self, content: str, file_name: str
+    ) -> Dict[str, Any]:
+        """
+        Scan context files for prompt injection patterns.
+
+        Issue #4345: Detects prompt injection attempts in context files
+        (AGENTS.md, CLAUDE.md, .cursorrules, SOUL.md, etc.) before they
+        are injected into system prompts.
+
+        Detects:
+        - "ignore previous instructions" patterns
+        - Role-switching attempts ("you are now", "you are a")
+        - Invisible Unicode characters (U+200B-U+206F)
+        - System prompt override attempts
+        - Command injection patterns
+
+        Args:
+            content: File content to scan
+            file_name: Name of the file being scanned (for logging)
+
+        Returns:
+            Dictionary with detection results:
+                - detected: bool, whether injection was found
+                - risk_level: string risk level
+                - patterns: list of detected patterns
+                - suspicious_chars: list of invisible Unicode found
+        """
+        try:
+            from security.prompt_injection_detector import (
+                get_prompt_injection_detector,
+                InjectionRisk,
+            )
+
+            detector = get_prompt_injection_detector(strict_mode=True)
+            result = detector.detect_injection(content, context="context_file")
+
+            detection = {
+                "detected": result.blocked,
+                "risk_level": result.risk_level.value,
+                "patterns": result.detected_patterns,
+                "file_name": file_name,
+            }
+
+            if result.blocked:
+                logger.warning(
+                    "🚨 Prompt injection detected in context file '%s': %s",
+                    file_name,
+                    result.detected_patterns,
+                )
+
+                # Log audit trail
+                try:
+                    audit_msg = (
+                        f"INJECTION_ATTEMPT | File: {file_name} | "
+                        f"Risk: {result.risk_level.value} | "
+                        f"Patterns: {len(result.detected_patterns)}"
+                    )
+                    logger.critical(audit_msg)
+                except Exception as audit_error:
+                    logger.error("Failed to log injection audit: %s", audit_error)
+
+            elif result.risk_level != InjectionRisk.SAFE:
+                logger.info(
+                    "⚠️ Suspicious patterns in context file '%s' "
+                    "(risk: %s): %s",
+                    file_name,
+                    result.risk_level.value,
+                    result.detected_patterns,
+                )
+
+            return detection
+
+        except Exception as e:
+            logger.error("Error scanning context file '%s' for injection: %s", file_name, e)
+            return {
+                "detected": False,
+                "risk_level": "error",
+                "patterns": [],
+                "file_name": file_name,
+                "error": str(e),
+            }
 
     def get_categories(self) -> List[str]:
         """

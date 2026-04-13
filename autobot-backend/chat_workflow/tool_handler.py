@@ -29,6 +29,10 @@ from chat_workflow.llm_handler import (
     _emit_before_tool_execute,
     _emit_tool_error,
 )
+from chat_workflow.session_handler import (
+    _emit_approval_received,
+    _emit_approval_required,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -756,6 +760,20 @@ class ToolHandlerMixin:
         )
         yield approval_msg
 
+        # Issue #4264: Fire APPROVAL_REQUIRED hook when approval is requested
+        approval_id = terminal_session_id
+        await _emit_approval_required(
+            request_id=approval_id,
+            action=command,
+            session_id=session_id,
+            context={
+                "command": command,
+                "risk_level": result.get("risk"),
+                "reasons": result.get("reasons", []),
+                "description": description,
+            },
+        )
+
         await self._persist_approval_request(
             approval_msg, session_id, terminal_session_id
         )
@@ -773,6 +791,19 @@ class ToolHandlerMixin:
         async for poll_result in self._poll_for_approval(terminal_session_id, command):
             approval_result, status_msg = poll_result
             if approval_result:
+                # Issue #4264: Fire APPROVAL_RECEIVED hook when approval decision is made
+                was_approved = approval_result.get("status") == "success"
+                await _emit_approval_received(
+                    request_id=approval_id,
+                    approved=was_approved,
+                    session_id=session_id,
+                    context={
+                        "command": command,
+                        "approval_status": approval_result.get("status"),
+                        "approval_comment": approval_result.get("approval_comment", ""),
+                    },
+                )
+
                 yield WorkflowMessage(
                     type="metadata_update",
                     content="",
