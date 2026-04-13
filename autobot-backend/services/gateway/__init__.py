@@ -1,45 +1,31 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""
-Gateway Service
+"""Unified multi-platform message gateway."""
 
-Issue #732: Unified Gateway for multi-channel communication.
-Main exports for the Gateway service.
-"""
-
-from .channel_adapters import BaseChannelAdapter, WebSocketAdapter
-from .config import DEFAULT_CONFIG, GatewayConfig
-from .gateway import Gateway, get_gateway
-from .message_router import MessageRouter
-from .session_manager import SessionManager
-from .types import (
-    ChannelType,
-    GatewaySession,
-    MessageType,
-    RoutingDecision,
-    SessionStatus,
+from .adapters import (
+    BaseAdapter,
+    DiscordAdapter,
+    NormalizedResponse,
+    SlackAdapter,
+    TeamsAdapter,
     UnifiedMessage,
+    WebAdapter,
+    WhatsAppAdapter,
 )
+from .gateway_manager import GatewayManager
+from .message_queue import MessageQueue, RateLimiter
 
 __all__ = [
-    # Core Gateway
-    "Gateway",
-    "get_gateway",
-    # Components
-    "SessionManager",
-    "MessageRouter",
-    # Channel Adapters
-    "BaseChannelAdapter",
-    "WebSocketAdapter",
-    # Configuration
-    "GatewayConfig",
-    "DEFAULT_CONFIG",
-    # Types
-    "ChannelType",
-    "MessageType",
-    "SessionStatus",
+    "GatewayManager",
+    "MessageQueue",
+    "RateLimiter",
+    "BaseAdapter",
     "UnifiedMessage",
-    "GatewaySession",
-    "RoutingDecision",
+    "NormalizedResponse",
+    "SlackAdapter",
+    "DiscordAdapter",
+    "WhatsAppAdapter",
+    "TeamsAdapter",
+    "WebAdapter",
 ]
