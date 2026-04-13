@@ -211,7 +211,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 // @ts-ignore - Component may not have type declarations
-import BaseButton from '@/components/ui/BaseButton.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { useToast } from '@/composables/useToast'
 import { getApiBase } from '@/config/ssot-config'
