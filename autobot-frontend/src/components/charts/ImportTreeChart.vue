@@ -852,10 +852,11 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 400px;
+  min-height: 400px;
   gap: var(--spacing-2);
   color: var(--text-secondary);
   font-size: 0.95rem;
+  contain: layout style paint;
 }
 
 .chart-loading-overlay {

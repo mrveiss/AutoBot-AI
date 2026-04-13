@@ -477,7 +477,7 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   border: none;
-  min-height: 600px;
+  contain: layout style paint;
 }
 
 /* Loading and error styles moved to UnifiedLoadingView */
