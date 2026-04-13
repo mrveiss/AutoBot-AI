@@ -1296,14 +1296,14 @@ async def scan_man_pages(
     system_context = _get_system_context_safe(machine_id)
 
     if run_background:
-        background_tasks.add_task(
-            _scan_and_store_man_pages,
+        # Use asyncio.create_task() for async functions (BackgroundTasks is for sync only)
+        asyncio.create_task(_scan_and_store_man_pages(
             kb_to_use,
             machine_id,
             limit,
             sections,
             system_context,
-        )
+        ))
         return {
             "status": "success",
             "message": "Man page scan started in background",
