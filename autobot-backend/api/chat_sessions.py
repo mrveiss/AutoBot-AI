@@ -32,6 +32,9 @@ from utils.chat_utils import (
     validate_chat_session_id,
 )
 
+# Import session lifecycle hooks (Issue #4260)
+from chat_workflow.session_handler import _emit_session_create, _emit_session_destroy
+
 # ====================================================================
 # Router Configuration
 # ====================================================================
@@ -821,6 +824,9 @@ async def create_session(session_data: SessionCreate, request: Request):
         request, session_id, session_title, user_data, request_id
     )
 
+    # Issue #4260: Wire SESSION_CREATE hook for extensions
+    context = getattr(request.app.state, "context", {})
+    await _emit_session_create(session_id, context)
     return create_success_response(
         data=session,
         message="Session created successfully",
@@ -1359,6 +1365,8 @@ async def delete_session(
 
     chat_history_manager = get_chat_history_manager(request)
 
+    # Issue #4260: Get message count before deletion for SESSION_DESTROY hook
+    message_count = await chat_history_manager.get_session_message_count(session_id)
     # Perform all cleanup operations (Issue #620)
     (
         file_result,
@@ -1377,6 +1385,9 @@ async def delete_session(
         {"request_id": request_id, "file_action": file_action},
     )
 
+    # Issue #4260: Wire SESSION_DESTROY hook for extensions
+    context = getattr(request.app.state, "context", {})
+    await _emit_session_destroy(session_id, message_count, context)
     return _build_delete_session_response(
         session_id,
         request_id,
