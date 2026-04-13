@@ -142,6 +142,7 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "agents_self_improvement",
     ),
     # Code analysis and search
+    ("api.analytics_code", "/analytics/code", ["analytics", "code-analysis"], "analytics_code"),
     ("api.code_search", "/code-search", ["code-search"], "code_search"),
     (
         "api.anti_pattern",
