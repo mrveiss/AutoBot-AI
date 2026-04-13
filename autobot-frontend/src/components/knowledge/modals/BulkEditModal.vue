@@ -17,6 +17,7 @@ import { ref, computed, watch } from 'vue'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
+import KnowledgeScopeSelector from '@/components/knowledge/KnowledgeScopeSelector.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
 
@@ -27,7 +28,7 @@ const { t } = useI18n()
 // Type Definitions
 // =============================================================================
 
-export type BulkEditMode = 'category' | 'tags-add' | 'tags-remove'
+export type BulkEditMode = 'category' | 'tags-add' | 'tags-remove' | 'scope'
 
 export interface BulkEditEntry {
   id: string
@@ -48,7 +49,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
-  (e: 'confirm', payload: { mode: BulkEditMode; value: string | string[] }): void
+  (e: 'confirm', payload: { mode: BulkEditMode; value: string | string[] | { scope: string; groupIds: string[] } }): void
 }>()
 
 // =============================================================================
@@ -63,6 +64,8 @@ const store = useKnowledgeStore()
 
 const selectedCategory = ref('')
 const tagsInput = ref('')
+const selectedScope = ref('private')
+const selectedGroupIds = ref<string[]>([])
 const isProcessing = ref(false)
 
 // =============================================================================
@@ -82,6 +85,8 @@ const modalTitle = computed(() => {
       return t('knowledge.modals.bulkEdit.addTags')
     case 'tags-remove':
       return t('knowledge.modals.bulkEdit.removeTags')
+    case 'scope':
+      return t('knowledge.modals.bulkEdit.changeScope')
     default:
       return t('knowledge.modals.bulkEdit.title')
   }
@@ -96,6 +101,8 @@ const modalDescription = computed(() => {
       return t('knowledge.modals.bulkEdit.addTagsDesc', { count })
     case 'tags-remove':
       return t('knowledge.modals.bulkEdit.removeTagsDesc', { count })
+    case 'scope':
+      return t('knowledge.modals.bulkEdit.changeScopeDesc', { count })
     default:
       return ''
   }
@@ -109,6 +116,8 @@ const confirmButtonText = computed(() => {
       return t('knowledge.modals.bulkEdit.addTags')
     case 'tags-remove':
       return t('knowledge.modals.bulkEdit.removeTags')
+    case 'scope':
+      return t('knowledge.modals.bulkEdit.changeScope')
     default:
       return t('knowledge.modals.bulkEdit.apply')
   }
@@ -117,6 +126,9 @@ const confirmButtonText = computed(() => {
 const isValid = computed(() => {
   if (props.mode === 'category') {
     return selectedCategory.value.length > 0
+  }
+  if (props.mode === 'scope') {
+    return selectedScope.value.length > 0
   }
   return tagsInput.value.trim().length > 0
 })
@@ -168,6 +180,8 @@ function closeModal(): void {
 function resetForm(): void {
   selectedCategory.value = ''
   tagsInput.value = ''
+  selectedScope.value = 'private'
+  selectedGroupIds.value = []
   isProcessing.value = false
 }
 
@@ -179,6 +193,8 @@ function handleConfirm(): void {
   try {
     if (props.mode === 'category') {
       emit('confirm', { mode: 'category', value: selectedCategory.value })
+    } else if (props.mode === 'scope') {
+      emit('confirm', { mode: 'scope', value: { scope: selectedScope.value, groupIds: selectedGroupIds.value } })
     } else {
       emit('confirm', { mode: props.mode, value: parsedTags.value })
     }
@@ -344,6 +360,20 @@ watch(() => props.modelValue, (newValue) => {
             </span>
           </div>
         </div>
+      </div>
+
+      <!-- Scope Selection Section -->
+      <div v-if="mode === 'scope'" class="form-section">
+        <label class="form-label">
+          <i class="fas fa-lock"></i>
+          {{ $t('knowledge.modals.bulkEdit.visibilityScope') }}
+        </label>
+        <KnowledgeScopeSelector
+          v-model="selectedScope"
+          :selected-group-ids="selectedGroupIds"
+          @update:modelValue="selectedScope = $event"
+          @update:selectedGroupIds="selectedGroupIds = $event"
+        />
       </div>
     </div>
 
