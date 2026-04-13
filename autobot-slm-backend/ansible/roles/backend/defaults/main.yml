@@ -86,4 +86,4 @@ service_auth_rate_limit_max_failures: 10
 # internal HTTP port; uri verifies /api/health returns 200.  Both values are
 # configurable so staging environments can shorten the timeout.
 backend_health_check_port: 8001
-backend_health_check_timeout: 60
+backend_health_check_timeout: 180
