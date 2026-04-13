@@ -56,7 +56,7 @@
           <button @click.stop="downloadItem(item)" class="btn-action" :title="t('vision.mediaGallery.download')">
             <i class="fas fa-download"></i>
           </button>
-          <button @click.stop="$emit('delete', item.id)" class="btn-action btn-delete" :title="t('vision.mediaGallery.deleteItem')">
+          <button @click.stop="deleteItem(item.id)" class="btn-action btn-delete" :title="t('vision.mediaGallery.deleteItem')">
             <i class="fas fa-trash"></i>
           </button>
         </div>
@@ -148,7 +148,7 @@
             <i class="fas fa-download"></i>
             {{ t('vision.mediaGallery.download') }}
           </button>
-          <button @click="$emit('delete', selectedItem.id); selectedItem = null" class="btn-danger">
+          <button @click="deleteItem(selectedItem.id); selectedItem = null" class="btn-danger">
             <i class="fas fa-trash"></i>
             {{ t('vision.mediaGallery.deleteItem') }}
           </button>
@@ -174,13 +174,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useToast } from '@/composables/useToast';
+import { useThumbnailWorker } from '@/composables/useThumbnailWorker';
 import type { GalleryItem } from '@/utils/VisionMultimodalApiClient';
 
 const { t } = useI18n();
 const { showToast } = useToast();
+const { revokeBlobUrl } = useThumbnailWorker();
 
 // Props
 const props = defineProps<{
@@ -277,6 +279,23 @@ const handleThumbnailError = (event: Event) => {
   const img = event.target as HTMLImageElement;
   img.style.display = 'none';
 };
+
+const deleteItem = (itemId: string) => {
+  const item = props.items.find(i => i.id === itemId);
+  if (item?.thumbnail && item.thumbnail.startsWith('blob:')) {
+    revokeBlobUrl(item.thumbnail);
+  }
+  emit('delete', itemId);
+};
+
+// Cleanup blob URLs when component unmounts
+onUnmounted(() => {
+  props.items.forEach(item => {
+    if (item.thumbnail && item.thumbnail.startsWith('blob:')) {
+      revokeBlobUrl(item.thumbnail);
+    }
+  });
+});
 </script>
 
 <style scoped>
