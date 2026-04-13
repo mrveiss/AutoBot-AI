@@ -458,9 +458,14 @@
       </div>
 
       <!-- Loading skeleton for initial response -->
-      <div v-if="store.isTyping && !store.currentMessages.length" class="message-skeleton">
+      <StableLoadingState
+        v-if="store.isTyping && !store.currentMessages.length"
+        :is-loading="store.isTyping"
+        :has-content="store.currentMessages.length > 0"
+        variant="chat"
+      >
         <SkeletonLoader variant="chat-message" :animated="true" />
-      </div>
+      </StableLoadingState>
     </div>
   </div>
 
@@ -513,6 +518,7 @@ import type { ChatMessage } from '@/stores/useChatStore'
 import MessageStatus from '@/components/ui/MessageStatus.vue'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import SkeletonLoader from '@/components/ui/SkeletonLoader.vue'
+import StableLoadingState from '@/components/ui/StableLoadingState.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
