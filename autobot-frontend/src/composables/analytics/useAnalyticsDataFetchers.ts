@@ -1034,12 +1034,12 @@ export function useAnalyticsDataFetchers(
         {
           id: 'dependencies',
           label: t('analytics.codebase.scans.dependencies'),
-          run: () => loadDependencyData(),
+          run: async () => { await loadDependencyData() },
         },
         {
           id: 'imports',
           label: t('analytics.codebase.scans.imports'),
-          run: () => loadImportTreeData(),
+          run: async () => { await loadImportTreeData() },
         },
         {
           id: 'callgraph',
