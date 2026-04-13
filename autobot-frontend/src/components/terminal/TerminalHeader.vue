@@ -2,7 +2,7 @@
   <div class="window-header">
     <div class="window-title">
       <span class="terminal-icon">⬛</span>
-      <span data-testid="terminal-title">{{ $t('terminal.title') }} - {{ sessionTitle }}</span>
+      <span data-testid="terminal-title">{{ $t('terminal.window.titlePrefix') }} {{ sessionTitle }}</span>
     </div>
     <div class="window-controls">
       <!-- Emergency Kill Button -->
@@ -11,7 +11,7 @@
         data-testid="emergency-kill-button"
         @click="$emit('emergency-kill')"
         :disabled="!hasRunningProcesses"
-        :title="$t('terminal.emergencyKillTitle')"
+        :title="$t('terminal.window.emergencyKillTitle')"
       >
         🛑 KILL
       </button>
@@ -22,7 +22,7 @@
         @click="$emit('toggle-automation')"
         :class="{ 'active': automationPaused }"
         :disabled="!hasAutomatedWorkflow"
-        :title="automationPaused ? $t('terminal.resumeAutomation') : $t('terminal.pauseAutomation')"
+        :title="automationPaused ? $t('terminal.window.resumeAutomation') : $t('terminal.window.pauseAutomation')"
       >
         {{ automationPaused ? '▶️ RESUME' : '⏸️ PAUSE' }}
       </button>
@@ -33,7 +33,7 @@
         data-testid="interrupt-button"
         @click="$emit('interrupt-process')"
         :disabled="!hasActiveProcess"
-        :title="$t('terminal.interruptTitle')"
+        :title="$t('terminal.window.interruptProcess')"
       >
         ⚡ INT
       </button>
@@ -43,7 +43,7 @@
         data-testid="reconnect-button"
         @click="$emit('reconnect')"
         :disabled="connecting"
-        :title="$t('terminal.reconnect')"
+        :title="$t('terminal.window.reconnect')"
       >
         {{ connecting ? '⟳' : '🔄' }}
       </button>
@@ -51,14 +51,14 @@
         class="control-button"
         data-testid="clear-button"
         @click="$emit('clear-terminal')"
-        :title="$t('common.clear')"
+        :title="$t('terminal.window.clear')"
       >
         🗑️
       </button>
       <button
         class="control-button danger"
         @click="$emit('close-window')"
-        :title="$t('terminal.closeWindow')"
+        :title="$t('terminal.window.closeWindow')"
       >
         ✕
       </button>

@@ -1,66 +1,19 @@
 <template>
   <div class="terminal-window-standalone">
-    <div class="window-header">
-      <div class="window-title">
-        <span class="terminal-icon">⬛</span>
-        <span>{{ t('terminal.window.titlePrefix') }} {{ sessionTitle }}</span>
-      </div>
-      <div class="window-controls">
-        <!-- Emergency Kill Button -->
-        <button
-          class="control-button emergency-kill"
-          @click="emergencyKillAll"
-          :disabled="!hasRunningProcesses"
-          :title="t('terminal.window.emergencyKillTitle')"
-        >
-          🛑 KILL
-        </button>
-
-        <!-- Session Takeover / Pause Automation -->
-        <button
-          class="control-button takeover"
-          @click="toggleAutomationPause"
-          :class="{ 'active': automationPaused }"
-          :disabled="!hasAutomatedWorkflow"
-          :title="automationPaused ? t('terminal.window.resumeAutomation') : t('terminal.window.pauseAutomation')"
-        >
-          {{ automationPaused ? '▶️ RESUME' : '⏸️ PAUSE' }}
-        </button>
-
-        <!-- Interrupt Current Process -->
-        <button
-          class="control-button interrupt"
-          @click="interruptProcess"
-          :disabled="!hasActiveProcess"
-          :title="t('terminal.window.interruptProcess')"
-        >
-          ⚡ INT
-        </button>
-
-        <button
-          class="control-button"
-          @click="reconnect"
-          :disabled="connecting"
-          :title="t('terminal.window.reconnect')"
-        >
-          {{ connecting ? '⟳' : '🔄' }}
-        </button>
-        <button
-          class="control-button"
-          @click="clearTerminal"
-          :title="t('terminal.window.clear')"
-        >
-          🗑️
-        </button>
-        <button
-          class="control-button danger"
-          @click="closeWindow"
-          :title="t('terminal.window.closeWindow')"
-        >
-          ✕
-        </button>
-      </div>
-    </div>
+    <TerminalHeader
+      :session-title="sessionTitle"
+      :has-running-processes="hasRunningProcesses"
+      :automation-paused="automationPaused"
+      :has-automated-workflow="hasAutomatedWorkflow"
+      :has-active-process="hasActiveProcess"
+      :connecting="connecting"
+      @emergency-kill="emergencyKillAll"
+      @toggle-automation="toggleAutomationPause"
+      @interrupt-process="interruptProcess"
+      @reconnect="reconnect"
+      @clear-terminal="clearTerminal"
+      @close-window="closeWindow"
+    />
 
     <div class="terminal-status-bar">
       <div class="status-left">
@@ -334,6 +287,7 @@ import { useTerminalService } from '@/services/TerminalService';
 import { useRoute, useRouter } from 'vue-router';
 import AdvancedStepConfirmationModal from './AdvancedStepConfirmationModal.vue';
 import CompletionSuggestions from './CompletionSuggestions.vue';
+import TerminalHeader from './TerminalHeader.vue';
 import { createLogger } from '@/utils/debugUtils';
 import { useTabCompletion } from '@/composables/useTabCompletion';
 import { escapeHtml } from '@/utils/sanitize';
@@ -344,7 +298,8 @@ export default {
   name: 'TerminalWindow',
   components: {
     AdvancedStepConfirmationModal,
-    CompletionSuggestions
+    CompletionSuggestions,
+    TerminalHeader
   },
   setup() {
     const { t } = useI18n();
