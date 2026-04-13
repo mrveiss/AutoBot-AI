@@ -731,6 +731,17 @@ const routes: RouteRecordRaw[] = [
     ]
   },
   {
+    path: '/usage',
+    name: 'usage',
+    component: () => import('@/views/UsageView.vue'),
+    meta: {
+      title: 'Usage & Cost Tracking',
+      icon: 'fas fa-chart-bar',
+      description: 'Token usage, LLM costs, and billing-ready metrics',
+      requiresAuth: true
+    }
+  },
+  {
     path: '/permission-denied',
     name: 'permission-denied',
     component: PermissionDeniedView,

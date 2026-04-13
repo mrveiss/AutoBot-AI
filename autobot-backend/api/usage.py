@@ -21,10 +21,25 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.llm_cost_tracker import get_cost_tracker
+
+
+class UsageRecordRequest(BaseModel):
+    """Request body for POST /api/usage/record. Issue #1807."""
+
+    provider: str
+    model: str
+    input_tokens: int
+    output_tokens: int
+    session_id: str | None = None
+    user_id: str | None = None
+    agent_id: str | None = None
+    latency_ms: float | None = None
+    success: bool = True
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/usage", tags=["usage", "analytics"])
@@ -156,6 +171,51 @@ async def get_my_usage(
     return {
         **data,
         "recent_requests": user_recent,
+    }
+
+
+
+# ============================================================================
+# RECORD ENDPOINT
+# ============================================================================
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="record_usage_event",
+    error_code_prefix="USAGE",
+)
+@router.post("/record")
+async def record_usage_event(
+    body: UsageRecordRequest,
+    current_user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
+    """
+    Record a single LLM usage event.
+
+    Called from LLM handlers after each API call to track tokens and cost.
+    The user_id in the body is used if provided; otherwise falls back to the
+    authenticated user's username.
+
+    Issue #1807: Billing-ready usage event ingestion.
+    """
+    tracker = get_cost_tracker()
+    user_id = body.user_id or current_user.get("username", "")
+    record = await tracker.track_usage(
+        provider=body.provider,
+        model=body.model,
+        input_tokens=body.input_tokens,
+        output_tokens=body.output_tokens,
+        session_id=body.session_id,
+        user_id=user_id,
+        agent_id=body.agent_id,
+        latency_ms=body.latency_ms,
+        success=body.success,
+    )
+    return {
+        "recorded": True,
+        "cost_usd": record.cost_usd,
+        "record_id": record.id if hasattr(record, "id") else None,
     }
 
 
