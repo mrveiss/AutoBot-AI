@@ -27,6 +27,7 @@ class SubagentOrchestrator:
         self.active_subagents: Dict[str, asyncio.Task] = {}
     
     async def spawn_parallel_tasks(self, tasks: List[SubagentTask]) -> Dict[str, Any]:
+<<<<<<< HEAD
         """
         Spawn multiple subagents for parallel execution.
         
@@ -40,6 +41,12 @@ class SubagentOrchestrator:
         
         # Create tasks with timeouts
         pending = []
+=======
+        """Spawn multiple subagents for parallel execution."""
+        results = {}
+        pending = []
+        
+>>>>>>> origin/issue-4348
         for task in tasks[:self.max_parallel]:
             try:
                 coro = asyncio.wait_for(
@@ -51,11 +58,17 @@ class SubagentOrchestrator:
                 logger.error(f"Error creating task {task.task_id}: {e}")
                 results[task.task_id] = {"error": str(e)}
         
+<<<<<<< HEAD
         # Execute all pending tasks concurrently
         if pending:
             task_ids, coros = zip(*pending) if pending else ([], [])
             task_results = await asyncio.gather(*coros, return_exceptions=True)
             
+=======
+        if pending:
+            task_ids, coros = zip(*pending)
+            task_results = await asyncio.gather(*coros, return_exceptions=True)
+>>>>>>> origin/issue-4348
             for task_id, result in zip(task_ids, task_results):
                 results[task_id] = result
         
