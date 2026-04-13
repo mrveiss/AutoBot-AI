@@ -23,6 +23,13 @@ from utils.errors import RepairableException
 if TYPE_CHECKING:
     from .models import LLMIterationContext
 
+# Import hook emitters (Issue #4261)
+from chat_workflow.llm_handler import (
+    _emit_after_tool_execute,
+    _emit_before_tool_execute,
+    _emit_tool_error,
+)
+
 logger = logging.getLogger(__name__)
 
 # Issue #1368: Browser tool names that route to browser_mcp handlers.
@@ -254,6 +261,7 @@ async def _try_mcp_dispatch(
     tool_call: dict[str, Any],
     execution_results: list[dict[str, Any]],
     role: str = "user",
+    session_id: str = "",
 ) -> WorkflowMessage | None:
     """Attempt to dispatch tool_name via the MCP registry. Issue #2513.
 
@@ -262,6 +270,7 @@ async def _try_mcp_dispatch(
         tool_call: Raw tool call dict from the LLM.
         execution_results: Accumulator list for execution results.
         role: Caller RBAC role forwarded to the dispatcher (#2629).
+        session_id: Session identifier for hook invocation (#4261).
 
     Returns a WorkflowMessage on success, or None if the tool is not found
     in the registry (so the caller can fall through to the unknown-tool error).
@@ -277,38 +286,70 @@ async def _try_mcp_dispatch(
         return None
 
     arguments = tool_call.get("arguments", {})
-    mcp_result = await dispatcher.dispatch(tool_name, arguments, role=role)
-    bridge = mcp_result.get("bridge", "unknown")
-    success = mcp_result.get("success", False)
-    raw_result = mcp_result.get("result", "")
 
-    # Issue #2622: Detect approval_required from MCP bridges
-    if isinstance(raw_result, dict) and raw_result.get("status") == "approval_required":
-        return _build_mcp_approval_message(
-            tool_name, bridge, raw_result, execution_results
+    # Issue #4261: Wire BEFORE_TOOL_EXECUTE hook for MCP tools
+    should_execute = await _emit_before_tool_execute(tool_name, arguments, session_id)
+    if not should_execute:
+        logger.info(
+            "[Issue #4261] Tool execution cancelled by BEFORE_TOOL_EXECUTE hook: %s",
+            tool_name,
+        )
+        return WorkflowMessage(
+            type="error",
+            content=f"Tool execution cancelled: {tool_name}",
+            metadata={"tool_name": tool_name, "cancelled_by_hook": True},
         )
 
-    result_text = str(raw_result)
-    execution_results.append(
-        {
-            "tool": tool_name,
-            "bridge": bridge,
-            "result": result_text,
-            "status": "success" if success else "error",
-        }
-    )
-    msg_type = "tool_result" if success else "error"
-    logger.info(
-        "[Issue #2513] MCP dispatch: tool=%s bridge=%s success=%s",
-        tool_name,
-        bridge,
-        success,
-    )
-    return WorkflowMessage(
-        type=msg_type,
-        content=f"[{bridge}] {result_text}",
-        metadata={"tool_name": tool_name, "bridge": bridge, "mcp_dispatch": True},
-    )
+    try:
+        mcp_result = await dispatcher.dispatch(tool_name, arguments, role=role)
+        bridge = mcp_result.get("bridge", "unknown")
+        success = mcp_result.get("success", False)
+        raw_result = mcp_result.get("result", "")
+
+        # Issue #2622: Detect approval_required from MCP bridges
+        if isinstance(raw_result, dict) and raw_result.get("status") == "approval_required":
+            return _build_mcp_approval_message(
+                tool_name, bridge, raw_result, execution_results
+            )
+
+        result_text = str(raw_result)
+
+        # Issue #4261: Wire AFTER_TOOL_EXECUTE hook to allow result modification
+        result_text = await _emit_after_tool_execute(
+            tool_name, result_text, session_id, {}
+        )
+
+        execution_results.append(
+            {
+                "tool": tool_name,
+                "bridge": bridge,
+                "result": result_text,
+                "status": "success" if success else "error",
+            }
+        )
+        msg_type = "tool_result" if success else "error"
+        logger.info(
+            "[Issue #2513] MCP dispatch: tool=%s bridge=%s success=%s",
+            tool_name,
+            bridge,
+            success,
+        )
+        return WorkflowMessage(
+            type=msg_type,
+            content=f"[{bridge}] {result_text}",
+            metadata={"tool_name": tool_name, "bridge": bridge, "mcp_dispatch": True},
+        )
+
+    except Exception as e:
+        # Issue #4261: Wire TOOL_ERROR hook to allow error handling/logging
+        await _emit_tool_error(tool_name, e, session_id, {})
+        logger.error(
+            "[Issue #2513] MCP dispatch error for tool %s: %s",
+            tool_name,
+            e,
+            exc_info=True,
+        )
+        raise
 
 
 class ToolHandlerMixin:
@@ -1070,6 +1111,7 @@ class ToolHandlerMixin:
         """Process a single execute_command tool call. Issue #620.
 
         Issue #655: Wraps common errors as RepairableException for retry.
+        Issue #4261: Wires BEFORE/AFTER_TOOL_EXECUTE and TOOL_ERROR hooks.
 
         Yields:
             WorkflowMessage items
@@ -1077,24 +1119,54 @@ class ToolHandlerMixin:
         command, host, description = self._extract_command_params(tool_call)
         logger.info("[ChatWorkflowManager] Executing command: %s on %s", command, host)
 
-        result = await self._execute_terminal_command(
-            session_id=session_id, command=command, host=host, description=description
-        )
+        # Issue #4261: Wire BEFORE_TOOL_EXECUTE hook for execute_command
+        params = {"command": command, "host": host}
+        should_execute = await _emit_before_tool_execute("execute_command", params, session_id)
+        if not should_execute:
+            logger.info(
+                "[Issue #4261] Execute command cancelled by BEFORE_TOOL_EXECUTE hook: %s on %s",
+                command,
+                host,
+            )
+            yield WorkflowMessage(
+                type="error",
+                content=f"Command execution cancelled: {command}",
+                metadata={"command": command, "host": host, "cancelled_by_hook": True},
+            )
+            return
 
-        async for msg in self._dispatch_command_by_status(
-            result.get("status"),
-            session_id,
-            terminal_session_id,
-            command,
-            host,
-            result,
-            description,
-            ollama_endpoint,
-            selected_model,
-            execution_results,
-            additional_response_parts,
-        ):
-            yield msg
+        try:
+            result = await self._execute_terminal_command(
+                session_id=session_id, command=command, host=host, description=description
+            )
+
+            # Issue #4261: Wire AFTER_TOOL_EXECUTE hook for execute_command on success
+            if result.get("status") == "success":
+                stdout = result.get("stdout", "")
+                stdout = await _emit_after_tool_execute(
+                    "execute_command", stdout, session_id, {}
+                )
+
+            async for msg in self._dispatch_command_by_status(
+                result.get("status"),
+                session_id,
+                terminal_session_id,
+                command,
+                host,
+                result,
+                description,
+                ollama_endpoint,
+                selected_model,
+                execution_results,
+                additional_response_parts,
+            ):
+                yield msg
+
+        except Exception as e:
+            # Issue #4261: Wire TOOL_ERROR hook for execute_command
+            await _emit_tool_error("execute_command", e, session_id, {})
+            logger.error("[ChatWorkflowManager] Command execution error: %s", e, exc_info=True)
+            raise
 
     async def _handle_command_error(
         self,
@@ -1274,11 +1346,13 @@ class ToolHandlerMixin:
         self,
         tool_call: dict[str, Any],
         execution_results: list[dict[str, Any]],
+        session_id: str = "",
     ):
         """Execute a browser tool call via browser_mcp. Issue #1368.
 
         Routes navigate/click/screenshot/etc. to the Browser VM through
         the existing browser_mcp.send_to_browser_vm() function.
+        Issue #4261: Wires BEFORE/AFTER_TOOL_EXECUTE and TOOL_ERROR hooks.
 
         Yields:
             WorkflowMessage for browser tool execution stages
@@ -1308,14 +1382,37 @@ class ToolHandlerMixin:
                 )
                 return
 
+            # Issue #4261: Wire BEFORE_TOOL_EXECUTE hook for browser tools
+            should_execute = await _emit_before_tool_execute(tool_name, params, session_id)
+            if not should_execute:
+                logger.info(
+                    "[Issue #4261] Browser tool execution cancelled by hook: %s",
+                    tool_name,
+                )
+                yield WorkflowMessage(
+                    type="error",
+                    content=f"Browser tool execution cancelled: {tool_name}",
+                    metadata={"tool": tool_name, "cancelled_by_hook": True},
+                )
+                return
+
             from api.browser_mcp import send_to_browser_vm
 
             result = await send_to_browser_vm(tool_name, params)
+
+            # Issue #4261: Wire AFTER_TOOL_EXECUTE hook for browser tools
+            result_text = str(result)
+            result_text = await _emit_after_tool_execute(
+                tool_name, result_text, session_id, {}
+            )
+
             yield self._record_browser_success(
                 tool_name, params, result, execution_results
             )
 
         except Exception as e:
+            # Issue #4261: Wire TOOL_ERROR hook for browser tools
+            await _emit_tool_error(tool_name, e, session_id, {})
             logger.error("[Issue #1368] Browser tool '%s' failed: %s", tool_name, e)
             execution_results.append(
                 {
@@ -1420,11 +1517,13 @@ class ToolHandlerMixin:
         self,
         tool_call: dict[str, Any],
         execution_results: list[dict[str, Any]],
+        session_id: str = "",
     ):
         """Execute a web search via browser VM. Issue #2306.
 
         Abstracts the multi-step browser flow (navigate → fill → click → get_text)
         into a single tool call so small models don't need to orchestrate it.
+        Issue #4261: Wires BEFORE/AFTER_TOOL_EXECUTE and TOOL_ERROR hooks.
 
         Yields:
             WorkflowMessage for search execution stages
@@ -1453,8 +1552,27 @@ class ToolHandlerMixin:
             metadata={"tool": "web_search", "query": query},
         )
 
+        # Issue #4261: Wire BEFORE_TOOL_EXECUTE hook for web_search
+        should_execute = await _emit_before_tool_execute("web_search", params, session_id)
+        if not should_execute:
+            logger.info(
+                "[Issue #4261] Web search cancelled by hook"
+            )
+            yield WorkflowMessage(
+                type="error",
+                content="Web search execution cancelled",
+                metadata={"tool": "web_search", "cancelled_by_hook": True},
+            )
+            return
+
         try:
             results = await self._execute_web_search(query)
+
+            # Issue #4261: Wire AFTER_TOOL_EXECUTE hook for web_search
+            results = await _emit_after_tool_execute(
+                "web_search", results, session_id, {}
+            )
+
             execution_results.append(
                 {"tool": "web_search", "status": "success", "output": results}
             )
@@ -1468,6 +1586,8 @@ class ToolHandlerMixin:
                 },
             )
         except Exception as e:
+            # Issue #4261: Wire TOOL_ERROR hook for web_search
+            await _emit_tool_error("web_search", e, session_id, {})
             logger.error("[Issue #2306] Web search failed: %s", e)
             execution_results.append(
                 {"tool": "web_search", "status": "error", "error": "Web search failed"}
@@ -1627,7 +1747,7 @@ class ToolHandlerMixin:
         if tool_name in BROWSER_TOOL_NAMES:
             if ctx is not None:
                 ctx.consecutive_invalid_tool_calls = 0
-            async for msg in self._handle_browser_tool(tool_call, execution_results):
+            async for msg in self._handle_browser_tool(tool_call, execution_results, session_id):
                 yield msg
             return
 
@@ -1635,13 +1755,13 @@ class ToolHandlerMixin:
         if tool_name == "web_search":
             if ctx is not None:
                 ctx.consecutive_invalid_tool_calls = 0
-            async for msg in self._handle_web_search_tool(tool_call, execution_results):
+            async for msg in self._handle_web_search_tool(tool_call, execution_results, session_id):
                 yield msg
             return
 
         if tool_name != "execute_command":
             async for msg in self._dispatch_mcp_or_unknown(
-                tool_name, tool_call, execution_results, ctx, role
+                tool_name, tool_call, execution_results, ctx, role, session_id
             ):
                 yield msg
             return
@@ -1666,15 +1786,17 @@ class ToolHandlerMixin:
         execution_results: list[dict[str, Any]],
         ctx: "LLMIterationContext" | None,
         role: str,
+        session_id: str = "",
     ):
         """Try MCP dispatch; yield unknown-tool error if not registered. Issue #2513/#2629.
 
         Extracted from _dispatch_tool_call (#2735) to keep parent under 65 lines.
+        Issue #4261: Added session_id for hook invocation.
         """
         # Issue #2513: Check MCP registry before reporting unknown tool.
         # Issue #2629: Forward RBAC role so admin-only tools are enforced.
         mcp_result = await _try_mcp_dispatch(
-            tool_name, tool_call, execution_results, role=role
+            tool_name, tool_call, execution_results, role=role, session_id=session_id
         )
         if mcp_result is not None:
             yield mcp_result
