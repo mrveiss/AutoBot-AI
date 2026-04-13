@@ -9,9 +9,30 @@ as part of the core routers module. This exists for organizational consistency
 and future MCP router additions that may be optional.
 """
 
+import importlib
 import logging
+from typing import List, Tuple
 
 logger = logging.getLogger(__name__)
+
+
+def _load_single_mcp_router(
+    module_path: str, prefix: str, tags: List[str], name: str
+) -> Tuple | None:
+    """Load a single MCP router with graceful fallback."""
+    try:
+        module = importlib.import_module(module_path)
+        router = getattr(module, "router")
+        logger.info("✅ Optional MCP router loaded: %s", name)
+        return (router, prefix, tags, name)
+    except ImportError as e:
+        logger.warning("⚠️ Optional MCP router not available: %s - %s", name, e)
+        return None
+    except AttributeError as e:
+        logger.warning(
+            "⚠️ Router not found in module %s: %s - %s", module_path, name, e
+        )
+        return None
 
 
 def load_mcp_routers():
@@ -19,15 +40,14 @@ def load_mcp_routers():
     Load optional MCP protocol routers.
 
     Note: Most MCP routers are loaded as core routers in core_routers.py.
-    This function exists for any optional MCP routers that may be added in the future.
+    This function loads optional MCP routers.
 
     Returns:
         list: List of tuples in format (router, prefix, tags, name)
-              Currently returns empty list as all MCP routers are core.
     """
     optional_routers = []
 
-    # All current MCP routers are in core_routers.py:
+    # All core MCP routers are in core_routers.py:
     # - knowledge_mcp
     # - vnc_mcp
     # - sequential_thinking_mcp
@@ -40,7 +60,21 @@ def load_mcp_routers():
     # - prometheus_mcp
     # - mcp_registry
 
-    # Future optional MCP routers can be added here
-    logger.info("✅ MCP routers: All current MCP routers are loaded as core routers")
+    # Optional MCP routers
+    optional_mcp_configs = [
+        ("api.manual_mcp", "", ["manual_mcp", "mcp"], "manual_mcp"),
+    ]
+
+    for module_path, prefix, tags, name in optional_mcp_configs:
+        result = _load_single_mcp_router(module_path, prefix, tags, name)
+        if result:
+            optional_routers.append(result)
+
+    if optional_routers:
+        logger.info("✅ Loaded %s optional MCP routers", len(optional_routers))
+    else:
+        logger.info(
+            "✅ MCP routers: Core MCP routers are loaded from core_routers"
+        )
 
     return optional_routers

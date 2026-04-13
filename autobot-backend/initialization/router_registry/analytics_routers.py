@@ -153,6 +153,37 @@ ANALYTICS_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["analytics-maintenance", "analytics", "bi"],
         "analytics_maintenance",
     ),
+    # Unregistered analytics routers
+    (
+        "api.analytics_agents",
+        "/analytics/agents",
+        ["analytics", "agents"],
+        "analytics_agents",
+    ),
+    (
+        "api.analytics_behavior",
+        "/analytics/behavior",
+        ["analytics", "behavior"],
+        "analytics_behavior",
+    ),
+    (
+        "api.analytics_code",
+        "/analytics/code",
+        ["analytics", "code-analysis"],
+        "analytics_code",
+    ),
+    (
+        "api.analytics_cost",
+        "/analytics/cost",
+        ["analytics", "cost"],
+        "analytics_cost",
+    ),
+    (
+        "api.analytics_export",
+        "/analytics/export",
+        ["analytics", "export"],
+        "analytics_export",
+    ),
 ]
 
 

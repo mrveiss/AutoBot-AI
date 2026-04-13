@@ -462,6 +462,26 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["ai-documents"],
         "ai_documents",
     ),
+    # Unregistered feature routers
+    ("api.chat_sessions", "", ["chat-sessions"], "chat_sessions"),
+    (
+        "api.diagnostics",
+        "/api/diagnostics",
+        ["diagnostics"],
+        "diagnostics",
+    ),
+    (
+        "api.presence_ws",
+        "",
+        ["collaboration", "websocket", "presence"],
+        "presence_ws",
+    ),
+    (
+        "api.self_capabilities",
+        "",
+        ["self-capabilities"],
+        "self_capabilities",
+    ),
 ]
 
 

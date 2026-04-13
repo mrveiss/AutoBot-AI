@@ -47,6 +47,14 @@ from api.knowledge_search_scoped import router as knowledge_search_scoped_router
 from api.knowledge_suggestions import router as knowledge_suggestions_router
 from api.knowledge_tags import router as knowledge_tags_router
 from api.knowledge_verification import router as knowledge_verification_router
+from api.knowledge_ai_stack import router as knowledge_ai_stack_router
+from api.knowledge_boards import router as knowledge_boards_router
+from api.knowledge_debug import router as knowledge_debug_router
+from api.knowledge_grounding import router as knowledge_grounding_router
+from api.knowledge_search_aggregator import (
+    router as knowledge_search_aggregator_router,
+)
+from api.knowledge_vectorization import router as knowledge_vectorization_router
 from api.llm import router as llm_router
 from api.llm_providers import router as llm_providers_router
 from api.mcp_registry import router as mcp_registry_router
@@ -210,12 +218,55 @@ def _get_knowledge_collaboration_routers() -> list:
     ]
 
 
+def _get_knowledge_feature_routers() -> list:
+    """Get additional knowledge feature routers."""
+    return [
+        (
+            knowledge_ai_stack_router,
+            "/knowledge_base",
+            ["knowledge-enhanced", "knowledge-ai"],
+            "knowledge_ai_stack",
+        ),
+        (
+            knowledge_boards_router,
+            "/knowledge_base",
+            ["knowledge-boards"],
+            "knowledge_boards",
+        ),
+        (
+            knowledge_debug_router,
+            "/knowledge_base",
+            ["knowledge-debug"],
+            "knowledge_debug",
+        ),
+        (
+            knowledge_grounding_router,
+            "/knowledge_base",
+            ["knowledge-grounding"],
+            "knowledge_grounding",
+        ),
+        (
+            knowledge_search_aggregator_router,
+            "/knowledge_base",
+            ["knowledge-unified", "knowledge-search"],
+            "knowledge_search_aggregator",
+        ),
+        (
+            knowledge_vectorization_router,
+            "/knowledge_base",
+            ["knowledge-vectorization"],
+            "knowledge_vectorization",
+        ),
+    ]
+
+
 def _get_knowledge_routers() -> list:
     """Get knowledge base routers (Issue #560: extracted, #688: ownership, #679: full collaboration)."""
     return (
         _get_core_knowledge_routers()
         + _get_knowledge_organization_routers()
         + _get_knowledge_collaboration_routers()
+        + _get_knowledge_feature_routers()
     )
 
 

@@ -47,6 +47,17 @@ def load_terminal_routers():
     except ImportError as e:
         logger.warning("⚠️ Optional router not available: agent_terminal - %s", e)
 
+    # Terminal tools router
+    try:
+        from api.terminal_tools import router as terminal_tools_router
+
+        optional_routers.append(
+            (terminal_tools_router, "", ["terminal-tools"], "terminal_tools")
+        )
+        logger.info("✅ Optional router loaded: terminal_tools")
+    except ImportError as e:
+        logger.warning("⚠️ Optional router not available: terminal_tools - %s", e)
+
     # NOTE: remote_terminal and base_terminal were archived and deleted in Issue #567
     # - remote_terminal: Future feature - implement with new architecture when Vue UI components are built
     # - base_terminal: Features migrated to terminal.py

@@ -636,7 +636,8 @@ async def populate_man_pages(
         }
 
     # Start background task
-    background_tasks.add_task(_populate_man_pages_background, kb_to_use)
+    # Use asyncio.create_task() for async functions (BackgroundTasks is for sync only)
+    asyncio.create_task(_populate_man_pages_background(kb_to_use))
 
     return {
         "status": "success",
@@ -1030,11 +1031,8 @@ async def populate_autobot_docs(background_tasks: BackgroundTasks, request: dict
     )
 
     # Queue the actual indexing in background
-    background_tasks.add_task(
-        _index_autobot_docs_background,
-        task_id=task_id,
-        force_reindex=force_reindex
-    )
+    # Use asyncio.create_task() for async functions (BackgroundTasks is for sync only)
+    asyncio.create_task(_index_autobot_docs_background(task_id, force_reindex))
 
     logger.info("Queued AutoBot docs indexing task: %s (force=%s)", task_id, force_reindex)
 
