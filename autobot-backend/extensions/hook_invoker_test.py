@@ -71,11 +71,11 @@ class TestHookInvokerInitialization:
         assert invoker.manager is manager
 
     def test_default_configs_registered(self):
-        """Should register default configs for all 24 hooks."""
+        """Should register default configs for all 25 hooks."""
         manager = ExtensionManager()
         invoker = HookInvoker(manager)
         hooks = invoker.list_hooks()
-        assert len(hooks) == 24
+        assert len(hooks) == 25
 
     def test_message_preparation_hooks_configured(self):
         """Should configure message preparation hooks."""
@@ -253,11 +253,12 @@ class TestHookInvokerInvocation:
         invoker = HookInvoker(manager)
 
         hooks = invoker.list_hooks()
-        assert len(hooks) == 24
+        assert len(hooks) == 25
 
         # Verify hook names and modes are present
         hook_names = {h[0] for h in hooks}
         assert "BEFORE_MESSAGE_PROCESS" in hook_names
+        assert "BEFORE_PROMPT_BUILD" in hook_names
         assert "AFTER_PROMPT_BUILD" in hook_names
         assert "BEFORE_LLM_CALL" in hook_names
 

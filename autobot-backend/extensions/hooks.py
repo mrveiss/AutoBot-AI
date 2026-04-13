@@ -16,7 +16,7 @@ class HookPoint(Enum):
     All extension hook points in the agent lifecycle.
 
     Hook points are organized into logical groups:
-    - Message preparation (BEFORE_MESSAGE_PROCESS, AFTER_PROMPT_BUILD)
+    - Message preparation (BEFORE_MESSAGE_PROCESS, BEFORE_PROMPT_BUILD, AFTER_PROMPT_BUILD)
     - LLM interaction (BEFORE_LLM_CALL, DURING_LLM_STREAMING, etc.)
     - Tool execution (BEFORE_TOOL_PARSE, BEFORE_TOOL_EXECUTE, etc.)
     - Continuation loop (BEFORE_CONTINUATION, AFTER_CONTINUATION, etc.)
@@ -38,6 +38,7 @@ class HookPoint(Enum):
 
     # Message preparation
     BEFORE_MESSAGE_PROCESS = auto()
+    BEFORE_PROMPT_BUILD = auto()
     AFTER_PROMPT_BUILD = auto()
 
     # LLM interaction
@@ -88,8 +89,13 @@ HOOK_METADATA = {
         "can_modify": ["message", "context"],
         "return_type": "None",
     },
+    HookPoint.BEFORE_PROMPT_BUILD: {
+        "description": "Called before building the prompt",
+        "can_modify": ["context"],
+        "return_type": "None",
+    },
     HookPoint.AFTER_PROMPT_BUILD: {
-        "description": "Called after system prompt is built",
+        "description": "Called after prompt is built and before being sent to LLM",
         "can_modify": ["prompt"],
         "return_type": "Modified prompt string or None",
     },
