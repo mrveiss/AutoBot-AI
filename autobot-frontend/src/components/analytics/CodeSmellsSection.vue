@@ -125,6 +125,7 @@
  */
 
 import { ref, computed } from 'vue'
+import { useGroupingMemo } from '@/composables/useComputedMemo'
 import EmptyState from '@/components/ui/EmptyState.vue'
 
 interface CodeSmell {
