@@ -60,6 +60,13 @@ Issue #753: User preference management interface
           <i class="fas fa-key"></i>
           {{ $t('settings.apiKeys.stepKeys') }}
         </button>
+        <button
+          @click="activeTab = 'connection'"
+          :class="['settings-tab', { active: activeTab === 'connection' }]"
+        >
+          <i class="fas fa-plug"></i>
+          {{ $t('settings.connection.title') }}
+        </button>
       </div>
 
       <!-- Tab Content -->
@@ -131,6 +138,19 @@ Issue #753: User preference management interface
             </button>
           </div>
         </section>
+
+        <section v-if="activeTab === 'connection'" class="settings-section">
+          <div class="section-header">
+            <h2 class="section-title">
+              <i class="fas fa-plug"></i>
+              {{ $t('settings.connection.title') }}
+            </h2>
+            <p class="section-description">{{ $t('settings.connection.desc') }}</p>
+          </div>
+          <div class="section-content">
+            <ConnectionSettingsPanel />
+          </div>
+        </section>
       </div>
 
     <ApiKeySetupWizard v-model="showApiKeyWizard" @saved="onApiKeysSaved" />
@@ -144,6 +164,7 @@ import LanguageSettingsPanel from '@/components/settings/LanguageSettingsPanel.v
 import VoiceSettingsPanel from '@/components/settings/VoiceSettingsPanel.vue'
 import WebResearchSettingsPanel from '@/components/settings/WebResearchSettingsPanel.vue'
 import ApiKeySetupWizard from '@/components/settings/ApiKeySetupWizard.vue'
+import ConnectionSettingsPanel from '@/components/desktop/ConnectionSettingsPanel.vue'
 import { ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -151,7 +172,7 @@ const logger = createLogger('SettingsView')
 
 logger.debug('Settings view initialized')
 
-type PreferenceTab = 'appearance' | 'language' | 'voice' | 'webresearch' | 'apikeys'
+type PreferenceTab = 'appearance' | 'language' | 'voice' | 'webresearch' | 'apikeys' | 'connection'
 const activeTab = ref<PreferenceTab>('appearance')
 const showApiKeyWizard = ref(false)
 

@@ -211,51 +211,13 @@
       </div>
 
       <!-- Right: Content Viewer (70%) -->
-      <div class="content-pane">
-        <div v-if="!selectedFile" class="placeholder-state">
-          <i class="fas fa-file-alt"></i>
-          <h4>{{ $t('knowledge.browser.noFileSelected') }}</h4>
-          <p>{{ $t('knowledge.browser.selectFileHint') }}</p>
-        </div>
-
-        <div v-else class="file-viewer">
-          <div class="file-header">
-            <div class="file-info">
-              <i :class="getFileIcon(selectedFile)"></i>
-              <div>
-                <h4>{{ selectedFile.name }}</h4>
-                <p class="file-meta">
-                  {{ selectedFile.type }} • {{ formatFileSize(selectedFile.size || 0) }}
-                  <span v-if="selectedFile.date"> • {{ formatDate(selectedFile.date) }}</span>
-                </p>
-              </div>
-            </div>
-            <BaseButton
-              variant="ghost"
-              size="sm"
-              @click="clearSelection"
-              class="close-btn"
-              :aria-label="$t('knowledge.browser.closeFileViewer')"
-            >
-              <i class="fas fa-times"></i>
-            </BaseButton>
-          </div>
-
-          <div class="file-content">
-            <div v-if="isLoadingContent" class="loading-content">
-              <i class="fas fa-spinner fa-spin"></i>
-              <p>{{ $t('knowledge.browser.loadingContent') }}</p>
-            </div>
-
-            <div v-else-if="contentError" class="error-content">
-              <i class="fas fa-exclamation-circle"></i>
-              <p>{{ contentError }}</p>
-            </div>
-
-            <pre v-else class="content-display">{{ fileContent }}</pre>
-          </div>
-        </div>
-      </div>
+      <KnowledgeContentViewer
+        :selected-file="selectedFile"
+        :content="fileContent"
+        :is-loading="isLoadingContent"
+        :error="contentError instanceof Error ? contentError.message : (contentError as string | null)"
+        @close="clearSelection"
+      />
     </div>
   </div>
 </template>
@@ -278,6 +240,7 @@ import { useDebounce } from '@/composables/useTimeout'
 import TreeNodeComponent, { type TreeNode } from './TreeNodeComponent.vue'
 import VectorizationProgressModal from './VectorizationProgressModal.vue'
 import KnowledgeBrowserHeader from './KnowledgeBrowserHeader.vue'
+import KnowledgeContentViewer from './KnowledgeContentViewer.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import KnowledgeMainCategories from './KnowledgeMainCategories.vue'

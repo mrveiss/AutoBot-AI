@@ -40,6 +40,7 @@ import KnowledgeView from '@/views/KnowledgeView.vue'
 import WorkflowBuilderView from '@/views/WorkflowBuilderView.vue'
 import AnalyticsView from '@/views/AnalyticsView.vue'
 import NotFoundView from '@/views/NotFoundView.vue'
+import PermissionDeniedView from '@/views/PermissionDeniedView.vue'
 
 // Route configuration - Issue #729: Business-only routes, infrastructure moved to slm-admin
 const routes: RouteRecordRaw[] = [
@@ -702,6 +703,16 @@ const routes: RouteRecordRaw[] = [
         }
       }
     ]
+  },
+  {
+    path: '/permission-denied',
+    name: 'permission-denied',
+    component: PermissionDeniedView,
+    meta: {
+      title: 'Permission Denied',
+      hideInNav: true,
+      requiresAuth: false
+    }
   },
   {
     path: '/:pathMatch(.*)*',
