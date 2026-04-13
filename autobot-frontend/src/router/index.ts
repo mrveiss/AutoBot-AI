@@ -41,6 +41,8 @@ import WorkflowBuilderView from '@/views/WorkflowBuilderView.vue'
 import AnalyticsView from '@/views/AnalyticsView.vue'
 import NotFoundView from '@/views/NotFoundView.vue'
 import PermissionDeniedView from '@/views/PermissionDeniedView.vue'
+import HomeView from '@/views/HomeView.vue'
+import AboutView from '@/views/AboutView.vue'
 
 // Route configuration - Issue #729: Business-only routes, infrastructure moved to slm-admin
 const routes: RouteRecordRaw[] = [
@@ -484,6 +486,30 @@ const routes: RouteRecordRaw[] = [
       title: 'Preferences',
       icon: 'fas fa-sliders-h',
       description: 'Customize your AutoBot experience',
+      requiresAuth: true
+    }
+  },
+  // Issue #4185: Wire HomeView
+  {
+    path: '/home',
+    name: 'home',
+    component: HomeView,
+    meta: {
+      title: 'Home',
+      icon: 'fas fa-home',
+      description: 'Home page',
+      requiresAuth: true
+    }
+  },
+  // Issue #4185: Wire AboutView
+  {
+    path: '/about',
+    name: 'about',
+    component: AboutView,
+    meta: {
+      title: 'About',
+      icon: 'fas fa-info-circle',
+      description: 'About AutoBot',
       requiresAuth: true
     }
   },
