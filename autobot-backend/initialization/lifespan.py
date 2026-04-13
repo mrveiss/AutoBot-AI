@@ -343,15 +343,19 @@ async def _init_skills(app: FastAPI) -> None:
 
 
 async def _init_builtin_extensions(app: FastAPI) -> None:
-    """Register built-in extensions (permission enforcement, etc.).
+    """Register built-in extensions (logging, secret masking, permission enforcement).
 
+    Issue #658: Registers LoggingExtension and SecretMaskingExtension.
     Issue #3009: Wires PermissionEnforcementExtension into the extension
     manager so all tool executions are subject to role-based permission checks.
+    Issue #4183: Registers SecretMaskingExtension as a builtin extension.
     Non-critical: a failure logs a warning but does not block startup.
     """
     try:
-        from extensions.builtin.permission_enforcement import (
+        from extensions.builtin import (
+            LoggingExtension,
             PermissionEnforcementExtension,
+            SecretMaskingExtension,
         )
         from extensions.manager import ExtensionManager
 
@@ -360,9 +364,11 @@ async def _init_builtin_extensions(app: FastAPI) -> None:
             manager = ExtensionManager()
             app.state.extension_manager = manager
 
+        manager.register(LoggingExtension())
+        manager.register(SecretMaskingExtension())
         manager.register(PermissionEnforcementExtension())
         logger.info(
-            "Built-in extensions registered (permission_enforcement)"
+            "Built-in extensions registered (logging, secret_masking, permission_enforcement)"
         )
     except Exception as ext_error:
         logger.warning(
