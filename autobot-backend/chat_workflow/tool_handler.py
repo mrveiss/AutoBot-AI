@@ -1094,7 +1094,7 @@ class ToolHandlerMixin:
                 yield msg
         elif status == "error":
             async for msg in self._handle_command_error(
-                command, result, additional_response_parts
+                command, result, additional_response_parts, session_id
             ):
                 yield msg
 
@@ -1173,19 +1173,24 @@ class ToolHandlerMixin:
         command: str,
         result: dict[str, Any],
         additional_response_parts: list,
+        session_id: str = "",
     ):
         """Handle command execution error (Issue #665: extracted helper).
 
         Classifies error as repairable or critical and yields appropriate message.
+        Issue #4262: Emit REPAIRABLE_ERROR and CRITICAL_ERROR hooks.
 
         Args:
             command: The command that failed
             result: Execution result dict with error/stderr
             additional_response_parts: list to append context to
+            session_id: Session identifier for hook context
 
         Yields:
             WorkflowMessage with error details
         """
+        from chat_workflow.llm_handler import _emit_critical_error, _emit_repairable_error
+
         error = result.get("error", "Unknown error")
         stderr = result.get("stderr", "")
         repairable_error = self._classify_command_error(command, error, stderr)
@@ -1195,6 +1200,10 @@ class ToolHandlerMixin:
                 "[Issue #655] Repairable error for command '%s': %s",
                 command,
                 repairable_error.message,
+            )
+            # Emit REPAIRABLE_ERROR hook
+            await _emit_repairable_error(
+                Exception(repairable_error.message), session_id, {"command": command, "suggestion": repairable_error.suggestion}
             )
             additional_response_parts.append(f"\n\n{repairable_error.to_llm_context()}")
             yield WorkflowMessage(
@@ -1208,6 +1217,10 @@ class ToolHandlerMixin:
                 },
             )
         else:
+            # Emit CRITICAL_ERROR hook for non-repairable errors
+            await _emit_critical_error(
+                Exception(error), session_id, {"command": command}
+            )
             additional_response_parts.append(
                 f"\n\n❌ Command execution failed: {error}"
             )

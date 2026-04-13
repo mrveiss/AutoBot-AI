@@ -901,11 +901,18 @@ async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict
     if state.get("error"):
         return {}
 
+    from chat_workflow.llm_handler import _emit_loop_complete
+
     manager = config["configurable"]["manager"]
+    session_id = state.get("session_id", "")
+    total_iterations = state.get("iteration_count", 0)
+    combined_response = "\n\n".join(state.get("all_llm_responses", []))
+
+    # Emit LOOP_COMPLETE hook to notify extensions
+    await _emit_loop_complete(total_iterations, combined_response, session_id)
 
     try:
         session = await manager.get_or_create_session(state["session_id"])
-        combined_response = "\n\n".join(state.get("all_llm_responses", []))
 
         await manager._persist_conversation(
             state["session_id"],
