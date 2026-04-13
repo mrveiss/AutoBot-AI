@@ -691,6 +691,10 @@ const checkConnection = async () => {
 const heartbeatInterval = ref<number | null>(null)
 const autoSaveInterval = ref<number | null>(null)
 
+// Cleanup flag for promises that resolve after unmount (#4355)
+const isMounted = ref(true)
+let initializationAbortController: AbortController | null = null
+
 const startHeartbeat = () => {
   // Clear any existing interval first
   if (heartbeatInterval.value) {
@@ -771,9 +775,13 @@ const handleKeyboardShortcuts = (event: KeyboardEvent) => {
 
 // STREAMLINED: Simplified initialization without complex timeout racing
 // Issue #671: Added initialization state tracking for loading feedback
+// Issue #4355: Added cleanup to prevent mutations after unmount
 const initializeChatInterface = async () => {
   // Issue #671: Set initializing state to show loading indicator
   store.setInitializing(true)
+
+  // Issue #4355: Create abort controller for this initialization
+  initializationAbortController = new AbortController()
 
   try {
     logger.debug('🚀 Starting streamlined chat interface initialization')
@@ -787,6 +795,12 @@ const initializeChatInterface = async () => {
     try {
       // Race initialization with timeout
       const data = await Promise.race([loadPromise, timeoutPromise])
+
+      // Issue #4355: Check if component unmounted before processing results
+      if (!isMounted.value) {
+        logger.debug('Component unmounted, skipping initialization result processing')
+        return
+      }
 
       // Process results - sync with backend (source of truth)
       if (data.chat_sessions && !data.chat_sessions.error && Array.isArray(data.chat_sessions)) {
@@ -813,6 +827,12 @@ const initializeChatInterface = async () => {
     } catch (error) {
       logger.warn('⏱️ Initialization failed or timed out, using fallback:', error)
 
+      // Issue #4355: Check if component unmounted before fallback
+      if (!isMounted.value) {
+        logger.debug('Component unmounted, skipping fallback initialization')
+        return
+      }
+
       // Fallback to individual loading
       if (store.sessions.length === 0) {
         await controller.loadChatSessions().catch((err) => logger.warn('Failed to load chat sessions:', err))
@@ -825,6 +845,12 @@ const initializeChatInterface = async () => {
     logger.debug('✅ Chat interface initialization completed')
 
   } catch (error) {
+    // Issue #4355: Check if component unmounted before error handling
+    if (!isMounted.value) {
+      logger.debug('Component unmounted, skipping initialization error handling')
+      return
+    }
+
     logger.error('❌ Chat initialization failed:', error)
 
     // Issue #671: Set error state and show toast notification
@@ -858,6 +884,15 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  // Issue #4355: Mark component as unmounted to prevent mutations from pending promises
+  isMounted.value = false
+
+  // Issue #4355: Abort in-flight initialization if still running
+  if (initializationAbortController) {
+    initializationAbortController.abort()
+    initializationAbortController = null
+  }
+
   // Clean up event listeners
   document.removeEventListener('keydown', handleKeyboardShortcuts)
 
