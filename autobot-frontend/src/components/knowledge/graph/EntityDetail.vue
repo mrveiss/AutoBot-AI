@@ -78,36 +78,7 @@
       </div>
 
       <!-- Relationships -->
-      <div class="detail-section">
-        <h5>
-          <i class="fas fa-link"></i>
-          {{ $t('knowledge.graph.entity.relationships') }}
-          <span v-if="relLoading" class="section-loading">
-            <i class="fas fa-spinner fa-spin"></i>
-          </span>
-        </h5>
-
-        <div v-if="relError" class="section-error">
-          {{ relError }}
-        </div>
-
-        <div
-          v-else-if="relationships.length > 0"
-          class="relationship-list"
-        >
-          <div
-            v-for="rel in relationships"
-            :key="rel.id"
-            class="relationship-item"
-          >
-            <span class="rel-source">{{ rel.source_entity }}</span>
-            <span class="rel-type">{{ rel.relationship_type }}</span>
-            <span class="rel-target">{{ rel.target_entity }}</span>
-          </div>
-        </div>
-
-        <p v-else class="empty-text">{{ $t('knowledge.graph.entity.noRelationships') }}</p>
-      </div>
+      <RelationshipViewer :entity-id="entity.id" />
 
       <!-- Source Documents -->
       <div
@@ -160,6 +131,7 @@ import {
   type Entity,
 } from '@/composables/useKnowledgeGraph'
 import { getEntityTypeColor as getTypeColor } from '../constants'
+import RelationshipViewer from './RelationshipViewer.vue'
 
 const props = defineProps<{
   entity: Entity
@@ -169,13 +141,6 @@ defineEmits<{
   (e: 'close'): void
   (e: 'view-timeline', entityName: string): void
 }>()
-
-const {
-  relationships,
-  getRelationships,
-  loading: relLoading,
-  error: relError,
-} = useKnowledgeGraph()
 
 const panelRef = ref<HTMLElement | null>(null)
 let previouslyFocused: Element | null = null
@@ -219,7 +184,6 @@ onMounted(async () => {
   document.addEventListener('keydown', trapFocus)
   await nextTick()
   panelRef.value?.focus()
-  getRelationships(props.entity.id)
 })
 </script>
 
@@ -395,47 +359,6 @@ onMounted(async () => {
 .prop-value {
   color: var(--text-primary);
   word-break: break-word;
-}
-
-/* Relationships */
-.relationship-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
-}
-
-.relationship-item {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-xs) var(--spacing-sm);
-  background: var(--bg-card);
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-}
-
-.rel-source {
-  color: var(--text-primary);
-  font-weight: var(--font-medium);
-}
-
-.rel-type {
-  color: var(--color-primary);
-  font-size: var(--text-xs);
-  padding: 1px var(--spacing-xs);
-  background: var(--color-primary-bg);
-  border-radius: var(--radius-sm);
-}
-
-.rel-target {
-  color: var(--text-primary);
-  font-weight: var(--font-medium);
-}
-
-.empty-text {
-  font-size: var(--text-sm);
-  color: var(--text-tertiary);
-  margin: 0;
 }
 
 /* Source Documents */
