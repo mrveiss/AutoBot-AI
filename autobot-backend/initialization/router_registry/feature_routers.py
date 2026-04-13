@@ -306,12 +306,6 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "knowledge_boards",
     ),
     (
-        "api.knowledge_grounding",
-        "/api",
-        ["knowledge-grounding"],
-        "knowledge_grounding",
-    ),
-    (
         "api.knowledge_vectorization",
         "",
         ["knowledge_vectorization"],
