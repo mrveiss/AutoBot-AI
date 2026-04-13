@@ -43,8 +43,10 @@ const KnowledgePromptEditor = () => import('./KnowledgePromptEditor.vue')
 
 const store = useKnowledgeStore()
 
+type TabId = 'entries' | 'search' | 'upload' | 'manage' | 'categories' | 'stats' | 'system-docs' | 'prompt-editor' | 'advanced'
+
 // Tab configuration
-const tabs = computed(() => [
+const tabs = computed<{ id: TabId; label: string }[]>(() => [
   { id: 'search', label: t('knowledge.manager.tabSearch') },
   { id: 'categories', label: t('knowledge.manager.tabCategories') },
   { id: 'upload', label: t('knowledge.manager.tabUpload') },

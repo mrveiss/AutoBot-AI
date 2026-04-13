@@ -31,6 +31,8 @@
 import { ref, shallowRef, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import ForceGraph3D, { type ForceGraph3DInstance } from '3d-force-graph'
 import SpriteText from 'three-spritetext'
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore – 'three' ships without bundled type declarations in this version; types are provided transitively via 3d-force-graph
 import * as THREE from 'three'
 import { getCssVar } from '@/composables/useCssVars'
 import { createLogger } from '@/utils/debugUtils'
@@ -155,7 +157,7 @@ function initGraph(): void {
   const height = container.value.clientHeight || container.value.offsetHeight || 500
 
   // new ForceGraph3D(element, config) per IForceGraph3D constructor signature
-  graph.value = new ForceGraph3D(container.value, { antialias: true, alpha: true })
+  graph.value = new ForceGraph3D(container.value, { rendererConfig: { antialias: true, alpha: true } })
     .width(width)
     .height(height)
     .backgroundColor(getCssVar('--bg-primary', '#0f172a'))
@@ -235,7 +237,7 @@ function disposeGraph(): void {
         // Issue #3399: omitting this step leaks GPU texture memory on each 2D/3D toggle.
         for (const value of Object.values(m as unknown as Record<string, unknown>)) {
           if (value instanceof THREE.Texture) {
-            value.dispose()
+            (value as THREE.Texture).dispose()
           }
         }
         m.dispose()
