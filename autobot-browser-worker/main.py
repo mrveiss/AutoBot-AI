@@ -5,11 +5,13 @@
 
 Deploys to: 10.0.0.6 (Browser VM)
 
-This is a stub for Phase 1. Browser-specific code will be extracted
-from autobot-user-backend in a future phase.
+Phase 2+ refactoring: Extracted browser automation code to src/automation/ module.
+Provides core Playwright-based browser automation capabilities for workflow integration.
 """
 
 import logging
+
+from src.automation import BrowserAutomationSession
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +19,9 @@ logger = logging.getLogger(__name__)
 def main():
     """Browser worker entry point."""
     logger.info("Browser Worker starting...")
-    # TODO: Extract browser automation code from src/ in Phase 2+
+    logger.info("Browser automation module loaded: %s", BrowserAutomationSession.__name__)
+    # Browser automation code extracted to src/automation/ module
+    # See src/automation/browser_session.py for BrowserAutomationSession implementation
 
 
 if __name__ == "__main__":
