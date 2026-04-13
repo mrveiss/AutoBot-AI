@@ -5,7 +5,7 @@
 Skill Management Service Module
 
 Provides skill metrics tracking, health scoring, feedback analysis,
-and autonomous skill extraction from conversations.
+autonomous skill extraction, and skill relevance ranking.
 """
 
 from .skill_feedback import SkillFeedbackAnalyzer
@@ -13,6 +13,7 @@ from .skill_health_scheduler import SkillHealthScheduler, get_skill_health_sched
 from .skill_metrics import SkillMetrics
 from .skill_extractor import SkillExtractor
 from .skill_proposer import SkillProposer
+from .skill_ranker import SkillRanker, get_skill_ranker
 
 __all__ = [
     "SkillMetrics",
@@ -21,4 +22,6 @@ __all__ = [
     "SkillFeedbackAnalyzer",
     "SkillExtractor",
     "SkillProposer",
+    "SkillRanker",
+    "get_skill_ranker",
 ]

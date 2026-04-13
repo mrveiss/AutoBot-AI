@@ -22,6 +22,42 @@ from constants.ttl_constants import TTL_24_HOURS
 
 logger = logging.getLogger(__name__)
 
+
+def _build_skill_context(skills: Optional[List[Dict]]) -> str:
+    """
+    Build a skill context section from ranked skills.
+
+    Issue #4337: Injects available skills into system prompt for agent awareness.
+
+    Args:
+        skills: List of ranked skill dictionaries (from SkillRanker)
+
+    Returns:
+        Rendered skill context string or empty string if no skills
+    """
+    if not skills:
+        return ""
+
+    skill_lines = []
+    for i, skill in enumerate(skills, 1):
+        name = skill.get("name", "Unknown")
+        description = skill.get("description", "")
+        skill_id = skill.get("id", "")
+
+        # Format: 1. SkillName: brief description
+        if description:
+            skill_lines.append(f"{i}. {name}: {description}")
+        else:
+            skill_lines.append(f"{i}. {name}")
+
+    if not skill_lines:
+        return ""
+
+    skills_text = "\n".join(skill_lines)
+    return (
+        f"\n\n## Available Skills\nThe following skills are available for this agent to use:\n{skills_text}"
+    )
+
 # Issue #380: Module-level constant for supported prompt file extensions
 _SUPPORTED_PROMPT_EXTENSIONS = frozenset({".md", ".txt", ".prompt"})
 
@@ -537,6 +573,35 @@ def get_prompt(prompt_key: str, **kwargs) -> str:
     return prompt_manager.get(prompt_key, **kwargs)
 
 
+async def _get_ranked_skills(
+    context: Optional[str], platform: Optional[str] = None
+) -> List[Dict]:
+    """
+    Fetch and rank skills by relevance to conversation context.
+
+    Issue #4337: Uses SkillRanker to get relevant skills for injection into prompt.
+
+    Args:
+        context: Conversation context for ranking
+        platform: Optional platform filter
+
+    Returns:
+        List of ranked skills or empty list if unavailable
+    """
+    if not context:
+        return []
+
+    try:
+        from services.skill_management import get_skill_ranker
+
+        ranker = get_skill_ranker()
+        skills = await ranker.rank_skills(context, platform=platform)
+        return skills
+    except Exception as e:
+        logger.debug("Failed to get ranked skills: %s", e)
+        return []
+
+
 def _build_dynamic_context(
     session_id: Optional[str],
     user_name: Optional[str],
@@ -601,6 +666,8 @@ def get_optimized_prompt(
     1. Static base prompt FIRST (will be cached by vLLM)
     2. Dynamic context LAST (NOT cached, but minimal tokens)
 
+    For async skill injection, use get_optimized_prompt_with_skills().
+
     Args:
         base_prompt_key: The static base prompt key (e.g., 'default.agent.system.main')
         session_id: Current session identifier
@@ -628,6 +695,65 @@ def get_optimized_prompt(
 
     # Combine: static prefix + dynamic suffix (CRITICAL for vLLM prefix caching)
     return f"{base_prompt}\n\n{dynamic_context}"
+
+
+async def get_optimized_prompt_with_skills(
+    base_prompt_key: str,
+    session_id: Optional[str] = None,
+    user_name: Optional[str] = None,
+    user_role: Optional[str] = None,
+    available_tools: Optional[List[str]] = None,
+    recent_context: Optional[str] = None,
+    additional_params: Optional[Dict] = None,
+    skill_ranking_context: Optional[str] = None,
+    platform: Optional[str] = None,
+) -> str:
+    """
+    Get a prompt with ranked skills injected via async operation.
+
+    Issue #4337: Fetches and ranks relevant skills by embedding similarity,
+    then injects them into the system prompt for agent awareness.
+
+    This function returns a prompt structured for maximum cache efficiency:
+    1. Static base prompt FIRST (will be cached by vLLM)
+    2. Skills section MIDDLE (dynamic but cached if unchanged)
+    3. Dynamic context LAST (NOT cached, but minimal tokens)
+
+    Args:
+        base_prompt_key: The static base prompt key (e.g., 'default.agent.system.main')
+        session_id: Current session identifier
+        user_name: User's display name
+        user_role: User's role/permissions
+        available_tools: List of available tool names
+        recent_context: Recent conversation context or task history
+        additional_params: Additional dynamic parameters
+        skill_ranking_context: Context for ranking skills (if None, uses recent_context)
+        platform: Optional platform filter for skills ('local', 'telegram', etc.)
+
+    Returns:
+        Combined prompt with static prefix + skills + dynamic suffix
+    """
+    # Get static base prompt with includes rendered (will be cached by vLLM)
+    base_prompt = prompt_manager.get(base_prompt_key)
+
+    # Get ranked skills for injection (async operation)
+    ranking_context = skill_ranking_context or recent_context or ""
+    ranked_skills = await _get_ranked_skills(ranking_context, platform=platform)
+    skill_context = _build_skill_context(ranked_skills)
+
+    # Build dynamic context section (Issue #620: extracted helper)
+    dynamic_context = _build_dynamic_context(
+        session_id,
+        user_name,
+        user_role,
+        available_tools,
+        recent_context,
+        additional_params,
+    )
+
+    # Combine: static prefix + skills + dynamic suffix
+    # (CRITICAL for vLLM prefix caching)
+    return f"{base_prompt}{skill_context}\n\n{dynamic_context}"
 
 
 def list_available_prompts(filter_pattern: Optional[str] = None) -> List[str]:
