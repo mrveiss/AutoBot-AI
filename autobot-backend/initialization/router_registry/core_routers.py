@@ -72,6 +72,7 @@ from api.service_messages import router as service_messages_router
 from api.settings import router as settings_router
 from api.structured_thinking_mcp import router as structured_thinking_mcp_router
 from api.system import router as system_router
+from api.usage import router as usage_router  # Issue #1807
 from api.vnc_manager import router as vnc_router
 from api.vnc_mcp import router as vnc_mcp_router
 from api.vnc_proxy import router as vnc_proxy_router
@@ -94,6 +95,7 @@ def _get_system_routers() -> list:
         (collaboration_router, "", ["collaboration"], "collaboration"),
         (system_router, "/system", ["system"], "system"),
         (settings_router, "/settings", ["settings"], "settings"),
+        (usage_router, "/usage", ["usage", "analytics"], "usage"),  # Issue #1807
         (data_storage_router, "", ["data-storage"], "data_storage"),
         (prompts_router, "/prompts", ["prompts"], "prompts"),
         (frontend_config_router, "", ["frontend-config"], "frontend_config"),

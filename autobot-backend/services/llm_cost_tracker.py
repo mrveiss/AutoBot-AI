@@ -213,6 +213,7 @@ class LLMCostTracker:
     MODEL_TOTALS_KEY = f"{REDIS_KEY_PREFIX}by_model"
     SESSION_TOTALS_KEY = f"{REDIS_KEY_PREFIX}by_session"
     AGENT_TOTALS_KEY = f"{REDIS_KEY_PREFIX}by_agent"
+    USER_TOTALS_KEY = f"{REDIS_KEY_PREFIX}by_user"
     AGENT_BUDGET_KEY = f"{REDIS_KEY_PREFIX}agent_budget"
     BUDGET_ALERTS_KEY = f"{REDIS_KEY_PREFIX}budget_alerts"
 
@@ -641,6 +642,17 @@ class LLMCostTracker:
                     await pipe.incrbyfloat(daily_agent_key, record.cost_usd)
                     await pipe.expire(daily_agent_key, TTL_90_DAYS)
 
+                # Update per-user totals if user provided (#1807)
+                if record.user_id:
+                    user_key = f"{self.USER_TOTALS_KEY}:{record.user_id}"
+                    await pipe.hincrbyfloat(user_key, "cost_usd", record.cost_usd)
+                    await pipe.hincrby(user_key, "input_tokens", record.input_tokens)
+                    await pipe.hincrby(user_key, "output_tokens", record.output_tokens)
+                    await pipe.hincrby(user_key, "call_count", 1)
+                    daily_user_key = f"{self.USER_TOTALS_KEY}:{record.user_id}:daily:{today}"
+                    await pipe.incrbyfloat(daily_user_key, record.cost_usd)
+                    await pipe.expire(daily_user_key, TTL_90_DAYS)
+
                 # Execute all operations in single round-trip
                 await pipe.execute()
 
@@ -995,6 +1007,82 @@ class LLMCostTracker:
             "utilization_percent": round(utilization, 2),
             "exceeded": exceeded,
         }
+
+    async def get_cost_by_user(self, user_id: str) -> dict[str, Any]:
+        """Get cost breakdown for a specific user (#1807)."""
+        try:
+            redis = await self.get_redis()
+            user_key = f"{self.USER_TOTALS_KEY}:{user_id}"
+            data = await redis.hgetall(user_key)
+
+            if not data:
+                return {"user_id": user_id, "found": False}
+
+            def _int(v: Any) -> int:
+                return int(v) if v else 0
+
+            def _float(v: Any) -> float:
+                return float(v) if v else 0.0
+
+            return {
+                "user_id": user_id,
+                "found": True,
+                "cost_usd": _float(data.get(b"cost_usd") or data.get("cost_usd")),
+                "input_tokens": _int(data.get(b"input_tokens") or data.get("input_tokens")),
+                "output_tokens": _int(data.get(b"output_tokens") or data.get("output_tokens")),
+                "call_count": _int(data.get(b"call_count") or data.get("call_count")),
+            }
+        except Exception as e:
+            logger.error("Failed to get user cost: %s", e)
+            return {"user_id": user_id, "error": "Failed to retrieve user cost"}
+
+    async def get_all_user_costs(self) -> list[dict[str, Any]]:
+        """Get cost breakdown for all users (#1807)."""
+        try:
+            redis = await self.get_redis()
+            pattern = f"{self.USER_TOTALS_KEY}:*"
+            all_keys = await redis.keys(pattern)
+            # Exclude daily sub-keys
+            user_keys = [
+                k for k in all_keys
+                if b":daily:" not in (k if isinstance(k, bytes) else k.encode())
+            ]
+
+            if not user_keys:
+                return []
+
+            pipe = redis.pipeline()
+            for key in user_keys:
+                pipe.hgetall(key)
+            results = await pipe.execute()
+
+            def _int(v: Any) -> int:
+                return int(v) if v else 0
+
+            def _float(v: Any) -> float:
+                return float(v) if v else 0.0
+
+            users = []
+            for key, data in zip(user_keys, results):
+                if not data:
+                    continue
+                key_str = key if isinstance(key, str) else key.decode("utf-8")
+                user_id = key_str.split(":")[-1]
+                users.append(
+                    {
+                        "user_id": user_id,
+                        "cost_usd": _float(data.get(b"cost_usd") or data.get("cost_usd")),
+                        "input_tokens": _int(data.get(b"input_tokens") or data.get("input_tokens")),
+                        "output_tokens": _int(data.get(b"output_tokens") or data.get("output_tokens")),
+                        "call_count": _int(data.get(b"call_count") or data.get("call_count")),
+                    }
+                )
+
+            users.sort(key=lambda x: x["cost_usd"], reverse=True)
+            return users
+        except Exception as e:
+            logger.error("Failed to get all user costs: %s", e)
+            return []
 
 
 # Singleton instance (thread-safe)
