@@ -9,6 +9,7 @@ per-user skill preferences (via Redis), and skill execution routing.
 """
 
 import logging
+import time
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_management.cache_wrapper import RedisCache
@@ -25,10 +26,12 @@ class SkillManager:
     """Manages skill lifecycle, configuration persistence, and execution.
 
     Uses Redis for persistent storage of skill configs and user preferences.
+    Includes metrics tracking for skill performance monitoring (Issue #4339).
     """
 
     def __init__(self, registry: Optional[SkillRegistry] = None) -> None:
         self._registry = registry or get_skill_registry()
+        self._metrics: Optional[Any] = None
 
     @property
     def registry(self) -> SkillRegistry:
@@ -78,15 +81,38 @@ class SkillManager:
                 "error": f"Unknown action '{action}' for skill '{skill_name}'",
             }
 
+        # Track execution with metrics (Issue #4339)
+        start_time = time.time()
+        result = None
+        error_type = None
+
         try:
             result = await skill.execute(action, params)
+            success = result.get("success", True)
             return result
-        except Exception:
+        except Exception as e:
             logger.exception("Skill execution failed: %s.%s", skill_name, action)
+            success = False
+            error_type = type(e).__name__
             return {
                 "success": False,
                 "error": f"Execution failed for {skill_name}.{action}",
             }
+        finally:
+            # Log metrics asynchronously (non-blocking)
+            duration_ms = (time.time() - start_time) * 1000
+            try:
+                metrics = await self._get_metrics()
+                if metrics:
+                    await metrics.log_invocation(
+                        skill_id=skill_name,
+                        action=action,
+                        success=success,
+                        duration_ms=duration_ms,
+                        error_type=error_type,
+                    )
+            except Exception as e:
+                logger.debug("Failed to log skill metrics: %s", e)
 
     async def get_user_skill_preferences(self, user_id: str) -> Dict[str, bool]:
         """Get per-user skill enable/disable preferences from Redis.
@@ -165,6 +191,18 @@ class SkillManager:
             if _matches_query(skill_info, query_lower):
                 results.append(skill_info)
         return results
+
+    async def _get_metrics(self) -> Optional[Any]:
+        """Get or create the SkillMetrics instance (lazy initialization)."""
+        if self._metrics is None:
+            try:
+                from services.skill_management.skill_metrics import SkillMetrics
+
+                self._metrics = SkillMetrics()
+            except ImportError:
+                logger.debug("SkillMetrics not available")
+                return None
+        return self._metrics
 
 
 def _matches_query(skill_info: Dict[str, Any], query: str) -> bool:
