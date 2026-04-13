@@ -67,6 +67,13 @@ Issue #753: User preference management interface
           <i class="fas fa-plug"></i>
           {{ $t('settings.connection.title') }}
         </button>
+        <button
+          @click="activeTab = 'featureflags'"
+          :class="['settings-tab', { active: activeTab === 'featureflags' }]"
+        >
+          <i class="fas fa-shield-alt"></i>
+          Feature Flags
+        </button>
       </div>
 
       <!-- Tab Content -->
@@ -151,6 +158,19 @@ Issue #753: User preference management interface
             <ConnectionSettingsPanel />
           </div>
         </section>
+
+        <section v-if="activeTab === 'featureflags'" class="settings-section">
+          <div class="section-header">
+            <h2 class="section-title">
+              <i class="fas fa-shield-alt"></i>
+              Feature Flags
+            </h2>
+            <p class="section-description">Manage feature flags, enforcement modes, and access control</p>
+          </div>
+          <div class="section-content">
+            <FeatureFlagsSettingsPanel />
+          </div>
+        </section>
       </div>
 
     <ApiKeySetupWizard v-model="showApiKeyWizard" @saved="onApiKeysSaved" />
@@ -165,6 +185,7 @@ import VoiceSettingsPanel from '@/components/settings/VoiceSettingsPanel.vue'
 import WebResearchSettingsPanel from '@/components/settings/WebResearchSettingsPanel.vue'
 import ApiKeySetupWizard from '@/components/settings/ApiKeySetupWizard.vue'
 import ConnectionSettingsPanel from '@/components/desktop/ConnectionSettingsPanel.vue'
+import FeatureFlagsSettingsPanel from '@/components/settings/FeatureFlagsSettingsPanel.vue'
 import { ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -172,7 +193,7 @@ const logger = createLogger('SettingsView')
 
 logger.debug('Settings view initialized')
 
-type PreferenceTab = 'appearance' | 'language' | 'voice' | 'webresearch' | 'apikeys' | 'connection'
+type PreferenceTab = 'appearance' | 'language' | 'voice' | 'webresearch' | 'apikeys' | 'connection' | 'featureflags'
 const activeTab = ref<PreferenceTab>('appearance')
 const showApiKeyWizard = ref(false)
 
