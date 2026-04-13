@@ -458,6 +458,14 @@ export const useChatStore = defineStore('chat', () => {
      *
      * This fixes the bug where deleted sessions reappear after page reload.
      */
+    // Defensive guard: if backend returns 0 sessions but store has sessions,
+    // the backend may have returned incomplete data. Preserving local sessions
+    // prevents accidental data loss (#4328).
+    if (backendSessions.length === 0 && sessions.value.length > 0) {
+      logger.warn(`syncSessionsWithBackend: backend returned 0 sessions but store has ${sessions.value.length} — skipping to preserve local data`)
+      return
+    }
+
     logger.debug(`🔄 Syncing sessions: Store has ${sessions.value.length}, Backend has ${backendSessions.length}`)
 
     const backendIds = new Set(backendSessions.map(s => s.id))
