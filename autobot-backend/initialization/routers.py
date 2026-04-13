@@ -55,6 +55,7 @@ def load_optional_routers():
     optional_routers.extend(load_analytics_routers())
     optional_routers.extend(load_terminal_routers())
     optional_routers.extend(load_monitoring_routers())
+    optional_routers.extend(load_integration_routers())
     optional_routers.extend(load_feature_routers())
     optional_routers.extend(load_mcp_routers())
 

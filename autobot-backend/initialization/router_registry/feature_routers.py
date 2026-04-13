@@ -374,55 +374,7 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["admin", "feature-flags"],
         "feature_flags",
     ),
-    # External tool integrations (Issue #61)
-    (
-        "api.integration_database",
-        "/integrations/database",
-        ["integrations-database"],
-        "integration_database",
-    ),
-    (
-        "api.integration_cloud",
-        "/integrations/cloud",
-        ["integrations-cloud"],
-        "integration_cloud",
-    ),
-    (
-        "api.integration_cicd",
-        "/integrations/cicd",
-        ["integrations-cicd"],
-        "integration_cicd",
-    ),
-    (
-        "api.integration_project_management",
-        "/integrations/project-management",
-        ["integrations-project-management"],
-        "integration_project_management",
-    ),
-    (
-        "api.integration_communication",
-        "/integrations/communication",
-        ["integrations-communication"],
-        "integration_communication",
-    ),
-    (
-        "api.integration_version_control",
-        "/integrations/version-control",
-        ["integrations-version-control"],
-        "integration_version_control",
-    ),
-    (
-        "api.integration_monitoring",
-        "/integrations/monitoring",
-        ["integrations-monitoring"],
-        "integration_monitoring",
-    ),
-    (
-        "api.integration_github",
-        "/integrations/github",
-        ["integrations-github"],
-        "integration_github",
-    ),
+    # Issue #4203: External tool integrations consolidated into integration_routers.py
     # Skills repo management and governance MUST be registered before the base skills
     # router so their static path prefixes take precedence over skills' /{name} param.
     ("api.skills_repos", "/skills/repos", ["skills"], "skills-repos"),
