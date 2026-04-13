@@ -197,7 +197,7 @@ class Extension:
             None (modify ctx.data directly)
         """
 
-    async def on_before_prompt_build(self, ctx: HookContext) -> Optional[None]:
+    async def on_before_prompt_build(self, ctx: HookContext) -> None:
         """
         Called before building the prompt.
 
