@@ -7,7 +7,7 @@ Tests for smart context truncation feature (Issue #4346).
 Verifies that large files are truncated intelligently with head/tail preservation.
 """
 
-from prompt_manager import _truncate_large_file
+from prompt_manager import _truncate_large_file, _snap_to_char_boundary
 
 
 class TestSmartTruncation:
@@ -117,6 +117,126 @@ class TestSmartTruncation:
         assert "START_OF_FILE" in result.split("[...")[0]
         # Should preserve tail marker (last part)
         assert "END_OF_FILE" in result.split("...]")[-1]
+
+
+class TestUtf8BoundarySafety:
+    """Issue #4394: multi-byte character boundary safety tests."""
+
+    def _make_large(self, char: str, total: int = 25000) -> str:
+        """Build a string of *total* Unicode characters using *char* as filler."""
+        return char * total
+
+    # ------------------------------------------------------------------
+    # _snap_to_char_boundary unit tests
+    # ------------------------------------------------------------------
+
+    def test_snap_forward_finds_whitespace(self):
+        """snap forward should return position of first whitespace at/after pos."""
+        s = "abcde fghij"
+        assert _snap_to_char_boundary(s, 3, search_forward=True) == 5
+
+    def test_snap_backward_finds_whitespace(self):
+        """snap backward should return position just after the last whitespace before pos."""
+        s = "abcde fghij"
+        assert _snap_to_char_boundary(s, 8, search_forward=False) == 6
+
+    def test_snap_no_whitespace_returns_original(self):
+        """When no whitespace is found within limit, original position is returned."""
+        s = "a" * 200
+        assert _snap_to_char_boundary(s, 50, search_forward=True) == 50
+        assert _snap_to_char_boundary(s, 150, search_forward=False) == 150
+
+    # ------------------------------------------------------------------
+    # Emoji (4-byte UTF-8 codepoints) — U+1F600 and family
+    # ------------------------------------------------------------------
+
+    def test_emoji_not_corrupted_at_head_boundary(self):
+        """4-byte emoji must not be split at the head cut point."""
+        emoji = "\U0001F600"  # 😀 — 4 bytes when encoded to UTF-8
+        content = emoji * 25000  # all emoji
+        result = _truncate_large_file(content, max_chars=20000)
+
+        # Re-encode must succeed without UnicodeEncodeError / replacement chars
+        encoded = result.encode("utf-8")
+        decoded = encoded.decode("utf-8")
+        assert decoded == result, "round-trip encode/decode must be lossless"
+
+        # Head and tail must each consist entirely of valid emoji codepoints
+        before_marker = result.split("[...")[0]
+        after_marker = result.split("...]")[-1].strip()
+        assert all(c == emoji or c.isspace() for c in before_marker.strip())
+        assert all(c == emoji or c.isspace() for c in after_marker.strip())
+
+    def test_emoji_content_survives_round_trip(self):
+        """Mixed emoji + ASCII content round-trips through truncation."""
+        content = ("Hello 😀 World 🌍 " * 1500)  # > 20000 chars
+        result = _truncate_large_file(content, max_chars=20000)
+        encoded = result.encode("utf-8")
+        assert encoded.decode("utf-8") == result
+
+    # ------------------------------------------------------------------
+    # CJK characters (3-byte UTF-8 codepoints) — U+4E2D (中)
+    # ------------------------------------------------------------------
+
+    def test_cjk_not_corrupted_at_boundary(self):
+        """3-byte CJK characters must not be split at truncation boundaries."""
+        cjk = "\u4e2d"  # 中 — 3 bytes in UTF-8
+        content = cjk * 25000
+        result = _truncate_large_file(content, max_chars=20000)
+
+        encoded = result.encode("utf-8")
+        assert encoded.decode("utf-8") == result
+
+    def test_cjk_mixed_with_ascii(self):
+        """CJK mixed with ASCII spaces survives truncation round-trip."""
+        content = ("中文 text " * 3000)  # spaces allow boundary snapping
+        result = _truncate_large_file(content, max_chars=20000)
+        assert result.encode("utf-8").decode("utf-8") == result
+
+    # ------------------------------------------------------------------
+    # Accented / Latin extended characters (2-byte UTF-8) — café, naïve
+    # ------------------------------------------------------------------
+
+    def test_accented_chars_not_corrupted(self):
+        """2-byte accented characters (é, ï, ñ) must survive truncation."""
+        content = ("café naïve résumé " * 1500)  # > 20000 chars
+        result = _truncate_large_file(content, max_chars=20000)
+        assert result.encode("utf-8").decode("utf-8") == result
+
+    def test_accented_head_preserved(self):
+        """Head section must start with accented content, not be mangled."""
+        content = ("résumé " * 4000)
+        result = _truncate_large_file(content, max_chars=20000)
+        before_marker = result.split("[...")[0]
+        assert "résumé" in before_marker
+
+    # ------------------------------------------------------------------
+    # ASCII (1-byte) — baseline should still pass
+    # ------------------------------------------------------------------
+
+    def test_ascii_unchanged_behaviour(self):
+        """ASCII-only content must still truncate correctly."""
+        content = "hello world " * 2500  # > 20000 chars
+        result = _truncate_large_file(content, max_chars=20000)
+        assert len(result) < len(content)
+        assert "[..." in result
+        assert result.encode("utf-8").decode("utf-8") == result
+
+    # ------------------------------------------------------------------
+    # Mixed multi-byte in head/tail — boundary snapping correctness
+    # ------------------------------------------------------------------
+
+    def test_boundary_snap_does_not_cut_mid_word(self):
+        """Boundary snap must not cut in the middle of a multi-byte word."""
+        # Place a long emoji word right at the section_size boundary (~8000)
+        prefix = "a " * 4000              # 8000 chars, ends with space
+        emoji_word = "😀🌍🎉" * 100       # 300 chars, no internal spaces
+        suffix = " b" * 8500              # 17000 chars
+        content = prefix + emoji_word + suffix  # well above 20000
+
+        result = _truncate_large_file(content, max_chars=20000)
+        # Round-trip encode/decode is the definitive correctness check
+        assert result.encode("utf-8").decode("utf-8") == result
 
 
 class TestPromptManagerTruncation:

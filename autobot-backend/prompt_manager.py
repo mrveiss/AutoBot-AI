@@ -23,12 +23,53 @@ from constants.ttl_constants import TTL_24_HOURS
 logger = logging.getLogger(__name__)
 
 
+def _snap_to_char_boundary(content: str, pos: int, search_forward: bool = True) -> int:
+    """
+    Snap a string slice position to a Unicode-safe word boundary.
+
+    Issue #4394: Python str indexing is already codepoint-safe (no mid-codepoint
+    splits possible), but this helper snaps the cut to the nearest whitespace so
+    truncation does not break mid-word for multi-byte characters (emoji 4-byte,
+    CJK 3-byte, accented 2-byte).
+
+    Args:
+        content: The full string being sliced.
+        pos: Proposed slice position.
+        search_forward: If True search forward for whitespace (head cut);
+                        if False search backward (tail cut).
+
+    Returns:
+        Adjusted position at or near a whitespace boundary, within ±100 chars.
+    """
+    limit = 100  # Maximum chars to search for a boundary
+    length = len(content)
+    pos = max(0, min(pos, length))
+
+    if search_forward:
+        end = min(pos + limit, length)
+        for i in range(pos, end):
+            if content[i].isspace():
+                return i
+        return pos  # No whitespace found within limit — use original
+    else:
+        start = max(pos - limit, 0)
+        for i in range(pos, start, -1):
+            if content[i - 1].isspace():
+                return i
+        return pos  # No whitespace found within limit — use original
+
+
 def _truncate_large_file(content: str, max_chars: int = 20000) -> str:
     """
     Smart head/tail truncation for large file content.
 
     Issue #4346: Preserves critical first and last sections of large files
     (>max_chars) with a truncation marker, optimizing LLM context usage.
+
+    Issue #4394: Truncation boundaries are snapped to whitespace so that
+    multi-byte Unicode characters (emoji 4-byte, CJK 3-byte, accented 2-byte)
+    are never split mid-word.  Python str indexing is already codepoint-safe,
+    but word-boundary snapping prevents cut points inside multi-byte words.
 
     Strategy:
     - Files smaller than max_chars: returned unchanged
@@ -47,10 +88,21 @@ def _truncate_large_file(content: str, max_chars: int = 20000) -> str:
 
     # Calculate sections: preserve first 40% and last 40% of max_chars
     section_size = (max_chars // 5) * 2  # 40% of max_chars
-    truncated_chars = len(content) - (section_size * 2)
 
-    head = content[:section_size]
-    tail = content[-section_size:]
+    # Issue #4394: snap cut points to whitespace boundaries so multi-byte
+    # characters (e.g. emoji U+1F600, CJK U+4E2D, accented café) are not
+    # split mid-word when the content is later encoded to UTF-8 bytes.
+    head_end = _snap_to_char_boundary(content, section_size, search_forward=True)
+    tail_start = _snap_to_char_boundary(content, len(content) - section_size, search_forward=False)
+
+    # Ensure tail_start > head_end to avoid overlap on pathological inputs
+    if tail_start <= head_end:
+        head_end = section_size
+        tail_start = len(content) - section_size
+
+    head = content[:head_end]
+    tail = content[tail_start:]
+    truncated_chars = len(content) - head_end - (len(content) - tail_start)
 
     marker = f"\n\n[...{truncated_chars} chars TRUNCATED...]\n\n"
     truncated = f"{head}{marker}{tail}"
