@@ -1143,14 +1143,37 @@ onUnmounted(() => {
   @apply grid grid-cols-6 gap-1 p-3 max-h-48 overflow-y-auto;
 }
 
-/* Responsive */
+/* Responsive (#1804) */
 @media (max-width: 640px) {
   .input-container {
     @apply items-stretch;
   }
 
   .send-button {
-    @apply w-10 h-auto;
+    /* 44px minimum touch target on mobile */
+    min-width: 44px;
+    min-height: 44px;
+    @apply w-11 h-auto;
+  }
+
+  /* Horizontally scroll the action bar on mobile to prevent wrapping */
+  .input-actions {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .input-actions::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* 44px tap targets for action buttons on mobile */
+  .knowledge-toggle,
+  .overseer-toggle {
+    min-height: 44px;
+    min-width: 44px;
+    @apply px-3;
   }
 
   .quick-actions {
@@ -1160,6 +1183,11 @@ onUnmounted(() => {
 
   .quick-actions::-webkit-scrollbar {
     display: none;
+  }
+
+  /* Limit status bar on mobile */
+  .input-status-bar {
+    @apply hidden;
   }
 
   .emoji-picker {
