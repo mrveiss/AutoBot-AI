@@ -351,7 +351,7 @@ export class KnowledgeRepository extends ApiRepository {
    * Get all categories in knowledge base
    */
   async getCategories(): Promise<string[]> {
-    const response = await this.get(`${getApiBase()}/knowledge_base/categories`)
+    const response = await this.get<string[]>(`${getApiBase()}/knowledge_base/categories`)
     return response.data
   }
 
@@ -359,7 +359,7 @@ export class KnowledgeRepository extends ApiRepository {
    * Get documents by category
    */
   async getDocumentsByCategory(category: string): Promise<KnowledgeDocument[]> {
-    const response = await this.get(`${getApiBase()}/knowledge_base/categories/${encodeURIComponent(category)}/documents`)
+    const response = await this.get<KnowledgeDocument[]>(`${getApiBase()}/knowledge_base/categories/${encodeURIComponent(category)}/documents`)
     return response.data
   }
 
@@ -367,7 +367,7 @@ export class KnowledgeRepository extends ApiRepository {
    * Get document by ID
    */
   async getDocument(documentId: string): Promise<KnowledgeDocument> {
-    const response = await this.get(`${getApiBase()}/knowledge_base/documents/${documentId}`)
+    const response = await this.get<KnowledgeDocument>(`${getApiBase()}/knowledge_base/documents/${documentId}`)
     return response.data
   }
 
@@ -376,7 +376,7 @@ export class KnowledgeRepository extends ApiRepository {
    */
   async updateDocument(documentId: string, updates: Partial<KnowledgeDocument>): Promise<KnowledgeDocument> {
     // Use facts endpoint for consistency with backend
-    const response = await this.put(`${getApiBase()}/knowledge_base/facts/${documentId}`, updates)
+    const response = await this.put<KnowledgeDocument>(`${getApiBase()}/knowledge_base/facts/${documentId}`, updates)
     return response.data
   }
 
@@ -385,7 +385,7 @@ export class KnowledgeRepository extends ApiRepository {
    */
   async deleteDocument(documentId: string): Promise<{ success: boolean; message: string }> {
     // Use facts endpoint for consistency with backend
-    const response = await this.delete(`${getApiBase()}/knowledge_base/facts/${documentId}`)
+    const response = await this.delete<{ success: boolean; message: string }>(`${getApiBase()}/knowledge_base/facts/${documentId}`)
     return response.data
   }
 
@@ -396,7 +396,7 @@ export class KnowledgeRepository extends ApiRepository {
    * This endpoint may need adjustment based on collection context
    */
   async bulkDeleteDocuments(documentIds: string[], collectionId: string = 'default'): Promise<{ success: boolean; deleted_count: number }> {
-    const response = await this.post(`${getApiBase()}/knowledge_base/collections/${collectionId}/bulk-delete`, {
+    const response = await this.post<{ success: boolean; deleted_count: number }>(`${getApiBase()}/knowledge_base/collections/${collectionId}/bulk-delete`, {
       fact_ids: documentIds
     })
     return response.data
@@ -406,10 +406,10 @@ export class KnowledgeRepository extends ApiRepository {
    * Get similar documents to a given document
    */
   async getSimilarDocuments(documentId: string, limit: number = 5): Promise<SearchResult[]> {
-    const response = await this.get(`${getApiBase()}/knowledge_base/documents/${documentId}/similar?limit=${limit}`)
+    const response = await this.get<{ results: BackendSearchResult[] }>(`${getApiBase()}/knowledge_base/documents/${documentId}/similar?limit=${limit}`)
 
     // Transform results to match SearchResult format
-    const results = response.data.results || response.data || []
+    const results = (response.data as any).results || response.data || []
     return results.map((result: BackendSearchResult) => ({
       document: {
         id: result.metadata?.fact_id || result.node_id,
@@ -432,8 +432,8 @@ export class KnowledgeRepository extends ApiRepository {
    */
   async getSearchSuggestions(query: string, limit: number = 8): Promise<string[]> {
     try {
-      const response = await this.get(`${getApiBase()}/knowledge_base/suggestions?query=${encodeURIComponent(query)}&limit=${limit}`)
-      return response.data || []
+      const response = await this.get<string[]>(`${getApiBase()}/knowledge_base/suggestions?query=${encodeURIComponent(query)}&limit=${limit}`)
+      return (response.data as any) || []
     } catch {
       // Return empty array if suggestions endpoint not available
       return []
@@ -446,7 +446,7 @@ export class KnowledgeRepository extends ApiRepository {
    * Consider using vectorize_facts/background for knowledge base specific reindex
    */
   async reindexKnowledgeBase(): Promise<{ success: boolean; message: string }> {
-    const response = await this.post(`${getApiBase()}/rebuild_index`)
+    const response = await this.post<{ success: boolean; message: string }>(`${getApiBase()}/rebuild_index`)
     return response.data
   }
 
@@ -454,7 +454,7 @@ export class KnowledgeRepository extends ApiRepository {
    * Check knowledge base health status
    */
   async checkKnowledgeBaseHealth(): Promise<{ healthy: boolean; message: string }> {
-    const response = await this.get(`${getApiBase()}/knowledge_base/health`)
+    const response = await this.get<{ healthy: boolean; message: string }>(`${getApiBase()}/knowledge_base/health`)
     return response.data
   }
 

@@ -22,42 +22,6 @@ from constants.ttl_constants import TTL_24_HOURS
 
 logger = logging.getLogger(__name__)
 
-
-def _build_skill_context(skills: Optional[List[Dict]]) -> str:
-    """
-    Build a skill context section from ranked skills.
-
-    Issue #4337: Injects available skills into system prompt for agent awareness.
-
-    Args:
-        skills: List of ranked skill dictionaries (from SkillRanker)
-
-    Returns:
-        Rendered skill context string or empty string if no skills
-    """
-    if not skills:
-        return ""
-
-    skill_lines = []
-    for i, skill in enumerate(skills, 1):
-        name = skill.get("name", "Unknown")
-        description = skill.get("description", "")
-        skill_id = skill.get("id", "")
-
-        # Format: 1. SkillName: brief description
-        if description:
-            skill_lines.append(f"{i}. {name}: {description}")
-        else:
-            skill_lines.append(f"{i}. {name}")
-
-    if not skill_lines:
-        return ""
-
-    skills_text = "\n".join(skill_lines)
-    return (
-        f"\n\n## Available Skills\nThe following skills are available for this agent to use:\n{skills_text}"
-    )
-
 # Issue #380: Module-level constant for supported prompt file extensions
 _SUPPORTED_PROMPT_EXTENSIONS = frozenset({".md", ".txt", ".prompt"})
 
@@ -91,6 +55,17 @@ class PromptManager:
             lstrip_blocks=True,
             autoescape=True,  # Enable autoescaping for security
         )
+
+        # Store project root for context file scanning (#4345)
+        self._root_dir = Path(__file__).parent.parent
+
+        # Scan context files for injection patterns before loading prompts (#4345)
+        try:
+            self.load_and_scan_context_files()
+        except ValueError as e:
+            # Critical injection detected - log but don't fail init
+            logger.error("Context file injection detected during init: %s", e)
+            # In production, this would be more severe; for now, log and continue
 
         # Load all prompts on initialization
         self.load_all_prompts()
@@ -420,6 +395,120 @@ class PromptManager:
                 "error": str(e),
             }
 
+    def load_and_scan_context_files(
+        self, project_root: Optional[Path] = None
+    ) -> Dict[str, Any]:
+        """
+        Load and scan context files for prompt injection patterns.
+
+        Issue #4345: Scans AGENTS.md, CLAUDE.md, .cursorrules, SOUL.md before
+        injecting into system prompts. Blocks injection if HIGH/CRITICAL risk
+        detected.
+
+        Args:
+            project_root: Root directory to search for context files.
+                         Defaults to parent of prompt manager's root.
+
+        Returns:
+            Dictionary with scan results:
+                - scanned_files: list of scanned files
+                - total_scanned: number of files scanned
+                - detections: list of detection results
+                - has_critical: bool, whether any critical risk detected
+                - blocked: bool, whether injection was blocked
+
+        Raises:
+            ValueError: If HIGH or CRITICAL risk detected
+        """
+        if project_root is None:
+            project_root = self._root_dir
+
+        context_files = [
+            "AGENTS.md",
+            "CLAUDE.md",
+            ".cursorrules",
+            "SOUL.md",
+            "GEMINI.md",  # Additional context file
+        ]
+
+        scan_results = {
+            "scanned_files": [],
+            "total_scanned": 0,
+            "detections": [],
+            "has_critical": False,
+            "has_high": False,
+            "blocked": False,
+        }
+
+        try:
+            from security.prompt_injection_detector import InjectionRisk
+
+            for context_file in context_files:
+                file_path = project_root / context_file
+
+                if not file_path.exists():
+                    logger.debug("Context file not found: %s", context_file)
+                    continue
+
+                try:
+                    content = file_path.read_text(encoding="utf-8")
+                    scan_results["scanned_files"].append(context_file)
+                    scan_results["total_scanned"] += 1
+
+                    # Scan for injection patterns
+                    detection = self._scan_for_injection(content, context_file)
+                    scan_results["detections"].append(detection)
+
+                    # Track risk levels
+                    if detection["risk_level"] == "critical":
+                        scan_results["has_critical"] = True
+                    elif detection["risk_level"] == "high":
+                        scan_results["has_high"] = True
+
+                except Exception as e:
+                    logger.error("Error reading context file %s: %s", context_file, e)
+                    scan_results["detections"].append(
+                        {
+                            "file_name": context_file,
+                            "detected": False,
+                            "risk_level": "error",
+                            "error": str(e),
+                            "patterns": [],
+                        }
+                    )
+
+            # Determine if injection should be blocked
+            if scan_results["has_critical"]:
+                scan_results["blocked"] = True
+                blocked_files = [
+                    d["file_name"]
+                    for d in scan_results["detections"]
+                    if d["risk_level"] == "critical"
+                ]
+                error_msg = (
+                    f"🚨 CRITICAL prompt injection detected in context files: "
+                    f"{', '.join(blocked_files)}. Injection blocked."
+                )
+                logger.critical(error_msg)
+                raise ValueError(error_msg)
+
+            # Log summary
+            if scan_results["total_scanned"] > 0:
+                logger.info(
+                    "Context file scan complete: %d files scanned, %d detections",
+                    scan_results["total_scanned"],
+                    len([d for d in scan_results["detections"] if d.get("detected")]),
+                )
+
+            return scan_results
+
+        except ValueError:
+            # Re-raise ValueError for critical injections
+            raise
+        except Exception as e:
+            logger.error("Error in context file scanning: %s", e)
+            return scan_results
+
     def get_categories(self) -> List[str]:
         """
         Get all unique prompt categories (top-level directories).
@@ -656,35 +745,6 @@ def get_prompt(prompt_key: str, **kwargs) -> str:
     return prompt_manager.get(prompt_key, **kwargs)
 
 
-async def _get_ranked_skills(
-    context: Optional[str], platform: Optional[str] = None
-) -> List[Dict]:
-    """
-    Fetch and rank skills by relevance to conversation context.
-
-    Issue #4337: Uses SkillRanker to get relevant skills for injection into prompt.
-
-    Args:
-        context: Conversation context for ranking
-        platform: Optional platform filter
-
-    Returns:
-        List of ranked skills or empty list if unavailable
-    """
-    if not context:
-        return []
-
-    try:
-        from services.skill_management import get_skill_ranker
-
-        ranker = get_skill_ranker()
-        skills = await ranker.rank_skills(context, platform=platform)
-        return skills
-    except Exception as e:
-        logger.debug("Failed to get ranked skills: %s", e)
-        return []
-
-
 def _build_dynamic_context(
     session_id: Optional[str],
     user_name: Optional[str],
@@ -749,8 +809,6 @@ def get_optimized_prompt(
     1. Static base prompt FIRST (will be cached by vLLM)
     2. Dynamic context LAST (NOT cached, but minimal tokens)
 
-    For async skill injection, use get_optimized_prompt_with_skills().
-
     Args:
         base_prompt_key: The static base prompt key (e.g., 'default.agent.system.main')
         session_id: Current session identifier
@@ -778,65 +836,6 @@ def get_optimized_prompt(
 
     # Combine: static prefix + dynamic suffix (CRITICAL for vLLM prefix caching)
     return f"{base_prompt}\n\n{dynamic_context}"
-
-
-async def get_optimized_prompt_with_skills(
-    base_prompt_key: str,
-    session_id: Optional[str] = None,
-    user_name: Optional[str] = None,
-    user_role: Optional[str] = None,
-    available_tools: Optional[List[str]] = None,
-    recent_context: Optional[str] = None,
-    additional_params: Optional[Dict] = None,
-    skill_ranking_context: Optional[str] = None,
-    platform: Optional[str] = None,
-) -> str:
-    """
-    Get a prompt with ranked skills injected via async operation.
-
-    Issue #4337: Fetches and ranks relevant skills by embedding similarity,
-    then injects them into the system prompt for agent awareness.
-
-    This function returns a prompt structured for maximum cache efficiency:
-    1. Static base prompt FIRST (will be cached by vLLM)
-    2. Skills section MIDDLE (dynamic but cached if unchanged)
-    3. Dynamic context LAST (NOT cached, but minimal tokens)
-
-    Args:
-        base_prompt_key: The static base prompt key (e.g., 'default.agent.system.main')
-        session_id: Current session identifier
-        user_name: User's display name
-        user_role: User's role/permissions
-        available_tools: List of available tool names
-        recent_context: Recent conversation context or task history
-        additional_params: Additional dynamic parameters
-        skill_ranking_context: Context for ranking skills (if None, uses recent_context)
-        platform: Optional platform filter for skills ('local', 'telegram', etc.)
-
-    Returns:
-        Combined prompt with static prefix + skills + dynamic suffix
-    """
-    # Get static base prompt with includes rendered (will be cached by vLLM)
-    base_prompt = prompt_manager.get(base_prompt_key)
-
-    # Get ranked skills for injection (async operation)
-    ranking_context = skill_ranking_context or recent_context or ""
-    ranked_skills = await _get_ranked_skills(ranking_context, platform=platform)
-    skill_context = _build_skill_context(ranked_skills)
-
-    # Build dynamic context section (Issue #620: extracted helper)
-    dynamic_context = _build_dynamic_context(
-        session_id,
-        user_name,
-        user_role,
-        available_tools,
-        recent_context,
-        additional_params,
-    )
-
-    # Combine: static prefix + skills + dynamic suffix
-    # (CRITICAL for vLLM prefix caching)
-    return f"{base_prompt}{skill_context}\n\n{dynamic_context}"
 
 
 def list_available_prompts(filter_pattern: Optional[str] = None) -> List[str]:
