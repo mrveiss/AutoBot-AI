@@ -4,26 +4,35 @@
 """
 Extension Hooks System.
 
-Issue #658: Implements Agent Zero's extension pattern with 22 lifecycle
+Issue #658: Implements Agent Zero's extension pattern with 24 lifecycle
 hook points for modular customization of agent behavior.
 
+Issue #4202: Introduces HookInvoker for centralized, extensible hook
+invocation strategy with declarative configuration modes.
+
 This package provides:
-- HookPoint enum with 22 lifecycle points
+- HookPoint enum with 24 lifecycle points
 - Extension base class for creating extensions
 - ExtensionManager for registration and invocation
+- HookInvoker for centralized, configurable hook invocation
 - Built-in extensions (logging, secret_masking)
 
-Usage:
+Usage (HookInvoker pattern - Issue #4202):
     from extensions import (
         HookPoint,
         Extension,
         HookContext,
-        ExtensionManager,
+        HookInvoker,
         get_extension_manager,
     )
 
-    # Get global manager
+    # Get invoker
     manager = get_extension_manager()
+    invoker = HookInvoker(manager)
+
+    # Invoke with strategy
+    ctx = HookContext(session_id="sess-123", message="Hello")
+    results = await invoker.invoke(HookPoint.BEFORE_MESSAGE_PROCESS, ctx)
 
     # Register custom extension
     class MyExtension(Extension):
@@ -35,12 +44,17 @@ Usage:
 
     manager.register(MyExtension())
 
-    # Invoke hook
-    ctx = HookContext(session_id="sess-123", message="Hello")
+Legacy usage (direct manager):
+    manager = get_extension_manager()
     await manager.invoke_hook(HookPoint.BEFORE_MESSAGE_PROCESS, ctx)
 """
 
 from extensions.base import Extension, HookContext
+from extensions.hook_invoker import (
+    HookInvocationConfig,
+    HookInvoker,
+    InvocationMode,
+)
 from extensions.hooks import HOOK_METADATA, HookPoint, get_hook_metadata
 from extensions.manager import (
     ExtensionManager,
@@ -60,4 +74,8 @@ __all__ = [
     "ExtensionManager",
     "get_extension_manager",
     "reset_extension_manager",
+    # HookInvoker (Issue #4202)
+    "HookInvoker",
+    "HookInvocationConfig",
+    "InvocationMode",
 ]

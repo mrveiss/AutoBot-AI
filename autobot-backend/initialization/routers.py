@@ -21,6 +21,7 @@ from initialization.router_registry import (
     load_analytics_routers,
     load_core_routers,
     load_feature_routers,
+    load_integration_routers,
     load_mcp_routers,
     load_monitoring_routers,
     load_terminal_routers,
