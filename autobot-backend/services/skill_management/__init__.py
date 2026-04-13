@@ -15,7 +15,7 @@ from services.skill_management.skill_health_scheduler import (
     get_skill_health_scheduler,
 )
 from services.skill_management.skill_feedback import SkillFeedbackAnalyzer
-from services.skill_management.skill_extractor import SkillExtractor
+from services.skill_management.skill_extractor import ExtractedSkill, SkillExtractor
 from services.skill_management.skill_proposer import SkillProposer
 
 __all__ = [
@@ -25,6 +25,7 @@ __all__ = [
     "SkillHealthScheduler",
     "get_skill_health_scheduler",
     "SkillFeedbackAnalyzer",
+    "ExtractedSkill",
     "SkillExtractor",
     "SkillProposer",
 ]
