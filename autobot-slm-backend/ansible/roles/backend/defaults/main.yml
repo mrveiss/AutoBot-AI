@@ -82,8 +82,10 @@ service_auth_timestamp_window: 300
 service_auth_rate_limit_window: 300
 service_auth_rate_limit_max_failures: 10
 
-# Post-deploy smoke test (#3687): wait_for probes uvicorn directly on the
-# internal HTTP port; uri verifies /api/health returns 200.  Both values are
-# configurable so staging environments can shorten the timeout.
+# Post-deploy smoke test (#3687): retry-based health check polls /api/health
+# until it returns 200. Retries every 5 seconds (300s = 60 retries max).
+# Handles variable startup times across different hardware profiles without
+# blocking provisioning if service takes longer than expected.
 backend_health_check_port: 8001
-backend_health_check_timeout: 180
+backend_health_check_retries: 60       # Max retry attempts (60 × 5s = 300s total)
+backend_health_check_delay: 5          # Seconds between retries

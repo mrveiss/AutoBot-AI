@@ -615,17 +615,12 @@
   ansible.builtin.meta: flush_handlers
   tags: ['backend', 'smoke-test']
 
-- name: "Backend | Wait for backend to accept connections (#3687)"
-  ansible.builtin.wait_for:
-    host: 127.0.0.1
-    port: "{{ backend_health_check_port }}"
-    timeout: "{{ backend_health_check_timeout }}"
-  tags: ['backend', 'smoke-test']
-
-- name: "Backend | Verify /api/health returns 200 (#3687)"
+- name: "Backend | Wait for backend to be healthy (#3687)"
   ansible.builtin.uri:
     url: "http://127.0.0.1:{{ backend_health_check_port }}/api/health"
     status_code: 200
-  retries: 3
-  delay: 5
+  retries: "{{ backend_health_check_retries | default(60) }}"
+  delay: "{{ backend_health_check_delay | default(5) }}"
   tags: ['backend', 'smoke-test']
+  register: backend_health_check
+  until: backend_health_check is succeeded
