@@ -81,6 +81,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "llm_optimization",
     ),
     ("api.llm_awareness", "/llm-awareness", ["llm-awareness"], "llm_awareness"),
+    # Issue #4258: Dynamic endpoint capability discovery for LLM self-awareness
+    (
+        "api.self_capabilities",
+        "",
+        ["self-capabilities"],
+        "self_capabilities",
+    ),
     # Web research and browser automation
     (
         "api.research_browser",
@@ -446,7 +453,7 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["ai-documents"],
         "ai_documents",
     ),
-    # Unregistered feature routers
+    # Partially wired or legacy feature routers
     ("api.chat_sessions", "", ["chat-sessions"], "chat_sessions"),
     (
         "api.diagnostics",
@@ -459,12 +466,6 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "",
         ["collaboration", "websocket", "presence"],
         "presence_ws",
-    ),
-    (
-        "api.self_capabilities",
-        "",
-        ["self-capabilities"],
-        "self_capabilities",
     ),
 ]
 
