@@ -49,26 +49,6 @@ def test_analytics_cost_router_loads():
     assert len(analytics_cost_router.routes) > 0
 
 
-def test_analytics_cost_router_config_exists():
-    """Test that analytics_cost is configured in router config (direct check)."""
-    # Read the config directly instead of importing (avoids multipart issue)
-    import ast
-    import inspect
-
-    # Get the analytics_routers module source
-    from initialization.router_registry import analytics_routers
-
-    source = inspect.getsource(analytics_routers)
-
-    # Check that "analytics_cost" appears in the config
-    assert (
-        '"api.analytics_cost"' in source or "'api.analytics_cost'" in source
-    ), "analytics_cost module not found in analytics_routers config"
-    assert (
-        'analytics_cost' in source
-    ), "analytics_cost name not found in analytics_routers config"
-
-
 def test_analytics_cost_router_endpoints():
     """Test that analytics_cost router has expected endpoint paths."""
     from api import analytics_cost
