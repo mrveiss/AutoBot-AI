@@ -75,7 +75,7 @@ jobs:
 
     - name: Comment on PR with SSOT status
       if: github.event_name == 'pull_request'
-      uses: actions/github-script@v8
+      uses: actions/github-script@v9
       with:
         script: |
           const totalViolations = '${{ steps.ssot_check.outputs.total_violations }}';
