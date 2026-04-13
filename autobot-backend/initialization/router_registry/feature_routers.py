@@ -453,6 +453,21 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["ai-documents"],
         "ai_documents",
     ),
+    # Issue #4342: Error resilience monitoring endpoints (circuit breakers, error budgets)
+    # Router defines prefix="/api/resilience" internally — use "" here to avoid double-prefix
+    (
+        "api.error_resilience",
+        "",
+        ["resilience", "monitoring"],
+        "error_resilience",
+    ),
+    # User management (users, teams, organizations) — router defines /user-management internally
+    (
+        "api.user_management",
+        "",
+        ["user-management", "users"],
+        "user_management",
+    ),
     # Partially wired or legacy feature routers
     ("api.chat_sessions", "", ["chat-sessions"], "chat_sessions"),
     (
