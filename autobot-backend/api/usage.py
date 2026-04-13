@@ -41,6 +41,7 @@ class UsageRecordRequest(BaseModel):
     latency_ms: float | None = None
     success: bool = True
 
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/usage", tags=["usage", "analytics"])
 
@@ -172,7 +173,6 @@ async def get_my_usage(
         **data,
         "recent_requests": user_recent,
     }
-
 
 
 # ============================================================================
