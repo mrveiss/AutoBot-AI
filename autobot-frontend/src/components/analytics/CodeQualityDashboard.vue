@@ -562,10 +562,13 @@ const {
 });
 
 // Computed
-const scoreCircleLength = computed(() => 2 * Math.PI * 54);
+// Constant values - memoized to avoid recomputation
+const scoreCircleLength = 2 * Math.PI * 54; // ~339.3 - compute once
+const yAxisLabels = ['100', '80', '60', '40', '20', '0']; // Static labels
+
 const scoreOffset = computed(() => {
   const percentage = healthScore.value.overall / 100;
-  return scoreCircleLength.value * (1 - percentage);
+  return scoreCircleLength * (1 - percentage);
 });
 
 const filteredPatterns = computed(() => {
@@ -573,19 +576,26 @@ const filteredPatterns = computed(() => {
   return patterns.value.filter(p => p.severity === selectedSeverity.value);
 });
 
+// Optimized: single pass over patterns instead of forEach + object return
 const patternStats = computed(() => {
   const stats = { critical: 0, high: 0, medium: 0, info: 0 };
-  patterns.value.forEach(p => {
-    if (p.severity === 'critical') stats.critical += p.count;
-    else if (p.severity === 'high') stats.high += p.count;
-    else if (p.severity === 'medium') stats.medium += p.count;
-    else stats.info += p.count;
-  });
+  for (const p of patterns.value) {
+    // Use switch for faster lookup than multiple if/else
+    switch (p.severity) {
+      case 'critical':
+        stats.critical += p.count;
+        break;
+      case 'high':
+        stats.high += p.count;
+        break;
+      case 'medium':
+        stats.medium += p.count;
+        break;
+      default:
+        stats.info += p.count;
+    }
+  }
   return stats;
-});
-
-const yAxisLabels = computed(() => {
-  return ['100', '80', '60', '40', '20', '0'];
 });
 
 // Single pass over trendData to extract all aggregate values consumed by
@@ -621,29 +631,39 @@ const trendPoints = computed((): TrendPoint[] => {
   }));
 });
 
-const trendLinePath = computed(() => {
-  if (trendPoints.value.length < 2) return '';
+// Optimized: generate both line and area paths in single pass
+const trendPathData = computed(() => {
   const points = trendPoints.value;
-  let path = `M ${points[0].x} ${points[0].y}`;
-  for (let i = 1; i < points.length; i++) {
-    path += ` L ${points[i].x} ${points[i].y}`;
+  if (points.length < 2) {
+    return { linePath: '', areaPath: '' };
   }
-  return path;
+
+  // Build paths incrementally
+  const pathSegments: string[] = [];
+  const linePath = `M ${points[0].x} ${points[0].y}`;
+  pathSegments.push(linePath);
+
+  for (let i = 1; i < points.length; i++) {
+    pathSegments.push(`L ${points[i].x} ${points[i].y}`);
+  }
+  const fullLinePath = pathSegments.join(' ');
+
+  // Area path reuses the line coordinates
+  const bottom = 160;
+  const areaSegments = [`M ${points[0].x} ${bottom}`, `L ${points[0].x} ${points[0].y}`];
+  for (let i = 1; i < points.length; i++) {
+    areaSegments.push(`L ${points[i].x} ${points[i].y}`);
+  }
+  areaSegments.push(`L ${points[points.length - 1].x} ${bottom}`, 'Z');
+
+  return {
+    linePath: fullLinePath,
+    areaPath: areaSegments.join(' '),
+  };
 });
 
-const trendAreaPath = computed(() => {
-  if (trendPoints.value.length < 2) return '';
-  const points = trendPoints.value;
-  const bottom = 160;
-  let path = `M ${points[0].x} ${bottom}`;
-  path += ` L ${points[0].x} ${points[0].y}`;
-  for (let i = 1; i < points.length; i++) {
-    path += ` L ${points[i].x} ${points[i].y}`;
-  }
-  path += ` L ${points[points.length - 1].x} ${bottom}`;
-  path += ' Z';
-  return path;
-});
+const trendLinePath = computed(() => trendPathData.value.linePath);
+const trendAreaPath = computed(() => trendPathData.value.areaPath);
 
 const xAxisLabels = computed(() => {
   if (trendData.value.length === 0) return [];
@@ -677,9 +697,9 @@ const trendStats = computed(() => {
   };
 });
 
-const lastUpdated = computed(() => {
-  return new Date().toLocaleTimeString();
-});
+// Removed lastUpdated computed - always recalculating is inefficient
+// Use reactive lastUpdated ref instead, updated only on data refresh
+const lastUpdated = ref(new Date().toLocaleTimeString());
 
 // Methods
 async function refreshData(): Promise<void> {
@@ -693,6 +713,8 @@ async function refreshData(): Promise<void> {
       loadTrends(),
       loadSnapshot(),
     ]);
+    // Update timestamp only on successful data refresh
+    lastUpdated.value = new Date().toLocaleTimeString();
   } catch (error) {
     logger.error('Failed to refresh data:', error);
   } finally {
@@ -897,7 +919,36 @@ function handleWebSocketMessage(message: any): void {
   }
 }
 
-// Utility Functions - Using design tokens via getCssVar helper
+// Utility Functions - Memoize lookup objects to avoid recreation
+// Grade descriptions - static, created once
+const GRADE_DESCRIPTIONS: Record<string, string> = {
+  A: 'Excellent',
+  B: 'Good',
+  C: 'Acceptable',
+  D: 'Needs Improvement',
+  F: 'Critical',
+};
+
+// Metric icons - static, created once
+const METRIC_ICONS: Record<string, string> = {
+  maintainability: '🔧',
+  reliability: '🛡️',
+  security: '🔒',
+  performance: '⚡',
+  testability: '🧪',
+  documentation: '📝',
+};
+
+// Pattern severity icons - static, created once
+const PATTERN_ICONS: Record<string, string> = {
+  critical: '🔴',
+  high: '🟠',
+  medium: '🟡',
+  low: '🟢',
+  info: '🔵',
+};
+
+// Using design tokens via getCssVar helper
 function getScoreColor(score: number): string {
   if (score >= 80) return getCssVar('--color-success', '#22c55e');
   if (score >= 60) return getCssVar('--color-warning', '#eab308');
@@ -919,37 +970,15 @@ function getTrendClass(trend: number): string {
 }
 
 function getGradeDescription(grade: string): string {
-  const descriptions: Record<string, string> = {
-    A: 'Excellent',
-    B: 'Good',
-    C: 'Acceptable',
-    D: 'Needs Improvement',
-    F: 'Critical',
-  };
-  return descriptions[grade] || 'Unknown';
+  return GRADE_DESCRIPTIONS[grade] || 'Unknown';
 }
 
 function getMetricIcon(category: string): string {
-  const icons: Record<string, string> = {
-    maintainability: '🔧',
-    reliability: '🛡️',
-    security: '🔒',
-    performance: '⚡',
-    testability: '🧪',
-    documentation: '📝',
-  };
-  return icons[category] || '📊';
+  return METRIC_ICONS[category] || '📊';
 }
 
 function getPatternIcon(severity: string): string {
-  const icons: Record<string, string> = {
-    critical: '🔴',
-    high: '🟠',
-    medium: '🟡',
-    low: '🟢',
-    info: '🔵',
-  };
-  return icons[severity] || '⚪';
+  return PATTERN_ICONS[severity] || '⚪';
 }
 
 function getComplexityClass(complexity: number): string {
