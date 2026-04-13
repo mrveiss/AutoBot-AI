@@ -291,7 +291,8 @@ const {
 const {
   execute: loadFileContentOp,
   loading: isLoadingContent,
-  error: contentError
+  error: contentError,
+  reset: resetContentError
 } = useAsyncOperation()
 
 // Cursor-based pagination for user knowledge entries
@@ -1043,7 +1044,7 @@ const restoreExpandedState = (nodes: TreeNode[], expandedPaths: Set<string>) => 
 const clearSelection = () => {
   selectedFile.value = null
   fileContent.value = ''
-  contentError.value = null
+  resetContentError()
 }
 
 const handleSearch = (query: string) => {

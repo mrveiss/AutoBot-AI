@@ -179,7 +179,7 @@
           <tr v-if="spacerBefore > 0" style="height: 0px; visibility: hidden;"></tr>
 
           <tr
-            v-for="entry in visibleItems.length > 0 ? visibleItems : paginatedEntries"
+            v-for="entry in displayedEntries"
             :key="entry.id"
             :class="{ 'selected': selectedEntries.includes(entry.id) }"
           >
@@ -549,9 +549,20 @@ const totalPages = computed(() =>
 const scrollContainerRef = ref<HTMLElement | null>(null)
 
 // Virtual scroll for efficient rendering of large lists
-const { visibleItems, spacerBefore, spacerAfter } = useVirtualScroll(
-  filteredDocuments,
-  { itemHeight: 48, bufferSize: 5 }
+const ITEM_HEIGHT = 48
+const { visibleItems, visibleRange, totalSize } = useVirtualScroll({
+  items: filteredDocuments,
+  itemHeight: ITEM_HEIGHT,
+  buffer: 5
+})
+const spacerBefore = computed(() => visibleRange.value.startIndex * ITEM_HEIGHT)
+const spacerAfter = computed(() => Math.max(0, totalSize.value - (visibleRange.value.endIndex + 1) * ITEM_HEIGHT))
+
+// Extract KnowledgeDocument items from virtual scroll wrapper objects
+const displayedEntries = computed<KnowledgeDocument[]>(() =>
+  visibleItems.value.length > 0
+    ? visibleItems.value.map(v => v.item as KnowledgeDocument)
+    : paginatedEntries.value
 )
 
 const paginatedEntries = computed(() => {
@@ -801,7 +812,7 @@ const openBulkRemoveTags = () => {
   showBulkEditModal.value = true
 }
 
-const handleBulkEditConfirm = async (payload: { mode: BulkEditMode; value: string | string[] }) => {
+const handleBulkEditConfirm = async (payload: { mode: BulkEditMode; value: string | string[] | { scope: string; groupIds: string[] } }) => {
   try {
     const ids = selectedEntries.value
 
