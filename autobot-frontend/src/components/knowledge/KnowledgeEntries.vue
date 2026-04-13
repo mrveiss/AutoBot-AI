@@ -174,9 +174,12 @@
             <th>{{ $t('knowledge.entries.thActions') }}</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody ref="scrollContainerRef" class="entries-tbody-virtual">
+          <!-- Virtual scroll spacer before -->
+          <tr v-if="spacerBefore > 0" style="height: 0px; visibility: hidden;"></tr>
+
           <tr
-            v-for="entry in paginatedEntries"
+            v-for="entry in visibleItems.length > 0 ? visibleItems : paginatedEntries"
             :key="entry.id"
             :class="{ 'selected': selectedEntries.includes(entry.id) }"
           >
@@ -248,6 +251,9 @@
               </BaseButton>
             </td>
           </tr>
+
+          <!-- Virtual scroll spacer after -->
+          <tr v-if="spacerAfter > 0" style="height: 0px; visibility: hidden;"></tr>
         </tbody>
       </table>
 
@@ -444,6 +450,7 @@ import type { BulkEditMode, BulkEditEntry } from '@/components/knowledge/modals/
 import { formatDate, formatDateTime } from '@/utils/formatHelpers'
 import { getDocumentTypeIcon } from '@/utils/iconMappings'
 import { useDebounce } from '@/composables/useDebounce'
+import { useVirtualScroll } from '@/composables/useVirtualScroll'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
@@ -537,6 +544,14 @@ const filteredDocuments = computed(() => {
 
 const totalPages = computed(() =>
   Math.ceil(filteredDocuments.value.length / itemsPerPage)
+)
+
+const scrollContainerRef = ref<HTMLElement | null>(null)
+
+// Virtual scroll for efficient rendering of large lists
+const { visibleItems, spacerBefore, spacerAfter } = useVirtualScroll(
+  filteredDocuments,
+  { itemHeight: 48, bufferSize: 5 }
 )
 
 const paginatedEntries = computed(() => {
@@ -1147,6 +1162,16 @@ tr.selected {
 .actions-cell {
   display: flex;
   gap: var(--spacing-2);
+}
+
+/* Virtual scroll optimization - Issue #4011 */
+.entries-tbody-virtual {
+  contain: layout style paint;
+  will-change: transform;
+}
+
+.entries-tbody-virtual tr {
+  contain: layout style;
 }
 
 /* Pagination */
