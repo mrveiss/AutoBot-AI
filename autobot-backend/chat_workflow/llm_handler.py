@@ -99,6 +99,421 @@ async def _emit_full_prompt_ready(
     return prompt
 
 
+async def _emit_before_message_process(
+    message: str, session_id: str, context: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Emit BEFORE_MESSAGE_PROCESS hook to registered extensions.
+
+    Issue #4181: Fires at the start of message handling so extensions can
+    inspect or modify the message and context before processing begins.
+
+    Args:
+        message: User message to process
+        session_id: Session identifier
+        context: Request-level context dict
+
+    Returns:
+        Dict with potentially modified message and context
+    """
+    ctx = HookContext(
+        session_id=session_id,
+        message=message,
+        data={"message": message, "context": context},
+    )
+    await get_extension_manager().invoke_hook(HookPoint.BEFORE_MESSAGE_PROCESS, ctx)
+    return {
+        "message": ctx.get("message", message),
+        "context": ctx.get("context", context),
+    }
+
+
+async def _emit_after_prompt_build(
+    prompt: str, session_id: str, context: Dict[str, Any]
+) -> str:
+    """Emit AFTER_PROMPT_BUILD hook to registered extensions.
+
+    Issue #4181: Fires after system prompt is built so extensions can
+    inspect or modify the prompt before it enters assembly.
+
+    Args:
+        prompt: The built prompt string
+        session_id: Session identifier
+        context: Request-level context dict
+
+    Returns:
+        Possibly modified prompt string
+    """
+    ctx = HookContext(
+        session_id=session_id,
+        data={"prompt": prompt, "context": context},
+    )
+    result = await get_extension_manager().invoke_with_transform(
+        HookPoint.AFTER_PROMPT_BUILD, ctx, "prompt"
+    )
+    return result if isinstance(result, str) else prompt
+
+
+async def _emit_before_llm_call(
+    prompt: str, llm_params: Dict[str, Any], session_id: str
+) -> bool:
+    """Emit BEFORE_LLM_CALL hook to registered extensions.
+
+    Issue #4181: Fires before calling the LLM so extensions can reject
+    or modify the call. If any extension returns False, the call is cancelled.
+
+    Args:
+        prompt: The prompt to send to LLM
+        llm_params: LLM parameters (model, endpoint, etc.)
+        session_id: Session identifier
+
+    Returns:
+        False to cancel the LLM call, True otherwise
+    """
+    ctx = HookContext(
+        session_id=session_id,
+        data={"prompt": prompt, "llm_params": llm_params},
+    )
+    results = await get_extension_manager().invoke_hook(
+        HookPoint.BEFORE_LLM_CALL, ctx
+    )
+    # If any extension returns False, cancel
+    return not any(result is False for result in results)
+
+
+async def _emit_during_llm_streaming(
+    chunk: str, session_id: str, context: Dict[str, Any]
+) -> None:
+    """Emit DURING_LLM_STREAMING hook to registered extensions.
+
+    Issue #4181: Fires during LLM response streaming so extensions can
+    monitor or process partial responses.
+
+    Args:
+        chunk: Streamed response chunk
+        session_id: Session identifier
+        context: Request-level context dict
+    """
+    ctx = HookContext(
+        session_id=session_id,
+        data={"chunk": chunk, "context": context},
+    )
+    await get_extension_manager().invoke_hook(HookPoint.DURING_LLM_STREAMING, ctx)
+
+
+async def _emit_after_llm_response(
+    response: str, llm_params: Dict[str, Any], session_id: str
+) -> str:
+    """Emit AFTER_LLM_RESPONSE hook to registered extensions.
+
+    Issue #4181: Fires after LLM returns full response so extensions can
+    inspect or modify it.
+
+    Args:
+        response: The LLM response text
+        llm_params: LLM parameters used
+        session_id: Session identifier
+
+    Returns:
+        Possibly modified response
+    """
+    ctx = HookContext(
+        session_id=session_id,
+        data={"response": response, "llm_params": llm_params},
+    )
+    result = await get_extension_manager().invoke_with_transform(
+        HookPoint.AFTER_LLM_RESPONSE, ctx, "response"
+    )
+    return result if isinstance(result, str) else response
+
+
+async def _emit_before_tool_parse(
+    llm_response: str, session_id: str, context: Dict[str, Any]
+) -> str:
+    """Emit BEFORE_TOOL_PARSE hook to registered extensions.
+
+    Issue #4181: Fires before parsing tool calls from LLM response so
+    extensions can inspect or modify the raw response.
+
+    Args:
+        llm_response: Raw LLM response text
+        session_id: Session identifier
+        context: Request-level context dict
+
+    Returns:
+        Possibly modified response
+    """
+    ctx = HookContext(
+        session_id=session_id,
+        data={"llm_response": llm_response, "context": context},
+    )
+    result = await get_extension_manager().invoke_with_transform(
+        HookPoint.BEFORE_TOOL_PARSE, ctx, "llm_response"
+    )
+    return result if isinstance(result, str) else llm_response
+
+
+async def _emit_before_tool_execute(
+    tool_name: str, tool_params: Dict[str, Any], session_id: str
+) -> bool:
+    """Emit BEFORE_TOOL_EXECUTE hook to registered extensions.
+
+    Issue #4181: Fires before executing a tool so extensions can reject
+    or validate the execution.
+
+    Args:
+        tool_name: Name of tool to execute
+        tool_params: Tool parameters
+        session_id: Session identifier
+
+    Returns:
+        False to cancel tool execution, True otherwise
+    """
+    ctx = HookContext(
+        session_id=session_id,
+        data={"tool_name": tool_name, "tool_params": tool_params},
+    )
+    results = await get_extension_manager().invoke_hook(
+        HookPoint.BEFORE_TOOL_EXECUTE, ctx
+    )
+    return not any(result is False for result in results)
+
+
+async def _emit_after_tool_execute(
+    tool_name: str, tool_result: Any, session_id: str, context: Dict[str, Any]
+) -> Any:
+    """Emit AFTER_TOOL_EXECUTE hook to registered extensions.
+
+    Issue #4181: Fires after tool execution so extensions can inspect
+    or modify the result.
+
+    Args:
+        tool_name: Name of executed tool
+        tool_result: Result returned by tool
+        session_id: Session identifier
+        context: Request-level context dict
+
+    Returns:
+        Possibly modified tool result
+    """
+    ctx = HookContext(
+        session_id=session_id,
+        data={
+            "tool_name": tool_name,
+            "tool_result": tool_result,
+            "context": context,
+        },
+    )
+    result = await get_extension_manager().invoke_with_transform(
+        HookPoint.AFTER_TOOL_EXECUTE, ctx, "tool_result"
+    )
+    return result if result is not None else tool_result
+
+
+async def _emit_tool_error(
+    tool_name: str, error: Exception, session_id: str, context: Dict[str, Any]
+) -> None:
+    """Emit TOOL_ERROR hook to registered extensions.
+
+    Issue #4181: Fires when tool execution fails so extensions can
+    log, monitor, or attempt recovery.
+
+    Args:
+        tool_name: Name of tool that failed
+        error: Exception raised by tool
+        session_id: Session identifier
+        context: Request-level context dict
+    """
+    ctx = HookContext(
+        session_id=session_id,
+        data={
+            "tool_name": tool_name,
+            "error": str(error),
+            "error_type": type(error).__name__,
+            "context": context,
+        },
+    )
+    await get_extension_manager().invoke_hook(HookPoint.TOOL_ERROR, ctx)
+
+
+async def _emit_before_continuation(
+    iteration: int, session_id: str, context: Dict[str, Any]
+) -> bool:
+    """Emit BEFORE_CONTINUATION hook to registered extensions.
+
+    Issue #4181: Fires before starting next iteration of continuation loop
+    so extensions can inspect state or cancel continuation.
+
+    Args:
+        iteration: Current iteration number
+        session_id: Session identifier
+        context: Request-level context dict
+
+    Returns:
+        False to cancel continuation, True otherwise
+    """
+    ctx = HookContext(
+        session_id=session_id,
+        data={"iteration": iteration, "context": context},
+    )
+    results = await get_extension_manager().invoke_hook(
+        HookPoint.BEFORE_CONTINUATION, ctx
+    )
+    return not any(result is False for result in results)
+
+
+async def _emit_after_continuation(
+    iteration: int, response: str, session_id: str, context: Dict[str, Any]
+) -> str:
+    """Emit AFTER_CONTINUATION hook to registered extensions.
+
+    Issue #4181: Fires after continuation iteration completes so extensions
+    can inspect or modify the response.
+
+    Args:
+        iteration: Completed iteration number
+        response: Response from this iteration
+        session_id: Session identifier
+        context: Request-level context dict
+
+    Returns:
+        Possibly modified response
+    """
+    ctx = HookContext(
+        session_id=session_id,
+        data={"iteration": iteration, "response": response, "context": context},
+    )
+    result = await get_extension_manager().invoke_with_transform(
+        HookPoint.AFTER_CONTINUATION, ctx, "response"
+    )
+    return result if isinstance(result, str) else response
+
+
+async def _emit_loop_complete(
+    total_iterations: int, final_response: str, session_id: str
+) -> str:
+    """Emit LOOP_COMPLETE hook to registered extensions.
+
+    Issue #4181: Fires when continuation loop completes so extensions
+    can finalize or modify the final response.
+
+    Args:
+        total_iterations: Total iterations completed
+        final_response: Final response from loop
+        session_id: Session identifier
+
+    Returns:
+        Possibly modified final response
+    """
+    ctx = HookContext(
+        session_id=session_id,
+        data={"total_iterations": total_iterations, "final_response": final_response},
+    )
+    result = await get_extension_manager().invoke_with_transform(
+        HookPoint.LOOP_COMPLETE, ctx, "final_response"
+    )
+    return result if isinstance(result, str) else final_response
+
+
+async def _emit_repairable_error(
+    error: Exception, session_id: str, context: Dict[str, Any]
+) -> bool:
+    """Emit REPAIRABLE_ERROR hook to registered extensions.
+
+    Issue #4181: Fires when a repairable error occurs so extensions
+    can attempt recovery or take corrective action.
+
+    Args:
+        error: The repairable exception
+        session_id: Session identifier
+        context: Request-level context dict
+
+    Returns:
+        True if error was handled, False otherwise
+    """
+    ctx = HookContext(
+        session_id=session_id,
+        data={
+            "error": str(error),
+            "error_type": type(error).__name__,
+            "context": context,
+        },
+    )
+    result = await get_extension_manager().invoke_until_handled(
+        HookPoint.REPAIRABLE_ERROR, ctx
+    )
+    return result is not None
+
+
+async def _emit_critical_error(
+    error: Exception, session_id: str, context: Dict[str, Any]
+) -> None:
+    """Emit CRITICAL_ERROR hook to registered extensions.
+
+    Issue #4181: Fires when a critical unrecoverable error occurs so
+    extensions can log, alert, or perform cleanup.
+
+    Args:
+        error: The critical exception
+        session_id: Session identifier
+        context: Request-level context dict
+    """
+    ctx = HookContext(
+        session_id=session_id,
+        data={
+            "error": str(error),
+            "error_type": type(error).__name__,
+            "context": context,
+        },
+    )
+    await get_extension_manager().invoke_hook(HookPoint.CRITICAL_ERROR, ctx)
+
+
+async def _emit_before_response_send(
+    response: str, session_id: str, context: Dict[str, Any]
+) -> str:
+    """Emit BEFORE_RESPONSE_SEND hook to registered extensions.
+
+    Issue #4181: Fires before sending response to user so extensions
+    can inspect, filter, or modify the response.
+
+    Args:
+        response: Response to be sent
+        session_id: Session identifier
+        context: Request-level context dict
+
+    Returns:
+        Possibly modified response
+    """
+    ctx = HookContext(
+        session_id=session_id,
+        data={"response": response, "context": context},
+    )
+    result = await get_extension_manager().invoke_with_transform(
+        HookPoint.BEFORE_RESPONSE_SEND, ctx, "response"
+    )
+    return result if isinstance(result, str) else response
+
+
+async def _emit_after_response_send(
+    response: str, session_id: str, context: Dict[str, Any]
+) -> None:
+    """Emit AFTER_RESPONSE_SEND hook to registered extensions.
+
+    Issue #4181: Fires after response is sent to user so extensions
+    can perform post-processing or logging.
+
+    Args:
+        response: Response that was sent
+        session_id: Session identifier
+        context: Request-level context dict
+    """
+    ctx = HookContext(
+        session_id=session_id,
+        data={"response": response, "context": context},
+    )
+    await get_extension_manager().invoke_hook(HookPoint.AFTER_RESPONSE_SEND, ctx)
+
+
 class LLMHandlerMixin:
     """Mixin for LLM interaction handling."""
 

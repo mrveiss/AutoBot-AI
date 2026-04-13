@@ -15,6 +15,9 @@ from async_chat_workflow import AsyncChatWorkflow
 from autobot_shared.error_boundaries import error_boundary
 from conversation_context import ConversationContext, ConversationContextAnalyzer
 from conversation_safety import ConversationSafetyGuards, SafetyCheckResult
+from extensions.base import HookContext
+from extensions.hooks import HookPoint
+from extensions.manager import get_extension_manager
 from intent_classifier import ConversationIntent, IntentClassification, IntentClassifier
 
 from .models import WorkflowSession
@@ -214,3 +217,141 @@ class SessionHandlerMixin:
         """Get count of active sessions."""
         async with self._lock:
             return len(self.sessions)
+
+
+async def _emit_session_create(session_id: str, context: Dict[str, Any]) -> None:
+    """Emit SESSION_CREATE hook to registered extensions.
+
+    Issue #4181: Fires when a new chat session is created so extensions
+    can initialize resources or perform setup.
+
+    Args:
+        session_id: ID of created session
+        context: Request-level context dict
+    """
+    ctx = HookContext(
+        session_id=session_id,
+        data={"session_id": session_id, "context": context},
+    )
+    await get_extension_manager().invoke_hook(HookPoint.SESSION_CREATE, ctx)
+
+
+async def _emit_session_destroy(
+    session_id: str, message_count: int, context: Dict[str, Any]
+) -> None:
+    """Emit SESSION_DESTROY hook to registered extensions.
+
+    Issue #4181: Fires when a chat session is closed so extensions
+    can clean up resources or perform final processing.
+
+    Args:
+        session_id: ID of destroyed session
+        message_count: Total messages in session
+        context: Request-level context dict
+    """
+    ctx = HookContext(
+        session_id=session_id,
+        data={"session_id": session_id, "message_count": message_count, "context": context},
+    )
+    await get_extension_manager().invoke_hook(HookPoint.SESSION_DESTROY, ctx)
+
+
+async def _emit_before_rag_query(
+    query: str, session_id: str, context: Dict[str, Any]
+) -> str:
+    """Emit BEFORE_RAG_QUERY hook to registered extensions.
+
+    Issue #4181: Fires before executing RAG query so extensions can
+    inspect or modify the query.
+
+    Args:
+        query: The RAG query string
+        session_id: Session identifier
+        context: Request-level context dict
+
+    Returns:
+        Possibly modified query
+    """
+    ctx = HookContext(
+        session_id=session_id,
+        data={"query": query, "context": context},
+    )
+    result = await get_extension_manager().invoke_with_transform(
+        HookPoint.BEFORE_RAG_QUERY, ctx, "query"
+    )
+    return result if isinstance(result, str) else query
+
+
+async def _emit_after_rag_results(
+    results: list, query: str, session_id: str, context: Dict[str, Any]
+) -> list:
+    """Emit AFTER_RAG_RESULTS hook to registered extensions.
+
+    Issue #4181: Fires after RAG returns results so extensions can
+    filter, rank, or modify the results.
+
+    Args:
+        results: List of RAG results
+        query: Original query
+        session_id: Session identifier
+        context: Request-level context dict
+
+    Returns:
+        Possibly modified results list
+    """
+    ctx = HookContext(
+        session_id=session_id,
+        data={"results": results, "query": query, "context": context},
+    )
+    result = await get_extension_manager().invoke_with_transform(
+        HookPoint.AFTER_RAG_RESULTS, ctx, "results"
+    )
+    return result if isinstance(result, list) else results
+
+
+async def _emit_approval_required(
+    request_id: str, action: str, session_id: str, context: Dict[str, Any]
+) -> bool:
+    """Emit APPROVAL_REQUIRED hook to registered extensions.
+
+    Issue #4181: Fires when an action requires approval so extensions
+    can implement approval workflows.
+
+    Args:
+        request_id: Unique ID for this approval request
+        action: Description of action requiring approval
+        session_id: Session identifier
+        context: Request-level context dict
+
+    Returns:
+        True if approved, False otherwise
+    """
+    ctx = HookContext(
+        session_id=session_id,
+        data={"request_id": request_id, "action": action, "context": context},
+    )
+    result = await get_extension_manager().invoke_until_handled(
+        HookPoint.APPROVAL_REQUIRED, ctx
+    )
+    return result is not None
+
+
+async def _emit_approval_received(
+    request_id: str, approved: bool, session_id: str, context: Dict[str, Any]
+) -> None:
+    """Emit APPROVAL_RECEIVED hook to registered extensions.
+
+    Issue #4181: Fires when approval is received so extensions can
+    proceed with the approved action or log the decision.
+
+    Args:
+        request_id: ID of approval request
+        approved: Whether action was approved
+        session_id: Session identifier
+        context: Request-level context dict
+    """
+    ctx = HookContext(
+        session_id=session_id,
+        data={"request_id": request_id, "approved": approved, "context": context},
+    )
+    await get_extension_manager().invoke_hook(HookPoint.APPROVAL_RECEIVED, ctx)
