@@ -67,6 +67,9 @@ const MEMORY_CACHE_LIMIT = 50 // Max entries in memory cache
 const memoryCache = new Map<string, CacheEntry>()
 const cacheAccessOrder: string[] = []
 
+// Track blob URLs for cleanup
+const blobUrls = new Set<string>()
+
 /**
  * Initialize or get Web Worker instance
  */
@@ -272,7 +275,21 @@ export function useThumbnailWorker() {
       pendingRequests.set(id, (result: ThumbnailResult) => {
         clearTimeout(timeout)
         if (result.success && result.data) {
-          resolve(`data:${format};base64,${result.data}`)
+          // Convert base64 to Blob URL for better performance
+          try {
+            const binaryString = atob(result.data)
+            const bytes = new Uint8Array(binaryString.length)
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i)
+            }
+            const blob = new Blob([bytes], { type: format })
+            const blobUrl = URL.createObjectURL(blob)
+            blobUrls.add(blobUrl)
+            resolve(blobUrl)
+          } catch (err) {
+            logger.error(`Failed to create blob URL: ${err}`)
+            resolve(null)
+          }
         } else {
           logger.error(`Thumbnail generation failed: ${result.error}`)
           resolve(null)
@@ -299,9 +316,26 @@ export function useThumbnailWorker() {
   }
 
   /**
+   * Revoke a blob URL and free memory
+   */
+  function revokeBlobUrl(url: string): void {
+    if (url && url.startsWith('blob:')) {
+      URL.revokeObjectURL(url)
+      blobUrls.delete(url)
+      logger.debug(`Blob URL revoked: ${url}`)
+    }
+  }
+
+  /**
    * Clear all caches
    */
   function clearCache(): void {
+    // Revoke all blob URLs
+    blobUrls.forEach(url => {
+      URL.revokeObjectURL(url)
+    })
+    blobUrls.clear()
+
     // Clear memory cache
     memoryCache.clear()
     cacheAccessOrder.length = 0
@@ -350,6 +384,12 @@ export function useThumbnailWorker() {
    * Cleanup on unmount
    */
   onUnmounted(() => {
+    // Revoke blob URLs to free memory
+    blobUrls.forEach(url => {
+      URL.revokeObjectURL(url)
+    })
+    blobUrls.clear()
+
     // Terminate worker if no longer needed
     if (workerInstance && pendingRequests.size === 0) {
       workerInstance.terminate()
@@ -362,6 +402,7 @@ export function useThumbnailWorker() {
     pendingCount,
     generateThumbnail,
     cancelThumbnail,
+    revokeBlobUrl,
     clearCache,
     getCacheStats
   }
