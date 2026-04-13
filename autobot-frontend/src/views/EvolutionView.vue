@@ -197,6 +197,11 @@
       </div>
     </div>
 
+    <!-- Code Evolution Timeline - Issue #4268: Wire orphaned component -->
+    <div class="timeline-section">
+      <CodeEvolutionTimeline />
+    </div>
+
     <!-- Pattern Details Table -->
     <div v-if="evolution.hasAnalysisResult.value" class="patterns-section">
       <h2 class="section-title">{{ $t('analytics.evolution.patternDetails') }}</h2>
@@ -356,6 +361,7 @@ import { useI18n } from 'vue-i18n'
 import { useEvolution } from '@/composables/useEvolution'
 import EvolutionTimelineChart from '@/components/charts/EvolutionTimelineChart.vue'
 import PatternEvolutionChart from '@/components/charts/PatternEvolutionChart.vue'
+import CodeEvolutionTimeline from '@/components/analytics/CodeEvolutionTimeline.vue'
 
 // Issue #3436: read sourceId from route param set by codebase/:sourceId parent
 const route = useRoute()
@@ -687,6 +693,11 @@ onMounted(async () => {
   border-radius: var(--radius-md);
   border: 1px solid var(--border-default);
   padding: var(--spacing-4);
+}
+
+/* Timeline Section - Issue #4268 */
+.timeline-section {
+  margin-bottom: var(--spacing-6);
 }
 
 /* Patterns Section */
