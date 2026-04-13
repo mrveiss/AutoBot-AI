@@ -126,3 +126,9 @@ prometheus_url: "http://{{ prometheus_host }}:{{ prometheus_port }}"
 # Enable CORS headers when Grafana is on a different host
 grafana_enable_cors: "{{ grafana_mode == 'external' }}"
 grafana_cors_origin: "https://{{ ansible_host }}"
+
+# Health checks (retry-based polling instead of fixed timeout)
+slm_backend_health_check_retries: 60   # Max attempts (60 × 5s = 300s)
+slm_backend_health_check_delay: 5      # Seconds between retries
+grafana_health_check_retries: 60       # Max attempts (60 × 5s = 300s)
+grafana_health_check_delay: 5          # Seconds between retries

@@ -50,3 +50,7 @@ redis_group: "autobot"
 redis_exporter_version: "1.62.0"
 redis_exporter_port: 9121
 slm_admin_url: "https://{{ slm_host | default('127.0.0.1') }}"
+
+# Health check (retry-based polling instead of fixed timeout)
+redis_health_check_retries: 60       # Max attempts (60 × 5s = 300s)
+redis_health_check_delay: 5          # Seconds between retries

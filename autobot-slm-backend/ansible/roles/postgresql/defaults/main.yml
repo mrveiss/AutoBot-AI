@@ -68,3 +68,7 @@ databases:
 # AutoBot user
 autobot_user: "autobot"
 autobot_group: "autobot"
+
+# Health check (retry-based polling instead of fixed timeout)
+postgresql_health_check_retries: 60  # Max attempts (60 × 5s = 300s)
+postgresql_health_check_delay: 5     # Seconds between retries

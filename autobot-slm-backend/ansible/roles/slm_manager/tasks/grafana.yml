@@ -147,12 +147,14 @@
   when: grafana_install | bool
   tags: ['grafana', 'service']
 
-- name: "Grafana | Wait for Grafana to be ready"
-  ansible.builtin.wait_for:
-    host: 127.0.0.1
-    port: "{{ grafana_port }}"
-    delay: 2
-    timeout: 60
-    state: started
+- name: "Grafana | Wait for Grafana to be healthy (retry-based)"
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ grafana_port }}/api/health"
+    method: GET
+    status_code: 200
   when: grafana_install | bool
+  register: _grafana_health
+  retries: 60
+  delay: 5
+  until: _grafana_health is succeeded
   tags: ['grafana', 'service']

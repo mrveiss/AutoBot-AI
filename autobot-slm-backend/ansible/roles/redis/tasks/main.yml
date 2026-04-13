@@ -192,15 +192,7 @@
   become: yes
   tags: ['redis', 'service']
 
-- name: "Redis | Wait for Redis to be ready"
-  wait_for:
-    host: 127.0.0.1
-    port: "{{ redis_port }}"
-    timeout: 60
-    state: started
-  tags: ['redis', 'validation']
-
-- name: "Redis | Test Redis connectivity"
+- name: "Redis | Wait for Redis to be ready (retry-based)"
   command: >
     {{ redis_cli_path | default('/usr/bin/redis-cli') }}
     -h 127.0.0.1 -p {{ redis_port }}
@@ -209,6 +201,9 @@
   register: redis_ping
   changed_when: false
   no_log: "{{ redis_password is defined and redis_password | default(false) | bool }}"
+  retries: 60
+  delay: 5
+  until: redis_ping is succeeded
   tags: ['redis', 'validation']
 
 - name: "Redis | Create backup directory"

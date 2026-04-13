@@ -493,21 +493,16 @@
   ansible.builtin.meta: flush_handlers
   tags: ['slm', 'service']
 
-- name: "SLM | Wait for backend port to be ready"
-  ansible.builtin.wait_for:
-    host: "{{ slm_backend_host }}"
-    port: "{{ slm_backend_port }}"
-    delay: 3
-    timeout: 60
-    state: started
-  tags: ['slm', 'service']
-
-- name: "SLM | Verify backend health via API"
+- name: "SLM | Wait for backend to be healthy (retry-based)"
   ansible.builtin.uri:
     url: "http://{{ slm_backend_host }}:{{ slm_backend_port }}/api/health"
     method: GET
     status_code: 200
   register: _slm_health
+  retries: 60
+  delay: 5
+  until: _slm_health is succeeded
+  tags: ['slm', 'service']
   retries: 10
   delay: 3
   until: _slm_health.status == 200
