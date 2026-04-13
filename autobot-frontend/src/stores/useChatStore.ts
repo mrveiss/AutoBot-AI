@@ -446,22 +446,30 @@ export const useChatStore = defineStore('chat', () => {
     sessions.value.push(session)
   }
 
-  function syncSessionsWithBackend(backendSessions: ChatSession[]) {
-    /**
-     * Synchronize store sessions with backend sessions.
-     *
-     * This is the SOURCE OF TRUTH sync:
-     * - Backend sessions are authoritative
-     * - Removes sessions that exist in store but not on backend (deleted sessions)
-     * - Adds sessions that exist on backend but not in store (new sessions)
-     * - Updates existing sessions with backend data
-     *
-     * This fixes the bug where deleted sessions reappear after page reload.
-     */
+  /**
+   * Synchronize store sessions with backend sessions.
+   *
+   * This is the SOURCE OF TRUTH sync:
+   * - Backend sessions are authoritative
+   * - Removes sessions that exist in store but not on backend (deleted sessions)
+   * - Adds sessions that exist on backend but not in store (new sessions)
+   * - Updates existing sessions with backend data
+   *
+   * This fixes the bug where deleted sessions reappear after page reload.
+   *
+   * @param backendSessions - Sessions returned by the backend
+   * @param intentionalEmpty - Issue #4352: When true, the backend explicitly confirmed
+   *   0 sessions (e.g. user deleted all sessions). The defensive guard is bypassed so
+   *   local sessions are cleared. When false/undefined, 0 backend sessions while store
+   *   has sessions is treated as an API failure and local data is preserved (#4328).
+   */
+  function syncSessionsWithBackend(backendSessions: ChatSession[], intentionalEmpty = false) {
     // Defensive guard: if backend returns 0 sessions but store has sessions,
     // the backend may have returned incomplete data. Preserving local sessions
     // prevents accidental data loss (#4328).
-    if (backendSessions.length === 0 && sessions.value.length > 0) {
+    // Exception: when intentionalEmpty=true the backend confirmed the empty list
+    // is correct (user deleted all sessions), so we proceed with the sync.
+    if (backendSessions.length === 0 && sessions.value.length > 0 && !intentionalEmpty) {
       logger.warn(`syncSessionsWithBackend: backend returned 0 sessions but store has ${sessions.value.length} — skipping to preserve local data`)
       return
     }

@@ -792,16 +792,11 @@ const initializeChatInterface = async () => {
       // Explicitly check for error to distinguish API failures from empty responses
       if (data.chat_sessions && !data.chat_sessions.error && data.chat_sessions.data) {
         const sessions = data.chat_sessions.data
-        // Only sync if backend returned sessions OR store is already empty.
-        // An empty backend response while local sessions exist likely means the
-        // API returned incomplete data (auth not ready, caching lag, network issue).
-        // Syncing in that case would destroy all local session history (#4328).
-        if (sessions.length > 0 || store.sessions.length === 0) {
-          // Use syncSessionsWithBackend to remove deleted sessions and add new ones
-          store.syncSessionsWithBackend(sessions)
-        } else {
-          logger.warn('syncSessionsWithBackend skipped: backend returned 0 sessions but store has sessions — preserving local data')
-        }
+        // Issue #4352: intentional_empty=true means the backend confirmed 0 sessions
+        // is correct (user deleted all). Pass this through so syncSessionsWithBackend
+        // can bypass the #4328 defensive guard and clear local sessions as intended.
+        const intentionalEmpty = Boolean(data.chat_sessions.intentional_empty)
+        store.syncSessionsWithBackend(sessions, intentionalEmpty)
       } else if (data.chat_sessions?.error) {
         // Explicit error case - log and proceed with fallback
         logger.warn('Failed to load chat sessions from backend:', data.chat_sessions.error)
