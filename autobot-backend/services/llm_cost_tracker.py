@@ -361,7 +361,8 @@ class LLMCostTracker:
         """Helper for _extract_usage_params. Ref: #1088."""
         if provider is None or model is None or input_tokens is None or output_tokens is None:
             raise ValueError(
-                "Either 'request' object or 'provider', 'model', " "'input_tokens', 'output_tokens' are required"
+                "Either 'request' object or 'provider', 'model', "
+                "'input_tokens', 'output_tokens' are required"
             )
         return (
             provider,
