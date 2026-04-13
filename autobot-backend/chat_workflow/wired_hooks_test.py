@@ -25,6 +25,7 @@ from chat_workflow.llm_handler import (
     _emit_before_continuation,
     _emit_before_llm_call,
     _emit_before_message_process,
+    _emit_before_prompt_build,
     _emit_before_response_send,
     _emit_before_tool_execute,
     _emit_before_tool_parse,
@@ -59,6 +60,10 @@ class _TrackingExtension(Extension):
     async def on_before_message_process(self, ctx: HookContext) -> None:
         self.called_hooks.append("before_message_process")
         self.captured_data["message"] = ctx.get("message")
+
+    async def on_before_prompt_build(self, ctx: HookContext) -> None:
+        self.called_hooks.append("before_prompt_build")
+        self.captured_data["context"] = ctx.get("context")
 
     async def on_after_prompt_build(self, ctx: HookContext) -> Optional[str]:
         self.called_hooks.append("after_prompt_build")
@@ -171,6 +176,49 @@ class TestBeforeMessageProcess:
 
         assert "before_message_process" in tracker.called_hooks
         assert tracker.captured_data["message"] == "hello world"
+
+
+class TestBeforePromptBuild:
+    """Tests for _emit_before_prompt_build."""
+
+    @pytest.mark.asyncio
+    async def test_noop_when_no_extension_registered(self):
+        """No-op when no extension is registered."""
+        await _emit_before_prompt_build("sess-1", {})
+
+    @pytest.mark.asyncio
+    async def test_extension_receives_context_info(self):
+        """Extension receives context information for prompt preparation."""
+        tracker = _TrackingExtension()
+        get_extension_manager().register(tracker)
+
+        context = {"message": "test", "use_knowledge": True}
+        await _emit_before_prompt_build("sess-123", context)
+
+        assert "before_prompt_build" in tracker.called_hooks
+        assert tracker.captured_data["context"] == context
+
+
+class TestAfterPromptBuild:
+    """Tests for _emit_after_prompt_build."""
+
+    @pytest.mark.asyncio
+    async def test_noop_when_no_extension_registered(self):
+        """Returns original prompt unchanged when no extension is registered."""
+        prompt = "This is the built prompt"
+        result = await _emit_after_prompt_build(prompt, "sess-1", {})
+        assert result == prompt
+
+    @pytest.mark.asyncio
+    async def test_extension_can_modify_prompt(self):
+        """Extension can modify the prompt."""
+        tracker = _TrackingExtension()
+        get_extension_manager().register(tracker)
+
+        original = "original prompt"
+        result = await _emit_after_prompt_build(original, "sess-1", {})
+
+        assert "after_prompt_build" in tracker.called_hooks
 
 
 class TestBeforeLLMCall:

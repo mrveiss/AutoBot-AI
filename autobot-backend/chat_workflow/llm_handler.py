@@ -127,13 +127,32 @@ async def _emit_before_message_process(
     }
 
 
+async def _emit_before_prompt_build(
+    session_id: str, context: Dict[str, Any]
+) -> None:
+    """Emit BEFORE_PROMPT_BUILD hook to registered extensions.
+
+    Issue #4265: Fires before prompt building begins so extensions can
+    prepare or modify context before prompt assembly starts.
+
+    Args:
+        session_id: Session identifier
+        context: Request-level context dict
+    """
+    ctx = HookContext(
+        session_id=session_id,
+        data={"context": context},
+    )
+    await get_extension_manager().invoke_hook(HookPoint.BEFORE_PROMPT_BUILD, ctx)
+
+
 async def _emit_after_prompt_build(
     prompt: str, session_id: str, context: Dict[str, Any]
 ) -> str:
     """Emit AFTER_PROMPT_BUILD hook to registered extensions.
 
-    Issue #4181: Fires after system prompt is built so extensions can
-    inspect or modify the prompt before it enters assembly.
+    Issue #4265: Fires after prompt is built so extensions can
+    inspect or modify the prompt before being sent to the LLM.
 
     Args:
         prompt: The built prompt string
@@ -792,6 +811,13 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             ollama_endpoint = slm_base
         else:
             ollama_endpoint = self._get_ollama_endpoint_for_model(selected_model)
+
+        # Issue #4265: Emit BEFORE_PROMPT_BUILD hook before building prompts
+        await _emit_before_prompt_build(
+            session.session_id,
+            {"message": message, "use_knowledge": use_knowledge, "language": language},
+        )
+
         system_prompt = self._get_system_prompt(language=language)
         # Issue #3787: Prepend always-loaded compact memory summary.
         try:
@@ -855,6 +881,14 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         full_prompt = self._build_full_prompt(
             knowledge_context, conversation_context, message
         )
+
+        # Issue #4265: Emit AFTER_PROMPT_BUILD hook after full prompt is built
+        full_prompt = await _emit_after_prompt_build(
+            full_prompt,
+            session.session_id,
+            {"message": message, "use_knowledge": use_knowledge},
+        )
+
         full_prompt = await _emit_full_prompt_ready(
             full_prompt,
             {"endpoint": ollama_endpoint, "model": selected_model},
