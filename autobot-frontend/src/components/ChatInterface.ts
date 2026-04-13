@@ -302,7 +302,7 @@ export function useChatInterface() {
 
       // Process response
       if (chatResponse && chatResponse.data) {
-        const responseText = chatResponse.data.response || 'No response received'
+        const responseText = (chatResponse.data as any).response || 'No response received'
         const messageType = determineMessageType(responseText)
 
         messages.value.push({
@@ -354,8 +354,8 @@ export function useChatInterface() {
   // Chat management functions
   const newChat = async (): Promise<void> => {
     try {
-      const data = await apiClient.createNewChat()
-      const newChatId = data.chatId || generateChatId()
+      const data = await apiClient.createNewChat() as any
+      const newChatId = (data?.chatId as string) || generateChatId()
 
       currentChatId.value = newChatId
       messages.value = []
@@ -537,7 +537,7 @@ export function useChatInterface() {
     }
 
     if (eventType === 'llm_response') {
-      const response = payload as LLMResponse
+      const response = (payload || {}) as unknown as LLMResponse
       messages.value.push({
         id: generateChatId(),
         sender: normalizeSender(response.sender),
@@ -556,26 +556,27 @@ export function useChatInterface() {
     // Handle workflow events
     if (eventType.startsWith('workflow_')) {
       let workflowMessage = ''
+      const workflowPayload = (payload || {}) as any
       switch (eventType) {
         case 'workflow_step_started':
-          workflowMessage = `🔄 Started: ${payload.description}`
+          workflowMessage = `🔄 Started: ${workflowPayload.description || ''}`
           break
         case 'workflow_step_completed':
-          workflowMessage = `✅ Completed: ${payload.description}`
+          workflowMessage = `✅ Completed: ${workflowPayload.description || ''}`
           break
         case 'workflow_approval_required':
-          activeWorkflowId.value = payload.workflow_id
-          workflowMessage = `⏸️ Approval Required: ${payload.description}`
+          activeWorkflowId.value = workflowPayload.workflow_id as string || null
+          workflowMessage = `⏸️ Approval Required: ${workflowPayload.description || ''}`
           break
         case 'workflow_completed':
-          workflowMessage = `🎉 Workflow completed successfully! (${payload.total_steps} steps)`
-          if (activeWorkflowId.value === payload.workflow_id) {
+          workflowMessage = `🎉 Workflow completed successfully! (${workflowPayload.total_steps || 0} steps)`
+          if (activeWorkflowId.value === workflowPayload.workflow_id) {
             activeWorkflowId.value = null
           }
           break
         case 'workflow_failed':
-          workflowMessage = `❌ Workflow failed: ${payload.error}`
-          if (activeWorkflowId.value === payload.workflow_id) {
+          workflowMessage = `❌ Workflow failed: ${workflowPayload.error || 'Unknown error'}`
+          if (activeWorkflowId.value === workflowPayload.workflow_id) {
             activeWorkflowId.value = null
           }
           break

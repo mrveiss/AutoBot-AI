@@ -114,7 +114,7 @@
       <!-- Issue #249: Knowledge Base Citations Display -->
       <CitationsDisplay
         v-if="hasCitations"
-        :citations="message.metadata?.citations || []"
+        :citations="(message.metadata as any)?.citations || []"
         :initially-expanded="citationsExpanded"
         @citation-click="$emit('citation-click', $event)"
         @expanded-change="$emit('citations-expanded-change', { messageId: message.id, expanded: $event })"
@@ -136,17 +136,17 @@
       <!-- Command Approval Request UI -->
       <ApprovalRequestCard
         v-if="hasApprovalRequest"
-        :status="message.metadata?.approval_status"
-        :requires-approval="message.metadata?.requires_approval"
-        :command="message.metadata?.command"
-        :comment="message.metadata?.approval_comment"
-        :risk-level="message.metadata?.risk_level"
-        :purpose="message.metadata?.purpose"
-        :reasons="message.metadata?.reasons"
-        :is-interactive="message.metadata?.is_interactive"
-        :interactive-reasons="message.metadata?.interactive_reasons"
+        :status="(message.metadata as any)?.approval_status"
+        :requires-approval="(message.metadata as any)?.requires_approval"
+        :command="(message.metadata as any)?.command"
+        :comment="(message.metadata as any)?.approval_comment"
+        :risk-level="(message.metadata as any)?.risk_level"
+        :purpose="(message.metadata as any)?.purpose"
+        :reasons="(message.metadata as any)?.reasons"
+        :is-interactive="(message.metadata as any)?.is_interactive"
+        :interactive-reasons="(message.metadata as any)?.interactive_reasons"
         :processing="processingApproval"
-        :session-id="message.metadata?.terminal_session_id"
+        :session-id="(message.metadata as any)?.terminal_session_id"
         @approve="$emit('approve', $event)"
         @deny="$emit('deny', $event)"
         @auto-approve-changed="$emit('auto-approve-changed', $event)"
@@ -289,7 +289,7 @@ const showMetadata = computed(() => {
 const hasCitations = computed(() => {
   return (
     props.message.sender === 'assistant' &&
-    (props.message.metadata?.citations?.length || 0) > 0
+    ((props.message.metadata as any)?.citations?.length || 0) > 0
   )
 })
 

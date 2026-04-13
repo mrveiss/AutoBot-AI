@@ -789,14 +789,15 @@ const initializeChatInterface = async () => {
       const data = await Promise.race([loadPromise, timeoutPromise])
 
       // Process results - sync with backend (source of truth)
-      if (data.chat_sessions && !data.chat_sessions.error && Array.isArray(data.chat_sessions)) {
+      const dataObj = data as any
+      if (dataObj.chat_sessions && !dataObj.chat_sessions.error && Array.isArray(dataObj.chat_sessions)) {
         // Only sync if backend returned sessions OR store is already empty.
         // An empty backend response while local sessions exist likely means the
         // API returned incomplete data (auth not ready, caching lag, network issue).
         // Syncing in that case would destroy all local session history (#4328).
-        if (data.chat_sessions.length > 0 || store.sessions.length === 0) {
+        if (dataObj.chat_sessions.length > 0 || store.sessions.length === 0) {
           // Use syncSessionsWithBackend to remove deleted sessions and add new ones
-          store.syncSessionsWithBackend(data.chat_sessions)
+          store.syncSessionsWithBackend(dataObj.chat_sessions as any)
         } else {
           logger.warn('syncSessionsWithBackend skipped: backend returned 0 sessions but store has sessions — preserving local data')
         }

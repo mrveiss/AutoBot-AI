@@ -56,7 +56,7 @@
         <div class="message-header">
           <div class="flex items-center gap-1.5">
             <div class="message-avatar" :class="getAvatarClass(message.sender)">
-              <i :class="getSenderIcon(message.sender, message.type || message.metadata?.display_type)" aria-hidden="true"></i>
+              <i :class="getSenderIcon(message.sender, (message.type || (message.metadata?.display_type as string)) || undefined)" aria-hidden="true"></i>
             </div>
             <div class="message-info">
               <span class="sender-name">
@@ -127,14 +127,14 @@
         <!-- Issue #690: Overseer Agent Plan Message -->
         <OverseerPlanMessage
           v-if="message.type === 'overseer_plan' && message.metadata?.plan"
-          :plan="message.metadata.plan"
-          :steps="message.metadata?.steps"
+          :plan="message.metadata.plan as any"
+          :steps="message.metadata?.steps as any"
         />
 
         <!-- Issue #690: Overseer Agent Step Message -->
         <OverseerStepMessage
           v-else-if="message.type === 'overseer_step' && message.metadata?.step"
-          :step="message.metadata.step"
+          :step="message.metadata.step as any"
         />
 
         <!-- Message Content -->
@@ -174,8 +174,8 @@
 
           <!-- Issue #249, #1186: Source Attribution Display -->
           <CitationsDisplay
-            v-if="message.sender === 'assistant' && (message.metadata?.citations?.length || 0) > 0"
-            :citations="message.metadata?.citations || []"
+            v-if="message.sender === 'assistant' && ((message.metadata as any)?.citations?.length || 0) > 0"
+            :citations="(message.metadata as any)?.citations || []"
           />
 
           <!-- Attachments -->
@@ -272,21 +272,21 @@
               </div>
               <div class="approval-detail-item">
                 <span class="detail-label">{{ $t('chat.approval.riskLevel') }}:</span>
-                <span class="detail-value" :class="getRiskClass(message.metadata.risk_level)">
-                  {{ message.metadata.risk_level }}
+                <span class="detail-value" :class="getRiskClass((message.metadata as any).risk_level)">
+                  {{ (message.metadata as any).risk_level }}
                 </span>
               </div>
-              <div v-if="message.metadata.purpose" class="approval-detail-item">
+              <div v-if="(message.metadata as any).purpose" class="approval-detail-item">
                 <span class="detail-label">{{ $t('chat.approval.purpose') }}:</span>
-                <span class="detail-value">{{ message.metadata.purpose }}</span>
+                <span class="detail-value">{{ (message.metadata as any).purpose }}</span>
               </div>
-              <div v-if="message.metadata.reasons && message.metadata.reasons.length > 0" class="approval-detail-item">
+              <div v-if="(message.metadata as any).reasons && (message.metadata as any).reasons.length > 0" class="approval-detail-item">
                 <span class="detail-label">{{ $t('chat.approval.reasons') }}:</span>
-                <span class="detail-value">{{ message.metadata.reasons.join(', ') }}</span>
+                <span class="detail-value">{{ (message.metadata as any).reasons.join(', ') }}</span>
               </div>
 
               <!-- Interactive Command Warning (Issue #33) -->
-              <div v-if="message.metadata.is_interactive" class="approval-detail-item interactive-warning">
+              <div v-if="(message.metadata as any).is_interactive" class="approval-detail-item interactive-warning">
                 <div class="interactive-header">
                   <i class="fas fa-keyboard text-blue-600" aria-hidden="true"></i>
                   <span class="detail-label font-semibold text-blue-700">{{ $t('chat.approval.interactiveCommand') }}</span>
@@ -295,7 +295,7 @@
                   <p class="text-sm text-autobot-text-secondary mb-2">
                     {{ $t('chat.approval.interactiveInfo') }}
                   </p>
-                  <div v-if="message.metadata.interactive_reasons && message.metadata.interactive_reasons.length > 0" class="interactive-reasons">
+                  <div v-if="(message.metadata as any).interactive_reasons && (message.metadata as any).interactive_reasons.length > 0" class="interactive-reasons">
                     <span class="text-xs font-medium text-autobot-text-secondary">{{ $t('chat.approval.inputRequired') }}:</span>
                     <ul class="text-xs text-autobot-text-secondary mt-1 ml-4 list-disc">
                       <li v-for="(reason, idx) in message.metadata.interactive_reasons" :key="idx">{{ reason }}</li>
@@ -381,7 +381,7 @@
               <BaseButton
                 variant="success"
                 size="sm"
-                @click="approveCommand(message.metadata.terminal_session_id, true, undefined, message.metadata.command_id, { command: message.metadata.command, risk_level: message.metadata.risk_level })"
+                @click="approveCommand((message.metadata as any).terminal_session_id as string, true, undefined, (message.metadata as any).command_id, { command: (message.metadata as any).command as string, risk_level: (message.metadata as any).risk_level as string })"
                 :disabled="processingApproval || showCommentInput"
                 class="approve-btn"
                 :aria-label="$t('chat.approval.approveCommand')"
@@ -392,7 +392,7 @@
               <BaseButton
                 variant="outline-solid"
                 size="sm"
-                @click="promptForComment(message.metadata.terminal_session_id)"
+                @click="promptForComment((message.metadata as any).terminal_session_id as string)"
                 :disabled="processingApproval || showCommentInput"
                 class="comment-btn"
                 :aria-label="$t('chat.approval.addComment')"
@@ -403,7 +403,7 @@
               <BaseButton
                 variant="danger"
                 size="sm"
-                @click="approveCommand(message.metadata.terminal_session_id, false, undefined, message.metadata.command_id, { command: message.metadata.command, risk_level: message.metadata.risk_level })"
+                @click="approveCommand((message.metadata as any).terminal_session_id as string, false, undefined, (message.metadata as any).command_id, { command: (message.metadata as any).command as string, risk_level: (message.metadata as any).risk_level as string })"
                 :disabled="processingApproval || showCommentInput"
                 class="deny-btn"
                 :aria-label="$t('chat.approval.denyCommand')"
@@ -699,9 +699,9 @@ const getMessageWrapperClass = (message: ChatMessage): string => {
 
   // Add message type class for type-specific styling
   // Issue #680: Exclude streaming types from type-class assignment to prevent wrong badges
-  const messageType = message.type || message.metadata?.display_type
+  const messageType = message.type || (message.metadata as any)?.display_type
   const noTypeClassTypes = ['response', 'message', 'default', 'llm_response', 'llm_response_chunk']
-  if (messageType && !noTypeClassTypes.includes(messageType)) {
+  if (messageType && !noTypeClassTypes.includes(String(messageType))) {
     classes.push(`type-${messageType}`)
   }
 
@@ -764,7 +764,7 @@ const getSenderName = (sender: string): string => {
 
 /** Issue #1310: Visible badge for typed messages so they're clearly distinguishable. */
 const getMessageTypeBadge = (message: ChatMessage): { label: string; icon: string; type: string } | null => {
-  const msgType = message.type || message.metadata?.display_type
+  const msgType = message.type || (message.metadata as any)?.display_type
   if (!msgType) return null
 
   const badges: Record<string, { label: string; icon: string; type: string }> = {
@@ -775,7 +775,7 @@ const getMessageTypeBadge = (message: ChatMessage): { label: string; icon: strin
     sources:  { label: t('chat.messages.badgeSources'),  icon: 'fas fa-book-open',   type: 'sources' },
   }
 
-  return badges[msgType] || null
+  return badges[String(msgType)] || null
 }
 
 const getContentClass = (message: ChatMessage): string => {
@@ -1005,7 +1005,7 @@ const detectToolCalls = (message: ChatMessage) => {
 
       // Search for terminal_session_id in recent assistant messages
       // The terminal_session_id might be in metadata of streaming chunks, not necessarily the message with TOOL_CALL
-      let terminal_session_id = message.metadata?.terminal_session_id || null
+      let terminal_session_id: string | null = ((message.metadata as any)?.terminal_session_id as string) || null
 
       if (!terminal_session_id) {
         // Search backwards through recent assistant messages for terminal_session_id
@@ -1015,8 +1015,9 @@ const detectToolCalls = (message: ChatMessage) => {
           .slice(0, 10) // Check last 10 assistant messages
 
         for (const msg of recentAssistantMessages) {
-          if (msg.metadata?.terminal_session_id) {
-            terminal_session_id = msg.metadata.terminal_session_id
+          const metadataSessionId = (msg.metadata as any)?.terminal_session_id as string | null
+          if (metadataSessionId) {
+            terminal_session_id = metadataSessionId
             logger.debug('Found terminal_session_id in message metadata:', terminal_session_id)
             break
           }
