@@ -18,7 +18,6 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_1_HOUR, TTL_30_DAYS
 
 from .subagent_task import (
@@ -35,22 +34,23 @@ class SubagentManager:
 
     def __init__(self, redis_client=None):
         """Initialize manager with optional Redis client."""
-        self.redis = redis_client or get_async_redis_client()
+        self.redis = redis_client
         self.local_results: Dict[str, TaskResult] = {}
 
     async def register_subagent(self, task: SubagentTask) -> str:
         """Register a new subagent and return its ID."""
         logger.debug("Registering subagent task %s", task.task_id)
 
-        # Store in Redis
-        await self.redis.set(
-            f"subagent:task:{task.task_id}",
-            task.to_dict(),
-            ex=TTL_1_HOUR,
-        )
+        # Store in Redis if available
+        if self.redis:
+            await self.redis.set(
+                f"subagent:task:{task.task_id}",
+                task.to_dict(),
+                ex=TTL_1_HOUR,
+            )
 
-        # Update status to PENDING
-        await self.set_task_status(task.task_id, TaskStatus.PENDING)
+            # Update status to PENDING
+            await self.set_task_status(task.task_id, TaskStatus.PENDING)
 
         return task.task_id
 
@@ -58,6 +58,9 @@ class SubagentManager:
         self, task_id: str, status: TaskStatus, metadata: Optional[Dict[str, Any]] = None
     ) -> None:
         """Update task status."""
+        if not self.redis:
+            return
+
         status_data = {
             "task_id": task_id,
             "status": status.value,
@@ -76,19 +79,20 @@ class SubagentManager:
         """Record the result of a completed task."""
         logger.info("Recording result for task %s: %s", result.task_id, result.status.value)
 
-        # Store result
-        await self.redis.set(
-            f"subagent:result:{result.task_id}",
-            result.to_dict(),
-            ex=TTL_30_DAYS,
-        )
+        # Store result in Redis if available
+        if self.redis:
+            await self.redis.set(
+                f"subagent:result:{result.task_id}",
+                result.to_dict(),
+                ex=TTL_30_DAYS,
+            )
 
-        # Update status
-        await self.set_task_status(
-            result.task_id,
-            result.status,
-            {"duration_seconds": result.duration_seconds, "error": result.error},
-        )
+            # Update status
+            await self.set_task_status(
+                result.task_id,
+                result.status,
+                {"duration_seconds": result.duration_seconds, "error": result.error},
+            )
 
         # Store in local cache
         self.local_results[result.task_id] = result
@@ -99,12 +103,13 @@ class SubagentManager:
         if task_id in self.local_results:
             return self.local_results[task_id]
 
-        # Try Redis
-        result_data = await self.redis.get(f"subagent:result:{task_id}")
-        if result_data:
-            result = TaskResult.from_dict(result_data)
-            self.local_results[task_id] = result
-            return result
+        # Try Redis if available
+        if self.redis:
+            result_data = await self.redis.get(f"subagent:result:{task_id}")
+            if result_data:
+                result = TaskResult.from_dict(result_data)
+                self.local_results[task_id] = result
+                return result
 
         return None
 
@@ -120,6 +125,9 @@ class SubagentManager:
     async def get_parent_task_status(self, parent_task_id: str) -> Dict[str, Any]:
         """Get overall status of a parent task and its subagents."""
         try:
+            if not self.redis:
+                return {"parent_task_id": parent_task_id, "status": "no_redis"}
+
             # Get all child task IDs
             child_ids = await self.redis.lrange(f"subagent:children:{parent_task_id}", 0, -1)
 
@@ -172,6 +180,9 @@ class SubagentManager:
     async def cleanup_parent_tasks(self, parent_task_id: str) -> bool:
         """Clean up Redis entries for a parent task."""
         try:
+            if not self.redis:
+                return False
+
             # Get child IDs before deleting
             child_ids = await self.redis.lrange(
                 f"subagent:children:{parent_task_id}", 0, -1

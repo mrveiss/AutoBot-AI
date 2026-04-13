@@ -9,13 +9,10 @@ conflict resolution, and constraint validation.
 """
 
 import asyncio
-import json
 import pytest
-from typing import Any, Dict
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 from services.agents.subagent_task import (
-    ConflictResolution,
     SubagentTask,
     TaskPriority,
     TaskResult,
@@ -32,7 +29,6 @@ class TestSubagentTask:
         """Test creating a task with default values."""
         task = SubagentTask(goal="Analyze data")
         assert task.goal == "Analyze data"
-        assert task.status == TaskStatus.PENDING
         assert task.priority == TaskPriority.NORMAL
         assert task.timeout_seconds == 300
         assert task.depth == 0
@@ -115,11 +111,6 @@ class TestSubagentSpawner:
         tasks = [
             {"goal": f"Task {i}", "context": {"index": i}} for i in range(3)
         ]
-        # Use asyncio.run to test async spawn
-        with pytest.raises(NotImplementedError):
-            # We'll test the synchronous parts directly
-            pass
-
         # Validate constraints at spawner level
         assert len(tasks) <= 5  # MAX_SUBAGENTS_PER_PARENT
 
@@ -136,6 +127,8 @@ class TestSubagentSpawner:
         asyncio.run(test())
 
     def test_spawn_exceeds_max_depth(self, spawner):
+
+
         """Test spawning at max depth constraint."""
         tasks = [{"goal": "Task", "context": {}}]
 

@@ -12,7 +12,6 @@ Defines task data structures for subagent spawning and execution:
 
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import uuid4

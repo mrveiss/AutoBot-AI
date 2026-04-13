@@ -17,8 +17,6 @@ import asyncio
 import logging
 from typing import Any, Coroutine, Dict, List, Optional
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
 from constants.ttl_constants import TTL_1_HOUR
 
 from .subagent_task import (
@@ -244,10 +242,6 @@ class SubagentSpawner:
                 f"subagent:children:{parent_task_id}", task.task_id
             )
 
-    @with_error_handling(
-        error_category=ErrorCategory.INTEGRATION,
-        fallback="Unable to aggregate subagent results",
-    )
     async def aggregate_results(
         self,
         results: List[TaskResult],
