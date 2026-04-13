@@ -279,6 +279,43 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ),
     # Issue #708: knowledge_search_aggregator, knowledge_ai_stack, knowledge_debug
     # consolidated into knowledge.py as sub-routers (backend.api.knowledge includes them)
+    # Issue #4179: Register unregistered knowledge routers
+    (
+        "api.knowledge_search_aggregator",
+        "/unified",
+        ["knowledge-unified"],
+        "knowledge_search_aggregator",
+    ),
+    (
+        "api.knowledge_ai_stack",
+        "",
+        ["knowledge-enhanced"],
+        "knowledge_ai_stack",
+    ),
+    (
+        "api.knowledge_debug",
+        "",
+        ["knowledge-debug"],
+        "knowledge_debug",
+    ),
+    (
+        "api.knowledge_boards",
+        "",
+        ["knowledge-boards"],
+        "knowledge_boards",
+    ),
+    (
+        "api.knowledge_grounding",
+        "/api",
+        ["knowledge-grounding"],
+        "knowledge_grounding",
+    ),
+    (
+        "api.knowledge_vectorization",
+        "",
+        ["knowledge-vectorization"],
+        "knowledge_vectorization",
+    ),
     (
         "api.conversation_files",
         "/conversation-files",
