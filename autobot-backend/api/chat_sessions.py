@@ -470,8 +470,15 @@ async def list_sessions(
     if username:
         sessions = await _filter_user_sessions(sessions, username)
 
+    # Issue #4352: Signal intentional empty to distinguish from API failure.
+    # When an authenticated request returns 0 sessions, mark it explicitly so
+    # the frontend can clear local sessions instead of preserving them.
+    response_data: dict = {"sessions": sessions, "count": len(sessions)}
+    if len(sessions) == 0:
+        response_data["intentional_empty"] = True
+
     return create_success_response(
-        data={"sessions": sessions, "count": len(sessions)},
+        data=response_data,
         message="Sessions retrieved successfully",
         request_id=request_id,
     )

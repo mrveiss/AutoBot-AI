@@ -29,6 +29,10 @@ interface ChatInitData {
 interface ApiResponse<T = unknown> {
   data?: T;
   error?: string;
+  // Issue #4352: intentional_empty signals the backend confirmed 0 sessions
+  // (vs. an API failure that returns empty data). Frontend uses this to decide
+  // whether to clear local sessions or preserve them as a defensive fallback.
+  intentional_empty?: boolean;
 }
 
 interface FallbackResults {
@@ -105,6 +109,15 @@ export class BatchApiService {
     return (data?.sessions || data || (r as Record<string, unknown>)?.sessions || []) as unknown[];
   }
 
+  /** Issue #4352: Extract intentional_empty flag from backend chat-sessions response. */
+  private extractIntentionalEmpty(response: unknown): boolean {
+    if (!response || typeof response !== 'object') return false;
+    const r = response as Record<string, unknown>;
+    // Backend wraps in: { success, data: { sessions, count, intentional_empty }, ... }
+    const data = r.data as Record<string, unknown> | undefined;
+    return Boolean(data?.intentional_empty ?? r.intentional_empty);
+  }
+
   async fallbackChatInitialization(): Promise<FallbackResults> {
     logger.info('Using parallel chat initialization with individual API calls');
 
@@ -118,10 +131,16 @@ export class BatchApiService {
       this.apiClient.getSettings()
     ]);
 
+    const chatSessionsApiResult: ApiResponse<Record<string, unknown>[]> =
+      chatSessionsResult.status === 'fulfilled'
+        ? {
+            data: this.extractSessionsList(chatSessionsResult.value) as Record<string, unknown>[],
+            intentional_empty: this.extractIntentionalEmpty(chatSessionsResult.value),
+          }
+        : { error: (chatSessionsResult as PromiseRejectedResult).reason?.message || 'Failed to load' };
+
     const results: FallbackResults = {
-      chat_sessions: chatSessionsResult.status === 'fulfilled'
-        ? { data: this.extractSessionsList(chatSessionsResult.value) as Record<string, unknown>[] }
-        : { error: (chatSessionsResult as PromiseRejectedResult).reason?.message || 'Failed to load' },
+      chat_sessions: chatSessionsApiResult,
 
       system_health: systemHealthResult.status === 'fulfilled'
         ? { data: systemHealthResult.value as Record<string, unknown> }
