@@ -2,6 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 <<<<<<< HEAD
+<<<<<<< HEAD
 """
 Skill Management Service Module
 
@@ -29,3 +30,14 @@ __all__ = [
 =======
 """Skill management services for autonomous skill extraction and proposal."""
 >>>>>>> origin/issue-4338
+=======
+"""
+Skill Management Module
+
+Issue #4337: Skill relevance ranking and caching for agent prompts.
+"""
+
+from services.skill_management.skill_ranker import SkillRanker, get_skill_ranker
+
+__all__ = ["SkillRanker", "get_skill_ranker"]
+>>>>>>> origin/issue-4337
