@@ -120,10 +120,10 @@ def register_root_endpoints(app: FastAPI) -> None:
         app: FastAPI application instance
     """
 
-    @app.get("/api/health")
+    @app.api_route("/api/health", methods=["GET", "HEAD"])
     @with_error_handling(category=ErrorCategory.SYSTEM)
     async def root_health_check(request: Request):
-        """Health endpoint with per-service breakdown and capabilities."""
+        """Health endpoint with per-service breakdown and capabilities (supports GET and HEAD)."""
         state = request.app.state
         services = _build_services_status(state)
         ai_stack_ready = services.get("ai_stack") == "connected"
