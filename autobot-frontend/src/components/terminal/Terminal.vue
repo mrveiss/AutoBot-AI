@@ -70,6 +70,13 @@
           </div>
         </div>
       </div>
+      <TerminalStatusBar
+        :connection-status="statusBarConnectionStatus"
+        :connecting="isConnecting"
+        :can-input="isConnected"
+        :session-id="sessionId"
+        :output-lines-count="terminalLines.length"
+      />
     </div>
   </div>
 </template>
@@ -83,6 +90,7 @@ import { useWebSocket } from '@/composables/useWebSocket'
 import { useSessionActivityLogger } from '@/composables/useSessionActivityLogger'
 import { useTabCompletion } from '@/composables/useTabCompletion'
 import CompletionSuggestions from './CompletionSuggestions.vue'
+import TerminalStatusBar from './TerminalStatusBar.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 
@@ -191,6 +199,12 @@ const statusIconClass = computed(() => {
   if (isConnecting.value) return 'fas fa-spinner fa-spin text-blue-500'
   if (isConnected.value) return 'fas fa-check-circle text-green-500'
   return 'fas fa-exclamation-circle text-red-500'
+})
+
+const statusBarConnectionStatus = computed(() => {
+  if (isConnecting.value) return 'connecting'
+  if (isConnected.value) return 'connected'
+  return 'disconnected'
 })
 
 // Methods
