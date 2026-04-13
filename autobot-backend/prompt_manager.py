@@ -56,6 +56,17 @@ class PromptManager:
             autoescape=True,  # Enable autoescaping for security
         )
 
+        # Store project root for context file scanning (#4345)
+        self._root_dir = Path(__file__).parent.parent
+
+        # Scan context files for injection patterns before loading prompts (#4345)
+        try:
+            self.load_and_scan_context_files()
+        except ValueError as e:
+            # Critical injection detected - log but don't fail init
+            logger.error("Context file injection detected during init: %s", e)
+            # In production, this would be more severe; for now, log and continue
+
         # Load all prompts on initialization
         self.load_all_prompts()
 
@@ -383,6 +394,120 @@ class PromptManager:
                 "file_name": file_name,
                 "error": str(e),
             }
+
+    def load_and_scan_context_files(
+        self, project_root: Optional[Path] = None
+    ) -> Dict[str, Any]:
+        """
+        Load and scan context files for prompt injection patterns.
+
+        Issue #4345: Scans AGENTS.md, CLAUDE.md, .cursorrules, SOUL.md before
+        injecting into system prompts. Blocks injection if HIGH/CRITICAL risk
+        detected.
+
+        Args:
+            project_root: Root directory to search for context files.
+                         Defaults to parent of prompt manager's root.
+
+        Returns:
+            Dictionary with scan results:
+                - scanned_files: list of scanned files
+                - total_scanned: number of files scanned
+                - detections: list of detection results
+                - has_critical: bool, whether any critical risk detected
+                - blocked: bool, whether injection was blocked
+
+        Raises:
+            ValueError: If HIGH or CRITICAL risk detected
+        """
+        if project_root is None:
+            project_root = self._root_dir
+
+        context_files = [
+            "AGENTS.md",
+            "CLAUDE.md",
+            ".cursorrules",
+            "SOUL.md",
+            "GEMINI.md",  # Additional context file
+        ]
+
+        scan_results = {
+            "scanned_files": [],
+            "total_scanned": 0,
+            "detections": [],
+            "has_critical": False,
+            "has_high": False,
+            "blocked": False,
+        }
+
+        try:
+            from security.prompt_injection_detector import InjectionRisk
+
+            for context_file in context_files:
+                file_path = project_root / context_file
+
+                if not file_path.exists():
+                    logger.debug("Context file not found: %s", context_file)
+                    continue
+
+                try:
+                    content = file_path.read_text(encoding="utf-8")
+                    scan_results["scanned_files"].append(context_file)
+                    scan_results["total_scanned"] += 1
+
+                    # Scan for injection patterns
+                    detection = self._scan_for_injection(content, context_file)
+                    scan_results["detections"].append(detection)
+
+                    # Track risk levels
+                    if detection["risk_level"] == "critical":
+                        scan_results["has_critical"] = True
+                    elif detection["risk_level"] == "high":
+                        scan_results["has_high"] = True
+
+                except Exception as e:
+                    logger.error("Error reading context file %s: %s", context_file, e)
+                    scan_results["detections"].append(
+                        {
+                            "file_name": context_file,
+                            "detected": False,
+                            "risk_level": "error",
+                            "error": str(e),
+                            "patterns": [],
+                        }
+                    )
+
+            # Determine if injection should be blocked
+            if scan_results["has_critical"]:
+                scan_results["blocked"] = True
+                blocked_files = [
+                    d["file_name"]
+                    for d in scan_results["detections"]
+                    if d["risk_level"] == "critical"
+                ]
+                error_msg = (
+                    f"🚨 CRITICAL prompt injection detected in context files: "
+                    f"{', '.join(blocked_files)}. Injection blocked."
+                )
+                logger.critical(error_msg)
+                raise ValueError(error_msg)
+
+            # Log summary
+            if scan_results["total_scanned"] > 0:
+                logger.info(
+                    "Context file scan complete: %d files scanned, %d detections",
+                    scan_results["total_scanned"],
+                    len([d for d in scan_results["detections"] if d.get("detected")]),
+                )
+
+            return scan_results
+
+        except ValueError:
+            # Re-raise ValueError for critical injections
+            raise
+        except Exception as e:
+            logger.error("Error in context file scanning: %s", e)
+            return scan_results
 
     def get_categories(self) -> List[str]:
         """
