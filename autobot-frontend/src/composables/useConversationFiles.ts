@@ -108,9 +108,7 @@ export function useConversationFiles(sessionId: string) {
     error.value = null
 
     try {
-      const response = await api.get(`${getApiBase()}/conversation-files/conversation/${sessionId}/list`)
-      // Issue #156 Fix: Call .json() to get data from Response
-      const data = await response.json()
+      const data = await api.get<{ files: ConversationFile[]; stats: FileStats }>(`${getApiBase()}/conversation-files/conversation/${sessionId}/list`)
 
       if (data) {
         files.value = data.files || []
@@ -152,7 +150,7 @@ export function useConversationFiles(sessionId: string) {
         formData.append('files', file)
       })
 
-      const response = await api.post(
+      const data = await api.post<{ success: boolean }>(
         `${getApiBase()}/conversation-files/conversation/${sessionId}/upload`,
         formData,
         {
@@ -166,9 +164,6 @@ export function useConversationFiles(sessionId: string) {
           }
         }
       )
-
-      // Issue #156 Fix: Call .json() to get data from Response
-      const data = await response.json()
 
       if (data?.success) {
         // Reload files to get updated list
@@ -229,12 +224,11 @@ export function useConversationFiles(sessionId: string) {
     }
 
     try {
-      const response = await api.get(
+      const response = await api.rawRequest(
         `${getApiBase()}/conversation-files/conversation/${sessionId}/download/${fileId}`,
-        { responseType: 'blob' }
+        { method: 'GET' }
       )
 
-      // Issue #156 Fix: Call .blob() to get blob data from Response
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -332,8 +326,7 @@ export function useConversationFiles(sessionId: string) {
     loading.value = true
     error.value = null
     try {
-      const response = await api.post(`${API}/files/create`, { filename, content, mime_type: mimeType })
-      const data = await response.json()
+      const data = await api.post<{ success: boolean }>(`${API}/files/create`, { filename, content, mime_type: mimeType })
       if (data?.success) { await loadFiles(); return true }
       error.value = 'Failed to create file'
       return false
@@ -348,8 +341,7 @@ export function useConversationFiles(sessionId: string) {
     if (!sessionId || !fileId) { error.value = 'Missing parameters'; return false }
     error.value = null
     try {
-      const response = await api.put(`${API}/files/${fileId}/rename`, { new_filename: newFilename })
-      const data = await response.json()
+      const data = await api.put<{ success: boolean }>(`${API}/files/${fileId}/rename`, { new_filename: newFilename })
       if (data?.success) {
         const file = files.value.find(f => f.file_id === fileId)
         if (file) file.filename = newFilename
@@ -367,8 +359,7 @@ export function useConversationFiles(sessionId: string) {
   const getFileContent = async (fileId: string): Promise<string | null> => {
     if (!sessionId || !fileId) { error.value = 'Missing parameters'; return null }
     try {
-      const response = await api.get(`${API}/files/${fileId}/content`)
-      const data = await response.json()
+      const data = await api.get<{ content: string }>(`${API}/files/${fileId}/content`)
       return data?.content ?? null
     } catch (err: unknown) {
       error.value = extractApiErrorMessage(err, 'Failed to read file')
@@ -381,8 +372,7 @@ export function useConversationFiles(sessionId: string) {
     if (!sessionId || !fileId) { error.value = 'Missing parameters'; return false }
     error.value = null
     try {
-      const response = await api.put(`${API}/files/${fileId}/content`, { content })
-      const data = await response.json()
+      const data = await api.put<{ success: boolean }>(`${API}/files/${fileId}/content`, { content })
       if (data?.success) { await loadFiles(); return true }
       error.value = 'Save failed'
       return false
@@ -398,8 +388,7 @@ export function useConversationFiles(sessionId: string) {
     loading.value = true
     error.value = null
     try {
-      const response = await api.post(`${API}/files/${fileId}/copy`, { new_filename: newFilename || null })
-      const data = await response.json()
+      const data = await api.post<{ success: boolean }>(`${API}/files/${fileId}/copy`, { new_filename: newFilename || null })
       if (data?.success) { await loadFiles(); return true }
       error.value = 'Copy failed'
       return false
