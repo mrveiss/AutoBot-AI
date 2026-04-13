@@ -44,7 +44,6 @@ const showRoleMenu = ref<string | null>(null)
 const removingUserId = ref<string | null>(null)
 const isLoadingParticipants = ref(false)
 const participantRoles = ref<Map<string, ParticipantResponse>>(new Map())
-const containerRef = ref<HTMLElement | null>(null)
 
 // Current user is owner
 const isOwner = computed(() => {
@@ -57,7 +56,7 @@ interface ParticipantWithRole extends UserPresence {
   role: 'owner' | 'collaborator' | 'viewer'
   email?: string
   joinedAt: Date
-  id?: string
+  id: string
 }
 
 // Fetch real role data from session API
@@ -89,9 +88,9 @@ const fetchParticipantRoles = async () => {
 const participantsWithRoles = computed<ParticipantWithRole[]>(() => {
   return sessionPresence.value.map(p => {
     const roleData = participantRoles.value.get(p.userId)
-    const role = (roleData?.permission === 'owner' ? 'owner' :
+    const role: 'owner' | 'collaborator' | 'viewer' = roleData?.permission === 'owner' ? 'owner' :
                   roleData?.permission === 'editor' ? 'collaborator' :
-                  'viewer') as const
+                  'viewer'
 
     return {
       ...p,
@@ -105,7 +104,7 @@ const participantsWithRoles = computed<ParticipantWithRole[]>(() => {
 
 // Virtual scrolling composable - Issue #4037
 // Each participant item is approximately 140px (with status indicator, role badge, etc.)
-const { containerRef, visibleItems, totalHeight } = useVirtualList(participantsWithRoles, 140, 2)
+const { containerRef, visibleItems, totalHeight } = useVirtualList<ParticipantWithRole>(participantsWithRoles, 140, 2)
 
 // Get role badge styling
 const getRoleBadge = (role: ParticipantWithRole['role']): { color: string; label: string } => {
