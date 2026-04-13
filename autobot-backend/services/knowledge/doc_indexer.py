@@ -894,6 +894,14 @@ class DocIndexerService:
             logger.warning("No documentation files discovered in %s", self._root_dir)
             return total_result
 
+        # If collection is empty, force full indexing regardless of cache (#4350)
+        if not force and self.needs_indexing():
+            logger.info(
+                "Collection empty — forcing full indexing despite cache to ensure "
+                "documentation is available"
+            )
+            force = True
+
         # Incremental mode: filter to changed files
         new_hashes: Dict[str, str] = {}
         if not force:
@@ -902,6 +910,10 @@ class DocIndexerService:
             )
             if early:
                 return total_result
+        else:
+            # In force mode, compute hashes for all files to update cache
+            hash_cache = {}  # Empty cache treats all as changed
+            files, new_hashes = _filter_changed_files(files, hash_cache, self._root_dir)
 
         logger.info("Indexing %d documentation files...", len(files))
         for file_path, tier in files:
