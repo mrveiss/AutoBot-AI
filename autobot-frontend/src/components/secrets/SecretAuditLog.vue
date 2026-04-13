@@ -326,7 +326,7 @@ const prevPage = async () => {
             </div>
 
             <!-- Metadata -->
-            <div v-if="Object.keys(entry.metadata).length > 0" class="text-xs text-gray-500 mt-1">
+            <div v-if="entry.metadata && Object.keys(entry.metadata).length > 0" class="text-xs text-gray-500 mt-1">
               <details class="cursor-pointer">
                 <summary class="hover:text-gray-400">{{ $t('secrets.auditLog.details') }}</summary>
                 <pre class="mt-1 p-2 bg-gray-800 rounded text-xs overflow-x-auto">{{ JSON.stringify(entry.metadata, null, 2) }}</pre>
