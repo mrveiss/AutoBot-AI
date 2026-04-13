@@ -1,51 +1,13 @@
 <template>
   <div class="knowledge-file-browser">
     <!-- Main Categories -->
-    <div class="main-categories">
-      <div
-        v-for="mainCat in mainCategories"
-        :key="mainCat.id"
-        class="main-category-card"
-        :style="{ borderColor: mainCat.color }"
-        @click="selectMainCategory(mainCat.id)"
-      >
-        <div class="category-icon" :style="{ backgroundColor: mainCat.color }">
-          <i :class="mainCat.icon"></i>
-        </div>
-        <div class="category-info">
-          <h3>{{ mainCat.name }}</h3>
-          <p>{{ mainCat.description }}</p>
-          <div class="category-stats">
-            <span class="fact-count">{{ mainCat.count }} {{ $t('knowledge.browser.facts') }}</span>
-            <!-- Populate button for system categories -->
-            <BaseButton
-              v-if="mainCat.id !== 'user-knowledge'"
-              variant="primary"
-              size="sm"
-              :loading="populationStates[mainCat.id]?.isPopulating"
-              :disabled="populationStates[mainCat.id]?.isPopulating"
-              @click.stop="handlePopulate(mainCat.id)"
-              class="populate-btn"
-            >
-              <i v-if="!populationStates[mainCat.id]?.isPopulating" class="fas fa-sync"></i>
-              <span v-if="!populationStates[mainCat.id]?.isPopulating">{{ $t('knowledge.browser.populate') }}</span>
-              <span v-else>{{ populationStates[mainCat.id]?.progress || 0 }}%</span>
-            </BaseButton>
-            <!-- Import button for user knowledge -->
-            <BaseButton
-              v-if="mainCat.id === 'user-knowledge'"
-              variant="primary"
-              size="sm"
-              @click.stop="router.push('/knowledge/upload')"
-              class="populate-btn"
-            >
-              <i class="fas fa-file-import"></i>
-              <span>{{ $t('knowledge.browser.import') }}</span>
-            </BaseButton>
-          </div>
-        </div>
-      </div>
-    </div>
+    <KnowledgeMainCategories
+      :categories="mainCategories"
+      :population-states="populationStates"
+      @select="selectMainCategory"
+      @populate="handlePopulate"
+      @import="() => router.push('/knowledge/upload')"
+    />
 
     <!-- Header -->
     <div class="browser-header">
@@ -1137,83 +1099,6 @@ watch(() => props.mode, () => {
   display: flex;
   flex-direction: column;
   background: var(--bg-secondary);
-}
-
-/* Main Categories */
-.main-categories {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.75rem;
-  padding: 0.75rem;
-  background: var(--bg-card);
-  border-bottom: 1px solid var(--border-default);
-}
-
-.main-category-card {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem;
-  border: 2px solid;
-  border-radius: 8px;
-  background: var(--bg-card);
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.main-category-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
-}
-
-.category-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--bg-card);
-  font-size: 1.5rem;
-  flex-shrink: 0;
-}
-
-.category-info {
-  flex: 1;
-}
-
-.category-info h3 {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0 0 0.25rem 0;
-}
-
-.category-info p {
-  font-size: 0.8125rem;
-  color: var(--text-tertiary);
-  margin: 0 0 0.375rem 0;
-  line-height: 1.3;
-}
-
-.category-stats {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.fact-count {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  background: var(--bg-tertiary);
-  padding: 0.25rem 0.75rem;
-  border-radius: 6px;
-}
-
-/* Populate button spacing */
-.populate-btn {
-  margin-left: 0.5rem;
 }
 
 /* Header */
