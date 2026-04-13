@@ -100,16 +100,14 @@
           >
             <div
               v-if="event.causal_links.length > 0"
-              class="causal-links"
+              class="causal-links-section"
             >
               <span class="links-label">{{ $t('knowledge.temporal.events.causalLinks') }}:</span>
-              <span
-                v-for="link in event.causal_links"
-                :key="link"
-                class="link-badge"
-              >
-                {{ link }}
-              </span>
+              <div class="causal-chain-wrapper">
+                <CausalChainViewer
+                  :event-id="event.id"
+                />
+              </div>
             </div>
             <div class="event-entity">
               <span class="entity-label">{{ $t('knowledge.temporal.events.entity') }}:</span>
@@ -134,6 +132,7 @@ import {
   getEventTypeColor as getEventColor,
   getEventTypeIcon as getEventIcon,
 } from '../constants'
+import CausalChainViewer from './CausalChainViewer.vue'
 
 const props = defineProps<{
   events: TemporalEvent[]
@@ -373,11 +372,10 @@ function toggleExpand(eventId: string): void {
   gap: var(--spacing-sm);
 }
 
-.causal-links {
+.causal-links-section {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--spacing-xs);
+  flex-direction: column;
+  gap: var(--spacing-sm);
 }
 
 .links-label,
@@ -387,12 +385,11 @@ function toggleExpand(eventId: string): void {
   color: var(--text-secondary);
 }
 
-.link-badge {
-  font-size: var(--text-xs);
-  padding: 2px var(--spacing-sm);
-  background: rgba(244, 63, 94, 0.1);
-  color: rgba(244, 63, 94, 0.9);
-  border-radius: var(--radius-full);
+.causal-chain-wrapper {
+  margin-top: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
 }
 
 .event-entity {
