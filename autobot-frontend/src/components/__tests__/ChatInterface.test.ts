@@ -217,9 +217,9 @@ describe('ChatInterface', () => {
 
     // Default: initialization returns empty data (no sessions, healthy system)
     mockInitializeChatInterface.mockResolvedValue({
-      chat_sessions: [],
-      system_health: { status: 'healthy' },
-      settings: {},
+      chat_sessions: { data: [] },
+      system_health: { data: { status: 'healthy' } },
+      settings: { data: {} },
     })
   })
 
@@ -262,9 +262,9 @@ describe('ChatInterface', () => {
     it('displays chat history when available', async () => {
       // Mock initialization to return chat sessions
       mockInitializeChatInterface.mockResolvedValue({
-        chat_sessions: mockChatSessions,
-        system_health: { status: 'healthy' },
-        settings: {},
+        chat_sessions: { data: mockChatSessions },
+        system_health: { data: { status: 'healthy' } },
+        settings: { data: {} },
       })
 
       renderComponent(ChatInterface, { pinia: true })
@@ -308,9 +308,9 @@ describe('ChatInterface', () => {
 
     it('switches between chat sessions', async () => {
       mockInitializeChatInterface.mockResolvedValue({
-        chat_sessions: mockChatSessions,
-        system_health: { status: 'healthy' },
-        settings: {},
+        chat_sessions: { data: mockChatSessions },
+        system_health: { data: { status: 'healthy' } },
+        settings: { data: {} },
       })
 
       renderComponent(ChatInterface, { pinia: true })
@@ -323,9 +323,9 @@ describe('ChatInterface', () => {
 
     it('deletes a chat session', async () => {
       mockInitializeChatInterface.mockResolvedValue({
-        chat_sessions: mockChatSessions,
-        system_health: { status: 'healthy' },
-        settings: {},
+        chat_sessions: { data: mockChatSessions },
+        system_health: { data: { status: 'healthy' } },
+        settings: { data: {} },
       })
 
       renderComponent(ChatInterface, { pinia: true })
@@ -510,9 +510,9 @@ describe('ChatInterface', () => {
 
     it('handles empty chat history response', async () => {
       mockInitializeChatInterface.mockResolvedValue({
-        chat_sessions: [],
-        system_health: { status: 'healthy' },
-        settings: {},
+        chat_sessions: { data: [] },
+        system_health: { data: { status: 'healthy' } },
+        settings: { data: {} },
       })
 
       renderComponent(ChatInterface, { pinia: true })
@@ -540,9 +540,9 @@ describe('ChatInterface', () => {
 
     it('supports keyboard navigation', async () => {
       mockInitializeChatInterface.mockResolvedValue({
-        chat_sessions: mockChatSessions,
-        system_health: { status: 'healthy' },
-        settings: {},
+        chat_sessions: { data: mockChatSessions },
+        system_health: { data: { status: 'healthy' } },
+        settings: { data: {} },
       })
 
       renderComponent(ChatInterface, { pinia: true })
@@ -566,9 +566,9 @@ describe('ChatInterface', () => {
   describe('Performance', () => {
     it('handles large message lists efficiently', async () => {
       mockInitializeChatInterface.mockResolvedValue({
-        chat_sessions: [],
-        system_health: { status: 'healthy' },
-        settings: {},
+        chat_sessions: { data: [] },
+        system_health: { data: { status: 'healthy' } },
+        settings: { data: {} },
       })
 
       const { container } = renderComponent(ChatInterface, { pinia: true })

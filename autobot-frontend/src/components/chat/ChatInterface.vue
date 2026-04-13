@@ -803,24 +803,32 @@ const initializeChatInterface = async () => {
       }
 
       // Process results - sync with backend (source of truth)
-      const dataObj = data as any
-      if (dataObj.chat_sessions && !dataObj.chat_sessions.error && Array.isArray(dataObj.chat_sessions)) {
+      // Explicitly check for error to distinguish API failures from empty responses
+      if (data.chat_sessions && !data.chat_sessions.error && data.chat_sessions.data) {
+        const sessions = data.chat_sessions.data
         // Only sync if backend returned sessions OR store is already empty.
         // An empty backend response while local sessions exist likely means the
         // API returned incomplete data (auth not ready, caching lag, network issue).
         // Syncing in that case would destroy all local session history (#4328).
-        if (dataObj.chat_sessions.length > 0 || store.sessions.length === 0) {
+        if (sessions.length > 0 || store.sessions.length === 0) {
           // Use syncSessionsWithBackend to remove deleted sessions and add new ones
-          store.syncSessionsWithBackend(dataObj.chat_sessions as any)
+          store.syncSessionsWithBackend(sessions)
         } else {
           logger.warn('syncSessionsWithBackend skipped: backend returned 0 sessions but store has sessions — preserving local data')
         }
+      } else if (data.chat_sessions?.error) {
+        // Explicit error case - log and proceed with fallback
+        logger.warn('Failed to load chat sessions from backend:', data.chat_sessions.error)
       }
 
       // Update connection status
-      if (data.system_health && !data.system_health.error) {
-        isConnected.value = data.system_health.status === 'healthy'
+      if (data.system_health && !data.system_health.error && data.system_health.data) {
+        const healthData = data.system_health.data as Record<string, unknown>
+        isConnected.value = healthData.status === 'healthy'
         baseConnectionStatus.value = isConnected.value ? t('status.connected') : t('status.disconnected')
+      } else if (data.system_health?.error) {
+        // Explicit error case for system health
+        logger.warn('Failed to load system health:', data.system_health.error)
       }
 
       // Issue #671: Clear initialization state on success
