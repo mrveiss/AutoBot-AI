@@ -199,7 +199,7 @@ layer(base);
 }
 
 @utility input-field {
-  @apply border-0 px-3 py-3 placeholder-blueGray-300 text-blueGray-600 bg-white rounded text-sm shadow focus:outline-hidden focus:ring-2 focus:ring-indigo-500 w-full ease-linear transition-all duration-150;
+  @apply border-0 px-3 py-3 placeholder-blueGray-300 text-blueGray-600 bg-white rounded text-sm shadow focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full ease-linear transition-all duration-150;
 }
 
 @utility label {

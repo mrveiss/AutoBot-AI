@@ -27,7 +27,7 @@
                 v-model="searchQuery"
                 type="text"
                 :placeholder="$t('commands.search', 'Search commands...')"
-                class="w-full px-4 py-3 bg-autobot-bg-secondary text-autobot-text-primary rounded-lg border border-autobot-border focus:outline-hidden focus:ring-2 focus:ring-autobot-primary placeholder-autobot-text-muted"
+                class="w-full px-4 py-3 bg-autobot-bg-secondary text-autobot-text-primary rounded-lg border border-autobot-border focus:outline-none focus:ring-2 focus:ring-autobot-primary placeholder-autobot-text-muted"
                 @keydown.arrow-down="moveDown"
                 @keydown.arrow-up="moveUp"
                 @keydown.enter="executeCommand"

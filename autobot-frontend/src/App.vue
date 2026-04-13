@@ -15,7 +15,7 @@
           <div class="shrink-0 flex items-center">
             <button
               @click="toggleSystemStatus"
-              class="flex items-center space-x-3 hover:bg-autobot-bg-tertiary rounded-md px-2 py-1 transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-autobot-primary/50"
+              class="flex items-center space-x-3 hover:bg-autobot-bg-tertiary rounded-md px-2 py-1 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-autobot-primary/50"
               :title="getSystemStatusTooltip()"
             >
               <div class="relative w-8 h-8 bg-white rounded flex items-center justify-center">
@@ -89,7 +89,7 @@
             <button
               v-if="userStore.isAuthenticated"
               @click="showProfileModal = true"
-              class="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium text-autobot-text-primary hover:bg-autobot-bg-tertiary transition-colors duration-150 focus:outline-hidden focus:ring-2 focus:ring-autobot-primary"
+              class="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium text-autobot-text-primary hover:bg-autobot-bg-tertiary transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-autobot-primary"
               :title="$t('nav.profileSettings')"
               :aria-label="$t('nav.profileSettings')"
             >
@@ -108,7 +108,7 @@
             <!-- Mobile menu button -->
             <button
               @click="toggleMobileNav"
-              class="lg:hidden inline-flex items-center justify-center p-2 rounded text-autobot-text-primary hover:bg-autobot-bg-tertiary focus:outline-hidden focus:ring-2 focus:ring-autobot-primary"
+              class="lg:hidden inline-flex items-center justify-center p-2 rounded text-autobot-text-primary hover:bg-autobot-bg-tertiary focus:outline-none focus:ring-2 focus:ring-autobot-primary"
               aria-controls="mobile-nav"
               aria-expanded="false"
             >
@@ -229,7 +229,7 @@
               </h3>
               <button
                 @click="showSystemStatus = false"
-                class="rounded-md text-autobot-text-muted hover:text-autobot-text-primary focus:outline-hidden focus:ring-2 focus:ring-autobot-primary"
+                class="rounded-md text-autobot-text-muted hover:text-autobot-text-primary focus:outline-none focus:ring-2 focus:ring-autobot-primary"
               >
                 <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -301,7 +301,7 @@
             <div class="mt-6 flex justify-between">
               <button
                 @click="refreshSystemStatus"
-                class="inline-flex items-center px-3 py-2 border border-autobot-border shadow-sm text-sm leading-4 font-medium rounded-md text-autobot-text-primary bg-autobot-bg-secondary hover:bg-autobot-bg-tertiary focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-autobot-primary"
+                class="inline-flex items-center px-3 py-2 border border-autobot-border shadow-sm text-sm leading-4 font-medium rounded-md text-autobot-text-primary bg-autobot-bg-secondary hover:bg-autobot-bg-tertiary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-autobot-primary"
               >
                 <svg class="w-4 h-4 me-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
@@ -310,7 +310,7 @@
               </button>
               <button
                 @click="showSystemStatus = false"
-                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-autobot-primary hover:bg-autobot-primary-hover focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-autobot-primary"
+                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-autobot-primary hover:bg-autobot-primary-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-autobot-primary"
               >
                 {{ $t('common.close') }}
               </button>

@@ -36,7 +36,7 @@
             <div class="ml-4 shrink-0 flex">
               <button
                 @click="dismissNotification"
-                class="bg-autobot-bg-card rounded-md inline-flex text-autobot-text-muted hover:text-autobot-text-secondary focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                class="bg-autobot-bg-card rounded-md inline-flex text-autobot-text-muted hover:text-autobot-text-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 :title="t('ui.systemStatus.dismissNotification')"
               >
                 <span class="sr-only">{{ t('ui.systemStatus.close') }}</span>
@@ -162,7 +162,7 @@
             <button
               @click="dismissNotification"
               :class="[
-                'px-4 py-2 text-sm font-medium rounded-md transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-2',
+                'px-4 py-2 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',
                 notificationData.severity === 'error' ? 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-500' :
                 notificationData.severity === 'warning' ? 'bg-yellow-600 hover:bg-yellow-700 text-white focus:ring-yellow-500' :
                 notificationData.severity === 'info' ? 'bg-blue-600 hover:bg-blue-700 text-white focus:ring-blue-500' :

@@ -537,7 +537,7 @@ onMounted(() => {
 }
 
 .file-actions-inline button {
-  @apply px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-autobot-bg-card border border-autobot-border rounded-md hover:bg-autobot-bg-secondary focus:outline-hidden focus:ring-2 focus:ring-blue-500 flex items-center gap-2;
+  @apply px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-autobot-bg-card border border-autobot-border rounded-md hover:bg-autobot-bg-secondary focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center gap-2;
 }
 
 .file-actions-inline button:hover {

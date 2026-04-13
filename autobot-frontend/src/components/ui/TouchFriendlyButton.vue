@@ -129,7 +129,7 @@ const createRipple = (event: TouchEvent) => {
 <style scoped>
 @reference "../../assets/tailwind.css";
 .touch-friendly-button {
-  @apply relative overflow-hidden focus:outline-hidden focus:ring-2 focus:ring-offset-2 transition-all duration-200 font-medium;
+  @apply relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-200 font-medium;
   min-height: 44px; /* iOS/Android minimum touch target */
   min-width: 44px;
   -webkit-tap-highlight-color: transparent;

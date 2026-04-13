@@ -32,7 +32,7 @@
           v-model="searchQuery"
           type="text"
           :placeholder="$t('chat.filePanel.searchFiles')"
-          class="w-full pl-7 pr-2 py-1.5 text-xs border border-autobot-border rounded-md focus:outline-hidden focus:border-autobot-primary bg-autobot-bg-tertiary"
+          class="w-full pl-7 pr-2 py-1.5 text-xs border border-autobot-border rounded-md focus:outline-none focus:border-autobot-primary bg-autobot-bg-tertiary"
         />
       </div>
       <!-- Sort -->
@@ -168,7 +168,7 @@
                 v-model="renameValue"
                 @keyup.enter="handleRename"
                 @keyup.escape="renamingFileId = null"
-                class="w-full text-xs px-1 py-0.5 border border-autobot-primary rounded focus:outline-hidden"
+                class="w-full text-xs px-1 py-0.5 border border-autobot-primary rounded focus:outline-none"
               />
               <button @click="handleRename" class="action-btn" :title="$t('common.save')">
                 <i class="fas fa-check text-xs text-green-600"></i>
@@ -261,14 +261,14 @@
           <input
             v-model="newFileName"
             :placeholder="$t('chat.filePanel.filenamePlaceholder')"
-            class="w-full text-xs px-2 py-1.5 border border-autobot-border rounded-md focus:outline-hidden focus:border-autobot-primary mb-2"
+            class="w-full text-xs px-2 py-1.5 border border-autobot-border rounded-md focus:outline-none focus:border-autobot-primary mb-2"
             @keyup.enter="handleCreateFile"
           />
           <textarea
             v-model="newFileContent"
             :placeholder="$t('chat.filePanel.contentPlaceholder')"
             rows="4"
-            class="w-full text-xs px-2 py-1.5 border border-autobot-border rounded-md focus:outline-hidden focus:border-autobot-primary mb-3 resize-none font-mono"
+            class="w-full text-xs px-2 py-1.5 border border-autobot-border rounded-md focus:outline-none focus:border-autobot-primary mb-3 resize-none font-mono"
           ></textarea>
           <div class="flex justify-end gap-2">
             <button @click="showCreateDialog = false" class="px-3 py-1 text-xs text-autobot-text-secondary hover:bg-autobot-bg-secondary rounded">{{ $t('common.cancel') }}</button>
@@ -288,7 +288,7 @@
           </div>
           <textarea
             v-model="editingContent"
-            class="flex-1 w-full text-xs px-2 py-1.5 border border-autobot-border rounded-md focus:outline-hidden focus:border-autobot-primary resize-none font-mono min-h-[200px]"
+            class="flex-1 w-full text-xs px-2 py-1.5 border border-autobot-border rounded-md focus:outline-none focus:border-autobot-primary resize-none font-mono min-h-[200px]"
           ></textarea>
           <div class="flex justify-end gap-2 mt-3">
             <button @click="editingFileId = null" class="px-3 py-1 text-xs text-autobot-text-secondary hover:bg-autobot-bg-secondary rounded">{{ $t('common.cancel') }}</button>
