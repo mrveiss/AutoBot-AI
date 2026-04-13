@@ -295,13 +295,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     (
         "api.knowledge_debug",
         "",
-        ["knowledge-debug"],
+        [],
         "knowledge_debug",
     ),
     (
         "api.knowledge_boards",
         "",
-        ["knowledge-boards"],
+        [],
         "knowledge_boards",
     ),
     (
@@ -313,7 +313,7 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     (
         "api.knowledge_vectorization",
         "",
-        ["knowledge-vectorization"],
+        ["knowledge_vectorization"],
         "knowledge_vectorization",
     ),
     (
