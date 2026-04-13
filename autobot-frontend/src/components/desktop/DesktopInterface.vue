@@ -70,18 +70,42 @@
         {{ $t('desktop.interface.desktopActions') }}
       </div>
       <div class="actions-buttons">
-        <button @click="takeScreenshot" class="action-btn" :title="$t('desktop.interface.screenshot')">
+        <TouchFriendlyButton
+          variant="primary"
+          size="sm"
+          @click="takeScreenshot"
+          :title="$t('desktop.interface.screenshot')"
+          class="touch-action-btn"
+        >
           📷 {{ $t('desktop.interface.screenshot') }}
-        </button>
-        <button @click="showTypeDialog = true" class="action-btn" :title="$t('desktop.interface.typeText')">
+        </TouchFriendlyButton>
+        <TouchFriendlyButton
+          variant="primary"
+          size="sm"
+          @click="showTypeDialog = true"
+          :title="$t('desktop.interface.typeText')"
+          class="touch-action-btn"
+        >
           ⌨️ {{ $t('desktop.interface.typeText') }}
-        </button>
-        <button @click="sendCtrlAltDel" class="action-btn" :title="$t('desktop.interface.ctrlAltDel')">
+        </TouchFriendlyButton>
+        <TouchFriendlyButton
+          variant="danger"
+          size="sm"
+          @click="sendCtrlAltDel"
+          :title="$t('desktop.interface.ctrlAltDel')"
+          class="touch-action-btn"
+        >
           🔴 {{ $t('desktop.interface.ctrlAltDel') }}
-        </button>
-        <button @click="pasteFromClipboard" class="action-btn" :title="$t('desktop.interface.paste')">
+        </TouchFriendlyButton>
+        <TouchFriendlyButton
+          variant="primary"
+          size="sm"
+          @click="pasteFromClipboard"
+          :title="$t('desktop.interface.paste')"
+          class="touch-action-btn"
+        >
           📋 {{ $t('desktop.interface.paste') }}
-        </button>
+        </TouchFriendlyButton>
       </div>
     </div>
 
@@ -142,6 +166,7 @@ import { useI18n } from 'vue-i18n'
 // MIGRATED: Removed environment.js, using AppConfig.js only
 import appConfig from '@/config/AppConfig.js'
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
+import TouchFriendlyButton from '@/components/ui/TouchFriendlyButton.vue'
 import { useAsyncOperation } from '@/composables/useAsyncOperation'
 import { useVncControls } from '@/composables/useVncControls'
 import { createLogger } from '@/utils/debugUtils'
@@ -520,6 +545,11 @@ onUnmounted(() => {
 
 .action-btn:hover {
   background-color: var(--color-primary-bg-hover);
+}
+
+/* Touch-friendly button variant for desktop actions */
+.touch-action-btn {
+  margin: 0;
 }
 
 /* Screenshot Modal (Issue #74) */
