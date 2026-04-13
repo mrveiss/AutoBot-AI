@@ -112,13 +112,13 @@ app.config.warnHandler = (msg, _instance, trace) => {
 // Mount the app
 app.mount('#app')
 
-// Register Service Worker for caching strategy (Issue #4041, #3275)
+// Register Service Worker for caching strategy (Issue #4015, #4041, #3275)
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     try {
-      // Register the compiled service worker (plain JS, served from /public)
+      // Register the service worker with stale-while-revalidate strategy (Issue #4015)
       const registration = await navigator.serviceWorker.register(
-        '/sw-cache-bust.js' + (import.meta.env.DEV ? '' : `?v=${Date.now()}`),
+        '/service-worker.js' + (import.meta.env.DEV ? '' : `?v=${Date.now()}`),
         { scope: '/' }
       )
 
