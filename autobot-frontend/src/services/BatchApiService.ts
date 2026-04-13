@@ -26,10 +26,15 @@ interface ChatInitData {
   user_preferences: Record<string, unknown>;
 }
 
+interface ApiResponse<T = unknown> {
+  data?: T;
+  error?: string;
+}
+
 interface FallbackResults {
-  chat_sessions: Record<string, unknown> | Record<string, unknown>[];
-  system_health: Record<string, unknown>;
-  settings: Record<string, unknown>;
+  chat_sessions: ApiResponse<Record<string, unknown>[]>;
+  system_health: ApiResponse<Record<string, unknown>>;
+  settings: ApiResponse<Record<string, unknown>>;
 }
 
 interface BatchRequest {
@@ -115,15 +120,15 @@ export class BatchApiService {
 
     const results: FallbackResults = {
       chat_sessions: chatSessionsResult.status === 'fulfilled'
-        ? this.extractSessionsList(chatSessionsResult.value)
-        : { error: (chatSessionsResult as PromiseRejectedResult).reason?.message || 'Failed to load', sessions: [] },
+        ? { data: this.extractSessionsList(chatSessionsResult.value) as Record<string, unknown>[] }
+        : { error: (chatSessionsResult as PromiseRejectedResult).reason?.message || 'Failed to load' },
 
       system_health: systemHealthResult.status === 'fulfilled'
-        ? systemHealthResult.value as Record<string, unknown>
-        : { error: (systemHealthResult as PromiseRejectedResult).reason?.message || 'Failed to load', status: 'unknown' },
+        ? { data: systemHealthResult.value as Record<string, unknown> }
+        : { error: (systemHealthResult as PromiseRejectedResult).reason?.message || 'Failed to load' },
 
       settings: settingsResult.status === 'fulfilled'
-        ? settingsResult.value as Record<string, unknown>
+        ? { data: settingsResult.value as Record<string, unknown> }
         : { error: (settingsResult as PromiseRejectedResult).reason?.message || 'Failed to load' }
     };
 
