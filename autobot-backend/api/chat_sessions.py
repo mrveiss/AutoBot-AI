@@ -827,7 +827,6 @@ async def create_session(session_data: SessionCreate, request: Request):
     # Issue #4260: Wire SESSION_CREATE hook for extensions
     context = getattr(request.app.state, "context", {})
     await _emit_session_create(session_id, context)
-
     return create_success_response(
         data=session,
         message="Session created successfully",
@@ -1368,7 +1367,6 @@ async def delete_session(
 
     # Issue #4260: Get message count before deletion for SESSION_DESTROY hook
     message_count = await chat_history_manager.get_session_message_count(session_id)
-
     # Perform all cleanup operations (Issue #620)
     (
         file_result,
@@ -1390,7 +1388,6 @@ async def delete_session(
     # Issue #4260: Wire SESSION_DESTROY hook for extensions
     context = getattr(request.app.state, "context", {})
     await _emit_session_destroy(session_id, message_count, context)
-
     return _build_delete_session_response(
         session_id,
         request_id,
