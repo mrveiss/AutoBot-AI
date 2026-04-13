@@ -119,7 +119,7 @@
         :selected-category="selectedCategory"
         :available-categories="availableCategories"
         :analyzing="analyzing"
-        @export-section="exportSection"
+        @export-section="handleExportSection"
         @load-unified-report="loadUnifiedReport"
         @load-chart-data="loadChartData"
         @update:selected-category="selectedCategory = $event"
@@ -130,10 +130,10 @@
       <CodebaseDependenciesPanel
         :dependency-data="dependencyData"
         :dependency-loading="dependencyLoading"
-        :dependency-error="dependencyError"
+        :dependency-error="dependencyError ?? ''"
         :import-tree-data="importTreeData ?? []"
         :import-tree-loading="importTreeLoading"
-        :import-tree-error="importTreeError"
+        :import-tree-error="importTreeError ?? ''"
         :call-graph-data="callGraphData"
         :call-graph-summary="callGraphSummary"
         :call-graph-orphaned="callGraphOrphaned"
@@ -149,14 +149,14 @@
       <!-- Issue #1579: Problems Report extracted to ProblemsReportSection -->
       <ProblemsReportSection
         :problems="problemsReport"
-        @export="(fmt) => exportSection('problems', fmt)"
+        @export="(fmt: string) => exportSection('problems', fmt as 'md' | 'json')"
       />
 
       <!-- Code Intelligence: Anti-Pattern / Code Smells Report (#1469, #184) -->
       <CodeSmellsSection
         :smells="codeSmellsForPanel"
         :code-health-score="codeHealthScore"
-        @export="(fmt) => exportSection('code-smells', fmt)"
+        @export="(fmt: string) => exportSection('code-smells', fmt as 'md' | 'json')"
       />
 
       <!-- Code Intelligence Analysis (#1469, #566) -->
@@ -174,13 +174,13 @@
       <!-- Duplicate Code Analysis (#1469, #184) -->
       <DuplicatesSection
         :duplicates="duplicateAnalysis"
-        @export="(fmt) => exportSection('duplicates', fmt)"
+        @export="(fmt: string) => exportSection('duplicates', fmt as 'md' | 'json')"
       />
 
       <!-- Function Declarations (#1469, #184) -->
       <DeclarationsSection
         :declarations="declarationsForPanel"
-        @export="(fmt) => exportSection('declarations', fmt)"
+        @export="(fmt: string) => exportSection('declarations', fmt as 'md' | 'json')"
       />
 
       <!-- Issue #527: API Endpoint Checker Section (#1469: extracted to CodebaseApiEndpointsPanel) -->
@@ -189,7 +189,7 @@
         :loading="loadingApiEndpoints"
         :error="apiEndpointsError"
         @refresh="getApiEndpointCoverage"
-        @export="(fmt) => exportSection('api-endpoints', fmt)"
+        @export="(fmt: string) => exportSection('api-endpoints', fmt as 'md' | 'json')"
       />
 
             <!-- Issue #244: Cross-Language Pattern Analysis Section (#1469: extracted to CodebaseCrossLanguagePanel) -->
@@ -199,7 +199,7 @@
         :error="crossLanguageError"
         @refresh="getCrossLanguageAnalysis"
         @run-full-scan="runCrossLanguageAnalysis"
-        @export="(fmt) => exportSection('cross-language', fmt)"
+        @export="(fmt: string) => exportSection('cross-language', fmt as 'md' | 'json')"
       />
 
             <!-- Issue #208: Code Pattern Analysis Section -->
@@ -217,7 +217,7 @@
         :loading="loadingConfigDuplicates"
         :error="configDuplicatesError"
         @refresh="loadConfigDuplicates"
-        @export="(fmt) => exportSection('config-duplicates', fmt)"
+        @export="(fmt: string) => exportSection('config-duplicates', fmt as 'md' | 'json')"
       />
 
             <!-- Issue #538: Bug Prediction Section (#1469: extracted to CodebaseBugPredictionPanel) -->
@@ -229,7 +229,7 @@
         :task-current-step="bugPredictionTask.taskStatus.value?.current_step"
         :task-progress="bugPredictionTask.taskStatus.value?.progress"
         @refresh="loadBugPrediction"
-        @export="(fmt) => exportSection('bug-prediction', fmt)"
+        @export="(fmt: string) => exportSection('bug-prediction', fmt as 'md' | 'json')"
       />
 
             <!-- Issue #538: Code Intelligence Scores Section (#1469: extracted to CodebaseIntelligenceScoresPanel) -->
@@ -237,12 +237,12 @@
         :root-path="rootPath"
         :security-score="securityScore"
         :security-loading="loadingSecurityScore"
-        :security-error="securityScoreError"
+        :security-error="securityScoreError ?? ''"
         :security-findings="securityFindings"
         :security-findings-loading="loadingSecurityFindings"
         :performance-score="performanceScore"
         :performance-loading="loadingPerformanceScore"
-        :performance-error="performanceScoreError"
+        :performance-error="performanceScoreError ?? ''"
         :performance-findings="performanceFindings"
         :performance-findings-loading="loadingPerformanceFindings"
         :redis-health="redisHealth"
@@ -276,7 +276,7 @@
         :ai-filtering-priority="aiFilteringPriority"
         :llm-filtering-result="llmFilteringResult"
         @refresh="loadEnvironmentAnalysis"
-        @export="(fmt) => exportSection('environment', fmt)"
+        @export="(fmt: string) => exportSection('environment', fmt as 'md' | 'json')"
         @update:use-ai-filtering="useAiFiltering = $event"
         @update:ai-filtering-priority="aiFilteringPriority = $event"
       />
@@ -287,7 +287,7 @@
         :loading="loadingOwnership"
         :error="ownershipError"
         @refresh="loadOwnershipAnalysis"
-        @export="(fmt) => exportSection('ownership', fmt)"
+        @export="(fmt: string) => exportSection('ownership', fmt as 'md' | 'json')"
       />
     </div>
 
@@ -440,7 +440,8 @@ import appConfig from '@/config/AppConfig.js'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import PatternAnalysis from '@/components/analytics/PatternAnalysis.vue'
 import { useToast } from '@/composables/useToast'
-import { useCodebaseExport } from '@/composables/analytics/useCodebaseExport'
+import { useCodebaseExport, type SectionType } from '@/composables/analytics/useCodebaseExport'
+import type { ScanDefinition } from '@/composables/useAnalyticsScanRunner'
 import { useIndexingJob } from '@/composables/analytics/useIndexingJob'
 import { useDashboardLoaders } from '@/composables/analytics/useDashboardLoaders'
 import { useSourceRegistry } from '@/composables/analytics/useSourceRegistry'
@@ -780,11 +781,15 @@ const { exportReport, exportSection } = useCodebaseExport({
   },
   exportingReport,
   progressStatus,
-  fetchWithAuth,
+  fetchWithAuth: fetchWithAuth as typeof fetch,
   getBackendUrl: () => appConfig.getServiceUrl('backend'),
   notify,
   t,
 })
+
+// Typed wrapper for @export-section event handler (section is string from emit but SectionType at runtime)
+const handleExportSection = (section: string, fmt: 'md' | 'json') =>
+  exportSection(section as SectionType, fmt)
 
 // =============================================
 // Orchestration: Event Handlers + Lifecycle
@@ -794,30 +799,30 @@ const { exportReport, exportSection } = useCodebaseExport({
 // loadCachedAnalyticsData uses lighter cached loaders; runAllAnalysisScans
 // uses full re-fetch triggers after indexing completes.
 // #2390: Include all code-intel scans so every panel populates on page visit
-const codeIntelExtraScans = () => [
-  { id: 'configDuplicates', label: t('analytics.codebase.scans.configDuplicates'), run: () => loadConfigDuplicates() },
-  { id: 'apiEndpoints', label: t('analytics.codebase.scans.apiEndpoints'), run: () => loadApiEndpointAnalysis() },
-  { id: 'bugPrediction', label: t('analytics.codebase.scans.bugPrediction'), run: () => loadCachedBugPrediction() },
-  { id: 'security', label: t('analytics.codebase.scans.security'), run: () => loadCachedSecurityScore() },
-  { id: 'performance', label: t('analytics.codebase.scans.performance'), run: () => loadPerformanceScore() },
-  { id: 'redis', label: t('analytics.codebase.scans.redis'), run: () => loadRedisHealth() },
-  { id: 'environment', label: t('analytics.codebase.scans.environment'), run: () => loadEnvironmentAnalysis() },
-  { id: 'ownership', label: t('analytics.codebase.scans.ownership'), run: () => loadOwnershipAnalysis() },
-  { id: 'crossLanguage', label: t('analytics.codebase.scans.crossLanguage'), run: () => getCrossLanguageAnalysis() },
-  { id: 'codeIntelligence', label: t('analytics.codebase.scans.codeIntelligence'), run: () => runCodeIntelligenceAnalysis() },
+const codeIntelExtraScans = (): ScanDefinition[] => [
+  { id: 'configDuplicates', label: t('analytics.codebase.scans.configDuplicates'), run: async () => { await loadConfigDuplicates() } },
+  { id: 'apiEndpoints', label: t('analytics.codebase.scans.apiEndpoints'), run: async () => { await loadApiEndpointAnalysis() } },
+  { id: 'bugPrediction', label: t('analytics.codebase.scans.bugPrediction'), run: async () => { await loadCachedBugPrediction() } },
+  { id: 'security', label: t('analytics.codebase.scans.security'), run: async () => { await loadCachedSecurityScore() } },
+  { id: 'performance', label: t('analytics.codebase.scans.performance'), run: async () => { await loadPerformanceScore() } },
+  { id: 'redis', label: t('analytics.codebase.scans.redis'), run: async () => { await loadRedisHealth() } },
+  { id: 'environment', label: t('analytics.codebase.scans.environment'), run: async () => { await loadEnvironmentAnalysis() } },
+  { id: 'ownership', label: t('analytics.codebase.scans.ownership'), run: async () => { await loadOwnershipAnalysis() } },
+  { id: 'crossLanguage', label: t('analytics.codebase.scans.crossLanguage'), run: async () => { await getCrossLanguageAnalysis() } },
+  { id: 'codeIntelligence', label: t('analytics.codebase.scans.codeIntelligence'), run: async () => { await runCodeIntelligenceAnalysis() } },
 ]
 
-const codeIntelFullScans = () => [
-  { id: 'configDuplicates', label: t('analytics.codebase.scans.configDuplicates'), run: () => loadConfigDuplicates() },
-  { id: 'apiEndpoints', label: t('analytics.codebase.scans.apiEndpoints'), run: () => loadApiEndpointAnalysis() },
-  { id: 'bugPrediction', label: t('analytics.codebase.scans.bugPrediction'), run: () => loadBugPrediction() },
-  { id: 'security', label: t('analytics.codebase.scans.security'), run: () => loadSecurityScore() },
-  { id: 'performance', label: t('analytics.codebase.scans.performance'), run: () => loadPerformanceScore() },
-  { id: 'redis', label: t('analytics.codebase.scans.redis'), run: () => loadRedisHealth() },
-  { id: 'environment', label: t('analytics.codebase.scans.environment'), run: () => loadEnvironmentAnalysis() },
-  { id: 'ownership', label: t('analytics.codebase.scans.ownership'), run: () => loadOwnershipAnalysis() },
-  { id: 'crossLanguage', label: t('analytics.codebase.scans.crossLanguage'), run: () => getCrossLanguageAnalysis() },
-  { id: 'codeIntelligence', label: t('analytics.codebase.scans.codeIntelligence'), run: () => runCodeIntelligenceAnalysis() },
+const codeIntelFullScans = (): ScanDefinition[] => [
+  { id: 'configDuplicates', label: t('analytics.codebase.scans.configDuplicates'), run: async () => { await loadConfigDuplicates() } },
+  { id: 'apiEndpoints', label: t('analytics.codebase.scans.apiEndpoints'), run: async () => { await loadApiEndpointAnalysis() } },
+  { id: 'bugPrediction', label: t('analytics.codebase.scans.bugPrediction'), run: async () => { await loadBugPrediction() } },
+  { id: 'security', label: t('analytics.codebase.scans.security'), run: async () => { await loadSecurityScore() } },
+  { id: 'performance', label: t('analytics.codebase.scans.performance'), run: async () => { await loadPerformanceScore() } },
+  { id: 'redis', label: t('analytics.codebase.scans.redis'), run: async () => { await loadRedisHealth() } },
+  { id: 'environment', label: t('analytics.codebase.scans.environment'), run: async () => { await loadEnvironmentAnalysis() } },
+  { id: 'ownership', label: t('analytics.codebase.scans.ownership'), run: async () => { await loadOwnershipAnalysis() } },
+  { id: 'crossLanguage', label: t('analytics.codebase.scans.crossLanguage'), run: async () => { await getCrossLanguageAnalysis() } },
+  { id: 'codeIntelligence', label: t('analytics.codebase.scans.codeIntelligence'), run: async () => { await runCodeIntelligenceAnalysis() } },
 ]
 
 // Issue #208: Pattern Analysis component ref

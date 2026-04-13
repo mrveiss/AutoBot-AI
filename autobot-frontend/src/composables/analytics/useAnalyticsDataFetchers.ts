@@ -199,6 +199,8 @@ const CODE_SMELL_TYPES = new Set([
   'performance_unbatched_api_calls',
 ])
 
+import type { ToastType } from '@/composables/useToast'
+
 export interface UseAnalyticsDataFetchersDeps {
   rootPath: Ref<string>
   sourceIdParam: ComputedRef<string>
@@ -206,8 +208,8 @@ export interface UseAnalyticsDataFetchersDeps {
   withSourceId: (url: string) => string
   analyzing: Ref<boolean>
   t: (key: string, params?: Record<string, unknown>) => string
-  showToast: (msg: string, type?: string, duration?: number) => void
-  notify: (msg: string, type?: string) => void
+  showToast: (msg: string, type?: ToastType, duration?: number) => number | void
+  notify: (msg: string, type?: ToastType) => void
 }
 
 export function useAnalyticsDataFetchers(
