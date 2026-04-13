@@ -1815,26 +1815,34 @@ before summarizing.
             payload["system"] = system_prompt
         return payload
 
-    def _log_and_parse_tool_calls(
-        self, llm_response: str, iteration: int
+    async def _log_and_parse_tool_calls(
+        self, llm_response: str, iteration: int, session_id: str = "", context: Dict[str, Any] | None = None
     ) -> List[Dict[str, Any]]:
         """
         Log response details and parse tool calls.
 
         Issue #620: Extracted from _process_single_llm_iteration.
+        Issue #4262: Emit BEFORE_TOOL_PARSE hook before parsing tool calls.
         """
-        has_tool_call_tag = "<TOOL_CALL" in llm_response or "<tool_call" in llm_response
+        from chat_workflow.llm_handler import _emit_before_tool_parse
+
+        # Emit BEFORE_TOOL_PARSE hook to allow extensions to inspect/modify response
+        modified_response = await _emit_before_tool_parse(
+            llm_response, session_id, context or {}
+        )
+
+        has_tool_call_tag = "<TOOL_CALL" in modified_response or "<tool_call" in modified_response
         logger.info(
             "[Issue #651] Iteration %d: Response has TOOL_CALL tag: %s, snippet: %s",
             iteration,
             has_tool_call_tag,
-            llm_response[:500].replace("\n", " "),
+            modified_response[:500].replace("\n", " "),
         )
 
         # Issue #716: On first iteration, defer tool execution for plan-first
         is_first_iteration = iteration == 1
         tool_calls = self._parse_tool_calls(
-            llm_response, is_first_iteration=is_first_iteration
+            modified_response, is_first_iteration=is_first_iteration
         )
         logger.info(
             "[Issue #352] Iteration %d: Parsed %d tool calls",
@@ -1940,7 +1948,9 @@ before summarizing.
         finally:
             await http_client.decrement_active()
 
-        tool_calls = self._log_and_parse_tool_calls(llm_response, iteration)
+        tool_calls = await self._log_and_parse_tool_calls(
+            llm_response, iteration, terminal_session_id, {}
+        )
         yield (llm_response, tool_calls)
 
     def _handle_break_loop_tuple(self, tool_msg: Any) -> tuple:
