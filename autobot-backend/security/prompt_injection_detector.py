@@ -15,6 +15,7 @@ This module provides comprehensive prompt injection detection for:
 
 import logging
 import re
+import unicodedata
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List
@@ -59,8 +60,13 @@ INJECTION_PATTERNS = (
     r"disregard\s+previous",
     r"forget\s+previous",
     r"forget\s+all",
+    r"forget\s+your\s+system\s+prompt",
     r"new\s+instructions",
     r"override\s+instructions",
+    r"override\s*:",
+    # Role-switching attempts (Issue #4345)
+    r"you\s+are\s+now\s+",
+    r"you\s+are\s+a\s+",
     # System prompt manipulation
     r"system\s*:\s*",
     r"assistant\s*:\s*",
@@ -126,6 +132,35 @@ CONTEXT_POISON_PATTERNS = (
     r"run\s+that\s+again",
 )
 
+# Issue #4345: Invisible Unicode character detection for prompt injection
+# Dangerous invisible Unicode ranges that can hide malicious instructions
+INVISIBLE_UNICODE_RANGES = {
+    # Zero-width characters (U+200B-U+200D)
+    "\u200B": "Zero-width space",
+    "\u200C": "Zero-width non-joiner",
+    "\u200D": "Zero-width joiner",
+    "\u200E": "Left-to-right mark",
+    "\u200F": "Right-to-left mark",
+    # Soft hyphen (U+00AD)
+    "\u00AD": "Soft hyphen",
+    # Byte order mark (U+FEFF)
+    "\uFEFF": "Byte order mark",
+    # Other invisible or problematic characters
+    "\u061C": "Arabic letter mark",
+    "\u180E": "Mongolian vowel separator",
+    "\u2061": "Function application (invisible operator)",
+    "\u2062": "Invisible times (multiplication)",
+    "\u2063": "Invisible separator",
+    "\u2064": "Invisible plus",
+    "\u2069": "Right-to-left isolation terminator",
+    "\u206A": "Inhibit symmetric swapping",
+    "\u206B": "Activate symmetric swapping",
+    "\u206C": "Inhibit Arabic form shaping",
+    "\u206D": "Activate Arabic form shaping",
+    "\u206E": "National digit shapes",
+    "\u206F": "Nominal digit shapes",
+}
+
 
 class InjectionRisk(Enum):
     """Risk levels for detected injection patterns"""
@@ -167,6 +202,8 @@ class PromptInjectionDetector:
         Issue #281: Refactored to use module-level constants for pattern lists.
         Reduced from 106 lines to ~15 lines.
 
+        Issue #4345: Added invisible Unicode character detection.
+
         Args:
             strict_mode: If True, apply stricter validation rules
         """
@@ -177,6 +214,9 @@ class PromptInjectionDetector:
         self.injection_patterns = list(INJECTION_PATTERNS)
         self.dangerous_patterns = list(DANGEROUS_PATTERNS)
         self.context_poison_patterns = list(CONTEXT_POISON_PATTERNS)
+
+        # Issue #4345: Invisible Unicode characters for detection
+        self.invisible_unicode_chars = set(INVISIBLE_UNICODE_RANGES.keys())
 
         logger.info("PromptInjectionDetector initialized (strict_mode=%s)", strict_mode)
 
@@ -336,13 +376,29 @@ class PromptInjectionDetector:
                 metadata=metadata,
             )
 
-        # Run all pattern checks
-        max_risk = self._run_all_pattern_checks(
+        # Initialize risk level
+        max_risk = InjectionRisk.SAFE
+
+        # Issue #4345: Check for invisible Unicode characters before pattern matching
+        has_invisible, invisible_chars = self._detect_invisible_unicode(text)
+        if has_invisible:
+            detected_patterns.append(f"Invisible Unicode: {', '.join(invisible_chars)}")
+            max_risk = self._update_risk(max_risk, InjectionRisk.MODERATE)
+            metadata["invisible_unicode"] = invisible_chars
+            logger.warning(
+                "🚨 Invisible Unicode detected in context: %s", invisible_chars
+            )
+
+        # Run all pattern checks and merge with existing risk level
+        pattern_risk = self._run_all_pattern_checks(
             text, context, detected_patterns, metadata
         )
+        max_risk = self._update_risk(max_risk, pattern_risk)
 
         # Sanitize and determine blocking
         sanitized_text = self.sanitize_input(text)
+        # Issue #4345: Also strip invisible Unicode from sanitized output
+        sanitized_text = self._strip_invisible_unicode(sanitized_text)
         metadata["sanitized_length"] = len(sanitized_text)
         blocked = max_risk in {InjectionRisk.HIGH, InjectionRisk.CRITICAL}
 
@@ -442,6 +498,46 @@ class PromptInjectionDetector:
             else:
                 sanitized[key] = value
 
+        return sanitized
+
+    def _detect_invisible_unicode(self, text: str) -> tuple[bool, List[str]]:
+        """
+        Detect invisible Unicode characters that could hide malicious instructions.
+
+        Issue #4345: Detects zero-width characters, soft hyphens, and other
+        invisible Unicode that could be used to obfuscate prompt injection attempts.
+
+        Args:
+            text: Text to check for invisible Unicode
+
+        Returns:
+            Tuple of (found, list_of_found_chars)
+        """
+        found_chars = []
+
+        for char in text:
+            if char in self.invisible_unicode_chars:
+                char_name = INVISIBLE_UNICODE_RANGES.get(char, "Unknown invisible character")
+                found_chars.append(f"{char_name} (U+{ord(char):04X})")
+
+        return len(found_chars) > 0, found_chars
+
+    def _strip_invisible_unicode(self, text: str) -> str:
+        """
+        Remove invisible Unicode characters from text.
+
+        Issue #4345: Removes zero-width spaces and other invisible characters
+        that could hide prompt injection attempts.
+
+        Args:
+            text: Text to sanitize
+
+        Returns:
+            Text with invisible Unicode characters removed
+        """
+        sanitized = text
+        for char in self.invisible_unicode_chars:
+            sanitized = sanitized.replace(char, "")
         return sanitized
 
     # Issue #380: Class-level constant for risk ordering to avoid dict recreation
