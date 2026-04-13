@@ -9,6 +9,7 @@
  */
 
 import type { Ref, ComputedRef } from 'vue'
+import type { ToastType } from '@/composables/useToast'
 
 // --- Dependencies interface ---
 
@@ -19,8 +20,8 @@ export interface UseCodeIntelAnalysisDeps {
   withSourceId: (url: string) => string
   analyzing: Ref<boolean>
   t: (key: string, params?: Record<string, unknown>) => string
-  showToast: (msg: string, type?: string, duration?: number) => void
-  notify: (msg: string, type?: string) => void
+  showToast: (msg: string, type?: ToastType, duration?: number) => number | void
+  notify: (msg: string, type?: ToastType) => void
 }
 
 // --- Score result types ---
