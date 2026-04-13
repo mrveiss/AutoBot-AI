@@ -129,8 +129,7 @@ const tabs = ref<SettingsTab[]>([
   { id: 'cache', label: 'Cache' },
   { id: 'prompts', label: 'Prompts' },
   { id: 'infrastructure', label: 'Infrastructure' },
-  { id: 'developer', label: 'Developer' },
-  { id: 'feature-flags', label: 'Feature Flags' }
+  { id: 'developer', label: 'Developer' }
 ])
 const activeBackendSubTab = ref('agents')
 
