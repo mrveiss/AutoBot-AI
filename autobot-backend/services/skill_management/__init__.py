@@ -1,6 +1,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+<<<<<<< HEAD
 """
 Skill Management Service Module
 
@@ -25,3 +26,6 @@ __all__ = [
     "SkillRanker",
     "get_skill_ranker",
 ]
+=======
+"""Skill management services for autonomous skill extraction and proposal."""
+>>>>>>> origin/issue-4338
