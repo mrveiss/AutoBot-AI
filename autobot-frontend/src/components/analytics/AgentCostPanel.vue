@@ -7,7 +7,7 @@
   <div class="agent-cost-panel">
     <div class="section-header">
       <h3><i class="fas fa-robot"></i> {{ $t('analytics.bi.agentCosts.title') }}</h3>
-      <BaseButton variant="outline" size="sm" @click="fetchAgentCosts">
+      <BaseButton variant="outline-solid" size="sm" @click="fetchAgentCosts">
         <i class="fas fa-refresh"></i> {{ $t('analytics.bi.refresh') }}
       </BaseButton>
     </div>

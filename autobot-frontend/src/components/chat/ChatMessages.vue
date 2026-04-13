@@ -390,7 +390,7 @@
                 <span>{{ $t('chat.approval.approve') }}</span>
               </BaseButton>
               <BaseButton
-                variant="outline"
+                variant="outline-solid"
                 size="sm"
                 @click="promptForComment(message.metadata.terminal_session_id)"
                 :disabled="processingApproval || showCommentInput"

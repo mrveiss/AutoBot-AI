@@ -39,7 +39,7 @@
 
       <!-- Refresh vectorization status button (Issue #162) -->
       <BaseButton
-        variant="outline"
+        variant="outline-solid"
         size="sm"
         :loading="isRefreshingStatus"
         :disabled="isRefreshingStatus"

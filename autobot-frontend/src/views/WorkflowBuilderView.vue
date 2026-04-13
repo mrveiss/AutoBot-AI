@@ -580,7 +580,7 @@
 
         <!-- Media Gallery Section (#2373) -->
         <section v-if="activeSection === 'media-gallery'" class="section-media-gallery">
-          <MediaGallery />
+          <MediaGallery :items="galleryItems" />
         </section>
 
         <!-- Agents Section -->
@@ -762,6 +762,9 @@ const sessionId = ref(`session_${Date.now()}`);
 // GUI Automation state (#1242)
 const guiAutomationOpportunities = ref<AutomationOpportunity[]>([]);
 const guiAutomationLoading = ref(false);
+
+// Media Gallery state
+const galleryItems = ref([]);
 
 // Vision service health (#2373)
 const visionHealthStatus = ref<'healthy' | 'degraded' | 'offline'>('offline');
@@ -1023,7 +1026,7 @@ async function handleTemplateSelected(template: WorkflowTemplate | WorkflowTempl
       showToast('Template has no steps to load', 'warning');
       return;
     }
-    full = { ...template, steps: detail.steps } as WorkflowTemplate;
+    full = { ...template, steps: detail.steps } as unknown as WorkflowTemplate;
   }
   clearCanvas();
   full.steps.forEach((step, index) => {

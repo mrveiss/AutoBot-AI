@@ -260,7 +260,7 @@
       <!-- Pagination -->
       <div class="pagination">
         <BaseButton
-          variant="outline"
+          variant="outline-solid"
           size="sm"
           @click="currentPage--"
           :disabled="currentPage === 1"
@@ -274,7 +274,7 @@
         </span>
 
         <BaseButton
-          variant="outline"
+          variant="outline-solid"
           size="sm"
           @click="currentPage++"
           :disabled="currentPage === totalPages"

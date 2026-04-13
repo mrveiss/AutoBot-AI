@@ -337,7 +337,7 @@
               <i class="fas fa-hand-paper mr-1"></i>
               {{ $t('desktop.popoutBrowser.takeControl') }}
             </BaseButton>
-            <BaseButton variant="outline" @click="hideInteractionOverlay">
+            <BaseButton variant="outline-solid" @click="hideInteractionOverlay">
               {{ $t('desktop.popoutBrowser.dismiss') }}
             </BaseButton>
           </div>

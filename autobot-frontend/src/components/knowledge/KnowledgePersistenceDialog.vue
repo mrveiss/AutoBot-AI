@@ -139,7 +139,7 @@
         <h4 class="section-title">{{ $t('knowledge.persistence.bulkActionsTitle') }}</h4>
         <div class="bulk-buttons">
           <BaseButton
-            variant="outline"
+            variant="outline-solid"
             @click="selectAll"
             class="bulk-button"
             :aria-label="$t('knowledge.persistence.selectAllAria')"
@@ -147,7 +147,7 @@
             {{ $t('knowledge.persistence.selectAll') }}
           </BaseButton>
           <BaseButton
-            variant="outline"
+            variant="outline-solid"
             @click="deselectAll"
             class="bulk-button"
             :aria-label="$t('knowledge.persistence.deselectAllAria')"

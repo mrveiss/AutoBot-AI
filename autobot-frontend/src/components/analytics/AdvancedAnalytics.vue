@@ -300,7 +300,7 @@
             <BaseButton
               v-for="endpoint in format.endpoints"
               :key="endpoint.path"
-              variant="outline"
+              variant="outline-solid"
               size="sm"
               @click="downloadExport(endpoint.path)"
             >

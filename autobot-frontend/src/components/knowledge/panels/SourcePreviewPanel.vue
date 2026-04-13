@@ -246,7 +246,7 @@ onUnmounted(() => {
           <!-- Panel Footer -->
           <footer class="panel-footer">
             <BaseButton
-              variant="outline"
+              variant="outline-solid"
               size="sm"
               :class="{ success: copySuccess }"
               @click="copyContent"

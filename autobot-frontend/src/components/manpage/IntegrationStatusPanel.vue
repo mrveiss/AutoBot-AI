@@ -4,7 +4,7 @@
       <h3><i class="fas fa-chart-bar"></i> {{ $t('manpage.integrationStatus.title') }}</h3>
       <BaseButton
         size="sm"
-        variant="outline"
+        variant="outline-solid"
         @click="$emit('refresh')"
         :disabled="loading"
       >

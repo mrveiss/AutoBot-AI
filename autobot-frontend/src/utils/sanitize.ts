@@ -9,12 +9,13 @@
  */
 
 import DOMPurify from 'dompurify'
+import type { Config as DOMPurifyConfig } from 'dompurify'
 
 /**
  * Default DOMPurify configuration for chat/message content.
  * Allows safe formatting tags while stripping scripts and event handlers.
  */
-const CHAT_SANITIZE_CONFIG: DOMPurify.Config = {
+const CHAT_SANITIZE_CONFIG: DOMPurifyConfig = {
   ALLOWED_TAGS: [
     'br',
     'strong',
@@ -33,7 +34,7 @@ const CHAT_SANITIZE_CONFIG: DOMPurify.Config = {
  * Strict DOMPurify configuration for knowledge/document content.
  * Allows basic formatting only.
  */
-const KNOWLEDGE_SANITIZE_CONFIG: DOMPurify.Config = {
+const KNOWLEDGE_SANITIZE_CONFIG: DOMPurifyConfig = {
   ALLOWED_TAGS: ['br', 'strong', 'em', 'code', 'pre', 'span', 'p'],
   ALLOWED_ATTR: ['class'],
 }
@@ -47,7 +48,7 @@ const KNOWLEDGE_SANITIZE_CONFIG: DOMPurify.Config = {
  * @returns Sanitized HTML string safe for v-html rendering
  */
 export function sanitizeChatHtml(html: string): string {
-  return DOMPurify.sanitize(html, CHAT_SANITIZE_CONFIG)
+  return DOMPurify.sanitize(html, CHAT_SANITIZE_CONFIG) as string
 }
 
 /**
@@ -58,7 +59,7 @@ export function sanitizeChatHtml(html: string): string {
  * @returns Sanitized HTML string safe for v-html rendering
  */
 export function sanitizeKnowledgeHtml(html: string): string {
-  return DOMPurify.sanitize(html, KNOWLEDGE_SANITIZE_CONFIG)
+  return DOMPurify.sanitize(html, KNOWLEDGE_SANITIZE_CONFIG) as string
 }
 
 /**
@@ -70,9 +71,9 @@ export function sanitizeKnowledgeHtml(html: string): string {
  */
 export function sanitizeHtml(
   html: string,
-  config?: DOMPurify.Config,
+  config?: DOMPurifyConfig,
 ): string {
-  return DOMPurify.sanitize(html, config ?? CHAT_SANITIZE_CONFIG)
+  return DOMPurify.sanitize(html, config ?? CHAT_SANITIZE_CONFIG) as string
 }
 
 /**

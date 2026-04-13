@@ -12,7 +12,7 @@
 
     <div class="file-actions">
       <BaseButton
-        variant="outline"
+        variant="outline-solid"
         size="sm"
         @click="$emit('new-folder')"
         :aria-label="$t('fileBrowser.header.newFolder')"
@@ -20,7 +20,7 @@
         <i class="fas fa-folder-plus"></i> {{ $t('fileBrowser.header.newFolder') }}
       </BaseButton>
       <BaseButton
-        variant="outline"
+        variant="outline-solid"
         size="sm"
         @click="$emit('upload')"
         :aria-label="$t('fileBrowser.header.uploadFile')"

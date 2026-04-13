@@ -502,7 +502,7 @@ onBeforeUnmount(() => {
               <span class="version-date">{{ formatDate(version.timestamp) }}</span>
             </div>
             <BaseButton
-              variant="outline"
+              variant="outline-solid"
               size="sm"
               @click.stop="revertToVersion(version)"
             >

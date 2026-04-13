@@ -154,7 +154,7 @@ function handleClickOutside(event: MouseEvent): void {
         <!-- Export Dropdown -->
         <div class="dropdown-container">
           <BaseButton
-            variant="outline"
+            variant="outline-solid"
             size="sm"
             @click="toggleExportMenu"
             class="action-btn"
@@ -184,7 +184,7 @@ function handleClickOutside(event: MouseEvent): void {
 
         <!-- Category Change -->
         <BaseButton
-          variant="outline"
+          variant="outline-solid"
           size="sm"
           @click="emit('changeCategory')"
           class="action-btn"
@@ -196,7 +196,7 @@ function handleClickOutside(event: MouseEvent): void {
         <!-- More Actions Dropdown -->
         <div class="dropdown-container">
           <BaseButton
-            variant="outline"
+            variant="outline-solid"
             size="sm"
             @click="toggleMoreMenu"
             class="action-btn"

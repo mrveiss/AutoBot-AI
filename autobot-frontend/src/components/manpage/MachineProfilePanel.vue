@@ -4,7 +4,7 @@
       <h3><i class="fas fa-desktop"></i> {{ $t('manpage.machineProfile.title') }}</h3>
       <BaseButton
         size="sm"
-        variant="outline"
+        variant="outline-solid"
         @click="$emit('refresh')"
         :disabled="loading"
       >

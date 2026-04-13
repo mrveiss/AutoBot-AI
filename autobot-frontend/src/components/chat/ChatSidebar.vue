@@ -163,7 +163,7 @@
             {{ $t('common.delete') }}
           </BaseButton>
           <BaseButton
-            variant="outline"
+            variant="outline-solid"
             size="xs"
             class="py-1.5 px-2"
             @click="controller.loadChatSessions()"
