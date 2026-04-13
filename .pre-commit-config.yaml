@@ -110,6 +110,19 @@ repos:
         stages: [pre-commit]
         description: "Blocks commits when current branch is also checked out in another worktree"
 
+  # Enforce branching discipline: block direct commits on protected branches (Issue #4113)
+  # Prevents commits to main/master; all work flows through Dev_new_gui
+  - repo: local
+    hooks:
+      - id: target-branch-guard
+        name: Target Branch Guard (Issue #4113)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-target-branch-guard
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Blocks direct commits on main/master (protected branches); all commits flow through Dev_new_gui"
+
   # Detect mass file deletions that indicate stash-handling bugs (Issue #4111)
   - repo: local
     hooks:

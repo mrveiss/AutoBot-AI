@@ -63,6 +63,7 @@ You are the world's best AI developer working on AutoBot. Every decision must op
 - **Branch target:** `Dev_new_gui` for all PRs unless told otherwise
 - **Commit format:** `<type>(scope): <description> (#issue-number)`
 - **Pre-commit:** Never `--no-verify`. PostToolUse hook auto-formats `.py` files.
+- **Branching discipline:** Direct commits on `main`/`master` are blocked by pre-commit hook (Issue #4113). All development flows through `Dev_new_gui` first.
 - **Worktrees:** No nesting. Manual creation for PRs (not `isolation: "worktree"`). Clean up after issue closure.
 - **Agents:** Prefer direct implementation. Reserve subagents for research/exploration. Subagents can't acquire Bash permission.
 - **Codebase is source of truth:** Changes only in this git repo directory. Never edit `/opt/autobot/`, `/var/log/autobot/`, or other deployment folders. Ansible syncs code from GitHub each playbook run.
@@ -107,6 +108,38 @@ Before spawning agents or starting worktree work:
 5. **Confirm approach:** For architectural decisions, state in 1-2 sentences and wait for confirmation.
 
 **Critical:** If you accidentally switched to a feature branch during parallel work, immediately switch back to `Dev_new_gui`. You may have broken active worktrees.
+
+---
+
+## Branching Discipline (Issue #4113)
+
+**PROTECTED BRANCHES:** Direct commits are blocked by pre-commit hook.
+- `main` — Release branch (stable, read-only via hook)
+- `master` — Alias for main (legacy, also protected)
+
+**ALLOWED BRANCHES:** You can commit on these:
+- `Dev_new_gui` — Active development (default target for all PRs)
+- `issue-*` — Feature branches (must flow through Dev_new_gui to main)
+- `hotfix-*` — Hotfix branches (reviewed before merging)
+- Any worktree branch matching above patterns
+
+**WORKFLOW:**
+1. Create feature branch: `git checkout -b issue-XXXX origin/Dev_new_gui`
+2. Make changes and commit on your feature branch
+3. Push: `git push -u origin issue-XXXX`
+4. Open PR: `issue-XXXX` → `Dev_new_gui` (NOT directly to main)
+5. After review, merge to `Dev_new_gui`
+6. Later, `Dev_new_gui` is merged to `main` (release cycle)
+
+**WHY:** Issue #4113 found commits went to `main` instead of `Dev_new_gui`, reversing branching discipline. The pre-commit hook prevents this.
+
+**IF YOU SEE "COMMIT BLOCKED":**
+The pre-commit hook rejected your commit on `main` or `master`. This is correct — switch to a feature branch and re-apply your changes:
+```bash
+git checkout issue-XXXX  # or create new: git checkout -b issue-XXXX origin/Dev_new_gui
+# Re-apply your changes
+git add -A && git commit -m "..."
+```
 
 ---
 
