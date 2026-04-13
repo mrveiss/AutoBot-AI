@@ -91,7 +91,7 @@ export function useKnowledgeBase() {
         throw new Error('Failed to fetch stats: No response from server');
       }
 
-      const data = await parseApiResponse(response)
+      const data = ((await parseApiResponse(response as any))) as any
       return data as KnowledgeStats
     } catch (error) {
       logger.error('Error fetching stats:', error)
@@ -112,7 +112,7 @@ export function useKnowledgeBase() {
         throw new Error('Failed to fetch categories: No response from server')
       }
 
-      const data = await parseApiResponse(response) as CategoriesListResponse
+      const data = (await parseApiResponse(response as any)) as CategoriesListResponse
 
       // Validate response structure
       if (!data || !Array.isArray(data.categories)) {
@@ -137,7 +137,7 @@ export function useKnowledgeBase() {
         throw new Error('Failed to fetch category: No response from server');
       }
 
-      const data = await parseApiResponse(response)
+      const data = ((await parseApiResponse(response as any))) as any
       return data
     } catch (error) {
       logger.error('Error fetching category:', error)
@@ -164,13 +164,13 @@ export function useKnowledgeBase() {
       params.append('limit', String(limit))
 
       const url = `${getApiBase()}/knowledge_base/facts/by_category?${params.toString()}`
-      const response = await apiClient.get(url)
+      const response = (await apiClient.get(url)) as Record<string, unknown>
 
       if (!response) {
         throw new Error('Failed to fetch categorized facts: No response from server')
       }
 
-      const data = await parseApiResponse(response) as CategorizedFactsResponse
+      const data = (await parseApiResponse(response as any)) as CategorizedFactsResponse
 
       // Validate response structure
       if (!data || typeof data.categories !== 'object') {
@@ -236,7 +236,7 @@ export function useKnowledgeBase() {
         throw new Error('Search failed: No response from server');
       }
 
-      const data = await parseApiResponse(response)
+      const data = ((await parseApiResponse(response as any))) as any
       return data
     } catch (error) {
       logger.error('Error searching knowledge:', error)
@@ -277,7 +277,7 @@ export function useKnowledgeBase() {
         throw new Error('Advanced search failed: No response from server')
       }
 
-      const data = await parseApiResponse(response)
+      const data = ((await parseApiResponse(response as any))) as any
       return data
     } catch (error) {
       logger.error('Error in advanced search:', error)
@@ -300,7 +300,7 @@ export function useKnowledgeBase() {
         throw new Error('Failed to add fact: No response from server');
       }
 
-      const data = await parseApiResponse(response)
+      const data = ((await parseApiResponse(response as any))) as any
       return data
     } catch (error) {
       logger.error('Error adding fact:', error)
@@ -320,14 +320,14 @@ export function useKnowledgeBase() {
         body: formData
       })
 
-      if (!response.ok) {
-        logger.error('File upload failed with status:', response.status)
+      if (!(response as any).ok) {
+        logger.error('File upload failed with status:', (response as any).status)
         const errorText = await response.text()
         logger.error('Error response:', errorText)
-        throw new Error(`Upload failed: ${response.status} ${response.statusText}`)
+        throw new Error(`Upload failed: ${(response as any).status} ${(response as any).statusText}`)
       }
 
-      const data = await parseApiResponse(response)
+      const data = ((await parseApiResponse(response as any))) as any
       return data
     } catch (error) {
       logger.error('Error uploading file:', error)
@@ -347,7 +347,7 @@ export function useKnowledgeBase() {
         throw new Error('Failed to fetch machine profiles: No response from server');
       }
 
-      const data = await parseApiResponse(response)
+      const data = ((await parseApiResponse(response as any))) as any
       return Array.isArray(data) ? data : []
     } catch (error) {
       logger.error('Error fetching machine profiles:', error)
@@ -366,7 +366,7 @@ export function useKnowledgeBase() {
         throw new Error('Failed to fetch man pages summary: No response from server');
       }
 
-      const data = await parseApiResponse(response)
+      const data = ((await parseApiResponse(response as any))) as any
       return data
     } catch (error) {
       logger.error('Error fetching man pages summary:', error)
@@ -387,7 +387,7 @@ export function useKnowledgeBase() {
         throw new Error('Integration failed: No response from server');
       }
 
-      const data = await parseApiResponse(response)
+      const data = ((await parseApiResponse(response as any))) as any
       return data
     } catch (error) {
       logger.error('Error integrating man pages:', error)
@@ -407,7 +407,7 @@ export function useKnowledgeBase() {
         throw new Error('Failed to get vectorization status: No response from server');
       }
 
-      const data = await parseApiResponse(response)
+      const data = ((await parseApiResponse(response as any))) as any
       return data
     } catch (error) {
       logger.error('Error getting vectorization status:', error)
@@ -438,10 +438,10 @@ export function useKnowledgeBase() {
       }, { timeout: knowledgeTimeout })
 
       logger.debug('[vectorizeFacts] Response received:', {
-        ok: response.ok,
-        status: response.status,
-        statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries())
+        ok: (response as any).ok,
+        status: (response as any).status,
+        statusText: (response as any).statusText,
+        headers: Object.fromEntries((response as any).headers?.entries?.() || [])
       })
 
       if (!response) {
@@ -449,7 +449,7 @@ export function useKnowledgeBase() {
       }
 
       // Parse successful response
-      const data = await parseApiResponse(response)
+      const data = ((await parseApiResponse(response as any))) as any
 
       return data
     } catch (error) {
@@ -476,16 +476,16 @@ export function useKnowledgeBase() {
       })
 
       logger.debug('[initializeMachineKnowledge] Response received:', {
-        ok: response.ok,
-        status: response.status,
-        statusText: response.statusText
+        ok: (response as any).ok,
+        status: (response as any).status,
+        statusText: (response as any).statusText
       })
 
       if (!response) {
         throw new Error('Machine knowledge initialization failed: No response from server');
       }
 
-      const data = await parseApiResponse(response)
+      const data = ((await parseApiResponse(response as any))) as any
       return data
     } catch (error) {
       logger.error('[initializeMachineKnowledge] Error:', error)
@@ -505,16 +505,16 @@ export function useKnowledgeBase() {
       const response = await apiClient.post(`${getApiBase()}/knowledge_base/refresh_system_knowledge`, {})
 
       logger.debug('[refreshSystemKnowledge] Response received:', {
-        ok: response.ok,
-        status: response.status,
-        statusText: response.statusText
+        ok: (response as any).ok,
+        status: (response as any).status,
+        statusText: (response as any).statusText
       })
 
       if (!response) {
         throw new Error('System knowledge refresh failed: No response from server');
       }
 
-      const data = await parseApiResponse(response)
+      const data = ((await parseApiResponse(response as any))) as any
       return data
     } catch (error) {
       logger.error('[refreshSystemKnowledge] Error:', error)
@@ -533,8 +533,8 @@ export function useKnowledgeBase() {
       const response = await apiClient.get(`${getApiBase()}/knowledge_base/job_status/${taskId}`)
 
       logger.debug('[pollJobStatus] Response received:', {
-        ok: response.ok,
-        status: response.status,
+        ok: (response as any).ok,
+        status: (response as any).status,
         taskId
       })
 
@@ -542,7 +542,7 @@ export function useKnowledgeBase() {
         throw new Error('Job status check failed: No response from server');
       }
 
-      const data = await parseApiResponse(response)
+      const data = ((await parseApiResponse(response as any))) as any
       return data
     } catch (error) {
       logger.error('[pollJobStatus] Error:', error)
@@ -562,16 +562,16 @@ export function useKnowledgeBase() {
       })
 
       logger.debug('[populateManPages] Response received:', {
-        ok: response.ok,
-        status: response.status,
-        statusText: response.statusText
+        ok: (response as any).ok,
+        status: (response as any).status,
+        statusText: (response as any).statusText
       })
 
       if (!response) {
         throw new Error('Man pages population failed: No response from server');
       }
 
-      const data = await parseApiResponse(response)
+      const data = ((await parseApiResponse(response as any))) as any
       return data
     } catch (error) {
       logger.error('[populateManPages] Error:', error)
@@ -589,16 +589,16 @@ export function useKnowledgeBase() {
       const response = await apiClient.post(`${getApiBase()}/knowledge_base/populate_autobot_docs`, {})
 
       logger.debug('[populateAutoBotDocs] Response received:', {
-        ok: response.ok,
-        status: response.status,
-        statusText: response.statusText
+        ok: (response as any).ok,
+        status: (response as any).status,
+        statusText: (response as any).statusText
       })
 
       if (!response) {
         throw new Error('AutoBot docs population failed: No response from server');
       }
 
-      const data = await parseApiResponse(response)
+      const data = ((await parseApiResponse(response as any))) as any
       return data
     } catch (error) {
       logger.error('[populateAutoBotDocs] Error:', error)
@@ -618,16 +618,16 @@ export function useKnowledgeBase() {
       )
 
       logger.debug('[fetchMachineProfile] Response received:', {
-        ok: response.ok,
-        status: response.status,
-        statusText: response.statusText
+        ok: (response as any).ok,
+        status: (response as any).status,
+        statusText: (response as any).statusText
       })
 
       if (!response) {
         throw new Error('Machine profile fetch failed: No response from server');
       }
 
-      const data = await parseApiResponse(response)
+      const data = ((await parseApiResponse(response as any))) as any
       return data as MachineProfile
     } catch (error) {
       logger.error('[fetchMachineProfile] Error:', error)
@@ -645,16 +645,16 @@ export function useKnowledgeBase() {
       const response = await apiClient.get(`${getApiBase()}/knowledge_base/stats/basic`)
 
       logger.debug('[fetchBasicStats] Response received:', {
-        ok: response.ok,
-        status: response.status,
-        statusText: response.statusText
+        ok: (response as any).ok,
+        status: (response as any).status,
+        statusText: (response as any).statusText
       })
 
       if (!response) {
         throw new Error('Basic stats fetch failed: No response from server');
       }
 
-      const data = await parseApiResponse(response)
+      const data = ((await parseApiResponse(response as any))) as any
       return data as KnowledgeStats
     } catch (error) {
       logger.error('[fetchBasicStats] Error:', error)
