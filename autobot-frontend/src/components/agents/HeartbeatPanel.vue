@@ -254,7 +254,7 @@ watch(agentId, (newId: string, oldId: string) => {
     _liveUnsub = subscribe(`agent:${newId}`, _onLiveEvent)
     logger.debug('Subscribed to live events for agent', { agentId: newId })
   }
-})
+}, { immediate: true })
 
 onUnmounted(() => {
   if (_liveUnsub) {
