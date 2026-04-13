@@ -386,7 +386,7 @@ import { getApiBase } from '@/config/ssot-config'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { getCssVar } from '@/composables/useCssVars'
-import { useDebounce } from '@/composables/useTimeout'
+import { useDebouncedFn } from '@/composables/useDebounce'
 import MemoryOrphanManager from '@/components/knowledge/MemoryOrphanManager.vue'
 const KnowledgeGraph3D = defineAsyncComponent(() => 
   import('@/components/knowledge/KnowledgeGraph3D.vue')
@@ -479,7 +479,7 @@ const cy = shallowRef<Core | null>(null)
 // ============================================================================
 
 /** Debounced graph update for search performance (300ms delay, auto-cleanup on unmount) */
-const debouncedUpdateGraph = useDebounce(() => {
+const { debouncedFn: debouncedUpdateGraph } = useDebouncedFn(() => {
   updateCytoscapeElements()
 }, 300)
 
