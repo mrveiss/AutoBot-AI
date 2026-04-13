@@ -3,15 +3,29 @@
     class="bg-autobot-bg-secondary border-r border-autobot-border flex flex-col h-full overflow-hidden transition-all duration-300 shrink-0"
     :class="{ 'w-12': store.sidebarCollapsed, 'w-80': !store.sidebarCollapsed }"
   >
-    <!-- Toggle Button -->
-    <BaseButton
-      variant="ghost"
-      class="p-3 border-b border-autobot-border text-autobot-text-secondary shrink-0"
-      @click="controller.toggleSidebar()"
-      :aria-label="store.sidebarCollapsed ? $t('chat.sidebar.expandSidebar') : $t('chat.sidebar.collapseSidebar')"
-    >
-      <i :class="store.sidebarCollapsed ? 'fas fa-chevron-right' : 'fas fa-chevron-left'"></i>
-    </BaseButton>
+    <!-- Toggle Button row: desktop collapse toggle + mobile close button (#1804) -->
+    <div class="flex items-center border-b border-autobot-border shrink-0">
+      <BaseButton
+        variant="ghost"
+        class="flex-1 p-3 text-autobot-text-secondary hidden lg:flex"
+        @click="controller.toggleSidebar()"
+        :aria-label="store.sidebarCollapsed ? $t('chat.sidebar.expandSidebar') : $t('chat.sidebar.collapseSidebar')"
+      >
+        <i :class="store.sidebarCollapsed ? 'fas fa-chevron-right' : 'fas fa-chevron-left'"></i>
+      </BaseButton>
+      <!-- Mobile header: title + close button -->
+      <div class="lg:hidden flex items-center justify-between w-full px-3 py-2">
+        <span class="text-sm font-semibold text-autobot-text-primary">{{ $t('chat.sidebar.chatHistory') }}</span>
+        <BaseButton
+          variant="ghost"
+          class="p-2 text-autobot-text-secondary"
+          @click="emit('close-mobile')"
+          :aria-label="$t('common.close')"
+        >
+          <i class="fas fa-times"></i>
+        </BaseButton>
+      </div>
+    </div>
 
     <!-- Sidebar Content - FIXED: Better scroll behavior -->
     <div v-if="!store.sidebarCollapsed" class="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -288,6 +302,9 @@
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+// #1804: emit close-mobile so ChatInterface can close the mobile overlay
+const emit = defineEmits<{ 'close-mobile': [] }>()
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import { useDisplaySettings, type DisplaySettings } from '@/composables/useDisplaySettings'
@@ -343,6 +360,8 @@ const handleSessionClick = (session: ChatSession, index: number) => {
     toggleSelection(session.id)
   } else {
     controller.switchToSession(session.id)
+    // #1804: close mobile overlay after selecting a session
+    emit('close-mobile')
   }
 }
 

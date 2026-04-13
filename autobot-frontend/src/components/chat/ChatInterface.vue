@@ -2,7 +2,16 @@
   <ErrorBoundary :fallback="$t('chat.interface.loadFailed')">
     <div class="chat-interface flex h-full bg-autobot-bg-card overflow-hidden">
 
+      <!-- Mobile Sidebar Backdrop -->
+      <div
+        v-if="showMobileSidebar"
+        class="lg:hidden fixed inset-0 bg-black/40 z-30"
+        @click="showMobileSidebar = false"
+        aria-hidden="true"
+      ></div>
+
       <!-- Chat Sidebar with Unified Loading -->
+      <!-- Desktop: inline. Mobile: fixed overlay when showMobileSidebar is true -->
       <UnifiedLoadingView
         loading-key="chat-sidebar"
         :has-content="store.sessions.length > 0"
@@ -10,10 +19,31 @@
         @loading-complete="handleSidebarLoadingComplete"
         @loading-error="handleSidebarLoadingError"
         @loading-timeout="handleSidebarLoadingTimeout"
-        class="sidebar-loading-view h-full w-80 shrink-0"
+        :class="[
+          'sidebar-loading-view h-full shrink-0',
+          'hidden lg:block',
+          store.sidebarCollapsed ? 'w-12' : 'w-80',
+        ]"
       >
         <ChatSidebar />
       </UnifiedLoadingView>
+
+      <!-- Mobile Sidebar Overlay -->
+      <Transition
+        enter-active-class="transition duration-250 ease-out"
+        enter-from-class="-translate-x-full"
+        enter-to-class="translate-x-0"
+        leave-active-class="transition duration-200 ease-in"
+        leave-from-class="translate-x-0"
+        leave-to-class="-translate-x-full"
+      >
+        <div
+          v-if="showMobileSidebar"
+          class="lg:hidden fixed top-0 left-0 h-full w-80 max-w-[85vw] z-40 shadow-2xl overflow-hidden"
+        >
+          <ChatSidebar @close-mobile="showMobileSidebar = false" />
+        </div>
+      </Transition>
 
       <!-- Main Chat Area -->
       <div class="flex-1 flex flex-col min-w-0 relative">
@@ -27,6 +57,7 @@
           :is-connected="isConnected"
           @export-session="exportSession"
           @clear-session="clearSession"
+          @toggle-mobile-sidebar="showMobileSidebar = !showMobileSidebar"
           class="shrink-0"
         >
           <!-- File Panel Toggle Button (injected into header) -->
@@ -247,6 +278,8 @@ const showKnowledgeDialog = ref(false)
 const showCommandDialog = ref(false)
 const showWorkflowProgress = ref(false)
 const showFilePanel = ref(false)
+// Mobile sidebar overlay (#1804)
+const showMobileSidebar = ref(false)
 
 // Dialog data
 const currentChatContext = ref<any>(null)
