@@ -8,6 +8,13 @@
 -->
 <template>
   <div class="operations-list">
+    <!-- Filters -->
+    <OperationFilters
+      :filter="filter"
+      @update:filter="emit('update:filter', $event)"
+      @clear="emit('clear-filter')"
+    />
+
     <!-- Empty state -->
     <div class="empty-state" v-if="operations.length === 0 && !loading">
       <i class="fas fa-tasks empty-icon"></i>
@@ -119,7 +126,7 @@
 </template>
 
 <script setup lang="ts">
-import type { Operation } from '@/types/operations'
+import type { Operation, OperationsFilter } from '@/types/operations'
 import {
   STATUS_CONFIG,
   OPERATION_TYPE_LABELS,
@@ -129,6 +136,7 @@ import {
   canResume
 } from '@/types/operations'
 import OperationProgress from './OperationProgress.vue'
+import OperationFilters from './OperationFilters.vue'
 
 interface Props {
   operations: Operation[]
@@ -136,18 +144,26 @@ interface Props {
   loading?: boolean
   selectedId?: string | null
   emptyMessage?: string
+  filter?: OperationsFilter
 }
 
 const props = withDefaults(defineProps<Props>(), {
   loading: false,
   selectedId: null,
-  emptyMessage: undefined
+  emptyMessage: undefined,
+  filter: () => ({
+    status: undefined,
+    operation_type: undefined,
+    limit: 50
+  })
 })
 
 const emit = defineEmits<{
   select: [operation: Operation]
   cancel: [operationId: string]
   resume: [operationId: string]
+  'update:filter': [filter: OperationsFilter]
+  'clear-filter': []
 }>()
 
 function canCancelOperation(operation: Operation): boolean {
