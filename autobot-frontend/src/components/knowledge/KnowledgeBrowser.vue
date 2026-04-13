@@ -280,6 +280,7 @@ import VectorizationProgressModal from './VectorizationProgressModal.vue'
 import KnowledgeBrowserHeader from './KnowledgeBrowserHeader.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
+import KnowledgeMainCategories from './KnowledgeMainCategories.vue'
 
 // Use the shared composables
 const {
@@ -998,6 +999,10 @@ const handlePopulate = async (categoryId: string) => {
     logger.error(`Failed to populate ${categoryId}:`, error)
     populationStates.value[categoryId] = { isPopulating: false, progress: 0 }
   }
+}
+
+const handleImport = () => {
+  router.push('/knowledge/upload')
 }
 
 const loadFolderContents = async (folder: TreeNode) => {
