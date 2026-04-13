@@ -78,6 +78,7 @@ from services.knowledge.doc_indexer import (  # noqa: E402 — after sys.modules
     _compute_file_hash,
     _filter_changed_files,
     _load_hash_cache,
+    _normalize_path,
     _save_hash_cache,
     _should_exclude,
     get_doc_indexer_service,
@@ -672,6 +673,123 @@ class TestEdgeCases:
         changed, hashes = _filter_changed_files([], {"some.md": "hash"}, tmp_path)
         assert changed == []
         assert hashes == {}
+
+
+class TestHashCacheEdgeCases4382:
+    """Edge case tests for hash cache — Issue #4382."""
+
+    # ------------------------------------------------------------------
+    # Symlinks
+    # ------------------------------------------------------------------
+
+    def test_compute_file_hash_follows_symlink(self, tmp_path):
+        """_compute_file_hash hashes the target content, not the symlink path."""
+        target = tmp_path / "real.md"
+        target.write_text("real content", encoding="utf-8")
+        link = tmp_path / "link.md"
+        link.symlink_to(target)
+
+        hash_via_target = _compute_file_hash(str(target))
+        hash_via_link = _compute_file_hash(str(link))
+        assert hash_via_target == hash_via_link
+
+    def test_filter_changed_files_symlink_matches_target_hash(self, tmp_path):
+        """Symlink and target produce the same cache key hash (#4382)."""
+        target = tmp_path / "real.md"
+        target.write_text("content", encoding="utf-8")
+        link = tmp_path / "link.md"
+        link.symlink_to(target)
+
+        target_hash = _compute_file_hash(str(target))
+
+        # Cache uses resolved key for target; symlink should resolve to same hash
+        _, link_rel = _normalize_path(str(link), tmp_path)
+        changed, new_hashes = _filter_changed_files(
+            [(str(link), 1)], {link_rel: target_hash}, tmp_path
+        )
+        # Hash matches → file should NOT appear as changed
+        assert len(changed) == 0
+
+    # ------------------------------------------------------------------
+    # Permissions
+    # ------------------------------------------------------------------
+
+    def test_compute_file_hash_returns_empty_on_permission_error(self, tmp_path):
+        """_compute_file_hash returns '' on PermissionError without raising."""
+        f = tmp_path / "secret.md"
+        f.write_text("secret", encoding="utf-8")
+        f.chmod(0o000)
+        try:
+            result = _compute_file_hash(str(f))
+            # On Linux running as root, chmod 000 is bypassed — skip assertion.
+            if result != "":
+                import os as _os
+                assert _os.getuid() == 0, "Non-root should get empty hash for unreadable file"
+        finally:
+            f.chmod(0o644)
+
+    def test_filter_changed_files_preserves_cached_hash_on_permission_error(self, tmp_path):
+        """Unreadable file preserves cached hash and is NOT marked changed (#4382)."""
+        f = tmp_path / "locked.md"
+        f.write_text("data", encoding="utf-8")
+        existing_hash = _compute_file_hash(str(f))
+        f.chmod(0o000)
+        try:
+            import os as _os
+            if _os.getuid() == 0:
+                # Root bypasses chmod — skip this test
+                return
+            cache = {"locked.md": existing_hash}
+            changed, new_hashes = _filter_changed_files([(str(f), 1)], cache, tmp_path)
+            # File unreadable → hash preserved, not marked changed
+            assert len(changed) == 0
+            assert new_hashes.get("locked.md") == existing_hash
+        finally:
+            f.chmod(0o644)
+
+    # ------------------------------------------------------------------
+    # Path normalization
+    # ------------------------------------------------------------------
+
+    def test_normalize_path_returns_relative_key(self, tmp_path):
+        """_normalize_path returns a relative path key under root_dir."""
+        sub = tmp_path / "docs" / "api"
+        sub.mkdir(parents=True)
+        f = sub / "ref.md"
+        f.write_text("x", encoding="utf-8")
+
+        _, rel = _normalize_path(str(f), tmp_path)
+        assert rel == str(Path("docs") / "api" / "ref.md")
+
+    def test_normalize_path_symlink_resolves_consistently(self, tmp_path):
+        """Symlink and its target produce the same relative path after resolution."""
+        real_dir = tmp_path / "real_docs"
+        real_dir.mkdir()
+        target = real_dir / "guide.md"
+        target.write_text("guide", encoding="utf-8")
+
+        link_dir = tmp_path / "linked_docs"
+        link_dir.symlink_to(real_dir)
+        link_file = link_dir / "guide.md"
+
+        _, rel_target = _normalize_path(str(target), tmp_path)
+        _, rel_link = _normalize_path(str(link_file), tmp_path)
+        # Both point to same inode → same relative path
+        assert rel_target == rel_link
+
+    def test_filter_changed_files_normalized_keys_match_cache(self, tmp_path):
+        """_filter_changed_files uses normalized keys so relocation-safe lookup works."""
+        sub = tmp_path / "docs"
+        sub.mkdir()
+        f = sub / "x.md"
+        f.write_text("hello", encoding="utf-8")
+        current_hash = _compute_file_hash(str(f))
+
+        _, rel = _normalize_path(str(f), tmp_path)
+        changed, _ = _filter_changed_files(
+            [(str(f), 1)], {rel: current_hash}, tmp_path
+        )
+        assert len(changed) == 0
 
 
 class TestGetDocIndexerService:

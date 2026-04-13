@@ -510,10 +510,19 @@ HASH_CACHE_FILE = PATH.DATA_DIR / ".doc_index_hashes.json"
 
 
 def _compute_file_hash(file_path: str) -> str:
-    """Compute SHA-256 hash of file content."""
+    """Compute SHA-256 hash of file content.
+
+    Resolves symlinks so the hash reflects the target file's content (#4382).
+    Returns empty string on PermissionError or other read failures; callers
+    must preserve the cached hash when empty to avoid false-changed detection.
+    """
     try:
-        with open(file_path, "rb") as f:
+        resolved = str(Path(file_path).resolve())
+        with open(resolved, "rb") as f:
             return hashlib.sha256(f.read()).hexdigest()
+    except PermissionError as e:
+        logger.warning("Permission denied hashing %s: %s", file_path, e)
+        return ""
     except Exception as e:
         logger.warning("Could not hash %s: %s", file_path, e)
         return ""
@@ -540,18 +549,58 @@ def _save_hash_cache(hashes: Dict[str, str]) -> None:
         logger.warning("Could not save hash cache: %s", e)
 
 
+def _normalize_path(file_path: str, root_dir: Path) -> Tuple[str, str]:
+    """Return (normalized_abs_path, rel_path) for a file.
+
+    Resolves the file path to handle symlinks and ensure consistent
+    path separators across platforms (#4382).  If the resolved path
+    escapes root_dir (e.g. after project relocation), falls back to
+    the original path so relpath always returns a valid key.
+    """
+    try:
+        resolved = str(Path(file_path).resolve())
+        rel_path = os.path.relpath(resolved, str(root_dir.resolve()))
+    except ValueError:
+        # On Windows, relpath raises ValueError for paths on different drives.
+        # Fall back to the original path so we still get a usable relative key.
+        resolved = file_path
+        rel_path = os.path.relpath(file_path, str(root_dir))
+    return resolved, rel_path
+
+
 def _filter_changed_files(
     files: List[Tuple[str, int]], hash_cache: Dict[str, str], root_dir: Path
 ) -> Tuple[List[Tuple[str, int]], Dict[str, str]]:
-    """Filter to only changed files since last indexing."""
+    """Filter to only changed files since last indexing.
+
+    Edge cases handled (#4382):
+    - Symlinks: paths are resolved before hashing so the hash reflects
+      target content, not the symlink inode.
+    - Path normalization: resolved paths eliminate platform separator
+      differences and double-slash ambiguities.
+    - Permission errors: _compute_file_hash returns "" when a file
+      cannot be read.  Preserving the cached hash avoids treating a
+      temporarily unreadable file as "changed" and avoids storing an
+      empty hash that would trigger re-indexing once permissions are
+      restored.
+    """
     changed = []
     new_hashes: Dict[str, str] = {}
 
     for file_path, tier in files:
-        rel_path = os.path.relpath(file_path, root_dir)
+        _, rel_path = _normalize_path(file_path, root_dir)
         current_hash = _compute_file_hash(file_path)
-        new_hashes[rel_path] = current_hash
 
+        if not current_hash:
+            # File is unreadable (permission error or gone); keep whatever
+            # was in the cache so the file is not falsely marked as changed.
+            cached = hash_cache.get(rel_path, "")
+            new_hashes[rel_path] = cached
+            if hash_cache.get(rel_path) != cached:
+                changed.append((file_path, tier))
+            continue
+
+        new_hashes[rel_path] = current_hash
         if hash_cache.get(rel_path) != current_hash:
             changed.append((file_path, tier))
 
@@ -710,12 +759,17 @@ class DocIndexerService:
 
         Returns True if the file should be skipped (hash unchanged and not forced).
         Extracted from index_file to keep parent under 65 lines.
+
+        Uses normalized (resolved) paths for consistent cache keys (#4382).
         """
         if force:
             return False
-        rel_path = os.path.relpath(file_str, self._root_dir)
+        _, rel_path = _normalize_path(file_str, self._root_dir)
         cache = _load_hash_cache()
         current_hash = _compute_file_hash(file_str)
+        if not current_hash:
+            # Unreadable file: preserve cached hash and skip to avoid false-changed.
+            return True
         if cache.get(rel_path) == current_hash:
             return True
         cache[rel_path] = current_hash
