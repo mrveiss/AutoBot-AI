@@ -86,7 +86,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
 
   async function fetchWorkerStatus(): Promise<void> {
     try {
-      const data = await ApiClient.get(`${getApiBase()}/browser/status`)
+      const data = await ApiClient.get<BrowserWorkerStatus>(`${getApiBase()}/browser/status`)
       workerStatus.value = data
       logger.debug('Fetched worker status:', data)
     } catch (err) {
@@ -100,7 +100,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
     isLoading.value = true
     error.value = null
     try {
-      const data = await ApiClient.post(`${getApiBase()}/browser/launch`, { url: url || 'about:blank' })
+      const data = await ApiClient.post<{ session: BrowserSession }>(`${getApiBase()}/browser/launch`, { url: url || 'about:blank' })
       sessions.value.push(data.session)
       currentSession.value = data.session
       logger.debug('Launched browser session:', data.session)
@@ -138,7 +138,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
 
   async function fetchSessions(): Promise<void> {
     try {
-      const data = await ApiClient.get(`${getApiBase()}/browser/sessions`)
+      const data = await ApiClient.get<{ sessions: BrowserSession[] }>(`${getApiBase()}/browser/sessions`)
       sessions.value = data.sessions || []
       logger.debug('Fetched sessions:', sessions.value.length)
     } catch (err) {
@@ -150,7 +150,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
 
   async function getSession(sessionId: string): Promise<BrowserSession | null> {
     try {
-      const data = await ApiClient.get(`${getApiBase()}/browser/session/${sessionId}`)
+      const data = await ApiClient.get<BrowserSession>(`${getApiBase()}/browser/session/${sessionId}`)
       currentSession.value = data
       logger.debug('Fetched session details:', data)
       return data
@@ -218,7 +218,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
     isLoading.value = true
     error.value = null
     try {
-      const data = await ApiClient.post(`${getApiBase()}/browser/screenshot`, { session_id: sessionId })
+      const data = await ApiClient.post<ScreenshotResult>(`${getApiBase()}/browser/screenshot`, { session_id: sessionId })
       screenshots.value.unshift(data)
       logger.debug('Captured screenshot')
       return data
@@ -236,7 +236,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
     isLoading.value = true
     error.value = null
     try {
-      const data = await ApiClient.post(`${getApiBase()}/browser/execute`, { session_id: sessionId, script })
+      const data = await ApiClient.post<{ result: unknown }>(`${getApiBase()}/browser/execute`, { session_id: sessionId, script })
       logger.debug('Executed script, result:', data.result)
       return data.result
     } catch (err) {
@@ -253,7 +253,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
     isLoading.value = true
     error.value = null
     try {
-      const data = await ApiClient.post(`${getApiBase()}/browser/automation/run`, { script })
+      const data = await ApiClient.post<{ result: unknown }>(`${getApiBase()}/browser/automation/run`, { script })
       logger.debug('Automation script completed:', data)
       return data.result
     } catch (err) {
