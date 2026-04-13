@@ -155,7 +155,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch, provide } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, provide } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useBackoffPoller } from '@/composables/useBackoffPoller'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
@@ -691,10 +691,6 @@ const checkConnection = async () => {
 const heartbeatInterval = ref<number | null>(null)
 const autoSaveInterval = ref<number | null>(null)
 
-// Cleanup flag for promises that resolve after unmount (#4355)
-const isMounted = ref(true)
-let initializationAbortController: AbortController | null = null
-
 const startHeartbeat = () => {
   // Clear any existing interval first
   if (heartbeatInterval.value) {
@@ -775,13 +771,9 @@ const handleKeyboardShortcuts = (event: KeyboardEvent) => {
 
 // STREAMLINED: Simplified initialization without complex timeout racing
 // Issue #671: Added initialization state tracking for loading feedback
-// Issue #4355: Added cleanup to prevent mutations after unmount
 const initializeChatInterface = async () => {
   // Issue #671: Set initializing state to show loading indicator
   store.setInitializing(true)
-
-  // Issue #4355: Create abort controller for this initialization
-  initializationAbortController = new AbortController()
 
   try {
     logger.debug('🚀 Starting streamlined chat interface initialization')
@@ -795,12 +787,6 @@ const initializeChatInterface = async () => {
     try {
       // Race initialization with timeout
       const data = await Promise.race([loadPromise, timeoutPromise])
-
-      // Issue #4355: Check if component unmounted before processing results
-      if (!isMounted.value) {
-        logger.debug('Component unmounted, skipping initialization result processing')
-        return
-      }
 
       // Process results - sync with backend (source of truth)
       // Explicitly check for error to distinguish API failures from empty responses
@@ -836,12 +822,6 @@ const initializeChatInterface = async () => {
     } catch (error) {
       logger.warn('⏱️ Initialization failed or timed out, using fallback:', error)
 
-      // Issue #4355: Check if component unmounted before fallback
-      if (!isMounted.value) {
-        logger.debug('Component unmounted, skipping fallback initialization')
-        return
-      }
-
       // Fallback to individual loading
       if (store.sessions.length === 0) {
         await controller.loadChatSessions().catch((err) => logger.warn('Failed to load chat sessions:', err))
@@ -854,12 +834,6 @@ const initializeChatInterface = async () => {
     logger.debug('✅ Chat interface initialization completed')
 
   } catch (error) {
-    // Issue #4355: Check if component unmounted before error handling
-    if (!isMounted.value) {
-      logger.debug('Component unmounted, skipping initialization error handling')
-      return
-    }
-
     logger.error('❌ Chat initialization failed:', error)
 
     // Issue #671: Set error state and show toast notification
@@ -893,15 +867,6 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  // Issue #4355: Mark component as unmounted to prevent mutations from pending promises
-  isMounted.value = false
-
-  // Issue #4355: Abort in-flight initialization if still running
-  if (initializationAbortController) {
-    initializationAbortController.abort()
-    initializationAbortController = null
-  }
-
   // Clean up event listeners
   document.removeEventListener('keydown', handleKeyboardShortcuts)
 
@@ -917,50 +882,6 @@ onUnmounted(() => {
   }
 
   messagePoller.stop()
-})
-
-// Issue #4356: Handle keep-alive activation (component re-enters view)
-// Resume polling and heartbeat when ChatInterface is activated from keep-alive cache
-onActivated(() => {
-  logger.debug('[ChatInterface] Activated from keep-alive - resuming operations')
-
-  // Resume heartbeat monitoring
-  startHeartbeat()
-
-  // Resume connection checking
-  checkConnection()
-
-  // Resume auto-save
-  enableAutoSave()
-
-  // Resume message polling
-  startMessagePolling()
-
-  // Re-attach keyboard shortcuts
-  document.addEventListener('keydown', handleKeyboardShortcuts)
-})
-
-// Issue #4356: Handle keep-alive deactivation (component leaves view but stays cached)
-// Pause polling and cleanup before caching to reduce background activity
-onDeactivated(() => {
-  logger.debug('[ChatInterface] Deactivated for keep-alive caching - pausing operations')
-
-  // Pause message polling (will resume on onActivated)
-  messagePoller.stop()
-
-  // Clean up intervals while cached
-  if (heartbeatInterval.value) {
-    clearInterval(heartbeatInterval.value)
-    heartbeatInterval.value = null
-  }
-
-  if (autoSaveInterval.value) {
-    clearInterval(autoSaveInterval.value)
-    autoSaveInterval.value = null
-  }
-
-  // Clean up keyboard shortcuts while cached
-  document.removeEventListener('keydown', handleKeyboardShortcuts)
 })
 
 // Watch for session changes to update NoVNC URL
