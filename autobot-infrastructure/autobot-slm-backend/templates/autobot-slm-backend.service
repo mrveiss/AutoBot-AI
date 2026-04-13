@@ -13,8 +13,11 @@ ExecStart=/opt/autobot/autobot-slm-backend/venv/bin/uvicorn main:app --host 127.
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=5
-StandardOutput=append:/opt/autobot/logs/slm-backend.log
-StandardError=append:/opt/autobot/logs/slm-backend-error.log
+# Issue #4309: Use LogsDirectory= for proper ownership instead of StandardOutput=append
+LogsDirectory=autobot
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=autobot-slm-backend
 
 # Security hardening
 NoNewPrivileges=true

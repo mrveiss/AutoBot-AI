@@ -26,8 +26,11 @@ ExecStart=/opt/autobot/autobot-user-backend/venv/bin/uvicorn \
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=5
-StandardOutput=append:/var/log/autobot/user-backend.log
-StandardError=append:/var/log/autobot/user-backend-error.log
+# Issue #4309: Use LogsDirectory= for proper ownership instead of StandardOutput=append
+LogsDirectory=autobot
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=autobot-user-backend
 # Issue #1240: Memory limits to prevent runaway growth
 MemoryHigh=12G
 MemoryMax=16G
@@ -39,7 +42,6 @@ PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=yes
 ReadWritePaths=/opt/autobot/autobot-user-backend/data
-ReadWritePaths=/var/log/autobot
 
 [Install]
 WantedBy=multi-user.target
