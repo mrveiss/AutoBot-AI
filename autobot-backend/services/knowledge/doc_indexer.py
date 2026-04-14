@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from autobot_shared.ssot_config import get_ollama_url
 from constants.path_constants import PATH
+from services.knowledge.synthesis_schema_loader import SynthesisSchema, load_synthesis_schema
 
 logger = logging.getLogger(__name__)
 
@@ -633,6 +634,21 @@ class DocIndexerService:
         self._root_dir = PATH.PROJECT_ROOT
         # Issue #4564: optional LLM service for KB synthesis
         self._llm_service = llm_service
+        self.synthesis_schema: SynthesisSchema = self._load_schema()
+
+    def _load_schema(self) -> SynthesisSchema:
+        """Load synthesis schema from YAML; warn and return empty schema if absent."""
+        schema = load_synthesis_schema()
+        if not schema.collections:
+            logger.warning(
+                "Synthesis schema is absent or empty — schema-driven synthesis disabled"
+            )
+        else:
+            logger.debug(
+                "Loaded synthesis schema: %d collection(s)",
+                len(schema.collections),
+            )
+        return schema
 
     async def initialize(self) -> bool:
         """Initialize ChromaDB client and embedding model.
