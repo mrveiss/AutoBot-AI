@@ -568,8 +568,8 @@ export default {
 
 .persistent-badge {
   padding: 4px 8px;
-  background: #dbeafe;
-  color: #1e40af;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
   border-radius: var(--radius-sm);
   font-size: 12px;
 }

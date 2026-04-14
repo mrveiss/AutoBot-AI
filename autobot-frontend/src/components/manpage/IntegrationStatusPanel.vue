@@ -210,8 +210,8 @@ const { formatDate } = useKnowledgeBase()
 }
 
 .command-tag {
-  background: #3498db;
-  color: white;
+  background: var(--color-primary);
+  color: var(--text-inverse);
   padding: 4px 10px;
   border-radius: 15px;
   font-size: 0.8rem;
@@ -224,7 +224,7 @@ const { formatDate } = useKnowledgeBase()
   justify-content: center;
   gap: 15px;
   padding: 40px;
-  color: #7f8c8d;
+  color: var(--text-muted);
   font-style: italic;
 }
 
