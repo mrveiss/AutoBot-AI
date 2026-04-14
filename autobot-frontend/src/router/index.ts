@@ -707,6 +707,18 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true
     }
   },
+  // Issue #1803: Plugin and agent marketplace
+  {
+    path: '/marketplace',
+    name: 'marketplace',
+    component: () => import('@/views/MarketplaceView.vue'),
+    meta: {
+      title: 'Marketplace',
+      icon: 'fas fa-store',
+      description: 'Discover and install community plugins and agents',
+      requiresAuth: true
+    }
+  },
   // Issue #729: Secrets stays in autobot-vue - user functionality for chat/agent credentials
   {
     path: '/secrets',

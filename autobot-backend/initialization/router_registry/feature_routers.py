@@ -468,6 +468,10 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["user-management", "users"],
         "user_management",
     ),
+    # Issue #1803: Plugin manager endpoints (list, discover, load/unload/enable/disable, config)
+    ("plugin_manager", "", ["plugins"], "plugin_manager"),
+    # Issue #1803: Plugin and agent marketplace — community catalog
+    ("api.marketplace", "/marketplace", ["marketplace", "plugins"], "marketplace"),
     # Partially wired or legacy feature routers
     ("api.chat_sessions", "", ["chat-sessions"], "chat_sessions"),
     (
