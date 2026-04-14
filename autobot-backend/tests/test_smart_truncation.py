@@ -7,7 +7,7 @@ Tests for smart context truncation feature (Issue #4346).
 Verifies that large files are truncated intelligently with head/tail preservation.
 """
 
-from prompt_manager import _truncate_large_file, _snap_to_char_boundary
+from prompt_manager import _is_binary_content, _truncate_large_file, _snap_to_char_boundary
 
 
 class TestSmartTruncation:
@@ -275,3 +275,84 @@ class TestPromptManagerTruncation:
         large_content = "z" * 20001
         result_large = prompt_manager.truncate_large_file(large_content)
         assert len(result_large) < len(large_content)
+
+
+class TestBinaryFileHandling:
+    """Issue #4396: binary file detection and safe handling in truncation."""
+
+    # ------------------------------------------------------------------
+    # _is_binary_content unit tests
+    # ------------------------------------------------------------------
+
+    def test_plain_text_not_binary(self):
+        """Normal ASCII text must not be flagged as binary."""
+        assert _is_binary_content("hello world") is False
+
+    def test_unicode_text_not_binary(self):
+        """Unicode text (emoji, CJK, accented) must not be flagged as binary."""
+        assert _is_binary_content("cafe \u00e9 \u4e2d \U0001f600") is False
+
+    def test_null_byte_detected(self):
+        """A single null byte must be detected as binary."""
+        assert _is_binary_content("text\x00more") is True
+
+    def test_all_null_bytes_detected(self):
+        """Content consisting only of null bytes must be detected."""
+        assert _is_binary_content("\x00" * 100) is True
+
+    def test_null_byte_at_start(self):
+        """Null byte at position 0 must be caught."""
+        assert _is_binary_content("\x00trailing text") is True
+
+    def test_null_byte_at_end(self):
+        """Null byte at end of string must be caught."""
+        assert _is_binary_content("leading text\x00") is True
+
+    def test_empty_string_not_binary(self):
+        """Empty string must not be flagged as binary."""
+        assert _is_binary_content("") is False
+
+    # ------------------------------------------------------------------
+    # _truncate_large_file binary guard (small + large binary inputs)
+    # ------------------------------------------------------------------
+
+    def test_small_binary_below_threshold_returned_unchanged(self):
+        """Binary content under max_chars passes through unchanged (no truncation guard)."""
+        # Under the 20k threshold: _truncate_large_file returns early before the binary check
+        content = "abc\x00def"
+        result = _truncate_large_file(content, max_chars=20000)
+        assert result == content
+
+    def test_large_binary_returns_placeholder(self):
+        """Binary content above max_chars must be replaced with a safe placeholder."""
+        content = "a" * 10000 + "\x00" + "b" * 11000  # 21001 chars, contains null byte
+        result = _truncate_large_file(content, max_chars=20000)
+        assert result == "[Binary file content omitted — not suitable for LLM context]"
+        assert "\x00" not in result
+
+    def test_large_binary_placeholder_is_str(self):
+        """Placeholder must be a plain str — safe to pass to LLM context."""
+        content = "\x00" * 25000
+        result = _truncate_large_file(content, max_chars=20000)
+        assert isinstance(result, str)
+        assert "\x00" not in result
+
+    def test_large_binary_no_truncation_marker(self):
+        """Placeholder must not contain the normal truncation marker."""
+        content = ("x\x00" * 15000)  # 30000 chars with embedded nulls
+        result = _truncate_large_file(content, max_chars=20000)
+        assert "chars TRUNCATED" not in result
+
+    def test_text_with_no_null_bytes_truncated_normally(self):
+        """Text without null bytes must still be truncated normally."""
+        content = "a" * 25000
+        result = _truncate_large_file(content, max_chars=20000)
+        assert "chars TRUNCATED" in result
+        assert "\x00" not in result
+
+    def test_binary_with_high_control_chars_not_flagged(self):
+        """Non-null control chars (\\x01–\\x1f) are not flagged as binary — only null bytes are."""
+        content = "\x01\x1f\x7f" * 8000  # 24000 chars, no null bytes
+        result = _truncate_large_file(content, max_chars=20000)
+        # Should truncate normally, not return placeholder
+        assert "chars TRUNCATED" in result

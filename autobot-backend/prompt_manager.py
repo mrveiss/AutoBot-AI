@@ -150,6 +150,24 @@ def _xml_tail_boundary(content: str, target: int) -> int:
     return target
 
 
+def _is_binary_content(content: str) -> bool:
+    """
+    Detect binary content masquerading as text (e.g. null bytes in decoded strings).
+
+    Issue #4396: Binary files opened with UTF-8 decoding can slip through as
+    str objects that contain null bytes (\\x00).  Passing such content to
+    _truncate_large_file would produce a broken LLM context entry.  This helper
+    lets callers bail out early with a safe placeholder.
+
+    Args:
+        content: String to inspect.
+
+    Returns:
+        True when null bytes are present (strong binary signal), else False.
+    """
+    return "\x00" in content
+
+
 def _snap_to_char_boundary(content: str, pos: int, search_forward: bool = True) -> int:
     """
     Snap a string slice position to a Unicode-safe word boundary.
@@ -218,6 +236,14 @@ def _truncate_large_file(content: str, max_chars: int = 20000) -> str:
     """
     if len(content) <= max_chars:
         return content
+
+    # Issue #4396: binary content (null bytes) must not be passed to the LLM
+    if _is_binary_content(content):
+        logger.warning(
+            "Binary content detected (%d chars) — skipping truncation, returning placeholder",
+            len(content),
+        )
+        return "[Binary file content omitted — not suitable for LLM context]"
 
     # Calculate sections: preserve first 40% and last 40% of max_chars
     section_size = (max_chars // 5) * 2  # 40% of max_chars
@@ -291,7 +317,6 @@ def _build_skill_context(skills: Optional[List[Dict]]) -> str:
     skills_text = "\n".join(skill_lines)
     header = "\n\n## Available Skills\nThe following skills are available for this agent to use:\n"
     return header + skills_text
-
 
 # Issue #380: Module-level constant for supported prompt file extensions
 _SUPPORTED_PROMPT_EXTENSIONS = frozenset({".md", ".txt", ".prompt"})
