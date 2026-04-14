@@ -108,7 +108,7 @@ const handleRemove = (event: MouseEvent) => {
   height: 28px;
   padding: 0 12px;
   font-size: var(--text-sm);
-  border-radius: 14px;
+  border-radius: var(--radius-2xl);
 }
 
 /* Rounded Variants */

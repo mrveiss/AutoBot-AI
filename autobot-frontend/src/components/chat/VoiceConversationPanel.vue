@@ -417,14 +417,14 @@ onBeforeUnmount(() => {
 
 .voice-panel__amplitude {
   height: 3px;
-  border-radius: 1.5px;
+  border-radius: var(--radius-xs);
   background: rgba(148, 163, 184, 0.1);
   overflow: hidden;
 }
 
 .voice-panel__amplitude-bar {
   height: 100%;
-  border-radius: 1.5px;
+  border-radius: var(--radius-xs);
   background: linear-gradient(90deg, #60a5fa, #818cf8);
   transition: width var(--duration-100) var(--ease-out);
   min-width: 0;
@@ -434,7 +434,7 @@ onBeforeUnmount(() => {
   height: 3px;
   appearance: none;
   background: rgba(148, 163, 184, 0.15);
-  border-radius: 1.5px;
+  border-radius: var(--radius-xs);
   outline: none;
   cursor: pointer;
 }

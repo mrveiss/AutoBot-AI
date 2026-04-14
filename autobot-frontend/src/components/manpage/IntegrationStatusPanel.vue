@@ -213,7 +213,7 @@ const { formatDate } = useKnowledgeBase()
   background: var(--color-primary);
   color: var(--text-inverse);
   padding: 4px 10px;
-  border-radius: 15px;
+  border-radius: var(--radius-2xl);
   font-size: 0.8rem;
   font-family: 'Courier New', monospace;
 }
