@@ -292,7 +292,7 @@ function toggleExpand(eventId: string): void {
 
 .timeline-dot i {
   color: white;
-  font-size: 10px;
+  font-size: var(--text-xs);
 }
 
 /* Event Card */

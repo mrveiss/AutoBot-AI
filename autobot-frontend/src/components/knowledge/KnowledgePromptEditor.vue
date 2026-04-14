@@ -541,7 +541,7 @@ onBeforeUnmount(() => {
 }
 
 .header-left h2 {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 0.25rem;
@@ -549,7 +549,7 @@ onBeforeUnmount(() => {
 
 .header-left .subtitle {
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .header-actions {
@@ -576,7 +576,7 @@ onBeforeUnmount(() => {
   padding: 0.5rem 0.75rem 0.5rem 2.25rem;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   background: var(--bg-input);
   color: var(--text-primary);
 }
@@ -585,7 +585,7 @@ onBeforeUnmount(() => {
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   background: var(--bg-input);
   color: var(--text-primary);
 }
@@ -596,7 +596,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .alert-error {
@@ -648,7 +648,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 0;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -688,12 +688,12 @@ onBeforeUnmount(() => {
   display: block;
   font-weight: 500;
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .prompt-desc {
   display: block;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   margin-top: 0.125rem;
   white-space: nowrap;
@@ -719,7 +719,7 @@ onBeforeUnmount(() => {
 }
 
 .editor-empty i {
-  font-size: 3rem;
+  font-size: var(--text-5xl);
   opacity: 0.5;
 }
 
@@ -740,7 +740,7 @@ onBeforeUnmount(() => {
 }
 
 .toolbar-left h3 {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -749,7 +749,7 @@ onBeforeUnmount(() => {
   padding: 0.125rem 0.5rem;
   background: var(--bg-secondary);
   border-radius: var(--radius-default);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -758,7 +758,7 @@ onBeforeUnmount(() => {
   background: var(--color-warning-bg);
   color: var(--color-warning-dark);
   border-radius: var(--radius-default);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 500;
 }
 
@@ -781,7 +781,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   font-family: var(--font-mono);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   line-height: 1.6;
   resize: none;
   background: var(--bg-input);
@@ -819,7 +819,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -839,7 +839,7 @@ onBeforeUnmount(() => {
   color: var(--color-info);
   border-radius: var(--radius-default);
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 /* Loading State */
@@ -896,7 +896,7 @@ onBeforeUnmount(() => {
 }
 
 .version-date {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -906,7 +906,7 @@ onBeforeUnmount(() => {
 }
 
 .version-preview h4 {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 0.75rem;

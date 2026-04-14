@@ -1408,13 +1408,13 @@ watch(() => currentView.value, () => {
 }
 
 .connection-label {
-  font-size: 10px;
+  font-size: var(--text-xs);
   fill: var(--text-secondary);
 }
 
 /* Component Groups */
 .group-label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: var(--font-semibold);
   text-transform: uppercase;
   letter-spacing: var(--tracking-wide);
@@ -1444,12 +1444,12 @@ watch(() => currentView.value, () => {
 }
 
 .component-icon {
-  font-size: 24px;
+  font-size: var(--text-2xl);
   fill: var(--text-on-primary);
 }
 
 .component-label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: var(--font-medium);
   fill: var(--text-on-primary);
 }
@@ -1460,7 +1460,7 @@ watch(() => currentView.value, () => {
 }
 
 .metrics-text {
-  font-size: 10px;
+  font-size: var(--text-xs);
   fill: var(--text-secondary);
 }
 
@@ -1573,7 +1573,7 @@ watch(() => currentView.value, () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: var(--text-base);
 }
 
 .close-btn {

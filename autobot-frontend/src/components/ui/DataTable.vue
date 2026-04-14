@@ -355,7 +355,7 @@ const formatCell = (value: any, column: Column) => {
   border-radius: var(--radius-xs);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: var(--text-sm);
   cursor: pointer;
   transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -372,7 +372,7 @@ const formatCell = (value: any, column: Column) => {
 
 /* Issue #901: Monospace for page numbers */
 .pagination-info {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   color: var(--text-secondary);

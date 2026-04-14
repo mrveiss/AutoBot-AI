@@ -643,7 +643,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -654,7 +654,7 @@ onMounted(() => {
 
 .header-description {
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   margin-top: 0.25rem;
 }
 
@@ -673,7 +673,7 @@ onMounted(() => {
   border: 1px solid var(--border-default);
   color: var(--text-primary);
   border-radius: var(--radius-lg);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -711,7 +711,7 @@ onMounted(() => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   min-width: 150px;
 }
 
@@ -742,7 +742,7 @@ onMounted(() => {
 }
 
 .widget-palette h4 {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-secondary);
   margin-bottom: 0.75rem;
@@ -763,7 +763,7 @@ onMounted(() => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   cursor: grab;
   transition: all 0.2s;
 }
@@ -914,7 +914,7 @@ onMounted(() => {
 }
 
 .empty-dashboard h3 {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 0.5rem;
@@ -965,7 +965,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -998,7 +998,7 @@ onMounted(() => {
 
 .form-group label {
   display: block;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
   margin-bottom: 0.375rem;
@@ -1012,7 +1012,7 @@ onMounted(() => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .form-group input:focus,
@@ -1066,7 +1066,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   margin: 0 auto 1rem;
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   color: var(--color-primary);
 }
 
@@ -1078,7 +1078,7 @@ onMounted(() => {
 }
 
 .widget-option p {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   line-height: 1.4;
 }

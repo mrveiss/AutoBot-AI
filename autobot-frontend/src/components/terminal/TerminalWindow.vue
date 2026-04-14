@@ -1510,12 +1510,12 @@ export default {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
 }
 
 .terminal-icon {
-  font-size: 16px;
+  font-size: var(--text-base);
 }
 
 .window-controls {
@@ -1530,7 +1530,7 @@ export default {
   padding: 4px 8px;
   border-radius: var(--radius-default);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--text-xs);
   transition: all 0.2s;
 }
 
@@ -1555,7 +1555,7 @@ export default {
   background-color: #1e1e1e;
   padding: 4px 16px;
   border-bottom: 1px solid #333;
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: #888;
 }
 
@@ -1603,7 +1603,7 @@ export default {
   flex: 1;
   padding: 16px;
   overflow-y: auto;
-  font-size: 13px;
+  font-size: var(--text-sm);
   line-height: 1.4;
   white-space: pre-wrap;
   word-break: break-all;
@@ -1686,7 +1686,7 @@ export default {
   background-color: #2d2d2d;
   padding: 6px 16px;
   border-top: 1px solid #333;
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 
 .footer-info {
@@ -1705,7 +1705,7 @@ export default {
   padding: 3px 8px;
   border-radius: var(--radius-default);
   cursor: pointer;
-  font-size: 10px;
+  font-size: var(--text-xs);
   transition: background-color 0.2s;
 }
 
@@ -1765,7 +1765,7 @@ export default {
   border: none;
   border-radius: var(--radius-default);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--text-sm);
   transition: background-color 0.2s;
 }
 
@@ -1885,7 +1885,7 @@ export default {
 .modal-title {
   margin: 0;
   color: #ffc107;
-  font-size: 18px;
+  font-size: var(--text-lg);
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -1909,7 +1909,7 @@ export default {
 }
 
 .command-label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: #888;
   margin-bottom: 8px;
   text-transform: uppercase;
@@ -1918,7 +1918,7 @@ export default {
 
 .command-text {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: #87ceeb;
   background-color: #000;
   padding: 12px;
@@ -1935,7 +1935,7 @@ export default {
 .risk-level {
   padding: 8px 12px;
   border-radius: var(--radius-md);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   margin-bottom: 12px;
 }
@@ -1971,7 +1971,7 @@ export default {
 
 .risk-reason {
   margin-bottom: 4px;
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .confirmation-message {
@@ -2007,7 +2007,7 @@ export default {
   border-radius: var(--radius-default);
   margin-bottom: 4px;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: #87ceeb;
 }
 
@@ -2068,7 +2068,7 @@ export default {
   padding: 8px 16px;
   border-radius: var(--radius-2xl);
   display: inline-block;
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 600;
   margin-bottom: 16px;
   text-transform: uppercase;
@@ -2078,14 +2078,14 @@ export default {
 .step-description h4 {
   margin: 0 0 8px 0;
   color: #17a2b8;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
 }
 
 .step-description p {
   margin: 0 0 16px 0;
   color: #ccc;
-  font-size: 14px;
+  font-size: var(--text-sm);
   line-height: 1.5;
 }
 
@@ -2111,7 +2111,7 @@ export default {
 
 .option-info li {
   margin-bottom: 8px;
-  font-size: 13px;
+  font-size: var(--text-sm);
   line-height: 1.4;
 }
 
@@ -2227,7 +2227,7 @@ export default {
 
   .terminal-output {
     padding: 12px;
-    font-size: 12px;
+    font-size: var(--text-xs);
   }
 
   .terminal-input-line {

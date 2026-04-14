@@ -159,14 +159,14 @@ function clearFilters() {
 }
 
 .filter-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--text-secondary);
 }
 
 .filter-select {
   padding: 0.5rem 2rem 0.5rem 0.75rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   background-color: var(--bg-input);
@@ -198,7 +198,7 @@ function clearFilters() {
   align-items: center;
   gap: 0.375rem;
   padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
   background-color: var(--bg-secondary);

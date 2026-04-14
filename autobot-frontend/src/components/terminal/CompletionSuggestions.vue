@@ -66,7 +66,7 @@ const typeIcon = (type: string): string => {
   border-radius: var(--radius-default) 4px 0 0;
   z-index: var(--z-popover);
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .completion-item {
@@ -104,7 +104,7 @@ const typeIcon = (type: string): string => {
 .item-desc {
   color: #666;
   margin-left: auto;
-  font-size: 11px;
+  font-size: var(--text-xs);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -112,7 +112,7 @@ const typeIcon = (type: string): string => {
 
 .completion-hint {
   padding: 2px 12px;
-  font-size: 10px;
+  font-size: var(--text-xs);
   color: #555;
   border-top: 1px solid #333;
   text-align: center;

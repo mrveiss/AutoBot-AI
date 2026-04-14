@@ -349,7 +349,7 @@ watch(saveSuccess, (val) => {
 }
 
 .field-label {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--color-text-primary, #e2e8f0);
 }
@@ -360,7 +360,7 @@ watch(saveSuccess, (val) => {
   border-radius: var(--radius-md);
   background: var(--color-bg-secondary, #1e293b);
   color: var(--color-text-primary, #e2e8f0);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   transition: border-color 0.15s;
 }
 .field-input:focus {
@@ -374,7 +374,7 @@ watch(saveSuccess, (val) => {
 }
 
 .field-hint {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--color-text-secondary, #94a3b8);
 }
 
@@ -398,7 +398,7 @@ watch(saveSuccess, (val) => {
 }
 
 .toggle-text {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--color-text-primary, #e2e8f0);
 }
@@ -417,7 +417,7 @@ watch(saveSuccess, (val) => {
 }
 
 .section-heading {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-text-primary, #e2e8f0);
   margin: 0;
@@ -445,7 +445,7 @@ watch(saveSuccess, (val) => {
 .matrix-header {
   background: var(--color-bg-tertiary, #0f172a);
   font-weight: 600;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--color-text-secondary, #94a3b8);
@@ -493,7 +493,7 @@ watch(saveSuccess, (val) => {
   border-radius: var(--radius-md);
   background: var(--color-primary, #3b82f6);
   color: #fff;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   transition: background 0.15s;
@@ -517,7 +517,7 @@ watch(saveSuccess, (val) => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--color-text-secondary, #94a3b8);
   padding: 0.75rem 0;
 }

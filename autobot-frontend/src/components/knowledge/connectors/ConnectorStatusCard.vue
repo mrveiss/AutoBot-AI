@@ -333,7 +333,7 @@ defineExpose({ resetSyncing })
 }
 
 .disabled-badge {
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--text-tertiary);
   text-transform: uppercase;
@@ -361,7 +361,7 @@ defineExpose({ resetSyncing })
 }
 
 .stat-label {
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--text-tertiary);
   text-transform: uppercase;
@@ -370,7 +370,7 @@ defineExpose({ resetSyncing })
 }
 
 .stat-value {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
   font-family: var(--font-sans);
@@ -402,7 +402,7 @@ defineExpose({ resetSyncing })
 }
 
 .error-text {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-error-dark);
   font-family: var(--font-mono);
   line-height: 1.4;

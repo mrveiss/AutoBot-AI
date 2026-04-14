@@ -286,7 +286,7 @@ function showError(msg: string) {
 
 .sidebar-title {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
 }
 
@@ -417,7 +417,7 @@ function showError(msg: string) {
 }
 
 .no-selection-icon {
-  font-size: 3rem;
+  font-size: var(--text-5xl);
   color: var(--color-text-muted, #444);
 }
 
@@ -448,7 +448,7 @@ function showError(msg: string) {
 
 .modal-title {
   margin: 0 0 12px;
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
 }
 
@@ -476,7 +476,7 @@ function showError(msg: string) {
   border: 1px solid var(--color-error, #f87171);
   border-radius: var(--radius-md);
   padding: 10px 20px;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   z-index: var(--z-popover);
   max-width: 90vw;
   text-align: center;

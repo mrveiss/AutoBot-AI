@@ -590,7 +590,7 @@ onMounted(() => {
 
 .modal-header h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--text-lg);
   color: var(--text-primary);
   word-break: break-all;
 }
@@ -598,7 +598,7 @@ onMounted(() => {
 .close-btn {
   background: none;
   border: none;
-  font-size: 24px;
+  font-size: var(--text-2xl);
   color: var(--text-muted);
   cursor: pointer;
   padding: 0;
@@ -663,7 +663,7 @@ onMounted(() => {
 .text-preview pre, .json-preview pre {
   margin: 0;
   font-family: 'Courier New', Courier, monospace;
-  font-size: 14px;
+  font-size: var(--text-sm);
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
@@ -705,7 +705,7 @@ onMounted(() => {
 
 .file-info p {
   margin: 8px 0;
-  font-size: 16px;
+  font-size: var(--text-base);
   color: var(--text-primary);
 }
 
@@ -721,7 +721,7 @@ onMounted(() => {
   border: none;
   border-radius: var(--radius-default);
   cursor: pointer;
-  font-size: 16px;
+  font-size: var(--text-base);
   transition: background-color 0.2s;
 }
 
@@ -741,7 +741,7 @@ onMounted(() => {
   }
 
   .modal-header h3 {
-    font-size: 16px;
+    font-size: var(--text-base);
   }
 
   .text-preview, .json-preview {
@@ -749,7 +749,7 @@ onMounted(() => {
   }
 
   .text-preview pre, .json-preview pre {
-    font-size: 12px;
+    font-size: var(--text-xs);
     padding: 12px;
   }
 }

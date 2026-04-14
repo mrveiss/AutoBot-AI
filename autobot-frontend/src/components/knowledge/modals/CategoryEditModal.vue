@@ -455,7 +455,7 @@ function selectIcon(icon: string): void {
   padding: 0.875rem 1rem;
   border-radius: var(--radius-lg);
   margin-bottom: 1.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .alert-success {
@@ -480,7 +480,7 @@ function selectIcon(icon: string): void {
 
 .category-path label {
   display: block;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -489,7 +489,7 @@ function selectIcon(icon: string): void {
 
 .path-value {
   font-family: var(--font-mono);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--color-info);
 }
 
@@ -503,7 +503,7 @@ function selectIcon(icon: string): void {
   margin-bottom: 0.5rem;
   font-weight: 500;
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .form-input,
@@ -512,7 +512,7 @@ function selectIcon(icon: string): void {
   padding: 0.625rem 0.875rem;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   background: var(--bg-input);
   color: var(--text-primary);
   transition: border-color 0.2s, box-shadow 0.2s;
@@ -560,7 +560,7 @@ function selectIcon(icon: string): void {
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s;
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 
 .icon-option:hover {
@@ -613,7 +613,7 @@ function selectIcon(icon: string): void {
   transform: translate(-50%, -50%);
   color: white;
   font-weight: bold;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
@@ -641,7 +641,7 @@ function selectIcon(icon: string): void {
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
 }
 
 .preview-name {
@@ -670,7 +670,7 @@ function selectIcon(icon: string): void {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
@@ -695,7 +695,7 @@ function selectIcon(icon: string): void {
 }
 
 .delete-warning h3 {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 0.75rem;
@@ -719,7 +719,7 @@ function selectIcon(icon: string): void {
 }
 
 .delete-note {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   font-style: italic;
   margin-top: 0.75rem;

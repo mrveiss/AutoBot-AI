@@ -588,7 +588,7 @@ onMounted(() => {
 }
 
 .dashboard-header h2 {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
@@ -596,7 +596,7 @@ onMounted(() => {
 
 .subtitle {
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   margin: 0.25rem 0 0 0;
 }
 
@@ -643,13 +643,13 @@ onMounted(() => {
 }
 
 .stat-value {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .stat-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -684,7 +684,7 @@ onMounted(() => {
 }
 
 .panel-header h3 {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
   margin: 0;
@@ -730,7 +730,7 @@ onMounted(() => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   resize: vertical;
 }
 
@@ -760,7 +760,7 @@ onMounted(() => {
   border: none;
   border-radius: var(--radius-md);
   color: #fff;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   cursor: pointer;
   transition: background 0.2s;
 }
@@ -795,7 +795,7 @@ onMounted(() => {
 .cost-badge {
   padding: 0.25rem 0.5rem;
   border-radius: var(--radius-default);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .category-badge {
@@ -880,19 +880,19 @@ onMounted(() => {
 }
 
 .rec-type {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   text-transform: uppercase;
 }
 
 .rec-savings {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--chart-green);
   font-weight: 500;
 }
 
 .recommendation-card h4 {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
   margin: 0 0 0.5rem 0;
@@ -905,7 +905,7 @@ onMounted(() => {
 }
 
 .rec-meta {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   margin-bottom: 0.5rem;
 }
@@ -915,7 +915,7 @@ onMounted(() => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-default);
   color: var(--text-secondary);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   padding: 0.25rem 0.5rem;
   cursor: pointer;
 }
@@ -964,18 +964,18 @@ onMounted(() => {
 .model-name {
   font-weight: 500;
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .model-cost {
   color: var(--color-warning);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .model-stats {
   display: flex;
   gap: 1rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   margin-bottom: 0.5rem;
 }
@@ -1012,12 +1012,12 @@ onMounted(() => {
 }
 
 .category-name {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
 .category-count {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -1039,7 +1039,7 @@ onMounted(() => {
 .category-meta {
   display: flex;
   justify-content: space-between;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -1065,12 +1065,12 @@ onMounted(() => {
 .cache-count {
   font-weight: 500;
   color: var(--color-purple-light);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .cache-savings {
   color: var(--chart-green);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .cache-preview {
@@ -1111,7 +1111,7 @@ onMounted(() => {
 }
 
 .axis-label {
-  font-size: 10px;
+  font-size: var(--text-xs);
   fill: var(--text-secondary);
 }
 
@@ -1126,7 +1126,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 

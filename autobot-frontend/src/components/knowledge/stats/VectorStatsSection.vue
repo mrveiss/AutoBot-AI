@@ -289,7 +289,7 @@ const getCategoryColor = (index: number): string => {
 
 .section-header h3 {
   color: var(--text-on-primary);
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: var(--font-bold);
   display: flex;
   align-items: center;
@@ -406,13 +406,13 @@ const getCategoryColor = (index: number): string => {
   background: var(--color-warning-bg-transparent);
   border-radius: 50%;
   color: var(--color-warning);
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   flex-shrink: 0;
 }
 
 .notice-content h4 {
   color: var(--text-on-primary);
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: var(--font-semibold);
   margin-bottom: var(--spacing-3);
 }
@@ -451,7 +451,7 @@ const getCategoryColor = (index: number): string => {
 
 .vector-chart-section h4 {
   color: var(--text-on-primary);
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: var(--font-semibold);
   margin-bottom: var(--spacing-6);
   display: flex;
@@ -505,7 +505,7 @@ const getCategoryColor = (index: number): string => {
 
 .vector-health-section h4 {
   color: var(--text-on-primary);
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: var(--font-semibold);
   margin-bottom: var(--spacing-6);
   display: flex;

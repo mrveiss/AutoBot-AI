@@ -482,7 +482,7 @@ onMounted(() => {
 
 .header-title {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-sans);
@@ -506,7 +506,7 @@ onMounted(() => {
 }
 
 .mode-label {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
   font-family: var(--font-sans);
@@ -518,7 +518,7 @@ onMounted(() => {
   border-radius: var(--radius-xs);
   background: var(--bg-secondary);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   font-family: var(--font-sans);
   cursor: pointer;
@@ -561,7 +561,7 @@ onMounted(() => {
 }
 
 .stat-value {
-  font-size: 20px;
+  font-size: var(--text-xl);
   font-weight: 600;
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
@@ -581,7 +581,7 @@ onMounted(() => {
 }
 
 .stat-label {
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--text-tertiary);
   text-transform: uppercase;
@@ -602,7 +602,7 @@ onMounted(() => {
 }
 
 .bulk-count {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--color-info);
   font-family: var(--font-sans);
@@ -616,7 +616,7 @@ onMounted(() => {
 }
 
 .loading-state i {
-  font-size: 24px;
+  font-size: var(--text-2xl);
   margin-bottom: var(--spacing-3);
 }
 
@@ -691,7 +691,7 @@ onMounted(() => {
   display: inline-block;
   padding: 2px var(--spacing-2);
   border-radius: var(--radius-xs);
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 500;
   font-family: var(--font-sans);
   text-transform: uppercase;
@@ -701,13 +701,13 @@ onMounted(() => {
 }
 
 .card-domain {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   font-family: var(--font-mono);
 }
 
 .card-timestamp {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
@@ -716,7 +716,7 @@ onMounted(() => {
 /* Card Content */
 .card-content {
   margin: 0 0 var(--spacing-3) 28px;
-  font-size: 13px;
+  font-size: var(--text-sm);
   line-height: 1.6;
   color: var(--text-secondary);
   font-family: var(--font-sans);
@@ -738,7 +738,7 @@ onMounted(() => {
 }
 
 .url-link {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-info);
   text-decoration: none;
   font-family: var(--font-mono);

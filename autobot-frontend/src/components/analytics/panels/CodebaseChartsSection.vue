@@ -333,7 +333,7 @@ function getCategoryIcon(categoryId: string): string {
 .stats-section h3 {
   margin: 0 0 20px 0;
   color: var(--text-secondary);
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -416,7 +416,7 @@ function getCategoryIcon(categoryId: string): string {
 .charts-section .section-header h3 {
   margin: 0;
   color: var(--text-secondary);
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -454,7 +454,7 @@ function getCategoryIcon(categoryId: string): string {
   border: 1px solid rgba(71, 85, 105, 0.5);
   border-radius: var(--radius-md);
   color: var(--text-muted);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -473,7 +473,7 @@ function getCategoryIcon(categoryId: string): string {
 }
 
 .category-tab i {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .tab-count {
@@ -485,7 +485,7 @@ function getCategoryIcon(categoryId: string): string {
   padding: 0 6px;
   background: rgba(0, 0, 0, 0.2);
   border-radius: var(--radius-xl);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
 }
 
@@ -614,7 +614,7 @@ function getCategoryIcon(categoryId: string): string {
   }
 
   .summary-value {
-    font-size: 1.5rem;
+    font-size: var(--text-2xl);
   }
 }
 
@@ -639,7 +639,7 @@ function getCategoryIcon(categoryId: string): string {
 .dependency-section .section-header h3 {
   margin: 0;
   color: var(--text-secondary);
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -710,7 +710,7 @@ function getCategoryIcon(categoryId: string): string {
 .external-deps-table h4 {
   margin: 0 0 16px 0;
   color: var(--text-secondary);
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   display: flex;
   align-items: center;

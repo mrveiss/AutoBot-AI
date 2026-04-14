@@ -137,7 +137,7 @@ async function handleScan() {
 
 .modal-header h3 {
   margin: 0;
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
 }
@@ -187,7 +187,7 @@ async function handleScan() {
   display: block;
   margin-top: var(--spacing-1);
   color: #ef4444;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .checkbox-group {
@@ -204,7 +204,7 @@ async function handleScan() {
 
 .note {
   color: var(--text-tertiary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   margin: 0;
 }
 

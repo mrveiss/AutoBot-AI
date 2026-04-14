@@ -795,17 +795,17 @@ onUnmounted(() => {
   }
 
   .terminal-header h3 {
-    font-size: 12px;
+    font-size: var(--text-xs);
   }
 
   .terminal-controls button {
     padding: 4px 8px;
-    font-size: 11px;
+    font-size: var(--text-xs);
   }
 
   .terminal-output {
     padding: 12px;
-    font-size: 12px;
+    font-size: var(--text-xs);
   }
 }
 

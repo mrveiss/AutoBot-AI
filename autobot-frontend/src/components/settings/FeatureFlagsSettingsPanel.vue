@@ -317,7 +317,7 @@ onMounted(() => {
 
 .error-state p {
   margin: 0 0 16px;
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .retry-btn {
@@ -329,7 +329,7 @@ onMounted(() => {
   color: var(--text-on-error);
   border: none;
   border-radius: var(--radius-md);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   transition: opacity 0.2s;

@@ -589,7 +589,7 @@ onUnmounted(() => {
 }
 
 .board-selector-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   white-space: nowrap;
 }
@@ -791,7 +791,7 @@ onUnmounted(() => {
 .sources-count {
   background: var(--color-info-bg);
   color: var(--color-info);
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
   border-radius: var(--radius-xl);
   padding: 1px 7px;

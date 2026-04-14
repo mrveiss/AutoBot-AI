@@ -181,46 +181,46 @@ function getStrategyIcon(strategy: string): string {
 .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
 .status-card { display: flex; align-items: center; gap: 14px; padding: 16px; background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-xl); }
 .status-card.healthy { border-color: var(--color-success); }
-.card-icon { width: 44px; height: 44px; border-radius: var(--radius-xl); background: var(--bg-tertiary); display: flex; align-items: center; justify-content: center; font-size: 18px; color: var(--text-secondary); }
+.card-icon { width: 44px; height: 44px; border-radius: var(--radius-xl); background: var(--bg-tertiary); display: flex; align-items: center; justify-content: center; font-size: var(--text-lg); color: var(--text-secondary); }
 .status-card.healthy .card-icon { background: var(--color-success-bg); color: var(--color-success); }
-.card-value { display: block; font-size: 18px; font-weight: 600; color: var(--text-primary); text-transform: capitalize; }
-.card-label { font-size: 12px; color: var(--text-tertiary); }
+.card-value { display: block; font-size: var(--text-lg); font-weight: 600; color: var(--text-primary); text-transform: capitalize; }
+.card-label { font-size: var(--text-xs); color: var(--text-tertiary); }
 
 .capabilities-panel { background: var(--bg-secondary); border-radius: var(--radius-xl); padding: 20px; }
 .capabilities-list { display: flex; flex-wrap: wrap; gap: 12px; }
-.capability-item { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--bg-tertiary); border-radius: var(--radius-2xl); font-size: 13px; color: var(--text-muted); }
+.capability-item { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--bg-tertiary); border-radius: var(--radius-2xl); font-size: var(--text-sm); color: var(--text-muted); }
 .capability-item.enabled { background: var(--color-success-bg); color: var(--color-success); }
-.capability-item i { font-size: 14px; }
+.capability-item i { font-size: var(--text-sm); }
 
 .strategies-panel { background: var(--bg-secondary); border-radius: var(--radius-xl); padding: 20px; }
-.loading { color: var(--text-tertiary); font-size: 13px; }
+.loading { color: var(--text-tertiary); font-size: var(--text-sm); }
 .strategies-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
 .strategy-card { display: flex; gap: 12px; padding: 14px; background: var(--bg-tertiary); border: 1px solid transparent; border-radius: var(--radius-lg); transition: all 0.2s; }
 .strategy-card.active { border-color: var(--color-primary); background: var(--color-primary-bg); }
 .strategy-icon { width: 36px; height: 36px; border-radius: var(--radius-lg); background: var(--bg-secondary); display: flex; align-items: center; justify-content: center; color: var(--text-secondary); flex-shrink: 0; }
 .strategy-card.active .strategy-icon { background: var(--color-primary); color: white; }
-.strategy-name { display: block; font-size: 14px; font-weight: 500; color: var(--text-primary); margin-bottom: 4px; }
-.strategy-desc { margin: 0 0 6px; font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
-.strategy-best { font-size: 11px; color: var(--text-muted); font-style: italic; }
+.strategy-name { display: block; font-size: var(--text-sm); font-weight: 500; color: var(--text-primary); margin-bottom: 4px; }
+.strategy-desc { margin: 0 0 6px; font-size: var(--text-xs); color: var(--text-secondary); line-height: 1.4; }
+.strategy-best { font-size: var(--text-xs); color: var(--text-muted); font-style: italic; }
 
 .visualization-panel { background: var(--bg-secondary); border-radius: var(--radius-xl); padding: 20px; }
 .workflow-viz { display: flex; flex-direction: column; gap: 20px; }
 .viz-timeline { display: flex; align-items: flex-start; gap: 0; overflow-x: auto; padding: 16px 0; }
 .viz-step { display: flex; align-items: center; }
 .viz-node { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 80px; }
-.node-circle { width: 40px; height: 40px; border-radius: 50%; background: var(--bg-tertiary); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; color: var(--text-tertiary); border: 2px solid var(--border-default); }
+.node-circle { width: 40px; height: 40px; border-radius: 50%; background: var(--bg-tertiary); display: flex; align-items: center; justify-content: center; font-size: var(--text-sm); font-weight: 600; color: var(--text-tertiary); border: 2px solid var(--border-default); }
 .viz-step.completed .node-circle { background: var(--color-success); color: white; border-color: var(--color-success); }
 .viz-step.failed .node-circle { background: var(--color-error); color: white; border-color: var(--color-error); }
 .viz-step.executing .node-circle { background: var(--color-primary); color: white; border-color: var(--color-primary); }
-.node-label { font-size: 11px; color: var(--text-secondary); text-align: center; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.node-label { font-size: var(--text-xs); color: var(--text-secondary); text-align: center; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .viz-connector { width: 40px; height: 2px; background: var(--border-default); margin-top: 20px; }
 .viz-connector.completed { background: var(--color-success); }
 
 .viz-details { display: flex; gap: 24px; padding: 16px; background: var(--bg-tertiary); border-radius: var(--radius-lg); }
 .detail-item { display: flex; flex-direction: column; gap: 4px; }
-.detail-item .label { font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; }
-.detail-item .value { font-size: 14px; font-weight: 500; color: var(--text-primary); }
-.status-badge { padding: 2px 10px; border-radius: var(--radius-xl); font-size: 12px; }
+.detail-item .label { font-size: var(--text-xs); color: var(--text-tertiary); text-transform: uppercase; }
+.detail-item .value { font-size: var(--text-sm); font-weight: 500; color: var(--text-primary); }
+.status-badge { padding: 2px 10px; border-radius: var(--radius-xl); font-size: var(--text-xs); }
 .status-badge.running { background: var(--color-success-bg); color: var(--color-success); }
 .status-badge.paused { background: var(--color-warning-bg); color: var(--color-warning); }
 .status-badge.completed { background: var(--color-info-bg); color: var(--color-info); }
@@ -228,7 +228,7 @@ function getStrategyIcon(strategy: string): string {
 
 .no-workflow { flex: 1; display: flex; align-items: center; justify-content: center; }
 .empty-viz { text-align: center; padding: 40px; }
-.empty-viz i { font-size: 48px; color: var(--text-muted); margin-bottom: 16px; }
+.empty-viz i { font-size: var(--text-5xl); color: var(--text-muted); margin-bottom: 16px; }
 .empty-viz h3 { margin: 0 0 8px; color: var(--text-primary); }
 .empty-viz p { margin: 0; color: var(--text-tertiary); }
 </style>

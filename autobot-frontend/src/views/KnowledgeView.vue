@@ -218,7 +218,7 @@
 
 .sidebar-header h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-sans);
@@ -247,7 +247,7 @@
 
 .category-divider {
   padding: 12px 20px 8px;
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.8px;
@@ -288,7 +288,7 @@
 
 .category-item span {
   flex: 1;
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   font-family: var(--font-sans);
 }
@@ -340,7 +340,7 @@
   }
 
   .category-item span {
-    font-size: 13px;
+    font-size: var(--text-sm);
   }
 
   .category-divider {

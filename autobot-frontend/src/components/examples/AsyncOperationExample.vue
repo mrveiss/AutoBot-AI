@@ -796,7 +796,7 @@ const loadAnalytics = () => analytics.execute(async () => {
 }
 
 .example-title {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 600;
   color: var(--color-primary-dark);
 }
@@ -806,7 +806,7 @@ const loadAnalytics = () => analytics.execute(async () => {
   color: var(--text-on-primary);
   padding: 4px 12px;
   border-radius: var(--radius-2xl);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
@@ -927,7 +927,7 @@ const loadAnalytics = () => analytics.execute(async () => {
 
 .data-display pre {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -949,7 +949,7 @@ const loadAnalytics = () => analytics.execute(async () => {
   padding: 8px 12px;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
-  font-size: 1rem;
+  font-size: var(--text-base);
   transition: border-color 0.2s;
 }
 
@@ -1022,7 +1022,7 @@ const loadAnalytics = () => analytics.execute(async () => {
 }
 
 .log-timestamp {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--color-error-dark);
   margin-right: 12px;
 }
@@ -1049,7 +1049,7 @@ const loadAnalytics = () => analytics.execute(async () => {
 .data-section h3 {
   margin: 0 0 12px 0;
   color: var(--text-primary);
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
 }
 
 /* Analytics Display */
@@ -1070,7 +1070,7 @@ const loadAnalytics = () => analytics.execute(async () => {
 
 .analytics-card h4 {
   margin: 0 0 12px 0;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   opacity: 0.9;
 }
@@ -1128,7 +1128,7 @@ const loadAnalytics = () => analytics.execute(async () => {
   padding: 12px 16px;
   background: var(--bg-tertiary);
   border-bottom: 1px solid var(--border-default);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .code-block pre {
@@ -1186,13 +1186,13 @@ const loadAnalytics = () => analytics.execute(async () => {
 
 .benefit-content h3 {
   margin: 0 0 8px 0;
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
 }
 
 .benefit-content p {
   margin: 0;
   opacity: 0.9;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 /* Scrollbar Styling */

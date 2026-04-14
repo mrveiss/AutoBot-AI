@@ -620,7 +620,7 @@ onMounted(async () => {
 .tab-badge {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 1px 6px;
   border-radius: var(--radius-xl);
   min-width: 20px;
@@ -734,7 +734,7 @@ onMounted(async () => {
 
 /* ---- Status Badges ---- */
 .status-badge {
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
   padding: 2px 8px;
   border-radius: var(--radius-xl);
@@ -794,7 +794,7 @@ onMounted(async () => {
 }
 
 .plugin-meta {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary, var(--text-secondary));
   margin: 0;
 }
@@ -808,12 +808,12 @@ onMounted(async () => {
 }
 
 .deps-label {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
 .hook-tag {
-  font-size: 11px;
+  font-size: var(--text-xs);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   padding: 1px 6px;
@@ -1052,7 +1052,7 @@ onMounted(async () => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   padding: var(--spacing-md);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-family: var(--font-mono);
   color: var(--text-primary);
   overflow-x: auto;
@@ -1066,7 +1066,7 @@ onMounted(async () => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   padding: var(--spacing-md);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-family: var(--font-mono);
   color: var(--text-primary);
   resize: vertical;

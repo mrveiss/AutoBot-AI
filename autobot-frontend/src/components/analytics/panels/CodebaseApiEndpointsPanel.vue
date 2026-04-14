@@ -637,7 +637,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 
 .coverage-value {
   font-weight: 600;
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 
 .coverage-value.success { color: var(--chart-green); }
@@ -668,7 +668,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
   display: inline-block;
   padding: 2px 8px;
   border-radius: var(--radius-default);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   margin-right: 8px;
@@ -696,7 +696,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
   background: rgba(59, 130, 246, 0.2);
   color: var(--color-info-light);
   border-radius: var(--radius-xl);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 500;
 }
 

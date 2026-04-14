@@ -1629,7 +1629,7 @@ watch(selectedScope, () => {
 
 .sidebar-header h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
@@ -1656,7 +1656,7 @@ watch(selectedScope, () => {
   position: absolute;
   left: 12px;
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .search-wrapper .search-input {
@@ -1664,7 +1664,7 @@ watch(selectedScope, () => {
   padding: 10px 36px 10px 36px;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  font-size: 14px;
+  font-size: var(--text-sm);
   transition: all 0.2s;
   background: var(--bg-input);
   color: var(--text-primary);
@@ -1698,7 +1698,7 @@ watch(selectedScope, () => {
 
 .category-divider {
   padding: 12px 20px 8px;
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -1727,16 +1727,16 @@ watch(selectedScope, () => {
 .category-item i {
   width: 20px;
   text-align: center;
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .category-item span:first-of-type:not(.count) {
   flex: 1;
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .category-item .count {
-  font-size: 12px;
+  font-size: var(--text-xs);
   background: var(--bg-tertiary);
   padding: 2px 8px;
   border-radius: var(--radius-xl);
@@ -1769,7 +1769,7 @@ watch(selectedScope, () => {
   color: var(--text-on-primary);
   border: none;
   border-radius: var(--radius-lg);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: flex;
@@ -1803,13 +1803,13 @@ watch(selectedScope, () => {
 
 .header-left h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .header-left .subtitle {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -1858,7 +1858,7 @@ watch(selectedScope, () => {
 
 .stat-item i {
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .stat-item .stat-value {
@@ -1867,7 +1867,7 @@ watch(selectedScope, () => {
 }
 
 .stat-item .stat-label {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -1946,7 +1946,7 @@ watch(selectedScope, () => {
   align-items: center;
   justify-content: center;
   color: var(--text-on-primary);
-  font-size: 18px;
+  font-size: var(--text-lg);
 }
 
 .card-content {
@@ -1979,7 +1979,7 @@ watch(selectedScope, () => {
 }
 
 .badge {
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 2px 8px;
   border-radius: var(--radius-default);
   font-weight: 500;
@@ -2038,7 +2038,7 @@ watch(selectedScope, () => {
 
 .card-description {
   margin: 0 0 8px;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
   line-height: 1.4;
 }
@@ -2046,7 +2046,7 @@ watch(selectedScope, () => {
 .card-meta {
   display: flex;
   gap: 16px;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
@@ -2068,7 +2068,7 @@ watch(selectedScope, () => {
 }
 
 .tag {
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 2px 8px;
   background: var(--bg-tertiary);
   border-radius: var(--radius-default);
@@ -2088,7 +2088,7 @@ watch(selectedScope, () => {
 }
 
 .usage-label {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   display: flex;
   align-items: center;
@@ -2096,7 +2096,7 @@ watch(selectedScope, () => {
 }
 
 .usage-tag {
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 2px 8px;
   background: var(--color-primary-bg);
   color: var(--color-primary);
@@ -2146,7 +2146,7 @@ watch(selectedScope, () => {
 
 .templates-section h3 {
   margin: 0 0 8px;
-  font-size: 18px;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
@@ -2160,7 +2160,7 @@ watch(selectedScope, () => {
 
 .templates-subtitle {
   margin: 0 0 20px;
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -2195,19 +2195,19 @@ watch(selectedScope, () => {
   align-items: center;
   justify-content: center;
   color: var(--text-on-primary);
-  font-size: 16px;
+  font-size: var(--text-base);
 }
 
 .template-info h4 {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .template-info p {
   margin: 2px 0 0;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -2256,11 +2256,11 @@ watch(selectedScope, () => {
   align-items: center;
   justify-content: center;
   color: var(--text-on-primary);
-  font-size: 18px;
+  font-size: var(--text-lg);
 }
 
 .type-option span {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
   text-align: center;
@@ -2284,7 +2284,7 @@ watch(selectedScope, () => {
   align-items: center;
   justify-content: center;
   color: var(--text-on-primary);
-  font-size: 16px;
+  font-size: var(--text-base);
 }
 
 .selected-type .type-info {
@@ -2301,7 +2301,7 @@ watch(selectedScope, () => {
   background: none;
   border: none;
   padding: 0;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-primary);
   cursor: pointer;
 }
@@ -2329,7 +2329,7 @@ watch(selectedScope, () => {
 }
 
 .form-group label {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -2342,7 +2342,7 @@ watch(selectedScope, () => {
   padding: 10px 12px;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  font-size: 14px;
+  font-size: var(--text-sm);
   transition: all 0.2s;
   background: var(--bg-input);
   color: var(--text-primary);
@@ -2355,7 +2355,7 @@ watch(selectedScope, () => {
 }
 
 .input-hint {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
@@ -2366,7 +2366,7 @@ watch(selectedScope, () => {
 .secret-input {
   padding-right: 44px;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .secret-masked {
@@ -2422,7 +2422,7 @@ watch(selectedScope, () => {
 }
 
 .scope-option i {
-  font-size: 20px;
+  font-size: var(--text-xl);
   color: var(--text-muted);
   margin-top: 2px;
 }
@@ -2442,7 +2442,7 @@ watch(selectedScope, () => {
 }
 
 .scope-option small {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   margin-top: 2px;
 }
@@ -2470,18 +2470,18 @@ watch(selectedScope, () => {
   align-items: center;
   justify-content: center;
   color: var(--text-on-primary);
-  font-size: 24px;
+  font-size: var(--text-2xl);
 }
 
 .view-title h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .view-type {
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -2492,7 +2492,7 @@ watch(selectedScope, () => {
 }
 
 .view-section label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -2516,7 +2516,7 @@ watch(selectedScope, () => {
 .secret-display code {
   flex: 1;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--text-sm);
   word-break: break-all;
   color: var(--text-primary);
 }
@@ -2539,7 +2539,7 @@ watch(selectedScope, () => {
 }
 
 .view-item label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -2547,7 +2547,7 @@ watch(selectedScope, () => {
 }
 
 .view-item span {
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
@@ -2597,7 +2597,7 @@ watch(selectedScope, () => {
 .transfer-content h4,
 .delete-content h4 {
   margin: 0 0 8px;
-  font-size: 18px;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -2615,7 +2615,7 @@ watch(selectedScope, () => {
   gap: 8px;
   padding: 10px 16px;
   border-radius: var(--radius-lg);
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .transfer-warning {
@@ -2635,7 +2635,7 @@ watch(selectedScope, () => {
   color: var(--text-on-primary);
   border: none;
   border-radius: var(--radius-lg);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: inline-flex;
@@ -2660,7 +2660,7 @@ watch(selectedScope, () => {
   color: var(--text-secondary);
   border: none;
   border-radius: var(--radius-lg);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
@@ -2676,7 +2676,7 @@ watch(selectedScope, () => {
   color: var(--text-on-error);
   border: none;
   border-radius: var(--radius-lg);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: inline-flex;
@@ -2742,7 +2742,7 @@ watch(selectedScope, () => {
 }
 
 .checkbox-option i {
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 
@@ -2751,7 +2751,7 @@ watch(selectedScope, () => {
 }
 
 .checkbox-option span {
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
   font-weight: 500;
 }

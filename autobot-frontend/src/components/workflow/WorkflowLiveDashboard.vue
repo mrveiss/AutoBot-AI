@@ -342,7 +342,7 @@ onUnmounted(() => {
   gap: 8px;
   padding: 8px 14px;
   border-radius: var(--radius-lg);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
@@ -371,7 +371,7 @@ onUnmounted(() => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: var(--text-xs);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -407,7 +407,7 @@ onUnmounted(() => {
 }
 
 .stat-chip i {
-  font-size: 16px;
+  font-size: var(--text-base);
   color: var(--text-secondary);
 }
 
@@ -417,13 +417,13 @@ onUnmounted(() => {
 .stat-chip:nth-child(4) i { color: var(--color-error); }
 
 .stat-value {
-  font-size: 18px;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .stat-label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -497,7 +497,7 @@ onUnmounted(() => {
 
 .empty-state p {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 /* Execution Grid */
@@ -545,7 +545,7 @@ onUnmounted(() => {
 }
 
 .card-name {
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
   overflow: hidden;
@@ -555,7 +555,7 @@ onUnmounted(() => {
 }
 
 .card-desc {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -569,7 +569,7 @@ onUnmounted(() => {
   gap: 4px;
   padding: 3px 10px;
   border-radius: var(--radius-xl);
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 500;
   white-space: nowrap;
   flex-shrink: 0;
@@ -610,7 +610,7 @@ onUnmounted(() => {
 .progress-meta {
   display: flex;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -629,7 +629,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
+  font-size: var(--text-xs);
   border: 2px solid var(--border-default);
   background: var(--bg-tertiary);
   color: var(--text-tertiary);
@@ -672,7 +672,7 @@ onUnmounted(() => {
 }
 
 .timeline-overflow {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   padding-left: 4px;
 }
@@ -698,7 +698,7 @@ onUnmounted(() => {
   padding: 2px 8px;
   background: var(--bg-tertiary);
   border-radius: var(--radius-default);
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   text-transform: capitalize;
 }
@@ -707,7 +707,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 </style>

@@ -285,7 +285,7 @@ async function handleDelete(voiceId: string, name: string) {
 }
 
 .voice-badge {
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 2px 6px;
   border-radius: var(--radius-sm, 4px);
   font-weight: 500;
@@ -428,7 +428,7 @@ async function handleDelete(voiceId: string, name: string) {
 
 .audio-preview {
   margin-top: var(--spacing-xs, 6px);
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary, #64748b);
 }
 
@@ -469,7 +469,7 @@ async function handleDelete(voiceId: string, name: string) {
   border: 1px solid var(--color-primary, #60a5fa);
   border-radius: var(--radius-md, 6px);
   color: var(--text-secondary, #94a3b8);
-  font-size: 12px;
+  font-size: var(--text-xs);
   display: flex;
   align-items: center;
   gap: var(--spacing-xs, 6px);

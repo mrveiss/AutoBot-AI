@@ -115,15 +115,15 @@ const footerClasses = computed(() => ({
 
 /* Size Variants */
 .card-sm {
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .card-md {
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .card-lg {
-  font-size: 16px;
+  font-size: var(--text-base);
 }
 
 /* Card Header */
@@ -148,7 +148,7 @@ const footerClasses = computed(() => ({
 
 .card-title {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-sans);
@@ -157,7 +157,7 @@ const footerClasses = computed(() => ({
 
 .card-subtitle {
   margin: 4px 0 0 0;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   line-height: 1.4;
 }

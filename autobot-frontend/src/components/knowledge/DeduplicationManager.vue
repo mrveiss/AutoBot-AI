@@ -391,7 +391,7 @@ const cleanupOrphans = async () => {
 .scanning-state i,
 .error-state i,
 .initial-state i {
-  font-size: 3rem;
+  font-size: var(--text-5xl);
   margin-bottom: var(--spacing-4);
   display: block;
 }

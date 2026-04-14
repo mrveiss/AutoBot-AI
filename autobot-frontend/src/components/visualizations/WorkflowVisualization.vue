@@ -603,14 +603,14 @@ defineExpose({
 }
 
 .header-info h3 {
-  font-size: 18px;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
 }
 
 .workflow-id {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -626,7 +626,7 @@ defineExpose({
   gap: 6px;
   padding: 6px 12px;
   border-radius: var(--radius-md);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
@@ -753,12 +753,12 @@ defineExpose({
 }
 
 .node-icon {
-  font-size: 18px;
+  font-size: var(--text-lg);
   fill: var(--text-primary);
 }
 
 .node-label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   fill: var(--text-secondary);
   font-weight: 500;
 }
@@ -795,7 +795,7 @@ defineExpose({
 }
 
 .duration-badge {
-  font-size: 10px;
+  font-size: var(--text-xs);
   fill: var(--text-tertiary);
 }
 
@@ -833,7 +833,7 @@ defineExpose({
 }
 
 .zoom-level {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   min-width: 40px;
   text-align: center;
@@ -863,7 +863,7 @@ defineExpose({
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-primary);
   font-weight: 500;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
@@ -898,7 +898,7 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: var(--text-lg);
   background: var(--color-info-bg);
 }
 
@@ -920,13 +920,13 @@ defineExpose({
 
 .details-title h4 {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .node-type {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -962,12 +962,12 @@ defineExpose({
 }
 
 .detail-row .label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
 .detail-row .value {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-primary);
   font-weight: 500;
 }
@@ -977,7 +977,7 @@ defineExpose({
 }
 
 .detail-row .output {
-  font-size: 11px;
+  font-size: var(--text-xs);
   background: rgba(15, 23, 42, 0.5);
   padding: 8px;
   border-radius: var(--radius-default);

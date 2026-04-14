@@ -350,7 +350,7 @@ onMounted(() => {
 
 .header-title {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-sans);
@@ -383,7 +383,7 @@ onMounted(() => {
 }
 
 .loading-state i {
-  font-size: 24px;
+  font-size: var(--text-2xl);
   margin-bottom: var(--spacing-3);
 }
 
@@ -399,7 +399,7 @@ onMounted(() => {
   text-align: center;
   padding: var(--spacing-8);
   color: var(--text-tertiary);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-family: var(--font-sans);
 }
 
@@ -424,7 +424,7 @@ onMounted(() => {
 }
 
 .history-status {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -449,7 +449,7 @@ onMounted(() => {
 }
 
 .history-time {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
@@ -461,7 +461,7 @@ onMounted(() => {
 }
 
 .history-stat {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   font-family: var(--font-sans);
 }
@@ -491,14 +491,14 @@ onMounted(() => {
 }
 
 .history-error {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-error-dark);
   font-family: var(--font-mono);
   line-height: 1.4;
 }
 
 .history-more-errors {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   font-style: italic;
   font-family: var(--font-sans);

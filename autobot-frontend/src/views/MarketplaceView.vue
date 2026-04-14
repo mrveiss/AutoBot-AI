@@ -500,7 +500,7 @@ onMounted(async () => {
 }
 
 .count-badge {
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 1px 6px;
   border-radius: var(--radius-xl);
   min-width: 20px;
@@ -611,7 +611,7 @@ onMounted(async () => {
 }
 
 .status-badge {
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
   padding: 2px 8px;
   border-radius: var(--radius-xl);
@@ -656,7 +656,7 @@ onMounted(async () => {
 }
 
 .plugin-meta {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary, var(--text-secondary));
   margin: 0;
 }
@@ -665,7 +665,7 @@ onMounted(async () => {
   display: flex;
   gap: var(--spacing-sm);
   align-items: center;
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -689,7 +689,7 @@ onMounted(async () => {
   border: 1px solid var(--border-default);
   padding: 1px 6px;
   border-radius: var(--radius-default);
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   text-transform: capitalize;
 }
@@ -701,7 +701,7 @@ onMounted(async () => {
 }
 
 .tag-chip {
-  font-size: 11px;
+  font-size: var(--text-xs);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   padding: 1px 6px;

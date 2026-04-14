@@ -834,14 +834,14 @@ onUnmounted(() => {
 
 .chart-title {
   margin: 0;
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
 }
 
 .chart-subtitle {
   display: block;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   margin-top: 4px;
 }
@@ -897,7 +897,7 @@ onUnmounted(() => {
 
 .error-icon {
   font-weight: bold;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   color: var(--color-error, #ef4444);
 }
 
@@ -907,7 +907,7 @@ onUnmounted(() => {
   color: var(--color-primary);
   cursor: pointer;
   text-decoration: underline;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   padding: 0;
 }
 
@@ -937,7 +937,7 @@ onUnmounted(() => {
   border-radius: var(--radius-md);
   background: var(--bg-primary);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .tree-search::placeholder {
@@ -947,7 +947,7 @@ onUnmounted(() => {
 .tree-stats {
   display: flex;
   gap: var(--spacing-3);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   white-space: nowrap;
 }
@@ -968,7 +968,7 @@ onUnmounted(() => {
   border-radius: var(--radius-md);
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   transition: all 0.2s ease;
 }
 
@@ -1057,7 +1057,7 @@ onUnmounted(() => {
   border-radius: var(--radius-md);
   color: var(--text-primary);
   cursor: pointer;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   transition: all 0.2s ease;
 }
 
@@ -1106,7 +1106,7 @@ onUnmounted(() => {
 }
 
 .detail-icon {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   min-width: 24px;
 }
 
@@ -1123,7 +1123,7 @@ onUnmounted(() => {
   border: none;
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   padding: 0;
   width: 24px;
   height: 24px;
@@ -1150,7 +1150,7 @@ onUnmounted(() => {
 }
 
 .detail-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: var(--font-semibold);
   color: var(--text-tertiary);
   text-transform: uppercase;
@@ -1158,7 +1158,7 @@ onUnmounted(() => {
 }
 
 .detail-value {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-primary);
   word-break: break-word;
 }
@@ -1237,7 +1237,7 @@ onUnmounted(() => {
 }
 
 .file-icon {
-  font-size: 1rem;
+  font-size: var(--text-base);
   flex-shrink: 0;
 }
 
@@ -1296,7 +1296,7 @@ onUnmounted(() => {
 }
 
 .section-icon {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .import-list {
@@ -1354,7 +1354,7 @@ onUnmounted(() => {
 .import-via {
   flex-shrink: 0;
   color: var(--text-tertiary);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .import-tree-chart.fullscreen {

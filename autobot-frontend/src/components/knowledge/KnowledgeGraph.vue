@@ -1672,7 +1672,7 @@ watch(layoutMode, () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .panel-header .close-btn {
@@ -1789,7 +1789,7 @@ watch(layoutMode, () => {
 }
 
 .relation-target i {
-  font-size: 10px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -2028,7 +2028,7 @@ watch(layoutMode, () => {
 
 .control-separator {
   color: var(--border-default);
-  font-size: 14px;
+  font-size: var(--text-sm);
   margin: 0 4px;
 }
 

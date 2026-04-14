@@ -364,7 +364,7 @@ const getItemSeverityClass = (severity: string): string => {
 .item-severity {
   padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-sm);
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-weight: var(--font-semibold);
   text-transform: uppercase;
 }

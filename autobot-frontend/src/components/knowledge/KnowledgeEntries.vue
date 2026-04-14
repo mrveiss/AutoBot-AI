@@ -976,7 +976,7 @@ watch([debouncedSearchQuery, filterCategory, filterType], () => {
   background: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: var(--text-sm);
   transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -1130,7 +1130,7 @@ tr.selected {
   display: inline-block;
   padding: var(--spacing-1) var(--spacing-3);
   border-radius: var(--radius-xs);
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 500;
   font-family: var(--font-sans);
   background: var(--bg-tertiary);
@@ -1158,7 +1158,7 @@ tr.selected {
   padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--bg-tertiary);
   border-radius: var(--radius-xs);
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-family: var(--font-mono);
   font-weight: 400;
   color: var(--text-secondary);
@@ -1171,7 +1171,7 @@ tr.selected {
 
 /* Issue #901: Monospace for dates */
 .date-cell {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;

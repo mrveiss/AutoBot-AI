@@ -374,7 +374,7 @@ onMounted(() => {
 }
 
 .section-title h3 {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
@@ -386,7 +386,7 @@ onMounted(() => {
 .health-status-badge {
   padding: 0.375rem 0.75rem;
   border-radius: var(--radius-full);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
 }
@@ -449,7 +449,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   color: var(--bg-card);
 }
 
@@ -487,13 +487,13 @@ onMounted(() => {
 }
 
 .card-value {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .card-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -507,7 +507,7 @@ onMounted(() => {
 }
 
 .quality-dimensions h4 {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-secondary);
   margin: 0 0 1rem 0;
@@ -528,7 +528,7 @@ onMounted(() => {
 .dimension-header {
   display: flex;
   justify-content: space-between;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .dimension-name {
@@ -574,7 +574,7 @@ onMounted(() => {
 }
 
 .issues-summary h4 {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-secondary);
   margin: 0 0 0.75rem 0;
@@ -589,7 +589,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
@@ -611,7 +611,7 @@ onMounted(() => {
 }
 
 .recommendations h4 {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-info-dark);
   margin: 0 0 0.75rem 0;
@@ -630,7 +630,7 @@ onMounted(() => {
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--color-info-dark);
 }
 
@@ -723,7 +723,7 @@ onMounted(() => {
   background: var(--border-default);
   border-radius: 50%;
   color: var(--border-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .history-content {
@@ -735,16 +735,16 @@ onMounted(() => {
 .history-action {
   font-weight: 500;
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .history-details {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
 .history-time {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   white-space: nowrap;
 }

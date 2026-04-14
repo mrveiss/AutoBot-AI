@@ -474,17 +474,17 @@ export default {
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-full);
-  font-size: 20px;
+  font-size: var(--text-xl);
 }
 
 .stat-value {
-  font-size: 24px;
+  font-size: var(--text-2xl);
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .stat-label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -548,18 +548,18 @@ export default {
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-md);
-  font-size: 18px;
+  font-size: var(--text-lg);
 }
 
 .session-name {
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: var(--spacing-1);
 }
 
 .session-url {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -571,7 +571,7 @@ export default {
   background: var(--color-primary-bg);
   color: var(--color-primary);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .session-info {
@@ -660,7 +660,7 @@ export default {
 
 .form-label {
   display: block;
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
   margin-bottom: var(--spacing-2);
@@ -671,7 +671,7 @@ export default {
   padding: var(--spacing-2-5) var(--spacing-3);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  font-size: 14px;
+  font-size: var(--text-sm);
   background: var(--bg-tertiary);
   color: var(--text-primary);
   transition: border-color var(--duration-200);

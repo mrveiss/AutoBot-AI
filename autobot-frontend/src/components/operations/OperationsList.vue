@@ -277,7 +277,7 @@ function canResumeOperation(operation: Operation): boolean {
 }
 
 .operation-step {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   max-width: 250px;
   overflow: hidden;
@@ -293,7 +293,7 @@ function canResumeOperation(operation: Operation): boolean {
 }
 
 .progress-text {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -302,12 +302,12 @@ function canResumeOperation(operation: Operation): boolean {
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
 .time-text {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
@@ -349,7 +349,7 @@ function canResumeOperation(operation: Operation): boolean {
 }
 
 .footer-text {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 </style>

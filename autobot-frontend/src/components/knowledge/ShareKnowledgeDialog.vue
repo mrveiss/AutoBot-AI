@@ -395,7 +395,7 @@ const closeDialog = () => {
 
 .modal-title {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -403,7 +403,7 @@ const closeDialog = () => {
 .close-button {
   background: none;
   border: none;
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   cursor: pointer;
   color: var(--text-muted);
   padding: 0;
@@ -455,7 +455,7 @@ const closeDialog = () => {
   padding: 0.5rem 0.75rem 0.5rem 2.5rem;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   background-color: var(--bg-secondary);
   color: var(--text-primary);
 }
@@ -482,7 +482,7 @@ const closeDialog = () => {
   padding: 0.75rem;
   text-align: center;
   color: var(--text-muted);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -517,14 +517,14 @@ const closeDialog = () => {
 }
 
 .result-type {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   text-transform: uppercase;
 }
 
 .current-access h4 {
   margin: 0 0 1rem 0;
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -570,7 +570,7 @@ const closeDialog = () => {
 }
 
 .access-type {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   text-transform: uppercase;
 }
@@ -585,7 +585,7 @@ const closeDialog = () => {
   padding: 0.25rem 0.5rem;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-default);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   cursor: pointer;
   background-color: var(--bg-secondary);
   color: var(--text-primary);

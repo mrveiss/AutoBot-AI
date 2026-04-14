@@ -530,7 +530,7 @@ onMounted(() => {
 }
 
 .header-left h2 {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 0.25rem;
@@ -538,7 +538,7 @@ onMounted(() => {
 
 .header-left .subtitle {
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .header-actions {
@@ -565,7 +565,7 @@ onMounted(() => {
   padding: 0.5rem 0.875rem 0.5rem 2.5rem;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   background: var(--bg-input);
   color: var(--text-primary);
 }
@@ -611,7 +611,7 @@ onMounted(() => {
   border: none;
   background: none;
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   cursor: pointer;
   text-align: left;
 }
@@ -697,22 +697,22 @@ onMounted(() => {
   background: none;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .category-icon {
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .category-name {
   flex: 1;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
 .doc-count {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   background: var(--bg-secondary);
   padding: 0.125rem 0.5rem;
@@ -785,7 +785,7 @@ onMounted(() => {
 
 .doc-path {
   display: block;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -809,7 +809,7 @@ onMounted(() => {
 }
 
 .preview-empty i {
-  font-size: 3rem;
+  font-size: var(--text-5xl);
   opacity: 0.5;
 }
 
@@ -829,7 +829,7 @@ onMounted(() => {
 }
 
 .preview-header h3 {
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -855,7 +855,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -867,7 +867,7 @@ onMounted(() => {
 
 .doc-content {
   font-family: var(--font-mono);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   line-height: 1.6;
   white-space: pre-wrap;
   word-wrap: break-word;

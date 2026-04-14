@@ -493,7 +493,7 @@ onUnmounted(() => {
 
 .control-btn {
   padding: 0.375rem 0.75rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   background-color: var(--bg-secondary);
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
@@ -507,7 +507,7 @@ onUnmounted(() => {
 }
 
 .connection-status {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
@@ -534,7 +534,7 @@ onUnmounted(() => {
 
 .action-btn {
   padding: 0.375rem 0.75rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   background-color: var(--color-primary-bg);
   color: var(--color-primary);
   border: 1px solid var(--color-primary-light);
@@ -632,7 +632,7 @@ onUnmounted(() => {
 }
 
 .close-btn {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   color: var(--text-muted);
   background: none;
   border: none;

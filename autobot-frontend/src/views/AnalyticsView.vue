@@ -127,7 +127,7 @@ const isDevToolsActive = computed(() => {
 /* Issue #901: Technical Precision Analytics View Design */
 
 .tab-icon-fa {
-  font-size: 16px;
+  font-size: var(--text-base);
   flex-shrink: 0;
 }
 
@@ -158,7 +158,7 @@ const isDevToolsActive = computed(() => {
 
 .page-title {
   margin: 0;
-  font-size: 24px;
+  font-size: var(--text-2xl);
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-sans);
@@ -167,7 +167,7 @@ const isDevToolsActive = computed(() => {
 
 .page-subtitle {
   margin: 6px 0 0 0;
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   line-height: 1.5;
 }
@@ -195,7 +195,7 @@ const isDevToolsActive = computed(() => {
   align-items: center;
   gap: 8px;
   padding: 12px 16px;
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
   text-decoration: none;
@@ -242,11 +242,11 @@ const isDevToolsActive = computed(() => {
   }
 
   .page-title {
-    font-size: 20px;
+    font-size: var(--text-xl);
   }
 
   .page-subtitle {
-    font-size: 13px;
+    font-size: var(--text-sm);
   }
 
   .nav-tabs {
@@ -256,7 +256,7 @@ const isDevToolsActive = computed(() => {
 
   .nav-tab {
     padding: 10px 12px;
-    font-size: 13px;
+    font-size: var(--text-sm);
     gap: 6px;
   }
 

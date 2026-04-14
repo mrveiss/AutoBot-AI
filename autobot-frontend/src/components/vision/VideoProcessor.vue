@@ -568,18 +568,18 @@ onUnmounted(() => {
 }
 
 .drop-placeholder i {
-  font-size: 48px;
+  font-size: var(--text-5xl);
   color: var(--text-muted);
 }
 
 .drop-placeholder p {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--text-base);
   color: var(--text-secondary);
 }
 
 .supported-formats {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   margin-top: 8px;
 }
@@ -608,14 +608,14 @@ onUnmounted(() => {
 }
 
 .filename {
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
 }
 
 .filesize,
 .duration {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -651,7 +651,7 @@ onUnmounted(() => {
 }
 
 .option-group label {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -662,7 +662,7 @@ onUnmounted(() => {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
@@ -720,7 +720,7 @@ onUnmounted(() => {
 .progress-info {
   display: flex;
   justify-content: space-between;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -743,7 +743,7 @@ onUnmounted(() => {
 
 .results-header h4 {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-success);
   display: flex;
@@ -752,7 +752,7 @@ onUnmounted(() => {
 }
 
 .frame-count {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -777,7 +777,7 @@ onUnmounted(() => {
 }
 
 .frame-index {
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 8px;
@@ -791,7 +791,7 @@ onUnmounted(() => {
 
 .frame-info .confidence,
 .frame-info .time {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -802,7 +802,7 @@ onUnmounted(() => {
 
 .selected-frame h5 {
   margin: 0 0 12px;
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -821,13 +821,13 @@ onUnmounted(() => {
 }
 
 .detail-item .label {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   text-transform: uppercase;
 }
 
 .detail-item .value {
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
@@ -836,7 +836,7 @@ onUnmounted(() => {
   background: none;
   border: none;
   color: var(--text-tertiary);
-  font-size: 13px;
+  font-size: var(--text-sm);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -848,7 +848,7 @@ onUnmounted(() => {
   padding: 12px;
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   overflow-x: auto;
   max-height: 200px;
@@ -867,7 +867,7 @@ onUnmounted(() => {
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: flex;

@@ -325,7 +325,7 @@ const formatTime = (timestamp: number) => {
 
 .header-info h3 {
   margin: 0 0 8px;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
@@ -339,7 +339,7 @@ const formatTime = (timestamp: number) => {
 
 .header-info .description {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -355,7 +355,7 @@ const formatTime = (timestamp: number) => {
   border-radius: var(--radius-md);
   background: var(--bg-input);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
@@ -408,14 +408,14 @@ const formatTime = (timestamp: number) => {
 
 .no-data-state h4 {
   margin: 0 0 8px;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .no-data-state p {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -453,7 +453,7 @@ const formatTime = (timestamp: number) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: var(--text-lg);
   color: var(--text-secondary);
 }
 
@@ -468,14 +468,14 @@ const formatTime = (timestamp: number) => {
 
 .summary-value {
   display: block;
-  font-size: 24px;
+  font-size: var(--text-2xl);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .summary-label {
   display: block;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -486,7 +486,7 @@ const formatTime = (timestamp: number) => {
 }
 
 .trend span:first-child {
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -506,7 +506,7 @@ const formatTime = (timestamp: number) => {
 }
 
 .trend-label {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
@@ -530,7 +530,7 @@ const formatTime = (timestamp: number) => {
 
 .breakdown-section h4 {
   margin: 0 0 16px;
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-secondary);
   display: flex;
@@ -542,7 +542,7 @@ const formatTime = (timestamp: number) => {
   text-align: center;
   padding: 20px;
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .breakdown-list {
@@ -578,7 +578,7 @@ const formatTime = (timestamp: number) => {
 
 .item-label {
   display: block;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -588,7 +588,7 @@ const formatTime = (timestamp: number) => {
 
 code.item-label {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .item-bar {
@@ -606,7 +606,7 @@ code.item-label {
 }
 
 .item-count {
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
   min-width: 40px;
@@ -648,19 +648,19 @@ code.item-label {
 }
 
 .day-label {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
 .day-count {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 /* Violations Table */
 .violations-table {
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .table-header {
@@ -689,7 +689,7 @@ code.item-label {
 
 .col-endpoint code {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-xs);
   background: var(--bg-tertiary);
   padding: 2px 6px;
   border-radius: var(--radius-default);

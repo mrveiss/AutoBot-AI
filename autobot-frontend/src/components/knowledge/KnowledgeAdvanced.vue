@@ -509,7 +509,7 @@ onMounted(() => {
 }
 
 .advanced-header h3 {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 0.5rem;
@@ -517,7 +517,7 @@ onMounted(() => {
 
 .header-description {
   color: var(--text-secondary);
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 
 .advanced-sections {
@@ -540,7 +540,7 @@ onMounted(() => {
 }
 
 .section-header h4 {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 0.5rem;
@@ -601,7 +601,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   margin-bottom: 1rem;
 }
 
@@ -626,7 +626,7 @@ onMounted(() => {
 }
 
 .action-card h5 {
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 0.5rem;
@@ -640,7 +640,7 @@ onMounted(() => {
 
 .action-meta {
   color: var(--text-tertiary);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   display: block;
   margin-bottom: 1rem;
 }
@@ -675,13 +675,13 @@ onMounted(() => {
 
 .progress-details {
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .progress-percentage {
   font-weight: 600;
   color: var(--color-primary);
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
 }
 
 .progress-bar {
@@ -702,7 +702,7 @@ onMounted(() => {
 .progress-stats {
   display: flex;
   justify-content: space-between;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -783,7 +783,7 @@ onMounted(() => {
 
 .message-details {
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 /* Dismiss button positioning */

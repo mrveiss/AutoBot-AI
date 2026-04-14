@@ -685,7 +685,7 @@ defineExpose({
 }
 
 .avatar-icon.small {
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .status-ring {
@@ -795,7 +795,7 @@ defineExpose({
 }
 
 .metric-label {
-  font-size: 10px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: var(--tracking-wide);

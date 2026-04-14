@@ -278,7 +278,7 @@ const getDeclarationTypeClass = (type: string): string => {
 }
 
 .export-badge.small {
-  font-size: 10px;
+  font-size: var(--text-xs);
   padding: var(--spacing-px) var(--spacing-1-5);
 }
 

@@ -534,7 +534,7 @@ watch([selectedGranularity, selectedDays], () => {
 }
 
 .timeline-header h2 {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   color: var(--text-primary);
   display: flex;
   align-items: center;
@@ -553,7 +553,7 @@ watch([selectedGranularity, selectedDays], () => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .loading-state,
@@ -597,7 +597,7 @@ watch([selectedGranularity, selectedDays], () => {
 }
 
 .metric-name {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   text-transform: uppercase;
 }
@@ -609,7 +609,7 @@ watch([selectedGranularity, selectedDays], () => {
 }
 
 .trend-change {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   margin-top: 0.25rem;
 }
 
@@ -649,7 +649,7 @@ watch([selectedGranularity, selectedDays], () => {
 }
 
 .chart-header h3 {
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   color: var(--text-primary);
 }
 
@@ -663,7 +663,7 @@ watch([selectedGranularity, selectedDays], () => {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   cursor: pointer;
   opacity: 0.6;
   transition: opacity 0.2s;
@@ -695,7 +695,7 @@ watch([selectedGranularity, selectedDays], () => {
 
 .axis-label {
   fill: var(--text-secondary);
-  font-size: 10px;
+  font-size: var(--text-xs);
   text-anchor: end;
 }
 
@@ -731,7 +731,7 @@ watch([selectedGranularity, selectedDays], () => {
 }
 
 .tooltip-date {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   margin-bottom: 0.25rem;
 }
@@ -747,7 +747,7 @@ watch([selectedGranularity, selectedDays], () => {
 }
 
 .patterns-section h3 {
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   color: var(--text-primary);
   margin-bottom: 1rem;
   display: flex;
@@ -776,12 +776,12 @@ watch([selectedGranularity, selectedDays], () => {
 }
 
 .pattern-name {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
 .pattern-count {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
 }
 
@@ -809,7 +809,7 @@ watch([selectedGranularity, selectedDays], () => {
 }
 
 .pattern-trend {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   display: flex;
   align-items: center;

@@ -272,7 +272,7 @@ async function handleSave(): Promise<void> {
 
 .notif-header h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--text-base);
   color: var(--text-primary);
   display: flex;
   align-items: center;
@@ -288,7 +288,7 @@ async function handleSave(): Promise<void> {
   color: var(--text-tertiary);
   cursor: pointer;
   border-radius: var(--radius-default);
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 .btn-close:hover { background: var(--bg-hover); color: var(--text-primary); }
 
@@ -315,7 +315,7 @@ async function handleSave(): Promise<void> {
   background: var(--color-error-bg);
   color: var(--color-error);
   border-radius: var(--radius-md);
-  font-size: 13px;
+  font-size: var(--text-sm);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -329,7 +329,7 @@ async function handleSave(): Promise<void> {
 }
 
 .notif-field legend {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
   padding: 0 6px;
@@ -342,7 +342,7 @@ async function handleSave(): Promise<void> {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: var(--text-sm);
   outline: none;
 }
 .notif-input:focus { border-color: var(--color-primary); }
@@ -368,7 +368,7 @@ async function handleSave(): Promise<void> {
   background: var(--color-primary-bg);
   color: var(--color-primary);
   border-radius: 14px;
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
 }
 
@@ -378,7 +378,7 @@ async function handleSave(): Promise<void> {
   border: none;
   color: inherit;
   cursor: pointer;
-  font-size: 10px;
+  font-size: var(--text-xs);
   opacity: 0.7;
 }
 .tag-remove:hover { opacity: 1; }
@@ -390,7 +390,7 @@ async function handleSave(): Promise<void> {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: var(--text-sm);
   outline: none;
 }
 .tag-input:focus { border-color: var(--color-primary); }
@@ -398,13 +398,13 @@ async function handleSave(): Promise<void> {
 
 .field-error {
   margin: 6px 0 0;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-error);
 }
 
 .field-hint {
   margin: 0 0 10px;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -416,7 +416,7 @@ async function handleSave(): Promise<void> {
 }
 
 .channel-header {
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--text-tertiary);
   text-align: center;
@@ -425,7 +425,7 @@ async function handleSave(): Promise<void> {
 }
 
 .event-label {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   padding: 6px 4px;
 }
@@ -457,7 +457,7 @@ async function handleSave(): Promise<void> {
   color: white;
   border: none;
   border-radius: var(--radius-md);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: inline-flex;
@@ -473,7 +473,7 @@ async function handleSave(): Promise<void> {
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  font-size: 13px;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 .btn-secondary:hover { background: var(--bg-hover); }

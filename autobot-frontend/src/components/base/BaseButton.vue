@@ -167,35 +167,35 @@ const createRipple = (event: TouchEvent) => {
 .btn-xs {
   height: 28px;
   padding: 0 8px;
-  font-size: 11px;
+  font-size: var(--text-xs);
   border-radius: var(--radius-xs);
 }
 
 .btn-sm {
   height: 32px;
   padding: 0 12px;
-  font-size: 13px;
+  font-size: var(--text-sm);
   border-radius: var(--radius-xs);
 }
 
 .btn-md {
   height: 40px;
   padding: 0 16px;
-  font-size: 14px;
+  font-size: var(--text-sm);
   border-radius: var(--radius-xs);
 }
 
 .btn-lg {
   height: 48px;
   padding: 0 24px;
-  font-size: 16px;
+  font-size: var(--text-base);
   border-radius: var(--radius-default);
 }
 
 .btn-xl {
   height: 56px;
   padding: 0 32px;
-  font-size: 18px;
+  font-size: var(--text-lg);
   border-radius: var(--radius-default);
 }
 
@@ -372,12 +372,12 @@ const createRipple = (event: TouchEvent) => {
 @media (max-width: 640px) {
   .btn-lg {
     padding: 0.5rem 1rem;
-    font-size: 1rem;
+    font-size: var(--text-base);
   }
 
   .btn-xl {
     padding: 0.75rem 1.5rem;
-    font-size: 1rem;
+    font-size: var(--text-base);
   }
 }
 

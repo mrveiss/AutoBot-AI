@@ -662,7 +662,7 @@ onUnmounted(() => {
 }
 
 .default-badge i {
-  font-size: 10px;
+  font-size: var(--text-xs);
 }
 
 .host-details {

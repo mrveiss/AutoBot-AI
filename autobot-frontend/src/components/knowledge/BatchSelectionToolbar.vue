@@ -163,7 +163,7 @@ function handleVectorize(): void {
 }
 
 .selection-icon {
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
 }
 
 .selection-label {

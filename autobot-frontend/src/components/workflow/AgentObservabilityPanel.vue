@@ -237,19 +237,19 @@ function formatDuration(seconds: number): string {
 
 .empty-state i,
 .loading-state i {
-  font-size: 36px;
+  font-size: var(--text-4xl);
   margin-bottom: 10px;
 }
 
 .empty-state h4 {
   margin: 0 0 4px;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .empty-state p {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 /* Agents Grid */
@@ -297,7 +297,7 @@ function formatDuration(seconds: number): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: var(--text-base);
   flex-shrink: 0;
 }
 
@@ -323,7 +323,7 @@ function formatDuration(seconds: number): string {
 }
 
 .agent-name {
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
   overflow: hidden;
@@ -332,14 +332,14 @@ function formatDuration(seconds: number): string {
 }
 
 .agent-tasks-summary {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
 .reliability-badge {
   padding: 3px 10px;
   border-radius: var(--radius-xl);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 600;
   flex-shrink: 0;
 }
@@ -376,7 +376,7 @@ function formatDuration(seconds: number): string {
 }
 
 .metric-value {
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -385,7 +385,7 @@ function formatDuration(seconds: number): string {
 .metric-value.failed { color: var(--color-error); }
 
 .metric-label {
-  font-size: 10px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -425,13 +425,13 @@ function formatDuration(seconds: number): string {
   padding: 2px 8px;
   background: var(--bg-tertiary);
   border-radius: var(--radius-default);
-  font-size: 10px;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
 .capability-overflow {
   padding: 2px 6px;
-  font-size: 10px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 </style>

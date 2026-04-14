@@ -497,7 +497,7 @@ const emit = defineEmits<{
   }
 
   .summary-value {
-    font-size: 1.5rem;
+    font-size: var(--text-2xl);
   }
 }
 
@@ -522,7 +522,7 @@ const emit = defineEmits<{
 .dependency-section .section-header h3 {
   margin: 0;
   color: var(--text-secondary);
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -606,7 +606,7 @@ const emit = defineEmits<{
 .external-deps-table h4 {
   margin: 0 0 16px 0;
   color: var(--text-secondary);
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   display: flex;
   align-items: center;
