@@ -88,19 +88,25 @@ class ChatAgent(StandardizedAgent):
         return self.capabilities.copy()
 
     def _build_success_response(
-        self, response_text: str, response: Dict[str, Any]
+        self, response_text: str, response: Any
     ) -> Dict[str, Any]:
         """
         Build success response dictionary for chat message processing.
 
         Issue #620.
+        Issue #4501: response is an LLMResponse object — use attribute access.
         """
+        if isinstance(response, dict):
+            token_usage = response.get("usage", {})
+        else:
+            token_usage = getattr(response, "usage", {})
         return {
             "status": "success",
+            "response": response_text,
             "response_text": response_text,
             "agent_type": "chat",
             "model_used": self.model_name,
-            "token_usage": response.get("usage", {}),
+            "token_usage": token_usage,
             "metadata": {
                 "agent": "ChatAgent",
                 "processing_time": "fast",
@@ -244,8 +250,17 @@ For complex technical tasks, analysis, or system commands, you should "
         return choice["message"]["content"].strip()
 
     def _extract_response_content(self, response: Any) -> str:
-        """Extract the actual text content from LLM response."""
+        """Extract the actual text content from LLM response.
+
+        Issue #4501: handle LLMResponse objects via .content attribute.
+        """
         try:
+            # LLMResponse dataclass — use .content attribute directly
+            if hasattr(response, "content") and not isinstance(response, dict):
+                content = getattr(response, "content", None)
+                if content and isinstance(content, str):
+                    return content.strip()
+
             if isinstance(response, dict):
                 # Try message content first
                 content = self._try_extract_message_content(response)
