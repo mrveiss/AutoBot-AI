@@ -524,5 +524,6 @@ def _decode_jwt_sub(token: str) -> Optional[str]:
         payload = base64.urlsafe_b64decode(payload_b64)
         claims = _json.loads(payload)
         return claims.get("sub")
-    except Exception:
+    except Exception as exc:
+        logger.debug("JWT sub decode failed: %s", exc)
         return None
