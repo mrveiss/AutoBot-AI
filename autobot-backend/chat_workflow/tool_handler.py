@@ -10,6 +10,7 @@ and approval workflows.
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import html
 import json
@@ -114,6 +115,30 @@ _REPAIRABLE_ERROR_PATTERNS = (
 
 # Critical error patterns that should NOT be repairable
 _CRITICAL_ERROR_PATTERNS = ["out of memory", "cannot allocate"]
+
+
+def _parse_tool_args(raw: str) -> dict:
+    """Parse tool call JSON args with a safe literal-parser fallback. (#4483)
+
+    LLMs occasionally produce near-valid JSON with trailing commas, single
+    quotes, or Python boolean/None literals that json.loads() rejects.
+    ast.literal_eval is safe: it only accepts Python literal structures and
+    raises ValueError/SyntaxError on anything else.
+    """
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        try:
+            result = ast.literal_eval(raw)  # noqa: S307 - literals only, safe
+            if isinstance(result, dict):
+                logger.warning(
+                    "Tool args parsed via ast.literal_eval fallback"
+                    " — LLM produced near-valid JSON"
+                )
+                return result
+        except (ValueError, SyntaxError):
+            pass
+        raise
 
 
 def _detect_and_store_security_output(
@@ -459,7 +484,7 @@ class ToolHandlerMixin:
             params_str = match.group(3)
             description = match.group(4).strip()
             try:
-                params = json.loads(params_str)
+                params = _parse_tool_args(params_str)
                 tool_calls.append(
                     {"name": tool_name, "params": params, "description": description}
                 )
