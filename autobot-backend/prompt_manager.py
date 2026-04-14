@@ -24,6 +24,132 @@ from constants.ttl_constants import TTL_24_HOURS
 logger = logging.getLogger(__name__)
 
 
+def _detect_structured_format(content: str) -> str:
+    """
+    Detect whether content is JSON or XML/HTML.
+
+    Issue #4395: Identifies structured data formats so _truncate_large_file
+    can snap to semantically valid boundaries instead of mid-token cuts.
+
+    Args:
+        content: File content (first 512 chars sufficient for detection).
+
+    Returns:
+        "json" | "xml" | "unknown"
+    """
+    stripped = content.lstrip()
+    if stripped.startswith(("{", "[")):
+        return "json"
+    if stripped.startswith("<"):
+        return "xml"
+    return "unknown"
+
+
+def _json_head_boundary(content: str, target: int) -> int:
+    """
+    Find the largest position ≤ target that ends a complete JSON value at the
+    top level of the document.
+
+    Issue #4395: Prevents leaving unterminated strings, arrays, or objects in
+    the head section when JSON content is truncated.
+
+    Scans backward from *target* for the pattern ``},\\n`` or ``],\\n`` —
+    i.e. a closing bracket followed by a comma/newline, which is a safe entry
+    boundary between sibling JSON values.  Internal commas (inside strings or
+    between object fields) are excluded because they are not preceded by ``}``
+    or ``]``.
+
+    Args:
+        content: Full JSON string.
+        target: Ideal cut position (typically 40% of max_chars).
+
+    Returns:
+        Adjusted position (after the trailing newline), or *target* if no
+        safe boundary is found within 1000 chars of *target*.
+    """
+    search_start = max(0, target - 1000)
+    # Walk backward from target looking for },\n or ],\n
+    for i in range(min(target, len(content) - 1), search_start, -1):
+        if content[i] == "\n" and i >= 2 and content[i - 1] == "," and content[i - 2] in ("}", "]"):
+            return i + 1
+    # Fallback: accept a bare },\n or ],\n without the comma (last entry)
+    for i in range(min(target, len(content) - 1), search_start, -1):
+        if content[i] == "\n" and i >= 1 and content[i - 1] in ("}", "]"):
+            return i + 1
+    return target
+
+
+def _json_tail_boundary(content: str, target: int) -> int:
+    """
+    Find the smallest position ≥ target that starts a complete JSON value at
+    the top level of the document.
+
+    Issue #4395: Ensures the tail section of truncated JSON begins on a clean
+    entry boundary (a line that opens an array element or object key).
+
+    Scans forward from *target* for a newline followed by a non-whitespace
+    character — these typically indicate the start of a new JSON entry.
+
+    Args:
+        content: Full JSON string.
+        target: Ideal cut position (typically len - 40% of max_chars).
+
+    Returns:
+        Adjusted position, or *target* if no safe boundary found.
+    """
+    search_end = min(len(content), target + 500)
+    for i in range(target, search_end):
+        next_is_non_ws = i + 1 < len(content) and content[i + 1] not in (" ", "\t", "\r", "\n")
+        if content[i] == "\n" and next_is_non_ws:
+            return i + 1
+    return target
+
+
+def _xml_head_boundary(content: str, target: int) -> int:
+    """
+    Find the largest position ≤ target that follows a complete XML closing tag.
+
+    Issue #4395: Avoids cutting in the middle of an XML element.  Scans
+    backward from *target* for the end of a closing tag (``>`` preceded by
+    ``/something``).
+
+    Args:
+        content: Full XML/HTML string.
+        target: Ideal cut position.
+
+    Returns:
+        Adjusted position (character after the ``>``), or *target* if not found.
+    """
+    search_start = max(0, target - 500)
+    for i in range(min(target, len(content) - 1), search_start, -1):
+        if content[i] == ">" and i > 0:
+            # Confirm this looks like a closing tag: find matching '</'
+            tag_start = content.rfind("</", search_start, i)
+            if tag_start != -1:
+                return i + 1
+    return target
+
+
+def _xml_tail_boundary(content: str, target: int) -> int:
+    """
+    Find the smallest position ≥ target that precedes an XML opening tag.
+
+    Issue #4395: Ensures the tail section starts at a clean element boundary.
+
+    Args:
+        content: Full XML/HTML string.
+        target: Ideal cut position.
+
+    Returns:
+        Adjusted position, or *target* if not found.
+    """
+    search_end = min(len(content), target + 500)
+    for i in range(target, search_end):
+        if content[i] == "<" and i + 1 < len(content) and content[i + 1] != "/":
+            return i
+    return target
+
+
 def _snap_to_char_boundary(content: str, pos: int, search_forward: bool = True) -> int:
     """
     Snap a string slice position to a Unicode-safe word boundary.
@@ -72,9 +198,15 @@ def _truncate_large_file(content: str, max_chars: int = 20000) -> str:
     are never split mid-word.  Python str indexing is already codepoint-safe,
     but word-boundary snapping prevents cut points inside multi-byte words.
 
+    Issue #4395: Structured data (JSON/XML) is truncated at semantically valid
+    element/entry boundaries so that each half remains well-formed and the LLM
+    can reason about the data even when it is too large to fit in context.
+
     Strategy:
     - Files smaller than max_chars: returned unchanged
     - Files larger than max_chars: keep first 40% + ellipsis marker + last 40%
+    - JSON/XML: boundaries snapped to complete entry/element edges
+    - Otherwise: boundaries snapped to whitespace (Issue #4394)
     - Marker format: "[...N chars TRUNCATED...]"
 
     Args:
@@ -90,11 +222,21 @@ def _truncate_large_file(content: str, max_chars: int = 20000) -> str:
     # Calculate sections: preserve first 40% and last 40% of max_chars
     section_size = (max_chars // 5) * 2  # 40% of max_chars
 
-    # Issue #4394: snap cut points to whitespace boundaries so multi-byte
-    # characters (e.g. emoji U+1F600, CJK U+4E2D, accented café) are not
-    # split mid-word when the content is later encoded to UTF-8 bytes.
-    head_end = _snap_to_char_boundary(content, section_size, search_forward=True)
-    tail_start = _snap_to_char_boundary(content, len(content) - section_size, search_forward=False)
+    fmt = _detect_structured_format(content)
+    if fmt == "json":
+        # Issue #4395: snap to complete JSON entry boundaries
+        head_end = _json_head_boundary(content, section_size)
+        tail_start = _json_tail_boundary(content, len(content) - section_size)
+    elif fmt == "xml":
+        # Issue #4395: snap to complete XML element boundaries
+        head_end = _xml_head_boundary(content, section_size)
+        tail_start = _xml_tail_boundary(content, len(content) - section_size)
+    else:
+        # Issue #4394: snap to whitespace so multi-byte chars are not split mid-word
+        head_end = _snap_to_char_boundary(content, section_size, search_forward=True)
+        tail_start = _snap_to_char_boundary(
+            content, len(content) - section_size, search_forward=False
+        )
 
     # Ensure tail_start > head_end to avoid overlap on pathological inputs
     if tail_start <= head_end:
@@ -137,8 +279,6 @@ def _build_skill_context(skills: Optional[List[Dict]]) -> str:
     for i, skill in enumerate(skills, 1):
         name = skill.get("name", "Unknown")
         description = skill.get("description", "")
-        skill_id = skill.get("id", "")
-
         # Format: 1. SkillName: brief description
         if description:
             skill_lines.append(f"{i}. {name}: {description}")
@@ -149,9 +289,8 @@ def _build_skill_context(skills: Optional[List[Dict]]) -> str:
         return ""
 
     skills_text = "\n".join(skill_lines)
-    return (
-        f"\n\n## Available Skills\nThe following skills are available for this agent to use:\n{skills_text}"
-    )
+    header = "\n\n## Available Skills\nThe following skills are available for this agent to use:\n"
+    return header + skills_text
 
 
 # Issue #380: Module-level constant for supported prompt file extensions
@@ -736,8 +875,6 @@ class PromptManager:
         }
 
         try:
-            from security.prompt_injection_detector import InjectionRisk
-
             for context_file in context_files:
                 file_path = project_root / context_file
 
