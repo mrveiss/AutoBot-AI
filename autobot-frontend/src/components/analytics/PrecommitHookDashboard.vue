@@ -661,7 +661,7 @@ onMounted(() => {
   gap: 0.5rem;
   padding: 0.5rem 1rem;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
@@ -726,7 +726,7 @@ onMounted(() => {
   align-items: center;
   gap: 1rem;
   padding: 1rem 1.25rem;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid;
 }
 
@@ -772,7 +772,7 @@ onMounted(() => {
   gap: 0.75rem;
   padding: 1rem;
   background: var(--bg-secondary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-color);
 }
 
@@ -818,7 +818,7 @@ onMounted(() => {
 /* Panels */
 .panel {
   background: var(--bg-secondary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-color);
   overflow: hidden;
 }
@@ -853,7 +853,7 @@ onMounted(() => {
   padding: 0.25rem 0.5rem;
   background: transparent;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.75rem;
   color: var(--text-secondary);
   cursor: pointer;
@@ -874,7 +874,7 @@ onMounted(() => {
 .result-card {
   padding: 0.875rem;
   background: var(--bg-tertiary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border-left: 3px solid;
 }
 
@@ -907,7 +907,7 @@ onMounted(() => {
   color: var(--accent-color);
   background: var(--bg-quaternary);
   padding: 0.125rem 0.375rem;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 .check-name {
@@ -930,7 +930,7 @@ onMounted(() => {
 
 .result-snippet {
   background: var(--bg-quaternary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   padding: 0.5rem;
   margin-bottom: 0.5rem;
 }
@@ -966,7 +966,7 @@ onMounted(() => {
   gap: 0.5rem;
   padding: 0.5rem;
   background: var(--bg-tertiary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
 }
 
@@ -1022,7 +1022,7 @@ onMounted(() => {
   position: absolute;
   inset: 0;
   background: var(--bg-quaternary);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   cursor: pointer;
   transition: 0.3s;
 }
@@ -1067,7 +1067,7 @@ onMounted(() => {
 .severity-indicator {
   font-size: 0.625rem;
   padding: 0.125rem 0.375rem;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   text-transform: uppercase;
 }
 
@@ -1103,7 +1103,7 @@ onMounted(() => {
   gap: 0.75rem;
   padding: 0.625rem 0.875rem;
   background: var(--bg-tertiary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -1147,7 +1147,7 @@ onMounted(() => {
 
 .stat {
   padding: 0.125rem 0.375rem;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.625rem;
   font-weight: 600;
 }
@@ -1219,14 +1219,14 @@ onMounted(() => {
   flex: 1;
   height: 8px;
   background: var(--bg-quaternary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   overflow: hidden;
 }
 
 .issue-bar-fill {
   height: 100%;
   background: var(--accent-color);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   transition: width 0.3s;
 }
 

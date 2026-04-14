@@ -397,7 +397,7 @@ const formattedContent = computed(() => {
 .message-wrapper.system-message {
   @apply bg-autobot-bg-tertiary border-autobot-border mx-auto text-autobot-text-secondary;
   max-width: 70%;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
 }
 
 .message-wrapper.error {

@@ -780,7 +780,7 @@ const loadAnalytics = () => analytics.execute(async () => {
 
 .example-card {
   background: var(--bg-card);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 24px;
   margin-bottom: 24px;
   box-shadow: var(--shadow-sm);
@@ -805,7 +805,7 @@ const loadAnalytics = () => analytics.execute(async () => {
   background: var(--color-success);
   color: var(--text-on-primary);
   padding: 4px 12px;
-  border-radius: 16px;
+  border-radius: var(--radius-2xl);
   font-size: 0.875rem;
   font-weight: 500;
 }
@@ -824,7 +824,7 @@ const loadAnalytics = () => analytics.execute(async () => {
   background: var(--color-primary);
   color: var(--text-on-primary);
   padding: 10px 20px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-weight: 500;
   border: none;
   cursor: pointer;
@@ -845,7 +845,7 @@ const loadAnalytics = () => analytics.execute(async () => {
   background: var(--text-tertiary);
   color: var(--text-on-primary);
   padding: 8px 16px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-weight: 500;
   border: none;
   cursor: pointer;
@@ -864,7 +864,7 @@ const loadAnalytics = () => analytics.execute(async () => {
   padding: 16px;
   background: var(--color-info-bg);
   border: 1px solid var(--color-info-light);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   margin-top: 12px;
   color: var(--color-info-dark);
 }
@@ -887,7 +887,7 @@ const loadAnalytics = () => analytics.execute(async () => {
   padding: 16px;
   background: var(--color-error-bg);
   border: 1px solid var(--color-error-light);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   margin-top: 12px;
   color: var(--color-error-dark);
 }
@@ -897,7 +897,7 @@ const loadAnalytics = () => analytics.execute(async () => {
   padding: 16px;
   background: var(--color-success-bg);
   border: 1px solid var(--color-success-light);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   margin-top: 12px;
   color: var(--color-success-dark);
 }
@@ -919,7 +919,7 @@ const loadAnalytics = () => analytics.execute(async () => {
 .data-display {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 12px;
   margin-top: 12px;
   overflow-x: auto;
@@ -948,7 +948,7 @@ const loadAnalytics = () => analytics.execute(async () => {
   max-width: 400px;
   padding: 8px 12px;
   border: 1px solid var(--border-light);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: 1rem;
   transition: border-color 0.2s;
 }
@@ -969,7 +969,7 @@ const loadAnalytics = () => analytics.execute(async () => {
   top: 20px;
   right: 20px;
   padding: 16px 24px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-weight: 500;
   box-shadow: var(--shadow-lg);
   animation: slideIn 0.3s ease;
@@ -998,7 +998,7 @@ const loadAnalytics = () => analytics.execute(async () => {
   padding: 16px;
   background: var(--color-error-bg);
   border: 1px solid var(--color-error-light);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 .error-log h4 {
@@ -1042,7 +1042,7 @@ const loadAnalytics = () => analytics.execute(async () => {
 .data-section {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 16px;
 }
 
@@ -1064,7 +1064,7 @@ const loadAnalytics = () => analytics.execute(async () => {
   background: var(--chart-purple);
   color: white;
   padding: 20px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   text-align: center;
 }
 
@@ -1087,7 +1087,7 @@ const loadAnalytics = () => analytics.execute(async () => {
 
 .code-comparison details {
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 12px;
   background: var(--bg-secondary);
 }
@@ -1119,7 +1119,7 @@ const loadAnalytics = () => analytics.execute(async () => {
 .code-block {
   background: var(--bg-card);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
@@ -1147,7 +1147,7 @@ const loadAnalytics = () => analytics.execute(async () => {
 .summary-card {
   background: var(--chart-purple);
   color: white;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 32px;
   margin-top: 32px;
 }
@@ -1168,7 +1168,7 @@ const loadAnalytics = () => analytics.execute(async () => {
 .benefit-item {
   background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 20px;
   display: flex;
   gap: 16px;
@@ -1206,7 +1206,7 @@ const loadAnalytics = () => analytics.execute(async () => {
 
 .async-examples-container::-webkit-scrollbar-thumb {
   background: var(--border-secondary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 .async-examples-container::-webkit-scrollbar-thumb:hover {

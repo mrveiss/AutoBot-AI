@@ -411,7 +411,7 @@ onMounted(loadUsers)
   padding: 0.75rem 1rem;
   background: var(--color-error-bg, #fef2f2);
   border: 1px solid var(--color-error-border, #fca5a5);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   margin-bottom: 1rem;
   color: var(--color-error, #dc2626);
 }
@@ -441,7 +441,7 @@ onMounted(loadUsers)
   width: 100%;
   padding: 0.5rem 0.75rem 0.5rem 2.25rem;
   border: 1px solid var(--color-border, #d1d5db);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   font-size: 0.875rem;
   box-sizing: border-box;
 }
@@ -449,7 +449,7 @@ onMounted(loadUsers)
 .table-section {
   background: var(--color-surface, #fff);
   border: 1px solid var(--color-border, #e5e7eb);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   overflow: hidden;
 }
 
@@ -499,7 +499,7 @@ onMounted(loadUsers)
 .badge {
   display: inline-block;
   padding: 0.125rem 0.5rem;
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   font-size: 0.7rem;
   font-weight: 600;
 }
@@ -522,7 +522,7 @@ onMounted(loadUsers)
 .role-select {
   padding: 0.25rem 0.5rem;
   border: 1px solid var(--color-border, #d1d5db);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   font-size: 0.8125rem;
   background: transparent;
 }
@@ -536,7 +536,7 @@ onMounted(loadUsers)
   width: 2rem;
   height: 2rem;
   border: none;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -577,7 +577,7 @@ onMounted(loadUsers)
 .btn-page {
   padding: 0.375rem 0.75rem;
   border: 1px solid var(--color-border, #d1d5db);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background: transparent;
   cursor: pointer;
 }
@@ -599,7 +599,7 @@ onMounted(loadUsers)
   align-items: center;
   gap: 0.375rem;
   padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   font-size: 0.875rem;
   font-weight: 500;
   border: 1px solid transparent;
@@ -640,7 +640,7 @@ onMounted(loadUsers)
 
 .modal {
   background: var(--color-surface, #fff);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   width: 100%;
   max-width: 480px;
   box-shadow: var(--shadow-2xl);
@@ -691,7 +691,7 @@ onMounted(loadUsers)
   width: 100%;
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--color-border, #d1d5db);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   font-size: 0.875rem;
   box-sizing: border-box;
 }

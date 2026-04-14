@@ -400,7 +400,7 @@ onUnmounted(() => {
   padding: 16px 20px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   flex-wrap: wrap;
   gap: 16px;
 }
@@ -417,7 +417,7 @@ onUnmounted(() => {
   background: var(--color-primary);
   color: var(--text-on-primary);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -459,7 +459,7 @@ onUnmounted(() => {
   width: 36px;
   height: 20px;
   background: var(--bg-tertiary);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   position: relative;
   transition: all 0.2s;
 }
@@ -489,7 +489,7 @@ onUnmounted(() => {
   padding: 6px 10px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: 13px;
   color: var(--text-primary);
 }
@@ -509,7 +509,7 @@ onUnmounted(() => {
   padding: 6px 10px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: 13px;
   color: var(--text-primary);
 }
@@ -538,7 +538,7 @@ onUnmounted(() => {
   overflow-y: auto;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
 }
 
 .panel-header {
@@ -602,7 +602,7 @@ onUnmounted(() => {
   gap: 12px;
   padding: 10px 12px;
   background: var(--bg-tertiary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -619,7 +619,7 @@ onUnmounted(() => {
 .element-icon {
   width: 32px;
   height: 32px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -654,7 +654,7 @@ onUnmounted(() => {
   color: var(--text-tertiary);
   padding: 2px 8px;
   background: var(--bg-secondary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 .no-elements {
@@ -681,7 +681,7 @@ onUnmounted(() => {
 .text-region {
   padding: 10px 12px;
   background: var(--bg-tertiary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .text-content {
@@ -694,7 +694,7 @@ onUnmounted(() => {
   margin: 0;
   padding: 12px;
   background: var(--bg-tertiary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 12px;
   color: var(--text-secondary);
   overflow-x: auto;
@@ -711,7 +711,7 @@ onUnmounted(() => {
   gap: 16px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
 }
 
 .empty-icon {
@@ -754,7 +754,7 @@ onUnmounted(() => {
 
 .element-detail-modal {
   background: var(--bg-secondary);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   width: 90%;
   max-width: 500px;
   max-height: 80vh;
@@ -827,6 +827,6 @@ onUnmounted(() => {
   padding: 4px 10px;
   background: var(--color-primary-bg);
   color: var(--color-primary);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
 }
 </style>

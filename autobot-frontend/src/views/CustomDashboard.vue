@@ -672,7 +672,7 @@ onMounted(() => {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   color: var(--text-primary);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   font-size: 0.875rem;
   cursor: pointer;
   transition: all 0.2s;
@@ -709,7 +709,7 @@ onMounted(() => {
   padding: 0.625rem 1rem;
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   color: var(--text-primary);
   font-size: 0.875rem;
   min-width: 150px;
@@ -720,7 +720,7 @@ onMounted(() => {
   height: 36px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   color: var(--text-secondary);
   cursor: pointer;
   display: flex;
@@ -761,7 +761,7 @@ onMounted(() => {
   padding: 0.5rem 1rem;
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   color: var(--text-primary);
   font-size: 0.875rem;
   cursor: grab;
@@ -808,7 +808,7 @@ onMounted(() => {
 /* Widget Container */
 .widget-container {
   background: var(--bg-secondary);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   border: 1px solid var(--border-default);
   overflow: hidden;
   display: flex;
@@ -867,7 +867,7 @@ onMounted(() => {
   border: none;
   color: var(--text-tertiary);
   cursor: pointer;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -938,7 +938,7 @@ onMounted(() => {
 
 .modal-content {
   background: var(--bg-secondary);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   border: 1px solid var(--border-default);
   width: 90%;
   max-width: 480px;
@@ -1010,7 +1010,7 @@ onMounted(() => {
   padding: 0.625rem 0.75rem;
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   color: var(--text-primary);
   font-size: 0.875rem;
 }
@@ -1045,7 +1045,7 @@ onMounted(() => {
 .widget-option {
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   padding: 1.5rem;
   text-align: center;
   cursor: pointer;
@@ -1061,7 +1061,7 @@ onMounted(() => {
   width: 60px;
   height: 60px;
   background: var(--color-primary-bg);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   display: flex;
   align-items: center;
   justify-content: center;

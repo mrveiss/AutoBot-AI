@@ -614,14 +614,14 @@ onMounted(() => {
   gap: 1rem;
   background: var(--bg-surface);
   border: 1px solid var(--border-secondary);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   padding: 1rem;
 }
 
 .stat-icon {
   width: 2.5rem;
   height: 2.5rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -672,7 +672,7 @@ onMounted(() => {
 .panel {
   background: var(--bg-surface);
   border: 1px solid var(--border-secondary);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
 }
 
 .panel-header {
@@ -728,7 +728,7 @@ onMounted(() => {
   padding: 0.75rem;
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   color: var(--text-primary);
   font-size: 0.875rem;
   resize: vertical;
@@ -758,7 +758,7 @@ onMounted(() => {
   padding: 0.75rem 1.5rem;
   background: var(--color-info);
   border: none;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   color: #fff;
   font-size: 0.875rem;
   cursor: pointer;
@@ -780,7 +780,7 @@ onMounted(() => {
   padding: 1rem;
   background: var(--bg-primary);
   border: 1px solid var(--border-secondary);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
 }
 
 .result-header {
@@ -794,7 +794,7 @@ onMounted(() => {
 .tokens-badge,
 .cost-badge {
   padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-default);
   font-size: 0.75rem;
 }
 
@@ -821,7 +821,7 @@ onMounted(() => {
 
 .issue-item {
   padding: 0.5rem;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-default);
   font-size: 0.8125rem;
   margin-bottom: 0.25rem;
 }
@@ -839,7 +839,7 @@ onMounted(() => {
 .recommendation-item {
   padding: 0.5rem;
   background: var(--color-success-alpha-10);
-  border-radius: 0.25rem;
+  border-radius: var(--radius-default);
   font-size: 0.8125rem;
   color: var(--chart-green-light);
   margin-bottom: 0.25rem;
@@ -848,7 +848,7 @@ onMounted(() => {
 .cache-indicator {
   padding: 0.5rem;
   background: rgba(168, 85, 247, 0.1);
-  border-radius: 0.25rem;
+  border-radius: var(--radius-default);
   font-size: 0.8125rem;
   color: var(--chart-purple-light);
   text-align: center;
@@ -865,7 +865,7 @@ onMounted(() => {
   padding: 1rem;
   background: var(--bg-primary);
   border: 1px solid var(--border-secondary);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
 }
 
 .recommendation-card.priority-1 { border-left: 3px solid var(--color-error); }
@@ -913,7 +913,7 @@ onMounted(() => {
 .expand-btn {
   background: transparent;
   border: 1px solid var(--border-default);
-  border-radius: 0.25rem;
+  border-radius: var(--radius-default);
   color: var(--text-secondary);
   font-size: 0.75rem;
   padding: 0.25rem 0.5rem;
@@ -952,7 +952,7 @@ onMounted(() => {
 .model-item {
   padding: 0.75rem;
   background: var(--bg-primary);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
 }
 
 .model-header {
@@ -983,14 +983,14 @@ onMounted(() => {
 .model-bar {
   height: 4px;
   background: var(--border-secondary);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   overflow: hidden;
 }
 
 .model-bar-fill {
   height: 100%;
   background: var(--color-info);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   transition: width 0.3s;
 }
 
@@ -1024,7 +1024,7 @@ onMounted(() => {
 .category-bar {
   height: 4px;
   background: var(--border-secondary);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   overflow: hidden;
   margin-bottom: 0.25rem;
 }
@@ -1032,7 +1032,7 @@ onMounted(() => {
 .category-bar-fill {
   height: 100%;
   background: var(--color-success);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   transition: width 0.3s;
 }
 
@@ -1053,7 +1053,7 @@ onMounted(() => {
 .cache-item {
   padding: 0.75rem;
   background: var(--bg-primary);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
 }
 
 .cache-header {

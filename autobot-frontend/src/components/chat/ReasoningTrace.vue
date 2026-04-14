@@ -111,7 +111,7 @@ function formatDuration(ms: number): string {
 <style scoped>
 .reasoning-trace {
   border: 1px solid var(--color-border, #334155);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   margin-bottom: 0.5rem;
   background: var(--color-bg-subtle, #0f172a);
   overflow: hidden;
@@ -161,7 +161,7 @@ function formatDuration(ms: number): string {
 .reasoning-trace__count {
   font-size: 0.7rem;
   background: var(--color-border, #334155);
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   padding: 0 0.4rem;
   line-height: 1.4rem;
 }

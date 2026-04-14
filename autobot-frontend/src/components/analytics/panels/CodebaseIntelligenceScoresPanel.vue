@@ -772,7 +772,7 @@ function formatTimestamp(timestamp: string): string {
   margin-top: 32px;
   padding: 24px;
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
   contain: layout style;}
 
@@ -799,7 +799,7 @@ function formatTimestamp(timestamp: string): string {
 
 .score-card {
   background: rgba(17, 24, 39, 0.6);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   padding: 20px;
   border: 1px solid rgba(71, 85, 105, 0.4);
   transition: all 0.2s ease;
@@ -825,7 +825,7 @@ function formatTimestamp(timestamp: string): string {
   padding: 4px 8px;
   background: rgba(59, 130, 246, 0.1);
   border: 1px solid rgba(59, 130, 246, 0.3);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   color: var(--color-info-light);
   cursor: pointer;
   font-size: 0.8em;
@@ -863,7 +863,7 @@ function formatTimestamp(timestamp: string): string {
   gap: 8px;
   padding: 12px;
   background: rgba(239, 68, 68, 0.1);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   color: var(--color-error-light);
   font-size: 0.85em;
 }
@@ -890,7 +890,7 @@ function formatTimestamp(timestamp: string): string {
   align-items: center;
   gap: 4px;
   padding: 4px 10px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.8em;
 }
 
@@ -941,13 +941,13 @@ function formatTimestamp(timestamp: string): string {
   flex: 1;
   height: 6px;
   background: rgba(71, 85, 105, 0.4);
-  border-radius: 3px;
+  border-radius: var(--radius-default);
   overflow: hidden;
 }
 
 .quality-metric .metric-fill {
   height: 100%;
-  border-radius: 3px;
+  border-radius: var(--radius-default);
   transition: width 0.5s ease;
 }
 
@@ -965,7 +965,7 @@ function formatTimestamp(timestamp: string): string {
 .quality-trend {
   margin-top: 8px;
   padding: 4px 12px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.8em;
   font-weight: 500;
   display: flex;
@@ -993,7 +993,7 @@ function formatTimestamp(timestamp: string): string {
   margin-top: 24px;
   padding: 20px;
   background: rgba(30, 41, 59, 0.4);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.3);
 }
 
@@ -1012,7 +1012,7 @@ function formatTimestamp(timestamp: string): string {
 .suggestions-count {
   padding: 2px 8px;
   background: rgba(245, 158, 11, 0.2);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   font-size: 0.75em;
   color: var(--color-warning-light);
 }
@@ -1026,7 +1026,7 @@ function formatTimestamp(timestamp: string): string {
 .suggestion-item {
   padding: 14px 16px;
   background: rgba(17, 24, 39, 0.5);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border-left: 4px solid var(--text-tertiary);
 }
 
@@ -1044,7 +1044,7 @@ function formatTimestamp(timestamp: string): string {
 .suggestion-type-badge {
   padding: 2px 8px;
   background: rgba(99, 102, 241, 0.2);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.75em;
   color: var(--chart-indigo-light);
   text-transform: capitalize;
@@ -1052,7 +1052,7 @@ function formatTimestamp(timestamp: string): string {
 
 .suggestion-priority {
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.7em;
   font-weight: 600;
   text-transform: uppercase;
@@ -1102,7 +1102,7 @@ function formatTimestamp(timestamp: string): string {
   margin-top: 24px;
   padding: 20px;
   background: rgba(30, 41, 59, 0.4);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.3);
 }
 
@@ -1132,7 +1132,7 @@ function formatTimestamp(timestamp: string): string {
   gap: 12px;
   padding: 10px 14px;
   background: rgba(17, 24, 39, 0.5);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   transition: background 0.2s ease;
 }
 
@@ -1184,7 +1184,7 @@ function formatTimestamp(timestamp: string): string {
   padding: 8px 16px;
   background: rgba(99, 102, 241, 0.2);
   border: 1px solid rgba(99, 102, 241, 0.4);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--chart-indigo-light);
   font-size: 0.85em;
   font-weight: 500;
@@ -1211,7 +1211,7 @@ function formatTimestamp(timestamp: string): string {
 .findings-panel {
   margin-top: 16px;
   background: rgba(30, 41, 59, 0.6);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
   overflow: hidden;
   animation: slideDown 0.3s ease-out;
@@ -1256,7 +1256,7 @@ function formatTimestamp(timestamp: string): string {
 .findings-count {
   padding: 4px 12px;
   background: rgba(71, 85, 105, 0.5);
-  border-radius: 20px;
+  border-radius: var(--radius-2xl);
   color: var(--text-muted);
   font-size: 0.85em;
   font-weight: 500;
@@ -1286,7 +1286,7 @@ function formatTimestamp(timestamp: string): string {
 
 .finding-item {
   background: rgba(15, 23, 42, 0.6);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 14px 16px;
   margin-bottom: 10px;
   border-left: 4px solid var(--text-tertiary);
@@ -1331,7 +1331,7 @@ function formatTimestamp(timestamp: string): string {
 
 .finding-severity {
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.75em;
   font-weight: 600;
   text-transform: uppercase;
@@ -1372,7 +1372,7 @@ function formatTimestamp(timestamp: string): string {
 .finding-category {
   padding: 2px 8px;
   background: rgba(71, 85, 105, 0.5);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.75em;
   color: var(--text-muted);
 }
@@ -1404,7 +1404,7 @@ function formatTimestamp(timestamp: string): string {
   margin-top: 10px;
   padding: 10px 12px;
   background: rgba(34, 197, 94, 0.1);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border-left: 3px solid var(--chart-green);
   color: var(--color-success-light);
   font-size: 0.85em;

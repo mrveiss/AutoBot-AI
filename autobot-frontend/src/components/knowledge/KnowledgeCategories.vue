@@ -418,7 +418,7 @@ onUnmounted(() => {
 .main-category-card {
   background: var(--bg-card);
   border: 3px solid var(--border-default);
-  border-radius: 1rem;
+  border-radius: var(--radius-2xl);
   padding: 2rem;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -438,7 +438,7 @@ onUnmounted(() => {
   width: 2rem;
   height: 2rem;
   border: none;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background: var(--bg-secondary);
   color: var(--text-secondary);
   cursor: pointer;
@@ -483,7 +483,7 @@ onUnmounted(() => {
 .category-icon-large {
   width: 5rem;
   height: 5rem;
-  border-radius: 1rem;
+  border-radius: var(--radius-2xl);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -523,7 +523,7 @@ onUnmounted(() => {
   margin-bottom: 1.5rem;
   padding: 0.75rem;
   background: var(--bg-secondary);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
 }
 
 .category-stats {
@@ -580,7 +580,7 @@ onUnmounted(() => {
   margin-bottom: 1.5rem;
   padding: 1rem;
   background: var(--bg-card);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-sm);
 }
 
@@ -650,7 +650,7 @@ onUnmounted(() => {
   margin-bottom: 2rem;
   padding: 1.5rem;
   background: var(--bg-card);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-sm);
 }
 
@@ -675,7 +675,7 @@ onUnmounted(() => {
   background: var(--color-info);
   color: var(--text-on-primary);
   text-decoration: none;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   font-weight: 500;
   transition: all 0.2s;
 }
@@ -695,7 +695,7 @@ onUnmounted(() => {
 
 .stat-card {
   background: var(--bg-card);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   padding: 1.5rem;
   display: flex;
   align-items: center;
@@ -714,7 +714,7 @@ onUnmounted(() => {
   height: 3rem;
   background: var(--color-info);
   color: var(--text-on-primary);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -748,7 +748,7 @@ onUnmounted(() => {
 
 .category-browse-card {
   background: var(--bg-card);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   padding: 1.5rem;
   display: flex;
   align-items: center;
@@ -769,7 +769,7 @@ onUnmounted(() => {
   height: 3.5rem;
   background: var(--color-info-bg);
   color: var(--color-info);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -817,7 +817,7 @@ onUnmounted(() => {
 .category-tree-container {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   padding: 1rem;
   max-height: 500px;
   overflow-y: auto;
@@ -832,7 +832,7 @@ onUnmounted(() => {
 .selected-category-info {
   background: var(--color-info-bg);
   padding: 1rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--color-info);
 }
 
@@ -857,7 +857,7 @@ onUnmounted(() => {
   flex: 1;
   padding: 0.75rem 1rem;
   border: none;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
@@ -893,7 +893,7 @@ onUnmounted(() => {
 /* KB Stats */
 .kb-stats {
   background: var(--bg-secondary);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   padding: 1.25rem;
   border: 1px solid var(--border-default);
 }
@@ -933,7 +933,7 @@ onUnmounted(() => {
 /* KB Message */
 .kb-message {
   padding: 0.75rem 1rem;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   font-size: 0.875rem;
 }
 
@@ -976,7 +976,7 @@ onUnmounted(() => {
   color: var(--color-error-dark);
   background: var(--color-error-bg);
   border: 1px solid var(--color-error-border);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   max-width: 500px;
   margin: 2rem auto;
 }
@@ -997,7 +997,7 @@ onUnmounted(() => {
   background: var(--color-error-dark);
   color: #fff;
   border: none;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   font-weight: 500;
   cursor: pointer;
   transition: opacity 0.2s;
@@ -1016,7 +1016,7 @@ onUnmounted(() => {
 .category-card {
   background: var(--bg-card);
   border: 2px solid var(--border-default);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   padding: 1.5rem;
   cursor: pointer;
   transition: all 0.2s;
@@ -1042,7 +1042,7 @@ onUnmounted(() => {
 .category-icon {
   width: 3rem;
   height: 3rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1104,7 +1104,7 @@ onUnmounted(() => {
   width: 100%;
   padding: 0.625rem;
   border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   font-size: 0.875rem;
   background: var(--bg-input);
   color: var(--text-primary);
@@ -1131,7 +1131,7 @@ onUnmounted(() => {
 .color-option {
   width: 2.5rem;
   height: 2.5rem;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   cursor: pointer;
   position: relative;
   transition: transform 0.2s;
@@ -1189,7 +1189,7 @@ onUnmounted(() => {
   gap: 1rem;
   padding: 0.75rem;
   border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   margin-bottom: 0.5rem;
   cursor: pointer;
   transition: all 0.2s;
@@ -1204,7 +1204,7 @@ onUnmounted(() => {
   width: 2.5rem;
   height: 2.5rem;
   background: var(--color-info-bg);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1229,7 +1229,7 @@ onUnmounted(() => {
   background: var(--color-success);
   color: var(--text-on-success);
   border: none;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
@@ -1264,7 +1264,7 @@ onUnmounted(() => {
 
 .category-documents-modal {
   background: var(--bg-card);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   width: 100%;
   max-width: 1200px;
   max-height: 90vh;
@@ -1280,7 +1280,7 @@ onUnmounted(() => {
   padding: 1.5rem 2rem;
   border-bottom: 1px solid var(--border-default);
   background: var(--bg-secondary);
-  border-radius: 0.75rem 0.75rem 0 0;
+  border-radius: var(--radius-xl) 0.75rem 0 0;
 }
 
 .modal-header h3 {
@@ -1305,7 +1305,7 @@ onUnmounted(() => {
 .document-card {
   background: var(--bg-card);
   border: 2px solid var(--border-default);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   padding: 1.25rem;
   cursor: pointer;
   transition: all 0.2s;
@@ -1328,7 +1328,7 @@ onUnmounted(() => {
   width: 2.5rem;
   height: 2.5rem;
   background: var(--color-info-bg);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1397,7 +1397,7 @@ onUnmounted(() => {
 
 .document-viewer-modal {
   background: var(--bg-card);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   width: 100%;
   max-width: 1400px;
   max-height: 95vh;
@@ -1413,7 +1413,7 @@ onUnmounted(() => {
   padding: 1.5rem 2rem;
   border-bottom: 1px solid var(--border-default);
   background: var(--bg-secondary);
-  border-radius: 0.75rem 0.75rem 0 0;
+  border-radius: var(--radius-xl) 0.75rem 0 0;
 }
 
 .viewer-header h3 {
@@ -1435,7 +1435,7 @@ onUnmounted(() => {
   font-family: var(--font-mono);
   background: var(--color-info-bg);
   padding: 0.25rem 0.75rem;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
 }
 
 .viewer-content {
@@ -1468,7 +1468,7 @@ onUnmounted(() => {
   padding: 0.5rem 1rem;
   border: none;
   background: transparent;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   color: var(--text-secondary);
   font-size: 0.875rem;
   font-weight: 500;
@@ -1510,7 +1510,7 @@ onUnmounted(() => {
 .document-card {
   background: var(--bg-card);
   border: 1px solid var(--border-default);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   padding: 1rem;
   cursor: pointer;
   transition: all 0.2s;
@@ -1529,7 +1529,7 @@ onUnmounted(() => {
   height: 3rem;
   background: var(--color-info-bg);
   color: var(--color-info);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1577,7 +1577,7 @@ onUnmounted(() => {
 /* Document Metadata */
 .document-metadata {
   background: var(--bg-secondary);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   padding: 1rem;
   margin-bottom: 1rem;
 }
@@ -1611,7 +1611,7 @@ onUnmounted(() => {
 .document-content pre {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   padding: 1rem;
   font-size: 0.875rem;
   overflow-x: auto;

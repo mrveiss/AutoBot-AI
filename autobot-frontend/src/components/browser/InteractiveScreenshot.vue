@@ -255,7 +255,7 @@ function submitType() {
   width: 28px;
   height: 28px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   background: transparent;
   color: var(--color-text-secondary, #a1a1aa);
   cursor: pointer;
@@ -285,7 +285,7 @@ function submitType() {
   flex: 1;
   padding: 4px 8px;
   border: 1px solid var(--color-border, #333);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   background: var(--color-bg, #121212);
   color: var(--color-text, #e4e4e7);
   font-size: 0.8rem;
@@ -307,7 +307,7 @@ function submitType() {
   width: 28px;
   height: 28px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   background: var(--color-primary, #3b82f6);
   color: white;
   cursor: pointer;

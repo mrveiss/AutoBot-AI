@@ -327,7 +327,7 @@ onUnmounted(() => {
 .document-change-feed {
   background: var(--bg-card);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 1.5rem;
   margin-bottom: 1.5rem;
 }
@@ -358,7 +358,7 @@ onUnmounted(() => {
 
 .badge {
   padding: 0.25rem 0.75rem;
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   font-size: 0.875rem;
   font-weight: 500;
   display: inline-flex;
@@ -414,7 +414,7 @@ onUnmounted(() => {
   padding: 0.375rem 0.5rem;
   font-size: 0.875rem;
   border: 1px solid var(--border-light);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   background: var(--bg-card);
   color: var(--text-secondary);
   min-width: 180px;
@@ -465,7 +465,7 @@ onUnmounted(() => {
 .vectorization-status {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
 }
@@ -526,7 +526,7 @@ onUnmounted(() => {
   display: flex;
   gap: 0.75rem;
   padding: 0.75rem;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   transition: all 0.2s;
 }
 

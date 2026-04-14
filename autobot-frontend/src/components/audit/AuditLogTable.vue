@@ -360,7 +360,7 @@ function exportLogs(format: 'json' | 'csv') {
   position: relative;
   background: var(--bg-card);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   overflow: hidden;
 }
 
@@ -398,7 +398,7 @@ function exportLogs(format: 'json' | 'csv') {
   margin-top: var(--spacing-1);
   background: var(--bg-card);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   box-shadow: var(--shadow-lg);
   z-index: 10;
   min-width: 150px;
@@ -519,7 +519,7 @@ th span {
   align-items: center;
   gap: var(--spacing-1);
   padding: var(--spacing-1) var(--spacing-2);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   font-size: 11px;
   font-weight: 500;
   font-family: var(--font-sans);
@@ -670,7 +670,7 @@ th span {
 
 .modal-content {
   background: var(--bg-card);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   max-width: 700px;
   width: 100%;
   max-height: 90vh;
@@ -739,7 +739,7 @@ th span {
   color: var(--color-error);
   background: var(--color-error-bg);
   padding: var(--spacing-2);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   font-family: var(--font-mono);
   font-size: 12px;
 }
@@ -749,7 +749,7 @@ th span {
   font-size: 12px;
   background: var(--bg-secondary);
   padding: var(--spacing-3);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   overflow-x: auto;
   margin: 0;
   white-space: pre-wrap;

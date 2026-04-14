@@ -475,7 +475,7 @@ onMounted(() => {
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background: rgba(156, 163, 175, 0.3);
-  border-radius: 3px;
+  border-radius: var(--radius-default);
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {

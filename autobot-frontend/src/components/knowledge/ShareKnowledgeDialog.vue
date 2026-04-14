@@ -376,7 +376,7 @@ const closeDialog = () => {
 
 .modal-dialog {
   background: var(--bg-card);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   width: 90%;
   max-width: 600px;
   max-height: 80vh;
@@ -412,7 +412,7 @@ const closeDialog = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-default);
   transition: background-color 0.2s;
 }
 
@@ -454,7 +454,7 @@ const closeDialog = () => {
   width: 100%;
   padding: 0.5rem 0.75rem 0.5rem 2.5rem;
   border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   font-size: 0.875rem;
   background-color: var(--bg-secondary);
   color: var(--text-primary);
@@ -473,7 +473,7 @@ const closeDialog = () => {
 .search-results {
   margin-bottom: 1.5rem;
   border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   max-height: 200px;
   overflow-y: auto;
 }
@@ -538,7 +538,7 @@ const closeDialog = () => {
 
 .access-list {
   border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
 }
 
 .access-item {
@@ -584,7 +584,7 @@ const closeDialog = () => {
 .permission-select {
   padding: 0.25rem 0.5rem;
   border: 1px solid var(--border-default);
-  border-radius: 0.25rem;
+  border-radius: var(--radius-default);
   font-size: 0.875rem;
   cursor: pointer;
   background-color: var(--bg-secondary);
@@ -597,7 +597,7 @@ const closeDialog = () => {
   padding: 0.5rem;
   cursor: pointer;
   color: #ef4444;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-default);
   transition: background-color 0.2s;
 }
 
@@ -615,7 +615,7 @@ const closeDialog = () => {
 
 .btn {
   padding: 0.5rem 1rem;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;

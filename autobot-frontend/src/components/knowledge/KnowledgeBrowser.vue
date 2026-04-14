@@ -1143,7 +1143,7 @@ watch(() => props.mode, () => {
 
 .category-tabs::-webkit-scrollbar-thumb {
   background: var(--color-primary-alpha-30);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 
 .category-tab {
@@ -1196,7 +1196,7 @@ watch(() => props.mode, () => {
   padding: 0.375rem 0.75rem;
   background: var(--color-primary-bg);
   border: 1px solid var(--color-primary-light);
-  border-radius: 1rem;
+  border-radius: var(--radius-2xl);
   font-size: 0.8125rem;
   color: var(--color-primary-dark);
   font-weight: 500;
@@ -1352,7 +1352,7 @@ watch(() => props.mode, () => {
   width: 100%;
   padding: 0.625rem 2.5rem 0.625rem 2.5rem;
   border: 1px solid var(--border-light);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   font-size: 0.875rem;
   transition: all 0.2s;
 }
@@ -1524,7 +1524,7 @@ watch(() => props.mode, () => {
   overflow-y: auto;
   background: var(--bg-card);
   margin: 1rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
 }
 
@@ -1567,7 +1567,7 @@ watch(() => props.mode, () => {
 .tree-pane::-webkit-scrollbar-thumb,
 .content-pane::-webkit-scrollbar-thumb {
   background: var(--border-secondary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 .tree-pane::-webkit-scrollbar-thumb:hover,

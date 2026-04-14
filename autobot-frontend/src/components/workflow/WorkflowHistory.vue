@@ -185,19 +185,19 @@ function formatDate(date?: string): string {
 .workflow-history { height: 100%; display: flex; flex-direction: column; }
 
 .history-filters { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
-.search-box { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: 8px; flex: 1; min-width: 200px; }
+.search-box { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-lg); flex: 1; min-width: 200px; }
 .search-box i { color: var(--text-muted); }
 .search-box input { flex: 1; background: none; border: none; color: var(--text-primary); font-size: 14px; outline: none; }
 .search-box input:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .filter-group { display: flex; gap: 8px; }
-.filter-group select { padding: 10px 12px; background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: 8px; color: var(--text-primary); font-size: 13px; cursor: pointer; }
+.filter-group select { padding: 10px 12px; background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-lg); color: var(--text-primary); font-size: 13px; cursor: pointer; }
 
 .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-tertiary); padding: 40px; }
 .empty-state i { font-size: 48px; margin-bottom: 16px; }
 .empty-state h3 { margin: 0 0 8px; color: var(--text-primary); }
 
 .history-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
-.history-item { display: flex; align-items: center; gap: 16px; padding: 16px; background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: 10px; cursor: pointer; transition: all 0.2s; }
+.history-item { display: flex; align-items: center; gap: 16px; padding: 16px; background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-xl); cursor: pointer; transition: all 0.2s; }
 .history-item:hover { border-color: var(--color-primary); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
 
 .item-status { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
@@ -212,18 +212,18 @@ function formatDate(date?: string): string {
 .item-meta span { display: flex; align-items: center; gap: 4px; }
 
 .item-stats { display: flex; gap: 12px; }
-.item-stats .stat { font-size: 12px; padding: 4px 10px; border-radius: 12px; }
+.item-stats .stat { font-size: 12px; padding: 4px 10px; border-radius: var(--radius-xl); }
 .item-stats .stat span { font-weight: 600; }
 .item-stats .success { background: var(--color-success-bg); color: var(--color-success); }
 .item-stats .failed { background: var(--color-error-bg); color: var(--color-error); }
 .item-stats .skipped { background: var(--bg-tertiary); color: var(--text-tertiary); }
 
 .item-actions { display: flex; gap: 8px; }
-.btn-icon { width: 32px; height: 32px; background: var(--bg-tertiary); border: none; border-radius: 6px; color: var(--text-secondary); cursor: pointer; transition: all 0.15s; }
+.btn-icon { width: 32px; height: 32px; background: var(--bg-tertiary); border: none; border-radius: var(--radius-md); color: var(--text-secondary); cursor: pointer; transition: all 0.15s; }
 .btn-icon:hover { background: var(--bg-hover); color: var(--text-primary); }
 
 .pagination { display: flex; justify-content: center; align-items: center; gap: 16px; padding: 16px 0; margin-top: auto; }
-.pagination button { padding: 8px 12px; background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: 6px; color: var(--text-secondary); cursor: pointer; }
+.pagination button { padding: 8px 12px; background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-md); color: var(--text-secondary); cursor: pointer; }
 .pagination button:hover:not(:disabled) { background: var(--bg-hover); }
 .pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
 .pagination span { font-size: 13px; color: var(--text-tertiary); }

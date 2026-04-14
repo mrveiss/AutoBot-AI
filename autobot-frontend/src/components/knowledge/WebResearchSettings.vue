@@ -824,7 +824,7 @@ onMounted(() => {
   align-items: center;
   width: 44px;
   height: 24px;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: none;
   cursor: pointer;
   transition: background-color 0.2s;

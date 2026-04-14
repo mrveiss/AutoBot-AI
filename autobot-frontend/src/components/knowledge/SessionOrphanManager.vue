@@ -264,7 +264,7 @@ const cleanupSessionOrphans = async () => {
 /* Issue #704: Migrated to CSS design tokens */
 .session-orphan-manager {
   background: var(--bg-card);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   margin: 1rem;
   box-shadow: var(--shadow-sm);
 }
@@ -310,7 +310,7 @@ const cleanupSessionOrphans = async () => {
   text-align: center;
   padding: 1rem;
   background: var(--bg-secondary);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-default);
 }
 
@@ -340,7 +340,7 @@ const cleanupSessionOrphans = async () => {
 .orphan-preview {
   background: var(--color-warning-bg-light);
   border: 1px solid var(--color-warning-light);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   padding: 1rem;
 }
 
@@ -362,7 +362,7 @@ const cleanupSessionOrphans = async () => {
 .orphan-item {
   background: var(--bg-card);
   border: 1px solid var(--color-warning-light);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   padding: 0.75rem;
 }
 
@@ -377,7 +377,7 @@ const cleanupSessionOrphans = async () => {
   padding: 0.125rem 0.5rem;
   background: var(--color-primary-bg);
   color: var(--color-primary-dark);
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
 }
 
 .orphan-important {
@@ -385,7 +385,7 @@ const cleanupSessionOrphans = async () => {
   padding: 0.125rem 0.5rem;
   background: var(--color-warning-bg);
   color: var(--color-warning-dark);
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
 }
 
 .orphan-content-text {
@@ -419,7 +419,7 @@ const cleanupSessionOrphans = async () => {
 
 .action-card {
   border: 1px solid var(--border-default);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   padding: 1.25rem;
   display: flex;
   flex-direction: column;
@@ -497,7 +497,7 @@ const cleanupSessionOrphans = async () => {
   align-items: center;
   gap: 0.75rem;
   padding: 1rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   margin-top: 1.5rem;
 }
 

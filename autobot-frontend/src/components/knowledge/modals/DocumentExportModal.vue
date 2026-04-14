@@ -292,7 +292,7 @@ watch(() => props.modelValue, (isOpen) => {
   align-items: center;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   margin-bottom: 1rem;
   font-size: 0.875rem;
 }
@@ -310,7 +310,7 @@ watch(() => props.modelValue, (isOpen) => {
   gap: 0.75rem;
   padding: 1rem;
   background: var(--bg-secondary);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   margin-bottom: 1.5rem;
   color: var(--text-secondary);
   font-size: 0.875rem;
@@ -347,7 +347,7 @@ watch(() => props.modelValue, (isOpen) => {
   gap: 0.75rem;
   padding: 0.875rem 1rem;
   border: 2px solid var(--border-default);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -369,7 +369,7 @@ watch(() => props.modelValue, (isOpen) => {
   align-items: center;
   justify-content: center;
   background: var(--bg-secondary);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   color: var(--color-info);
   font-size: 1rem;
 }

@@ -1663,7 +1663,7 @@ watch(selectedScope, () => {
   width: 100%;
   padding: 10px 36px 10px 36px;
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 14px;
   transition: all 0.2s;
   background: var(--bg-input);
@@ -1739,7 +1739,7 @@ watch(selectedScope, () => {
   font-size: 12px;
   background: var(--bg-tertiary);
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   color: var(--text-tertiary);
 }
 
@@ -1768,7 +1768,7 @@ watch(selectedScope, () => {
   background: var(--color-primary);
   color: var(--text-on-primary);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -1826,7 +1826,7 @@ watch(selectedScope, () => {
   justify-content: center;
   background: var(--bg-tertiary);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
   color: var(--text-secondary);
   transition: all 0.15s;
@@ -1918,7 +1918,7 @@ watch(selectedScope, () => {
   padding: 16px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -1941,7 +1941,7 @@ watch(selectedScope, () => {
   width: 48px;
   height: 48px;
   min-width: 48px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1981,7 +1981,7 @@ watch(selectedScope, () => {
 .badge {
   font-size: 11px;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-weight: 500;
   text-transform: capitalize;
 }
@@ -2071,7 +2071,7 @@ watch(selectedScope, () => {
   font-size: 11px;
   padding: 2px 8px;
   background: var(--bg-tertiary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   color: var(--text-secondary);
 }
 
@@ -2100,7 +2100,7 @@ watch(selectedScope, () => {
   padding: 2px 8px;
   background: var(--color-primary-bg);
   color: var(--color-primary);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
 }
 
 .card-actions {
@@ -2123,7 +2123,7 @@ watch(selectedScope, () => {
   justify-content: center;
   background: var(--bg-tertiary);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   color: var(--text-secondary);
   transition: all 0.15s;
@@ -2177,7 +2177,7 @@ watch(selectedScope, () => {
   padding: 14px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -2190,7 +2190,7 @@ watch(selectedScope, () => {
 .template-icon {
   width: 40px;
   height: 40px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2238,7 +2238,7 @@ watch(selectedScope, () => {
   gap: 10px;
   padding: 16px;
   border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -2251,7 +2251,7 @@ watch(selectedScope, () => {
 .type-option .type-icon {
   width: 44px;
   height: 44px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2272,14 +2272,14 @@ watch(selectedScope, () => {
   gap: 12px;
   padding: 12px;
   background: var(--bg-tertiary);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   margin-bottom: 8px;
 }
 
 .selected-type .type-icon {
   width: 40px;
   height: 40px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2341,7 +2341,7 @@ watch(selectedScope, () => {
 .form-input {
   padding: 10px 12px;
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 14px;
   transition: all 0.2s;
   background: var(--bg-input);
@@ -2381,7 +2381,7 @@ watch(selectedScope, () => {
   top: 8px;
   background: var(--bg-tertiary);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   width: 32px;
   height: 32px;
   display: flex;
@@ -2403,7 +2403,7 @@ watch(selectedScope, () => {
   gap: 12px;
   padding: 14px;
   border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -2465,7 +2465,7 @@ watch(selectedScope, () => {
 .view-icon {
   width: 56px;
   height: 56px;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2510,7 +2510,7 @@ watch(selectedScope, () => {
   gap: 8px;
   padding: 12px;
   background: var(--bg-tertiary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .secret-display code {
@@ -2614,7 +2614,7 @@ watch(selectedScope, () => {
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 14px;
 }
 
@@ -2634,7 +2634,7 @@ watch(selectedScope, () => {
   background: var(--color-primary);
   color: var(--text-on-primary);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -2659,7 +2659,7 @@ watch(selectedScope, () => {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -2675,7 +2675,7 @@ watch(selectedScope, () => {
   background: var(--color-error);
   color: var(--text-on-error);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -2709,7 +2709,7 @@ watch(selectedScope, () => {
   padding: 10px 16px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
   transition: all 0.15s;
   user-select: none;

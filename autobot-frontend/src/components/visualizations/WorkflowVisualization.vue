@@ -587,7 +587,7 @@ defineExpose({
 
 .workflow-visualization {
   background: var(--bg-secondary-alpha);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   padding: 20px;
   border: 1px solid var(--border-subtle);
   position: relative;
@@ -625,7 +625,7 @@ defineExpose({
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: 13px;
   font-weight: 500;
 }
@@ -655,7 +655,7 @@ defineExpose({
   padding: 8px 10px;
   background: transparent;
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s;
@@ -671,7 +671,7 @@ defineExpose({
 .workflow-container {
   position: relative;
   background: rgba(15, 23, 42, 0.5);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
   min-height: 400px;
 }
@@ -809,7 +809,7 @@ defineExpose({
   gap: 8px;
   background: rgba(30, 41, 59, 0.9);
   padding: 8px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-subtle);
 }
 
@@ -818,7 +818,7 @@ defineExpose({
   height: 28px;
   border: 1px solid var(--border-subtle);
   background: transparent;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   color: var(--text-secondary);
   cursor: pointer;
   display: flex;
@@ -847,7 +847,7 @@ defineExpose({
   width: 200px;
   height: 24px;
   background: rgba(30, 41, 59, 0.9);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid var(--border-subtle);
   overflow: hidden;
 }
@@ -876,7 +876,7 @@ defineExpose({
   right: 20px;
   width: 280px;
   background: var(--bg-secondary);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid var(--border-subtle);
   box-shadow: var(--shadow-lg);
   overflow: hidden;
@@ -894,7 +894,7 @@ defineExpose({
 .details-icon {
   width: 40px;
   height: 40px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -936,7 +936,7 @@ defineExpose({
   border: none;
   color: var(--text-tertiary);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   transition: all 0.2s;
 }
 
@@ -980,7 +980,7 @@ defineExpose({
   font-size: 11px;
   background: rgba(15, 23, 42, 0.5);
   padding: 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   margin-top: 4px;
   overflow-x: auto;
   max-width: 200px;
@@ -1017,7 +1017,7 @@ defineExpose({
     left: 0;
     right: 0;
     width: 100%;
-    border-radius: 12px 12px 0 0;
+    border-radius: var(--radius-xl) 12px 0 0;
     max-height: 50vh;
     overflow-y: auto;
   }

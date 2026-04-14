@@ -409,7 +409,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   background: rgba(37, 99, 235, 0.15);
   color: #60a5fa;
   font-size: 0.875rem;
@@ -418,7 +418,7 @@ onBeforeUnmount(() => {
 .voice-overlay__mode-select {
   appearance: none;
   padding: 0.25rem 1.75rem 0.25rem 0.5rem;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.15));
   background: var(--bg-tertiary, #1e293b)
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M3 4.5L6 8l3-3.5H3z'/%3E%3C/svg%3E")
@@ -443,7 +443,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 0.3rem;
   padding: 0.15rem 0.5rem;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background: rgba(37, 99, 235, 0.1);
   border: 1px solid rgba(37, 99, 235, 0.2);
   color: #93c5fd;
@@ -476,7 +476,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   color: var(--text-muted, #64748b);
   transition: all 0.15s;
   cursor: pointer;
@@ -555,13 +555,13 @@ onBeforeUnmount(() => {
 .voice-overlay__bubble--user .voice-overlay__bubble-content {
   background: rgba(37, 99, 235, 0.12);
   border: 1px solid rgba(37, 99, 235, 0.15);
-  border-bottom-right-radius: 0.25rem;
+  border-bottom-right-radius: var(--radius-default);
 }
 
 .voice-overlay__bubble--assistant .voice-overlay__bubble-content {
   background: var(--bg-tertiary, rgba(30, 41, 59, 0.6));
   border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.08));
-  border-bottom-left-radius: 0.25rem;
+  border-bottom-left-radius: var(--radius-default);
 }
 
 .voice-overlay__bubble-sender {
@@ -578,7 +578,7 @@ onBeforeUnmount(() => {
 .voice-overlay__live-transcript {
   margin-top: 0.75rem;
   padding: 0.5rem 0.75rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   background: rgba(37, 99, 235, 0.06);
   border: 1px dashed rgba(37, 99, 235, 0.2);
   color: #93c5fd;
@@ -590,7 +590,7 @@ onBeforeUnmount(() => {
 .voice-overlay__error {
   margin: 0 1.25rem;
   padding: 0.5rem 0.75rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.2);
   color: #fca5a5;
@@ -601,7 +601,7 @@ onBeforeUnmount(() => {
 .voice-overlay__cert-warning {
   margin: 0 1.25rem;
   padding: 0.75rem 1rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   background: rgba(245, 158, 11, 0.08);
   border: 1px solid rgba(245, 158, 11, 0.25);
   color: #fcd34d;
@@ -631,7 +631,7 @@ onBeforeUnmount(() => {
 .voice-overlay__cert-warning-steps code {
   background: rgba(0, 0, 0, 0.3);
   padding: 0.1rem 0.3rem;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-default);
   font-size: 0.75rem;
   word-break: break-all;
 }
@@ -780,14 +780,14 @@ onBeforeUnmount(() => {
 /* Amplitude meter */
 .voice-overlay__amplitude {
   height: 4px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   background: rgba(148, 163, 184, 0.1);
   overflow: hidden;
 }
 
 .voice-overlay__amplitude-bar {
   height: 100%;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   background: linear-gradient(90deg, #60a5fa, #818cf8);
   transition: width 0.1s ease-out;
   min-width: 0;
@@ -811,7 +811,7 @@ onBeforeUnmount(() => {
   height: 4px;
   appearance: none;
   background: rgba(148, 163, 184, 0.15);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   outline: none;
   cursor: pointer;
 }

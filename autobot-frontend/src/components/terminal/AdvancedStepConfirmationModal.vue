@@ -380,14 +380,14 @@ function resetEdit(): void {
 .progress-bar {
   height: 0.375rem;
   background: var(--bg-tertiary, #374151);
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
   background: var(--color-info, #3b82f6);
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   transition: width 0.3s ease;
 }
 
@@ -445,7 +445,7 @@ function resetEdit(): void {
   padding: 0.125rem 0.5rem;
   background: var(--color-warning-bg, rgba(245, 158, 11, 0.15));
   color: var(--color-warning, #f59e0b);
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   font-size: 0.6875rem;
   font-weight: var(--font-medium, 500);
   text-transform: none;

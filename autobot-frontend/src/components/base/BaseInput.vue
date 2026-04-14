@@ -185,7 +185,7 @@ defineExpose({
   align-items: center;
   background-color: var(--bg-input);
   border: 1px solid var(--border-default);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -289,7 +289,7 @@ defineExpose({
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   transition: all 150ms ease;
 }
 

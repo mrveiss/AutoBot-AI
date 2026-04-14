@@ -168,35 +168,35 @@ const createRipple = (event: TouchEvent) => {
   height: 28px;
   padding: 0 8px;
   font-size: 11px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 
 .btn-sm {
   height: 32px;
   padding: 0 12px;
   font-size: 13px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 
 .btn-md {
   height: 40px;
   padding: 0 16px;
   font-size: 14px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 
 .btn-lg {
   height: 48px;
   padding: 0 24px;
   font-size: 16px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 .btn-xl {
   height: 56px;
   padding: 0 32px;
   font-size: 18px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 /* Color variants - Issue #901: Professional electric blue primary */
@@ -324,7 +324,7 @@ const createRipple = (event: TouchEvent) => {
 }
 
 .btn-rounded {
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
 }
 
 .btn-disabled {

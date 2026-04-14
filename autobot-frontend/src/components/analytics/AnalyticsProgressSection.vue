@@ -359,7 +359,7 @@ function getPhaseIcon(status: string): string {
   width: 100%;
   height: 6px;
   background: var(--bg-tertiary);
-  border-radius: 3px;
+  border-radius: var(--radius-default);
   overflow: hidden;
 }
 
@@ -367,7 +367,7 @@ function getPhaseIcon(status: string): string {
   height: 100%;
   background: var(--color-success);
   transition: width 0.3s ease;
-  border-radius: 3px;
+  border-radius: var(--radius-default);
 }
 
 /* Live Stats */
@@ -378,7 +378,7 @@ function getPhaseIcon(status: string): string {
   margin-top: 16px;
   padding: 12px;
   background: var(--bg-card);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 .live-stats .stat-item {

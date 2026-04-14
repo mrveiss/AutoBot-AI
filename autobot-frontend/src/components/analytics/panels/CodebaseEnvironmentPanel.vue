@@ -286,7 +286,7 @@ function formatFactorName(factor: string): string {
   margin-top: 32px;
   padding: 24px;
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
   contain: layout style;}
 
@@ -311,7 +311,7 @@ function formatFactorName(factor: string): string {
   align-items: center;
   gap: 10px;
   padding: 16px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .environment-analysis-section .loading-state {
@@ -356,7 +356,7 @@ function formatFactorName(factor: string): string {
 .environment-analysis-section .category-badge {
   padding: 4px 10px;
   background: rgba(71, 85, 105, 0.4);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.85em;
   color: var(--text-muted);
 }
@@ -375,7 +375,7 @@ function formatFactorName(factor: string): string {
 .environment-analysis-section .recommendation-item {
   padding: 14px;
   background: rgba(17, 24, 39, 0.5);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   margin-bottom: 10px;
   border-left: 4px solid var(--text-tertiary);
 }
@@ -403,13 +403,13 @@ function formatFactorName(factor: string): string {
   background: rgba(34, 197, 94, 0.2);
   color: var(--color-success-light);
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.9em;
 }
 
 .environment-analysis-section .priority-badge {
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.7em;
   text-transform: uppercase;
   font-weight: 600;
@@ -444,7 +444,7 @@ function formatFactorName(factor: string): string {
 .environment-analysis-section .rec-default code {
   background: rgba(30, 41, 59, 0.8);
   padding: 1px 5px;
-  border-radius: 3px;
+  border-radius: var(--radius-default);
 }
 
 /* Hardcoded Values Preview */
@@ -469,7 +469,7 @@ function formatFactorName(factor: string): string {
 .environment-analysis-section .hardcoded-item {
   padding: 12px;
   background: rgba(17, 24, 39, 0.5);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   margin-bottom: 8px;
   border-left: 3px solid var(--text-tertiary);
 }
@@ -512,7 +512,7 @@ function formatFactorName(factor: string): string {
   background: rgba(245, 158, 11, 0.1);
   color: var(--color-warning-light);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.85em;
 }
 
@@ -528,7 +528,7 @@ function formatFactorName(factor: string): string {
   gap: 6px;
   padding: 6px 10px;
   background: rgba(59, 130, 246, 0.1);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.85em;
 }
 

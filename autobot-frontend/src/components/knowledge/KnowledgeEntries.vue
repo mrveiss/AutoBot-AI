@@ -971,7 +971,7 @@ watch([debouncedSearchQuery, filterCategory, filterType], () => {
 .search-input {
   padding: var(--spacing-2) var(--spacing-3) var(--spacing-2) var(--spacing-9);
   border: 1px solid var(--border-default);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   width: 250px;
   background: var(--bg-primary);
   color: var(--text-primary);
@@ -997,7 +997,7 @@ watch([debouncedSearchQuery, filterCategory, filterType], () => {
   gap: var(--spacing-4);
   padding: var(--spacing-4);
   background: var(--bg-secondary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   margin-bottom: var(--spacing-4);
   flex-wrap: wrap;
 }
@@ -1017,7 +1017,7 @@ watch([debouncedSearchQuery, filterCategory, filterType], () => {
 .filter-select {
   padding: var(--spacing-1-5) var(--spacing-3);
   border: 1px solid var(--border-default);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   font-size: var(--text-sm);
   font-family: var(--font-sans);
   background: var(--bg-card);
@@ -1045,7 +1045,7 @@ watch([debouncedSearchQuery, filterCategory, filterType], () => {
 /* Table styles */
 .entries-table {
   background: var(--bg-card);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   overflow: hidden;
   box-shadow: var(--shadow-sm);
 }
@@ -1129,7 +1129,7 @@ tr.selected {
 .category-badge {
   display: inline-block;
   padding: var(--spacing-1) var(--spacing-3);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   font-size: 11px;
   font-weight: 500;
   font-family: var(--font-sans);
@@ -1157,7 +1157,7 @@ tr.selected {
   display: inline-block;
   padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--bg-tertiary);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   font-size: 11px;
   font-family: var(--font-mono);
   font-weight: 400;
@@ -1216,7 +1216,7 @@ tr.selected {
   margin-bottom: var(--spacing-8);
   padding: var(--spacing-4);
   background: var(--bg-secondary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 .meta-item {

@@ -261,7 +261,7 @@ defineExpose({ resetSyncing })
   padding: var(--spacing-4);
   background: var(--bg-card);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
   contain: layout style;}
 
@@ -340,7 +340,7 @@ defineExpose({ resetSyncing })
   letter-spacing: 0.05em;
   padding: 2px var(--spacing-2);
   background: var(--bg-tertiary);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   font-family: var(--font-sans);
 }
 
@@ -390,7 +390,7 @@ defineExpose({ resetSyncing })
   margin-bottom: var(--spacing-3);
   padding: var(--spacing-2) var(--spacing-3);
   background: var(--color-error-bg);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 
 .error-icon {

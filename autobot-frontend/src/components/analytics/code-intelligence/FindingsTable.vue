@@ -212,7 +212,7 @@ function copyPath(finding: Finding): void {
 .findings-table {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   overflow: hidden;
 }
 
@@ -242,7 +242,7 @@ function copyPath(finding: Finding): void {
 .search-input {
   padding: var(--spacing-2);
   border: 1px solid var(--border-default);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   background: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-sans);
@@ -264,7 +264,7 @@ function copyPath(finding: Finding): void {
 /* Issue #901: Technical Precision severity badges */
 .severity-badge {
   padding: 2px 8px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   font-size: 11px;
   font-weight: 500;
   font-family: var(--font-sans);
@@ -382,7 +382,7 @@ code {
   border-left: 2px solid var(--color-info);
   margin: var(--spacing-2);
   background: var(--bg-secondary);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 
 .detail-section {
@@ -406,7 +406,7 @@ code {
   padding: 2px 8px;
   background: var(--color-info-bg);
   color: var(--color-info-dark);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   font-size: 12px;
   font-family: var(--font-mono);
   font-weight: 500;
@@ -425,7 +425,7 @@ code {
   padding: 6px 12px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   color: var(--text-primary);
   cursor: pointer;
   font-size: 13px;

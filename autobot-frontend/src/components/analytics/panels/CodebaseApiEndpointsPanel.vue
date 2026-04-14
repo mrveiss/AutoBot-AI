@@ -311,7 +311,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 
 .accordion-group {
   background: var(--bg-card);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--bg-tertiary);
   overflow: hidden;
 }
@@ -362,7 +362,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 .severity-badge {
   font-size: 0.7em;
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   font-weight: 500;
 }
 
@@ -404,7 +404,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 /* Unified List Items */
 .list-item {
   background: var(--bg-card);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 14px 16px;
   border-left: 4px solid var(--text-tertiary);
   transition: all 0.2s ease;
@@ -427,7 +427,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
   text-align: center;
   padding: 12px;
   background: var(--bg-secondary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   margin-top: 8px;
 }
 
@@ -453,7 +453,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 .item-severity {
   font-size: 0.75em;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-weight: 600;
   text-transform: uppercase;
 }
@@ -483,7 +483,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
   font-size: 0.85em;
   padding: 8px;
   background: rgba(34, 197, 94, 0.1);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   margin-top: 8px;
 }
 
@@ -491,7 +491,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 .item-similarity {
   font-size: 0.75em;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-weight: 600;
 }
 
@@ -579,7 +579,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
   margin-top: 32px;
   padding: 24px;
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
   contain: layout style;}
 
@@ -603,7 +603,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
   align-items: center;
   gap: 10px;
   padding: 16px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .api-endpoints-section .loading-state {
@@ -623,7 +623,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
   margin: 20px 0;
   padding: 16px;
   background: rgba(30, 41, 59, 0.8);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .coverage-label {
@@ -648,13 +648,13 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 .coverage-bar {
   height: 12px;
   background: rgba(71, 85, 105, 0.5);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
 .coverage-fill {
   height: 100%;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   transition: width 0.3s ease;
 }
 
@@ -667,7 +667,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 .method-badge {
   display: inline-block;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -695,7 +695,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
   margin-left: auto;
   background: rgba(59, 130, 246, 0.2);
   color: var(--color-info-light);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   font-size: 0.75rem;
   font-weight: 500;
 }
@@ -705,7 +705,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
   margin-top: 4px;
   padding: 6px 10px;
   background: rgba(0, 0, 0, 0.2);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   color: var(--text-muted);
   font-size: 0.8rem;
   font-style: italic;
@@ -773,7 +773,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
   margin-top: 16px;
   padding: 8px 12px;
   background: rgba(30, 41, 59, 0.8);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-tertiary);
   font-size: 0.8rem;
   display: flex;

@@ -523,7 +523,7 @@ watch([selectedGranularity, selectedDays], () => {
 .code-evolution-timeline {
   padding: 1.5rem;
   background: var(--bg-secondary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .timeline-header {
@@ -551,7 +551,7 @@ watch([selectedGranularity, selectedDays], () => {
   padding: 0.5rem 0.75rem;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-primary);
   font-size: 0.875rem;
 }
@@ -576,7 +576,7 @@ watch([selectedGranularity, selectedDays], () => {
 
 .trend-card {
   background: var(--bg-tertiary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 1rem;
   border: 1px solid var(--border-default);
 }
@@ -636,7 +636,7 @@ watch([selectedGranularity, selectedDays], () => {
 
 .chart-container {
   background: var(--bg-tertiary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 1.5rem;
   margin-bottom: 1.5rem;
 }
@@ -724,7 +724,7 @@ watch([selectedGranularity, selectedDays], () => {
   position: fixed;
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 0.75rem;
   z-index: var(--z-tooltip);
   pointer-events: none;
@@ -763,7 +763,7 @@ watch([selectedGranularity, selectedDays], () => {
 
 .pattern-card {
   background: var(--bg-tertiary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 1rem;
   border: 1px solid var(--border-default);
 }
@@ -804,7 +804,7 @@ watch([selectedGranularity, selectedDays], () => {
 .sparkline-bar {
   flex: 1;
   background: var(--color-primary);
-  border-radius: 2px 2px 0 0;
+  border-radius: var(--radius-xs) 2px 0 0;
   min-height: 2px;
 }
 

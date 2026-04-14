@@ -502,7 +502,7 @@ onMounted(async () => {
 .count-badge {
   font-size: 11px;
   padding: 1px 6px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   min-width: 20px;
   text-align: center;
   background: var(--bg-tertiary);
@@ -614,7 +614,7 @@ onMounted(async () => {
   font-size: 11px;
   font-weight: 600;
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -688,7 +688,7 @@ onMounted(async () => {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
   padding: 1px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 11px;
   color: var(--text-secondary);
   text-transform: capitalize;
@@ -705,7 +705,7 @@ onMounted(async () => {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   padding: 1px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   border: 1px solid var(--border-default);
 }
 

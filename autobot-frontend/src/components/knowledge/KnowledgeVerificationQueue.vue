@@ -515,7 +515,7 @@ onMounted(() => {
 .mode-btn {
   padding: var(--spacing-1-5) var(--spacing-3);
   border: 1px solid var(--border-default);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   background: var(--bg-secondary);
   color: var(--text-secondary);
   font-size: 12px;
@@ -547,7 +547,7 @@ onMounted(() => {
   gap: var(--spacing-4);
   padding: var(--spacing-4);
   background: var(--bg-secondary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   margin-bottom: var(--spacing-5);
   flex-wrap: wrap;
 }
@@ -597,7 +597,7 @@ onMounted(() => {
   padding: var(--spacing-3) var(--spacing-4);
   background: var(--color-info-bg);
   border: 1px solid var(--color-info);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   margin-bottom: var(--spacing-4);
 }
 
@@ -631,7 +631,7 @@ onMounted(() => {
   padding: var(--spacing-4);
   background: var(--bg-card);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -690,7 +690,7 @@ onMounted(() => {
 .source-type-badge {
   display: inline-block;
   padding: 2px var(--spacing-2);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   font-size: 11px;
   font-weight: 500;
   font-family: var(--font-sans);

@@ -274,7 +274,7 @@ const closeModal = () => {
 .endpoint-enforcement {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   padding: 24px;
 }
 
@@ -311,7 +311,7 @@ const closeModal = () => {
   background: var(--color-primary);
   color: var(--text-on-primary);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -370,7 +370,7 @@ const closeModal = () => {
   gap: 10px;
   padding: 12px 16px;
   background: var(--bg-tertiary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 14px;
   color: var(--text-secondary);
   margin-bottom: 8px;
@@ -387,7 +387,7 @@ const closeModal = () => {
   padding: 16px;
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   transition: all 0.15s;
 }
 
@@ -407,7 +407,7 @@ const closeModal = () => {
   color: var(--text-primary);
   background: var(--bg-tertiary);
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 .override-mode {
@@ -421,7 +421,7 @@ const closeModal = () => {
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 12px;
   font-weight: 500;
 }
@@ -459,7 +459,7 @@ const closeModal = () => {
   justify-content: center;
   background: var(--bg-tertiary);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
   color: var(--text-secondary);
   transition: all 0.15s;
@@ -501,7 +501,7 @@ const closeModal = () => {
 .form-input {
   padding: 12px;
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 14px;
   font-family: var(--font-mono);
   transition: all 0.2s;
@@ -542,7 +542,7 @@ const closeModal = () => {
   gap: 10px;
   padding: 16px;
   border: 2px solid var(--border-default);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -563,7 +563,7 @@ const closeModal = () => {
 .mode-selector .option-icon {
   width: 40px;
   height: 40px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -638,7 +638,7 @@ const closeModal = () => {
   font-family: var(--font-mono);
   background: var(--bg-tertiary);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 /* Buttons */
@@ -647,7 +647,7 @@ const closeModal = () => {
   background: var(--color-primary);
   color: var(--text-on-primary);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -672,7 +672,7 @@ const closeModal = () => {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;

@@ -598,8 +598,8 @@ onUnmounted(() => {
   /* Remove shadow and border-radius to prevent overlap with tabs */
   border-top-left-radius: 0;
   border-top-right-radius: 0;
-  border-bottom-left-radius: 0.5rem;
-  border-bottom-right-radius: 0.5rem;
+  border-bottom-left-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-lg);
 }
 
 /* Terminal button styling matching browser controls */

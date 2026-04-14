@@ -243,7 +243,7 @@ const formatCell = (value: any, column: Column) => {
 
 .data-table-container {
   background: var(--bg-card);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   border: 1px solid var(--border-default);
   overflow: hidden;
 }
@@ -352,7 +352,7 @@ const formatCell = (value: any, column: Column) => {
   padding: var(--spacing-2) var(--spacing-3);
   border: 1px solid var(--border-default);
   background: var(--bg-card);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 14px;

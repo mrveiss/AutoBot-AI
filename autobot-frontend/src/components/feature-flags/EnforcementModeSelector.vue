@@ -132,7 +132,7 @@ const selectMode = (mode: EnforcementMode) => {
 .enforcement-mode-selector {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   padding: 24px;
 }
 
@@ -173,7 +173,7 @@ const selectMode = (mode: EnforcementMode) => {
   padding: 16px;
   background: var(--bg-primary);
   border: 2px solid var(--border-default);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -195,7 +195,7 @@ const selectMode = (mode: EnforcementMode) => {
 .option-icon {
   width: 44px;
   height: 44px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -240,7 +240,7 @@ const selectMode = (mode: EnforcementMode) => {
   padding: 2px 8px;
   background: var(--color-primary);
   color: var(--text-on-primary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-weight: 500;
 }
 
@@ -314,7 +314,7 @@ const selectMode = (mode: EnforcementMode) => {
   gap: 12px;
   margin-top: 16px;
   padding: 14px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .mode-warning {

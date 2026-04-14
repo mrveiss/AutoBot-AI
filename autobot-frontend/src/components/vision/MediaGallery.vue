@@ -313,7 +313,7 @@ onUnmounted(() => {
   padding: 20px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   flex-wrap: wrap;
   gap: 16px;
 }
@@ -341,7 +341,7 @@ onUnmounted(() => {
   padding: 8px 12px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 13px;
   color: var(--text-primary);
 }
@@ -351,7 +351,7 @@ onUnmounted(() => {
   background: var(--color-error-bg);
   color: var(--color-error);
   border: 1px solid var(--color-error);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -381,7 +381,7 @@ onUnmounted(() => {
 .gallery-item {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   overflow: hidden;
   cursor: pointer;
   transition: all 0.2s;
@@ -419,7 +419,7 @@ onUnmounted(() => {
   width: 28px;
   height: 28px;
   background: rgba(0, 0, 0, 0.6);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -459,7 +459,7 @@ onUnmounted(() => {
   padding: 8px;
   background: var(--bg-tertiary);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-tertiary);
   cursor: pointer;
   transition: all 0.15s;
@@ -485,7 +485,7 @@ onUnmounted(() => {
   padding: 80px 20px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
 }
 
 .empty-icon {
@@ -530,7 +530,7 @@ onUnmounted(() => {
 
 .detail-modal {
   background: var(--bg-secondary);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   width: 100%;
   max-width: 600px;
   max-height: 90vh;
@@ -583,7 +583,7 @@ onUnmounted(() => {
   width: 100%;
   max-height: 300px;
   object-fit: contain;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--bg-tertiary);
 }
 
@@ -591,7 +591,7 @@ onUnmounted(() => {
   width: 100%;
   height: 200px;
   background: var(--bg-tertiary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -647,7 +647,7 @@ onUnmounted(() => {
   align-items: center;
   padding: 8px 12px;
   background: var(--bg-tertiary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 .data-row .label {
@@ -681,7 +681,7 @@ onUnmounted(() => {
   margin-top: 12px;
   padding: 12px;
   background: var(--bg-tertiary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 11px;
   color: var(--text-secondary);
   overflow-x: auto;
@@ -701,7 +701,7 @@ onUnmounted(() => {
   background: var(--color-primary);
   color: var(--text-on-primary);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -720,7 +720,7 @@ onUnmounted(() => {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -738,7 +738,7 @@ onUnmounted(() => {
   background: var(--color-error-bg);
   color: var(--color-error);
   border: 1px solid var(--color-error);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -769,7 +769,7 @@ onUnmounted(() => {
 
 .confirm-modal {
   background: var(--bg-secondary);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   padding: 24px;
   width: 100%;
   max-width: 360px;
@@ -813,7 +813,7 @@ onUnmounted(() => {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -829,7 +829,7 @@ onUnmounted(() => {
   background: var(--color-error);
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;

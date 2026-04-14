@@ -120,7 +120,7 @@ onMounted(() => {
   align-items: flex-start;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   font-size: 0.875rem;
   line-height: 1.25rem;
   transition: all 0.2s ease;
@@ -155,7 +155,7 @@ onMounted(() => {
 
 .alert-dismiss {
   padding: 0.25rem;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-default);
   transition: background-color 0.2s ease;
   background: transparent;
   border: none;

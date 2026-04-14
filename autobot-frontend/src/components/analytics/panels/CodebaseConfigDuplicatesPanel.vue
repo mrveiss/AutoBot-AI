@@ -150,7 +150,7 @@ function truncateValue(value: string, maxLength = 50): string {
   margin-top: 32px;
   padding: 24px;
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
   contain: layout style;}
 
@@ -175,7 +175,7 @@ function truncateValue(value: string, maxLength = 50): string {
   align-items: center;
   gap: 10px;
   padding: 16px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .config-duplicates-section .loading-state {
@@ -218,7 +218,7 @@ function truncateValue(value: string, maxLength = 50): string {
   background: rgba(245, 158, 11, 0.2);
   color: var(--color-warning-light);
   padding: 4px 10px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 0.85em;
 }
@@ -251,7 +251,7 @@ function truncateValue(value: string, maxLength = 50): string {
   padding: 12px 16px;
   background: rgba(59, 130, 246, 0.1);
   border: 1px solid rgba(59, 130, 246, 0.3);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   color: var(--color-info-light);
   display: flex;
   align-items: center;
@@ -265,7 +265,7 @@ function truncateValue(value: string, maxLength = 50): string {
 .config-duplicates-section .recommendation-box code {
   background: rgba(30, 41, 59, 0.8);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.9em;
 }
 

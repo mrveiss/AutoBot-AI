@@ -453,7 +453,7 @@ function selectIcon(icon: string): void {
   align-items: center;
   gap: 0.75rem;
   padding: 0.875rem 1rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   margin-bottom: 1.5rem;
   font-size: 0.875rem;
 }
@@ -474,7 +474,7 @@ function selectIcon(icon: string): void {
 .category-path {
   background: var(--bg-secondary);
   padding: 0.75rem 1rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   margin-bottom: 1.5rem;
 }
 
@@ -511,7 +511,7 @@ function selectIcon(icon: string): void {
   width: 100%;
   padding: 0.625rem 0.875rem;
   border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   font-size: 0.875rem;
   background: var(--bg-input);
   color: var(--text-primary);
@@ -555,7 +555,7 @@ function selectIcon(icon: string): void {
   align-items: center;
   justify-content: center;
   border: 2px solid var(--border-default);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background: var(--bg-card);
   color: var(--text-secondary);
   cursor: pointer;
@@ -589,7 +589,7 @@ function selectIcon(icon: string): void {
 .color-option {
   width: 2rem;
   height: 2rem;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   border: 2px solid transparent;
   cursor: pointer;
   transition: all 0.2s;
@@ -629,14 +629,14 @@ function selectIcon(icon: string): void {
   gap: 0.75rem;
   padding: 1rem;
   background: var(--bg-secondary);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-default);
 }
 
 .preview-icon {
   width: 2.5rem;
   height: 2.5rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -684,7 +684,7 @@ function selectIcon(icon: string): void {
   padding: 1.5rem;
   background: var(--color-warning-bg);
   border: 1px solid var(--color-warning-border);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   margin-bottom: 1.5rem;
 }
 
@@ -713,7 +713,7 @@ function selectIcon(icon: string): void {
   gap: 0.5rem;
   padding: 0.75rem;
   background: var(--color-error-bg);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   color: var(--color-error-dark);
   margin-top: 1rem;
 }

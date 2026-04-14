@@ -834,7 +834,7 @@ onMounted(() => {
   gap: 0.5rem;
   padding: 0.5rem 1rem;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
@@ -891,7 +891,7 @@ onMounted(() => {
   gap: 1rem;
   padding: 1rem;
   background: var(--bg-secondary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-color);
 }
 
@@ -913,7 +913,7 @@ onMounted(() => {
   padding: 0.625rem 0.875rem;
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-primary);
   font-size: 0.875rem;
 }
@@ -937,7 +937,7 @@ onMounted(() => {
   padding: 0.375rem 0.75rem;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
-  border-radius: 16px;
+  border-radius: var(--radius-2xl);
   font-size: 0.75rem;
   cursor: pointer;
   transition: all 0.2s;
@@ -962,7 +962,7 @@ onMounted(() => {
   gap: 0.75rem;
   padding: 1rem;
   background: var(--bg-secondary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-color);
 }
 
@@ -996,7 +996,7 @@ onMounted(() => {
 /* Panels */
 .panel {
   background: var(--bg-secondary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-color);
   overflow: hidden;
 }
@@ -1043,7 +1043,7 @@ onMounted(() => {
   padding: 0.25rem 0.5rem;
   background: transparent;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.75rem;
   color: var(--text-secondary);
   cursor: pointer;
@@ -1057,7 +1057,7 @@ onMounted(() => {
 .filter-tab .count {
   background: rgba(0,0,0,0.2);
   padding: 0.125rem 0.375rem;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 0.625rem;
 }
 
@@ -1071,7 +1071,7 @@ onMounted(() => {
 .issue-card {
   padding: 0.875rem;
   background: var(--bg-tertiary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border-left: 3px solid;
   cursor: pointer;
   transition: all 0.2s;
@@ -1116,7 +1116,7 @@ onMounted(() => {
 .severity-badge.small {
   font-size: 0.625rem;
   padding: 0.125rem 0.375rem;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   background: var(--bg-quaternary);
 }
 
@@ -1126,7 +1126,7 @@ onMounted(() => {
   color: var(--accent-color);
   background: var(--bg-quaternary);
   padding: 0.125rem 0.375rem;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 .issue-name {
@@ -1206,7 +1206,7 @@ onMounted(() => {
   gap: 0.75rem;
   padding: 0.875rem;
   background: rgba(16, 185, 129, 0.1);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
@@ -1222,7 +1222,7 @@ onMounted(() => {
 
 .code-snippet {
   background: var(--bg-tertiary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
@@ -1293,7 +1293,7 @@ onMounted(() => {
 .legend-color {
   width: 12px;
   height: 12px;
-  border-radius: 3px;
+  border-radius: var(--radius-default);
 }
 
 .legend-label {
@@ -1324,7 +1324,7 @@ onMounted(() => {
   align-items: center;
   padding: 0.75rem 1rem;
   background: var(--bg-tertiary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -1357,7 +1357,7 @@ onMounted(() => {
 
 .stat {
   padding: 0.25rem 0.5rem;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.6875rem;
   font-weight: 600;
 }
@@ -1414,7 +1414,7 @@ onMounted(() => {
 
 .modal {
   background: var(--bg-secondary);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   width: 90%;
   max-width: 600px;
   max-height: 80vh;
@@ -1463,7 +1463,7 @@ onMounted(() => {
   gap: 0.75rem;
   padding: 0.625rem 0.875rem;
   background: var(--bg-tertiary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   opacity: 0.6;
 }
 

@@ -207,7 +207,7 @@ const allCompleted = computed(() => {
 
 .modal-container {
   background: var(--bg-card);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-xl);
   max-width: 700px;
   width: 100%;
@@ -251,7 +251,7 @@ const allCompleted = computed(() => {
   justify-content: center;
   background: var(--bg-tertiary);
   border: none;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   color: var(--text-tertiary);
   cursor: pointer;
   transition: all 0.2s;
@@ -282,7 +282,7 @@ const allCompleted = computed(() => {
   align-items: center;
   padding: 1rem;
   background: var(--bg-card);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   border: 2px solid var(--border-default);
 }
 
@@ -322,7 +322,7 @@ const allCompleted = computed(() => {
   flex: 1;
   height: 1.5rem;
   background: var(--border-default);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   overflow: hidden;
 }
 
@@ -330,7 +330,7 @@ const allCompleted = computed(() => {
   height: 100%;
   background: var(--color-primary);
   transition: width 0.3s ease;
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
 }
 
 .progress-text {
@@ -357,7 +357,7 @@ const allCompleted = computed(() => {
   margin-bottom: 0.5rem;
   background: var(--bg-card);
   border: 1px solid var(--border-default);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   transition: all 0.2s;
 }
 
@@ -380,7 +380,7 @@ const allCompleted = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   flex-shrink: 0;
 }
 
@@ -445,7 +445,7 @@ const allCompleted = computed(() => {
   width: 80px;
   height: 0.5rem;
   background: var(--border-default);
-  border-radius: 0.25rem;
+  border-radius: var(--radius-default);
   overflow: hidden;
 }
 
@@ -453,7 +453,7 @@ const allCompleted = computed(() => {
   height: 100%;
   background: var(--color-primary);
   transition: width 0.3s ease;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-default);
 }
 
 .progress-percentage {
@@ -478,7 +478,7 @@ const allCompleted = computed(() => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.625rem 1.25rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
@@ -526,12 +526,12 @@ const allCompleted = computed(() => {
 
 .document-list::-webkit-scrollbar-track {
   background: var(--bg-tertiary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 .document-list::-webkit-scrollbar-thumb {
   background: var(--border-light);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 .document-list::-webkit-scrollbar-thumb:hover {

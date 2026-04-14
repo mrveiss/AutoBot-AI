@@ -63,7 +63,7 @@ const typeIcon = (type: string): string => {
   background-color: #1e1e1e;
   border: 1px solid #444;
   border-bottom: none;
-  border-radius: 4px 4px 0 0;
+  border-radius: var(--radius-default) 4px 0 0;
   z-index: var(--z-popover);
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 13px;
@@ -129,6 +129,6 @@ const typeIcon = (type: string): string => {
 
 .completion-suggestions::-webkit-scrollbar-thumb {
   background: #555;
-  border-radius: 3px;
+  border-radius: var(--radius-default);
 }
 </style>
