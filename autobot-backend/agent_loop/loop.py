@@ -24,6 +24,7 @@ import time
 import uuid
 from typing import Any, Optional
 
+from agent_loop.slack_hook import get_slack_hook
 from agent_loop.think_tool import ThinkTool
 from agent_loop.types import (
     AgentLoopConfig,
@@ -279,6 +280,16 @@ class AgentLoop:
 
         self._init_task_context(task_id, task_description, initial_context)
 
+        # Issue #4308: notify Slack that the agent has started
+        slack = get_slack_hook()
+        await slack.post_agent_status(
+            agent_name="AgentLoop",
+            status="started",
+            message=f"Task {task_id}: {task_description[:120]}",
+        )
+
+        _task_start = time.monotonic()
+
         try:
             # Issue #620: Use helper for plan creation
             await self._create_task_plan(task_description, initial_context)
@@ -286,7 +297,22 @@ class AgentLoop:
             results = await self._execute_main_loop()
 
             # Issue #620: Use helper for task finalization
-            return await self._finalize_task(results)
+            result = await self._finalize_task(results)
+
+            # Issue #4308: notify Slack on successful task completion
+            duration = time.monotonic() - _task_start
+            await slack.post_task_completion(
+                task_id=task_id,
+                task_title=task_description[:80],
+                agent_name="AgentLoop",
+                summary=(
+                    f"Completed {result.get('iterations', 0)} iteration(s), "
+                    f"{result.get('tools_executed', 0)} tool(s) executed."
+                ),
+                status="completed",
+                duration_seconds=duration,
+            )
+            return result
 
         except asyncio.CancelledError:
             self._state = LoopState.CANCELLED
@@ -296,6 +322,16 @@ class AgentLoop:
         except Exception as e:
             self._state = LoopState.FAILED
             logger.error("AgentLoop: Task %s failed: %s", task_id, e)
+            # Issue #4308: notify Slack on task failure
+            duration = time.monotonic() - _task_start
+            await slack.post_task_completion(
+                task_id=task_id,
+                task_title=task_description[:80],
+                agent_name="AgentLoop",
+                summary=f"Task failed: {e}",
+                status="failed",
+                duration_seconds=duration,
+            )
             raise
 
         finally:
@@ -850,6 +886,19 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
             "AgentLoop: approval required for tool '%s' (approval_id=%s)",
             tool_name,
             approval_id,
+        )
+
+        # Issue #4308: mirror approval request to Slack (fire-and-forget)
+        slack = get_slack_hook()
+        await slack.request_approval(
+            approval_id=approval_id,
+            title=f"Approval required: {tool_name}",
+            description=(
+                f"Tool '{tool_name}' is requesting authorization to perform a "
+                f"sensitive operation. Reply *approve* or *reject* in this thread."
+            ),
+            approval_type="tool",
+            requested_by="AgentLoop",
         )
 
         deadline = asyncio.get_event_loop().time() + self.config.approval_timeout_seconds
