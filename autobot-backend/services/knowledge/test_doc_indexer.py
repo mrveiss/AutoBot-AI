@@ -791,6 +791,35 @@ class TestHashCacheEdgeCases4382:
         )
         assert len(changed) == 0
 
+    # ------------------------------------------------------------------
+    # Circular symlinks (#4433)
+    # ------------------------------------------------------------------
+
+    def test_compute_file_hash_returns_empty_on_circular_symlink(self, tmp_path):
+        """_compute_file_hash returns '' for a circular symlink without raising (#4433)."""
+        link_a = tmp_path / "a.md"
+        link_b = tmp_path / "b.md"
+        link_a.symlink_to(link_b)
+        link_b.symlink_to(link_a)
+
+        result = _compute_file_hash(str(link_a))
+        assert result == "", "Circular symlink must return '' not raise OSError"
+
+    def test_filter_changed_files_preserves_cached_hash_on_circular_symlink(self, tmp_path):
+        """Circular symlink preserves cached hash and is NOT marked changed (#4433)."""
+        link_a = tmp_path / "loop_a.md"
+        link_b = tmp_path / "loop_b.md"
+        link_a.symlink_to(link_b)
+        link_b.symlink_to(link_a)
+
+        cache = {"loop_a.md": "cafebabe"}
+        changed, new_hashes = _filter_changed_files(
+            [(str(link_a), 1)], cache, tmp_path
+        )
+        # Circular symlink → hash is '' → cached hash preserved, not marked changed
+        assert len(changed) == 0
+        assert new_hashes.get("loop_a.md") == "cafebabe"
+
 
 class TestGetDocIndexerService:
     """Tests for the singleton factory."""
