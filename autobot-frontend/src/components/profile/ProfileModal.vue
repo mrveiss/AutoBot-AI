@@ -345,7 +345,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
 }
 
 .modal-content {
@@ -600,7 +600,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   box-shadow: var(--shadow-lg);
   font-weight: 500;
   animation: slideIn 0.3s ease-out;
-  z-index: 1100;
+  z-index: var(--z-popover);
 }
 
 .toast.success {

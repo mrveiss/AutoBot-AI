@@ -1730,7 +1730,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
 }
 
 .modal-content {
@@ -1850,7 +1850,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2000;
+  z-index: var(--z-popover);
   backdrop-filter: blur(2px);
 }
 

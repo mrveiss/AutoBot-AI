@@ -589,7 +589,7 @@ onMounted(() => {
   border: 1px solid var(--border-default);
   border-radius: 0.375rem;
   box-shadow: var(--shadow-lg);
-  z-index: 100;
+  z-index: var(--z-popover);
   display: none;
   min-width: 150px;
 }

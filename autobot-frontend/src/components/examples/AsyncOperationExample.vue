@@ -969,7 +969,7 @@ const loadAnalytics = () => analytics.execute(async () => {
   font-weight: 500;
   box-shadow: var(--shadow-lg);
   animation: slideIn 0.3s ease;
-  z-index: 1000;
+  z-index: var(--z-modal);
 }
 
 .notification-toast.success {

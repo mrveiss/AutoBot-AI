@@ -65,7 +65,7 @@ const getIcon = (type: string): string => {
   position: fixed;
   top: 80px;
   right: 20px;
-  z-index: 9999;
+  z-index: var(--z-toast);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-3);

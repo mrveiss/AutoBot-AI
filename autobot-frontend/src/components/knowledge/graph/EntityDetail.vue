@@ -197,7 +197,7 @@ onMounted(async () => {
   background: rgba(0, 0, 0, 0.5);
   display: flex;
   justify-content: flex-end;
-  z-index: 100;
+  z-index: var(--z-modal-backdrop);
 }
 
 .entity-detail {

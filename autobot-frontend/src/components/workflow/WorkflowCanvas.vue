@@ -406,7 +406,7 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .empty-state h3 { margin: 0 0 8px; color: var(--text-primary); }
 .empty-state p { margin: 0 0 20px; color: var(--text-tertiary); }
 
-.dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: var(--z-modal-backdrop); }
 .dialog { width: 400px; background: var(--bg-secondary); border-radius: 12px; padding: 24px; }
 .dialog h3 { margin: 0 0 20px; display: flex; align-items: center; gap: 10px; color: var(--text-primary); }
 .dialog h3 i { color: var(--color-primary); }

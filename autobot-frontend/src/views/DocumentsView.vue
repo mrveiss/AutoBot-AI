@@ -477,7 +477,7 @@ function showError(msg: string) {
   border-radius: 6px;
   padding: 10px 20px;
   font-size: 0.875rem;
-  z-index: 200;
+  z-index: var(--z-popover);
   max-width: 90vw;
   text-align: center;
 }

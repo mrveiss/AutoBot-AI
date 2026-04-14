@@ -64,7 +64,7 @@ const typeIcon = (type: string): string => {
   border: 1px solid #444;
   border-bottom: none;
   border-radius: 4px 4px 0 0;
-  z-index: 100;
+  z-index: var(--z-popover);
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 13px;
 }
