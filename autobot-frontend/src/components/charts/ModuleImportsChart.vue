@@ -124,9 +124,11 @@ const chartOptions = computed<ApexOptions>(() => ({
       const chartPurple = getCssVar('--chart-purple', '#8b5cf6')
       const colorSuccess = getCssVar('--color-success', '#10b981')
       const colorWarning = getCssVar('--color-warning', '#f59e0b')
+      const radiusMd = getCssVar('--radius-md', '0.375rem')
+      const spacingMd = getCssVar('--spacing-3', '0.75rem')
 
       return `
-        <div style="background: ${bgElevated}; border: 1px solid ${borderDefault}; border-radius: 6px; padding: 12px; max-width: 350px;">
+        <div style="background: ${bgElevated}; border: 1px solid ${borderDefault}; border-radius: ${radiusMd}; padding: ${spacingMd}; max-width: 350px;">
           <div style="font-weight: 600; color: ${textPrimary}; margin-bottom: 8px; word-break: break-all;">
             ${item.path}
           </div>
