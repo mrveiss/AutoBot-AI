@@ -946,9 +946,24 @@ class DocIndexerService:
             return files, new_hashes, True
         return files, new_hashes, False
 
-    async def _run_kb_synthesis(self, indexed_paths: List[str]) -> None:
-        """Run KBSynthesizer after tier ingest (best-effort, Issue #4564).
+    def _find_collection_config(self, indexed_paths: List[str]):
+        """Return the first CollectionConfig whose paths overlap with indexed_paths.
 
+        Matches when any indexed path contains one of the collection's path prefixes
+        as a substring (e.g. ``docs/architecture`` found in an absolute path).
+        Returns None if no collection matches or the schema is empty.
+        """
+        for col_cfg in self.synthesis_schema.collections:
+            for cfg_path in col_cfg.paths:
+                if any(cfg_path in p for p in indexed_paths):
+                    return col_cfg
+        return None
+
+    async def _run_kb_synthesis(self, indexed_paths: List[str]) -> None:
+        """Run KBSynthesizer after tier ingest (best-effort, Issue #4564/#4614).
+
+        Looks up the matching CollectionConfig from synthesis_schema and passes it
+        to synthesize_docs() so the schema-driven prompt_template is used.
         Errors are logged and swallowed so indexing is never interrupted.
         KBSynthesizer is imported lazily to avoid circular imports.
         """
@@ -956,7 +971,13 @@ class DocIndexerService:
             from services.knowledge.kb_synthesizer import get_kb_synthesizer
 
             synthesizer = get_kb_synthesizer(self._llm_service)
-            await synthesizer.synthesize_docs(indexed_paths)
+            collection_config = self._find_collection_config(indexed_paths)
+            if collection_config:
+                logger.debug(
+                    "DocIndexerService: synthesis using collection config '%s'",
+                    collection_config.name,
+                )
+            await synthesizer.synthesize_docs(indexed_paths, collection_config=collection_config)
         except Exception:
             logger.exception("DocIndexerService: KB synthesis failed (non-fatal)")
 

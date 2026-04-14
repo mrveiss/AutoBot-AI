@@ -294,3 +294,90 @@ def test_get_kb_synthesizer_returns_instance():
     _kb_synth_mod._kb_synthesizer = None  # type: ignore[attr-defined]
     synth = get_kb_synthesizer(_make_llm())
     assert isinstance(synth, KBSynthesizer)
+
+
+# ---------------------------------------------------------------------------
+# Helpers: CollectionConfig stub
+# ---------------------------------------------------------------------------
+
+
+def _make_collection_config(name: str = "test_col", prompt_template: str = "Custom prompt: {documents}"):
+    """Return a minimal CollectionConfig-like object for testing."""
+    cfg = MagicMock()
+    cfg.name = name
+    cfg.prompt_template = prompt_template
+    cfg.paths = ["docs/test"]
+    return cfg
+
+
+# ---------------------------------------------------------------------------
+# Tests: KBSynthesizer._resolve_prompt (#4614)
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_prompt_no_config_returns_default():
+    synth = KBSynthesizer(llm_service=_make_llm())
+    prompt = synth._resolve_prompt(None)
+    assert prompt == _kb_synth_mod._SYNTHESIS_PROMPT
+
+
+def test_resolve_prompt_with_config_returns_template():
+    synth = KBSynthesizer(llm_service=_make_llm())
+    cfg = _make_collection_config(prompt_template="Custom: {documents}")
+    prompt = synth._resolve_prompt(cfg)
+    assert prompt == "Custom: {documents}"
+
+
+def test_resolve_prompt_empty_template_falls_back_to_default():
+    synth = KBSynthesizer(llm_service=_make_llm())
+    cfg = _make_collection_config(prompt_template="   ")
+    prompt = synth._resolve_prompt(cfg)
+    assert prompt == _kb_synth_mod._SYNTHESIS_PROMPT
+
+
+# ---------------------------------------------------------------------------
+# Tests: synthesize_docs with collection_config (#4614)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_synthesize_docs_uses_collection_config_prompt(tmp_path):
+    f = tmp_path / "arch.md"
+    f.write_text("# Architecture\nSome details.", encoding="utf-8")
+
+    col = _make_collection()
+    llm = _make_llm("Architecture synthesis")
+    synth = KBSynthesizer(llm_service=llm)
+    synth._collection = col
+
+    cfg = _make_collection_config(
+        name="architecture_adrs",
+        prompt_template="You are an architecture assistant. Docs: {documents}",
+    )
+
+    await synth.synthesize_docs([str(f)], collection_config=cfg)
+
+    llm.chat.assert_awaited_once()
+    call_kwargs = llm.chat.call_args
+    messages = call_kwargs.kwargs.get("messages") or call_kwargs.args[0]
+    system_content = next(m["content"] for m in messages if m["role"] == "system")
+    assert "You are an architecture assistant." in system_content
+
+
+@pytest.mark.asyncio
+async def test_synthesize_docs_no_config_uses_default_prompt(tmp_path):
+    f = tmp_path / "doc.md"
+    f.write_text("# Topic\nSome content.", encoding="utf-8")
+
+    col = _make_collection()
+    llm = _make_llm("Generic synthesis")
+    synth = KBSynthesizer(llm_service=llm)
+    synth._collection = col
+
+    await synth.synthesize_docs([str(f)], collection_config=None)
+
+    llm.chat.assert_awaited_once()
+    call_kwargs = llm.chat.call_args
+    messages = call_kwargs.kwargs.get("messages") or call_kwargs.args[0]
+    system_content = next(m["content"] for m in messages if m["role"] == "system")
+    assert system_content == _kb_synth_mod._SYNTHESIS_PROMPT
