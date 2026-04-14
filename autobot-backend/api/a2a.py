@@ -15,6 +15,7 @@ Endpoints:
   POST /api/a2a/tasks                   Submit a task
   GET  /api/a2a/tasks                   List all tasks
   GET  /api/a2a/tasks/{id}              Get task status + artifacts
+  GET  /api/a2a/tasks/{id}/stream       SSE event stream for a task (Issue #4554)
   GET  /api/a2a/tasks/{id}/trace        Full audit trace for a task
   DELETE /api/a2a/tasks/{id}            Cancel a task
   GET  /api/a2a/stats                   Task statistics
@@ -22,12 +23,15 @@ Endpoints:
   POST /api/a2a/capabilities/verify     Verify a remote agent's capabilities
 """
 
+import asyncio
+import json
 import logging
 import os
 import time
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from a2a.agent_card import build_agent_card
@@ -267,6 +271,100 @@ async def get_task(task_id: str) -> Dict[str, Any]:
     if not task:
         raise HTTPException(status_code=404, detail=f"Task '{task_id}' not found")
     return _task_response(task)
+
+
+@router.get(
+    "/tasks/{task_id}/stream",
+    summary="Stream A2A task events (SSE)",
+    tags=["a2a"],
+)
+async def stream_task_events(task_id: str) -> StreamingResponse:
+    """
+    Server-Sent Events stream for a task.
+
+    Issue #4554: Eliminates polling loops — clients subscribe once and receive
+    push notifications for each state transition and artifact addition in real
+    time via Redis pub/sub.
+
+    Events::
+
+        data: {"event": "state_change",   "state": "working",   "task_id": "…"}
+        data: {"event": "artifact_added", "artifact_type": "text", "task_id": "…"}
+        data: {"event": "state_change",   "state": "completed", "terminal": true, …}
+
+    The stream closes automatically when a terminal event is received.
+    A comment-line heartbeat is sent every 15 s to keep proxies alive.
+    """
+    manager = get_task_manager()
+    task = manager.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail=f"Task '{task_id}' not found")
+
+    async def _event_generator():
+        from autobot_shared.redis_client import get_async_redis_client
+
+        _TERMINAL_STATES = {"completed", "failed", "cancelled"}
+        channel = f"a2a:events:{task_id}"
+
+        redis = await get_async_redis_client(database="main")
+        pubsub = redis.pubsub()
+        await pubsub.subscribe(channel)
+
+        # Yield the current state immediately so the client is never blind
+        current = manager.get_task(task_id)
+        if current:
+            initial_payload = json.dumps(
+                {
+                    "event": "state_change",
+                    "state": current.status.state.value,
+                    "task_id": task_id,
+                }
+            )
+            yield f"data: {initial_payload}\n\n"
+            if current.status.state.value in _TERMINAL_STATES:
+                await pubsub.unsubscribe(channel)
+                await pubsub.close()
+                return
+
+        # Feed pub/sub messages into an asyncio.Queue so we can apply a
+        # heartbeat timeout without blocking the event loop.
+        queue: asyncio.Queue = asyncio.Queue()
+
+        async def _reader():
+            async for msg in pubsub.listen():
+                if msg["type"] == "message":
+                    data = msg["data"]
+                    if isinstance(data, bytes):
+                        data = data.decode("utf-8")
+                    await queue.put(data)
+                    try:
+                        if json.loads(data).get("terminal"):
+                            await queue.put(None)  # sentinel — stop the loop
+                            return
+                    except Exception:
+                        pass
+
+        reader_task = asyncio.create_task(_reader())
+        try:
+            while True:
+                try:
+                    item = await asyncio.wait_for(queue.get(), timeout=15.0)
+                except asyncio.TimeoutError:
+                    yield ": heartbeat\n\n"
+                    continue
+                if item is None:
+                    break
+                yield f"data: {item}\n\n"
+        finally:
+            reader_task.cancel()
+            try:
+                await reader_task
+            except asyncio.CancelledError:
+                pass
+            await pubsub.unsubscribe(channel)
+            await pubsub.close()
+
+    return StreamingResponse(_event_generator(), media_type="text/event-stream")
 
 
 @router.get(

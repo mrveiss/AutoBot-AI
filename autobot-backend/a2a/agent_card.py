@@ -162,7 +162,7 @@ def build_agent_card(base_url: str) -> AgentCard:
         version=AUTOBOT_VERSION,
         skills=skills,
         capabilities=AgentCapabilities(
-            streaming=False,
+            streaming=True,
             push_notifications=False,
             state_transition_history=True,
         ),
