@@ -114,7 +114,7 @@
       <!-- Issue #249: Knowledge Base Citations Display -->
       <CitationsDisplay
         v-if="hasCitations"
-        :citations="message.metadata?.citations || []"
+        :citations="(message.metadata as any)?.citations || []"
         :initially-expanded="citationsExpanded"
         @citation-click="$emit('citation-click', $event)"
         @expanded-change="$emit('citations-expanded-change', { messageId: message.id, expanded: $event })"
@@ -136,17 +136,17 @@
       <!-- Command Approval Request UI -->
       <ApprovalRequestCard
         v-if="hasApprovalRequest"
-        :status="message.metadata?.approval_status"
-        :requires-approval="message.metadata?.requires_approval"
-        :command="message.metadata?.command"
-        :comment="message.metadata?.approval_comment"
-        :risk-level="message.metadata?.risk_level"
-        :purpose="message.metadata?.purpose"
-        :reasons="message.metadata?.reasons"
-        :is-interactive="message.metadata?.is_interactive"
-        :interactive-reasons="message.metadata?.interactive_reasons"
+        :status="(message.metadata as any)?.approval_status"
+        :requires-approval="(message.metadata as any)?.requires_approval"
+        :command="(message.metadata as any)?.command"
+        :comment="(message.metadata as any)?.approval_comment"
+        :risk-level="(message.metadata as any)?.risk_level"
+        :purpose="(message.metadata as any)?.purpose"
+        :reasons="(message.metadata as any)?.reasons"
+        :is-interactive="(message.metadata as any)?.is_interactive"
+        :interactive-reasons="(message.metadata as any)?.interactive_reasons"
         :processing="processingApproval"
-        :session-id="message.metadata?.terminal_session_id"
+        :session-id="(message.metadata as any)?.terminal_session_id"
         @approve="$emit('approve', $event)"
         @deny="$emit('deny', $event)"
         @auto-approve-changed="$emit('auto-approve-changed', $event)"
@@ -289,7 +289,7 @@ const showMetadata = computed(() => {
 const hasCitations = computed(() => {
   return (
     props.message.sender === 'assistant' &&
-    (props.message.metadata?.citations?.length || 0) > 0
+    ((props.message.metadata as any)?.citations?.length || 0) > 0
   )
 })
 
@@ -398,7 +398,9 @@ const formattedContent = computed(() => {
 }
 
 .message-wrapper.error {
-  @apply bg-red-50 border-red-300 text-red-900;
+  background: var(--color-error-bg);
+  border-color: var(--color-error-border);
+  color: var(--color-error);
 }
 
 .message-wrapper.sending {
@@ -473,15 +475,21 @@ const formattedContent = computed(() => {
 
 /* Assistant message code styling */
 .assistant-message .message-text :deep(code) {
-  @apply bg-gray-200 text-gray-800 px-1.5 py-0.5 rounded text-xs font-mono;
+  @apply bg-autobot-bg-tertiary text-autobot-text-primary px-1.5 py-0.5 rounded text-xs font-mono;
 }
 
 .assistant-message .message-text :deep(pre) {
-  @apply bg-gray-800 text-gray-100 p-3 rounded-lg overflow-x-auto my-1.5;
+  @apply p-3 rounded-lg overflow-x-auto my-1.5;
+  background: var(--code-bg);
+  color: var(--code-text);
 }
 
 .assistant-message .message-text :deep(a) {
-  @apply text-blue-600 hover:text-blue-800 underline;
+  @apply text-autobot-text-link hover:text-autobot-text-link underline;
+  opacity: 0.9;
+}
+.assistant-message .message-text :deep(a):hover {
+  opacity: 1;
 }
 
 /* Metadata */

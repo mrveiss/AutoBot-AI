@@ -17,6 +17,7 @@ import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import appConfig from '@/config/AppConfig.js'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import type { ToastType } from '@/composables/useToast'
 
 const logger = createLogger('useAnalyticsDebug')
 
@@ -33,7 +34,7 @@ export interface UseAnalyticsDebugDeps {
   duplicateAnalysis: Ref<unknown[]>
   stopJobPolling: () => void
   t: (key: string, params?: Record<string, unknown>) => string
-  notify: (msg: string, type?: string) => void
+  notify: (msg: string, type?: ToastType) => void
 }
 
 // Endpoint configs for API health check (#1588)

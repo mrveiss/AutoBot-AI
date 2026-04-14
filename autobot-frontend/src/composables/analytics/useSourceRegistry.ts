@@ -16,6 +16,7 @@ import { useRoute } from 'vue-router'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import appConfig from '@/config/AppConfig.js'
 import { createLogger } from '@/utils/debugUtils'
+import type { ToastType } from '@/composables/useToast'
 
 const logger = createLogger('useSourceRegistry')
 
@@ -25,8 +26,8 @@ export type { CodeSource }
 
 export interface UseSourceRegistryDeps {
   t: (key: string, params?: Record<string, unknown>) => string
-  showToast: (msg: string, type?: string, duration?: number) => void
-  notify: (msg: string, type?: string) => void
+  showToast: (msg: string, type?: ToastType, duration?: number) => number | void
+  notify: (msg: string, type?: ToastType) => void
 }
 
 export const STORAGE_KEY_PATH = 'codebase-analytics-path'

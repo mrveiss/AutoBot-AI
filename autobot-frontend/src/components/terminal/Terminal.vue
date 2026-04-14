@@ -1,7 +1,7 @@
 <template>
   <div class="terminal-container">
     <!-- Terminal Header (matching browser/desktop style) -->
-    <div class="terminal-header bg-gray-100 border-b border-gray-300 p-2 flex items-center justify-between">
+    <div class="terminal-header bg-autobot-bg-secondary border-b border-autobot-border p-2 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <div class="flex space-x-1">
           <div class="w-3 h-3 bg-red-500 rounded-full"></div>
@@ -11,7 +11,7 @@
         <div class="flex items-center space-x-2 text-sm">
           <i class="fas fa-terminal text-green-600"></i>
           <span class="font-medium">{{ props.chatSessionId ? $t('terminal.terminal.chatTerminal') : $t('terminal.terminal.systemTerminal') }}</span>
-          <span class="text-xs text-gray-500">{{ props.chatSessionId ? $t('terminal.terminal.chatSession') : $t('terminal.terminal.independentTool') }}</span>
+          <span class="text-xs text-autobot-text-muted">{{ props.chatSessionId ? $t('terminal.terminal.chatSession') : $t('terminal.terminal.independentTool') }}</span>
         </div>
       </div>
 
@@ -592,7 +592,7 @@ onUnmounted(() => {
 @reference "../../assets/tailwind.css";
 /* Container styling matching browser/desktop design */
 .terminal-container {
-  @apply flex flex-col h-full bg-white border-0 border-t border-l border-r border-gray-300 overflow-hidden;
+  @apply flex flex-col h-full bg-autobot-bg-card border-0 border-t border-l border-r border-autobot-border overflow-hidden;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   min-height: 400px;
   /* Remove shadow and border-radius to prevent overlap with tabs */
@@ -604,7 +604,7 @@ onUnmounted(() => {
 
 /* Terminal button styling matching browser controls */
 .terminal-btn {
-  @apply px-2 py-1 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded transition-colors duration-200;
+  @apply px-2 py-1 text-autobot-text-secondary hover:text-autobot-text-primary hover:bg-autobot-bg-hover rounded transition-colors duration-200;
 }
 
 .terminal-btn:disabled {

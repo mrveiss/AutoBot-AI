@@ -41,14 +41,13 @@ import WorkflowBuilderView from '@/views/WorkflowBuilderView.vue'
 import AnalyticsView from '@/views/AnalyticsView.vue'
 import NotFoundView from '@/views/NotFoundView.vue'
 import PermissionDeniedView from '@/views/PermissionDeniedView.vue'
-import HomeView from '@/views/HomeView.vue'
 import AboutView from '@/views/AboutView.vue'
 
 // Route configuration - Issue #729: Business-only routes, infrastructure moved to slm-admin
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
-    redirect: '/chat'
+    redirect: '/home'
   },
   {
     path: '/login',
@@ -62,7 +61,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/dashboard',
-    redirect: '/chat'
+    redirect: '/home'
   },
   {
     path: '/chat',
@@ -418,6 +417,16 @@ const routes: RouteRecordRaw[] = [
           requiresAuth: true
         }
       },
+      {
+        // Issue #902: Dev Tools moved from standalone /dev-speedup into /analytics/dev-tools
+        path: 'dev-tools',
+        name: 'analytics-dev-tools',
+        component: () => import('@/views/DevSpeedupView.vue'),
+        meta: {
+          title: 'Dev Tools',
+          parent: 'analytics'
+        }
+      },
       // bug-prediction route removed — functionality in CodebaseBugPredictionPanel
       // code-intelligence route removed — functionality in CodebaseIntelligenceScoresPanel
       // evolution, code-generation, code-quality, code-review moved under codebase/:sourceId (Issue #3436)
@@ -489,15 +498,15 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true
     }
   },
-  // Issue #4185: Wire HomeView
+  // Issue #4492: Home serves custom dashboard — renamed from /custom-dashboard
   {
     path: '/home',
     name: 'home',
-    component: HomeView,
+    component: () => import('@/views/CustomDashboard.vue'),
     meta: {
       title: 'Home',
       icon: 'fas fa-home',
-      description: 'Home page',
+      description: 'Home dashboard',
       requiresAuth: true
     }
   },
@@ -534,18 +543,7 @@ const routes: RouteRecordRaw[] = [
     redirect: '/',
     meta: { title: 'LLM Configuration' }
   },
-  // Issue #1794: Agent Registry — browse backend + Claude agents
-  {
-    path: '/agent-registry',
-    name: 'agent-registry',
-    component: () => import('@/views/AgentRegistryView.vue'),
-    meta: {
-      title: 'Agent Registry',
-      icon: 'fas fa-robot',
-      description: 'Browse and monitor all registered agents',
-      requiresAuth: true
-    }
-  },
+  // Issue #4490: Agent Registry removed — lives in SLM admin at /slm/agents/
   // Issue #1521: Agent Heartbeat Panel — real-time agent run status
   {
     path: '/agents/heartbeat',
@@ -563,18 +561,7 @@ const routes: RouteRecordRaw[] = [
     path: '/code-intelligence',
     redirect: '/analytics/codebase'
   },
-  // Issue #902: Developer Speedup Tools
-  {
-    path: '/dev-speedup',
-    name: 'dev-speedup',
-    component: () => import('@/views/DevSpeedupView.vue'),
-    meta: {
-      title: 'Developer Speedup',
-      icon: 'fas fa-bolt',
-      description: 'Code search, generation, and productivity tools',
-      requiresAuth: true
-    }
-  },
+  // Issue #902: Dev Tools moved into /analytics/dev-tools tab
   // Issue #3245: AI Document editor — persistent editable AI output documents
   {
     path: '/documents',
@@ -611,30 +598,21 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true,
     },
   },
-  // Issue #3502: Desktop remote view
+  // Issue #1801: Admin User Management
   {
-    path: '/desktop',
-    name: 'desktop',
-    component: () => import('@/views/DesktopView.vue'),
+    path: '/admin/users',
+    name: 'admin-users',
+    component: () => import('@/views/AdminUsersView.vue'),
     meta: {
-      title: 'Desktop',
-      description: 'Remote desktop streaming view',
+      title: 'User Management',
+      icon: 'fas fa-users',
+      description: 'Manage users, roles, and account status',
       requiresAuth: true,
       admin: true,
     },
   },
-  // Issue #3502: Custom Dashboard
-  {
-    path: '/custom-dashboard',
-    name: 'custom-dashboard',
-    component: () => import('@/views/CustomDashboard.vue'),
-    meta: {
-      title: 'Custom Dashboard',
-      description: 'Configurable dashboard view',
-      requiresAuth: true,
-      admin: true,
-    },
-  },
+  // Issue #4491: Desktop removed — VNC is the noVNC tab in /chat
+  // Issue #3502: Custom Dashboard renamed to /home (see home route above)
 
   // Issue #729: Infrastructure routes redirected to slm-admin
   // These routes are kept as redirects for backwards compatibility
@@ -707,6 +685,18 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true
     }
   },
+  // Issue #1803: Plugin and agent marketplace
+  {
+    path: '/marketplace',
+    name: 'marketplace',
+    component: () => import('@/views/MarketplaceView.vue'),
+    meta: {
+      title: 'Marketplace',
+      icon: 'fas fa-store',
+      description: 'Discover and install community plugins and agents',
+      requiresAuth: true
+    }
+  },
   // Issue #729: Secrets stays in autobot-vue - user functionality for chat/agent credentials
   {
     path: '/secrets',
@@ -729,6 +719,17 @@ const routes: RouteRecordRaw[] = [
         }
       }
     ]
+  },
+  {
+    path: '/usage',
+    name: 'usage',
+    component: () => import('@/views/UsageView.vue'),
+    meta: {
+      title: 'Usage & Cost Tracking',
+      icon: 'fas fa-chart-bar',
+      description: 'Token usage, LLM costs, and billing-ready metrics',
+      requiresAuth: true
+    }
   },
   {
     path: '/permission-denied',
@@ -898,14 +899,14 @@ router.beforeEach(async (to, from) => {
     // Block admin-only routes for non-admin users
     const requiresAdmin = to.matched.some(record => record.meta.admin === true)
     if (requiresAdmin && userStore.isAuthenticated && !userStore.isAdmin) {
-      logger.debug('Admin route blocked for non-admin user, redirecting to chat')
-      return { path: '/chat' }
+      logger.debug('Admin route blocked for non-admin user, redirecting to home')
+      return { path: '/home' }
     }
 
-    // If user is authenticated and trying to access login page, redirect to chat
+    // If user is authenticated and trying to access login page, redirect to home
     if (to.name === 'login' && userStore.isAuthenticated) {
-      logger.debug('User already authenticated, redirecting to chat')
-      return { path: '/chat' }
+      logger.debug('User already authenticated, redirecting to home')
+      return { path: '/home' }
     }
 
     // Check for expired tokens

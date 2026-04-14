@@ -108,7 +108,19 @@ aliases:
 
 | Document | Description |
 | --- | --- |
-| [AUTHENTICATION_RBAC](AUTHENTICATION_RBAC.md) | RBAC authentication |
+| [AUTHENTICATION_RBAC](AUTHENTICATION_RBAC.md) | RBAC and user management (roles, permissions, JWT) |
+
+## Features (2026-04-14)
+
+New features implemented in the 2026-04-14 development session.
+
+| Document | Description |
+| --- | --- |
+| [HOOKS_SYSTEM_GUIDE](HOOKS_SYSTEM_GUIDE.md) | Hook system — lifecycle event hooks for agents and workflows |
+| [../api/USAGE_METERING_API](../api/USAGE_METERING_API.md) | Usage metering — LLM cost tracking, POST /usage/record, per-user cost queries |
+| [PLUGIN_SDK](PLUGIN_SDK.md) | Plugin marketplace — SDK for building and publishing AutoBot plugins |
+| [AutoResearch user guide](../user/guides/autoresearch-guide.md) | AutoResearch — self-improving experiment loop, prompt optimization, insights |
+| Mobile Responsive UI | Chat interface, sidebar, and layout made responsive for mobile viewports (no separate doc — see issues #1804 and #4445) |
 
 ## Refactoring & Analysis
 

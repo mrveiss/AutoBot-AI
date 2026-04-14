@@ -858,12 +858,48 @@ async def perform_knowledge_search(state: ChatState, config: RunnableConfig) -> 
             logger.debug("Manager has no rag_service; skipping agentic search")
             return {"agentic_context": "", "agentic_search_queries": []}
 
+        # Issue #4263: Emit BEFORE_RAG_QUERY hook before executing RAG query
+        from chat_workflow.session_handler import _emit_before_rag_query
+
+        user_query = state["user_message"]
+        try:
+            # Allow extensions to inspect/modify the query
+            user_query = await _emit_before_rag_query(
+                user_query,
+                state.get("session_id"),
+                {},
+            )
+        except Exception as hook_exc:  # noqa: BLE001
+            logger.debug("BEFORE_RAG_QUERY hook failed (non-fatal): %s", hook_exc)
+
         context_str = await knowledge_search_tool(
-            query=state["user_message"],
+            query=user_query,
             rag_service=rag_service,
             context=None,
             config=agentic_cfg,
         )
+
+        # Issue #4263: Emit AFTER_RAG_RESULTS hook after RAG returns results
+        from chat_workflow.session_handler import _emit_after_rag_results
+
+        try:
+            # Convert context_str back to results format for extensions
+            # Results format: list of dicts with content/metadata
+            results = (
+                [{"content": context_str}] if context_str else []
+            )
+            results = await _emit_after_rag_results(
+                results,
+                user_query,
+                state.get("session_id"),
+                {},
+            )
+            # Reconstruct context_str from filtered results
+            context_str = "\n\n".join(
+                [r.get("content", "") for r in results if r.get("content")]
+            )
+        except Exception as hook_exc:  # noqa: BLE001
+            logger.debug("AFTER_RAG_RESULTS hook failed (non-fatal): %s", hook_exc)
 
         # Track the original query; refined queries are recorded inside the tool
         queries_used: List[str] = [state["user_message"]]
@@ -901,11 +937,31 @@ async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict
     if state.get("error"):
         return {}
 
+    from chat_workflow.llm_handler import _emit_loop_complete
+
     manager = config["configurable"]["manager"]
+    session_id = state.get("session_id", "")
+    total_iterations = state.get("iteration_count", 0)
+    combined_response = "\n\n".join(state.get("all_llm_responses", []))
+
+    # Emit LOOP_COMPLETE hook to notify extensions
+    await _emit_loop_complete(total_iterations, combined_response, session_id)
 
     try:
         session = await manager.get_or_create_session(state["session_id"])
-        combined_response = "\n\n".join(state.get("all_llm_responses", []))
+
+        # Issue #4263: Emit BEFORE_RESPONSE_SEND hook before sending response
+        from chat_workflow.llm_handler import _emit_before_response_send
+
+        try:
+            # Allow extensions to inspect/modify response before sending
+            combined_response = await _emit_before_response_send(
+                combined_response,
+                state.get("session_id"),
+                {},
+            )
+        except Exception as hook_exc:  # noqa: BLE001
+            logger.debug("BEFORE_RESPONSE_SEND hook failed (non-fatal): %s", hook_exc)
 
         await manager._persist_conversation(
             state["session_id"],
@@ -938,6 +994,19 @@ async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict
             state["session_id"],
             len(wf_messages),
         )
+
+        # Issue #4263: Emit AFTER_RESPONSE_SEND hook after response is sent
+        from chat_workflow.llm_handler import _emit_after_response_send
+
+        try:
+            await _emit_after_response_send(
+                combined_response,
+                state.get("session_id"),
+                {},
+            )
+        except Exception as hook_exc:  # noqa: BLE001
+            logger.debug("AFTER_RESPONSE_SEND hook failed (non-fatal): %s", hook_exc)
+
     except Exception as exc:
         logger.error("Failed to persist conversation: %s", exc, exc_info=True)
 

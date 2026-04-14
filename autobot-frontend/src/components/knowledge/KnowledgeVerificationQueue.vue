@@ -215,7 +215,7 @@
       class="pagination"
     >
       <BaseButton
-        variant="outline"
+        variant="outline-solid"
         size="sm"
         :disabled="currentPage === 1"
         @click="goToPage(currentPage - 1)"
@@ -226,7 +226,7 @@
         {{ $t('knowledge.verification.pageInfo', { current: currentPage, total: totalPages }) }}
       </span>
       <BaseButton
-        variant="outline"
+        variant="outline-solid"
         size="sm"
         :disabled="currentPage === totalPages"
         @click="goToPage(currentPage + 1)"

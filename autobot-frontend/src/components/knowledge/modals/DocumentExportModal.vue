@@ -261,7 +261,7 @@ watch(() => props.modelValue, (isOpen) => {
       <!-- Actions -->
       <div class="modal-actions">
         <BaseButton
-          variant="outline"
+          variant="outline-solid"
           @click="closeModal"
           :disabled="isExporting"
         >

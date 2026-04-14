@@ -301,7 +301,7 @@ function selectIcon(icon: string): void {
         </div>
         <div class="delete-actions">
           <BaseButton
-            variant="outline"
+            variant="outline-solid"
             @click="cancelDelete"
             :disabled="isLoading"
           >
@@ -421,7 +421,7 @@ function selectIcon(icon: string): void {
           </div>
           <div class="right-actions">
             <BaseButton
-              variant="outline"
+              variant="outline-solid"
               @click="closeModal"
               :disabled="isLoading"
             >

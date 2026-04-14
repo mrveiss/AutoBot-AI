@@ -15,7 +15,7 @@ This module provides:
 
 import logging
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from extensions.base import HookContext
 from extensions.hooks import HookPoint

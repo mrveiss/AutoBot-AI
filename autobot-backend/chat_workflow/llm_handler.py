@@ -127,13 +127,32 @@ async def _emit_before_message_process(
     }
 
 
+async def _emit_before_prompt_build(
+    session_id: str, context: Dict[str, Any]
+) -> None:
+    """Emit BEFORE_PROMPT_BUILD hook to registered extensions.
+
+    Issue #4265: Fires before prompt building begins so extensions can
+    prepare or modify context before prompt assembly starts.
+
+    Args:
+        session_id: Session identifier
+        context: Request-level context dict
+    """
+    ctx = HookContext(
+        session_id=session_id,
+        data={"context": context},
+    )
+    await get_extension_manager().invoke_hook(HookPoint.BEFORE_PROMPT_BUILD, ctx)
+
+
 async def _emit_after_prompt_build(
     prompt: str, session_id: str, context: Dict[str, Any]
 ) -> str:
     """Emit AFTER_PROMPT_BUILD hook to registered extensions.
 
-    Issue #4181: Fires after system prompt is built so extensions can
-    inspect or modify the prompt before it enters assembly.
+    Issue #4265: Fires after prompt is built so extensions can
+    inspect or modify the prompt before being sent to the LLM.
 
     Args:
         prompt: The built prompt string
@@ -792,6 +811,13 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             ollama_endpoint = slm_base
         else:
             ollama_endpoint = self._get_ollama_endpoint_for_model(selected_model)
+
+        # Issue #4265: Emit BEFORE_PROMPT_BUILD hook before building prompts
+        await _emit_before_prompt_build(
+            session.session_id,
+            {"message": message, "use_knowledge": use_knowledge, "language": language},
+        )
+
         system_prompt = self._get_system_prompt(language=language)
         # Issue #3787: Prepend always-loaded compact memory summary.
         try:
@@ -855,6 +881,14 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         full_prompt = self._build_full_prompt(
             knowledge_context, conversation_context, message
         )
+
+        # Issue #4265: Emit AFTER_PROMPT_BUILD hook after full prompt is built
+        full_prompt = await _emit_after_prompt_build(
+            full_prompt,
+            session.session_id,
+            {"message": message, "use_knowledge": use_knowledge},
+        )
+
         full_prompt = await _emit_full_prompt_ready(
             full_prompt,
             {"endpoint": ollama_endpoint, "model": selected_model},
@@ -902,8 +936,20 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         selected_model: str,
         interpretation_prompt: str,
         llm_options: Dict[str, Any],
+        session_id: str = "",
     ):
         """Handle non-streaming interpretation request (Issue #332)."""
+        # Issue #4259: Wire BEFORE_LLM_CALL hook
+        llm_params = {"model": selected_model, "endpoint": ollama_endpoint}
+        should_proceed = await _emit_before_llm_call(
+            interpretation_prompt, llm_params, session_id
+        )
+        if not should_proceed:
+            logger.info(
+                "[Issue #4259] LLM call cancelled by BEFORE_LLM_CALL hook"
+            )
+            return
+
         http_client = get_http_client()
         response_data = await http_client.post_json(
             f"{ollama_endpoint}/api/generate",
@@ -915,6 +961,13 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             },
         )
         interpretation = response_data.get("response", "")
+
+        # Issue #4259: Wire AFTER_LLM_RESPONSE hook
+        if interpretation:
+            interpretation = await _emit_after_llm_response(
+                interpretation, llm_params, session_id
+            )
+
         if interpretation:
             yield WorkflowMessage(
                 type="response",
@@ -928,44 +981,69 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         selected_model: str,
         interpretation_prompt: str,
         llm_options: Dict[str, Any],
+        session_id: str = "",
     ):
         """Handle streaming interpretation request (Issue #332)."""
         import aiohttp
 
+        # Issue #4259: Wire BEFORE_LLM_CALL hook
+        llm_params = {"model": selected_model, "endpoint": ollama_endpoint}
+        should_proceed = await _emit_before_llm_call(
+            interpretation_prompt, llm_params, session_id
+        )
+        if not should_proceed:
+            logger.info(
+                "[Issue #4259] LLM call cancelled by BEFORE_LLM_CALL hook"
+            )
+            return
+
         http_client = get_http_client()
-        async with await http_client.post(
-            f"{ollama_endpoint}/api/generate",
-            json={
-                "model": selected_model,
-                "prompt": interpretation_prompt,
-                "stream": True,
-                "options": llm_options,
-            },
-            timeout=aiohttp.ClientTimeout(total=60.0),
-        ) as interp_response:
-            async for line in interp_response.content:
-                line_str = line.decode("utf-8").strip()
-                if not line_str:
-                    continue
+        full_response = ""
+        try:
+            async with await http_client.post(
+                f"{ollama_endpoint}/api/generate",
+                json={
+                    "model": selected_model,
+                    "prompt": interpretation_prompt,
+                    "stream": True,
+                    "options": llm_options,
+                },
+                timeout=aiohttp.ClientTimeout(total=60.0),
+            ) as interp_response:
+                async for line in interp_response.content:
+                    line_str = line.decode("utf-8").strip()
+                    if not line_str:
+                        continue
 
-                try:
-                    data = json.loads(line_str)
-                except json.JSONDecodeError:
-                    continue
+                    try:
+                        data = json.loads(line_str)
+                    except json.JSONDecodeError:
+                        continue
 
-                chunk = data.get("response", "")
-                if chunk:
-                    yield WorkflowMessage(
-                        type="stream",
-                        content=chunk,
-                        metadata={
-                            "message_type": "command_interpretation",
-                            "streaming": True,
-                        },
-                    )
+                    chunk = data.get("response", "")
+                    if chunk:
+                        # Issue #4259: Wire DURING_LLM_STREAMING hook
+                        await _emit_during_llm_streaming(
+                            chunk, session_id, {"endpoint": ollama_endpoint}
+                        )
+                        full_response += chunk
+                        yield WorkflowMessage(
+                            type="stream",
+                            content=chunk,
+                            metadata={
+                                "message_type": "command_interpretation",
+                                "streaming": True,
+                            },
+                        )
 
-                if data.get("done"):
-                    break
+                    if data.get("done"):
+                        break
+        finally:
+            # Issue #4259: Wire AFTER_LLM_RESPONSE hook after streaming completes
+            if full_response:
+                full_response = await _emit_after_llm_response(
+                    full_response, llm_params, session_id
+                )
 
     async def _interpret_command_results(
         self,
@@ -976,6 +1054,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         ollama_endpoint: str,
         selected_model: str,
         streaming: bool = True,
+        session_id: str = "",
     ):
         """
         Send command results to LLM for interpretation.
@@ -988,6 +1067,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             ollama_endpoint: Ollama API endpoint
             selected_model: Model to use
             streaming: Whether to stream the response
+            session_id: Session identifier for hooks
 
         Yields:
             WorkflowMessage chunks
@@ -999,13 +1079,15 @@ Do NOT conclude the task or provide a final summary - just explain this specific
 
         if not streaming:
             async for msg in self._interpret_non_streaming(
-                ollama_endpoint, selected_model, interpretation_prompt, llm_options
+                ollama_endpoint, selected_model, interpretation_prompt, llm_options,
+                session_id
             ):
                 yield msg
             return
 
         async for msg in self._interpret_streaming(
-            ollama_endpoint, selected_model, interpretation_prompt, llm_options
+            ollama_endpoint, selected_model, interpretation_prompt, llm_options,
+            session_id
         ):
             yield msg
 
@@ -1131,7 +1213,8 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             )
 
     async def _get_interpretation_from_llm(
-        self, command: str, stdout: str, stderr: str, return_code: int
+        self, command: str, stdout: str, stderr: str, return_code: int,
+        session_id: str = ""
     ) -> str:
         """Get LLM interpretation for command results (non-streaming)."""
         selected_model = get_config().get_selected_model()
@@ -1158,6 +1241,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             ollama_endpoint=ollama_endpoint,
             selected_model=selected_model,
             streaming=False,
+            session_id=session_id,
         ):
             if hasattr(msg, "content"):
                 interpretation += msg.content
@@ -1181,7 +1265,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         """
         try:
             interpretation = await self._get_interpretation_from_llm(
-                command, stdout, stderr, return_code
+                command, stdout, stderr, return_code, session_id
             )
 
             if not session_id or not interpretation:

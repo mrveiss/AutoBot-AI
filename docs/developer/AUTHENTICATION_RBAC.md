@@ -331,3 +331,115 @@ The guest role fallback has been removed (Issue #744). All endpoints now require
 2. Add to appropriate role in `ROLE_PERMISSIONS`
 3. Add tests in `tests/security/test_auth_rbac.py`
 4. Document in this file
+
+---
+
+## Self-Registration & Signup
+
+> Issue #1801: Self-registration endpoint for new users
+
+AutoBot supports user self-registration in `multi_user` deployment mode. New accounts are created through `POST /auth/signup` without requiring an existing admin session.
+
+### Endpoint
+
+```
+POST /auth/signup
+```
+
+No authentication header is required.
+
+### Request Body
+
+```json
+{
+  "username": "jsmith",
+  "email": "jsmith@example.com",
+  "password": "Secret1234",
+  "display_name": "Jane Smith"
+}
+```
+
+| Field | Type | Required | Validation |
+|---|---|---|---|
+| `username` | string | Yes | 3–50 chars; alphanumeric, `-`, `_` only; stored lowercase |
+| `email` | string | Yes | Must contain `@`; max 255 chars; stored lowercase |
+| `password` | string | Yes | 8–128 chars; must include at least one uppercase letter, one lowercase letter, and one digit |
+| `display_name` | string | No | Free text; defaults to `username` if omitted |
+
+### Response
+
+`200 OK` on success:
+
+```json
+{
+  "success": true,
+  "message": "Account created successfully. You can now log in.",
+  "username": "jsmith"
+}
+```
+
+The new account is assigned the `user` system role automatically. An admin must call `PUT /user-management/users/{id}/role` to elevate privileges.
+
+### Error Responses
+
+| HTTP Status | Condition |
+|---|---|
+| `400 Bad Request` | `single_user` deployment mode — self-registration is disabled |
+| `409 Conflict` | Username or email already exists |
+| `422 Unprocessable Entity` | Field validation failure (see `detail` array) |
+| `500 Internal Server Error` | Unexpected registration failure |
+
+### When Signup Is Enabled vs Disabled
+
+| Deployment Mode | Signup Endpoint | Behaviour |
+|---|---|---|
+| `single_user` | Disabled | Returns `400` with message: "Self-registration is not available in single-user mode" |
+| `multi_user` | Enabled | Creates account in PostgreSQL and assigns `user` role |
+
+The deployment mode is controlled by `AUTOBOT_DEPLOYMENT_MODE`. In `single_user` mode the entire user management subsystem is disabled and no PostgreSQL connection is required.
+
+### single_user Mode Behaviour
+
+When `AUTOBOT_DEPLOYMENT_MODE=single_user`:
+
+- `POST /auth/signup` returns HTTP 400 immediately — no database call is made.
+- `POST /auth/login` returns a synthetic admin token without querying PostgreSQL (see Issue #2953).
+- `GET /user-management/users/me` returns a synthetic admin `UserResponse` with `is_platform_admin: true`.
+- All `/user-management/users/*` write endpoints return HTTP 503 (user management not enabled).
+- `GET /user-management/users/search` returns `available: false` with an empty list.
+
+This allows the frontend to degrade gracefully — search dialogs show a "not available" state instead of crashing.
+
+### Onboarding Flow (multi_user Mode)
+
+```
+New user visits /signup
+        │
+        ▼
+POST /auth/signup
+  username, email, password
+        │
+        ├── 409 Conflict ──▶ "Username or email already taken"
+        ├── 422 Validation ─▶ Show field-level errors
+        │
+        ▼ 200 OK
+  Account created (role: user)
+        │
+        ▼
+POST /auth/login
+  username, password
+        │
+        ▼ JWT token returned
+  Stored in localStorage as authToken
+        │
+        ▼
+  Redirect to /dashboard
+```
+
+After first login the user has the `user` role. If admin privileges are needed, an existing admin must navigate to `/admin/users` and update the role via the inline dropdown or `PUT /user-management/users/{id}/role`.
+
+### Related Documentation
+
+- Admin panel guide and full user lifecycle: [`docs/user/guides/user-management-guide.md`](../user/guides/user-management-guide.md)
+- Role capabilities and permission matrix: Section 4 of the user management guide
+- Password strength rules and change-password endpoint: Section 7 of the user management guide

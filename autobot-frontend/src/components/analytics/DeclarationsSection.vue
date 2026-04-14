@@ -100,6 +100,7 @@
 
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useGroupingMemo } from '@/composables/useComputedMemo'
 import EmptyState from '@/components/ui/EmptyState.vue'
 
 const { t } = useI18n()

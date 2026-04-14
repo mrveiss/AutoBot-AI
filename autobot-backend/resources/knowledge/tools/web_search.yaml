@@ -1,0 +1,90 @@
+metadata:
+  category: web_search
+  description: Web search tools for finding information, code, and research content
+  last_updated: "2024-01-01T00:00:00"
+  version: "1.0.0"
+
+tools:
+  - name: exa
+    type: web_search_api
+    purpose: Neural web search API optimized for AI agents — returns clean, structured results
+    installation:
+      pip: pip install exa-py
+      npm: npm install exa-js
+    usage:
+      search: "python3 -c \"from exa_py import Exa; exa = Exa('{api_key}'); results = exa.search('{query}', num_results=5); print([r.url for r in results.results])\""
+      search_with_contents: "python3 -c \"from exa_py import Exa; exa = Exa('{api_key}'); results = exa.search_and_contents('{query}', num_results=3, text=True); print([(r.url, r.text[:500]) for r in results.results])\""
+      find_similar: "python3 -c \"from exa_py import Exa; exa = Exa('{api_key}'); results = exa.find_similar('{url}', num_results=5); print([r.url for r in results.results])\""
+      get_contents: "python3 -c \"from exa_py import Exa; exa = Exa('{api_key}'); result = exa.get_contents(['{url}'], text=True); print(result.results[0].text)\""
+    common_examples:
+      - description: Search for recent articles on a topic
+        command: "python3 -c \"from exa_py import Exa; exa = Exa(api_key); r = exa.search('python asyncio best practices 2024', num_results=5, use_autoprompt=True); print('\\n'.join(f'{x.title}: {x.url}' for x in r.results))\""
+        expected_output: "5 relevant article titles and URLs"
+      - description: Search and retrieve full text content
+        command: "python3 -c \"from exa_py import Exa; exa = Exa(api_key); r = exa.search_and_contents('FastAPI dependency injection', num_results=3, text=True); print(r.results[0].text[:1000])\""
+        expected_output: "First 1000 chars of the most relevant article"
+      - description: Find pages similar to a reference URL
+        command: "python3 -c \"from exa_py import Exa; exa = Exa(api_key); r = exa.find_similar('https://docs.python.org/3/library/asyncio.html', num_results=5); print([x.url for x in r.results])\""
+        expected_output: "5 URLs similar to the Python asyncio docs"
+      - description: Fetch clean content from a known URL
+        command: "python3 -c \"from exa_py import Exa; exa = Exa(api_key); r = exa.get_contents(['https://example.com/article'], text=True); print(r.results[0].text)\""
+        expected_output: "Clean text content of the article"
+    troubleshooting:
+      - problem: "API key not set"
+        solution: "Set EXA_API_KEY environment variable or pass directly; get key at exa.ai"
+      - problem: "Results not relevant"
+        solution: "Use use_autoprompt=True for neural query enhancement, or be more specific"
+      - problem: "Rate limit error"
+        solution: "Exa free tier has limits; add retry logic with exponential backoff"
+    configuration:
+      env_var: EXA_API_KEY
+      base_url: "https://api.exa.ai"
+    related_tools: ["jina-reader", "wget", "feedparser"]
+
+  - name: mcporter
+    type: mcp_search_bridge
+    purpose: MCP (Model Context Protocol) bridge providing web search to AutoBot agents
+    installation:
+      system: Installed as part of AutoBot infrastructure via Ansible
+    usage:
+      search: "Access via MCP tool call: search(query='{query}', num_results={n})"
+      news_search: "Access via MCP tool call: search(query='{query}', category='news')"
+    common_examples:
+      - description: General web search via MCP
+        command: "MCP tool call: search(query='latest Python 3.13 features', num_results=5)"
+        expected_output: "Structured list of search results with title, URL, and snippet"
+      - description: News search via MCP
+        command: "MCP tool call: search(query='AI agent frameworks 2024', category='news')"
+        expected_output: "Recent news articles on the topic"
+    notes:
+      - "mcporter is the preferred search tool for AutoBot agents — uses Exa backend"
+      - "Direct Exa API access should be used as fallback when MCP is unavailable"
+      - "Results are returned as structured MCP tool response objects"
+    related_tools: ["exa", "jina-reader"]
+
+  - name: duckduckgo-search
+    type: web_search_library
+    purpose: Fallback web search via DuckDuckGo (no API key required)
+    installation:
+      pip: pip install duckduckgo-search
+    usage:
+      text_search: "python3 -c \"from duckduckgo_search import DDGS; results = DDGS().text('{query}', max_results=5); print(results)\""
+      news_search: "python3 -c \"from duckduckgo_search import DDGS; results = DDGS().news('{query}', max_results=5); print(results)\""
+      image_search: "python3 -c \"from duckduckgo_search import DDGS; results = DDGS().images('{query}', max_results=5); print([r['image'] for r in results])\""
+    common_examples:
+      - description: Search for text results
+        command: "python3 -c \"from duckduckgo_search import DDGS; [print(r['title'], r['href']) for r in DDGS().text('FastAPI tutorial', max_results=5)]\""
+        expected_output: "5 search results with title and URL"
+      - description: Search recent news
+        command: "python3 -c \"from duckduckgo_search import DDGS; [print(r['title'], r['url']) for r in DDGS().news('AI news today', max_results=5)]\""
+        expected_output: "5 recent news articles with title and URL"
+    troubleshooting:
+      - problem: "RatelimitException"
+        solution: "Add sleep between queries; DuckDuckGo rate limits aggressive scraping"
+      - problem: "No results returned"
+        solution: "Try simpler query or different terms; DDG may block unusual patterns"
+    notes:
+      - "No API key required — useful as anonymous fallback"
+      - "Prefer Exa/mcporter for better result quality in agent contexts"
+      - "Rate limits are stricter than paid search APIs"
+    related_tools: ["exa", "mcporter", "jina-reader"]

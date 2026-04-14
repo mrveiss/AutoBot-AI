@@ -57,6 +57,7 @@ from api.knowledge_search_aggregator import (
 from api.knowledge_vectorization import router as knowledge_vectorization_router
 from api.llm import router as llm_router
 from api.llm_providers import router as llm_providers_router
+from api.manual_mcp import router as manual_mcp_router
 from api.mcp_registry import router as mcp_registry_router
 from api.memory import router as memory_router
 from api.models import router as models_router
@@ -71,6 +72,8 @@ from api.service_messages import router as service_messages_router
 from api.settings import router as settings_router
 from api.structured_thinking_mcp import router as structured_thinking_mcp_router
 from api.system import router as system_router
+from api.usage import router as usage_router  # Issue #1807
+from api.user_management.router import router as user_management_router  # Issue #1801
 from api.vnc_manager import router as vnc_router
 from api.vnc_mcp import router as vnc_mcp_router
 from api.vnc_proxy import router as vnc_proxy_router
@@ -93,6 +96,8 @@ def _get_system_routers() -> list:
         (collaboration_router, "", ["collaboration"], "collaboration"),
         (system_router, "/system", ["system"], "system"),
         (settings_router, "/settings", ["settings"], "settings"),
+        (usage_router, "/usage", ["usage", "analytics"], "usage"),  # Issue #1807
+        (user_management_router, "", ["user-management"], "user_management"),  # Issue #1801
         (data_storage_router, "", ["data-storage"], "data_storage"),
         (prompts_router, "/prompts", ["prompts"], "prompts"),
         (frontend_config_router, "", ["frontend-config"], "frontend_config"),
@@ -328,6 +333,7 @@ def _get_mcp_routers() -> list:
             "prometheus_mcp",
         ),
         (redis_mcp_router, "/redis", ["redis_mcp", "mcp"], "redis_mcp"),  # Issue #2511
+        (manual_mcp_router, "/manual", ["manual_mcp", "mcp"], "manual_mcp"),  # Issue #4256
     ]
 
 

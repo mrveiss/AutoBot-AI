@@ -54,13 +54,12 @@ const navItems = [
   { name: 'Replication', path: '/replications', icon: 'replicate' },
   // Issue #760: Agents — local + external (merged)
   { name: 'Agents', path: '/agents', icon: 'agents' },
-  // Issue #1230: Consolidated Code Sync + System Updates into tabbed view
-  { name: 'Updates', path: '/updates', icon: 'updates', showBadge: true },
   // Issue #731: Skills system management
   { name: 'Skills', path: '/skills', icon: 'skills' },
-  { name: 'Maintenance', path: '/maintenance', icon: 'wrench' },
+  // Issue #840: Updates moved into Maintenance tab
+  { name: 'Maintenance', path: '/maintenance', icon: 'wrench', showBadge: true },
   { name: 'Settings', path: '/settings', icon: 'cog' },
-  { name: 'Performance', path: '/performance', icon: 'performance' },
+  // Issue #752: Performance moved into Monitoring tab
   { name: 'Monitoring', path: '/monitoring', icon: 'chart' },
   { name: 'Security', path: '/security', icon: 'shield' },
   { name: 'Tools', path: '/tools', icon: 'tools' },

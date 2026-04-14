@@ -686,7 +686,7 @@ function closeModal() {
       <!-- Test Connection (edit mode only) -->
       <div v-if="isEditing" class="test-section">
         <BaseButton
-          variant="outline"
+          variant="outline-solid"
           size="sm"
           :loading="testing"
           @click="testConnection"

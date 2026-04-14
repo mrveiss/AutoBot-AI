@@ -297,8 +297,8 @@ async function handleDelete(voiceId: string, name: string) {
 }
 
 .voice-badge.custom {
-  background: rgba(52, 211, 153, 0.15);
-  color: #34d399;
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .delete-btn {

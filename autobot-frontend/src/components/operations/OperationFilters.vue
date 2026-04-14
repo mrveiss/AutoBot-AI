@@ -147,9 +147,9 @@ function clearFilters() {
   align-items: flex-end;
   gap: 1rem;
   padding: 1rem;
-  background-color: var(--blue-gray-50);
+  background-color: var(--bg-secondary);
   border-radius: 0.5rem;
-  border: 1px solid var(--blue-gray-200);
+  border: 1px solid var(--border-default);
 }
 
 .filter-group {
@@ -161,16 +161,16 @@ function clearFilters() {
 .filter-label {
   font-size: 0.75rem;
   font-weight: 500;
-  color: var(--blue-gray-600);
+  color: var(--text-secondary);
 }
 
 .filter-select {
   padding: 0.5rem 2rem 0.5rem 0.75rem;
   font-size: 0.875rem;
-  border: 1px solid var(--blue-gray-300);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
-  background-color: white;
-  color: var(--blue-gray-700);
+  background-color: var(--bg-input);
+  color: var(--text-primary);
   cursor: pointer;
   appearance: none;
   background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
@@ -180,12 +180,12 @@ function clearFilters() {
 }
 
 .filter-select:hover {
-  border-color: var(--blue-gray-400);
+  border-color: var(--border-strong);
 }
 
 .filter-select:focus {
   outline: none;
-  border-color: var(--blue-500);
+  border-color: var(--color-primary);
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
@@ -196,17 +196,17 @@ function clearFilters() {
   padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
   font-weight: 500;
-  color: var(--blue-gray-600);
-  background-color: white;
-  border: 1px solid var(--blue-gray-300);
+  color: var(--text-secondary);
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .clear-filters-btn:hover:not(:disabled) {
-  background-color: var(--blue-gray-100);
-  border-color: var(--blue-gray-400);
+  background-color: var(--bg-hover);
+  border-color: var(--border-strong);
 }
 
 .clear-filters-btn:disabled {

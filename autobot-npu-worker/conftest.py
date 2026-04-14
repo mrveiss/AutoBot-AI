@@ -10,6 +10,8 @@ Sets up path imports and fixtures for NPU worker testing (Issue #4311).
 import sys
 from pathlib import Path
 
+__all__: list = []
+
 # Add npu-worker core module to path for test imports
 _npu_worker_root = Path(__file__).parent
 _core_path = _npu_worker_root / "core"

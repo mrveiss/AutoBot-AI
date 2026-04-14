@@ -18,6 +18,10 @@ import { createLogger } from '@/utils/debugUtils'
 import type {
   UseCodeIntelAnalysisDeps,
   CrossLanguageAnalysisResult,
+  DTOMismatch,
+  APIContractMismatch,
+  ValidationDuplication,
+  PatternMatch,
 } from './codeIntelTypes'
 
 const logger = createLogger('useCrossLanguageAnalysis')
@@ -90,11 +94,11 @@ export function useCrossLanguageAnalysis(
       const backendUrl = await appConfig.getServiceUrl('backend')
       const analysis = crossLanguageAnalysis.value
 
-      analysis.dto_mismatches = await _fetchCrossLanguageSection(
+      analysis.dto_mismatches = (await _fetchCrossLanguageSection(
         backendUrl, 'dto-mismatches', withSourceId,
         (d) => (d.mismatches as unknown[]) || [],
-      )
-      analysis.api_contract_mismatches = await _fetchCrossLanguageSection(
+      )) as DTOMismatch[]
+      analysis.api_contract_mismatches = (await _fetchCrossLanguageSection(
         backendUrl, 'api-mismatches', withSourceId,
         (d) => {
           const orphaned = ((d.orphaned as unknown[]) || []).map(
@@ -105,15 +109,15 @@ export function useCrossLanguageAnalysis(
           )
           return [...missing, ...orphaned]
         },
-      )
-      analysis.validation_duplications = await _fetchCrossLanguageSection(
+      )) as APIContractMismatch[]
+      analysis.validation_duplications = (await _fetchCrossLanguageSection(
         backendUrl, 'validation-duplications', withSourceId,
         (d) => (d.duplications as unknown[]) || [],
-      )
-      analysis.pattern_matches = await _fetchCrossLanguageSection(
+      )) as ValidationDuplication[]
+      analysis.pattern_matches = (await _fetchCrossLanguageSection(
         backendUrl, 'semantic-matches?min_similarity=0.7&limit=20', withSourceId,
         (d) => (d.matches as unknown[]) || [],
-      )
+      )) as PatternMatch[]
     } catch (error: unknown) {
       logger.warn(
         'Failed to load some cross-language details:',

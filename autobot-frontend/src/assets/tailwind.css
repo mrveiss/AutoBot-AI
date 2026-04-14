@@ -6,6 +6,10 @@ layer(base);
 @plugin '@tailwindcss/forms';
 @plugin '@tailwindcss/typography';
 
+/* Wire dark: variant to AutoBot's [data-theme="dark"] attribute system.
+ * Without this, dark: classes only respond to OS preference, not the toggle. */
+@variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 @theme {
   --color-blueGray-50: #f8fafc;
   --color-blueGray-100: #f1f5f9;
@@ -175,11 +179,11 @@ layer(base);
 }
 
 @utility btn-outline {
-  @apply bg-transparent text-blueGray-700 border border-blueGray-500 hover:bg-blueGray-500 hover:text-white;
+  @apply bg-transparent text-autobot-text-primary border border-autobot-border hover:bg-autobot-bg-hover hover:text-autobot-text-primary;
 }
 
 @utility card {
-  @apply relative flex flex-col min-w-0 wrap-break-word bg-white rounded-lg shadow-xl-soft;
+  @apply relative flex flex-col min-w-0 wrap-break-word bg-autobot-bg-card rounded-lg shadow-xl-soft;
 }
 
 @utility card-header {
@@ -191,19 +195,19 @@ layer(base);
 }
 
 @utility nav-link {
-  @apply text-blueGray-700 hover:text-blueGray-500 px-3 py-2 flex items-center text-xs uppercase font-bold transition-all duration-150;
+  @apply text-autobot-text-primary hover:text-autobot-text-secondary px-3 py-2 flex items-center text-xs uppercase font-bold transition-all duration-150;
 }
 
 @utility nav-link-active {
-  @apply text-indigo-500 hover:text-indigo-700;
+  @apply text-autobot-primary hover:text-autobot-primary-hover;
 }
 
 @utility input-field {
-  @apply border-0 px-3 py-3 placeholder-blueGray-300 text-blueGray-600 bg-white rounded text-sm shadow focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full ease-linear transition-all duration-150;
+  @apply border-0 px-3 py-3 placeholder-autobot-text-muted text-autobot-text-primary bg-autobot-bg-input rounded text-sm shadow focus:outline-none focus:ring-2 focus:ring-autobot-primary w-full ease-linear transition-all duration-150;
 }
 
 @utility label {
-  @apply block uppercase text-blueGray-600 text-xs font-bold mb-2;
+  @apply block uppercase text-autobot-text-secondary text-xs font-bold mb-2;
 }
 
 @layer base {

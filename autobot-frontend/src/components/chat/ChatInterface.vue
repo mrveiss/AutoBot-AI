@@ -2,7 +2,16 @@
   <ErrorBoundary :fallback="$t('chat.interface.loadFailed')">
     <div class="chat-interface flex h-full bg-autobot-bg-card overflow-hidden">
 
+      <!-- Mobile Sidebar Backdrop -->
+      <div
+        v-if="showMobileSidebar"
+        class="lg:hidden fixed inset-0 bg-black/40 z-30"
+        @click="showMobileSidebar = false"
+        aria-hidden="true"
+      ></div>
+
       <!-- Chat Sidebar with Unified Loading -->
+      <!-- Desktop: inline. Mobile: fixed overlay when showMobileSidebar is true -->
       <UnifiedLoadingView
         loading-key="chat-sidebar"
         :has-content="store.sessions.length > 0"
@@ -10,10 +19,31 @@
         @loading-complete="handleSidebarLoadingComplete"
         @loading-error="handleSidebarLoadingError"
         @loading-timeout="handleSidebarLoadingTimeout"
-        class="sidebar-loading-view h-full w-80 shrink-0"
+        :class="[
+          'sidebar-loading-view h-full shrink-0',
+          'hidden lg:block',
+          store.sidebarCollapsed ? 'w-12' : 'w-80',
+        ]"
       >
         <ChatSidebar />
       </UnifiedLoadingView>
+
+      <!-- Mobile Sidebar Overlay -->
+      <Transition
+        enter-active-class="transition duration-250 ease-out"
+        enter-from-class="-translate-x-full"
+        enter-to-class="translate-x-0"
+        leave-active-class="transition duration-200 ease-in"
+        leave-from-class="translate-x-0"
+        leave-to-class="-translate-x-full"
+      >
+        <div
+          v-if="showMobileSidebar"
+          class="lg:hidden fixed top-0 left-0 h-full w-80 max-w-[85vw] z-40 shadow-2xl overflow-hidden"
+        >
+          <ChatSidebar @close-mobile="showMobileSidebar = false" />
+        </div>
+      </Transition>
 
       <!-- Main Chat Area -->
       <div class="flex-1 flex flex-col min-w-0 relative">
@@ -27,6 +57,7 @@
           :is-connected="isConnected"
           @export-session="exportSession"
           @clear-session="clearSession"
+          @toggle-mobile-sidebar="showMobileSidebar = !showMobileSidebar"
           class="shrink-0"
         >
           <!-- File Panel Toggle Button (injected into header) -->
@@ -155,7 +186,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, provide } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch, provide } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useBackoffPoller } from '@/composables/useBackoffPoller'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
@@ -247,6 +278,8 @@ const showKnowledgeDialog = ref(false)
 const showCommandDialog = ref(false)
 const showWorkflowProgress = ref(false)
 const showFilePanel = ref(false)
+// Mobile sidebar overlay (#1804)
+const showMobileSidebar = ref(false)
 
 // Dialog data
 const currentChatContext = ref<any>(null)
@@ -789,15 +822,32 @@ const initializeChatInterface = async () => {
       const data = await Promise.race([loadPromise, timeoutPromise])
 
       // Process results - sync with backend (source of truth)
-      if (data.chat_sessions && !data.chat_sessions.error && Array.isArray(data.chat_sessions)) {
-        // Use syncSessionsWithBackend to remove deleted sessions and add new ones
-        store.syncSessionsWithBackend(data.chat_sessions)
+      // Explicitly check for error to distinguish API failures from empty responses
+      if (data.chat_sessions && !data.chat_sessions.error && data.chat_sessions.data) {
+        const sessions = data.chat_sessions.data
+        // Issue #4431: Push local-only sessions to backend before sync so they are
+        // not wiped by syncSessionsWithBackend. Only sessions with real messages are
+        // pushed (empty placeholders are skipped).
+        const backendIds = new Set<string>((sessions as Array<{ id: string }>).map(s => s.id))
+        await controller.pushLocalOnlySessions(backendIds)
+        // Issue #4352: intentional_empty=true means the backend confirmed 0 sessions
+        // is correct (user deleted all). Pass this through so syncSessionsWithBackend
+        // can bypass the #4328 defensive guard and clear local sessions as intended.
+        const intentionalEmpty = Boolean(data.chat_sessions.intentional_empty)
+        store.syncSessionsWithBackend(sessions, intentionalEmpty)
+      } else if (data.chat_sessions?.error) {
+        // Explicit error case - log and proceed with fallback
+        logger.warn('Failed to load chat sessions from backend:', data.chat_sessions.error)
       }
 
       // Update connection status
-      if (data.system_health && !data.system_health.error) {
-        isConnected.value = data.system_health.status === 'healthy'
+      if (data.system_health && !data.system_health.error && data.system_health.data) {
+        const healthData = data.system_health.data as Record<string, unknown>
+        isConnected.value = healthData.status === 'healthy'
         baseConnectionStatus.value = isConnected.value ? t('status.connected') : t('status.disconnected')
+      } else if (data.system_health?.error) {
+        // Explicit error case for system health
+        logger.warn('Failed to load system health:', data.system_health.error)
       }
 
       // Issue #671: Clear initialization state on success
@@ -865,6 +915,50 @@ onUnmounted(() => {
   }
 
   messagePoller.stop()
+})
+
+// Issue #4356: Handle keep-alive activation (component re-enters view)
+// Resume polling and heartbeat when ChatInterface is activated from keep-alive cache
+onActivated(() => {
+  logger.debug('[ChatInterface] Activated from keep-alive - resuming operations')
+
+  // Resume heartbeat monitoring
+  startHeartbeat()
+
+  // Resume connection checking
+  checkConnection()
+
+  // Resume auto-save
+  enableAutoSave()
+
+  // Resume message polling
+  startMessagePolling()
+
+  // Re-attach keyboard shortcuts
+  document.addEventListener('keydown', handleKeyboardShortcuts)
+})
+
+// Issue #4356: Handle keep-alive deactivation (component leaves view but stays cached)
+// Pause polling and cleanup before caching to reduce background activity
+onDeactivated(() => {
+  logger.debug('[ChatInterface] Deactivated for keep-alive caching - pausing operations')
+
+  // Pause message polling (will resume on onActivated)
+  messagePoller.stop()
+
+  // Clean up intervals while cached
+  if (heartbeatInterval.value) {
+    clearInterval(heartbeatInterval.value)
+    heartbeatInterval.value = null
+  }
+
+  if (autoSaveInterval.value) {
+    clearInterval(autoSaveInterval.value)
+    autoSaveInterval.value = null
+  }
+
+  // Clean up keyboard shortcuts while cached
+  document.removeEventListener('keydown', handleKeyboardShortcuts)
 })
 
 // Watch for session changes to update NoVNC URL

@@ -184,9 +184,15 @@ class AgentLoopConfig:
     # Repetitive tool-call detection (#3255)
     max_identical_tool_calls: int = 3  # Halt when same tool+args seen N times
 
+    # Schema self-correction (Issue #4482)
+    max_schema_retries: int = 3  # Max retries when tool argument schema validation fails
+
     # Approval workflow (Issue #4092)
     require_approval_for_sensitive: bool = True  # Gate sensitive ops behind user approval
     approval_timeout_seconds: int = 300  # Max seconds to wait for user response
+
+    # First-turn priming (Issue #4481)
+    first_turn_priming_enabled: bool = True  # Inject context note on first iteration
 
     # Logging
     log_iterations: bool = True  # Log each iteration

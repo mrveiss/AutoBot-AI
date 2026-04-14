@@ -152,15 +152,13 @@ class TestLinkPipelineErrorHandling:
 class TestLinkPipelineHttp:
     """Tests for HTTP fetch path."""
 
-    @pytest.mark.asyncio
-    async def test_fetch_success(self):
-        pipe = LinkPipeline()
-
+    def _make_mock_session(self, url, status=200):
+        """Helper: build a mock aiohttp ClientSession for fetch tests."""
         mock_response = AsyncMock()
-        mock_response.url = "https://example.com"
+        mock_response.url = url
         mock_response.headers = {"Content-Type": "text/html"}
         mock_response.text = AsyncMock(return_value=SAMPLE_HTML)
-        mock_response.status = 200
+        mock_response.status = status
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
         mock_response.__aexit__ = AsyncMock(return_value=False)
 
@@ -168,16 +166,63 @@ class TestLinkPipelineHttp:
         mock_session.get = MagicMock(return_value=mock_response)
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock(return_value=False)
+        return mock_session
+
+    @pytest.mark.asyncio
+    async def test_fetch_success(self):
+        pipe = LinkPipeline()
+        mock_session = self._make_mock_session("https://example.com")
+        _parsed = {"type": "link_fetch", "confidence": 0.9, "url": "https://example.com"}
 
         with patch("media.link.pipeline._AIOHTTP_AVAILABLE", True), patch(
             "media.link.pipeline._BS4_AVAILABLE", True
         ), patch(
             "media.link.pipeline.aiohttp.ClientSession", return_value=mock_session
-        ):
+        ), patch.object(pipe, "_parse_html", return_value=_parsed):
             result = await pipe._fetch_and_parse("https://example.com", {})
 
         assert result["type"] == "link_fetch"
         assert result["confidence"] > 0
+        # Default path must verify TLS certs (ssl=None, not ssl=False)
+        mock_session.get.assert_called_once_with(
+            "https://example.com", allow_redirects=True, ssl=None
+        )
+
+    @pytest.mark.asyncio
+    async def test_fetch_default_verifies_tls(self):
+        """ssl=None (cert verification) is used when allow_self_signed is absent."""
+        pipe = LinkPipeline()
+        mock_session = self._make_mock_session("https://example.com")
+        _parsed = {"type": "link_fetch", "confidence": 0.9}
+
+        with patch("media.link.pipeline._AIOHTTP_AVAILABLE", True), patch(
+            "media.link.pipeline._BS4_AVAILABLE", True
+        ), patch(
+            "media.link.pipeline.aiohttp.ClientSession", return_value=mock_session
+        ), patch.object(pipe, "_parse_html", return_value=_parsed):
+            await pipe._fetch_and_parse("https://example.com", {})
+
+        _call_kwargs = mock_session.get.call_args.kwargs
+        assert _call_kwargs.get("ssl") is None, "Default fetch must NOT disable cert verification"
+
+    @pytest.mark.asyncio
+    async def test_fetch_allow_self_signed_disables_tls(self):
+        """ssl=False is used only when metadata allow_self_signed=True is explicitly set."""
+        pipe = LinkPipeline()
+        mock_session = self._make_mock_session("https://internal.example.com")
+        _parsed = {"type": "link_fetch", "confidence": 0.9}
+
+        with patch("media.link.pipeline._AIOHTTP_AVAILABLE", True), patch(
+            "media.link.pipeline._BS4_AVAILABLE", True
+        ), patch(
+            "media.link.pipeline.aiohttp.ClientSession", return_value=mock_session
+        ), patch.object(pipe, "_parse_html", return_value=_parsed):
+            await pipe._fetch_and_parse(
+                "https://internal.example.com", {"allow_self_signed": True}
+            )
+
+        _call_kwargs = mock_session.get.call_args.kwargs
+        assert _call_kwargs.get("ssl") is False, "allow_self_signed=True must set ssl=False"
 
     @pytest.mark.asyncio
     async def test_fetch_http_error(self):

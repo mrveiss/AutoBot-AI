@@ -128,7 +128,7 @@
           <div class="session-actions">
             <BaseButton
               v-if="session.status === 'active'"
-              variant="outline"
+              variant="outline-solid"
               size="sm"
               @click="pauseSession(session.id)"
             >
@@ -147,7 +147,7 @@
             </BaseButton>
 
             <BaseButton
-              variant="outline"
+              variant="outline-solid"
               size="sm"
               @click="openSession(session.id)"
             >
@@ -209,7 +209,7 @@
         </div>
 
         <div class="modal-footer">
-          <BaseButton variant="outline" @click="showCreateModal = false">
+          <BaseButton variant="outline-solid" @click="showCreateModal = false">
             {{ $t('browser.sessionManager.cancel') }}
           </BaseButton>
           <BaseButton
@@ -568,8 +568,8 @@ export default {
 
 .persistent-badge {
   padding: 4px 8px;
-  background: #dbeafe;
-  color: #1e40af;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
   border-radius: var(--radius-sm);
   font-size: 12px;
 }

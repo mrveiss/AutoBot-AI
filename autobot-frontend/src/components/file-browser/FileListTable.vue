@@ -337,11 +337,15 @@ const formatDate = formatDateTime
 }
 
 .file-table tbody tr:focus {
-  @apply outline-hidden bg-blue-50 ring-2 ring-blue-500 ring-inset;
+  @apply outline-hidden ring-2 ring-inset;
+  background: var(--color-info-bg);
+  --tw-ring-color: var(--color-primary);
 }
 
 .file-table tbody tr:focus-visible {
-  @apply outline-hidden bg-blue-50 ring-2 ring-blue-500 ring-inset;
+  @apply outline-hidden ring-2 ring-inset;
+  background: var(--color-info-bg);
+  --tw-ring-color: var(--color-primary);
 }
 
 .file-name-cell {
@@ -353,7 +357,12 @@ const formatDate = formatDateTime
 }
 
 .file-name.clickable {
-  @apply cursor-pointer text-blue-600 hover:text-blue-800 hover:underline;
+  @apply cursor-pointer hover:underline;
+  color: var(--text-link);
+}
+
+.file-name.clickable:hover {
+  color: var(--text-link-hover);
 }
 
 .file-icon {

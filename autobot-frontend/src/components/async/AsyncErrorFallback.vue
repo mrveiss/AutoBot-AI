@@ -42,7 +42,7 @@
           </BaseButton>
 
           <BaseButton
-            variant="outline"
+            variant="outline-solid"
             @click="goHome"
           >
             <i class="fas fa-home"></i>

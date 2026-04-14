@@ -21,6 +21,7 @@ from typing import Any, Dict, Optional, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from live_event_manager import publish_live_event
 from models.heartbeat import (
     AgentRuntimeState,
     AgentWakeupRequest,
@@ -190,6 +191,11 @@ class HeartbeatScheduler:
             await _append_event(session, run_id, "run_started", "Heartbeat run started")
             await session.commit()
         logger.info("Heartbeat run %s started for agent %s", run_id, agent_id)
+        await publish_live_event(
+            f"agent:{agent_id}",
+            "heartbeat_run_started",
+            {"run_id": str(run_id), "agent_id": agent_id, "trigger": trigger.value},
+        )
         return run_id, state_id, timeout
 
     async def _invoke_agent(
@@ -250,6 +256,18 @@ class HeartbeatScheduler:
                 f"Run finished with status={final_status}",
             )
             await session.commit()
+        await publish_live_event(
+            f"agent:{agent_id}",
+            "heartbeat_run_completed",
+            {
+                "run_id": str(run_id),
+                "agent_id": agent_id,
+                "status": final_status,
+                "error_message": error_msg,
+                "tokens_used": usage.get("tokens_used"),
+                "cost_usd": usage.get("cost_usd"),
+            },
+        )
         logger.info(
             "Run %s finished: status=%s agent=%s", run_id, final_status, agent_id
         )

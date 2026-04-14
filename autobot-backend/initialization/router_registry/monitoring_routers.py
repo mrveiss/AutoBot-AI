@@ -71,6 +71,9 @@ MONITORING_ROUTER_CONFIGS = [
         ["gpu-monitoring"],
         "gpu_monitoring",
     ),
+    # Issue #4069: Production diagnostic endpoints for causal inference
+    # Issue #4254: Register diagnostics router
+    ("api.diagnostics", "router", "", ["diagnostics"], "diagnostics"),
 ]
 
 

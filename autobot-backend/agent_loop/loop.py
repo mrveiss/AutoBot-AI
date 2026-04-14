@@ -24,6 +24,7 @@ import time
 import uuid
 from typing import Any, Optional
 
+from agent_loop.slack_hook import get_slack_hook
 from agent_loop.think_tool import ThinkTool
 from agent_loop.types import (
     AgentLoopConfig,
@@ -85,6 +86,8 @@ SENSITIVE_TOOLS: frozenset[str] = frozenset(
         "http_patch",
         "http_delete",
         "send_request",
+        # Code execution
+        "code_interpreter",
     }
 )
 
@@ -279,6 +282,16 @@ class AgentLoop:
 
         self._init_task_context(task_id, task_description, initial_context)
 
+        # Issue #4308: notify Slack that the agent has started
+        slack = get_slack_hook()
+        await slack.post_agent_status(
+            agent_name="AgentLoop",
+            status="started",
+            message=f"Task {task_id}: {task_description[:120]}",
+        )
+
+        _task_start = time.monotonic()
+
         try:
             # Issue #620: Use helper for plan creation
             await self._create_task_plan(task_description, initial_context)
@@ -286,7 +299,22 @@ class AgentLoop:
             results = await self._execute_main_loop()
 
             # Issue #620: Use helper for task finalization
-            return await self._finalize_task(results)
+            result = await self._finalize_task(results)
+
+            # Issue #4308: notify Slack on successful task completion
+            duration = time.monotonic() - _task_start
+            await slack.post_task_completion(
+                task_id=task_id,
+                task_title=task_description[:80],
+                agent_name="AgentLoop",
+                summary=(
+                    f"Completed {result.get('iterations', 0)} iteration(s), "
+                    f"{result.get('tools_executed', 0)} tool(s) executed."
+                ),
+                status="completed",
+                duration_seconds=duration,
+            )
+            return result
 
         except asyncio.CancelledError:
             self._state = LoopState.CANCELLED
@@ -296,6 +324,16 @@ class AgentLoop:
         except Exception as e:
             self._state = LoopState.FAILED
             logger.error("AgentLoop: Task %s failed: %s", task_id, e)
+            # Issue #4308: notify Slack on task failure
+            duration = time.monotonic() - _task_start
+            await slack.post_task_completion(
+                task_id=task_id,
+                task_title=task_description[:80],
+                agent_name="AgentLoop",
+                summary=f"Task failed: {e}",
+                status="failed",
+                duration_seconds=duration,
+            )
             raise
 
         finally:
@@ -339,6 +377,18 @@ class AgentLoop:
         self._current_phase = LoopPhase.ANALYZE_EVENTS
         events_context = await self._analyze_events()
         result.events_analyzed = len(events_context.get("events", []))
+
+        # Issue #4528: inject first_turn_note into user content on first turn.
+        # _analyze_events() sets context["first_turn_note"] on iteration 1 when
+        # first_turn_priming_enabled=True, but nothing downstream consumed it.
+        # Extract it here, append to the task description carried in events_context,
+        # then clear it so subsequent iterations are not affected.
+        first_turn_note = events_context.pop("first_turn_note", None)
+        if first_turn_note and self.config.first_turn_priming_enabled:
+            task_content = events_context.get("task_description", "")
+            events_context["task_description"] = (
+                task_content + "\n\n" + first_turn_note if task_content else first_turn_note
+            )
 
         # Phase 2: Select Tools
         self._current_phase = LoopPhase.SELECT_TOOLS
@@ -454,6 +504,17 @@ class AgentLoop:
                 e.content for e in events if e.event_type == EventType.OBSERVATION
             ][-5:],
         }
+
+        # Issue #4481: inject a first-turn context hint so the LLM knows no
+        # prior tool results exist yet.  Only added on iteration 1 (the very
+        # first call) when the feature is enabled.
+        if (
+            self.config.first_turn_priming_enabled
+            and self._iteration_count == 1
+        ):
+            context["first_turn_note"] = (
+                "Note: This is the first iteration — no tool results exist yet."
+            )
 
         return context
 
@@ -850,6 +911,19 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
             "AgentLoop: approval required for tool '%s' (approval_id=%s)",
             tool_name,
             approval_id,
+        )
+
+        # Issue #4308: mirror approval request to Slack (fire-and-forget)
+        slack = get_slack_hook()
+        await slack.request_approval(
+            approval_id=approval_id,
+            title=f"Approval required: {tool_name}",
+            description=(
+                f"Tool '{tool_name}' is requesting authorization to perform a "
+                f"sensitive operation. Reply *approve* or *reject* in this thread."
+            ),
+            approval_type="tool",
+            requested_by="AgentLoop",
         )
 
         deadline = asyncio.get_event_loop().time() + self.config.approval_timeout_seconds

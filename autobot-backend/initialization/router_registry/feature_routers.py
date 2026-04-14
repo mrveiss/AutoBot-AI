@@ -81,6 +81,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "llm_optimization",
     ),
     ("api.llm_awareness", "/llm-awareness", ["llm-awareness"], "llm_awareness"),
+    # Issue #4258: Dynamic endpoint capability discovery for LLM self-awareness
+    (
+        "api.self_capabilities",
+        "",
+        ["self-capabilities"],
+        "self_capabilities",
+    ),
     # Web research and browser automation
     (
         "api.research_browser",
@@ -142,6 +149,7 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "agents_self_improvement",
     ),
     # Code analysis and search
+    ("api.analytics_code", "/analytics/code", ["analytics", "code-analysis"], "analytics_code"),
     ("api.code_search", "/code-search", ["code-search"], "code_search"),
     (
         "api.anti_pattern",
@@ -305,12 +313,6 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "knowledge_boards",
     ),
     (
-        "api.knowledge_grounding",
-        "/api",
-        ["knowledge-grounding"],
-        "knowledge_grounding",
-    ),
-    (
         "api.knowledge_vectorization",
         "",
         ["knowledge_vectorization"],
@@ -451,7 +453,26 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["ai-documents"],
         "ai_documents",
     ),
-    # Unregistered feature routers
+    # Issue #4342: Error resilience monitoring endpoints (circuit breakers, error budgets)
+    # Router defines prefix="/api/resilience" internally — use "" here to avoid double-prefix
+    (
+        "api.error_resilience",
+        "",
+        ["resilience", "monitoring"],
+        "error_resilience",
+    ),
+    # User management (users, teams, organizations) — router defines /user-management internally
+    (
+        "api.user_management",
+        "",
+        ["user-management", "users"],
+        "user_management",
+    ),
+    # Issue #1803: Plugin manager endpoints (list, discover, load/unload/enable/disable, config)
+    ("plugin_manager", "", ["plugins"], "plugin_manager"),
+    # Issue #1803: Plugin and agent marketplace — community catalog
+    ("api.marketplace", "/marketplace", ["marketplace", "plugins"], "marketplace"),
+    # Partially wired or legacy feature routers
     ("api.chat_sessions", "", ["chat-sessions"], "chat_sessions"),
     (
         "api.diagnostics",
@@ -464,12 +485,6 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "",
         ["collaboration", "websocket", "presence"],
         "presence_ws",
-    ),
-    (
-        "api.self_capabilities",
-        "",
-        ["self-capabilities"],
-        "self_capabilities",
     ),
 ]
 

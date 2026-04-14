@@ -10,6 +10,7 @@ and approval workflows.
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import html
 import json
@@ -23,7 +24,199 @@ from utils.errors import RepairableException
 if TYPE_CHECKING:
     from .models import LLMIterationContext
 
+# Import hook emitters (Issue #4261)
+from chat_workflow.llm_handler import (
+    _emit_after_tool_execute,
+    _emit_before_tool_execute,
+    _emit_tool_error,
+)
+from chat_workflow.session_handler import (
+    _emit_approval_received,
+    _emit_approval_required,
+)
+
 logger = logging.getLogger(__name__)
+
+# Issue #4482: Default retry count for schema self-correction loop.
+_DEFAULT_SCHEMA_RETRIES = 3
+
+
+def _format_schema_validation_errors(errors: list) -> str:
+    """Format jsonschema ValidationError list into a concise field-level message.
+
+    Args:
+        errors: List of jsonschema.ValidationError instances.
+
+    Returns:
+        Human-readable error string listing each field and its problem.
+    """
+    lines = []
+    for err in errors:
+        field = ".".join(str(p) for p in err.absolute_path) or "<root>"
+        lines.append(f"  - {field}: {err.message}")
+    return "Tool argument validation failed:\n" + "\n".join(lines)
+
+
+def validate_tool_arguments(
+    tool_name: str, arguments: dict, schema: dict
+) -> dict | None:
+    """Validate *arguments* against *schema* using jsonschema.
+
+    Issue #4482: Central validation helper used by the schema self-correction
+    retry loop.  Returns None on success, or a structured error dict on failure
+    so the caller can feed it back to the model as a tool_result.
+
+    Args:
+        tool_name: Name of the tool (for context in the error message).
+        arguments: The argument dict provided by the LLM.
+        schema: JSON Schema dict (typically the tool's ``input_schema``).
+
+    Returns:
+        None when valid, or ``{"error": "...", "schema_validation_failed": True}``
+        when invalid.
+    """
+    try:
+        import jsonschema
+
+        validator = jsonschema.Draft7Validator(schema)
+        errors = sorted(validator.iter_errors(arguments), key=lambda e: list(e.path))
+        if errors:
+            msg = _format_schema_validation_errors(errors)
+            logger.info(
+                "[Issue #4482] Schema validation failed for tool %s: %s",
+                tool_name,
+                msg,
+            )
+            return {"error": msg, "schema_validation_failed": True, "tool": tool_name}
+        return None
+    except Exception as exc:
+        # If jsonschema itself fails (e.g. bad schema), log and continue without
+        # blocking execution — a broken schema should not prevent tool dispatch.
+        logger.warning(
+            "[Issue #4482] Could not run schema validation for %s: %s", tool_name, exc
+        )
+        return None
+
+
+# Issue #4529: JSON Schema definitions for built-in tools dispatched directly
+# (not via MCP).  Used by _validate_builtin_tool_arguments() so every dispatch
+# path passes through validate_tool_arguments() before execution.
+_BUILTIN_TOOL_SCHEMAS: dict[str, dict] = {
+    "execute_command": {
+        "type": "object",
+        "properties": {
+            "command": {"type": "string"},
+            "host": {"type": "string"},
+        },
+        "required": ["command"],
+    },
+    "web_search": {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string"},
+        },
+        "required": ["query"],
+    },
+    # Browser tools share a common structure: at minimum one string parameter.
+    # Each tool is registered with its specific required field.
+    "navigate": {
+        "type": "object",
+        "properties": {"url": {"type": "string"}},
+        "required": ["url"],
+    },
+    "click": {
+        "type": "object",
+        "properties": {"selector": {"type": "string"}},
+        "required": ["selector"],
+    },
+    "fill": {
+        "type": "object",
+        "properties": {
+            "selector": {"type": "string"},
+            "value": {"type": "string"},
+        },
+        "required": ["selector", "value"],
+    },
+    "select": {
+        "type": "object",
+        "properties": {
+            "selector": {"type": "string"},
+            "value": {"type": "string"},
+        },
+        "required": ["selector", "value"],
+    },
+    "hover": {
+        "type": "object",
+        "properties": {"selector": {"type": "string"}},
+        "required": ["selector"],
+    },
+    "screenshot": {
+        "type": "object",
+        "properties": {},
+    },
+    "evaluate": {
+        "type": "object",
+        "properties": {"script": {"type": "string"}},
+        "required": ["script"],
+    },
+    "get_text": {
+        "type": "object",
+        "properties": {"selector": {"type": "string"}},
+        "required": ["selector"],
+    },
+    "get_attribute": {
+        "type": "object",
+        "properties": {
+            "selector": {"type": "string"},
+            "attribute": {"type": "string"},
+        },
+        "required": ["selector", "attribute"],
+    },
+    "wait_for_selector": {
+        "type": "object",
+        "properties": {"selector": {"type": "string"}},
+        "required": ["selector"],
+    },
+}
+
+
+def _validate_builtin_tool_arguments(
+    tool_name: str, tool_call: dict[str, Any]
+) -> WorkflowMessage | None:
+    """Validate params for a direct-dispatch built-in tool. Issue #4529.
+
+    Built-in tools use the ``params`` key (not ``arguments`` like MCP tools).
+    Returns a WorkflowMessage error if validation fails, or None on success.
+    The error message mirrors the pattern used in ``_try_mcp_dispatch()`` so
+    the agent loop can feed it back as a tool_result for self-correction.
+    """
+    schema = _BUILTIN_TOOL_SCHEMAS.get(tool_name)
+    if not schema:
+        return None  # No schema defined — skip validation
+
+    params = tool_call.get("params", {})
+    schema_error = validate_tool_arguments(tool_name, params, schema)
+    if schema_error is None:
+        return None
+
+    logger.info(
+        "[Issue #4529] Schema validation failed for built-in tool %s: %s",
+        tool_name,
+        schema_error["error"],
+    )
+    return WorkflowMessage(
+        type="tool_result",
+        content=schema_error["error"],
+        metadata={
+            "tool_name": tool_name,
+            "schema_validation_failed": True,
+            "self_correction_hint": (
+                f"Fix the argument errors above and retry '{tool_name}' "
+                f"with corrected arguments."
+            ),
+        },
+    )
+
 
 # Issue #1368: Browser tool names that route to browser_mcp handlers.
 # Exported (no leading underscore) so ToolRegistry can derive its list from this
@@ -103,6 +296,30 @@ _REPAIRABLE_ERROR_PATTERNS = (
 
 # Critical error patterns that should NOT be repairable
 _CRITICAL_ERROR_PATTERNS = ["out of memory", "cannot allocate"]
+
+
+def _parse_tool_args(raw: str) -> dict:
+    """Parse tool call JSON args with a safe literal-parser fallback. (#4483)
+
+    LLMs occasionally produce near-valid JSON with trailing commas, single
+    quotes, or Python boolean/None literals that json.loads() rejects.
+    ast.literal_eval is safe: it only accepts Python literal structures and
+    raises ValueError/SyntaxError on anything else.
+    """
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        try:
+            result = ast.literal_eval(raw)  # noqa: S307 - literals only, safe
+            if isinstance(result, dict):
+                logger.warning(
+                    "Tool args parsed via ast.literal_eval fallback"
+                    " — LLM produced near-valid JSON"
+                )
+                return result
+        except (ValueError, SyntaxError):
+            pass
+        raise
 
 
 def _detect_and_store_security_output(
@@ -254,14 +471,23 @@ async def _try_mcp_dispatch(
     tool_call: dict[str, Any],
     execution_results: list[dict[str, Any]],
     role: str = "user",
+    session_id: str = "",
+    max_schema_retries: int = _DEFAULT_SCHEMA_RETRIES,
 ) -> WorkflowMessage | None:
     """Attempt to dispatch tool_name via the MCP registry. Issue #2513.
+
+    Issue #4482: Validates arguments against the tool's input_schema before
+    dispatch.  On failure the error is returned as a structured WorkflowMessage
+    so the agent loop can feed it back as a tool_result and self-correct.
+    The caller may retry up to *max_schema_retries* times (default 3).
 
     Args:
         tool_name: Name of the tool to dispatch.
         tool_call: Raw tool call dict from the LLM.
         execution_results: Accumulator list for execution results.
         role: Caller RBAC role forwarded to the dispatcher (#2629).
+        session_id: Session identifier for hook invocation (#4261).
+        max_schema_retries: Max allowed retries for schema self-correction (#4482).
 
     Returns a WorkflowMessage on success, or None if the tool is not found
     in the registry (so the caller can fall through to the unknown-tool error).
@@ -277,38 +503,108 @@ async def _try_mcp_dispatch(
         return None
 
     arguments = tool_call.get("arguments", {})
-    mcp_result = await dispatcher.dispatch(tool_name, arguments, role=role)
-    bridge = mcp_result.get("bridge", "unknown")
-    success = mcp_result.get("success", False)
-    raw_result = mcp_result.get("result", "")
 
-    # Issue #2622: Detect approval_required from MCP bridges
-    if isinstance(raw_result, dict) and raw_result.get("status") == "approval_required":
-        return _build_mcp_approval_message(
-            tool_name, bridge, raw_result, execution_results
+    # Issue #4482: Validate arguments against the tool's input_schema before
+    # dispatching.  Return a structured error WorkflowMessage so the agent
+    # loop can feed it back as a tool_result and retry.  The retry counter is
+    # owned by the caller (agent loop); here we just surface the error clearly.
+    input_schema = tool.get("input_schema", {})
+    if input_schema:
+        schema_error = validate_tool_arguments(tool_name, arguments, input_schema)
+        if schema_error is not None:
+            retries_left = max_schema_retries - tool_call.get("_schema_retry_count", 0)
+            logger.info(
+                "[Issue #4482] Schema validation error for %s (retries_left=%d): %s",
+                tool_name,
+                retries_left,
+                schema_error["error"],
+            )
+            execution_results.append(
+                {
+                    "tool": tool_name,
+                    "status": "schema_error",
+                    "error": schema_error["error"],
+                    "schema_validation_failed": True,
+                    "retries_left": retries_left,
+                }
+            )
+            return WorkflowMessage(
+                type="tool_result",
+                content=schema_error["error"],
+                metadata={
+                    "tool_name": tool_name,
+                    "schema_validation_failed": True,
+                    "retries_left": retries_left,
+                    "self_correction_hint": (
+                        f"Fix the argument errors above and retry '{tool_name}' "
+                        f"with corrected arguments. {retries_left} attempt(s) remaining."
+                    ),
+                },
+            )
+
+    # Issue #4261: Wire BEFORE_TOOL_EXECUTE hook for MCP tools
+    should_execute = await _emit_before_tool_execute(tool_name, arguments, session_id)
+    if not should_execute:
+        logger.info(
+            "[Issue #4261] Tool execution cancelled by BEFORE_TOOL_EXECUTE hook: %s",
+            tool_name,
+        )
+        return WorkflowMessage(
+            type="error",
+            content=f"Tool execution cancelled: {tool_name}",
+            metadata={"tool_name": tool_name, "cancelled_by_hook": True},
         )
 
-    result_text = str(raw_result)
-    execution_results.append(
-        {
-            "tool": tool_name,
-            "bridge": bridge,
-            "result": result_text,
-            "status": "success" if success else "error",
-        }
-    )
-    msg_type = "tool_result" if success else "error"
-    logger.info(
-        "[Issue #2513] MCP dispatch: tool=%s bridge=%s success=%s",
-        tool_name,
-        bridge,
-        success,
-    )
-    return WorkflowMessage(
-        type=msg_type,
-        content=f"[{bridge}] {result_text}",
-        metadata={"tool_name": tool_name, "bridge": bridge, "mcp_dispatch": True},
-    )
+    try:
+        mcp_result = await dispatcher.dispatch(tool_name, arguments, role=role)
+        bridge = mcp_result.get("bridge", "unknown")
+        success = mcp_result.get("success", False)
+        raw_result = mcp_result.get("result", "")
+
+        # Issue #2622: Detect approval_required from MCP bridges
+        if isinstance(raw_result, dict) and raw_result.get("status") == "approval_required":
+            return _build_mcp_approval_message(
+                tool_name, bridge, raw_result, execution_results
+            )
+
+        result_text = str(raw_result)
+
+        # Issue #4261: Wire AFTER_TOOL_EXECUTE hook to allow result modification
+        result_text = await _emit_after_tool_execute(
+            tool_name, result_text, session_id, {}
+        )
+
+        execution_results.append(
+            {
+                "tool": tool_name,
+                "bridge": bridge,
+                "result": result_text,
+                "status": "success" if success else "error",
+            }
+        )
+        msg_type = "tool_result" if success else "error"
+        logger.info(
+            "[Issue #2513] MCP dispatch: tool=%s bridge=%s success=%s",
+            tool_name,
+            bridge,
+            success,
+        )
+        return WorkflowMessage(
+            type=msg_type,
+            content=f"[{bridge}] {result_text}",
+            metadata={"tool_name": tool_name, "bridge": bridge, "mcp_dispatch": True},
+        )
+
+    except Exception as e:
+        # Issue #4261: Wire TOOL_ERROR hook to allow error handling/logging
+        await _emit_tool_error(tool_name, e, session_id, {})
+        logger.error(
+            "[Issue #2513] MCP dispatch error for tool %s: %s",
+            tool_name,
+            e,
+            exc_info=True,
+        )
+        raise
 
 
 class ToolHandlerMixin:
@@ -414,7 +710,7 @@ class ToolHandlerMixin:
             params_str = match.group(3)
             description = match.group(4).strip()
             try:
-                params = json.loads(params_str)
+                params = _parse_tool_args(params_str)
                 tool_calls.append(
                     {"name": tool_name, "params": params, "description": description}
                 )
@@ -715,6 +1011,20 @@ class ToolHandlerMixin:
         )
         yield approval_msg
 
+        # Issue #4264: Fire APPROVAL_REQUIRED hook when approval is requested
+        approval_id = terminal_session_id
+        await _emit_approval_required(
+            request_id=approval_id,
+            action=command,
+            session_id=session_id,
+            context={
+                "command": command,
+                "risk_level": result.get("risk"),
+                "reasons": result.get("reasons", []),
+                "description": description,
+            },
+        )
+
         await self._persist_approval_request(
             approval_msg, session_id, terminal_session_id
         )
@@ -732,6 +1042,19 @@ class ToolHandlerMixin:
         async for poll_result in self._poll_for_approval(terminal_session_id, command):
             approval_result, status_msg = poll_result
             if approval_result:
+                # Issue #4264: Fire APPROVAL_RECEIVED hook when approval decision is made
+                was_approved = approval_result.get("status") == "success"
+                await _emit_approval_received(
+                    request_id=approval_id,
+                    approved=was_approved,
+                    session_id=session_id,
+                    context={
+                        "command": command,
+                        "approval_status": approval_result.get("status"),
+                        "approval_comment": approval_result.get("approval_comment", ""),
+                    },
+                )
+
                 yield WorkflowMessage(
                     type="metadata_update",
                     content="",
@@ -1053,7 +1376,7 @@ class ToolHandlerMixin:
                 yield msg
         elif status == "error":
             async for msg in self._handle_command_error(
-                command, result, additional_response_parts
+                command, result, additional_response_parts, session_id
             ):
                 yield msg
 
@@ -1070,6 +1393,7 @@ class ToolHandlerMixin:
         """Process a single execute_command tool call. Issue #620.
 
         Issue #655: Wraps common errors as RepairableException for retry.
+        Issue #4261: Wires BEFORE/AFTER_TOOL_EXECUTE and TOOL_ERROR hooks.
 
         Yields:
             WorkflowMessage items
@@ -1077,43 +1401,78 @@ class ToolHandlerMixin:
         command, host, description = self._extract_command_params(tool_call)
         logger.info("[ChatWorkflowManager] Executing command: %s on %s", command, host)
 
-        result = await self._execute_terminal_command(
-            session_id=session_id, command=command, host=host, description=description
-        )
+        # Issue #4261: Wire BEFORE_TOOL_EXECUTE hook for execute_command
+        params = {"command": command, "host": host}
+        should_execute = await _emit_before_tool_execute("execute_command", params, session_id)
+        if not should_execute:
+            logger.info(
+                "[Issue #4261] Execute command cancelled by BEFORE_TOOL_EXECUTE hook: %s on %s",
+                command,
+                host,
+            )
+            yield WorkflowMessage(
+                type="error",
+                content=f"Command execution cancelled: {command}",
+                metadata={"command": command, "host": host, "cancelled_by_hook": True},
+            )
+            return
 
-        async for msg in self._dispatch_command_by_status(
-            result.get("status"),
-            session_id,
-            terminal_session_id,
-            command,
-            host,
-            result,
-            description,
-            ollama_endpoint,
-            selected_model,
-            execution_results,
-            additional_response_parts,
-        ):
-            yield msg
+        try:
+            result = await self._execute_terminal_command(
+                session_id=session_id, command=command, host=host, description=description
+            )
+
+            # Issue #4261: Wire AFTER_TOOL_EXECUTE hook for execute_command on success
+            if result.get("status") == "success":
+                stdout = result.get("stdout", "")
+                stdout = await _emit_after_tool_execute(
+                    "execute_command", stdout, session_id, {}
+                )
+
+            async for msg in self._dispatch_command_by_status(
+                result.get("status"),
+                session_id,
+                terminal_session_id,
+                command,
+                host,
+                result,
+                description,
+                ollama_endpoint,
+                selected_model,
+                execution_results,
+                additional_response_parts,
+            ):
+                yield msg
+
+        except Exception as e:
+            # Issue #4261: Wire TOOL_ERROR hook for execute_command
+            await _emit_tool_error("execute_command", e, session_id, {})
+            logger.error("[ChatWorkflowManager] Command execution error: %s", e, exc_info=True)
+            raise
 
     async def _handle_command_error(
         self,
         command: str,
         result: dict[str, Any],
         additional_response_parts: list,
+        session_id: str = "",
     ):
         """Handle command execution error (Issue #665: extracted helper).
 
         Classifies error as repairable or critical and yields appropriate message.
+        Issue #4262: Emit REPAIRABLE_ERROR and CRITICAL_ERROR hooks.
 
         Args:
             command: The command that failed
             result: Execution result dict with error/stderr
             additional_response_parts: list to append context to
+            session_id: Session identifier for hook context
 
         Yields:
             WorkflowMessage with error details
         """
+        from chat_workflow.llm_handler import _emit_critical_error, _emit_repairable_error
+
         error = result.get("error", "Unknown error")
         stderr = result.get("stderr", "")
         repairable_error = self._classify_command_error(command, error, stderr)
@@ -1123,6 +1482,10 @@ class ToolHandlerMixin:
                 "[Issue #655] Repairable error for command '%s': %s",
                 command,
                 repairable_error.message,
+            )
+            # Emit REPAIRABLE_ERROR hook
+            await _emit_repairable_error(
+                Exception(repairable_error.message), session_id, {"command": command, "suggestion": repairable_error.suggestion}
             )
             additional_response_parts.append(f"\n\n{repairable_error.to_llm_context()}")
             yield WorkflowMessage(
@@ -1136,6 +1499,10 @@ class ToolHandlerMixin:
                 },
             )
         else:
+            # Emit CRITICAL_ERROR hook for non-repairable errors
+            await _emit_critical_error(
+                Exception(error), session_id, {"command": command}
+            )
             additional_response_parts.append(
                 f"\n\n❌ Command execution failed: {error}"
             )
@@ -1274,11 +1641,13 @@ class ToolHandlerMixin:
         self,
         tool_call: dict[str, Any],
         execution_results: list[dict[str, Any]],
+        session_id: str = "",
     ):
         """Execute a browser tool call via browser_mcp. Issue #1368.
 
         Routes navigate/click/screenshot/etc. to the Browser VM through
         the existing browser_mcp.send_to_browser_vm() function.
+        Issue #4261: Wires BEFORE/AFTER_TOOL_EXECUTE and TOOL_ERROR hooks.
 
         Yields:
             WorkflowMessage for browser tool execution stages
@@ -1308,14 +1677,37 @@ class ToolHandlerMixin:
                 )
                 return
 
+            # Issue #4261: Wire BEFORE_TOOL_EXECUTE hook for browser tools
+            should_execute = await _emit_before_tool_execute(tool_name, params, session_id)
+            if not should_execute:
+                logger.info(
+                    "[Issue #4261] Browser tool execution cancelled by hook: %s",
+                    tool_name,
+                )
+                yield WorkflowMessage(
+                    type="error",
+                    content=f"Browser tool execution cancelled: {tool_name}",
+                    metadata={"tool": tool_name, "cancelled_by_hook": True},
+                )
+                return
+
             from api.browser_mcp import send_to_browser_vm
 
             result = await send_to_browser_vm(tool_name, params)
+
+            # Issue #4261: Wire AFTER_TOOL_EXECUTE hook for browser tools
+            result_text = str(result)
+            result_text = await _emit_after_tool_execute(
+                tool_name, result_text, session_id, {}
+            )
+
             yield self._record_browser_success(
                 tool_name, params, result, execution_results
             )
 
         except Exception as e:
+            # Issue #4261: Wire TOOL_ERROR hook for browser tools
+            await _emit_tool_error(tool_name, e, session_id, {})
             logger.error("[Issue #1368] Browser tool '%s' failed: %s", tool_name, e)
             execution_results.append(
                 {
@@ -1420,11 +1812,13 @@ class ToolHandlerMixin:
         self,
         tool_call: dict[str, Any],
         execution_results: list[dict[str, Any]],
+        session_id: str = "",
     ):
         """Execute a web search via browser VM. Issue #2306.
 
         Abstracts the multi-step browser flow (navigate → fill → click → get_text)
         into a single tool call so small models don't need to orchestrate it.
+        Issue #4261: Wires BEFORE/AFTER_TOOL_EXECUTE and TOOL_ERROR hooks.
 
         Yields:
             WorkflowMessage for search execution stages
@@ -1453,8 +1847,27 @@ class ToolHandlerMixin:
             metadata={"tool": "web_search", "query": query},
         )
 
+        # Issue #4261: Wire BEFORE_TOOL_EXECUTE hook for web_search
+        should_execute = await _emit_before_tool_execute("web_search", params, session_id)
+        if not should_execute:
+            logger.info(
+                "[Issue #4261] Web search cancelled by hook"
+            )
+            yield WorkflowMessage(
+                type="error",
+                content="Web search execution cancelled",
+                metadata={"tool": "web_search", "cancelled_by_hook": True},
+            )
+            return
+
         try:
             results = await self._execute_web_search(query)
+
+            # Issue #4261: Wire AFTER_TOOL_EXECUTE hook for web_search
+            results = await _emit_after_tool_execute(
+                "web_search", results, session_id, {}
+            )
+
             execution_results.append(
                 {"tool": "web_search", "status": "success", "output": results}
             )
@@ -1468,6 +1881,8 @@ class ToolHandlerMixin:
                 },
             )
         except Exception as e:
+            # Issue #4261: Wire TOOL_ERROR hook for web_search
+            await _emit_tool_error("web_search", e, session_id, {})
             logger.error("[Issue #2306] Web search failed: %s", e)
             execution_results.append(
                 {"tool": "web_search", "status": "error", "error": "Web search failed"}
@@ -1627,7 +2042,20 @@ class ToolHandlerMixin:
         if tool_name in BROWSER_TOOL_NAMES:
             if ctx is not None:
                 ctx.consecutive_invalid_tool_calls = 0
-            async for msg in self._handle_browser_tool(tool_call, execution_results):
+            # Issue #4529: Validate arguments against schema before dispatch.
+            validation_msg = _validate_builtin_tool_arguments(tool_name, tool_call)
+            if validation_msg is not None:
+                execution_results.append(
+                    {
+                        "tool": tool_name,
+                        "status": "schema_error",
+                        "error": validation_msg.content,
+                        "schema_validation_failed": True,
+                    }
+                )
+                yield validation_msg
+                return
+            async for msg in self._handle_browser_tool(tool_call, execution_results, session_id):
                 yield msg
             return
 
@@ -1635,19 +2063,45 @@ class ToolHandlerMixin:
         if tool_name == "web_search":
             if ctx is not None:
                 ctx.consecutive_invalid_tool_calls = 0
-            async for msg in self._handle_web_search_tool(tool_call, execution_results):
+            # Issue #4529: Validate arguments against schema before dispatch.
+            validation_msg = _validate_builtin_tool_arguments(tool_name, tool_call)
+            if validation_msg is not None:
+                execution_results.append(
+                    {
+                        "tool": tool_name,
+                        "status": "schema_error",
+                        "error": validation_msg.content,
+                        "schema_validation_failed": True,
+                    }
+                )
+                yield validation_msg
+                return
+            async for msg in self._handle_web_search_tool(tool_call, execution_results, session_id):
                 yield msg
             return
 
         if tool_name != "execute_command":
             async for msg in self._dispatch_mcp_or_unknown(
-                tool_name, tool_call, execution_results, ctx, role
+                tool_name, tool_call, execution_results, ctx, role, session_id
             ):
                 yield msg
             return
 
         if ctx is not None:
             ctx.consecutive_invalid_tool_calls = 0
+        # Issue #4529: Validate arguments against schema before dispatch.
+        validation_msg = _validate_builtin_tool_arguments(tool_name, tool_call)
+        if validation_msg is not None:
+            execution_results.append(
+                {
+                    "tool": tool_name,
+                    "status": "schema_error",
+                    "error": validation_msg.content,
+                    "schema_validation_failed": True,
+                }
+            )
+            yield validation_msg
+            return
         async for msg in self._dispatch_execute_command(
             tool_call,
             session_id,
@@ -1666,15 +2120,17 @@ class ToolHandlerMixin:
         execution_results: list[dict[str, Any]],
         ctx: "LLMIterationContext" | None,
         role: str,
+        session_id: str = "",
     ):
         """Try MCP dispatch; yield unknown-tool error if not registered. Issue #2513/#2629.
 
         Extracted from _dispatch_tool_call (#2735) to keep parent under 65 lines.
+        Issue #4261: Added session_id for hook invocation.
         """
         # Issue #2513: Check MCP registry before reporting unknown tool.
         # Issue #2629: Forward RBAC role so admin-only tools are enforced.
         mcp_result = await _try_mcp_dispatch(
-            tool_name, tool_call, execution_results, role=role
+            tool_name, tool_call, execution_results, role=role, session_id=session_id
         )
         if mcp_result is not None:
             yield mcp_result

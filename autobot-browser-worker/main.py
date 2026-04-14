@@ -15,6 +15,8 @@ from src.automation import BrowserAutomationSession
 
 logger = logging.getLogger(__name__)
 
+__all__ = ["main"]
+
 
 def main():
     """Browser worker entry point."""

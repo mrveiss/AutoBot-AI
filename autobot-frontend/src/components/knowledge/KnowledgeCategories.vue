@@ -73,7 +73,7 @@
     <div v-else class="browser-view">
       <div class="browser-header-bar">
         <BaseButton
-          variant="outline"
+          variant="outline-solid"
           @click="backToCategories"
           class="back-btn"
         >

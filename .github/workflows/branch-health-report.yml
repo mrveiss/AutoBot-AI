@@ -91,7 +91,7 @@ jobs:
           echo "open_issues=$open_issues" >> "$GITHUB_OUTPUT"
 
       - name: Create health report issue
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           TOTAL_LOCAL: ${{ steps.metrics.outputs.total_local }}
           TOTAL_REMOTE: ${{ steps.metrics.outputs.total_remote }}

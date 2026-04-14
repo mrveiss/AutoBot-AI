@@ -19,8 +19,11 @@ logger = logging.getLogger(__name__)
 
 
 def _extract_response_text(result: Dict[str, Any]) -> str:
-    """Pull the human-readable response from an orchestrator result dict."""
-    for key in ("response", "message", "text", "output"):
+    """Pull the human-readable response from an orchestrator result dict.
+
+    Issue #4501: include "response_text" key used by ChatAgent._build_success_response.
+    """
+    for key in ("response", "response_text", "message", "text", "output"):
         value = result.get(key)
         if value and isinstance(value, str):
             return value
@@ -29,7 +32,7 @@ def _extract_response_text(result: Dict[str, Any]) -> str:
 
 def _extract_routing_metadata(result: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Extract non-response metadata (agent used, timing, etc.) from result."""
-    skip = {"response", "message", "text", "output"}
+    skip = {"response", "response_text", "message", "text", "output"}
     meta = {k: v for k, v in result.items() if k not in skip}
     return meta if meta else None
 
@@ -50,6 +53,9 @@ async def execute_a2a_task(
     """
     manager = get_task_manager()
     manager.update_state(task_id, TaskState.WORKING)
+    manager.publish_event(
+        task_id, {"event": "state_change", "state": "working", "task_id": task_id}
+    )
 
     try:
         # Late import to avoid circular deps at module load time
@@ -63,20 +69,28 @@ async def execute_a2a_task(
 
         # Artifact 1: primary text response
         response_text = _extract_response_text(result)
-        manager.add_artifact(
+        artifact_text = TaskArtifact(artifact_type="text", content=response_text)
+        manager.add_artifact(task_id, artifact_text)
+        manager.publish_event(
             task_id,
-            TaskArtifact(artifact_type="text", content=response_text),
+            {"event": "artifact_added", "artifact_type": "text", "task_id": task_id},
         )
 
         # Artifact 2: routing metadata (agent used, model, timing, etc.)
         metadata = _extract_routing_metadata(result)
         if metadata:
-            manager.add_artifact(
+            artifact_meta = TaskArtifact(artifact_type="json", content=metadata)
+            manager.add_artifact(task_id, artifact_meta)
+            manager.publish_event(
                 task_id,
-                TaskArtifact(artifact_type="json", content=metadata),
+                {"event": "artifact_added", "artifact_type": "json", "task_id": task_id},
             )
 
         manager.update_state(task_id, TaskState.COMPLETED)
+        manager.publish_event(
+            task_id,
+            {"event": "state_change", "state": "completed", "terminal": True, "task_id": task_id},
+        )
         logger.info("A2A task %s completed successfully", task_id)
 
     except Exception as exc:
@@ -86,3 +100,13 @@ async def execute_a2a_task(
             TaskArtifact(artifact_type="error", content=str(exc)),
         )
         manager.update_state(task_id, TaskState.FAILED, message=str(exc))
+        manager.publish_event(
+            task_id,
+            {
+                "event": "state_change",
+                "state": "failed",
+                "terminal": True,
+                "message": str(exc),
+                "task_id": task_id,
+            },
+        )

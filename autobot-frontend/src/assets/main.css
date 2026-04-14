@@ -46,6 +46,40 @@
   }
 }
 
+/* ============================================================
+ * MOBILE RESPONSIVE UTILITIES (#1804)
+ * Touch-friendly and viewport-adaptive rules for phones/tablets
+ * ============================================================ */
+
+/* Ensure interactive elements meet WCAG 2.5.5 minimum 44×44px touch target */
+@media (max-width: 1024px) {
+  /* Buttons and links in nav already have lg:hidden / lg:block logic in Tailwind.
+   * This fills in any element that needs a bigger tap area on touch screens. */
+  button,
+  [role="button"],
+  a {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  /* Chat interface: make scrollable containers work properly with touch */
+  .overflow-y-auto,
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Extra-small viewports: tighten page-header padding */
+@media (max-width: 480px) {
+  .page-header {
+    padding: var(--spacing-3) var(--spacing-3) var(--spacing-2);
+  }
+
+  .page-actions {
+    flex-wrap: wrap;
+  }
+}
+
 /* RTL layout support (#1337) */
 [dir="rtl"] .chat-sidebar {
   border-right: none;

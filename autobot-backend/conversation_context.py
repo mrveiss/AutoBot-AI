@@ -12,14 +12,17 @@ Features:
 - Analyze sentiment and confusion signals
 - Track conversation length and engagement
 - Identify active tasks and workflows
+- Post-completion skill extraction hook (#4338)
 
 Related Issue: #159 - Prevent Premature Conversation Endings
+Related Issue: #4338 - Autonomous skill extraction from conversations
 """
 
+import asyncio
 import logging
 import re
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +57,7 @@ class ConversationContextAnalyzer:
     Analyzes conversation history to provide context for intent classification.
 
     Fast, lightweight analysis focused on preventing premature conversation endings.
+    Also triggers post-completion skill extraction for self-improving agents (#4338).
     """
 
     # Question patterns in assistant messages
@@ -94,6 +98,16 @@ class ConversationContextAnalyzer:
         "installing",
         "deploying",
     }
+
+    def __init__(self, on_conversation_complete: Optional[Callable] = None):
+        """
+        Initialize analyzer with optional completion hook.
+
+        Args:
+            on_conversation_complete: Async callback for post-completion skill extraction.
+                Called with (session_id, conversation_history) when conversation ends.
+        """
+        self.on_conversation_complete = on_conversation_complete
 
     def analyze(
         self,
@@ -257,3 +271,33 @@ class ConversationContextAnalyzer:
                 return topic
 
         return "general"
+
+    def trigger_skill_extraction_async(
+        self, session_id: str, conversation_history: List[Dict[str, str]]
+    ) -> None:
+        """
+        Trigger post-completion skill extraction (non-blocking).
+
+        Called when conversation ends. If on_conversation_complete callback is set,
+        enqueue it as a background task to avoid blocking the response.
+
+        Args:
+            session_id: Session ID for tracking
+            conversation_history: Full conversation history
+        """
+        if not self.on_conversation_complete:
+            return
+
+        try:
+            # Fire-and-forget: schedule as background task
+            asyncio.create_task(
+                self.on_conversation_complete(session_id, conversation_history)
+            )
+            logger.debug(
+                "Enqueued skill extraction for session %s (%d messages)",
+                session_id,
+                len(conversation_history),
+            )
+        except RuntimeError as e:
+            # Might fail if no event loop — log and continue
+            logger.debug("Could not enqueue skill extraction: %s", e)

@@ -197,9 +197,22 @@ class Extension:
             None (modify ctx.data directly)
         """
 
+    async def on_before_prompt_build(self, ctx: HookContext) -> None:
+        """
+        Called before building the prompt.
+
+        Use to prepare context or validate inputs before prompt construction.
+
+        Args:
+            ctx: Hook context with context information
+
+        Returns:
+            None (modify ctx.data directly)
+        """
+
     async def on_after_prompt_build(self, ctx: HookContext) -> Optional[str]:
         """
-        Called after system prompt is built.
+        Called after prompt is built and before being sent to the LLM.
 
         Use to modify or append to the prompt.
 

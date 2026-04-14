@@ -1,0 +1,69 @@
+metadata:
+  category: rss_tools
+  description: RSS and Atom feed parsing and monitoring tools
+  last_updated: "2024-01-01T00:00:00"
+  version: "1.0.0"
+
+tools:
+  - name: feedparser
+    type: feed_parser
+    purpose: Parse RSS and Atom feeds programmatically via Python library
+    installation:
+      pip: pip install feedparser
+      apt: sudo apt-get install python3-feedparser
+      yum: sudo yum install python3-feedparser
+    usage:
+      parse_feed: "python3 -c \"import feedparser; d = feedparser.parse('{url}'); print([e.title for e in d.entries])\""
+      fetch_entries: "python3 -c \"import feedparser, json; d = feedparser.parse('{url}'); print(json.dumps([{'title': e.title, 'link': e.link, 'published': e.get('published', '')} for e in d.entries[:10]], indent=2))\""
+      feed_info: "python3 -c \"import feedparser; d = feedparser.parse('{url}'); print(d.feed.title, d.feed.get('description', ''))\""
+    common_examples:
+      - description: List titles from an RSS feed
+        command: "python3 -c \"import feedparser; d = feedparser.parse('https://news.ycombinator.com/rss'); print('\\n'.join(e.title for e in d.entries[:10]))\""
+        expected_output: "Top 10 Hacker News story titles"
+      - description: Get entries as JSON with metadata
+        command: "python3 -c \"import feedparser, json; d = feedparser.parse('https://feeds.feedburner.com/TechCrunch'); print(json.dumps([{'title': e.title, 'link': e.link, 'published': e.get('published', '')} for e in d.entries[:5]], indent=2))\""
+        expected_output: "JSON array of 5 most recent entries with title, link, date"
+      - description: Check feed type and channel info
+        command: "python3 -c \"import feedparser; d = feedparser.parse('{url}'); print('Version:', d.version, '\\nTitle:', d.feed.get('title'))\""
+        expected_output: "Feed version (rss20, atom10, etc.) and channel title"
+      - description: Get full entry content
+        command: "python3 -c \"import feedparser; d = feedparser.parse('{url}'); e = d.entries[0]; print(e.get('summary', e.get('description', 'No content')))\""
+        expected_output: "HTML or text summary of the first entry"
+    troubleshooting:
+      - problem: "Empty entries list"
+        solution: "Check d.bozo and d.bozo_exception for parse errors; feed may be malformed"
+      - problem: "Feed requires authentication"
+        solution: "Use feedparser.parse(url, handlers=[auth_handler]) or pass credentials in URL"
+      - problem: "SSL certificate error"
+        solution: "feedparser respects system SSL; use requests with verify=False and pass response to feedparser.parse(text)"
+      - problem: "Entry date missing"
+        solution: "Use e.get('published', e.get('updated', '')) for fallback; not all feeds include dates"
+    entry_fields:
+      - "title: Entry headline"
+      - "link: URL to full article"
+      - "summary / description: Entry excerpt or full text"
+      - "published / updated: Date string"
+      - "author: Author name"
+      - "tags: List of category/tag objects"
+      - "content: Full content (Atom feeds)"
+    related_tools: ["atoma", "wget", "curl", "jina-reader"]
+
+  - name: atoma
+    type: feed_parser
+    purpose: Lightweight RSS/Atom feed parser with typed Python objects
+    installation:
+      pip: pip install atoma
+    usage:
+      parse_atom: "python3 -c \"import atoma, requests; feed = atoma.parse_atom_bytes(requests.get('{url}').content); print([e.title.value for e in feed.entries])\""
+      parse_rss: "python3 -c \"import atoma, requests; feed = atoma.parse_rss_bytes(requests.get('{url}').content); print([i.title for i in feed.channel.items])\""
+    common_examples:
+      - description: Parse Atom feed entries
+        command: "python3 -c \"import atoma, requests; feed = atoma.parse_atom_bytes(requests.get('https://github.com/mrveiss/AutoBot-AI/releases.atom').content); print([e.title.value for e in feed.entries[:5]])\""
+        expected_output: "Last 5 GitHub release names"
+      - description: Parse RSS feed items
+        command: "python3 -c \"import atoma, requests; feed = atoma.parse_rss_bytes(requests.get('https://news.ycombinator.com/rss').content); print([i.title for i in feed.channel.items[:5]])\""
+        expected_output: "Top 5 Hacker News story titles"
+    troubleshooting:
+      - problem: "ParseError for mixed RSS/Atom feeds"
+        solution: "Try feedparser instead — it auto-detects format and handles malformed feeds better"
+    related_tools: ["feedparser", "curl", "requests"]

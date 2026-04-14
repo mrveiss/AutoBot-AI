@@ -68,6 +68,20 @@ except (ImportError, ModuleNotFoundError):
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    "CircuitState",
+    "WorkerState",
+    "NPUInferenceRequest",
+    "NPUWorkerClient",
+    "NPUWorkerPool",
+    "NPUTaskQueue",
+    "load_worker_config",
+    "get_npu_client",
+    "get_npu_queue",
+    "get_npu_pool",
+    "process_with_npu_fallback",
+]
+
 # Issue #255: Enable authenticated client for service-to-service communication
 # Set to False to fall back to unauthenticated mode (for development/testing)
 USE_AUTHENTICATED_CLIENT = True

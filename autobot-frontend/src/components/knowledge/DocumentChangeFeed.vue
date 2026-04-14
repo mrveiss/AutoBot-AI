@@ -191,11 +191,11 @@
 
     <!-- Actions -->
     <div class="feed-actions" v-if="recentChanges.length > 0">
-      <BaseButton variant="outline" size="sm" @click="handleClearChanges">
+      <BaseButton variant="outline-solid" size="sm" @click="handleClearChanges">
         <i class="fas fa-trash"></i>
         {{ $t('knowledge.changeFeed.clearHistory') }}
       </BaseButton>
-      <BaseButton variant="outline" size="sm" @click="handleExportChanges">
+      <BaseButton variant="outline-solid" size="sm" @click="handleExportChanges">
         <i class="fas fa-download"></i>
         {{ $t('knowledge.changeFeed.exportChanges') }}
       </BaseButton>

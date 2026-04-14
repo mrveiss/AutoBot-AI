@@ -119,7 +119,7 @@
       </BaseButton>
 
       <BaseButton
-        variant="outline"
+        variant="outline-solid"
         @click="fetchStats"
         :disabled="isLoading"
       >

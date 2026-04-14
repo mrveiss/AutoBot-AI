@@ -93,12 +93,32 @@ const router = createRouter({
       path: '/maintenance',
       name: 'maintenance',
       component: () => import('@/views/MaintenanceView.vue'),
-      meta: { title: 'Maintenance' }
+      meta: { title: 'Maintenance' },
+      children: [
+        // Issue #840, #1230: Updates tabs — moved from standalone /updates into maintenance
+        {
+          path: 'updates',
+          name: 'maintenance-updates',
+          component: () => import('@/views/UpdatesView.vue'),
+          meta: { title: 'Updates', parent: 'maintenance' },
+          beforeEnter: (to) => {
+            if (!to.params.tab) {
+              return { ...to, params: { ...to.params, tab: 'system' }, replace: true }
+            }
+          },
+        },
+        {
+          path: 'updates/:tab',
+          name: 'maintenance-updates-tab',
+          component: () => import('@/views/UpdatesView.vue'),
+          meta: { title: 'Updates', parent: 'maintenance' }
+        },
+      ]
     },
     {
-      // Issue #741: Code sync — redirects to /updates/code-sync (Issue #1230)
+      // Issue #741: Code sync — backwards compat redirect
       path: '/code-sync',
-      redirect: '/updates/code-sync',
+      redirect: '/maintenance/updates/code-sync',
     },
     {
       // Issue #760: Agent management - local + external agents
@@ -293,43 +313,36 @@ const router = createRouter({
           component: () => import('@/views/monitoring/admin/AdminMonitoringView.vue'),
           meta: { title: 'Admin Dashboard', parent: 'monitoring', admin: true }
         },
-      ]
-    },
-    {
-      // Issue #752: Comprehensive performance monitoring
-      path: '/performance',
-      name: 'performance',
-      component: () => import('@/views/PerformanceView.vue'),
-      meta: { title: 'Performance' },
-      children: [
+        // Issue #752: Performance — moved from standalone /performance into monitoring
         {
-          path: '',
-          name: 'performance-default',
-          redirect: '/performance/overview'
+          path: 'performance',
+          name: 'monitoring-performance',
+          component: () => import('@/views/PerformanceView.vue'),
+          meta: { title: 'Performance', parent: 'monitoring' }
         },
         {
-          path: 'overview',
-          name: 'performance-overview',
+          path: 'performance/overview',
+          name: 'monitoring-performance-overview',
           component: () => import('@/views/performance/PerformanceOverview.vue'),
-          meta: { title: 'Performance Overview', parent: 'performance' }
+          meta: { title: 'Performance Overview', parent: 'monitoring' }
         },
         {
-          path: 'traces',
-          name: 'performance-traces',
+          path: 'performance/traces',
+          name: 'monitoring-performance-traces',
           component: () => import('@/views/performance/TracingView.vue'),
-          meta: { title: 'Distributed Traces', parent: 'performance' }
+          meta: { title: 'Distributed Traces', parent: 'monitoring' }
         },
         {
-          path: 'slos',
-          name: 'performance-slos',
+          path: 'performance/slos',
+          name: 'monitoring-performance-slos',
           component: () => import('@/views/performance/SLODashboard.vue'),
-          meta: { title: 'SLO Dashboard', parent: 'performance' }
+          meta: { title: 'SLO Dashboard', parent: 'monitoring' }
         },
         {
-          path: 'alerts',
-          name: 'performance-alerts',
+          path: 'performance/alerts',
+          name: 'monitoring-performance-alerts',
           component: () => import('@/views/performance/AlertRulesView.vue'),
-          meta: { title: 'Alert Rules', parent: 'performance' }
+          meta: { title: 'Alert Rules', parent: 'monitoring' }
         },
       ]
     },
@@ -343,18 +356,6 @@ const router = createRouter({
       beforeEnter: (to) => {
         if (!to.params.tab) {
           return { name: 'orchestration', params: { tab: 'per-node' }, replace: true }
-        }
-      },
-    },
-    {
-      // Issue #840, #1230: Updates — system + code-sync tabs
-      path: '/updates/:tab?',
-      name: 'updates',
-      component: () => import('@/views/UpdatesView.vue'),
-      meta: { title: 'Updates' },
-      beforeEnter: (to) => {
-        if (!to.params.tab) {
-          return { name: 'updates', params: { tab: 'system' }, replace: true }
         }
       },
     },

@@ -26,10 +26,21 @@ interface ChatInitData {
   user_preferences: Record<string, unknown>;
 }
 
+interface ApiResponse<T = unknown> {
+  // data is null when the API call failed (distinguishes from data:[] which means
+  // the backend returned 0 items successfully). See issue #4353.
+  data?: T | null;
+  error?: string;
+  // Issue #4352: intentional_empty signals the backend confirmed 0 sessions
+  // (vs. an API failure that returns empty data). Frontend uses this to decide
+  // whether to clear local sessions or preserve them as a defensive fallback.
+  intentional_empty?: boolean;
+}
+
 interface FallbackResults {
-  chat_sessions: Record<string, unknown> | Record<string, unknown>[];
-  system_health: Record<string, unknown>;
-  settings: Record<string, unknown>;
+  chat_sessions: ApiResponse<Record<string, unknown>[]>;
+  system_health: ApiResponse<Record<string, unknown>>;
+  settings: ApiResponse<Record<string, unknown>>;
 }
 
 interface BatchRequest {
@@ -93,11 +104,50 @@ export class BatchApiService {
     }
   }
 
-  private extractSessionsList(response: unknown): unknown[] {
+  private extractSessionsList(response: unknown): unknown[] | null {
     if (Array.isArray(response)) return response;
     const r = response as Record<string, unknown> | null;
     const data = r?.data as Record<string, unknown> | undefined;
-    return (data?.sessions || data || (r as Record<string, unknown>)?.sessions || []) as unknown[];
+    // Prefer explicit sessions key; fall through to data object only if it is an array
+    const sessions = data?.sessions ?? r?.sessions;
+    if (sessions !== undefined) return sessions as unknown[];
+    if (Array.isArray(data)) return data;
+    // Response has no recognisable session structure — signal parse failure
+    return null;
+  }
+
+  /** Issue #4352: Extract intentional_empty flag from backend chat-sessions response. */
+  private extractIntentionalEmpty(response: unknown): boolean {
+    if (!response || typeof response !== 'object') return false;
+    const r = response as Record<string, unknown>;
+    // Backend returns: { sessions, count, intentional_empty } (no extra .data wrapper)
+    const data = r.data as Record<string, unknown> | undefined;
+    return Boolean(data?.intentional_empty ?? r.intentional_empty);
+  }
+
+  /** Issue #4353: Build chat_sessions ApiResponse, distinguishing API errors from
+   *  valid empty-session lists. Returns { error } when the API call failed or the
+   *  response has no recognisable sessions structure; returns { data, intentional_empty }
+   *  when the backend positively confirmed the sessions list (including empty). */
+  private buildChatSessionsResult(
+    result: PromiseSettledResult<Record<string, unknown>>
+  ): ApiResponse<Record<string, unknown>[]> {
+    if (result.status === 'rejected') {
+      const reason = (result as PromiseRejectedResult).reason;
+      return { data: null, error: reason?.message || 'api_failed' };
+    }
+
+    const sessions = this.extractSessionsList(result.value);
+    if (sessions === null) {
+      // Fulfilled but response structure unrecognisable — treat as silent API failure
+      logger.warn('getChatList response has no sessions structure; treating as api_failed');
+      return { data: null, error: 'api_failed' };
+    }
+
+    return {
+      data: sessions as Record<string, unknown>[],
+      intentional_empty: this.extractIntentionalEmpty(result.value),
+    };
   }
 
   async fallbackChatInitialization(): Promise<FallbackResults> {
@@ -113,17 +163,17 @@ export class BatchApiService {
       this.apiClient.getSettings()
     ]);
 
+    const chatSessionsApiResult = this.buildChatSessionsResult(chatSessionsResult);
+
     const results: FallbackResults = {
-      chat_sessions: chatSessionsResult.status === 'fulfilled'
-        ? this.extractSessionsList(chatSessionsResult.value)
-        : { error: (chatSessionsResult as PromiseRejectedResult).reason?.message || 'Failed to load', sessions: [] },
+      chat_sessions: chatSessionsApiResult,
 
       system_health: systemHealthResult.status === 'fulfilled'
-        ? systemHealthResult.value as Record<string, unknown>
-        : { error: (systemHealthResult as PromiseRejectedResult).reason?.message || 'Failed to load', status: 'unknown' },
+        ? { data: systemHealthResult.value as Record<string, unknown> }
+        : { error: (systemHealthResult as PromiseRejectedResult).reason?.message || 'Failed to load' },
 
       settings: settingsResult.status === 'fulfilled'
-        ? settingsResult.value as Record<string, unknown>
+        ? { data: settingsResult.value as Record<string, unknown> }
         : { error: (settingsResult as PromiseRejectedResult).reason?.message || 'Failed to load' }
     };
 

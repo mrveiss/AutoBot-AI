@@ -153,7 +153,8 @@ ANALYTICS_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["analytics-maintenance", "analytics", "bi"],
         "analytics_maintenance",
     ),
-    # Unregistered analytics routers
+    # Issue #4252: Registered analytics routers (previously flagged as unregistered)
+    # Issue #4251: analytics_code moved to feature_routers.py
     (
         "api.analytics_agents",
         "/analytics/agents",
@@ -165,12 +166,6 @@ ANALYTICS_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "/analytics/behavior",
         ["analytics", "behavior"],
         "analytics_behavior",
-    ),
-    (
-        "api.analytics_code",
-        "/analytics/code",
-        ["analytics", "code-analysis"],
-        "analytics_code",
     ),
     (
         "api.analytics_cost",

@@ -82,11 +82,21 @@ defineExpose({
 }
 
 .visible-file-input {
-  @apply flex-1 min-w-[150px] text-sm text-autobot-text-muted py-0 file:mr-2 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100;
+  @apply flex-1 min-w-[150px] text-sm text-autobot-text-muted py-0 file:mr-2 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium;
+}
+
+.visible-file-input::file-selector-button {
+  background: var(--color-info-bg);
+  color: var(--color-info);
+}
+
+.visible-file-input:hover::file-selector-button {
+  filter: brightness(1.1);
 }
 
 /* Drag and drop styling */
 .file-upload-section.drag-over {
-  @apply border-blue-400 bg-blue-50;
+  border-color: var(--color-primary);
+  background: var(--color-info-bg);
 }
 </style>

@@ -7,7 +7,7 @@
         <h3><i class="fas fa-desktop"></i> {{ $t('manpage.manager.title') }}</h3>
         <BaseButton
           size="sm"
-          variant="outline"
+          variant="outline-solid"
           @click="refreshMachineProfile"
           :disabled="loading?.profile"
         >
@@ -64,7 +64,7 @@
         <h3><i class="fas fa-chart-bar"></i> {{ $t('manpage.manager.integrationStatus') }}</h3>
         <BaseButton
           size="sm"
-          variant="outline"
+          variant="outline-solid"
           @click="refreshIntegrationStatus"
           :disabled="loading?.status"
         >
@@ -180,7 +180,7 @@
           <h3><i class="fas fa-tasks"></i> {{ $t('manpage.manager.progressTitle') }}</h3>
           <BaseButton
             size="sm"
-            variant="outline"
+            variant="outline-solid"
             @click="showProgressTracking = false"
           >
             <i class="fas fa-times"></i>

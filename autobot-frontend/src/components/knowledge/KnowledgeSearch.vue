@@ -527,7 +527,8 @@ const clearResults = () => {
 }
 
 .clear-filter-button {
-  @apply p-2 text-autobot-text-muted hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors;
+  @apply p-2 text-autobot-text-muted rounded-lg transition-colors;
+  &:hover { color: var(--color-error); background: var(--color-error-bg); }
 }
 
 .loading-indicator {
@@ -535,19 +536,30 @@ const clearResults = () => {
 }
 
 .active-filter-badge {
-  @apply inline-block mt-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full;
+  @apply inline-block mt-2 px-2 py-1 text-xs font-medium rounded-full;
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .categories-error {
-  @apply mt-2 p-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center gap-2;
+  @apply mt-2 p-2 rounded-lg text-sm flex items-center gap-2;
+  background: var(--color-error-bg);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: var(--color-error);
 }
 
 .categories-error i {
-  @apply text-red-500;
+  color: var(--color-error);
 }
 
 .retry-button {
-  @apply ml-auto px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors flex items-center gap-1;
+  @apply ml-auto px-2 py-1 text-xs rounded transition-colors flex items-center gap-1;
+  background: var(--color-error-bg);
+  color: var(--color-error);
+}
+
+.retry-button:hover {
+  background: var(--color-error-bg-hover);
 }
 
 /* Issue #685: Access Level Filter */
@@ -565,7 +577,9 @@ const clearResults = () => {
 }
 
 .filter-chip.active {
-  @apply border-blue-500 bg-blue-50 text-blue-700;
+  border-color: var(--color-primary);
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .filter-chip i {
@@ -574,7 +588,10 @@ const clearResults = () => {
 
 .clear-chip {
   @apply px-3 py-1.5 text-sm font-medium rounded-full border-2 transition-all flex items-center gap-1.5;
-  @apply border-red-300 bg-white text-red-600 hover:bg-red-50 hover:border-red-400;
+  @apply bg-autobot-bg-card;
+  border-color: rgba(239, 68, 68, 0.5);
+  color: var(--color-error);
+  &:hover { background: var(--color-error-bg); border-color: var(--color-error); }
 }
 
 .toggle-container {
@@ -594,7 +611,8 @@ const clearResults = () => {
 }
 
 .mode-button.rag-button.active {
-  @apply bg-blue-500 text-white;
+  background: var(--color-primary);
+  color: var(--text-inverse);
 }
 
 .mode-description {
@@ -602,12 +620,14 @@ const clearResults = () => {
 }
 
 .rag-desc {
-  @apply text-blue-600;
+  color: var(--color-info);
 }
 
 /* RAG Options */
 .rag-options {
-  @apply mt-3 p-3 bg-blue-50 rounded-lg border border-blue-100;
+  @apply mt-3 p-3 rounded-lg;
+  background: var(--color-info-bg);
+  border: 1px solid rgba(59, 130, 246, 0.2);
 }
 
 .option-group {
@@ -627,7 +647,9 @@ const clearResults = () => {
 }
 
 .reranking-badge {
-  @apply text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-normal;
+  @apply text-xs px-2 py-0.5 rounded-full font-normal;
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 /* Search Input */
@@ -640,16 +662,25 @@ const clearResults = () => {
 }
 
 .search-input {
-  @apply flex-1 px-4 py-2 border border-autobot-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+  @apply flex-1 px-4 py-2 border border-autobot-border rounded-lg focus:ring-2 focus:border-transparent;
+  --tw-ring-color: var(--color-primary);
 }
 
 .search-button {
-  @apply px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2;
+  @apply px-6 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2;
+  background: var(--color-primary);
+  color: var(--text-inverse);
+}
+
+.search-button:hover:not(:disabled) {
+  filter: brightness(1.1);
 }
 
 /* RAG Synthesis */
 .rag-synthesis {
-  @apply mb-6 p-4 bg-linear-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200;
+  @apply mb-6 p-4 rounded-lg;
+  background: var(--color-info-bg);
+  border: 1px solid rgba(59, 130, 246, 0.2);
 }
 
 .synthesis-header {
@@ -657,11 +688,12 @@ const clearResults = () => {
 }
 
 .synthesis-header h4 {
-  @apply text-lg font-semibold text-blue-900 flex items-center gap-2;
+  @apply text-lg font-semibold flex items-center gap-2;
+  color: var(--text-primary);
 }
 
 .rag-icon {
-  @apply text-blue-600;
+  color: var(--color-info);
 }
 
 .analysis-badges {
@@ -673,19 +705,23 @@ const clearResults = () => {
 }
 
 .confidence-high {
-  @apply bg-green-100 text-green-800;
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .confidence-medium {
-  @apply bg-yellow-100 text-yellow-800;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .confidence-low {
-  @apply bg-red-100 text-red-800;
+  background: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 .sources-badge {
-  @apply bg-blue-100 text-blue-800;
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .synthesis-content {
@@ -693,15 +729,17 @@ const clearResults = () => {
 }
 
 .synthesis-content p {
-  @apply text-gray-800 leading-relaxed;
+  @apply text-autobot-text-primary leading-relaxed;
 }
 
 .query-reformulation {
-  @apply mt-3 pt-3 border-t border-blue-200;
+  @apply mt-3 pt-3 border-t;
+  border-color: rgba(59, 130, 246, 0.2);
 }
 
 .reformulated-note {
-  @apply text-sm text-blue-700 flex items-center gap-2;
+  @apply text-sm flex items-center gap-2;
+  color: var(--color-info);
 }
 
 /* Results */
@@ -715,11 +753,14 @@ const clearResults = () => {
 }
 
 .initialization-help {
-  @apply mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg;
+  @apply mt-4 p-4 rounded-lg;
+  background: var(--color-info-bg);
+  border: 1px solid rgba(59, 130, 246, 0.2);
 }
 
 .initialization-help p {
-  @apply text-sm text-blue-800 mb-1;
+  @apply text-sm mb-1;
+  color: var(--text-primary);
 }
 
 .initialization-help strong {
@@ -727,23 +768,33 @@ const clearResults = () => {
 }
 
 .help-link {
-  @apply text-blue-600 hover:text-blue-800 underline font-medium;
+  @apply underline font-medium;
+  color: var(--color-info);
+}
+
+.help-link:hover {
+  color: var(--text-primary);
 }
 
 /* RAG Error */
 .rag-error {
-  @apply mt-4 p-4 bg-orange-50 border border-orange-200 rounded-lg;
+  @apply mt-4 p-4 rounded-lg;
+  background: var(--color-warning-bg);
+  border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
 .error-header {
-  @apply flex items-center gap-2 font-medium text-orange-800 mb-2;
+  @apply flex items-center gap-2 font-medium mb-2;
+  color: var(--color-warning);
 }
 
 .rag-error p {
-  @apply text-orange-700 text-sm;
+  @apply text-sm;
+  color: var(--color-warning);
 }
 
 .fallback-note {
-  @apply mt-2 text-orange-600 text-xs font-medium;
+  @apply mt-2 text-xs font-medium;
+  color: var(--color-warning);
 }
 </style>

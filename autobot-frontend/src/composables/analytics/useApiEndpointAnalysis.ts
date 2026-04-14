@@ -9,7 +9,7 @@
  * Extracted from useSpecializedAnalysis (Issue #2372).
  */
 
-import { reactive } from 'vue'
+import { reactive, ref } from 'vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import appConfig from '@/config/AppConfig.js'
 import { useAnalyticsFetch } from '@/composables/useAnalyticsFetch'
@@ -26,6 +26,8 @@ export function useApiEndpointAnalysis(
   deps: UseCodeIntelAnalysisDeps,
 ) {
   const { sourceIdQuery, withSourceId, t, notify } = deps
+
+  const coverageError = ref<string>('')
 
   const {
     data: apiEndpointAnalysis,
@@ -53,7 +55,7 @@ export function useApiEndpointAnalysis(
 
   const getApiEndpointCoverage = async () => {
     loadingApiEndpoints.value = true
-    apiEndpointsError.value = ''
+    coverageError.value = ''
     const startTime = Date.now()
     try {
       const backendUrl = await appConfig.getServiceUrl('backend')
@@ -98,7 +100,7 @@ export function useApiEndpointAnalysis(
       const errorMessage =
         error instanceof Error ? error.message : String(error)
       logger.error('API Endpoint analysis failed:', error)
-      apiEndpointsError.value = errorMessage
+      coverageError.value = errorMessage
       notify(
         t('analytics.codebase.notify.apiAnalysisFailed', {
           error: errorMessage,

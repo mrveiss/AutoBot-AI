@@ -35,9 +35,21 @@ const emit = defineEmits<{
   share: [secretId: string]
   revoke: [secretId: string]
   copy: [secretId: string]
-  add: [secret: any]
+  add: [secret: SecretItem]
   delete: [secretId: string]
 }>()
+
+// Secret item type from backend API
+interface SecretItem {
+  id: string
+  name: string
+  type: string
+  scope: string
+  value?: string
+  description?: string
+  created_at?: string
+  updated_at?: string
+}
 
 // Local state
 const searchQuery = ref('')
@@ -50,7 +62,7 @@ const error = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
 
 // Secrets data from API
-const secrets = ref<Array<any>>([])
+const secrets = ref<SecretItem[]>([])
 
 // Debounce search query for performance (Issue #4035)
 const debouncedSearchQuery = useDebounce(searchQuery, 400)
@@ -59,7 +71,7 @@ const debouncedSearchQuery = useDebounce(searchQuery, 400)
 const currentSession = computed(() => chatStore.currentSession)
 
 // Combine and filter secrets
-const allSecrets = computed(() => {
+const allSecrets = computed<SecretItem[]>(() => {
   let filtered = [...secrets.value]
 
   // Filter by scope
@@ -94,8 +106,8 @@ const allSecrets = computed(() => {
     filtered.sort((a, b) => (a.type || '').localeCompare(b.type || ''))
   } else if (sortBy.value === 'recent') {
     filtered.sort((a, b) => {
-      const aTime = new Date(a.updated_at || a.created_at).getTime()
-      const bTime = new Date(b.updated_at || b.created_at).getTime()
+      const aTime = new Date(a.updated_at || a.created_at || 0).getTime()
+      const bTime = new Date(b.updated_at || b.created_at || 0).getTime()
       return bTime - aTime
     })
   }
@@ -109,7 +121,7 @@ const allSecrets = computed(() => {
 
 // Virtual scrolling composable - Issue #4037
 // Each secret card is approximately 280px (with padding, metadata, actions)
-const { containerRef, visibleItems, totalHeight } = useVirtualList(allSecrets, 280, 2)
+const { containerRef, visibleItems, totalHeight } = useVirtualList<SecretItem>(allSecrets, 280, 2)
 
 // Get secret type icon
 const getTypeIcon = (type: string): string => {
@@ -154,7 +166,7 @@ const toggleReveal = (secretId: string) => {
 }
 
 // Copy secret to clipboard
-const copySecret = (secret: any) => {
+const copySecret = (secret: SecretItem) => {
   if (!secret.value) {
     error.value = t('secrets.vault.errorNoValue')
     setTimeout(() => { error.value = null }, 3000)
@@ -204,7 +216,7 @@ const loadSecrets = async () => {
   isLoading.value = true
   error.value = null
   try {
-    const response = (await secretsApiClient.getSecrets({})) as Record<string, any>
+    const response = (await secretsApiClient.getSecrets({})) as { secrets?: SecretItem[] }
     secrets.value = response.secrets || []
     logger.info(`Loaded ${secrets.value.length} secrets from backend`)
   } catch (err) {

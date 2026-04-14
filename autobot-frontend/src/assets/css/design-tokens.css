@@ -401,16 +401,16 @@
   --z-40: 40;
   --z-50: 50;
 
-  /* Semantic z-index */
+  /* Semantic z-index — matches actual component usage */
   --z-dropdown: 100;
   --z-sticky: 200;
   --z-fixed: 300;
-  --z-modal-backdrop: 400;
-  --z-modal: 500;
-  --z-popover: 600;
-  --z-tooltip: 700;
-  --z-toast: 800;
-  --z-maximum: 9999;
+  --z-modal-backdrop: 900;
+  --z-modal: 1000;
+  --z-popover: 1100;
+  --z-tooltip: 1200;
+  --z-toast: 9999;
+  --z-maximum: 10000;
 
   /* ============================================
    * LAYOUT

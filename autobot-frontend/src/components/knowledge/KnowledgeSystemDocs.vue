@@ -345,7 +345,7 @@ onMounted(() => {
           />
         </div>
         <div class="export-dropdown" v-if="selectedCategory">
-          <BaseButton variant="outline" class="export-btn">
+          <BaseButton variant="outline-solid" class="export-btn">
             <i class="fas fa-download"></i>
             {{ $t('knowledge.systemDocs.exportAll') }}
           </BaseButton>

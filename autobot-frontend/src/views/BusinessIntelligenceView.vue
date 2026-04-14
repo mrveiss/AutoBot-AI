@@ -81,7 +81,7 @@
         <div class="maintenance-section">
           <div class="section-header">
             <h3><i class="fas fa-tools"></i> {{ $t('analytics.bi.predictiveMaintenance') }}</h3>
-            <BaseButton variant="outline" size="sm" @click="fetchMaintenance">
+            <BaseButton variant="outline-solid" size="sm" @click="fetchMaintenance">
               <i class="fas fa-refresh"></i> {{ $t('analytics.bi.refresh') }}
             </BaseButton>
           </div>
@@ -151,7 +151,7 @@
         <div class="optimization-section">
           <div class="section-header">
             <h3><i class="fas fa-rocket"></i> {{ $t('analytics.bi.resourceOptimization') }}</h3>
-            <BaseButton variant="outline" size="sm" @click="fetchOptimization">
+            <BaseButton variant="outline-solid" size="sm" @click="fetchOptimization">
               <i class="fas fa-refresh"></i> {{ $t('analytics.bi.refresh') }}
             </BaseButton>
           </div>
@@ -214,7 +214,7 @@
         <div class="insights-section">
           <div class="section-header">
             <h3><i class="fas fa-lightbulb"></i> {{ $t('analytics.bi.actionableInsights') }}</h3>
-            <BaseButton variant="outline" size="sm" @click="fetchInsights">
+            <BaseButton variant="outline-solid" size="sm" @click="fetchInsights">
               <i class="fas fa-refresh"></i> {{ $t('analytics.bi.refresh') }}
             </BaseButton>
           </div>

@@ -4,7 +4,7 @@
       <h3><i class="fas fa-desktop"></i> {{ $t('manpage.machineProfile.title') }}</h3>
       <BaseButton
         size="sm"
-        variant="outline"
+        variant="outline-solid"
         @click="$emit('refresh')"
         :disabled="loading"
       >
@@ -137,11 +137,13 @@ const osBadgeClass = computed(() => {
 }
 
 .badge-linux {
-  @apply bg-orange-100 text-orange-800;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .badge-windows {
-  @apply bg-blue-100 text-blue-800;
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .badge-macos {
@@ -153,14 +155,18 @@ const osBadgeClass = computed(() => {
 }
 
 .highlight {
-  @apply font-semibold text-blue-600;
+  @apply font-semibold;
+  color: var(--color-primary);
 }
 
 .no-data {
-  @apply flex items-center gap-3 p-4 text-yellow-700 bg-yellow-50 rounded-lg;
+  @apply flex items-center gap-3 p-4 rounded-lg;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .loading {
-  @apply flex items-center gap-2 p-4 text-blue-600;
+  @apply flex items-center gap-2 p-4;
+  color: var(--color-info);
 }
 </style>

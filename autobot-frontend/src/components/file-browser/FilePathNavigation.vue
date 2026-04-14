@@ -73,13 +73,23 @@ const getPathUpTo = (index: number): string => {
 }
 
 .breadcrumb-item {
-  @apply flex items-center text-sm bg-none border-none cursor-pointer text-blue-600 hover:text-blue-800 hover:underline p-0;
+  @apply flex items-center text-sm bg-none border-none cursor-pointer hover:underline p-0;
+  color: var(--text-link);
   font: inherit;
 }
 
+.breadcrumb-item:hover {
+  color: var(--text-link-hover);
+}
+
 .breadcrumb-item .clickable {
-  @apply cursor-pointer text-blue-600 hover:text-blue-800 hover:underline bg-none border-none p-0;
+  @apply cursor-pointer hover:underline bg-none border-none p-0;
+  color: var(--text-link);
   font: inherit;
+}
+
+.breadcrumb-item .clickable:hover {
+  color: var(--text-link-hover);
 }
 
 .breadcrumb-separator {
@@ -91,10 +101,18 @@ const getPathUpTo = (index: number): string => {
 }
 
 .path-field {
-  @apply flex-1 px-3 py-2 border border-autobot-border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500;
+  @apply flex-1 px-3 py-2 border border-autobot-border rounded-md focus:outline-none focus:ring-2;
+  --tw-ring-color: var(--color-primary);
 }
 
 .path-go-btn {
-  @apply px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500;
+  @apply px-4 py-2 rounded-md focus:outline-none focus:ring-2;
+  background: var(--color-primary);
+  color: var(--text-inverse);
+  --tw-ring-color: var(--color-primary);
+}
+
+.path-go-btn:hover {
+  filter: brightness(1.1);
 }
 </style>

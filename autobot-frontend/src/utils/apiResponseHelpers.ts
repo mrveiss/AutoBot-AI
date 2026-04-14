@@ -28,9 +28,10 @@
  * const data = await parseApiResponse(response)
  * ```
  */
-export async function parseApiResponse(response: Response | Record<string, unknown>): Promise<unknown> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function parseApiResponse(response: unknown): Promise<any> {
   // Check if response has .json() method (it's a Response object)
-  if (typeof (response as Response).json === 'function') {
+  if (response !== null && typeof response === 'object' && typeof (response as Response).json === 'function') {
     return await (response as Response).json()
   }
 

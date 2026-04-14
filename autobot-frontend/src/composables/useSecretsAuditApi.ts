@@ -106,10 +106,9 @@ export function useSecretsAuditApi() {
 
     return withErrorHandling(
       async () => {
-        const response = await api.get(
+        const data = await api.get<AuditQueryResponse>(
           `${getApiBase()}/audit/logs?${params.toString()}`
         )
-        const data: AuditQueryResponse = await response.json()
 
         if (!data.success) {
           throw new Error('Failed to fetch audit logs')

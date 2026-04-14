@@ -30,12 +30,13 @@ class TestHookPoint:
     """Test HookPoint enum definitions."""
 
     def test_hook_count(self):
-        """Should have exactly 24 hook points (22 original + 2 added in #3405)."""
-        assert len(HookPoint) == 24
+        """Should have exactly 25 hook points (22 original + 2 in #3405 + 1 in #4265)."""
+        assert len(HookPoint) == 25
 
     def test_message_preparation_hooks(self):
         """Should have message preparation hooks."""
         assert HookPoint.BEFORE_MESSAGE_PROCESS is not None
+        assert HookPoint.BEFORE_PROMPT_BUILD is not None
         assert HookPoint.AFTER_PROMPT_BUILD is not None
 
     def test_llm_interaction_hooks(self):

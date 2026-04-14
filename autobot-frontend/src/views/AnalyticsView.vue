@@ -70,6 +70,18 @@
             </svg>
             <span>{{ $t('analytics.views.tabs.audit') }}</span>
           </router-link>
+          <!-- Issue #902: Dev Tools moved from standalone /dev-speedup into analytics tab -->
+          <router-link
+            to="/analytics/dev-tools"
+            class="nav-tab"
+            :class="{ 'nav-tab-active': isDevToolsActive }"
+            role="tab"
+            :aria-selected="isDevToolsActive"
+            aria-label="Dev Tools"
+          >
+            <i class="fas fa-bolt tab-icon-fa" aria-hidden="true"></i>
+            <span>Dev Tools</span>
+          </router-link>
         </nav>
       </div>
 
@@ -105,10 +117,19 @@ const isSecurityActive = computed(() => {
 const isAuditActive = computed(() => {
   return route.path === '/analytics/audit' || route.path.startsWith('/analytics/audit/')
 })
+
+const isDevToolsActive = computed(() => {
+  return route.path === '/analytics/dev-tools' || route.path.startsWith('/analytics/dev-tools/')
+})
 </script>
 
 <style scoped>
 /* Issue #901: Technical Precision Analytics View Design */
+
+.tab-icon-fa {
+  font-size: 16px;
+  flex-shrink: 0;
+}
 
 .analytics-view {
   display: flex;

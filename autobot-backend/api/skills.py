@@ -6,6 +6,8 @@ Skills API Endpoints (Issue #731)
 
 REST API for managing the Skills system: list, enable/disable,
 configure, execute, and monitor skills.
+
+Includes metrics and health tracking (Issue #4339).
 """
 
 import logging
@@ -16,6 +18,8 @@ from pydantic import BaseModel, Field
 
 from skills.manager import SkillManager
 from skills.registry import get_skill_registry
+
+logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -58,6 +62,13 @@ class UserSkillPreferences(BaseModel):
     preferences: Dict[str, bool] = Field(
         ..., description="Mapping of skill_name -> enabled"
     )
+
+
+class SkillFeedbackRequest(BaseModel):
+    """Request body for submitting skill feedback."""
+
+    rating: int = Field(..., description="User rating (1-5)", ge=1, le=5)
+    feedback: Optional[str] = Field(None, description="Feedback text")
 
 
 # --- Endpoints ---
@@ -196,3 +207,68 @@ async def list_skill_actions(name: str) -> Dict[str, Any]:
         "skill": name,
         "actions": skill.get_available_actions(),
     }
+
+
+@router.get("/{name}/metrics", summary="Get skill metrics")
+async def get_skill_metrics(
+    name: str,
+    days: int = Query(30, description="Number of days to analyze"),
+) -> Dict[str, Any]:
+    """Get performance metrics for a skill (Issue #4339).
+
+    Returns invocation count, success rate, error patterns, and duration stats.
+    """
+    try:
+        from services.skill_management.skill_metrics import SkillMetrics
+
+        metrics = SkillMetrics()
+        data = await metrics.get_metrics(name, days)
+        health_score = await metrics.get_health_score(name, days)
+        data["health_score"] = health_score
+        return data
+    except Exception as e:
+        logger.error("Failed to get metrics for %s: %s", name, e)
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve metrics: {e}")
+
+
+@router.post("/{name}/feedback", summary="Submit skill feedback")
+async def submit_skill_feedback(
+    name: str,
+    body: SkillFeedbackRequest,
+    action: Optional[str] = Query(None, description="Action that was invoked"),
+) -> Dict[str, Any]:
+    """Submit user feedback for a skill (Issue #4339)."""
+    try:
+        from services.skill_management.skill_feedback import SkillFeedbackAnalyzer
+
+        analyzer = SkillFeedbackAnalyzer()
+        await analyzer.log_user_feedback(
+            skill_id=name,
+            action=action or "unknown",
+            rating=body.rating,
+            feedback_text=body.feedback,
+        )
+        return {
+            "success": True,
+            "message": f"Feedback submitted for skill '{name}'",
+        }
+    except Exception as e:
+        logger.error("Failed to log feedback: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to log feedback: {e}")
+
+
+@router.get("/{name}/suggestions", summary="Get skill refinement suggestions")
+async def get_refinement_suggestions(name: str) -> Dict[str, Any]:
+    """Get suggestions for improving a skill (Issue #4339)."""
+    try:
+        from services.skill_management.skill_feedback import SkillFeedbackAnalyzer
+
+        analyzer = SkillFeedbackAnalyzer()
+        suggestions = await analyzer.get_refinement_suggestions(name)
+        return suggestions
+    except Exception as e:
+        logger.error("Failed to get suggestions for %s: %s", name, e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve suggestions: {e}",
+        )

@@ -12,11 +12,12 @@ import uuid
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from api.user_management.dependencies import (
     get_current_user,
     get_user_service,
+    require_platform_admin,
     require_user_management_enabled,
 )
 from autobot_shared.models.pagination import PaginationParams
@@ -75,6 +76,25 @@ class RoleAssignmentResponse(BaseModel):
     success: bool = True
     message: str
     role_id: uuid.UUID
+
+
+class RoleUpdateRequest(BaseModel):
+    """Request to set a user's role by name (#1801)."""
+
+    role: str = Field(
+        ...,
+        description="Role name: admin, user, or readonly",
+        pattern="^(admin|user|readonly)$",
+    )
+
+
+class RoleUpdateResponse(BaseModel):
+    """Response for role-by-name update (#1801)."""
+
+    success: bool = True
+    message: str
+    username: str
+    role: str
 
 
 class UserSearchResult(BaseModel):
@@ -588,6 +608,76 @@ async def revoke_role(
     return RoleAssignmentResponse(
         message="Role revoked successfully",
         role_id=role_id,
+    )
+
+
+# -------------------------------------------------------------------------
+# Role-by-name Management (#1801)
+# -------------------------------------------------------------------------
+
+
+@router.put(
+    "/{user_id}/role",
+    response_model=RoleUpdateResponse,
+    summary="Set user role by name",
+    description=(
+        "Replace all system roles for a user with the named role (admin, user, readonly). "
+        "Requires admin privilege. Issue #1801."
+    ),
+    dependencies=[
+        Depends(require_user_management_enabled),
+        Depends(require_platform_admin),
+    ],
+)
+async def set_user_role(
+    user_id: uuid.UUID,
+    body: RoleUpdateRequest,
+    user_service: UserService = Depends(get_user_service),
+):
+    """Set a user's system role by name, replacing previous system role assignments."""
+    from sqlalchemy import delete, select
+    from user_management.models.role import Role, UserRole
+
+    user = await user_service.get_user(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User {user_id} not found",
+        )
+
+    # Resolve target role from system roles
+    session = user_service.session
+    target_role_result = await session.execute(
+        select(Role).where(Role.name == body.role, Role.is_system.is_(True))
+    )
+    target_role = target_role_result.scalar_one_or_none()
+    if not target_role:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"System role '{body.role}' not found",
+        )
+
+    # Remove all existing system role assignments for this user
+    system_role_ids_result = await session.execute(
+        select(Role.id).where(Role.is_system.is_(True))
+    )
+    system_role_ids = [r for (r,) in system_role_ids_result.all()]
+    if system_role_ids:
+        await session.execute(
+            delete(UserRole).where(
+                UserRole.user_id == user_id,
+                UserRole.role_id.in_(system_role_ids),
+            )
+        )
+        await session.flush()
+
+    # Assign the new role
+    await user_service.assign_role(user_id, target_role.id)
+
+    return RoleUpdateResponse(
+        message=f"Role updated to '{body.role}' for user {user.username}",
+        username=user.username,
+        role=body.role,
     )
 
 

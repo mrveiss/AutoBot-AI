@@ -503,10 +503,6 @@
   delay: 5
   until: _slm_health is succeeded
   tags: ['slm', 'service']
-  retries: 10
-  delay: 3
-  until: _slm_health.status == 200
-  tags: ['slm', 'service']
 
 - name: "SLM | Export admin password for downstream plays"
   ansible.builtin.shell:

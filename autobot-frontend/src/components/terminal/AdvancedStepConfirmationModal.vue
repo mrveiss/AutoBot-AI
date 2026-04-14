@@ -306,7 +306,7 @@ function resetEdit(): void {
 
     <template #actions>
       <BaseButton
-        variant="outline"
+        variant="outline-solid"
         @click="handleTakeControl"
       >
         <i class="fas fa-hand-paper" aria-hidden="true"></i>
@@ -315,7 +315,7 @@ function resetEdit(): void {
 
       <BaseButton
         v-if="remainingStepsCount > 0"
-        variant="outline"
+        variant="outline-solid"
         @click="handleExecuteAll"
       >
         <i class="fas fa-forward" aria-hidden="true"></i>

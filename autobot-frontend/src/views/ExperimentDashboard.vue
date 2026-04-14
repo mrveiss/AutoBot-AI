@@ -64,7 +64,7 @@ async function handleReject(sessionId: string, experimentId: string) {
 </script>
 
 <template>
-  <div class="mx-auto max-w-7xl space-y-6 p-6">
+  <div class="mx-auto max-w-7xl space-y-6 p-6 view-container">
     <h1 class="text-2xl font-bold">Experiment Dashboard</h1>
 
     <!-- Stats Header -->

@@ -1,0 +1,94 @@
+metadata:
+  category: video_tools
+  description: Video downloading, transcript extraction, and media metadata tools
+  last_updated: "2024-01-01T00:00:00"
+  version: "1.0.0"
+
+tools:
+  - name: yt-dlp
+    type: video_downloader
+    purpose: Download videos and extract transcripts/metadata from YouTube, Bilibili, and 1000+ sites
+    installation:
+      apt: sudo apt-get install yt-dlp
+      pip: pip install yt-dlp
+      pipx: pipx install yt-dlp
+      brew: brew install yt-dlp
+    usage:
+      download_video: "yt-dlp {url}"
+      audio_only: "yt-dlp -x --audio-format mp3 {url}"
+      list_formats: "yt-dlp -F {url}"
+      download_format: "yt-dlp -f {format_id} {url}"
+      get_transcript: "yt-dlp --write-auto-sub --sub-lang en --skip-download {url}"
+      get_metadata: "yt-dlp --dump-json --no-download {url}"
+      search_youtube: "yt-dlp 'ytsearch{count}:{query}' --get-id"
+      transcript_srt: "yt-dlp --write-sub --sub-lang en --sub-format srt --skip-download {url}"
+    common_examples:
+      - description: Extract English transcript without downloading video
+        command: "yt-dlp --write-auto-sub --sub-lang en --skip-download 'https://www.youtube.com/watch?v=VIDEO_ID'"
+        expected_output: "Creates .vtt subtitle file with timestamped transcript"
+      - description: Get full video metadata as JSON
+        command: "yt-dlp --dump-json --no-download 'https://www.youtube.com/watch?v=VIDEO_ID'"
+        expected_output: "JSON with title, description, duration, uploader, view_count, etc."
+      - description: Search YouTube and get top result IDs
+        command: "yt-dlp 'ytsearch5:python asyncio tutorial' --get-id"
+        expected_output: "5 YouTube video IDs for the search query"
+      - description: Download best quality audio
+        command: "yt-dlp -x --audio-format mp3 -o '%(title)s.%(ext)s' {url}"
+        expected_output: "MP3 file named after video title"
+      - description: Download specific format
+        command: "yt-dlp -f 'bestvideo[height<=720]+bestaudio/best[height<=720]' {url}"
+        expected_output: "720p video with best available audio"
+      - description: Extract transcript from Bilibili video
+        command: "yt-dlp --write-auto-sub --sub-lang zh-Hans --skip-download 'https://www.bilibili.com/video/BV{id}'"
+        expected_output: "Chinese subtitle/transcript file for Bilibili video"
+    troubleshooting:
+      - problem: "Video unavailable or geo-blocked"
+        solution: "Use --proxy {proxy_url} or --geo-bypass flags"
+      - problem: "No subtitles available"
+        solution: "Try --write-auto-sub for auto-generated captions; not all videos have manual subs"
+      - problem: "yt-dlp out of date — extractor fails"
+        solution: "Run 'yt-dlp -U' to self-update to latest version"
+      - problem: "Rate limiting from YouTube"
+        solution: "Use --sleep-interval 2 --max-sleep-interval 5 to slow down requests"
+      - problem: "Cookies needed for age-gated content"
+        solution: "Use --cookies-from-browser firefox or --cookies cookies.txt"
+    output_formats:
+      - "Video: mp4, mkv, webm"
+      - "Audio: mp3, m4a, opus, wav"
+      - "Subtitles: vtt, srt, ass"
+      - "Metadata: JSON (--dump-json)"
+    supported_sites:
+      - "YouTube, YouTube Music, YouTube Shorts"
+      - "Bilibili (Chinese video platform)"
+      - "Vimeo, Dailymotion, Twitch"
+      - "Twitter/X, TikTok, Instagram"
+      - "1000+ other sites"
+    security_notes:
+      - "Respect copyright and platform terms of service"
+      - "Downloaded content may be subject to DRM restrictions"
+    related_tools: ["ffmpeg", "ffprobe", "gallery-dl"]
+
+  - name: ffprobe
+    type: media_inspector
+    purpose: Extract metadata and stream information from video/audio files
+    installation:
+      apt: sudo apt-get install ffmpeg
+      yum: sudo yum install ffmpeg
+      pacman: sudo pacman -S ffmpeg
+      brew: brew install ffmpeg
+    usage:
+      basic_info: "ffprobe {file}"
+      json_output: "ffprobe -v quiet -print_format json -show_format -show_streams {file}"
+      duration: "ffprobe -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 {file}"
+      streams: "ffprobe -v quiet -print_format json -show_streams {file}"
+    common_examples:
+      - description: Get full metadata as JSON
+        command: "ffprobe -v quiet -print_format json -show_format -show_streams video.mp4"
+        expected_output: "JSON with duration, bitrate, codec, resolution, and stream details"
+      - description: Get only duration in seconds
+        command: "ffprobe -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 video.mp4"
+        expected_output: "123.456789 (duration in seconds)"
+      - description: List all streams
+        command: "ffprobe -v quiet -print_format json -show_streams video.mkv"
+        expected_output: "JSON array of video, audio, and subtitle streams"
+    related_tools: ["ffmpeg", "yt-dlp", "mediainfo"]

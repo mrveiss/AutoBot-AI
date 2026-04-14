@@ -4,7 +4,7 @@
     <div v-if="error && !isLoading" class="error-container">
       <div class="error-content">
         <div class="error-icon">
-          <i class="fas fa-exclamation-triangle text-red-500 text-4xl"></i>
+          <i class="fas fa-exclamation-triangle text-4xl" style="color: var(--color-error)"></i>
         </div>
         <h3 class="error-title">{{ t('ui.unifiedLoading.somethingWentWrong') }}</h3>
         <p class="error-message">{{ error }}</p>
@@ -28,7 +28,7 @@
         </div>
         <p class="loading-message">{{ message || t('ui.unifiedLoading.loading') }}</p>
         <div v-if="hasTimedOut" class="timeout-warning">
-          <p class="text-yellow-600">{{ t('ui.unifiedLoading.takingLonger') }}</p>
+          <p style="color: var(--color-warning)">{{ t('ui.unifiedLoading.takingLonger') }}</p>
           <button @click="cancelLoading" class="btn-cancel">
             {{ t('ui.unifiedLoading.cancelAndContinue') }}
           </button>
@@ -178,7 +178,13 @@ const cancelLoading = () => {
 }
 
 .btn-cancel {
-  @apply px-4 py-2 bg-yellow-100 text-yellow-800 rounded-lg hover:bg-yellow-200 transition-colors;
+  @apply px-4 py-2 rounded-lg transition-colors;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+.btn-cancel:hover {
+  filter: brightness(1.15);
 }
 
 /* Content Container */
@@ -200,7 +206,8 @@ const cancelLoading = () => {
 }
 
 .updating-pulse {
-  @apply w-2 h-2 bg-blue-500 rounded-full animate-pulse;
+  @apply w-2 h-2 rounded-full animate-pulse;
+  background: var(--color-primary);
 }
 
 .updating-text {

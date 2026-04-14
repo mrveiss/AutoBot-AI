@@ -297,10 +297,97 @@ def create_technology_research_template() -> WorkflowTemplate:
     )
 
 
+def _create_autoresearch_loop_steps() -> List[WorkflowStep]:
+    """Create workflow steps for the AutoResearch self-improving experiment loop.
+
+    Issue #1440: Milestone 2 — web-search-informed hypothesis generation followed
+    by training, evaluation, knowledge indexing, and an approval gate for
+    significant improvements.
+    """
+    return [
+        WorkflowStep(
+            id="web_search",
+            agent_type="research",
+            action="Search arxiv and GitHub for recent techniques related to the research direction",
+            description="Research: Web Search for Hypotheses",
+            expected_duration_ms=30000,
+        ),
+        WorkflowStep(
+            id="generate_hypothesis",
+            agent_type="orchestrator",
+            action="Generate a concrete, testable hypothesis for improving val_bpb from search results",
+            description="Orchestrator: Hypothesis Generation",
+            dependencies=["web_search"],
+            expected_duration_ms=10000,
+        ),
+        WorkflowStep(
+            id="run_experiment",
+            agent_type="orchestrator",
+            action="Execute 5-minute training run with the proposed hyperparameter changes",
+            description="Orchestrator: Run Experiment",
+            dependencies=["generate_hypothesis"],
+            expected_duration_ms=360000,
+        ),
+        WorkflowStep(
+            id="evaluate_result",
+            agent_type="orchestrator",
+            action="Compare val_bpb against baseline and decide keep or discard",
+            description="Orchestrator: Evaluate Result",
+            dependencies=["run_experiment"],
+            expected_duration_ms=5000,
+        ),
+        WorkflowStep(
+            id="approval_gate",
+            agent_type="orchestrator",
+            action="Request human approval before applying a significant improvement (>1% val_bpb)",
+            description="Orchestrator: Approval Gate (requires your approval)",
+            requires_approval=True,
+            dependencies=["evaluate_result"],
+            expected_duration_ms=0,
+        ),
+        WorkflowStep(
+            id="index_findings",
+            agent_type="knowledge_manager",
+            action="Index successful experiment findings in ChromaDB for future RAG retrieval",
+            description="Knowledge_Manager: Index Experiment Findings",
+            dependencies=["approval_gate"],
+            expected_duration_ms=5000,
+        ),
+    ]
+
+
+def create_autoresearch_loop_template() -> WorkflowTemplate:
+    """Create AutoResearch self-improving experiment loop workflow template.
+
+    Issue #1440: Milestone 2 — autonomous ML experimentation driven by web
+    search (arxiv/GitHub), with approval gates for significant improvements and
+    ChromaDB indexing of successful findings for RAG-informed future runs.
+    """
+    return WorkflowTemplate(
+        id="autoresearch_loop",
+        name="AutoResearch Experiment Loop",
+        description=(
+            "Autonomous ML experimentation: web search → hypothesis → train 5 min "
+            "→ evaluate val_bpb → keep/discard → index findings"
+        ),
+        category=TemplateCategory.RESEARCH,
+        complexity=TaskComplexity.RESEARCH,
+        estimated_duration_minutes=15,
+        agents_involved=["research", "orchestrator", "knowledge_manager"],
+        tags=["autoresearch", "ml", "experiment", "self-improvement", "arxiv"],
+        variables={
+            "research_direction": "High-level research direction or technique to explore",
+            "max_iterations": "Maximum number of experiment iterations (default: 12)",
+        },
+        steps=_create_autoresearch_loop_steps(),
+    )
+
+
 def get_all_research_templates() -> List[WorkflowTemplate]:
     """Get all research workflow templates."""
     return [
         create_comprehensive_research_template(),
         create_competitive_analysis_template(),
         create_technology_research_template(),
+        create_autoresearch_loop_template(),
     ]

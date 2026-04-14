@@ -88,6 +88,9 @@ For teams prioritizing **data privacy, cost efficiency, and infrastructure contr
 
 ## Architecture Overview
 
+> Full diagrams (data flows, deployment topologies, sequence diagrams): [docs/architecture/system-diagram.md](docs/architecture/system-diagram.md)  
+> Feature walkthroughs and demo recording scripts: [docs/DEMOS.md](docs/DEMOS.md)
+
 ```mermaid
 graph TB
     User["👤 User<br/>(Browser)"]
@@ -267,16 +270,22 @@ Detailed contribution process, code style guidelines, and development setup:
 
 ## Sponsors & Supporters
 
-Support AutoBot's development:
+Support AutoBot's development in multiple ways:
 
-- **[GitHub Sponsors](https://github.com/sponsors/mrveiss)** — Get updates and direct support
-- **[Ko-fi](https://ko-fi.com/mrveiss)** — One-time or recurring donations
+### Sponsorship & Donations
+- **[GitHub Sponsors](https://github.com/sponsors/mrveiss)** — Recurring sponsorship with direct support and updates
+- **[Ko-fi](https://ko-fi.com/mrveiss)** — One-time or recurring donations for maintenance and features
+
+### Bounty Program
+- **[Polar.sh Bounties](https://polar.sh/mrveiss/AutoBot-AI)** — Earn rewards for implementing features and fixing bugs
+- See [BOUNTY.md](BOUNTY.md) for eligibility criteria and how to claim rewards
 
 Your support helps us:
 - Maintain and improve the codebase
 - Add new features and capabilities
 - Expand documentation and examples
 - Grow the community
+- Enable contributors to participate
 
 ---
 

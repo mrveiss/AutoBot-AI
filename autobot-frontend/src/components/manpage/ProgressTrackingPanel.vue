@@ -4,7 +4,7 @@
       <h3><i class="fas fa-tasks"></i> {{ $t('manpage.progressTracking.title') }}</h3>
       <BaseButton
         size="sm"
-        variant="outline"
+        variant="outline-solid"
         @click="$emit('hide')"
       >
         <i class="fas fa-times"></i>

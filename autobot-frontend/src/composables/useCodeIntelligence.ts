@@ -170,7 +170,7 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
   async function analyzeCode(request: CodeAnalysisRequest): Promise<CodeAnalysisResult | null> {
     startLoading()
     try {
-      const data = await ApiClient.post(`${getApiBase()}/code-intelligence/analyze`, request)
+      const data = await ApiClient.post<CodeAnalysisResult>(`${getApiBase()}/code-intelligence/analyze`, request)
       currentAnalysis.value = data
       logger.debug('Code analysis complete:', data)
       return data
@@ -187,7 +187,7 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
   async function getAnalysis(analysisId: string): Promise<CodeAnalysisResult | null> {
     startLoading()
     try {
-      const data = await ApiClient.get(`${getApiBase()}/code-intelligence/analysis/${analysisId}`)
+      const data = await ApiClient.get<CodeAnalysisResult>(`${getApiBase()}/code-intelligence/analysis/${analysisId}`)
       currentAnalysis.value = data
       logger.debug('Fetched analysis:', data)
       return data
@@ -204,7 +204,7 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
   async function getQualityScore(code: string, language?: string): Promise<QualityScore | null> {
     startLoading()
     try {
-      const data = await ApiClient.post(`${getApiBase()}/code-intelligence/quality-score`, { code, language })
+      const data = await ApiClient.post<QualityScore>(`${getApiBase()}/code-intelligence/quality-score`, { code, language })
       qualityScore.value = data
       logger.debug('Quality score:', data)
       return data
@@ -221,7 +221,7 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
   async function getSuggestions(code: string, language?: string): Promise<void> {
     startLoading()
     try {
-      const data = await ApiClient.post(`${getApiBase()}/code-intelligence/suggestions`, { code, language })
+      const data = await ApiClient.post<{ suggestions?: CodeSuggestion[] }>(`${getApiBase()}/code-intelligence/suggestions`, { code, language })
       suggestions.value = data.suggestions || []
       logger.debug('Fetched suggestions:', suggestions.value)
     } catch (err) {
@@ -239,7 +239,7 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
       const url = path
         ? `${getApiBase()}/code-intelligence/health-score?path=${encodeURIComponent(path)}`
         : `${getApiBase()}/code-intelligence/health-score`
-      const data = await ApiClient.get(url)
+      const data = await ApiClient.get<CodeHealthScore>(url)
       healthScore.value = data
       logger.debug('Health score:', healthScore.value)
     } catch (err) {
@@ -254,7 +254,7 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
   async function getSecurityScoreCached(): Promise<SecurityScoreCached | null> {
     startLoading()
     try {
-      const data = await ApiClient.get(`${getApiBase()}/code-intelligence/security/score/cached`)
+      const data = await ApiClient.get<SecurityScoreCached>(`${getApiBase()}/code-intelligence/security/score/cached`)
       securityScoreCached.value = data
       logger.debug('Cached security score:', data)
       return data
@@ -271,7 +271,7 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
   async function getTrends(days: number = 30): Promise<void> {
     startLoading()
     try {
-      const data = await ApiClient.get(`${getApiBase()}/code-intelligence/trends?days=${days}`)
+      const data = await ApiClient.get<{ trends?: AnalysisTrend[] }>(`${getApiBase()}/code-intelligence/trends?days=${days}`)
       trends.value = data.trends || []
       logger.debug('Fetched trends:', trends.value)
     } catch (err) {
@@ -286,7 +286,7 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
   async function compareCode(file1: string, file2: string): Promise<ComparisonResult | null> {
     startLoading()
     try {
-      const data = await ApiClient.post(`${getApiBase()}/code-intelligence/compare`, { file1, file2 })
+      const data = await ApiClient.post<ComparisonResult>(`${getApiBase()}/code-intelligence/compare`, { file1, file2 })
       logger.debug('Comparison result:', data)
       return data
     } catch (err) {
@@ -302,7 +302,7 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
   async function getAnalysisHistory(limit: number = 50): Promise<void> {
     startLoading()
     try {
-      const data = await ApiClient.get(`${getApiBase()}/code-intelligence/history?limit=${limit}`)
+      const data = await ApiClient.get<{ analyses?: CodeAnalysisResult[] }>(`${getApiBase()}/code-intelligence/history?limit=${limit}`)
       analysisHistory.value = data.analyses || []
       logger.debug('Fetched analysis history:', analysisHistory.value.length)
     } catch (err) {
@@ -334,7 +334,7 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
   async function batchAnalyze(files: Array<{ code: string; filename: string; language?: string }>): Promise<CodeAnalysisResult[]> {
     startLoading()
     try {
-      const data = await ApiClient.post(`${getApiBase()}/code-intelligence/batch-analyze`, { files })
+      const data = await ApiClient.post<{ results?: CodeAnalysisResult[] }>(`${getApiBase()}/code-intelligence/batch-analyze`, { files })
       logger.debug('Batch analysis complete:', data.results?.length)
       return data.results || []
     } catch (err) {

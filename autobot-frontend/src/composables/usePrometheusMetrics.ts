@@ -232,7 +232,7 @@ export function usePrometheusMetrics(
   const {
     autoFetch = true,
     pollInterval = 30000,
-    useWebSocket = false,
+    useWebSocket: enableWebSocket = false,
     wsUpdateInterval = 2
   } = options
 
@@ -285,7 +285,7 @@ export function usePrometheusMetrics(
       isConnected.value = false
       logger.info('WebSocket disconnected')
     },
-    onError: (event) => {
+    onError: (event: Event) => {
       logger.error('WebSocket error:', event)
       error.value = 'WebSocket connection error'
     },
@@ -354,14 +354,9 @@ export function usePrometheusMetrics(
 
   async function fetchDashboard(): Promise<void> {
     try {
-      const response = await api.get(`${getApiBase()}/monitoring/dashboard/overview`)
-      if (response.ok) {
-        dashboard.value = await response.json()
-        lastUpdate.value = new Date()
-        error.value = null
-      } else {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
+      dashboard.value = await api.get<DashboardOverview>(`${getApiBase()}/monitoring/dashboard/overview`)
+      lastUpdate.value = new Date()
+      error.value = null
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch dashboard'
       logger.error('Failed to fetch dashboard:', err)
@@ -371,13 +366,8 @@ export function usePrometheusMetrics(
 
   async function fetchServices(): Promise<void> {
     try {
-      const response = await api.get(`${getApiBase()}/monitoring/services/health`)
-      if (response.ok) {
-        services.value = await response.json()
-        error.value = null
-      } else {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
+      services.value = await api.get<ServicesSummary>(`${getApiBase()}/monitoring/services/health`)
+      error.value = null
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch services'
       logger.error('Failed to fetch services:', err)
@@ -387,13 +377,8 @@ export function usePrometheusMetrics(
 
   async function fetchAlerts(): Promise<void> {
     try {
-      const response = await api.get(`${getApiBase()}/monitoring/alerts/check`)
-      if (response.ok) {
-        alerts.value = await response.json()
-        error.value = null
-      } else {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
+      alerts.value = await api.get<AlertsSummary>(`${getApiBase()}/monitoring/alerts/check`)
+      error.value = null
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch alerts'
       logger.error('Failed to fetch alerts:', err)
@@ -403,13 +388,8 @@ export function usePrometheusMetrics(
 
   async function fetchRecommendations(): Promise<void> {
     try {
-      const response = await api.get(`${getApiBase()}/monitoring/optimization/recommendations`)
-      if (response.ok) {
-        recommendations.value = await response.json()
-        error.value = null
-      } else {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
+      recommendations.value = await api.get<OptimizationRecommendation[]>(`${getApiBase()}/monitoring/optimization/recommendations`)
+      error.value = null
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch recommendations'
       logger.error('Failed to fetch recommendations:', err)
@@ -419,13 +399,8 @@ export function usePrometheusMetrics(
 
   async function fetchGPUDetails(): Promise<void> {
     try {
-      const response = await api.get(`${getApiBase()}/monitoring/hardware/gpu`)
-      if (response.ok) {
-        gpuDetails.value = await response.json()
-        error.value = null
-      } else {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
+      gpuDetails.value = await api.get<GPUMetrics>(`${getApiBase()}/monitoring/hardware/gpu`)
+      error.value = null
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch GPU details'
       logger.error('Failed to fetch GPU details:', err)
@@ -435,13 +410,8 @@ export function usePrometheusMetrics(
 
   async function fetchNPUDetails(): Promise<void> {
     try {
-      const response = await api.get(`${getApiBase()}/monitoring/hardware/npu`)
-      if (response.ok) {
-        npuDetails.value = await response.json()
-        error.value = null
-      } else {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
+      npuDetails.value = await api.get<NPUMetrics>(`${getApiBase()}/monitoring/hardware/npu`)
+      error.value = null
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch NPU details'
       logger.error('Failed to fetch NPU details:', err)
@@ -509,7 +479,7 @@ export function usePrometheusMetrics(
       fetchAll()
     }
 
-    if (useWebSocket) {
+    if (enableWebSocket) {
       connectWebSocket()
     } else if (pollInterval > 0) {
       startPolling()
@@ -578,12 +548,9 @@ export function useSystemMetrics(pollInterval = 10000) {
   async function fetch() {
     isLoading.value = true
     try {
-      const response = await api.get(`${getApiBase()}/monitoring/metrics/current`)
-      if (response.ok) {
-        const data = await response.json()
-        metrics.value = data.metrics?.system || null
-        error.value = null
-      }
+      const data = await api.get<{ metrics?: { system?: SystemMetrics } }>(`${getApiBase()}/monitoring/metrics/current`)
+      metrics.value = data.metrics?.system || null
+      error.value = null
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to fetch metrics'
     } finally {
@@ -639,20 +606,17 @@ export function useServiceHealth(pollInterval = 15000) {
   async function fetch() {
     isLoading.value = true
     try {
-      const response = await api.get(`${getApiBase()}/monitoring/services/health`)
-      if (response.ok) {
-        const data: ServicesSummary = await response.json()
-        services.value = data.services || []
-        summary.value = {
-          total_services: data.total_services,
-          healthy_services: data.healthy_services,
-          degraded_services: data.degraded_services,
-          critical_services: data.critical_services,
-          overall_status: data.overall_status,
-          health_percentage: data.health_percentage
-        }
-        error.value = null
+      const data = await api.get<ServicesSummary>(`${getApiBase()}/monitoring/services/health`)
+      services.value = data.services || []
+      summary.value = {
+        total_services: data.total_services,
+        healthy_services: data.healthy_services,
+        degraded_services: data.degraded_services,
+        critical_services: data.critical_services,
+        overall_status: data.overall_status,
+        health_percentage: data.health_percentage
       }
+      error.value = null
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to fetch services'
     } finally {
@@ -729,20 +693,17 @@ export function useAlerts(pollInterval = 30000) {
   async function fetch() {
     isLoading.value = true
     try {
-      const response = await api.get(`${getApiBase()}/monitoring/alerts/check`)
-      if (response.ok) {
-        const data: AlertsSummary = await response.json()
-        alerts.value = data.alerts || []
-        criticalCount.value = data.critical_count
-        warningCount.value = data.warning_count
-        highCount.value = data.high_count || 0  // Issue #474
-        totalCount.value = data.total_count
-        // Issue #474: Track sources
-        if (data.sources) {
-          sources.value = data.sources
-        }
-        error.value = null
+      const data = await api.get<AlertsSummary>(`${getApiBase()}/monitoring/alerts/check`)
+      alerts.value = data.alerts || []
+      criticalCount.value = data.critical_count
+      warningCount.value = data.warning_count
+      highCount.value = data.high_count || 0  // Issue #474
+      totalCount.value = data.total_count
+      // Issue #474: Track sources
+      if (data.sources) {
+        sources.value = data.sources
       }
+      error.value = null
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to fetch alerts'
     } finally {
@@ -756,7 +717,7 @@ export function useAlerts(pollInterval = 30000) {
   const hasAlerts = computed(() => totalCount.value > 0)
   // Issue #474: Computed for AlertManager-specific alerts
   const alertmanagerAlerts = computed(() =>
-    alerts.value.filter(a => a.source === 'alertmanager')
+    alerts.value.filter((a: PerformanceAlert) => a.source === 'alertmanager')
   )
 
   function startPolling() {

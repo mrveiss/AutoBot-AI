@@ -247,6 +247,11 @@ class LLMConfig(BaseSettings):
         default="http://127.0.0.1:11434", alias="AUTOBOT_LLAMAINDEX_EMBEDDING_ENDPOINT"
     )
 
+    # Chat template for local providers (ollama, vllm, llama.cpp).
+    # OpenAI/Anthropic/Gemini skip this — they format server-side.
+    # Supported values: chatml, zephyr, vicuna
+    chat_template: str = Field(default="chatml", alias="AUTOBOT_CHAT_TEMPLATE")
+
     def get_ollama_endpoint_for_model(self, model_name: str) -> str:
         """Route Ollama requests to GPU or CPU endpoint by model (#1070).
 
@@ -532,9 +537,10 @@ class TimeoutConfig(BaseSettings):
     # A2A task manager (seconds)                                           #
     # ------------------------------------------------------------------ #
 
-    # How long a terminal A2A task remains queryable before eviction from
-    # the in-memory store (Issue #3823).
-    a2a_task_ttl: float = Field(default=60.0, alias="AUTOBOT_A2A_TASK_TTL_SECONDS")
+    # How long an A2A task remains queryable in Redis before eviction.
+    # 60s was the old in-memory eviction window; Redis persistence needs a
+    # realistic poll window — default 3600s (1 hour), overridable via env.
+    a2a_task_ttl: float = Field(default=3600.0, alias="AUTOBOT_A2A_TASK_TTL_SECONDS")
 
     # ------------------------------------------------------------------ #
     # Skill / code validation (seconds)                                    #

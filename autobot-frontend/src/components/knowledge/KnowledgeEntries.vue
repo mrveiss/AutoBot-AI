@@ -174,9 +174,12 @@
             <th>{{ $t('knowledge.entries.thActions') }}</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody ref="scrollContainerRef" class="entries-tbody-virtual">
+          <!-- Virtual scroll spacer before -->
+          <tr v-if="spacerBefore > 0" style="height: 0px; visibility: hidden;"></tr>
+
           <tr
-            v-for="entry in paginatedEntries"
+            v-for="entry in displayedEntries"
             :key="entry.id"
             :class="{ 'selected': selectedEntries.includes(entry.id) }"
           >
@@ -248,13 +251,16 @@
               </BaseButton>
             </td>
           </tr>
+
+          <!-- Virtual scroll spacer after -->
+          <tr v-if="spacerAfter > 0" style="height: 0px; visibility: hidden;"></tr>
         </tbody>
       </table>
 
       <!-- Pagination -->
       <div class="pagination">
         <BaseButton
-          variant="outline"
+          variant="outline-solid"
           size="sm"
           @click="currentPage--"
           :disabled="currentPage === 1"
@@ -268,7 +274,7 @@
         </span>
 
         <BaseButton
-          variant="outline"
+          variant="outline-solid"
           size="sm"
           @click="currentPage++"
           :disabled="currentPage === totalPages"
@@ -444,6 +450,7 @@ import type { BulkEditMode, BulkEditEntry } from '@/components/knowledge/modals/
 import { formatDate, formatDateTime } from '@/utils/formatHelpers'
 import { getDocumentTypeIcon } from '@/utils/iconMappings'
 import { useDebounce } from '@/composables/useDebounce'
+import { useVirtualScroll } from '@/composables/useVirtualScroll'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
@@ -537,6 +544,25 @@ const filteredDocuments = computed(() => {
 
 const totalPages = computed(() =>
   Math.ceil(filteredDocuments.value.length / itemsPerPage)
+)
+
+const scrollContainerRef = ref<HTMLElement | null>(null)
+
+// Virtual scroll for efficient rendering of large lists
+const ITEM_HEIGHT = 48
+const { visibleItems, visibleRange, totalSize } = useVirtualScroll({
+  items: filteredDocuments,
+  itemHeight: ITEM_HEIGHT,
+  buffer: 5
+})
+const spacerBefore = computed(() => visibleRange.value.startIndex * ITEM_HEIGHT)
+const spacerAfter = computed(() => Math.max(0, totalSize.value - (visibleRange.value.endIndex + 1) * ITEM_HEIGHT))
+
+// Extract KnowledgeDocument items from virtual scroll wrapper objects
+const displayedEntries = computed<KnowledgeDocument[]>(() =>
+  visibleItems.value.length > 0
+    ? visibleItems.value.map(v => v.item as KnowledgeDocument)
+    : paginatedEntries.value
 )
 
 const paginatedEntries = computed(() => {
@@ -786,7 +812,7 @@ const openBulkRemoveTags = () => {
   showBulkEditModal.value = true
 }
 
-const handleBulkEditConfirm = async (payload: { mode: BulkEditMode; value: string | string[] }) => {
+const handleBulkEditConfirm = async (payload: { mode: BulkEditMode; value: string | string[] | { scope: string; groupIds: string[] } }) => {
   try {
     const ids = selectedEntries.value
 
@@ -1147,6 +1173,16 @@ tr.selected {
 .actions-cell {
   display: flex;
   gap: var(--spacing-2);
+}
+
+/* Virtual scroll optimization - Issue #4011 */
+.entries-tbody-virtual {
+  contain: layout style paint;
+  will-change: transform;
+}
+
+.entries-tbody-virtual tr {
+  contain: layout style;
 }
 
 /* Pagination */

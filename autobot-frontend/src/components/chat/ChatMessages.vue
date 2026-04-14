@@ -56,7 +56,7 @@
         <div class="message-header">
           <div class="flex items-center gap-1.5">
             <div class="message-avatar" :class="getAvatarClass(message.sender)">
-              <i :class="getSenderIcon(message.sender, message.type || message.metadata?.display_type)" aria-hidden="true"></i>
+              <i :class="getSenderIcon(message.sender, (message.type || (message.metadata?.display_type as string)) || undefined)" aria-hidden="true"></i>
             </div>
             <div class="message-info">
               <span class="sender-name">
@@ -127,14 +127,14 @@
         <!-- Issue #690: Overseer Agent Plan Message -->
         <OverseerPlanMessage
           v-if="message.type === 'overseer_plan' && message.metadata?.plan"
-          :plan="message.metadata.plan"
-          :steps="message.metadata?.steps"
+          :plan="message.metadata.plan as any"
+          :steps="message.metadata?.steps as any"
         />
 
         <!-- Issue #690: Overseer Agent Step Message -->
         <OverseerStepMessage
           v-else-if="message.type === 'overseer_step' && message.metadata?.step"
-          :step="message.metadata.step"
+          :step="message.metadata.step as any"
         />
 
         <!-- Message Content -->
@@ -174,8 +174,8 @@
 
           <!-- Issue #249, #1186: Source Attribution Display -->
           <CitationsDisplay
-            v-if="message.sender === 'assistant' && (message.metadata?.citations?.length || 0) > 0"
-            :citations="message.metadata?.citations || []"
+            v-if="message.sender === 'assistant' && ((message.metadata as any)?.citations?.length || 0) > 0"
+            :citations="(message.metadata as any)?.citations || []"
           />
 
           <!-- Attachments -->
@@ -272,21 +272,21 @@
               </div>
               <div class="approval-detail-item">
                 <span class="detail-label">{{ $t('chat.approval.riskLevel') }}:</span>
-                <span class="detail-value" :class="getRiskClass(message.metadata.risk_level)">
-                  {{ message.metadata.risk_level }}
+                <span class="detail-value" :class="getRiskClass((message.metadata as any).risk_level)">
+                  {{ (message.metadata as any).risk_level }}
                 </span>
               </div>
-              <div v-if="message.metadata.purpose" class="approval-detail-item">
+              <div v-if="(message.metadata as any).purpose" class="approval-detail-item">
                 <span class="detail-label">{{ $t('chat.approval.purpose') }}:</span>
-                <span class="detail-value">{{ message.metadata.purpose }}</span>
+                <span class="detail-value">{{ (message.metadata as any).purpose }}</span>
               </div>
-              <div v-if="message.metadata.reasons && message.metadata.reasons.length > 0" class="approval-detail-item">
+              <div v-if="(message.metadata as any).reasons && (message.metadata as any).reasons.length > 0" class="approval-detail-item">
                 <span class="detail-label">{{ $t('chat.approval.reasons') }}:</span>
-                <span class="detail-value">{{ message.metadata.reasons.join(', ') }}</span>
+                <span class="detail-value">{{ (message.metadata as any).reasons.join(', ') }}</span>
               </div>
 
               <!-- Interactive Command Warning (Issue #33) -->
-              <div v-if="message.metadata.is_interactive" class="approval-detail-item interactive-warning">
+              <div v-if="(message.metadata as any).is_interactive" class="approval-detail-item interactive-warning">
                 <div class="interactive-header">
                   <i class="fas fa-keyboard text-blue-600" aria-hidden="true"></i>
                   <span class="detail-label font-semibold text-blue-700">{{ $t('chat.approval.interactiveCommand') }}</span>
@@ -295,7 +295,7 @@
                   <p class="text-sm text-autobot-text-secondary mb-2">
                     {{ $t('chat.approval.interactiveInfo') }}
                   </p>
-                  <div v-if="message.metadata.interactive_reasons && message.metadata.interactive_reasons.length > 0" class="interactive-reasons">
+                  <div v-if="(message.metadata as any).interactive_reasons && (message.metadata as any).interactive_reasons.length > 0" class="interactive-reasons">
                     <span class="text-xs font-medium text-autobot-text-secondary">{{ $t('chat.approval.inputRequired') }}:</span>
                     <ul class="text-xs text-autobot-text-secondary mt-1 ml-4 list-disc">
                       <li v-for="(reason, idx) in message.metadata.interactive_reasons" :key="idx">{{ reason }}</li>
@@ -381,7 +381,7 @@
               <BaseButton
                 variant="success"
                 size="sm"
-                @click="approveCommand(message.metadata.terminal_session_id, true, undefined, message.metadata.command_id, { command: message.metadata.command, risk_level: message.metadata.risk_level })"
+                @click="approveCommand((message.metadata as any).terminal_session_id as string, true, undefined, (message.metadata as any).command_id, { command: (message.metadata as any).command as string, risk_level: (message.metadata as any).risk_level as string })"
                 :disabled="processingApproval || showCommentInput"
                 class="approve-btn"
                 :aria-label="$t('chat.approval.approveCommand')"
@@ -390,9 +390,9 @@
                 <span>{{ $t('chat.approval.approve') }}</span>
               </BaseButton>
               <BaseButton
-                variant="outline"
+                variant="outline-solid"
                 size="sm"
-                @click="promptForComment(message.metadata.terminal_session_id)"
+                @click="promptForComment((message.metadata as any).terminal_session_id as string)"
                 :disabled="processingApproval || showCommentInput"
                 class="comment-btn"
                 :aria-label="$t('chat.approval.addComment')"
@@ -403,7 +403,7 @@
               <BaseButton
                 variant="danger"
                 size="sm"
-                @click="approveCommand(message.metadata.terminal_session_id, false, undefined, message.metadata.command_id, { command: message.metadata.command, risk_level: message.metadata.risk_level })"
+                @click="approveCommand((message.metadata as any).terminal_session_id as string, false, undefined, (message.metadata as any).command_id, { command: (message.metadata as any).command as string, risk_level: (message.metadata as any).risk_level as string })"
                 :disabled="processingApproval || showCommentInput"
                 class="deny-btn"
                 :aria-label="$t('chat.approval.denyCommand')"
@@ -699,9 +699,9 @@ const getMessageWrapperClass = (message: ChatMessage): string => {
 
   // Add message type class for type-specific styling
   // Issue #680: Exclude streaming types from type-class assignment to prevent wrong badges
-  const messageType = message.type || message.metadata?.display_type
+  const messageType = message.type || (message.metadata as any)?.display_type
   const noTypeClassTypes = ['response', 'message', 'default', 'llm_response', 'llm_response_chunk']
-  if (messageType && !noTypeClassTypes.includes(messageType)) {
+  if (messageType && !noTypeClassTypes.includes(String(messageType))) {
     classes.push(`type-${messageType}`)
   }
 
@@ -764,7 +764,7 @@ const getSenderName = (sender: string): string => {
 
 /** Issue #1310: Visible badge for typed messages so they're clearly distinguishable. */
 const getMessageTypeBadge = (message: ChatMessage): { label: string; icon: string; type: string } | null => {
-  const msgType = message.type || message.metadata?.display_type
+  const msgType = message.type || (message.metadata as any)?.display_type
   if (!msgType) return null
 
   const badges: Record<string, { label: string; icon: string; type: string }> = {
@@ -775,7 +775,7 @@ const getMessageTypeBadge = (message: ChatMessage): { label: string; icon: strin
     sources:  { label: t('chat.messages.badgeSources'),  icon: 'fas fa-book-open',   type: 'sources' },
   }
 
-  return badges[msgType] || null
+  return badges[String(msgType)] || null
 }
 
 const getContentClass = (message: ChatMessage): string => {
@@ -1005,7 +1005,7 @@ const detectToolCalls = (message: ChatMessage) => {
 
       // Search for terminal_session_id in recent assistant messages
       // The terminal_session_id might be in metadata of streaming chunks, not necessarily the message with TOOL_CALL
-      let terminal_session_id = message.metadata?.terminal_session_id || null
+      let terminal_session_id: string | null = ((message.metadata as any)?.terminal_session_id as string) || null
 
       if (!terminal_session_id) {
         // Search backwards through recent assistant messages for terminal_session_id
@@ -1015,8 +1015,9 @@ const detectToolCalls = (message: ChatMessage) => {
           .slice(0, 10) // Check last 10 assistant messages
 
         for (const msg of recentAssistantMessages) {
-          if (msg.metadata?.terminal_session_id) {
-            terminal_session_id = msg.metadata.terminal_session_id
+          const metadataSessionId = (msg.metadata as any)?.terminal_session_id as string | null
+          if (metadataSessionId) {
+            terminal_session_id = metadataSessionId
             logger.debug('Found terminal_session_id in message metadata:', terminal_session_id)
             break
           }
@@ -1514,60 +1515,64 @@ onMounted(async () => {
   @apply font-mono text-xs text-amber-100;
 }
 
-/* UTILITY MESSAGES - Slate theme for tool/utility output */
+/* UTILITY MESSAGES - Neutral theme-aware for tool/utility output */
 .message-wrapper.type-utility {
-  @apply bg-slate-100 border-slate-300 text-slate-800;
-  border-left: 4px solid var(--color-slate-500);
+  @apply bg-autobot-bg-tertiary border-autobot-border text-autobot-text-primary;
+  border-left: 4px solid var(--border-strong);
 }
 
 .message-wrapper.type-utility .message-avatar {
-  @apply bg-slate-600;
+  @apply bg-autobot-text-secondary;
 }
 
 .message-wrapper.type-utility .sender-name {
-  @apply text-slate-700;
+  @apply text-autobot-text-primary;
 }
 
 .message-wrapper.type-utility .message-time {
-  @apply text-slate-500;
+  @apply text-autobot-text-secondary;
 }
 
-/* SOURCES MESSAGES - Teal theme for source references */
+/* SOURCES MESSAGES - Info-tinted theme-aware for source references */
 .message-wrapper.type-sources {
-  @apply bg-teal-50 border-teal-300 text-teal-900;
-  border-left: 4px solid var(--color-teal-500);
+  background: var(--color-info-bg);
+  border-color: var(--color-info-bg-hover);
+  color: var(--text-primary);
+  border-left: 4px solid var(--color-info);
 }
 
 .message-wrapper.type-sources .message-avatar {
-  @apply bg-teal-600;
+  background: var(--color-info);
 }
 
 .message-wrapper.type-sources .sender-name {
-  @apply text-teal-800;
+  @apply text-autobot-text-primary;
 }
 
 .message-wrapper.type-sources .message-time {
-  @apply text-teal-600;
+  @apply text-autobot-text-secondary;
 }
 
-/* JSON MESSAGES - Cyan theme for structured data */
+/* JSON MESSAGES - Primary-tinted theme-aware for structured data */
 .message-wrapper.type-json {
-  @apply bg-cyan-50 border-cyan-300 text-cyan-900;
-  border-left: 4px solid var(--color-cyan-500);
+  background: var(--color-primary-bg);
+  border-color: var(--color-primary-bg-hover);
+  color: var(--text-primary);
+  border-left: 4px solid var(--color-primary);
 }
 
 .message-wrapper.type-json .message-avatar {
-  @apply bg-cyan-600;
+  background: var(--color-primary);
 }
 
 .message-wrapper.type-json .message-text {
   @apply font-mono text-xs;
 }
 
-/* TERMINAL OUTPUT MESSAGES - Dark theme for terminal output */
+/* TERMINAL OUTPUT MESSAGES - Always-dark (intentional terminal aesthetic) */
 .message-wrapper.type-terminal_output {
   @apply bg-gray-900 border-gray-700 text-gray-100;
-  border-left: 4px solid var(--color-green-500);
+  border-left: 4px solid var(--color-success);
 }
 
 .message-wrapper.type-terminal_output .message-avatar {
@@ -1591,10 +1596,12 @@ onMounted(async () => {
   @apply text-gray-100;
 }
 
-/* COMMAND APPROVAL REQUEST - Yellow/Warning theme */
+/* COMMAND APPROVAL REQUEST - Warning theme-aware */
 .message-wrapper.type-command_approval_request {
-  @apply bg-yellow-900/20 border-yellow-500/40 text-yellow-200;
-  border-left: 4px solid var(--color-yellow-500);
+  background: var(--color-warning-bg);
+  border-color: var(--color-warning-border);
+  color: var(--text-primary);
+  border-left: 4px solid var(--color-warning);
 }
 
 .message-wrapper.type-command_approval_request .message-avatar {
@@ -1602,7 +1609,7 @@ onMounted(async () => {
 }
 
 .message-wrapper.type-command_approval_request .message-content {
-  @apply text-yellow-200;
+  color: var(--text-primary);
 }
 
 /* Message type indicator badge */
@@ -1622,17 +1629,20 @@ onMounted(async () => {
 
 .message-wrapper.type-debug::after {
   content: 'Debug';
-  @apply bg-amber-200 text-amber-800;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning-border);
 }
 
 .message-wrapper.type-utility::after {
   content: 'Utility';
-  @apply bg-slate-200 text-slate-800;
+  @apply bg-autobot-bg-tertiary text-autobot-text-secondary;
 }
 
 .message-wrapper.type-sources::after {
   content: 'Sources';
-  @apply bg-teal-200 text-teal-800;
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .message-wrapper.type-terminal_output::after {
@@ -1765,11 +1775,17 @@ onMounted(async () => {
 }
 
 .assistant-message .message-text :deep(pre) {
-  @apply bg-gray-800 text-gray-100 p-3 rounded-lg overflow-x-auto my-1.5;
+  @apply p-3 rounded-lg overflow-x-auto my-1.5;
+  background: var(--code-bg);
+  color: var(--code-text);
 }
 
 .assistant-message .message-text :deep(a) {
-  @apply text-blue-600 hover:text-blue-800 underline;
+  color: var(--text-link);
+  text-decoration: underline;
+}
+.assistant-message .message-text :deep(a):hover {
+  color: var(--text-link-hover);
 }
 
 /* User message metadata - lighter border for blue background */
@@ -2018,7 +2034,7 @@ onMounted(async () => {
 }
 
 .interactive-reasons {
-  @apply mt-2 p-2 bg-white rounded border border-blue-100;
+  @apply mt-2 p-2 bg-autobot-bg-secondary rounded border border-autobot-border;
 }
 
 .approval-actions {

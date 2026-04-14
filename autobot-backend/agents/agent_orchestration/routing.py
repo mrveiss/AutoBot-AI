@@ -199,7 +199,7 @@ class AgentRouter:
         try:
             # Quick pattern matching for common cases
             quick_routing = self.quick_route_analysis(request)
-            if quick_routing["confidence"] > 0.8:
+            if quick_routing["confidence"] >= 0.8:
                 return quick_routing
 
             # Check learned strategies before LLM fallback (#2105)

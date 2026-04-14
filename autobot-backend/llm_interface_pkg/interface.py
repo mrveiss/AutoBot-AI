@@ -690,7 +690,11 @@ class LLMInterface:
             return ""
 
     def _resolve_includes(self, content: str, base_path: str) -> str:
-        """Resolve @include directives in prompt content recursively."""
+        """Resolve @include directives in prompt content recursively.
+
+        Issue #4346: Applies smart truncation to large included files
+        to optimize LLM context usage.
+        """
 
         def replace_include(match):
             included_file = match.group(1)
@@ -698,6 +702,11 @@ class LLMInterface:
             if os.path.exists(included_path):
                 with open(included_path, "r", encoding="utf-8") as f:
                     included_content = f.read()
+
+                # Apply smart truncation for large files (Issue #4346)
+                from prompt_manager import prompt_manager
+                included_content = prompt_manager.truncate_large_file(included_content)
+
                 return self._resolve_includes(
                     included_content, os.path.dirname(included_path)
                 )

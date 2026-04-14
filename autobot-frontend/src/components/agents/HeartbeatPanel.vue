@@ -150,12 +150,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 
 import { getBackendUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+import { useLiveEvents } from '@/composables/useLiveEvents'
+import type { LiveEvent } from '@/services/LiveEventService'
 
 const logger = createLogger('HeartbeatPanel')
+const { subscribe, unsubscribe } = useLiveEvents()
 
 interface HeartbeatConfig {
   agent_id: string
@@ -220,6 +223,47 @@ const editInterval = ref(300)
 const editMaxDuration = ref(600)
 const expandedRunId = ref<string | null>(null)
 const expandedRun = computed(() => runs.value.find((r) => r.id === expandedRunId.value) ?? null)
+
+// ── Live event subscription ───────────────────────────────────────────────────
+
+let _liveUnsub: (() => void) | null = null
+
+function _onLiveEvent(event: LiveEvent): void {
+  if (event.event_type === 'heartbeat_run_started') {
+    logger.debug('heartbeat_run_started received, refreshing data', { run_id: event.payload.run_id })
+    void loadData()
+  } else if (event.event_type === 'heartbeat_run_completed') {
+    logger.debug('heartbeat_run_completed received, refreshing data', {
+      run_id: event.payload.run_id,
+      status: event.payload.status,
+    })
+    void loadData()
+  }
+}
+
+watch(agentId, (newId: string, oldId: string) => {
+  if (oldId) {
+    const oldChannel = `agent:${oldId}`
+    if (_liveUnsub) {
+      _liveUnsub()
+      _liveUnsub = null
+    }
+    unsubscribe(oldChannel, _onLiveEvent)
+  }
+  if (newId) {
+    _liveUnsub = subscribe(`agent:${newId}`, _onLiveEvent)
+    logger.debug('Subscribed to live events for agent', { agentId: newId })
+  }
+}, { immediate: true })
+
+onUnmounted(() => {
+  if (_liveUnsub) {
+    _liveUnsub()
+    _liveUnsub = null
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function apiBase(): string {
   return `${getBackendUrl()}/api/heartbeat`
@@ -292,7 +336,9 @@ async function triggerManual(): Promise<void> {
   error.value = null
   try {
     await apiFetch(`/${agentId.value}/trigger`, { method: 'POST' })
-    setTimeout(() => loadData(), 1500)
+    // Refresh will happen automatically via heartbeat_run_started live event;
+    // load immediately to reflect the queued status while we wait.
+    void loadData()
   } catch (err) {
     error.value = String(err)
   } finally {

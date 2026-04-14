@@ -185,7 +185,7 @@ const scanOrphans = async () => {
     orphanScanResult.value = null
     statusMessage.value = null
 
-    const response = await apiClient.get(`${getApiBase()}/memory/entities/orphans`)
+    const response = await apiClient.get<Response>(`${getApiBase()}/memory/entities/orphans`)
 
     // Check if we got a valid Response object
     if (!response || typeof response.ok === 'undefined') {
@@ -238,7 +238,7 @@ const cleanupOrphans = async () => {
   try {
     isCleaning.value = true
 
-    const response = await apiClient.delete(`${getApiBase()}/memory/entities/orphans?dry_run=false`)
+    const response = await apiClient.delete<Response>(`${getApiBase()}/memory/entities/orphans?dry_run=false`)
 
     // Check if we got a valid Response object
     if (!response || typeof response.ok === 'undefined') {
