@@ -355,7 +355,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   max-width: 600px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-xl);
 }
 
 .modal-header {
@@ -597,7 +597,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   right: 24px;
   padding: 16px 20px;
   border-radius: 8px;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-lg);
   font-weight: 500;
   animation: slideIn 0.3s ease-out;
   z-index: 1100;

@@ -368,8 +368,8 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .connection-line { fill: none; stroke: var(--color-primary); stroke-width: 2; }
 .drawing-line { fill: none; stroke: var(--color-primary); stroke-width: 2; stroke-dasharray: 5; opacity: 0.6; }
 
-.workflow-node { position: absolute; width: 240px; background: var(--bg-secondary); border: 2px solid var(--border-default); border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); cursor: move; user-select: none; }
-.workflow-node:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
+.workflow-node { position: absolute; width: 240px; background: var(--bg-secondary); border: 2px solid var(--border-default); border-radius: 10px; box-shadow: var(--shadow-sm); cursor: move; user-select: none; }
+.workflow-node:hover { box-shadow: var(--shadow-md); }
 .workflow-node.selected { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-bg); }
 .workflow-node.step .node-header { background: var(--color-primary); }
 .workflow-node.condition .node-header { background: var(--color-warning); }
