@@ -1053,6 +1053,40 @@ export class ChatController {
    * @param comment      - Optional human comment attached to the decision
    * @returns true if the decision was delivered to the WebSocket, false otherwise
    */
+  /**
+   * Issue #4431: Push local-only sessions to the backend before bidirectional sync.
+   *
+   * After receiving the backend session list, any local session that has real messages
+   * and is absent from the backend is POSTed (created + messages saved) so it survives
+   * the subsequent syncSessionsWithBackend() call.
+   *
+   * @param backendSessionIds - Set of session IDs already present on the backend
+   */
+  async pushLocalOnlySessions(backendSessionIds: Set<string>): Promise<void> {
+    const localOnly = this.chatStore.sessions.filter(
+      (s: ChatSession) => !backendSessionIds.has(s.id) && s.messages.length > 0
+    )
+    if (localOnly.length === 0) return
+
+    logger.debug(`[Issue #4431] Pushing ${localOnly.length} local-only session(s) to backend`)
+
+    await Promise.allSettled(
+      localOnly.map(async (session: ChatSession) => {
+        try {
+          await chatRepository.createNewChat(session.title)
+          await chatRepository.saveChatMessages({
+            chatId: session.id,
+            messages: session.messages,
+            name: session.title || ''
+          })
+          logger.debug(`[Issue #4431] Pushed local session ${session.id} to backend`)
+        } catch (error) {
+          logger.warn(`[Issue #4431] Failed to push local session ${session.id}:`, error)
+        }
+      })
+    )
+  }
+
   submitApprovalDecision(
     approvalId: string,
     approved: boolean,

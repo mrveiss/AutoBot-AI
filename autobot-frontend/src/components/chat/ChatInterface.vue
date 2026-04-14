@@ -825,6 +825,11 @@ const initializeChatInterface = async () => {
       // Explicitly check for error to distinguish API failures from empty responses
       if (data.chat_sessions && !data.chat_sessions.error && data.chat_sessions.data) {
         const sessions = data.chat_sessions.data
+        // Issue #4431: Push local-only sessions to backend before sync so they are
+        // not wiped by syncSessionsWithBackend. Only sessions with real messages are
+        // pushed (empty placeholders are skipped).
+        const backendIds = new Set<string>((sessions as Array<{ id: string }>).map(s => s.id))
+        await controller.pushLocalOnlySessions(backendIds)
         // Issue #4352: intentional_empty=true means the backend confirmed 0 sessions
         // is correct (user deleted all). Pass this through so syncSessionsWithBackend
         // can bypass the #4328 defensive guard and clear local sessions as intended.
