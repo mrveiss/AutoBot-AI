@@ -342,6 +342,7 @@ def test_resolve_prompt_empty_template_falls_back_to_default():
 
 @pytest.mark.asyncio
 async def test_synthesize_docs_uses_collection_config_prompt(tmp_path):
+    """Template with {documents} sends a single user message with docs substituted (Option A)."""
     f = tmp_path / "arch.md"
     f.write_text("# Architecture\nSome details.", encoding="utf-8")
 
@@ -360,8 +361,11 @@ async def test_synthesize_docs_uses_collection_config_prompt(tmp_path):
     llm.chat.assert_awaited_once()
     call_kwargs = llm.chat.call_args
     messages = call_kwargs.kwargs.get("messages") or call_kwargs.args[0]
-    system_content = next(m["content"] for m in messages if m["role"] == "system")
-    assert "You are an architecture assistant." in system_content
+    # With {documents} placeholder: single user message, no system message
+    assert len(messages) == 1
+    assert messages[0]["role"] == "user"
+    assert "You are an architecture assistant." in messages[0]["content"]
+    assert "# Architecture" in messages[0]["content"]
 
 
 @pytest.mark.asyncio
@@ -381,3 +385,106 @@ async def test_synthesize_docs_no_config_uses_default_prompt(tmp_path):
     messages = call_kwargs.kwargs.get("messages") or call_kwargs.args[0]
     system_content = next(m["content"] for m in messages if m["role"] == "system")
     assert system_content == _kb_synth_mod._SYNTHESIS_PROMPT
+
+
+# ---------------------------------------------------------------------------
+# Tests: {documents} placeholder substitution in _synthesize_cluster (#4634)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_synthesize_cluster_with_documents_placeholder_single_user_message(tmp_path):
+    """When template has {documents}, LLM receives a single user message with docs substituted."""
+    f = tmp_path / "doc.md"
+    f.write_text("Important content here.", encoding="utf-8")
+
+    col = _make_collection()
+    llm = _make_llm("Synthesis result")
+    synth = KBSynthesizer(llm_service=llm)
+    synth._collection = col
+
+    cfg = _make_collection_config(
+        name="test_col",
+        prompt_template="Summarize these docs:\n\n{documents}\n\nEnd.",
+    )
+
+    await synth.synthesize_docs([str(f)], collection_config=cfg)
+
+    llm.chat.assert_awaited_once()
+    messages = llm.chat.call_args.kwargs.get("messages") or llm.chat.call_args.args[0]
+    # Must be exactly one user message — no system message
+    assert len(messages) == 1
+    assert messages[0]["role"] == "user"
+    assert "Important content here." in messages[0]["content"]
+    assert "{documents}" not in messages[0]["content"]
+
+
+@pytest.mark.asyncio
+async def test_synthesize_cluster_without_documents_placeholder_two_message_format(tmp_path):
+    """When template has no {documents}, LLM receives system + user two-message format."""
+    f = tmp_path / "doc.md"
+    f.write_text("Some content.", encoding="utf-8")
+
+    col = _make_collection()
+    llm = _make_llm("Synthesis result")
+    synth = KBSynthesizer(llm_service=llm)
+    synth._collection = col
+
+    # No {documents} placeholder — generic fallback-style prompt
+    cfg = _make_collection_config(
+        name="test_col",
+        prompt_template="You are a helpful assistant.",
+    )
+
+    await synth.synthesize_docs([str(f)], collection_config=cfg)
+
+    llm.chat.assert_awaited_once()
+    messages = llm.chat.call_args.kwargs.get("messages") or llm.chat.call_args.args[0]
+    assert len(messages) == 2
+    assert messages[0]["role"] == "system"
+    assert messages[0]["content"] == "You are a helpful assistant."
+    assert messages[1]["role"] == "user"
+    assert "Some content." in messages[1]["content"]
+
+
+@pytest.mark.asyncio
+async def test_synthesize_cluster_documents_placeholder_substitutes_actual_content(tmp_path):
+    """The substituted {documents} value contains the actual file content, not a literal."""
+    f = tmp_path / "readme.md"
+    f.write_text("Redis caching layer docs.", encoding="utf-8")
+
+    col = _make_collection()
+    llm = _make_llm("done")
+    synth = KBSynthesizer(llm_service=llm)
+    synth._collection = col
+
+    cfg = _make_collection_config(
+        prompt_template="Prefix:\n{documents}\nSuffix",
+    )
+
+    await synth.synthesize_docs([str(f)], collection_config=cfg)
+
+    messages = llm.chat.call_args.kwargs.get("messages") or llm.chat.call_args.args[0]
+    user_content = messages[0]["content"]
+    assert "Redis caching layer docs." in user_content
+    assert "Prefix:" in user_content
+    assert "Suffix" in user_content
+
+
+@pytest.mark.asyncio
+async def test_synthesize_cluster_default_prompt_no_documents_placeholder(tmp_path):
+    """Default (no collection_config) prompt has no {documents} — uses two-message format."""
+    f = tmp_path / "doc.md"
+    f.write_text("Content.", encoding="utf-8")
+
+    col = _make_collection()
+    llm = _make_llm("result")
+    synth = KBSynthesizer(llm_service=llm)
+    synth._collection = col
+
+    await synth.synthesize_docs([str(f)], collection_config=None)
+
+    messages = llm.chat.call_args.kwargs.get("messages") or llm.chat.call_args.args[0]
+    assert len(messages) == 2
+    assert messages[0]["role"] == "system"
+    assert messages[1]["role"] == "user"
