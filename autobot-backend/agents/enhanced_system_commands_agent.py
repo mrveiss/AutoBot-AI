@@ -426,8 +426,18 @@ and suggest alternatives."""
         return choice["message"]["content"].strip()
 
     def _extract_response_content(self, response: Any) -> str:
-        """Extract the actual text content from LLM response."""
+        """Extract the actual text content from LLM response.
+
+        Issue #4532: handle LLMResponse objects via .content attribute to avoid
+        str(LLMResponse(...)) leaking into the explanation field.
+        """
         try:
+            # LLMResponse dataclass — use .content attribute directly
+            if hasattr(response, "content") and not isinstance(response, dict):
+                content = getattr(response, "content", None)
+                if content and isinstance(content, str):
+                    return content.strip()
+
             if isinstance(response, dict):
                 content = self._try_extract_message_content(response)
                 if content:
