@@ -27,8 +27,9 @@ function coLocatedApiUrlGuard(): import('vite').Plugin {
       if (!isCoLocated()) return
       // Co-located build without VITE_API_URL — all API calls will silently
       // route to the wrong backend (port 8001 user backend instead of SLM).
-      config.logger.warn(
-        '\n[slm-frontend] WARNING: VITE_API_URL is not set.\n' +
+      // Throw to abort the build rather than silently writing a broken dist/.
+      throw new Error(
+        '[slm-frontend] VITE_API_URL is not set.\n' +
         '  In co-located mode every API call will default to "" (empty string)\n' +
         '  and route to the user backend (port 8001) instead of the SLM backend.\n' +
         '  Fix: run  VITE_API_URL=/slm npm run build  or use  npm run build:slm\n'
