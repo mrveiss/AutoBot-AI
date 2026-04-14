@@ -491,6 +491,11 @@ defineExpose({
   outline: none;
   border-color: var(--chart-blue);
 }
+.metric-select:focus-visible,
+.time-select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .refresh-btn {
   padding: var(--spacing-2) var(--spacing-3);

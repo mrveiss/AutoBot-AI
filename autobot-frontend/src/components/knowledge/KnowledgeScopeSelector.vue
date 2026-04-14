@@ -195,6 +195,10 @@ const handleGroupChange = () => {
   border-color: var(--color-electric-500, #3b82f6);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
+.scope-dropdown:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .scope-dropdown:disabled {
   background-color: var(--bg-secondary);

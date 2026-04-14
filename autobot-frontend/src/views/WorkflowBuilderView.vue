@@ -1741,6 +1741,10 @@ watch(hasActiveWorkflows, (hasActive) => {
   outline: none;
   border-color: var(--color-primary);
 }
+.nl-input-area textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .nl-input-area textarea::placeholder {
   color: var(--text-muted);

@@ -1675,6 +1675,10 @@ watch(selectedScope, () => {
   border-color: var(--color-primary);
   box-shadow: var(--shadow-focus);
 }
+.search-wrapper .search-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .clear-search {
   position: absolute;

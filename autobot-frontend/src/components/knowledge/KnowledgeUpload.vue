@@ -1070,6 +1070,13 @@ onMounted(() => {
   border-color: var(--color-primary);
   box-shadow: var(--ring-primary);
 }
+.form-input:focus-visible,
+.form-textarea:focus-visible,
+.form-select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.form-input:focus-visible,
 
 .char-count {
   text-align: right;

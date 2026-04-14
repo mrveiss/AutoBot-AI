@@ -465,6 +465,10 @@ const closeDialog = () => {
   border-color: var(--color-electric-500, #3b82f6);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
+.search-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .search-results {
   margin-bottom: 1.5rem;

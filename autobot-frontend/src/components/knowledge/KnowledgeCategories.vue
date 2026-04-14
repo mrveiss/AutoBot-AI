@@ -1116,6 +1116,11 @@ onUnmounted(() => {
   border-color: var(--color-info);
   box-shadow: var(--shadow-focus);
 }
+.form-input:focus-visible,
+.form-textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .color-picker {
   display: flex;

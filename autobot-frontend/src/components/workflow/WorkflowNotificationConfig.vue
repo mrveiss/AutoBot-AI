@@ -368,6 +368,10 @@ watch(saveSuccess, (val) => {
   border-color: var(--color-primary, #3b82f6);
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
 }
+.field-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .field-hint {
   font-size: 0.75rem;

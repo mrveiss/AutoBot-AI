@@ -816,6 +816,11 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
+.voice-overlay__threshold-slider:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 .voice-overlay__threshold-slider::-webkit-slider-thumb {
   appearance: none;
   width: 12px;

@@ -467,6 +467,11 @@ onMounted(() => {
   border-color: var(--color-primary);
   box-shadow: var(--shadow-focus);
 }
+.form-group input:focus-visible,
+.form-group select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .form-group input:disabled,
 .form-group select:disabled {

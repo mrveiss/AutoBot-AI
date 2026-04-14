@@ -681,6 +681,10 @@ export default {
   outline: none;
   border-color: var(--color-primary);
 }
+.form-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .form-checkbox {
   width: 18px;

@@ -590,6 +590,10 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   border-color: var(--color-primary, #6366f1);
   box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
 }
+.pw-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .toast {
   position: fixed;

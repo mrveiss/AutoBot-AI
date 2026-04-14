@@ -1664,6 +1664,11 @@ export default {
   min-width: 0;
 }
 
+.terminal-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 .cursor {
   color: #00ff00;
   font-weight: bold;

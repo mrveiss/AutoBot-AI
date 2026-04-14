@@ -171,8 +171,10 @@ onMounted(() => {
 
 .alert-dismiss:focus {
   outline: none;
-  ring: 2px;
-  ring-offset: 2px;
+}
+.alert-dismiss:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* Success variant */

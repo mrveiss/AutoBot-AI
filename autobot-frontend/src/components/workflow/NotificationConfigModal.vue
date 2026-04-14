@@ -346,6 +346,7 @@ async function handleSave(): Promise<void> {
   outline: none;
 }
 .notif-input:focus { border-color: var(--color-primary); }
+.notif-input:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 
 .tag-input-wrapper {
   display: flex;
@@ -393,6 +394,7 @@ async function handleSave(): Promise<void> {
   outline: none;
 }
 .tag-input:focus { border-color: var(--color-primary); }
+.tag-input:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 
 .field-error {
   margin: 6px 0 0;

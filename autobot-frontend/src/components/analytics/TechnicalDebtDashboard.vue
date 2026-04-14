@@ -1636,6 +1636,11 @@ watch(selectedPeriod, () => {
   outline: none;
   border-color: var(--color-primary);
 }
+.table-filters select:focus-visible,
+.table-filters input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .debt-table-container {
   overflow-x: auto;

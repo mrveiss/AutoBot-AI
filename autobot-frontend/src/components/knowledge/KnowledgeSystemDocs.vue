@@ -574,6 +574,10 @@ onMounted(() => {
   outline: none;
   border-color: var(--color-info);
 }
+.search-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 /* Export Dropdown */
 .export-dropdown {

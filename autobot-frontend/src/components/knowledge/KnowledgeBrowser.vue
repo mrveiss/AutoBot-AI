@@ -1362,6 +1362,10 @@ watch(() => props.mode, () => {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px var(--color-primary-alpha-10);
 }
+.search-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .clear-btn {
   position: absolute;

@@ -523,6 +523,10 @@ onMounted(() => {
   border-color: var(--color-info);
   box-shadow: var(--shadow-focus);
 }
+.url-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .btn-check {
   display: flex;

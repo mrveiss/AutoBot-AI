@@ -188,6 +188,7 @@ function formatDate(date?: string): string {
 .search-box { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: 8px; flex: 1; min-width: 200px; }
 .search-box i { color: var(--text-muted); }
 .search-box input { flex: 1; background: none; border: none; color: var(--text-primary); font-size: 14px; outline: none; }
+.search-box input:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .filter-group { display: flex; gap: 8px; }
 .filter-group select { padding: 10px 12px; background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: 8px; color: var(--text-primary); font-size: 13px; cursor: pointer; }
 

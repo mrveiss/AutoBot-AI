@@ -1470,6 +1470,10 @@ watch(layoutMode, () => {
   background: transparent;
   color: var(--text-primary);
 }
+.search-group input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .search-group input::placeholder {
   color: var(--text-tertiary);
@@ -1883,6 +1887,13 @@ watch(layoutMode, () => {
   border-color: var(--color-primary);
   box-shadow: var(--shadow-focus);
 }
+.form-group input:focus-visible,
+.form-group select:focus-visible,
+.form-group textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.form-group input:focus-visible,
 
 .form-actions {
   display: flex;

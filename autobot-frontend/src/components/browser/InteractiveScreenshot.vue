@@ -295,6 +295,10 @@ function submitType() {
 .type-input:focus {
   border-color: var(--color-primary, #3b82f6);
 }
+.type-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .type-submit {
   display: flex;

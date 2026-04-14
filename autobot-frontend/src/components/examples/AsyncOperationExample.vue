@@ -958,6 +958,10 @@ const loadAnalytics = () => analytics.execute(async () => {
   border-color: var(--color-primary);
   box-shadow: var(--shadow-focus);
 }
+.form-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 /* Notifications */
 .notification-toast {

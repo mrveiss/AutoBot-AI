@@ -726,6 +726,11 @@ onUnmounted(() => {
   padding: 0;
 }
 
+.terminal-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 /* Additional styling for terminal line types */
 .terminal-line {
   @apply mb-1 break-words;
