@@ -88,12 +88,16 @@ class LinkPipeline(BasePipeline):
     async def _fetch_and_parse(self, url: str, metadata: Dict) -> Dict[str, Any]:
         """Fetch URL and parse the HTML response."""
         headers = {"User-Agent": _USER_AGENT}
+        # ssl=None uses the default aiohttp SSL context (cert verification enabled).
+        # Callers may pass metadata={"allow_self_signed": True} to opt-in to skipping
+        # cert verification for known-safe internal URLs.
+        ssl_context = False if metadata.get("allow_self_signed") else None
         try:
             async with aiohttp.ClientSession(
                 headers=headers, timeout=_DEFAULT_TIMEOUT
             ) as session:
                 async with session.get(
-                    url, allow_redirects=True, ssl=False
+                    url, allow_redirects=True, ssl=ssl_context
                 ) as response:
                     final_url = str(response.url)
                     content_type = response.headers.get("Content-Type", "")
