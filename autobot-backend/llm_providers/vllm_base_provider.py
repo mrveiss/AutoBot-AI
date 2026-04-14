@@ -125,10 +125,11 @@ class VLLMBaseProvider(BaseProvider):
             )
 
             # Adapt vLLM response to LLMResponse
+            # Issue #4527: LLMResponse fields are `model` and `provider`, not model_name/provider_name
             return LLMResponse(
                 content=response["message"]["content"],
-                model_name=response.get("model", request.model_name or "vllm-model"),
-                provider_name=self.provider_name,
+                model=response.get("model", request.model_name or "vllm-model"),
+                provider=self.provider_name,
                 usage=response.get("usage", {}),
                 provider_metadata=self._build_provider_metadata(
                     model_api_name=response.get("model", request.model_name or ""),
@@ -142,8 +143,8 @@ class VLLMBaseProvider(BaseProvider):
             logger.error("vLLM chat completion failed: %s", exc)
             return LLMResponse(
                 content="",
-                model_name=request.model_name or "vllm-model",
-                provider_name=self.provider_name,
+                model=request.model_name or "vllm-model",
+                provider=self.provider_name,
                 error=f"vLLM inference error: {exc}",
             )
 

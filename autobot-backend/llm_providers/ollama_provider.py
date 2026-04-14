@@ -219,13 +219,15 @@ class OllamaProvider(BaseProvider):
             }
         if request.max_tokens:
             payload["options"]["num_predict"] = request.max_tokens
+        # Issue #4524/#4525 follow-up: generate payload must go to /api/generate
+        endpoint = PATH_OLLAMA_GENERATE if chat_template else PATH_OLLAMA_CHAT
         try:
             import json as _json
 
             http_client = get_http_client()
             timeout = aiohttp.ClientTimeout(total=None, connect=5.0, sock_read=None)
             async with await http_client.post(
-                f"{base_url}{PATH_OLLAMA_CHAT}",
+                f"{base_url}{endpoint}",
                 headers={"Content-Type": "application/json"},
                 json=payload,
                 timeout=timeout,
