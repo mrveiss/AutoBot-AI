@@ -345,9 +345,9 @@ onMounted(async () => {
 .template-icon.development { background: var(--color-primary-bg); color: var(--color-primary); }
 .template-icon.security { background: var(--color-warning-bg); color: var(--color-warning); }
 .template-icon.backup { background: var(--color-success-bg); color: var(--color-success); }
-.template-icon.research { background: #e8f4fd; color: #0077b6; }
-.template-icon.analysis { background: #f3e8ff; color: #7c3aed; }
-.template-icon.community { background: #e8fdf0; color: #059669; }
+.template-icon.research { background: var(--color-info-bg); color: var(--color-info); }
+.template-icon.analysis { background: var(--color-info-bg); color: var(--color-info); }
+.template-icon.community { background: var(--color-success-bg); color: var(--color-success); }
 
 .template-info { flex: 1; min-width: 0; }
 .template-info h4 { margin: 0 0 4px; font-size: 15px; color: var(--text-primary); }

@@ -480,9 +480,9 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   text-transform: uppercase;
 }
 
-.role-admin { background: #fbbf24; color: #78350f; }
-.role-user { background: #60a5fa; color: #1e3a8a; }
-.role-viewer { background: #94a3b8; color: #1e293b; }
+.role-admin { background: var(--color-warning-bg); color: var(--color-warning); }
+.role-user { background: var(--color-info-bg); color: var(--color-info); }
+.role-viewer { background: var(--bg-tertiary); color: var(--text-secondary); }
 
 .pref-group {
   margin-bottom: 20px;
@@ -604,13 +604,13 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 }
 
 .toast.success {
-  background: #10b981;
-  color: white;
+  background: var(--color-success);
+  color: var(--text-inverse);
 }
 
 .toast.error {
-  background: #ef4444;
-  color: white;
+  background: var(--color-error);
+  color: var(--text-inverse);
 }
 
 @keyframes slideIn {

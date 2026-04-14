@@ -547,7 +547,7 @@ function statusClass(status: string): string {
 }
 .event-type {
   font-weight: 600;
-  color: #60a5fa;
+  color: var(--color-info);
   flex-shrink: 0;
 }
 .event-msg {
@@ -583,23 +583,23 @@ button:not(:disabled):hover {
 }
 .btn-load,
 .btn-save {
-  background: #3b82f6;
-  border-color: #2563eb;
+  background: var(--color-primary);
+  border-color: var(--color-primary);
 }
 .btn-load:not(:disabled):hover,
 .btn-save:not(:disabled):hover {
-  background: #2563eb;
+  filter: brightness(0.9);
 }
 .btn-trigger {
-  background: #10b981;
-  border-color: #059669;
+  background: var(--color-success);
+  border-color: var(--color-success);
 }
 .btn-trigger:not(:disabled):hover {
-  background: #059669;
+  filter: brightness(0.9);
 }
 .btn-queue {
-  background: #8b5cf6;
-  border-color: #7c3aed;
+  background: var(--color-info);
+  border-color: var(--color-info);
 }
 .btn-sm {
   font-size: 0.75rem;
