@@ -189,11 +189,14 @@ const createRipple = (event: TouchEvent) => {
 
 /* Variant styles */
 .button-primary {
-  @apply bg-blue-600 text-white border border-transparent;
+  @apply border border-transparent;
+  background: var(--color-primary);
+  color: var(--text-inverse);
 }
 
 .button-primary:hover:not(.button-disabled):not(.button-loading) {
-  @apply bg-blue-700;
+  background: var(--color-primary);
+  filter: brightness(0.9);
 }
 
 .button-primary:focus {
@@ -237,11 +240,14 @@ const createRipple = (event: TouchEvent) => {
 }
 
 .button-danger {
-  @apply bg-red-600 text-white border border-transparent;
+  @apply border border-transparent;
+  background: var(--color-error);
+  color: var(--text-inverse);
 }
 
 .button-danger:hover:not(.button-disabled):not(.button-loading) {
-  @apply bg-red-700;
+  background: var(--color-error);
+  filter: brightness(0.9);
 }
 
 .button-danger:focus {
