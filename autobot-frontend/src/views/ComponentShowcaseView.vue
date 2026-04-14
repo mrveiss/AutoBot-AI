@@ -128,32 +128,32 @@
           <div class="card-stack">
             <BaseCard variant="default" size="sm">
               <template #header>
-                <h4 style="margin: 0; font-size: 14px;">{{ $t('views.componentShowcase.defaultCard') }}</h4>
+                <h4 style="margin: 0; font-size: var(--text-sm);">{{ $t('views.componentShowcase.defaultCard') }}</h4>
               </template>
-              <p style="margin: 0; font-size: 13px;">{{ $t('views.componentShowcase.defaultCardDesc') }}</p>
+              <p style="margin: 0; font-size: var(--text-sm);">{{ $t('views.componentShowcase.defaultCardDesc') }}</p>
             </BaseCard>
 
             <BaseCard variant="bordered" size="sm">
               <template #header>
-                <h4 style="margin: 0; font-size: 14px;">{{ $t('views.componentShowcase.borderedCard') }}</h4>
+                <h4 style="margin: 0; font-size: var(--text-sm);">{{ $t('views.componentShowcase.borderedCard') }}</h4>
               </template>
-              <p style="margin: 0; font-size: 13px;">{{ $t('views.componentShowcase.borderedCardDesc') }}</p>
+              <p style="margin: 0; font-size: var(--text-sm);">{{ $t('views.componentShowcase.borderedCardDesc') }}</p>
             </BaseCard>
 
             <BaseCard variant="elevated" size="sm">
               <template #header>
-                <h4 style="margin: 0; font-size: 14px;">{{ $t('views.componentShowcase.elevatedCard') }}</h4>
+                <h4 style="margin: 0; font-size: var(--text-sm);">{{ $t('views.componentShowcase.elevatedCard') }}</h4>
               </template>
-              <p style="margin: 0; font-size: 13px;">{{ $t('views.componentShowcase.elevatedCardDesc') }}</p>
+              <p style="margin: 0; font-size: var(--text-sm);">{{ $t('views.componentShowcase.elevatedCardDesc') }}</p>
             </BaseCard>
           </div>
 
           <h4 class="section-heading">{{ $t('views.componentShowcase.withFooter') }}</h4>
           <BaseCard variant="default" size="sm">
             <template #header>
-              <h4 style="margin: 0; font-size: 14px;">{{ $t('views.componentShowcase.cardWithFooter') }}</h4>
+              <h4 style="margin: 0; font-size: var(--text-sm);">{{ $t('views.componentShowcase.cardWithFooter') }}</h4>
             </template>
-            <p style="margin: 0; font-size: 13px;">{{ $t('views.componentShowcase.cardContent') }}</p>
+            <p style="margin: 0; font-size: var(--text-sm);">{{ $t('views.componentShowcase.cardContent') }}</p>
             <template #footer>
               <BaseButton size="sm" variant="ghost">{{ $t('views.componentShowcase.cancel') }}</BaseButton>
               <BaseButton size="sm" variant="primary">{{ $t('views.componentShowcase.save') }}</BaseButton>
@@ -203,7 +203,7 @@
 
             <template #footer>
               <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 13px; color: var(--text-secondary);">
+                <span style="font-size: var(--text-sm); color: var(--text-secondary);">
                   {{ $t('views.componentShowcase.showingEntries', { from: 1, to: 5, total: 5 }) }}
                 </span>
                 <div style="display: flex; gap: 4px;">
@@ -262,25 +262,25 @@
         <div class="component-section">
           <h4 class="section-heading">{{ $t('views.componentShowcase.uiFont') }}</h4>
           <div class="type-samples">
-            <p style="font-size: 28px; font-weight: 600; margin: 0;">{{ $t('views.componentShowcase.dashboardHeading') }}</p>
-            <p style="font-size: 18px; font-weight: 600; margin: 8px 0 0 0;">{{ $t('views.componentShowcase.sectionTitle') }}</p>
-            <p style="font-size: 14px; margin: 8px 0 0 0;">{{ $t('views.componentShowcase.bodyText') }}</p>
-            <p style="font-size: 13px; color: var(--text-secondary); margin: 4px 0 0 0;">{{ $t('views.componentShowcase.secondaryText') }}</p>
+            <p style="font-size: var(--text-3xl); font-weight: 600; margin: 0;">{{ $t('views.componentShowcase.dashboardHeading') }}</p>
+            <p style="font-size: var(--text-lg); font-weight: 600; margin: 8px 0 0 0;">{{ $t('views.componentShowcase.sectionTitle') }}</p>
+            <p style="font-size: var(--text-sm); margin: 8px 0 0 0;">{{ $t('views.componentShowcase.bodyText') }}</p>
+            <p style="font-size: var(--text-sm); color: var(--text-secondary); margin: 4px 0 0 0;">{{ $t('views.componentShowcase.secondaryText') }}</p>
           </div>
 
           <h4 class="section-heading">{{ $t('views.componentShowcase.dataFont') }}</h4>
           <div class="type-samples" style="font-family: var(--font-mono);">
-            <p style="font-size: 13px; margin: 0;">192.168.1.100</p>
-            <p style="font-size: 13px; margin: 4px 0 0 0;">2026-02-16T14:30:45Z</p>
-            <p style="font-size: 13px; margin: 4px 0 0 0;">user_id: 1234567890</p>
-            <p style="font-size: 13px; margin: 4px 0 0 0;">SHA: a3f4c2e1b7d</p>
+            <p style="font-size: var(--text-sm); margin: 0;">192.168.1.100</p>
+            <p style="font-size: var(--text-sm); margin: 4px 0 0 0;">2026-02-16T14:30:45Z</p>
+            <p style="font-size: var(--text-sm); margin: 4px 0 0 0;">user_id: 1234567890</p>
+            <p style="font-size: var(--text-sm); margin: 4px 0 0 0;">SHA: a3f4c2e1b7d</p>
           </div>
 
           <h4 class="section-heading">{{ $t('views.componentShowcase.numericFont') }}</h4>
           <div class="type-samples" style="font-family: var(--font-numeric); font-variant-numeric: tabular-nums;">
-            <p style="font-size: 13px; margin: 0;">1,234.56</p>
-            <p style="font-size: 13px; margin: 4px 0 0 0;">9,876.54</p>
-            <p style="font-size: 13px; margin: 4px 0 0 0;">  123.00</p>
+            <p style="font-size: var(--text-sm); margin: 0;">1,234.56</p>
+            <p style="font-size: var(--text-sm); margin: 4px 0 0 0;">9,876.54</p>
+            <p style="font-size: var(--text-sm); margin: 4px 0 0 0;">  123.00</p>
           </div>
         </div>
       </BaseCard>
