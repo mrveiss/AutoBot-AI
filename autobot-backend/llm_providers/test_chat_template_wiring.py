@@ -224,3 +224,113 @@ async def test_ollama_stream_uses_messages_payload_without_template():
     assert "messages" in captured_payload
     assert "prompt" not in captured_payload
     assert chunks == ["Hey"]
+
+
+# ---------------------------------------------------------------------------
+# OllamaProvider.chat_completion — uses generate endpoint when template set
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_ollama_chat_completion_pre_renders_when_template_set():
+    """When chat_template is in request.metadata, chat_completion must POST to
+    the generate endpoint with a rendered ``prompt`` key containing template
+    markers (e.g. ``<|im_start|>``) instead of forwarding to the delegate."""
+    from llm_interface_pkg.models import LLMRequest
+    from llm_providers.ollama_provider import OllamaProvider
+
+    provider = OllamaProvider(settings={"base_url": "http://localhost:11434"})
+
+    request = LLMRequest(
+        messages=[
+            {"role": "system", "content": "Be concise."},
+            {"role": "user", "content": "Hi"},
+        ],
+        model_name="llama3",
+        metadata={"chat_template": "chatml"},
+    )
+
+    captured_payload = {}
+    captured_url = {}
+
+    async def fake_post(url, headers, json, timeout):
+        captured_url["url"] = url
+        captured_payload.update(json)
+
+        ctx = MagicMock()
+        ctx.__aenter__ = AsyncMock(return_value=ctx)
+        ctx.__aexit__ = AsyncMock(return_value=False)
+        ctx.status = 200
+        ctx.json = AsyncMock(
+            return_value={
+                "response": "Hello there!",
+                "prompt_eval_count": 10,
+                "eval_count": 5,
+                "total_duration": 1_000_000_000,
+            }
+        )
+        return ctx
+
+    with patch("llm_providers.ollama_provider.get_http_client") as mock_client:
+        client = MagicMock()
+        client.post = fake_post
+        mock_client.return_value = client
+
+        response = await provider.chat_completion(request)
+
+    # Must use the generate endpoint, not the chat endpoint
+    from constants.api_constants import PATH_OLLAMA_GENERATE
+    assert PATH_OLLAMA_GENERATE in captured_url["url"]
+
+    # Payload must carry rendered prompt with chatml markers
+    assert "prompt" in captured_payload
+    assert "messages" not in captured_payload
+    assert "<|im_start|>" in captured_payload["prompt"]
+
+    # stream must be False for non-streaming call
+    assert captured_payload.get("stream") is False
+
+    # Response must be correctly populated
+    assert response.content == "Hello there!"
+    assert response.model == "llama3"
+    assert response.usage["prompt_tokens"] == 10
+    assert response.usage["completion_tokens"] == 5
+    assert response.usage["total_tokens"] == 15
+
+
+@pytest.mark.asyncio
+async def test_ollama_chat_completion_passes_through_without_template():
+    """Without chat_template in metadata, chat_completion must delegate to the
+    llm_interface_pkg OllamaProvider (messages passed through unchanged)."""
+    from llm_interface_pkg.models import LLMRequest, LLMResponse
+    from llm_providers.ollama_provider import OllamaProvider
+
+    provider = OllamaProvider(settings={"base_url": "http://localhost:11434"})
+
+    request = LLMRequest(
+        messages=[{"role": "user", "content": "Hello"}],
+        model_name="llama3",
+    )
+
+    expected_response = LLMResponse(
+        content="Hi from delegate",
+        model="llama3",
+        provider="ollama",
+        processing_time=0.1,
+        request_id=request.request_id,
+        usage={"prompt_tokens": 5, "completion_tokens": 4, "total_tokens": 9},
+    )
+
+    mock_delegate = MagicMock()
+    mock_delegate.chat_completion = AsyncMock(return_value=expected_response)
+    mock_delegate.ollama_host = "http://localhost:11434"
+
+    with patch.object(provider, "_ensure_delegate", return_value=mock_delegate):
+        response = await provider.chat_completion(request)
+
+    # Delegate must have been called exactly once with the original request
+    mock_delegate.chat_completion.assert_called_once_with(request)
+
+    # Response content must be forwarded
+    assert response.content == "Hi from delegate"
+    assert response.error is None
