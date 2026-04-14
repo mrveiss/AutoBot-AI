@@ -1730,7 +1730,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
 }
 
 .modal-content {
@@ -1850,7 +1850,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2000;
+  z-index: var(--z-popover);
   backdrop-filter: blur(2px);
 }
 
@@ -1861,7 +1861,7 @@ export default {
   border-radius: 12px;
   max-width: 600px;
   width: 90%;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-lg);
   border: 1px solid #444;
 }
 

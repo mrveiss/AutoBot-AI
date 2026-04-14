@@ -444,7 +444,7 @@ onMounted(() => {
   position: fixed;
   inset: 0;
   background: var(--bg-overlay-dark);
-  z-index: 1100;
+  z-index: var(--z-popover);
   display: flex;
   align-items: center;
   justify-content: center;

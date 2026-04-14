@@ -429,7 +429,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
+  z-index: var(--z-maximum);
   backdrop-filter: blur(4px);
 }
 

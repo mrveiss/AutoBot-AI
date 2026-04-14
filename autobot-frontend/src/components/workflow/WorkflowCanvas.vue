@@ -368,8 +368,8 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .connection-line { fill: none; stroke: var(--color-primary); stroke-width: 2; }
 .drawing-line { fill: none; stroke: var(--color-primary); stroke-width: 2; stroke-dasharray: 5; opacity: 0.6; }
 
-.workflow-node { position: absolute; width: 240px; background: var(--bg-secondary); border: 2px solid var(--border-default); border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); cursor: move; user-select: none; }
-.workflow-node:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
+.workflow-node { position: absolute; width: 240px; background: var(--bg-secondary); border: 2px solid var(--border-default); border-radius: 10px; box-shadow: var(--shadow-sm); cursor: move; user-select: none; }
+.workflow-node:hover { box-shadow: var(--shadow-md); }
 .workflow-node.selected { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-bg); }
 .workflow-node.step .node-header { background: var(--color-primary); }
 .workflow-node.condition .node-header { background: var(--color-warning); }
@@ -406,7 +406,7 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .empty-state h3 { margin: 0 0 8px; color: var(--text-primary); }
 .empty-state p { margin: 0 0 20px; color: var(--text-tertiary); }
 
-.dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: var(--z-modal-backdrop); }
 .dialog { width: 400px; background: var(--bg-secondary); border-radius: 12px; padding: 24px; }
 .dialog h3 { margin: 0 0 20px; display: flex; align-items: center; gap: 10px; color: var(--text-primary); }
 .dialog h3 i { color: var(--color-primary); }

@@ -1090,7 +1090,7 @@ onUnmounted(() => {
   border-radius: 0;
   overflow-y: auto;
   z-index: 100;
-  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-sm);
 }
 
 .detail-header {
@@ -1365,7 +1365,7 @@ onUnmounted(() => {
   bottom: 0;
   width: 100%;
   height: 100%;
-  z-index: 1000;
+  z-index: var(--z-modal);
   border-radius: 0;
 }
 

@@ -711,7 +711,7 @@ onMounted(() => {
   position: fixed;
   top: 1rem;
   right: 1rem;
-  z-index: 1000;
+  z-index: var(--z-modal);
   display: flex;
   flex-direction: column;
   gap: 0.75rem;

@@ -849,7 +849,7 @@ export default {
 /* Skip Navigation Links */
 .skip-links {
   position: relative;
-  z-index: 9999;
+  z-index: var(--z-toast);
 }
 
 .skip-link {
@@ -864,7 +864,7 @@ export default {
   font-size: 14px;
   font-weight: 500;
   transition: top 0.2s ease-in-out;
-  z-index: 10000;
+  z-index: var(--z-maximum);
 }
 
 .skip-link:focus {

@@ -247,7 +247,7 @@ async function handleSave(): Promise<void> {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
 }
 
 .notif-modal {
@@ -259,7 +259,7 @@ async function handleSave(): Promise<void> {
   max-height: 85vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-lg);
 }
 
 .notif-header {

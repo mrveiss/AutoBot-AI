@@ -726,7 +726,7 @@ watch([selectedGranularity, selectedDays], () => {
   border: 1px solid var(--border-default);
   border-radius: 6px;
   padding: 0.75rem;
-  z-index: 1000;
+  z-index: var(--z-tooltip);
   pointer-events: none;
 }
 
