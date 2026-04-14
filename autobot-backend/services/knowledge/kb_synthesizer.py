@@ -153,12 +153,16 @@ class KBSynthesizer:
 
         cluster_id = self._cluster_id(file_paths)
         prompt = self._resolve_prompt(collection_config)
+        if "{documents}" in prompt:
+            messages = [{"role": "user", "content": prompt.format(documents=docs_text)}]
+        else:
+            messages = [
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": docs_text},
+            ]
         try:
             response = await self._llm.chat(
-                messages=[
-                    {"role": "system", "content": prompt},
-                    {"role": "user", "content": docs_text},
-                ],
+                messages=messages,
                 temperature=0.3,
                 max_tokens=600,
             )
