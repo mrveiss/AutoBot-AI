@@ -611,6 +611,19 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true,
     },
   },
+  // Issue #1801: Admin User Management
+  {
+    path: '/admin/users',
+    name: 'admin-users',
+    component: () => import('@/views/AdminUsersView.vue'),
+    meta: {
+      title: 'User Management',
+      icon: 'fas fa-users',
+      description: 'Manage users, roles, and account status',
+      requiresAuth: true,
+      admin: true,
+    },
+  },
   // Issue #3502: Desktop remote view
   {
     path: '/desktop',
