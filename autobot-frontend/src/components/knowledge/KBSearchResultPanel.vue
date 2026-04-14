@@ -619,7 +619,7 @@ async function copyContent(): Promise<void> {
 .kb-highlight {
   background-color: #fef08a;
   color: #713f12;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   padding: 0 1px;
   font-weight: 600;
 }

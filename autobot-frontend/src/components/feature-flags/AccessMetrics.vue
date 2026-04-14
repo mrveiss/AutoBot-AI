@@ -308,7 +308,7 @@ const formatTime = (timestamp: number) => {
 .access-metrics {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   padding: 24px;
 }
 
@@ -352,7 +352,7 @@ const formatTime = (timestamp: number) => {
 .days-selector {
   padding: 8px 12px;
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--bg-input);
   color: var(--text-primary);
   font-size: 13px;
@@ -367,7 +367,7 @@ const formatTime = (timestamp: number) => {
   justify-content: center;
   background: var(--bg-tertiary);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
   color: var(--text-secondary);
   transition: all 0.15s;
@@ -438,7 +438,7 @@ const formatTime = (timestamp: number) => {
   padding: 16px;
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
 }
 
 .summary-card.alert {
@@ -448,7 +448,7 @@ const formatTime = (timestamp: number) => {
 .summary-icon {
   width: 44px;
   height: 44px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   background: var(--bg-tertiary);
   display: flex;
   align-items: center;
@@ -520,7 +520,7 @@ const formatTime = (timestamp: number) => {
 .breakdown-section {
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   padding: 16px;
 }
 
@@ -563,7 +563,7 @@ const formatTime = (timestamp: number) => {
   cursor: pointer;
   padding: 8px;
   margin: -8px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   transition: background 0.15s;
 }
 
@@ -594,14 +594,14 @@ code.item-label {
 .item-bar {
   height: 6px;
   background: var(--bg-tertiary);
-  border-radius: 3px;
+  border-radius: var(--radius-default);
   overflow: hidden;
 }
 
 .bar-fill {
   height: 100%;
   background: var(--color-error);
-  border-radius: 3px;
+  border-radius: var(--radius-default);
   transition: width 0.3s ease;
 }
 
@@ -642,7 +642,7 @@ code.item-label {
 .day-bar .bar {
   width: 100%;
   background: var(--color-error);
-  border-radius: 4px 4px 0 0;
+  border-radius: var(--radius-default) 4px 0 0;
   min-height: 4px;
   transition: height 0.3s ease;
 }
@@ -669,7 +669,7 @@ code.item-label {
   gap: 16px;
   padding: 10px 12px;
   background: var(--bg-tertiary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-weight: 600;
   color: var(--text-secondary);
   margin-bottom: 8px;
@@ -692,7 +692,7 @@ code.item-label {
   font-size: 12px;
   background: var(--bg-tertiary);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 /* Responsive */

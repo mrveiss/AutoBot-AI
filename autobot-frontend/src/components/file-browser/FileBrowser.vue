@@ -568,7 +568,7 @@ onMounted(() => {
 
 .modal-content {
   background: var(--bg-card);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   max-width: 90vw;
   max-height: 90vh;
   width: 800px;
@@ -607,7 +607,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   transition: background-color 0.2s;
 }
 
@@ -649,7 +649,7 @@ onMounted(() => {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   box-shadow: var(--shadow-sm);
 }
 
@@ -670,7 +670,7 @@ onMounted(() => {
   background-color: var(--bg-secondary);
   color: var(--text-primary);
   padding: 16px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   border: 1px solid var(--border-default);
 }
 
@@ -719,7 +719,7 @@ onMounted(() => {
   background-color: var(--color-electric-600, #2563eb);
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   cursor: pointer;
   font-size: 16px;
   transition: background-color 0.2s;

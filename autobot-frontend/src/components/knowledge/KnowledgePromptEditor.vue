@@ -575,7 +575,7 @@ onBeforeUnmount(() => {
   width: 100%;
   padding: 0.5rem 0.75rem 0.5rem 2.25rem;
   border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   font-size: 0.875rem;
   background: var(--bg-input);
   color: var(--text-primary);
@@ -584,7 +584,7 @@ onBeforeUnmount(() => {
 .category-filter {
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   font-size: 0.875rem;
   background: var(--bg-input);
   color: var(--text-primary);
@@ -659,7 +659,7 @@ onBeforeUnmount(() => {
   margin-left: auto;
   background: var(--bg-card);
   padding: 0.125rem 0.5rem;
-  border-radius: 1rem;
+  border-radius: var(--radius-2xl);
   font-weight: 500;
 }
 
@@ -671,7 +671,7 @@ onBeforeUnmount(() => {
 
 .prompt-item {
   padding: 0.625rem 0.75rem;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -748,7 +748,7 @@ onBeforeUnmount(() => {
 .version-badge {
   padding: 0.125rem 0.5rem;
   background: var(--bg-secondary);
-  border-radius: 0.25rem;
+  border-radius: var(--radius-default);
   font-size: 0.75rem;
   color: var(--text-secondary);
 }
@@ -757,7 +757,7 @@ onBeforeUnmount(() => {
   padding: 0.125rem 0.5rem;
   background: var(--color-warning-bg);
   color: var(--color-warning-dark);
-  border-radius: 0.25rem;
+  border-radius: var(--radius-default);
   font-size: 0.75rem;
   font-weight: 500;
 }
@@ -779,7 +779,7 @@ onBeforeUnmount(() => {
   height: 100%;
   padding: 1rem;
   border: 1px solid var(--border-default);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   font-family: var(--font-mono);
   font-size: 0.875rem;
   line-height: 1.6;
@@ -837,7 +837,7 @@ onBeforeUnmount(() => {
   padding: 0.125rem 0.5rem;
   background: var(--color-info-bg);
   color: var(--color-info);
-  border-radius: 0.25rem;
+  border-radius: var(--radius-default);
   font-family: var(--font-mono);
   font-size: 0.75rem;
 }
@@ -870,7 +870,7 @@ onBeforeUnmount(() => {
   align-items: center;
   padding: 0.75rem 1rem;
   border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -917,7 +917,7 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   padding: 1rem;
   background: var(--bg-secondary);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   font-family: var(--font-mono);
   font-size: 0.8125rem;
   line-height: 1.5;

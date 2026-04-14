@@ -348,16 +348,16 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 </script>
 
 <style scoped>
-.workflow-canvas-container { display: flex; flex-direction: column; height: 100%; background: var(--bg-primary); border-radius: 8px; overflow: hidden; }
+.workflow-canvas-container { display: flex; flex-direction: column; height: 100%; background: var(--bg-primary); border-radius: var(--radius-lg); overflow: hidden; }
 .canvas-toolbar { display: flex; justify-content: space-between; padding: 12px 16px; background: var(--bg-secondary); border-bottom: 1px solid var(--border-default); }
 .toolbar-left, .toolbar-right { display: flex; align-items: center; gap: 8px; }
-.tool-btn { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--bg-tertiary); border: 1px solid var(--border-default); border-radius: 6px; color: var(--text-secondary); font-size: 13px; cursor: pointer; transition: all 0.15s; }
+.tool-btn { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--bg-tertiary); border: 1px solid var(--border-default); border-radius: var(--radius-md); color: var(--text-secondary); font-size: 13px; cursor: pointer; transition: all 0.15s; }
 .tool-btn:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); }
 .tool-btn.primary { background: var(--color-primary); color: var(--text-on-primary); border-color: var(--color-primary); }
 .tool-btn.primary:hover:not(:disabled) { filter: brightness(1.1); }
 .tool-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .tool-btn.btn-experimental { opacity: 0.85; position: relative; }
-.badge-experimental { font-size: 9px; padding: 1px 4px; background: var(--color-warning); color: #000; border-radius: 3px; font-weight: 700; text-transform: uppercase; line-height: 1; }
+.badge-experimental { font-size: 9px; padding: 1px 4px; background: var(--color-warning); color: #000; border-radius: var(--radius-default); font-weight: 700; text-transform: uppercase; line-height: 1; }
 .toolbar-divider { width: 1px; height: 24px; background: var(--border-default); margin: 0 4px; }
 
 .canvas-area { flex: 1; position: relative; overflow: hidden; background: linear-gradient(var(--border-subtle) 1px, transparent 1px), linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px); background-size: 20px 20px; cursor: grab; }
@@ -368,7 +368,7 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .connection-line { fill: none; stroke: var(--color-primary); stroke-width: 2; }
 .drawing-line { fill: none; stroke: var(--color-primary); stroke-width: 2; stroke-dasharray: 5; opacity: 0.6; }
 
-.workflow-node { position: absolute; width: 240px; background: var(--bg-secondary); border: 2px solid var(--border-default); border-radius: 10px; box-shadow: var(--shadow-sm); cursor: move; user-select: none; }
+.workflow-node { position: absolute; width: 240px; background: var(--bg-secondary); border: 2px solid var(--border-default); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); cursor: move; user-select: none; }
 .workflow-node:hover { box-shadow: var(--shadow-md); }
 .workflow-node.selected { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-bg); }
 .workflow-node.step .node-header { background: var(--color-primary); }
@@ -376,19 +376,19 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .workflow-node[class*="vision-"] .node-header { background: linear-gradient(135deg, #7c3aed, #6d28d9); }
 
 .dropdown-container { position: relative; display: inline-block; }
-.dropdown-menu { position: absolute; top: 100%; left: 0; z-index: 10; background: var(--bg-secondary, #1e293b); border: 1px solid var(--border-color, #334155); border-radius: 6px; padding: 4px 0; min-width: 180px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+.dropdown-menu { position: absolute; top: 100%; left: 0; z-index: 10; background: var(--bg-secondary, #1e293b); border: 1px solid var(--border-color, #334155); border-radius: var(--radius-md); padding: 4px 0; min-width: 180px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
 .dropdown-menu button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 12px; border: none; background: none; color: var(--text-primary, #e2e8f0); cursor: pointer; font-size: 0.85rem; }
 .dropdown-menu button:hover { background: var(--bg-tertiary, #334155); }
 .target-label { font-size: 0.75rem; color: var(--text-secondary, #94a3b8); }
 .hint { font-size: 0.75rem; color: var(--text-secondary, #94a3b8); font-style: italic; }
 
-.node-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--text-on-primary); border-radius: 8px 8px 0 0; font-size: 13px; font-weight: 600; }
+.node-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--text-on-primary); border-radius: var(--radius-lg) 8px 0 0; font-size: 13px; font-weight: 600; }
 .node-header span { flex: 1; }
-.delete-btn { padding: 4px; background: transparent; border: none; color: inherit; cursor: pointer; opacity: 0.7; border-radius: 4px; }
+.delete-btn { padding: 4px; background: transparent; border: none; color: inherit; cursor: pointer; opacity: 0.7; border-radius: var(--radius-default); }
 .delete-btn:hover { opacity: 1; background: rgba(255,255,255,0.2); }
 
 .node-body { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-.node-body input, .node-body select { width: 100%; padding: 6px 8px; background: var(--bg-primary); border: 1px solid var(--border-default); border-radius: 4px; color: var(--text-primary); font-size: 12px; }
+.node-body input, .node-body select { width: 100%; padding: 6px 8px; background: var(--bg-primary); border: 1px solid var(--border-default); border-radius: var(--radius-default); color: var(--text-primary); font-size: 12px; }
 .node-body input:focus, .node-body select:focus { outline: none; border-color: var(--color-primary); }
 .node-body input:focus-visible, .node-body select:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .node-body input.mono { font-family: monospace; }
@@ -408,17 +408,17 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .empty-state p { margin: 0 0 20px; color: var(--text-tertiary); }
 
 .dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: var(--z-modal-backdrop); }
-.dialog { width: 400px; background: var(--bg-secondary); border-radius: 12px; padding: 24px; }
+.dialog { width: 400px; background: var(--bg-secondary); border-radius: var(--radius-xl); padding: 24px; }
 .dialog h3 { margin: 0 0 20px; display: flex; align-items: center; gap: 10px; color: var(--text-primary); }
 .dialog h3 i { color: var(--color-primary); }
-.dialog input, .dialog textarea { width: 100%; padding: 10px 12px; margin-bottom: 12px; background: var(--bg-primary); border: 1px solid var(--border-default); border-radius: 6px; color: var(--text-primary); font-size: 14px; font-family: inherit; }
+.dialog input, .dialog textarea { width: 100%; padding: 10px 12px; margin-bottom: 12px; background: var(--bg-primary); border: 1px solid var(--border-default); border-radius: var(--radius-md); color: var(--text-primary); font-size: 14px; font-family: inherit; }
 .dialog input:focus, .dialog textarea:focus { outline: none; border-color: var(--color-primary); }
 .dialog input:focus-visible, .dialog textarea:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 12px; }
 
-.btn-primary { padding: 10px 20px; background: var(--color-primary); color: var(--text-on-primary); border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+.btn-primary { padding: 10px 20px; background: var(--color-primary); color: var(--text-on-primary); border: none; border-radius: var(--radius-md); font-size: 14px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
 .btn-primary:hover:not(:disabled) { filter: brightness(1.1); }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-secondary { padding: 10px 20px; background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border-default); border-radius: 6px; font-size: 14px; cursor: pointer; }
+.btn-secondary { padding: 10px 20px; background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-md); font-size: 14px; cursor: pointer; }
 .btn-secondary:hover { background: var(--bg-hover); }
 </style>

@@ -206,13 +206,13 @@ function formatResult(result: Record<string, unknown>): string {
 </script>
 
 <style scoped>
-.workflow-runner { display: flex; height: 100%; gap: 0; background: var(--bg-primary); border-radius: 8px; overflow: hidden; }
+.workflow-runner { display: flex; height: 100%; gap: 0; background: var(--bg-primary); border-radius: var(--radius-lg); overflow: hidden; }
 
 .runner-sidebar { width: 300px; min-width: 300px; background: var(--bg-secondary); border-right: 1px solid var(--border-default); display: flex; flex-direction: column; }
 .sidebar-header { display: flex; justify-content: space-between; align-items: center; padding: 16px; border-bottom: 1px solid var(--border-default); }
 .sidebar-header h4 { margin: 0; font-size: 14px; color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
 .sidebar-header h4 i { color: var(--color-primary); }
-.btn-refresh { padding: 6px; background: transparent; border: none; color: var(--text-tertiary); cursor: pointer; border-radius: 4px; }
+.btn-refresh { padding: 6px; background: transparent; border: none; color: var(--text-tertiary); cursor: pointer; border-radius: var(--radius-default); }
 .btn-refresh:hover:not(:disabled) { background: var(--bg-hover); }
 .btn-refresh:disabled { opacity: 0.5; }
 
@@ -220,7 +220,7 @@ function formatResult(result: Record<string, unknown>): string {
 .empty-list i { font-size: 32px; margin-bottom: 12px; }
 
 .workflow-list { flex: 1; overflow-y: auto; padding: 8px; }
-.workflow-item { padding: 12px; background: var(--bg-tertiary); border-radius: 8px; margin-bottom: 8px; cursor: pointer; transition: all 0.15s; }
+.workflow-item { padding: 12px; background: var(--bg-tertiary); border-radius: var(--radius-lg); margin-bottom: 8px; cursor: pointer; transition: all 0.15s; }
 .workflow-item:hover { background: var(--bg-hover); }
 .workflow-item.active { background: var(--color-primary-bg); border: 1px solid var(--color-primary); }
 .workflow-item.paused { opacity: 0.7; }
@@ -233,7 +233,7 @@ function formatResult(result: Record<string, unknown>): string {
 .wf-info { flex: 1; min-width: 0; }
 .wf-name { display: block; font-size: 13px; font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wf-progress { font-size: 11px; color: var(--text-tertiary); }
-.wf-progress-bar { width: 100%; height: 4px; background: var(--bg-secondary); border-radius: 2px; overflow: hidden; }
+.wf-progress-bar { width: 100%; height: 4px; background: var(--bg-secondary); border-radius: var(--radius-xs); overflow: hidden; }
 .wf-progress-bar .progress-fill { height: 100%; background: var(--color-primary); transition: width 0.3s; }
 
 .runner-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
@@ -246,20 +246,20 @@ function formatResult(result: Record<string, unknown>): string {
 .header-info p { margin: 0 0 10px; font-size: 13px; color: var(--text-secondary); }
 .header-meta { display: flex; gap: 16px; font-size: 12px; color: var(--text-tertiary); flex-wrap: wrap; }
 .header-meta span { display: flex; align-items: center; gap: 6px; }
-.phase-badge { padding: 2px 8px; border-radius: 10px; font-weight: 500; background: var(--bg-tertiary); }
+.phase-badge { padding: 2px 8px; border-radius: var(--radius-xl); font-weight: 500; background: var(--bg-tertiary); }
 .phase-badge.planning { background: var(--color-info-bg); color: var(--color-info); }
 .phase-badge.executing { background: var(--color-primary-bg); color: var(--color-primary); }
 .phase-badge.validating { background: var(--color-warning-bg); color: var(--color-warning); }
 .phase-badge.complete { background: var(--color-success-bg); color: var(--color-success); }
 .phase-badge.failed { background: var(--color-error-bg); color: var(--color-error); }
-.service-badge { padding: 2px 8px; border-radius: 10px; background: var(--bg-tertiary); color: var(--text-secondary); font-family: monospace; }
+.service-badge { padding: 2px 8px; border-radius: var(--radius-xl); background: var(--bg-tertiary); color: var(--text-secondary); font-family: monospace; }
 .header-actions { display: flex; gap: 10px; align-items: center; }
 
 .btn-notif {
   padding: 8px 10px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-secondary);
   cursor: pointer;
   font-size: 14px;
@@ -270,7 +270,7 @@ function formatResult(result: Record<string, unknown>): string {
 .btn-notif:hover { background: var(--bg-hover); color: var(--color-primary); }
 
 .progress-overview { padding: 20px; background: var(--bg-secondary); }
-.progress-bar-large { height: 8px; background: var(--bg-tertiary); border-radius: 4px; overflow: hidden; margin-bottom: 16px; }
+.progress-bar-large { height: 8px; background: var(--bg-tertiary); border-radius: var(--radius-default); overflow: hidden; margin-bottom: 16px; }
 .progress-bar-large .progress-fill { height: 100%; background: var(--color-primary); transition: width 0.3s; }
 .progress-stats { display: flex; justify-content: space-around; }
 .progress-stats .stat { text-align: center; }
@@ -293,7 +293,7 @@ function formatResult(result: Record<string, unknown>): string {
 .step-line { width: 2px; flex: 1; min-height: 20px; background: var(--border-default); margin-top: 4px; }
 .step-line.completed { background: var(--color-success); }
 
-.step-content { flex: 1; padding: 8px 16px; background: var(--bg-secondary); border-radius: 8px; border-left: 3px solid var(--border-default); }
+.step-content { flex: 1; padding: 8px 16px; background: var(--bg-secondary); border-radius: var(--radius-lg); border-left: 3px solid var(--border-default); }
 .step-item.completed .step-content { border-left-color: var(--color-success); }
 .step-item.failed .step-content { border-left-color: var(--color-error); }
 .step-item.executing .step-content { border-left-color: var(--color-primary); }
@@ -301,32 +301,32 @@ function formatResult(result: Record<string, unknown>): string {
 
 .step-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .step-desc { font-size: 14px; font-weight: 500; color: var(--text-primary); }
-.step-status { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--bg-tertiary); color: var(--text-tertiary); }
+.step-status { font-size: 11px; padding: 2px 8px; border-radius: var(--radius-xl); background: var(--bg-tertiary); color: var(--text-tertiary); }
 .step-status.completed { background: var(--color-success-bg); color: var(--color-success); }
 .step-status.failed { background: var(--color-error-bg); color: var(--color-error); }
 .step-status.executing { background: var(--color-primary-bg); color: var(--color-primary); }
 .step-status.waiting_approval { background: var(--color-warning-bg); color: var(--color-warning); }
 
-.step-command { display: block; padding: 8px 10px; background: var(--bg-tertiary); border-radius: 4px; font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; overflow-x: auto; }
+.step-command { display: block; padding: 8px 10px; background: var(--bg-tertiary); border-radius: var(--radius-default); font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; overflow-x: auto; }
 .step-meta { display: flex; gap: 12px; font-size: 11px; color: var(--text-tertiary); }
 .step-meta span { display: flex; align-items: center; gap: 4px; }
-.step-meta .risk { padding: 2px 6px; border-radius: 8px; }
+.step-meta .risk { padding: 2px 6px; border-radius: var(--radius-lg); }
 .step-meta .risk.low { background: var(--color-success-bg); color: var(--color-success); }
 .step-meta .risk.medium { background: var(--color-warning-bg); color: var(--color-warning); }
 .step-meta .risk.high { background: var(--color-error-bg); color: var(--color-error); }
 
 .step-actions { display: flex; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-default); }
-.step-result { margin-top: 12px; padding: 10px; background: var(--bg-tertiary); border-radius: 4px; }
+.step-result { margin-top: 12px; padding: 10px; background: var(--bg-tertiary); border-radius: var(--radius-default); }
 .step-result.error { background: var(--color-error-bg); }
 .step-result pre { margin: 0; font-size: 11px; color: var(--text-secondary); white-space: pre-wrap; word-break: break-all; max-height: 150px; overflow-y: auto; }
 
-.btn-success { padding: 8px 16px; background: var(--color-success); color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.btn-success { padding: 8px 16px; background: var(--color-success); color: white; border: none; border-radius: var(--radius-md); font-size: 13px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .btn-success:hover { filter: brightness(1.1); }
-.btn-warning { padding: 8px 16px; background: var(--color-warning); color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.btn-warning { padding: 8px 16px; background: var(--color-warning); color: white; border: none; border-radius: var(--radius-md); font-size: 13px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .btn-warning:hover { filter: brightness(1.1); }
-.btn-danger { padding: 8px 16px; background: var(--color-error); color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.btn-danger { padding: 8px 16px; background: var(--color-error); color: white; border: none; border-radius: var(--radius-md); font-size: 13px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .btn-danger:hover { filter: brightness(1.1); }
-.btn-secondary { padding: 8px 16px; background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border-default); border-radius: 6px; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.btn-secondary { padding: 8px 16px; background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-md); font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .btn-secondary:hover { background: var(--bg-hover); }
 .btn-sm { padding: 6px 12px; font-size: 12px; }
 </style>

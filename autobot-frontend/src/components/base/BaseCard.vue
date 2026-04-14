@@ -83,23 +83,23 @@ const footerClasses = computed(() => ({
 /* Variant Styles */
 .card-default {
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 .card-bordered {
   border: 2px solid var(--border-strong);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 .card-elevated {
   border: 1px solid var(--border-subtle);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   box-shadow: var(--shadow-md);
 }
 
 .card-flat {
   background-color: var(--bg-secondary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 /* Hover Effect */

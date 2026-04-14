@@ -273,7 +273,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background: rgba(37, 99, 235, 0.15);
   color: #60a5fa;
   font-size: 0.75rem;
@@ -282,7 +282,7 @@ onBeforeUnmount(() => {
 .voice-panel__mode-select {
   appearance: none;
   padding: 0.2rem 1.5rem 0.2rem 0.4rem;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-default);
   border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.15));
   background: var(--bg-tertiary, #1e293b)
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M3 4.5L6 8l3-3.5H3z'/%3E%3C/svg%3E")
@@ -297,7 +297,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 0.2rem;
   padding: 0.1rem 0.4rem;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-default);
   background: rgba(37, 99, 235, 0.1);
   border: 1px solid rgba(37, 99, 235, 0.2);
   color: #93c5fd;
@@ -373,7 +373,7 @@ onBeforeUnmount(() => {
 .voice-panel__transcript {
   width: 100%;
   padding: 0.5rem 0.75rem;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background: rgba(37, 99, 235, 0.06);
   border: 1px dashed rgba(37, 99, 235, 0.2);
   color: #93c5fd;
@@ -386,7 +386,7 @@ onBeforeUnmount(() => {
 .voice-panel__error {
   margin: 0 0.75rem;
   padding: 0.375rem 0.5rem;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.2);
   color: #fca5a5;
@@ -397,7 +397,7 @@ onBeforeUnmount(() => {
 .voice-panel__cert-warning {
   margin: 0 0.75rem;
   padding: 0.5rem 0.625rem;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background: rgba(245, 158, 11, 0.08);
   border: 1px solid rgba(245, 158, 11, 0.25);
   color: #fcd34d;
@@ -575,6 +575,6 @@ onBeforeUnmount(() => {
 
 .overflow-y-auto::-webkit-scrollbar-thumb {
   background: var(--border-default, rgba(148, 163, 184, 0.15));
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 </style>

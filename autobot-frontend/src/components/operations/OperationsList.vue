@@ -262,7 +262,7 @@ function canResumeOperation(operation: Operation): boolean {
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
 }
 
 .name-cell {
@@ -322,7 +322,7 @@ function canResumeOperation(operation: Operation): boolean {
   justify-content: center;
   width: 28px;
   height: 28px;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-default);
   border: none;
   cursor: pointer;
 }

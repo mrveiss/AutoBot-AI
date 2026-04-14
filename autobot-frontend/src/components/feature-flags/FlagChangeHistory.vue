@@ -160,7 +160,7 @@ const formatRelativeTime = (timestamp: string) => {
 .flag-change-history {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   padding: 24px;
 }
 
@@ -296,7 +296,7 @@ const formatRelativeTime = (timestamp: string) => {
   display: inline-flex;
   align-items: center;
   padding: 4px 10px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 12px;
   font-weight: 600;
 }
@@ -325,7 +325,7 @@ const formatRelativeTime = (timestamp: string) => {
   padding: 14px;
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
 }
 
 .action-text {

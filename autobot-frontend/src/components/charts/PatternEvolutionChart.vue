@@ -150,7 +150,7 @@ function formatPatternName(pattern: string): string {
 <style scoped>
 .base-chart {
   background: var(--bg-secondary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 1rem;
 }
 </style>

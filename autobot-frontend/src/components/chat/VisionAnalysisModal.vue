@@ -357,7 +357,7 @@ onUnmounted(() => {
 
 .vision-modal {
   background: var(--bg-secondary, #fff);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   width: 90%;
   max-width: 640px;
   max-height: 85vh;
@@ -400,7 +400,7 @@ onUnmounted(() => {
   border: none;
   color: var(--text-tertiary);
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   transition: all 0.15s;
 }
 
@@ -422,7 +422,7 @@ onUnmounted(() => {
 /* Drop zone */
 .drop-zone {
   border: 2px dashed var(--border-default);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   padding: 32px;
   text-align: center;
   cursor: pointer;
@@ -478,7 +478,7 @@ onUnmounted(() => {
   width: 80px;
   height: 80px;
   object-fit: cover;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-default);
 }
 
@@ -507,7 +507,7 @@ onUnmounted(() => {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
 }
 
@@ -541,7 +541,7 @@ onUnmounted(() => {
   padding: 8px 12px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: 13px;
   color: var(--text-primary);
 }
@@ -563,7 +563,7 @@ onUnmounted(() => {
   background: var(--color-primary);
   color: var(--text-on-primary, #fff);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -591,7 +591,7 @@ onUnmounted(() => {
   padding: 10px 14px;
   background: var(--color-error-bg);
   border: 1px solid var(--color-error-border, var(--color-error));
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   color: var(--color-error);
   font-size: 13px;
 }
@@ -607,7 +607,7 @@ onUnmounted(() => {
 /* Results */
 .results-section {
   background: var(--bg-tertiary);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   overflow: hidden;
 }
 
@@ -637,7 +637,7 @@ onUnmounted(() => {
 .meta-badge {
   font-size: 11px;
   padding: 3px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   background: var(--bg-secondary);
   color: var(--text-secondary);
 }
@@ -680,7 +680,7 @@ onUnmounted(() => {
   padding: 3px 8px;
   background: var(--color-primary-bg, rgba(59, 130, 246, 0.1));
   color: var(--color-primary);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
 }
 
 .objects-list {
@@ -694,7 +694,7 @@ onUnmounted(() => {
   justify-content: space-between;
   padding: 6px 10px;
   background: var(--bg-secondary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 13px;
   color: var(--text-primary);
 }
@@ -723,7 +723,7 @@ onUnmounted(() => {
 .json-display {
   padding: 12px;
   background: var(--bg-secondary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: 11px;
   color: var(--text-secondary);
   overflow-x: auto;
@@ -750,7 +750,7 @@ onUnmounted(() => {
   background: var(--color-primary);
   color: var(--text-on-primary, #fff);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -773,7 +773,7 @@ onUnmounted(() => {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;

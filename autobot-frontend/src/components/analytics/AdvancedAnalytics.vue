@@ -562,7 +562,7 @@ onMounted(() => {
   background: none;
   color: var(--text-secondary);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   transition: all 0.2s;
 }
 
@@ -642,7 +642,7 @@ onMounted(() => {
   display: inline-block;
   padding: 0.25rem 0.5rem;
   background: var(--bg-tertiary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.75rem;
 }
 
@@ -757,14 +757,14 @@ onMounted(() => {
   width: 100px;
   height: 8px;
   background: var(--bg-tertiary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   overflow: hidden;
 }
 
 .popularity-fill {
   height: 100%;
   background: var(--color-primary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   transition: width 0.3s ease;
 }
 
@@ -780,7 +780,7 @@ onMounted(() => {
   gap: 1rem;
   padding: 0.75rem;
   background: var(--bg-secondary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 .peak-rank {

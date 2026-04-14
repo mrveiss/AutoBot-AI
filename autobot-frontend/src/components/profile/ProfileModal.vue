@@ -350,7 +350,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 
 .modal-content {
   background: var(--bg-card);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   width: 90%;
   max-width: 600px;
   max-height: 90vh;
@@ -385,7 +385,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   transition: background-color 0.2s;
 }
 
@@ -460,7 +460,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   align-items: center;
   padding: 12px;
   background: var(--bg-secondary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 .info-row label {
@@ -474,7 +474,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 
 .role-badge {
   padding: 2px 8px;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
@@ -505,7 +505,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 
 .option-btn {
   padding: 6px 16px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-default);
   background: var(--bg-secondary);
   color: var(--text-primary);
@@ -542,7 +542,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 .toggle-item input[type="checkbox"] {
   width: 16px;
   height: 16px;
-  border-radius: 3px;
+  border-radius: var(--radius-default);
   cursor: pointer;
 }
 
@@ -552,7 +552,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   background: var(--color-primary, #6366f1);
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -577,7 +577,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 .pw-input {
   padding: 8px 12px;
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--bg-secondary);
   color: var(--text-primary);
   font-size: 14px;
@@ -600,7 +600,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   bottom: 24px;
   right: 24px;
   padding: 16px 20px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   font-weight: 500;
   animation: slideIn 0.3s ease-out;

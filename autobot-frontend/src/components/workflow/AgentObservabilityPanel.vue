@@ -205,7 +205,7 @@ function formatDuration(seconds: number): string {
   height: 32px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-secondary);
   cursor: pointer;
   display: flex;
@@ -263,7 +263,7 @@ function formatDuration(seconds: number): string {
 .agent-card {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -293,7 +293,7 @@ function formatDuration(seconds: number): string {
 .agent-avatar {
   width: 36px;
   height: 36px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -338,7 +338,7 @@ function formatDuration(seconds: number): string {
 
 .reliability-badge {
   padding: 3px 10px;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   font-size: 12px;
   font-weight: 600;
   flex-shrink: 0;
@@ -372,7 +372,7 @@ function formatDuration(seconds: number): string {
   flex: 1;
   padding: 8px 0;
   background: var(--bg-tertiary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .metric-value {
@@ -400,13 +400,13 @@ function formatDuration(seconds: number): string {
 .reliability-bar {
   height: 4px;
   background: var(--bg-tertiary);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   overflow: hidden;
 }
 
 .reliability-fill {
   height: 100%;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   transition: width 0.4s ease;
 }
 
@@ -424,7 +424,7 @@ function formatDuration(seconds: number): string {
 .capability-tag {
   padding: 2px 8px;
   background: var(--bg-tertiary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 10px;
   color: var(--text-secondary);
 }

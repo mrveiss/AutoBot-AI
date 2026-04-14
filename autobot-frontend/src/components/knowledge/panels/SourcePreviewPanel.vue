@@ -339,7 +339,7 @@ onUnmounted(() => {
   justify-content: center;
   background: var(--color-info-bg);
   color: var(--color-info);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   font-size: 1.125rem;
   flex-shrink: 0;
 }
@@ -379,7 +379,7 @@ onUnmounted(() => {
   background: none;
   color: var(--text-secondary);
   cursor: pointer;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   transition: all 0.15s;
   flex-shrink: 0;
 }

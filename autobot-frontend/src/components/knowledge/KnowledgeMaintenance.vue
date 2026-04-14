@@ -360,7 +360,7 @@ onMounted(() => {
 /* Health Dashboard */
 .health-dashboard {
   background: var(--bg-card);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   padding: 1.5rem;
   margin-bottom: 2rem;
   box-shadow: var(--shadow-sm);
@@ -385,7 +385,7 @@ onMounted(() => {
 
 .health-status-badge {
   padding: 0.375rem 0.75rem;
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -438,14 +438,14 @@ onMounted(() => {
   gap: 1rem;
   padding: 1rem;
   background: var(--bg-tertiary);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-default);
 }
 
 .card-icon {
   width: 3rem;
   height: 3rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -501,7 +501,7 @@ onMounted(() => {
 .quality-dimensions {
   grid-column: span 2;
   background: var(--bg-tertiary);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   padding: 1rem;
   border: 1px solid var(--border-default);
 }
@@ -543,13 +543,13 @@ onMounted(() => {
 .dimension-bar {
   height: 0.5rem;
   background: var(--border-default);
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   overflow: hidden;
 }
 
 .dimension-fill {
   height: 100%;
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   transition: width 0.5s ease;
 }
 
@@ -568,7 +568,7 @@ onMounted(() => {
 /* Issues Summary */
 .issues-summary {
   background: var(--bg-tertiary);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   padding: 1rem;
   border: 1px solid var(--border-default);
 }
@@ -605,7 +605,7 @@ onMounted(() => {
 .recommendations {
   grid-column: span 4;
   background: var(--color-info-bg);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   padding: 1rem;
   border: 1px solid var(--color-info-light);
 }
@@ -649,7 +649,7 @@ onMounted(() => {
 
 .maintenance-section {
   background: var(--bg-card);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   overflow: hidden;
   box-shadow: var(--shadow-sm);
 }
@@ -657,7 +657,7 @@ onMounted(() => {
 /* Maintenance History */
 .maintenance-history {
   background: var(--bg-card);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   padding: 1.5rem;
   box-shadow: var(--shadow-sm);
 }
@@ -694,7 +694,7 @@ onMounted(() => {
   gap: 1rem;
   padding: 0.75rem 1rem;
   background: var(--bg-tertiary);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   border-left: 3px solid var(--border-light);
 }
 

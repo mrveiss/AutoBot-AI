@@ -327,7 +327,7 @@ defineExpose({
   padding: 8px 12px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -400,7 +400,7 @@ defineExpose({
   min-width: 320px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   z-index: var(--z-popover);
 }
@@ -444,7 +444,7 @@ defineExpose({
   padding: 6px 12px;
   background: var(--bg-tertiary);
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: 12px;
   color: var(--text-secondary);
   cursor: pointer;
@@ -472,7 +472,7 @@ defineExpose({
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -488,7 +488,7 @@ defineExpose({
 .host-icon {
   width: 36px;
   height: 36px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -528,7 +528,7 @@ defineExpose({
   padding: 2px 6px;
   font-size: 10px;
   font-weight: 600;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   text-transform: uppercase;
 }
 
@@ -577,7 +577,7 @@ defineExpose({
   flex: 1;
   padding: 8px 12px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;

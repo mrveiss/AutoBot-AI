@@ -120,7 +120,7 @@ const lineClass = computed(() => ({
 .skeleton-rounded .skeleton-line,
 .skeleton-rounded .skeleton-tag,
 .skeleton-rounded .skeleton-file-size {
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
 }
 
 .skeleton-rounded .skeleton-avatar,
@@ -204,7 +204,7 @@ const lineClass = computed(() => ({
 .skeleton-tag {
   height: 1.5rem;
   width: 4rem;
-  border-radius: 1rem;
+  border-radius: var(--radius-2xl);
 }
 
 /* File list skeleton */

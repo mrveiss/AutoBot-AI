@@ -178,7 +178,7 @@ const handleGroupChange = () => {
 .scope-dropdown {
   padding: 0.5rem;
   border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   font-size: 0.875rem;
   cursor: pointer;
   transition: border-color 0.2s;
@@ -211,7 +211,7 @@ const handleGroupChange = () => {
   padding: 0.75rem;
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   font-size: 0.813rem;
 }
 
@@ -231,7 +231,7 @@ const handleGroupChange = () => {
   margin-top: 0.75rem;
   padding: 0.75rem;
   border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background-color: var(--bg-secondary);
 }
 
@@ -253,7 +253,7 @@ const handleGroupChange = () => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-default);
   cursor: pointer;
   transition: background-color 0.2s;
 }

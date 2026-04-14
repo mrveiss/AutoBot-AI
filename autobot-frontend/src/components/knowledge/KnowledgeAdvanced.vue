@@ -528,7 +528,7 @@ onMounted(() => {
 
 .section-card {
   background: var(--bg-card);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-sm);
   overflow: hidden;
 }
@@ -567,7 +567,7 @@ onMounted(() => {
 
 .action-card {
   border: 1px solid var(--border-default);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   padding: 1.25rem;
   display: flex;
   flex-direction: column;
@@ -688,7 +688,7 @@ onMounted(() => {
   width: 100%;
   height: 0.5rem;
   background: var(--bg-tertiary);
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   overflow: hidden;
   margin-bottom: 1rem;
 }
@@ -721,7 +721,7 @@ onMounted(() => {
 .status-message {
   background: var(--bg-card);
   border: 1px solid var(--border-default);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   padding: 1rem;
   box-shadow: var(--shadow-md);
   display: flex;

@@ -357,7 +357,7 @@ watch(saveSuccess, (val) => {
 .field-input {
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--color-border, #374151);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background: var(--color-bg-secondary, #1e293b);
   color: var(--color-text-primary, #e2e8f0);
   font-size: 0.875rem;
@@ -428,7 +428,7 @@ watch(saveSuccess, (val) => {
   display: flex;
   flex-direction: column;
   border: 1px solid var(--color-border, #374151);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   overflow: hidden;
   margin-top: 0.5rem;
 }
@@ -490,7 +490,7 @@ watch(saveSuccess, (val) => {
   gap: 0.375rem;
   padding: 0.5rem 1.25rem;
   border: none;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background: var(--color-primary, #3b82f6);
   color: #fff;
   font-size: 0.875rem;
@@ -539,7 +539,7 @@ watch(saveSuccess, (val) => {
 
 .error-banner {
   padding: 0.5rem 0.75rem;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
   color: #fca5a5;

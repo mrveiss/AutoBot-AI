@@ -1528,7 +1528,7 @@ export default {
   border: 1px solid #666;
   color: #fff;
   padding: 4px 8px;
-  border-radius: 3px;
+  border-radius: var(--radius-default);
   cursor: pointer;
   font-size: 12px;
   transition: all 0.2s;
@@ -1703,7 +1703,7 @@ export default {
   border: 1px solid #666;
   color: #ccc;
   padding: 3px 8px;
-  border-radius: 3px;
+  border-radius: var(--radius-default);
   cursor: pointer;
   font-size: 10px;
   transition: background-color 0.2s;
@@ -1742,7 +1742,7 @@ export default {
   background-color: #2d2d2d;
   color: #fff;
   padding: 24px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   max-width: 400px;
   width: 90%;
   text-align: center;
@@ -1763,7 +1763,7 @@ export default {
 .btn {
   padding: 8px 16px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   cursor: pointer;
   font-size: 14px;
   transition: background-color 0.2s;
@@ -1863,7 +1863,7 @@ export default {
   background-color: #2d2d2d;
   color: #fff;
   padding: 0;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   max-width: 600px;
   width: 90%;
   box-shadow: var(--shadow-lg);
@@ -1879,7 +1879,7 @@ export default {
   padding: 20px 24px 16px 24px;
   border-bottom: 1px solid #444;
   background: var(--bg-secondary);
-  border-radius: 12px 12px 0 0;
+  border-radius: var(--radius-xl) 12px 0 0;
 }
 
 .modal-title {
@@ -1903,7 +1903,7 @@ export default {
 .command-preview {
   background-color: #1e1e1e;
   border: 1px solid #444;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 16px;
   margin-bottom: 20px;
 }
@@ -1922,7 +1922,7 @@ export default {
   color: #87ceeb;
   background-color: #000;
   padding: 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border-left: 4px solid #ffc107;
   white-space: pre-wrap;
   word-break: break-all;
@@ -1934,7 +1934,7 @@ export default {
 
 .risk-level {
   padding: 8px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: 14px;
   font-weight: 600;
   margin-bottom: 12px;
@@ -2004,7 +2004,7 @@ export default {
 .process-item {
   background-color: #1e1e1e;
   padding: 8px 12px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   margin-bottom: 4px;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 13px;
@@ -2066,7 +2066,7 @@ export default {
   background-color: #17a2b8;
   color: white;
   padding: 8px 16px;
-  border-radius: 20px;
+  border-radius: var(--radius-2xl);
   display: inline-block;
   font-size: 12px;
   font-weight: 600;
@@ -2091,7 +2091,7 @@ export default {
 
 .workflow-options {
   background-color: #1e1e1e;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 16px;
   margin-top: 20px;
   border-left: 4px solid #17a2b8;
@@ -2208,7 +2208,7 @@ export default {
 
 .terminal-output::-webkit-scrollbar-thumb {
   background: #555;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 .terminal-output::-webkit-scrollbar-thumb:hover {

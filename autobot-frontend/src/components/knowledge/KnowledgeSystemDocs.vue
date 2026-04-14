@@ -564,7 +564,7 @@ onMounted(() => {
   width: 100%;
   padding: 0.5rem 0.875rem 0.5rem 2.5rem;
   border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   font-size: 0.875rem;
   background: var(--bg-input);
   color: var(--text-primary);
@@ -591,7 +591,7 @@ onMounted(() => {
   margin-top: 0.25rem;
   background: var(--bg-card);
   border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
   z-index: var(--z-popover);
   display: none;
@@ -668,7 +668,7 @@ onMounted(() => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 0.75rem;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -716,7 +716,7 @@ onMounted(() => {
   color: var(--text-muted);
   background: var(--bg-secondary);
   padding: 0.125rem 0.5rem;
-  border-radius: 1rem;
+  border-radius: var(--radius-2xl);
 }
 
 .category-children {
@@ -742,7 +742,7 @@ onMounted(() => {
   gap: 0.75rem;
   padding: 0.75rem;
   border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -764,7 +764,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   background: var(--bg-secondary);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   color: var(--color-info);
 }
 

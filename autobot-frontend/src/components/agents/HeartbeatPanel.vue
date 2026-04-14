@@ -422,7 +422,7 @@ function statusClass(status: string): string {
 .agent-selector input {
   background: var(--bg-input, #1e293b);
   border: 1px solid var(--border, #334155);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   color: inherit;
   padding: 0.25rem 0.5rem;
   width: 200px;
@@ -430,14 +430,14 @@ function statusClass(status: string): string {
 .error-banner {
   background: rgba(239, 68, 68, 0.15);
   border: 1px solid rgba(239, 68, 68, 0.4);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: #fca5a5;
   padding: 0.5rem 0.75rem;
 }
 .card {
   background: var(--bg-card, #1e293b);
   border: 1px solid var(--border, #334155);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 1rem;
 }
 .card-title {
@@ -493,7 +493,7 @@ function statusClass(status: string): string {
   width: 70px;
   background: var(--bg-input, #0f172a);
   border: 1px solid var(--border, #334155);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   color: inherit;
   padding: 0.2rem 0.4rem;
 }
@@ -560,14 +560,14 @@ function statusClass(status: string): string {
 }
 .count-badge {
   background: var(--bg-input, #0f172a);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   font-size: 0.75rem;
   padding: 0.1rem 0.4rem;
 }
 button {
   background: var(--bg-btn, #334155);
   border: 1px solid var(--border, #475569);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   color: inherit;
   cursor: pointer;
   font-size: 0.8rem;
@@ -606,7 +606,7 @@ button:not(:disabled):hover {
   padding: 0.15rem 0.45rem;
 }
 .badge {
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.72rem;
   font-weight: 600;
   padding: 0.1rem 0.45rem;

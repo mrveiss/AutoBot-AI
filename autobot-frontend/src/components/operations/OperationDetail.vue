@@ -367,7 +367,7 @@ async function copyId() {
   padding: 1rem;
   background-color: #fef2f2;
   border: 1px solid #fecaca;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
 }
 
 .error-title {
@@ -432,7 +432,7 @@ async function copyId() {
   font-size: 0.75rem;
   background-color: var(--code-bg);
   padding: 1rem;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   overflow-x: auto;
   margin: 0;
 }
@@ -451,7 +451,7 @@ async function copyId() {
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
   font-weight: 500;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -511,7 +511,7 @@ async function copyId() {
   background: none;
   border: 1px solid var(--border-default);
   color: var(--text-muted);
-  border-radius: 0.25rem;
+  border-radius: var(--radius-default);
   cursor: pointer;
 }
 

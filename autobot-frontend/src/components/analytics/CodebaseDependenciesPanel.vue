@@ -371,7 +371,7 @@ const emit = defineEmits<{
   border: 1px solid var(--bg-hover);
   color: var(--text-secondary);
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -417,7 +417,7 @@ const emit = defineEmits<{
 
 .summary-stat {
   background: rgba(51, 65, 85, 0.5);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 16px;
   text-align: center;
   border: 1px solid rgba(71, 85, 105, 0.5);
@@ -469,7 +469,7 @@ const emit = defineEmits<{
 
 .chart-empty-slot {
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 16px;
   border: 1px solid rgba(71, 85, 105, 0.5);
   min-height: 350px;
@@ -506,7 +506,7 @@ const emit = defineEmits<{
   margin-top: 32px;
   padding: 24px;
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
 }
 
@@ -543,7 +543,7 @@ const emit = defineEmits<{
 .circular-deps-warning {
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 16px;
 }
 
@@ -572,7 +572,7 @@ const emit = defineEmits<{
   gap: 8px;
   padding: 8px 12px;
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.85rem;
   color: var(--text-secondary);
@@ -586,7 +586,7 @@ const emit = defineEmits<{
   text-align: center;
   padding: 12px;
   background: var(--bg-secondary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   margin-top: 8px;
 }
 
@@ -598,7 +598,7 @@ const emit = defineEmits<{
 /* External Dependencies Table */
 .external-deps-table {
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 16px;
   border: 1px solid rgba(71, 85, 105, 0.3);
 }
@@ -629,7 +629,7 @@ const emit = defineEmits<{
   align-items: center;
   padding: 8px 12px;
   background: rgba(51, 65, 85, 0.4);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   transition: background 0.2s ease;
 }
 
@@ -648,7 +648,7 @@ const emit = defineEmits<{
   color: var(--text-muted);
   background: rgba(59, 130, 246, 0.2);
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 /* Import Tree Section */
@@ -656,7 +656,7 @@ const emit = defineEmits<{
   margin-top: 32px;
   padding: 24px;
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
 }
 
@@ -688,7 +688,7 @@ const emit = defineEmits<{
   padding: 12px;
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   color: var(--color-error-light);
 }
 
@@ -705,7 +705,7 @@ const emit = defineEmits<{
   margin-top: 32px;
   padding: 24px;
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
 }
 
@@ -737,7 +737,7 @@ const emit = defineEmits<{
   padding: 12px;
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   color: var(--color-error-light);
 }
 
@@ -757,7 +757,7 @@ const emit = defineEmits<{
   gap: 16px;
   padding: 24px;
   background: rgba(30, 41, 59, 0.3);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid rgba(71, 85, 105, 0.3);
 }
 
@@ -766,7 +766,7 @@ const emit = defineEmits<{
   background: linear-gradient(90deg, rgba(71, 85, 105, 0.3) 0%, rgba(71, 85, 105, 0.5) 50%, rgba(71, 85, 105, 0.3) 100%);
   background-size: 200% 100%;
   animation: loading 1.5s infinite;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   width: 40%;
 }
 
@@ -775,7 +775,7 @@ const emit = defineEmits<{
   background: linear-gradient(90deg, rgba(71, 85, 105, 0.2) 0%, rgba(71, 85, 105, 0.4) 50%, rgba(71, 85, 105, 0.2) 100%);
   background-size: 200% 100%;
   animation: loading 1.5s infinite;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   min-height: 400px;
 }
 
@@ -784,7 +784,7 @@ const emit = defineEmits<{
   background: linear-gradient(90deg, rgba(71, 85, 105, 0.2) 0%, rgba(71, 85, 105, 0.4) 50%, rgba(71, 85, 105, 0.2) 100%);
   background-size: 200% 100%;
   animation: loading 1.5s infinite;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   min-height: 550px;
 }
 

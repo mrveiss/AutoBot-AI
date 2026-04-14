@@ -233,6 +233,6 @@ const getInitials = (username: string): string => {
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background: rgba(156, 163, 175, 0.3);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 </style>

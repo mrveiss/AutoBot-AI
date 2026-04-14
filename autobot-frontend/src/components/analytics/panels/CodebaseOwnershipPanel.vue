@@ -442,7 +442,7 @@ function formatFactorName(factor: string): string {
   margin-top: 32px;
   padding: 24px;
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
   contain: layout style;}
 
@@ -467,7 +467,7 @@ function formatFactorName(factor: string): string {
   align-items: center;
   gap: 10px;
   padding: 16px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .ownership-section .loading-state {
@@ -501,7 +501,7 @@ function formatFactorName(factor: string): string {
   padding: 8px 16px;
   background: rgba(71, 85, 105, 0.3);
   border: 1px solid rgba(71, 85, 105, 0.5);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-muted);
   cursor: pointer;
   display: flex;
@@ -526,7 +526,7 @@ function formatFactorName(factor: string): string {
   background: rgba(239, 68, 68, 0.3);
   color: var(--color-error-light);
   padding: 2px 6px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   font-size: 0.75em;
 }
 
@@ -566,13 +566,13 @@ function formatFactorName(factor: string): string {
 .ownership-metrics .metric-bar {
   height: 8px;
   background: rgba(71, 85, 105, 0.4);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   overflow: hidden;
 }
 
 .ownership-metrics .metric-bar-fill {
   height: 100%;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   transition: width 0.3s ease;
 }
 
@@ -618,7 +618,7 @@ function formatFactorName(factor: string): string {
   align-items: center;
   padding: 10px 14px;
   background: rgba(17, 24, 39, 0.5);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid rgba(71, 85, 105, 0.3);
 }
 
@@ -666,7 +666,7 @@ function formatFactorName(factor: string): string {
 
 .risk-badge {
   padding: 6px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: 0.85em;
   font-weight: 500;
 }
@@ -705,7 +705,7 @@ function formatFactorName(factor: string): string {
 .expert-card {
   padding: 16px;
   background: rgba(17, 24, 39, 0.5);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.3);
 }
 
@@ -732,7 +732,7 @@ function formatFactorName(factor: string): string {
   background: var(--chart-purple);
   color: var(--text-on-primary);
   padding: 4px 10px;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   font-weight: 700;
   font-size: 0.9em;
 }
@@ -777,13 +777,13 @@ function formatFactorName(factor: string): string {
 .score-track {
   height: 6px;
   background: rgba(71, 85, 105, 0.4);
-  border-radius: 3px;
+  border-radius: var(--radius-default);
   overflow: hidden;
 }
 
 .score-fill {
   height: 100%;
-  border-radius: 3px;
+  border-radius: var(--radius-default);
 }
 
 .score-fill.impact {
@@ -810,7 +810,7 @@ function formatFactorName(factor: string): string {
 .area-tag {
   padding: 3px 8px;
   background: rgba(71, 85, 105, 0.4);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.75em;
   color: var(--text-muted);
 }
@@ -845,7 +845,7 @@ function formatFactorName(factor: string): string {
 .file-item {
   padding: 12px 14px;
   background: rgba(17, 24, 39, 0.5);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border-left: 3px solid var(--color-success-light);
 }
 
@@ -916,7 +916,7 @@ function formatFactorName(factor: string): string {
 .gap-item {
   padding: 16px;
   background: rgba(17, 24, 39, 0.5);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   border-left: 4px solid var(--color-error-light);
 }
 
@@ -942,7 +942,7 @@ function formatFactorName(factor: string): string {
 
 .gap-risk-badge {
   padding: 3px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.75em;
   font-weight: 700;
   text-transform: uppercase;
@@ -1008,7 +1008,7 @@ function formatFactorName(factor: string): string {
   gap: 6px;
   padding: 10px;
   background: rgba(34, 197, 94, 0.1);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 .gap-recommendation i {

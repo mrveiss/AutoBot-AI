@@ -413,7 +413,7 @@ onMounted(() => {
   padding: var(--spacing-3);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 .history-header {
@@ -429,7 +429,7 @@ onMounted(() => {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 2px var(--spacing-2);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   font-family: var(--font-sans);
 }
 

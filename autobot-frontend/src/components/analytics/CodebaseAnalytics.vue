@@ -1064,7 +1064,7 @@ onUnmounted(() => {
   margin-top: 24px;
   padding: 20px;
   background: var(--bg-secondary);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid var(--bg-tertiary);
 }
 
@@ -1093,7 +1093,7 @@ onUnmounted(() => {
   width: 40px;
   height: 20px;
   background: var(--bg-tertiary);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   position: relative;
   transition: all 0.3s;
 }
@@ -1123,7 +1123,7 @@ onUnmounted(() => {
   color: var(--text-on-primary);
   border: none;
   padding: 8px 16px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.2s;
   display: flex;

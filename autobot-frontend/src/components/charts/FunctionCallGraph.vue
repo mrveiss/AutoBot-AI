@@ -1724,7 +1724,7 @@ watch(viewMode, async (newMode) => {
   padding: 1px var(--spacing-1);
   background: var(--color-warning-bg);
   color: var(--color-warning);
-  border-radius: 3px;
+  border-radius: var(--radius-default);
 }
 
 .more-calls {

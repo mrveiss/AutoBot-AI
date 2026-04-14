@@ -148,7 +148,7 @@ function clearFilters() {
   gap: 1rem;
   padding: 1rem;
   background-color: var(--bg-secondary);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-default);
 }
 
@@ -168,7 +168,7 @@ function clearFilters() {
   padding: 0.5rem 2rem 0.5rem 0.75rem;
   font-size: 0.875rem;
   border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background-color: var(--bg-input);
   color: var(--text-primary);
   cursor: pointer;
@@ -203,7 +203,7 @@ function clearFilters() {
   color: var(--text-secondary);
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.2s;
 }

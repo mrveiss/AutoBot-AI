@@ -179,31 +179,31 @@ function getStrategyIcon(strategy: string): string {
 .status-panel h3 i, .capabilities-panel h4 i, .strategies-panel h4 i, .visualization-panel h4 i { color: var(--color-primary); }
 
 .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
-.status-card { display: flex; align-items: center; gap: 14px; padding: 16px; background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: 10px; }
+.status-card { display: flex; align-items: center; gap: 14px; padding: 16px; background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-xl); }
 .status-card.healthy { border-color: var(--color-success); }
-.card-icon { width: 44px; height: 44px; border-radius: 10px; background: var(--bg-tertiary); display: flex; align-items: center; justify-content: center; font-size: 18px; color: var(--text-secondary); }
+.card-icon { width: 44px; height: 44px; border-radius: var(--radius-xl); background: var(--bg-tertiary); display: flex; align-items: center; justify-content: center; font-size: 18px; color: var(--text-secondary); }
 .status-card.healthy .card-icon { background: var(--color-success-bg); color: var(--color-success); }
 .card-value { display: block; font-size: 18px; font-weight: 600; color: var(--text-primary); text-transform: capitalize; }
 .card-label { font-size: 12px; color: var(--text-tertiary); }
 
-.capabilities-panel { background: var(--bg-secondary); border-radius: 10px; padding: 20px; }
+.capabilities-panel { background: var(--bg-secondary); border-radius: var(--radius-xl); padding: 20px; }
 .capabilities-list { display: flex; flex-wrap: wrap; gap: 12px; }
-.capability-item { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--bg-tertiary); border-radius: 20px; font-size: 13px; color: var(--text-muted); }
+.capability-item { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--bg-tertiary); border-radius: var(--radius-2xl); font-size: 13px; color: var(--text-muted); }
 .capability-item.enabled { background: var(--color-success-bg); color: var(--color-success); }
 .capability-item i { font-size: 14px; }
 
-.strategies-panel { background: var(--bg-secondary); border-radius: 10px; padding: 20px; }
+.strategies-panel { background: var(--bg-secondary); border-radius: var(--radius-xl); padding: 20px; }
 .loading { color: var(--text-tertiary); font-size: 13px; }
 .strategies-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
-.strategy-card { display: flex; gap: 12px; padding: 14px; background: var(--bg-tertiary); border: 1px solid transparent; border-radius: 8px; transition: all 0.2s; }
+.strategy-card { display: flex; gap: 12px; padding: 14px; background: var(--bg-tertiary); border: 1px solid transparent; border-radius: var(--radius-lg); transition: all 0.2s; }
 .strategy-card.active { border-color: var(--color-primary); background: var(--color-primary-bg); }
-.strategy-icon { width: 36px; height: 36px; border-radius: 8px; background: var(--bg-secondary); display: flex; align-items: center; justify-content: center; color: var(--text-secondary); flex-shrink: 0; }
+.strategy-icon { width: 36px; height: 36px; border-radius: var(--radius-lg); background: var(--bg-secondary); display: flex; align-items: center; justify-content: center; color: var(--text-secondary); flex-shrink: 0; }
 .strategy-card.active .strategy-icon { background: var(--color-primary); color: white; }
 .strategy-name { display: block; font-size: 14px; font-weight: 500; color: var(--text-primary); margin-bottom: 4px; }
 .strategy-desc { margin: 0 0 6px; font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
 .strategy-best { font-size: 11px; color: var(--text-muted); font-style: italic; }
 
-.visualization-panel { background: var(--bg-secondary); border-radius: 10px; padding: 20px; }
+.visualization-panel { background: var(--bg-secondary); border-radius: var(--radius-xl); padding: 20px; }
 .workflow-viz { display: flex; flex-direction: column; gap: 20px; }
 .viz-timeline { display: flex; align-items: flex-start; gap: 0; overflow-x: auto; padding: 16px 0; }
 .viz-step { display: flex; align-items: center; }
@@ -216,11 +216,11 @@ function getStrategyIcon(strategy: string): string {
 .viz-connector { width: 40px; height: 2px; background: var(--border-default); margin-top: 20px; }
 .viz-connector.completed { background: var(--color-success); }
 
-.viz-details { display: flex; gap: 24px; padding: 16px; background: var(--bg-tertiary); border-radius: 8px; }
+.viz-details { display: flex; gap: 24px; padding: 16px; background: var(--bg-tertiary); border-radius: var(--radius-lg); }
 .detail-item { display: flex; flex-direction: column; gap: 4px; }
 .detail-item .label { font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; }
 .detail-item .value { font-size: 14px; font-weight: 500; color: var(--text-primary); }
-.status-badge { padding: 2px 10px; border-radius: 12px; font-size: 12px; }
+.status-badge { padding: 2px 10px; border-radius: var(--radius-xl); font-size: 12px; }
 .status-badge.running { background: var(--color-success-bg); color: var(--color-success); }
 .status-badge.paused { background: var(--color-warning-bg); color: var(--color-warning); }
 .status-badge.completed { background: var(--color-info-bg); color: var(--color-info); }

@@ -1238,7 +1238,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 .health-indicator {
   font-size: 0.65rem;
   padding: 1px 6px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   text-transform: uppercase;
   font-weight: 600;
 }
@@ -1305,7 +1305,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   font-family: var(--font-mono);
   background: var(--bg-tertiary);
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   color: var(--text-tertiary);
   font-weight: 500;
 }
@@ -1332,7 +1332,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   font-size: 13px;
   font-weight: 500;
   font-family: var(--font-sans);
@@ -1413,7 +1413,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   align-items: center;
   gap: 8px;
   padding: 8px 14px;
-  border-radius: 20px;
+  border-radius: var(--radius-2xl);
   font-size: 13px;
   font-weight: 500;
 }
@@ -1490,7 +1490,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   padding: 20px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   transition: all 0.2s;
 }
 
@@ -1501,7 +1501,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 .stat-card .stat-icon {
   width: 48px;
   height: 48px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   background: var(--bg-tertiary);
   display: flex;
   align-items: center;
@@ -1546,7 +1546,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 .overview-card {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   padding: 20px;
 }
 
@@ -1579,7 +1579,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   padding: 16px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
   transition: all 0.2s;
   color: var(--text-secondary);
@@ -1610,7 +1610,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 .strategy-item {
   padding: 16px;
   background: var(--bg-tertiary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .strategy-header {
@@ -1651,7 +1651,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 .example-item {
   padding: 12px 16px;
   background: var(--bg-tertiary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -1678,7 +1678,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   padding: 2px 8px;
   background: var(--color-primary-bg);
   color: var(--color-primary);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
 }
 
 .example-description {
@@ -1721,7 +1721,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 .nl-input-area {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   padding: 20px;
 }
 
@@ -1730,7 +1730,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   padding: 12px;
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   color: var(--text-primary);
   font-size: 14px;
   resize: vertical;
@@ -1775,7 +1775,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   padding: 8px 12px;
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-primary);
   font-size: 13px;
 }
@@ -1790,7 +1790,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   margin-top: 24px;
   background: var(--bg-secondary);
   border: 1px solid var(--color-warning);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   padding: 20px;
 }
 
@@ -1839,7 +1839,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 .approval-step {
   padding: 12px;
   background: var(--bg-tertiary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border-left: 3px solid var(--border-default);
 }
 
@@ -1862,7 +1862,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 .risk-badge {
   font-size: 11px;
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   text-transform: uppercase;
 }
 
@@ -1886,7 +1886,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   display: block;
   padding: 8px;
   background: var(--bg-primary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 12px;
   color: var(--text-secondary);
   overflow-x: auto;
@@ -1902,7 +1902,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 .agents-container {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   padding: 24px;
 }
 
@@ -1932,7 +1932,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -1962,7 +1962,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 .agent-card {
   background: var(--bg-tertiary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 16px;
 }
 
@@ -1995,7 +1995,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   padding: 2px 8px;
   background: var(--bg-secondary);
   color: var(--text-secondary);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
 }
 
 .agent-performance {
@@ -2020,14 +2020,14 @@ watch(hasActiveWorkflows, (hasActive) => {
   flex: 1;
   height: 6px;
   background: var(--bg-secondary);
-  border-radius: 3px;
+  border-radius: var(--radius-default);
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
   background: var(--color-success);
-  border-radius: 3px;
+  border-radius: var(--radius-default);
   transition: width 0.3s;
 }
 
@@ -2045,7 +2045,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   background: var(--color-primary);
   color: var(--text-on-primary);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -2070,7 +2070,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   background: var(--color-success);
   color: var(--text-on-primary);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -2089,7 +2089,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   background: var(--color-error);
   color: var(--text-on-primary);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;

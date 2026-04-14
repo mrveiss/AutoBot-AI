@@ -531,13 +531,13 @@ onUnmounted(() => {
 .upload-section {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   padding: 24px;
 }
 
 .drop-zone {
   border: 2px dashed var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   padding: 40px;
   text-align: center;
   cursor: pointer;
@@ -595,7 +595,7 @@ onUnmounted(() => {
   width: 200px;
   height: 120px;
   object-fit: cover;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--bg-tertiary);
 }
 
@@ -624,7 +624,7 @@ onUnmounted(() => {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
 }
 
@@ -640,7 +640,7 @@ onUnmounted(() => {
   gap: 16px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   padding: 20px;
 }
 
@@ -661,7 +661,7 @@ onUnmounted(() => {
   padding: 10px 12px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 14px;
   color: var(--text-primary);
 }
@@ -677,7 +677,7 @@ onUnmounted(() => {
   background: var(--color-primary);
   color: var(--text-on-primary);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 15px;
   font-weight: 500;
   cursor: pointer;
@@ -699,14 +699,14 @@ onUnmounted(() => {
 .progress-section {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   padding: 20px;
 }
 
 .progress-bar {
   height: 8px;
   background: var(--bg-tertiary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   overflow: hidden;
   margin-bottom: 12px;
 }
@@ -728,7 +728,7 @@ onUnmounted(() => {
 .results-section {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   overflow: hidden;
 }
 
@@ -766,7 +766,7 @@ onUnmounted(() => {
 .frame-card {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 12px;
   cursor: pointer;
   transition: all 0.15s;
@@ -847,7 +847,7 @@ onUnmounted(() => {
   margin-top: 12px;
   padding: 12px;
   background: var(--bg-tertiary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 11px;
   color: var(--text-secondary);
   overflow-x: auto;
@@ -866,7 +866,7 @@ onUnmounted(() => {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -887,7 +887,7 @@ onUnmounted(() => {
   padding: 12px 16px;
   background: var(--color-error-bg);
   border: 1px solid var(--color-error);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .error-content {

@@ -341,7 +341,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   padding: 8px 14px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 13px;
   font-weight: 500;
 }
@@ -369,7 +369,7 @@ onUnmounted(() => {
   padding: 4px 12px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-primary);
   font-size: 12px;
   cursor: pointer;
@@ -401,7 +401,7 @@ onUnmounted(() => {
   padding: 10px 16px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   flex: 1;
   min-width: 140px;
 }
@@ -453,7 +453,7 @@ onUnmounted(() => {
   height: 32px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-secondary);
   cursor: pointer;
   display: flex;
@@ -511,7 +511,7 @@ onUnmounted(() => {
 .execution-card {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   padding: 18px;
   cursor: pointer;
   transition: border-color 0.2s, box-shadow 0.2s;
@@ -568,7 +568,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 4px;
   padding: 3px 10px;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   font-size: 11px;
   font-weight: 500;
   white-space: nowrap;
@@ -592,13 +592,13 @@ onUnmounted(() => {
 .progress-track {
   height: 6px;
   background: var(--bg-tertiary);
-  border-radius: 3px;
+  border-radius: var(--radius-default);
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  border-radius: 3px;
+  border-radius: var(--radius-default);
   transition: width 0.4s ease;
 }
 
@@ -697,7 +697,7 @@ onUnmounted(() => {
   gap: 4px;
   padding: 2px 8px;
   background: var(--bg-tertiary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 11px;
   color: var(--text-secondary);
   text-transform: capitalize;

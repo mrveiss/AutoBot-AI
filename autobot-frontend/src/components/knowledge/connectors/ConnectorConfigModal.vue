@@ -801,7 +801,7 @@ function closeModal() {
   gap: var(--spacing-3);
   padding: var(--spacing-5);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   background: var(--bg-secondary);
   cursor: pointer;
   transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -862,7 +862,7 @@ function closeModal() {
   color: var(--text-primary);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   transition: border-color 150ms ease;
 }
 
@@ -913,7 +913,7 @@ function closeModal() {
 .schedule-option {
   padding: var(--spacing-2) var(--spacing-3);
   border: 1px solid var(--border-default);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   font-size: 13px;
   color: var(--text-secondary);
   background: var(--bg-secondary);
@@ -954,7 +954,7 @@ function closeModal() {
 .mode-btn {
   padding: var(--spacing-2) var(--spacing-3);
   border: 1px solid var(--border-default);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   background: var(--bg-secondary);
   color: var(--text-secondary);
   font-size: 13px;
@@ -1008,7 +1008,7 @@ function closeModal() {
   font-size: 13px;
   font-family: var(--font-sans);
   padding: var(--spacing-1-5) var(--spacing-3);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 
 .test-ok {
@@ -1027,7 +1027,7 @@ function closeModal() {
   padding: var(--spacing-2) var(--spacing-3);
   background: var(--color-error-bg);
   color: var(--color-error-dark);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   font-size: 13px;
   font-family: var(--font-sans);
 }

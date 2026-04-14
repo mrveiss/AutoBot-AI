@@ -339,7 +339,7 @@ function clamp(value: number, min: number, max: number): number {
   position: relative;
   width: 44px;
   height: 24px;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   cursor: pointer;

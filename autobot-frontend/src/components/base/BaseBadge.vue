@@ -87,21 +87,21 @@ const handleRemove = (event: MouseEvent) => {
   height: 16px;
   padding: 0 6px;
   font-size: 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .badge-sm {
   height: 20px;
   padding: 0 8px;
   font-size: 11px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
 }
 
 .badge-md {
   height: 24px;
   padding: 0 10px;
   font-size: 12px;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
 }
 
 .badge-lg {
@@ -113,16 +113,16 @@ const handleRemove = (event: MouseEvent) => {
 
 /* Rounded Variants */
 .badge-rounded.badge-xs {
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 
 .badge-rounded.badge-sm,
 .badge-rounded.badge-md {
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 
 .badge-rounded.badge-lg {
-  border-radius: 3px;
+  border-radius: var(--radius-default);
 }
 
 /* Color Variants - Solid */

@@ -328,7 +328,7 @@ onMounted(() => {
   padding: 20px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
 }
 
 .header-info h3 {
@@ -349,7 +349,7 @@ onMounted(() => {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -377,7 +377,7 @@ onMounted(() => {
   padding: 60px 20px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   color: var(--text-tertiary);
 }
 
@@ -385,7 +385,7 @@ onMounted(() => {
 .opportunities-section {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   padding: 20px;
 }
 
@@ -398,7 +398,7 @@ onMounted(() => {
 .opportunity-card {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   padding: 16px;
   cursor: pointer;
   transition: all 0.2s;
@@ -419,7 +419,7 @@ onMounted(() => {
 .element-type-badge {
   width: 40px;
   height: 40px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -447,7 +447,7 @@ onMounted(() => {
 
 .confidence-badge {
   padding: 4px 10px;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   font-size: 12px;
   font-weight: 500;
 }
@@ -483,7 +483,7 @@ onMounted(() => {
 .btn-details {
   flex: 1;
   padding: 8px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -524,7 +524,7 @@ onMounted(() => {
   padding: 60px 20px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
 }
 
 .empty-icon {
@@ -555,7 +555,7 @@ onMounted(() => {
 .reference-section {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   overflow: hidden;
 }
 
@@ -602,13 +602,13 @@ onMounted(() => {
   gap: 12px;
   padding: 10px 12px;
   background: var(--bg-tertiary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .type-icon {
   width: 32px;
   height: 32px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -646,7 +646,7 @@ onMounted(() => {
   gap: 10px;
   padding: 10px 12px;
   background: var(--bg-tertiary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .interaction-item i {
@@ -674,7 +674,7 @@ onMounted(() => {
 
 .detail-modal {
   background: var(--bg-secondary);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   width: 90%;
   max-width: 480px;
   overflow: hidden;
@@ -745,7 +745,7 @@ onMounted(() => {
   background: var(--color-primary);
   color: var(--text-on-primary);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -764,7 +764,7 @@ onMounted(() => {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;

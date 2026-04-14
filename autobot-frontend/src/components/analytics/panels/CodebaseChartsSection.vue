@@ -326,7 +326,7 @@ function getCategoryIcon(categoryId: string): string {
   margin-top: 32px;
   padding: 24px;
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
   contain: layout style;}
 
@@ -360,7 +360,7 @@ function getCategoryIcon(categoryId: string): string {
 .export-btn {
   background: rgba(51, 65, 85, 0.5);
   border: 1px solid rgba(71, 85, 105, 0.5);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-muted);
   padding: 6px 12px;
   font-size: 0.85rem;
@@ -400,7 +400,7 @@ function getCategoryIcon(categoryId: string): string {
   margin-top: 32px;
   padding: 24px;
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
 }
 
@@ -441,7 +441,7 @@ function getCategoryIcon(categoryId: string): string {
   margin-bottom: 20px;
   padding: 12px;
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid rgba(71, 85, 105, 0.3);
 }
 
@@ -452,7 +452,7 @@ function getCategoryIcon(categoryId: string): string {
   padding: 8px 16px;
   background: rgba(51, 65, 85, 0.5);
   border: 1px solid rgba(71, 85, 105, 0.5);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-muted);
   font-size: 0.875rem;
   font-weight: 500;
@@ -484,7 +484,7 @@ function getCategoryIcon(categoryId: string): string {
   height: 20px;
   padding: 0 6px;
   background: rgba(0, 0, 0, 0.2);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   font-size: 0.75rem;
   font-weight: 600;
 }
@@ -533,7 +533,7 @@ function getCategoryIcon(categoryId: string): string {
 
 .summary-stat {
   background: rgba(51, 65, 85, 0.5);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 16px;
   text-align: center;
   border: 1px solid rgba(71, 85, 105, 0.5);
@@ -586,7 +586,7 @@ function getCategoryIcon(categoryId: string): string {
 /* Empty state placeholder (when chart has no data) */
 .chart-empty-slot {
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 16px;
   border: 1px solid rgba(71, 85, 105, 0.5);
   min-height: 350px;
@@ -623,7 +623,7 @@ function getCategoryIcon(categoryId: string): string {
   margin-top: 32px;
   padding: 24px;
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
 }
 
@@ -660,7 +660,7 @@ function getCategoryIcon(categoryId: string): string {
 .circular-deps-warning {
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 16px;
 }
 
@@ -689,7 +689,7 @@ function getCategoryIcon(categoryId: string): string {
   gap: 8px;
   padding: 8px 12px;
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.85rem;
   color: var(--text-secondary);
@@ -702,7 +702,7 @@ function getCategoryIcon(categoryId: string): string {
 /* External Dependencies Table */
 .external-deps-table {
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 16px;
   border: 1px solid rgba(71, 85, 105, 0.3);
 }
@@ -733,7 +733,7 @@ function getCategoryIcon(categoryId: string): string {
   align-items: center;
   padding: 8px 12px;
   background: rgba(51, 65, 85, 0.4);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   transition: background 0.2s ease;
 }
 
@@ -752,7 +752,7 @@ function getCategoryIcon(categoryId: string): string {
   color: var(--text-muted);
   background: rgba(59, 130, 246, 0.2);
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 /* Import Tree Section */
@@ -760,7 +760,7 @@ function getCategoryIcon(categoryId: string): string {
   margin-top: 32px;
   padding: 24px;
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
 }
 
@@ -792,7 +792,7 @@ function getCategoryIcon(categoryId: string): string {
   padding: 12px;
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   color: var(--color-error-light);
 }
 
@@ -809,7 +809,7 @@ function getCategoryIcon(categoryId: string): string {
   margin-top: 32px;
   padding: 24px;
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
 }
 
@@ -841,7 +841,7 @@ function getCategoryIcon(categoryId: string): string {
   padding: 12px;
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   color: var(--color-error-light);
 }
 

@@ -28,7 +28,7 @@ const qualityClass = computed(() => {
 .quality-badge {
   display: inline-block;
   padding: 2px 8px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   font-size: 11px;
   font-weight: 600;
   font-family: var(--font-mono);

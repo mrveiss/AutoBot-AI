@@ -253,7 +253,7 @@ const formatCellValue = (value: any, column: TableColumn) => {
   flex-direction: column;
   background-color: var(--bg-card);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 /* Table Controls */

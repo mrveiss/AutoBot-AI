@@ -343,10 +343,10 @@ const handleRemove = () => {
 .badge-group { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .card-stack { display: flex; flex-direction: column; gap: 16px; }
 .color-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
-.color-swatch { aspect-ratio: 1; border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 12px; box-shadow: var(--shadow-md); }
+.color-swatch { aspect-ratio: 1; border-radius: var(--radius-default); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 12px; box-shadow: var(--shadow-md); }
 .swatch-label { font-size: 11px; font-weight: 600; color: white; text-transform: uppercase; letter-spacing: 0.05em; }
 .swatch-hex { font-size: 10px; font-family: var(--font-mono); color: rgba(255, 255, 255, 0.8); }
-.type-samples { padding: 16px; background-color: var(--bg-secondary); border-radius: 4px; border: 1px solid var(--border-default); }
+.type-samples { padding: 16px; background-color: var(--bg-secondary); border-radius: var(--radius-default); border: 1px solid var(--border-default); }
 @media (max-width: 768px) {
   .showcase-grid { grid-template-columns: 1fr; }
   .showcase-container { padding: 16px; }

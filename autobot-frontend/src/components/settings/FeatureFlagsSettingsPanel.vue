@@ -305,7 +305,7 @@ onMounted(() => {
   background: var(--color-error-bg);
   color: var(--color-error);
   border: 1px solid var(--color-error);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   min-height: 200px;
   padding: 40px;
 }
@@ -328,7 +328,7 @@ onMounted(() => {
   background: var(--color-error);
   color: var(--text-on-error);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;

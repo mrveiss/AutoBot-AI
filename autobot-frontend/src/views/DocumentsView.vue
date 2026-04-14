@@ -440,7 +440,7 @@ function showError(msg: string) {
 .modal-card {
   background: var(--color-background-secondary, #252525);
   border: 1px solid var(--color-border, #444);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 24px;
   width: 360px;
   max-width: 90vw;
@@ -474,7 +474,7 @@ function showError(msg: string) {
   background: var(--color-error-bg, #3c1515);
   color: var(--color-error, #f87171);
   border: 1px solid var(--color-error, #f87171);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 10px 20px;
   font-size: 0.875rem;
   z-index: var(--z-popover);

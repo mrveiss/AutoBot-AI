@@ -253,7 +253,7 @@ async function handleSave(): Promise<void> {
 .notif-modal {
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   width: 560px;
   max-width: 95vw;
   max-height: 85vh;
@@ -287,7 +287,7 @@ async function handleSave(): Promise<void> {
   border: none;
   color: var(--text-tertiary);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 14px;
 }
 .btn-close:hover { background: var(--bg-hover); color: var(--text-primary); }
@@ -314,7 +314,7 @@ async function handleSave(): Promise<void> {
   padding: 10px 14px;
   background: var(--color-error-bg);
   color: var(--color-error);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: 13px;
   display: flex;
   align-items: center;
@@ -323,7 +323,7 @@ async function handleSave(): Promise<void> {
 
 .notif-field {
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 14px;
   margin: 0;
 }
@@ -340,7 +340,7 @@ async function handleSave(): Promise<void> {
   padding: 8px 12px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-primary);
   font-size: 13px;
   outline: none;
@@ -388,7 +388,7 @@ async function handleSave(): Promise<void> {
   padding: 8px 12px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-primary);
   font-size: 13px;
   outline: none;
@@ -456,7 +456,7 @@ async function handleSave(): Promise<void> {
   background: var(--color-primary);
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -472,7 +472,7 @@ async function handleSave(): Promise<void> {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: 13px;
   cursor: pointer;
 }

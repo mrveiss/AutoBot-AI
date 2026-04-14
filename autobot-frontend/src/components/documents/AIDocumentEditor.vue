@@ -262,7 +262,7 @@ const formattedUpdatedAt = computed(() => {
   height: 100%;
   background: var(--color-background, #1e1e1e);
   color: var(--color-text, #e0e0e0);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
@@ -290,7 +290,7 @@ const formattedUpdatedAt = computed(() => {
   text-overflow: ellipsis;
   outline: none;
   padding: 2px 4px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   transition: background 0.15s;
 }
 .document-title:focus-visible {
@@ -307,7 +307,7 @@ const formattedUpdatedAt = computed(() => {
   background: var(--color-background-input, #2a2a2a);
   color: inherit;
   border: 1px solid var(--color-primary, #4caf50);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 1.1rem;
   font-weight: 600;
   padding: 2px 8px;
@@ -347,7 +347,7 @@ const formattedUpdatedAt = computed(() => {
   background: var(--color-background-input, #2a2a2a);
   color: inherit;
   border: 1px solid var(--color-border, #444);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   padding: 8px;
   font-size: 0.9rem;
   font-family: inherit;
