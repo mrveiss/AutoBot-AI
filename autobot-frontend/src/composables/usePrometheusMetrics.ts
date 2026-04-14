@@ -717,7 +717,7 @@ export function useAlerts(pollInterval = 30000) {
   const hasAlerts = computed(() => totalCount.value > 0)
   // Issue #474: Computed for AlertManager-specific alerts
   const alertmanagerAlerts = computed(() =>
-    alerts.value.filter(a => a.source === 'alertmanager')
+    alerts.value.filter((a: PerformanceAlert) => a.source === 'alertmanager')
   )
 
   function startPolling() {
