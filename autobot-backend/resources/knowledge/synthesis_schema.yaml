@@ -1,0 +1,58 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# synthesis_schema.yaml
+# Schema-driven synthesis configuration for DocIndexerService.
+# Each collection type defines: paths to source documents, a synthesis
+# target (ChromaDB collection or output path), and a prompt template
+# used when generating summaries/syntheses from those documents.
+
+collections:
+  - name: architecture_adrs
+    paths:
+      - docs/architecture
+      - docs/adr
+    synthesis_target: autobot_synthesis_architecture
+    prompt_template: |
+      You are an AutoBot architecture assistant. Given the following architecture
+      documentation and Architecture Decision Records (ADRs), produce a concise
+      synthesis that captures the key design decisions, system boundaries, and
+      rationale.
+
+      Documents:
+      {documents}
+
+      Synthesis:
+
+  - name: api_reference
+    paths:
+      - docs/api
+      - docs/implementation
+    synthesis_target: autobot_synthesis_api
+    prompt_template: |
+      You are an AutoBot API documentation assistant. Given the following API
+      reference documents, produce a structured summary covering endpoints,
+      request/response formats, authentication requirements, and notable
+      constraints.
+
+      Documents:
+      {documents}
+
+      Synthesis:
+
+  - name: runbooks_operations
+    paths:
+      - docs/operations
+      - docs/deployment
+      - docs/troubleshooting
+    synthesis_target: autobot_synthesis_runbooks
+    prompt_template: |
+      You are an AutoBot operations assistant. Given the following runbooks and
+      operational documentation, produce a concise synthesis of the key
+      procedures, failure modes, recovery steps, and on-call guidance.
+
+      Documents:
+      {documents}
+
+      Synthesis:
