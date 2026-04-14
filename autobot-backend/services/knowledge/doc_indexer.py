@@ -513,18 +513,16 @@ def _compute_file_hash(file_path: str) -> str:
     """Compute SHA-256 hash of file content.
 
     Resolves symlinks so the hash reflects the target file's content (#4382).
-    Returns empty string on PermissionError or other read failures; callers
-    must preserve the cached hash when empty to avoid false-changed detection.
+    Returns empty string on PermissionError, OSError, or RuntimeError (e.g.
+    circular symlinks raise RuntimeError on Python 3.10+); callers must
+    preserve the cached hash when empty to avoid false-changed detection.
     """
     try:
         resolved = str(Path(file_path).resolve())
         with open(resolved, "rb") as f:
             return hashlib.sha256(f.read()).hexdigest()
-    except PermissionError as e:
-        logger.warning("Permission denied hashing %s: %s", file_path, e)
-        return ""
-    except Exception as e:
-        logger.warning("Could not hash %s: %s", file_path, e)
+    except (PermissionError, OSError, RuntimeError) as e:
+        logger.warning("Cannot hash %s: %s", file_path, e)
         return ""
 
 
@@ -554,14 +552,17 @@ def _normalize_path(file_path: str, root_dir: Path) -> Tuple[str, str]:
 
     Resolves the file path to handle symlinks and ensure consistent
     path separators across platforms (#4382).  If the resolved path
-    escapes root_dir (e.g. after project relocation), falls back to
-    the original path so relpath always returns a valid key.
+    escapes root_dir (e.g. after project relocation), or if resolution
+    fails due to a circular symlink (#4433), falls back to the original
+    path so relpath always returns a valid key.
     """
     try:
         resolved = str(Path(file_path).resolve())
         rel_path = os.path.relpath(resolved, str(root_dir.resolve()))
-    except ValueError:
-        # On Windows, relpath raises ValueError for paths on different drives.
+    except (ValueError, OSError, RuntimeError):
+        # ValueError: Windows cross-drive relpath.
+        # OSError/RuntimeError: circular symlinks (Python 3.10 raises
+        #   RuntimeError("Symlink loop …") wrapping the underlying ELOOP OSError).
         # Fall back to the original path so we still get a usable relative key.
         resolved = file_path
         rel_path = os.path.relpath(file_path, str(root_dir))
