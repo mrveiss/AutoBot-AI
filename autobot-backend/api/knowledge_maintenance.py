@@ -47,6 +47,7 @@ from services.knowledge.contradiction_detector import (
     load_report,
     store_report,
 )
+from services.knowledge.synthesis_provenance import SynthesisProvenanceLog
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -1911,6 +1912,8 @@ async def delete_backup(
 
 # ===== KNOWLEDGE LINT ENDPOINTS =====
 
+_provenance_log = SynthesisProvenanceLog()
+
 
 async def _run_lint_scan(job_id: str, chunks: list[dict]) -> None:
     """Background task: run contradiction scan and store result in Redis."""
@@ -1973,3 +1976,26 @@ async def get_lint_report(
     if report is None:
         raise HTTPException(status_code=404, detail="No lint report available yet")
     return report
+
+
+@router.get("/synthesis/log")
+async def get_synthesis_log(
+    limit: int = Query(
+        default=50,
+        ge=1,
+        le=200,
+        description="Max log entries to return (newest first)",
+    ),
+):
+    """Return recent synthesis provenance log entries from Redis stream.
+
+    Issue #4567: Synthesis provenance log.
+
+    Query parameters:
+    - limit: Maximum entries to return (default: 50, max: 200)
+
+    Returns list of provenance entries with: run_id, source_docs, synthesis_ids,
+    llm_model, prompt_template, ran_at, duration_ms.
+    """
+    entries = await _provenance_log.get_recent(limit=limit)
+    return {"entries": entries, "count": len(entries)}
