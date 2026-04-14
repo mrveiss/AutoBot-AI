@@ -394,3 +394,47 @@ class TestTaskManagerEviction:
         fetched = self.mgr.get_task(task.id)
         assert fetched is not None
         assert fetched.status.state == TaskState.COMPLETED
+
+
+# ---------------------------------------------------------------------------
+# Issue #4606: publish_event() tests
+# ---------------------------------------------------------------------------
+
+
+class TestPublishEvent:
+    """Unit tests for TaskManager.publish_event() — Issue #4606.
+
+    publish_event() wraps redis.publish() with a best-effort guard: any
+    exception must be swallowed so pub/sub failures never abort task execution.
+    """
+
+    def setup_method(self):
+        self._redis_mock = _make_redis_mock()
+        with patch(
+            "a2a.task_manager.get_redis_client", return_value=self._redis_mock
+        ):
+            self.mgr = TaskManager()
+
+    def test_publish_event_happy_path(self):
+        """redis.publish() is called with the correct channel and JSON payload."""
+        task = self.mgr.create_task("Publish test")
+        payload = {"event": "state_change", "state": "working"}
+
+        self.mgr.publish_event(task.id, payload)
+
+        expected_channel = f"a2a:events:{task.id}"
+        self._redis_mock.publish.assert_called_once_with(
+            expected_channel,
+            '{"event": "state_change", "state": "working"}',
+        )
+
+    def test_publish_event_redis_failure_does_not_propagate(self):
+        """An exception from redis.publish() must not escape publish_event().
+
+        publish_event() is best-effort — a Redis failure must never crash
+        the task executor that calls it.
+        """
+        self._redis_mock.publish.side_effect = Exception("Redis connection refused")
+
+        # Must not raise, regardless of the underlying Redis failure
+        self.mgr.publish_event("any-task-id", {"event": "state_change", "state": "working"})
