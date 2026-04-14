@@ -19,8 +19,11 @@ logger = logging.getLogger(__name__)
 
 
 def _extract_response_text(result: Dict[str, Any]) -> str:
-    """Pull the human-readable response from an orchestrator result dict."""
-    for key in ("response", "message", "text", "output"):
+    """Pull the human-readable response from an orchestrator result dict.
+
+    Issue #4501: include "response_text" key used by ChatAgent._build_success_response.
+    """
+    for key in ("response", "response_text", "message", "text", "output"):
         value = result.get(key)
         if value and isinstance(value, str):
             return value
@@ -29,7 +32,7 @@ def _extract_response_text(result: Dict[str, Any]) -> str:
 
 def _extract_routing_metadata(result: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Extract non-response metadata (agent used, timing, etc.) from result."""
-    skip = {"response", "message", "text", "output"}
+    skip = {"response", "response_text", "message", "text", "output"}
     meta = {k: v for k, v in result.items() if k not in skip}
     return meta if meta else None
 
