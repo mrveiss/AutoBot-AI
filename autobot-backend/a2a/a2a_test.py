@@ -438,3 +438,63 @@ class TestPublishEvent:
 
         # Must not raise, regardless of the underlying Redis failure
         self.mgr.publish_event("any-task-id", {"event": "state_change", "state": "working"})
+
+
+# ---------------------------------------------------------------------------
+# Issue #4626: get_task() must slide TTL on all three Redis keys
+# ---------------------------------------------------------------------------
+
+
+class TestGetTaskTTLSliding:
+    """Assert that get_task() calls expire() on every key it touches.
+
+    Issue #4626: The existing mock treated expire() as a silent no-op, meaning
+    a regression removing any EXPIRE call would still pass all tests. These
+    tests make each of the three EXPIRE calls explicit and mandatory.
+    """
+
+    def setup_method(self):
+        self._redis_mock = _make_redis_mock()
+        with patch(
+            "a2a.task_manager.get_redis_client", return_value=self._redis_mock
+        ):
+            self.mgr = TaskManager()
+
+    def test_get_task_slides_ttl_on_all_three_keys(self):
+        """get_task() must call expire() for task key, audit key, and tracking set."""
+        from a2a.task_manager import _KEY_AUDIT, _KEY_TASK, _KEY_TASKS
+
+        task = self.mgr.create_task("TTL sliding test")
+
+        # Reset call history so only get_task() calls are counted
+        self._redis_mock.expire.reset_mock()
+
+        self.mgr.get_task(task.id)
+
+        # Collect every key that was passed to expire()
+        expired_keys = [call.args[0] for call in self._redis_mock.expire.call_args_list]
+
+        assert self._redis_mock.expire.call_count >= 3, (
+            f"Expected at least 3 expire() calls, got {self._redis_mock.expire.call_count}"
+        )
+        assert _KEY_TASK.format(task.id) in expired_keys, (
+            f"expire() not called for task key {_KEY_TASK.format(task.id)!r}"
+        )
+        assert _KEY_AUDIT.format(task.id) in expired_keys, (
+            f"expire() not called for audit key {_KEY_AUDIT.format(task.id)!r}"
+        )
+        assert _KEY_TASKS in expired_keys, (
+            f"expire() not called for tracking set {_KEY_TASKS!r}"
+        )
+
+    def test_get_task_missing_does_not_call_expire(self):
+        """expire() must NOT be called when task_id is not found in Redis.
+
+        Avoids unnecessary Redis round-trips on cache misses.
+        """
+        self._redis_mock.expire.reset_mock()
+
+        result = self.mgr.get_task("nonexistent-task-id")
+
+        assert result is None
+        self._redis_mock.expire.assert_not_called()
