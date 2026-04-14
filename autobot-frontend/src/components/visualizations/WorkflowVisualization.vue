@@ -878,7 +878,7 @@ defineExpose({
   background: var(--bg-secondary);
   border-radius: 12px;
   border: 1px solid var(--border-subtle);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
 

@@ -643,7 +643,7 @@ onMounted(loadUsers)
   border-radius: 0.75rem;
   width: 100%;
   max-width: 480px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-2xl);
 }
 
 .modal-sm {

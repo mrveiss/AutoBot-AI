@@ -522,7 +522,7 @@ onUnmounted(() => {
 
 .execution-card:hover {
   border-color: var(--color-primary);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-sm);
 }
 
 .execution-card.card-running { border-left: 3px solid var(--color-success); }

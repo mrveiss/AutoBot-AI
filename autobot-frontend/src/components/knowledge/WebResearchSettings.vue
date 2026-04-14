@@ -856,7 +856,7 @@ onMounted(() => {
   border-radius: 50%;
   background: #ffffff;
   transition: transform 0.2s;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-sm);
 }
 
 .toggle-on .toggle-thumb {

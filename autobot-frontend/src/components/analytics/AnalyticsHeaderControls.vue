@@ -223,6 +223,6 @@ const emit = defineEmits<{
 
 .btn-debug:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-md);
 }
 </style>

@@ -927,7 +927,7 @@ onUnmounted(() => {
   bottom: 0 !important;
   z-index: 10 !important;
   background-color: var(--autobot-bg-card, white) !important;
-  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 /* Upload Progress */

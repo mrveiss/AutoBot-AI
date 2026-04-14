@@ -1861,7 +1861,7 @@ export default {
   border-radius: 12px;
   max-width: 600px;
   width: 90%;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-lg);
   border: 1px solid #444;
 }
 
