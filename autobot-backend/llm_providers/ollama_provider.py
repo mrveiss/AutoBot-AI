@@ -25,7 +25,7 @@ import aiohttp
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.ssot_config import get_ollama_url
-from constants.api_constants import PATH_OLLAMA_CHAT, PATH_OLLAMA_TAGS
+from constants.api_constants import PATH_OLLAMA_CHAT, PATH_OLLAMA_GENERATE, PATH_OLLAMA_TAGS
 from llm_interface_pkg.models import LLMRequest, LLMResponse
 from llm_interface_pkg.types import ProviderType
 
@@ -96,20 +96,62 @@ class OllamaProvider(BaseProvider):
         try:
             chat_template = request.metadata.get("chat_template")
             if chat_template:
+                # Issue #4525: when a chat_template is set, render messages to a
+                # prompt string and POST to /api/generate directly.  Collapsing to a
+                # single {"role":"user"} message and forwarding to /api/chat is
+                # semantically wrong — it discards conversation structure.
+                # stream_completion already uses this pattern correctly.
+                base_url = self._resolve_base_url()
+                model = request.model_name or self._get_setting("default_model", "")
                 raw_messages = [
                     {"role": m["role"], "content": m["content"]}
                     if isinstance(m, dict)
                     else {"role": m.role, "content": m.content}
                     for m in request.messages
                 ]
-                rendered = render_chat_template(raw_messages, chat_template)
-                # Replace messages with a single pre-rendered user turn so the
-                # delegate forwards the correctly formatted prompt to Ollama.
-                from dataclasses import replace as _dc_replace
-                request = _dc_replace(
-                    request,
-                    messages=[{"role": "user", "content": rendered}],
+                prompt = render_chat_template(raw_messages, chat_template)
+                payload: Dict[str, Any] = {
+                    "model": model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {"temperature": request.temperature},
+                }
+                if request.max_tokens:
+                    payload["options"]["num_predict"] = request.max_tokens
+
+                import json as _json
+                http_client = get_http_client()
+                timeout = aiohttp.ClientTimeout(total=None, connect=5.0, sock_read=None)
+                async with await http_client.post(
+                    f"{base_url}{PATH_OLLAMA_GENERATE}",
+                    headers={"Content-Type": "application/json"},
+                    json=payload,
+                    timeout=timeout,
+                ) as resp:
+                    if resp.status != 200:
+                        body = await resp.text()
+                        raise RuntimeError(f"Ollama generate returned HTTP {resp.status}: {body}")
+                    data = await resp.json()
+                content = data.get("response", "")
+                usage = {
+                    "prompt_tokens": data.get("prompt_eval_count", 0),
+                    "completion_tokens": data.get("eval_count", 0),
+                    "total_tokens": data.get("prompt_eval_count", 0) + data.get("eval_count", 0),
+                }
+                return LLMResponse(
+                    content=content,
+                    model=model,
+                    provider=self.provider_name,
+                    processing_time=data.get("total_duration", 0) / 1e9,
+                    request_id=request.request_id,
+                    usage=usage,
+                    provider_metadata=self._build_provider_metadata(
+                        model_api_name=model,
+                        api_kwargs_applied=payload,
+                        total_tokens=usage["total_tokens"],
+                    ),
                 )
+
             delegate = self._ensure_delegate()
             # Override host so settings["base_url"] is respected over SSOT env default.
             delegate.ollama_host = self._resolve_base_url()

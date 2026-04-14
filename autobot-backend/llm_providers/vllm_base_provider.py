@@ -22,7 +22,6 @@ from llm_interface_pkg.models import LLMRequest, LLMResponse
 from llm_interface_pkg.types import ProviderType
 
 from .base_provider import BaseProvider
-from .chat_template_loader import DEFAULT_TEMPLATE
 from .vllm_provider import VLLMProvider
 
 logger = logging.getLogger(__name__)
@@ -100,8 +99,11 @@ class VLLMBaseProvider(BaseProvider):
             ]
 
             # Extract inference parameters from request metadata
+            # Issue #4524: only apply chat_template when explicitly set — never default
+            # to DEFAULT_TEMPLATE, as models with native tokenizer templates would
+            # receive double-templated prompts.
             api_kwargs = request.metadata.get("api_kwargs", {})
-            chat_template = request.metadata.get("chat_template", DEFAULT_TEMPLATE)
+            chat_template = request.metadata.get("chat_template")
             inference_kwargs = {
                 "temperature": api_kwargs.get("temperature", 0.7),
                 "max_tokens": api_kwargs.get("max_tokens", 512),
@@ -110,8 +112,9 @@ class VLLMBaseProvider(BaseProvider):
                 "frequency_penalty": api_kwargs.get("frequency_penalty", 0.0),
                 "presence_penalty": api_kwargs.get("presence_penalty", 0.0),
                 "stop": api_kwargs.get("stop", None),
-                "chat_template": chat_template,
             }
+            if chat_template:
+                inference_kwargs["chat_template"] = chat_template
 
             # Run inference in executor to avoid blocking
             response = await asyncio.get_running_loop().run_in_executor(
@@ -168,15 +171,17 @@ class VLLMBaseProvider(BaseProvider):
                 for msg in request.messages
             ]
 
+            # Issue #4524: only apply chat_template when explicitly set
             api_kwargs = request.metadata.get("api_kwargs", {})
-            chat_template = request.metadata.get("chat_template", DEFAULT_TEMPLATE)
+            chat_template = request.metadata.get("chat_template")
             inference_kwargs = {
                 "temperature": api_kwargs.get("temperature", 0.7),
                 "max_tokens": api_kwargs.get("max_tokens", 512),
                 "top_p": api_kwargs.get("top_p", 0.95),
                 "top_k": api_kwargs.get("top_k", -1),
-                "chat_template": chat_template,
             }
+            if chat_template:
+                inference_kwargs["chat_template"] = chat_template
 
             # Run inference in executor
             response = await asyncio.get_running_loop().run_in_executor(
