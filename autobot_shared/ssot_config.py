@@ -247,6 +247,11 @@ class LLMConfig(BaseSettings):
         default="http://127.0.0.1:11434", alias="AUTOBOT_LLAMAINDEX_EMBEDDING_ENDPOINT"
     )
 
+    # Chat template for local providers (ollama, vllm, llama.cpp).
+    # OpenAI/Anthropic/Gemini skip this — they format server-side.
+    # Supported values: chatml, zephyr, vicuna
+    chat_template: str = Field(default="chatml", alias="AUTOBOT_CHAT_TEMPLATE")
+
     def get_ollama_endpoint_for_model(self, model_name: str) -> str:
         """Route Ollama requests to GPU or CPU endpoint by model (#1070).
 
