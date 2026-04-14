@@ -99,13 +99,7 @@ const router = createRouter({
         {
           path: 'updates',
           name: 'maintenance-updates',
-          component: () => import('@/views/UpdatesView.vue'),
-          meta: { title: 'Updates', parent: 'maintenance' },
-          beforeEnter: (to) => {
-            if (!to.params.tab) {
-              return { ...to, params: { ...to.params, tab: 'system' }, replace: true }
-            }
-          },
+          redirect: { name: 'maintenance-updates-tab', params: { tab: 'system' } },
         },
         {
           path: 'updates/:tab',
