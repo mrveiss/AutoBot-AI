@@ -31,7 +31,7 @@
                   class="absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-white"
                 ></div>
               </div>
-              <span class="text-white font-bold text-lg hidden sm:block">AutoBot</span>
+              <span class="text-autobot-text-primary font-bold text-lg hidden sm:block">AutoBot</span>
             </button>
           </div>
 

@@ -398,7 +398,9 @@ const formattedContent = computed(() => {
 }
 
 .message-wrapper.error {
-  @apply bg-red-50 border-red-300 text-red-900;
+  background: var(--color-error-bg);
+  border-color: var(--color-error-border);
+  color: var(--color-error);
 }
 
 .message-wrapper.sending {
@@ -473,15 +475,21 @@ const formattedContent = computed(() => {
 
 /* Assistant message code styling */
 .assistant-message .message-text :deep(code) {
-  @apply bg-gray-200 text-gray-800 px-1.5 py-0.5 rounded text-xs font-mono;
+  @apply bg-autobot-bg-tertiary text-autobot-text-primary px-1.5 py-0.5 rounded text-xs font-mono;
 }
 
 .assistant-message .message-text :deep(pre) {
-  @apply bg-gray-800 text-gray-100 p-3 rounded-lg overflow-x-auto my-1.5;
+  @apply p-3 rounded-lg overflow-x-auto my-1.5;
+  background: var(--code-bg);
+  color: var(--code-text);
 }
 
 .assistant-message .message-text :deep(a) {
-  @apply text-blue-600 hover:text-blue-800 underline;
+  @apply text-autobot-text-link hover:text-autobot-text-link underline;
+  opacity: 0.9;
+}
+.assistant-message .message-text :deep(a):hover {
+  opacity: 1;
 }
 
 /* Metadata */

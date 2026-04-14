@@ -41,15 +41,15 @@ function toggleDarkMode() {
   width: 40px;
   height: 40px;
   border-radius: var(--radius-md);
-  background-color: rgba(255, 255, 255, 0.1);
-  color: white;
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
   font-size: 18px;
   transition: all 0.2s ease;
   cursor: pointer;
 }
 
 .dark-mode-toggle:hover {
-  background-color: rgba(255, 255, 255, 0.2);
+  background-color: var(--bg-active);
   transform: scale(1.05);
 }
 
@@ -58,9 +58,9 @@ function toggleDarkMode() {
 }
 
 .dark-mode-toggle:focus-visible {
-  outline: 2px solid white;
+  outline: 2px solid var(--color-primary);
   outline-offset: 2px;
-  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 0 4px var(--color-primary-bg);
 }
 
 /* Icon transition animation */

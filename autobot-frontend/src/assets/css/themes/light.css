@@ -102,8 +102,8 @@
    * ============================================ */
 
   --scrollbar-track: #f1f5f9;
-  --scrollbar-thumb: #cbd5e1;
-  --scrollbar-thumb-hover: #94a3b8;
+  --scrollbar-thumb: #94a3b8;
+  --scrollbar-thumb-hover: #64748b;
 
   /* ============================================
    * COMPONENT TOKENS - Light Theme
@@ -160,7 +160,7 @@
     --border-strong: #cbd5e1;
 
     --scrollbar-track: #f1f5f9;
-    --scrollbar-thumb: #cbd5e1;
-    --scrollbar-thumb-hover: #94a3b8;
+    --scrollbar-thumb: #94a3b8;
+    --scrollbar-thumb-hover: #64748b;
   }
 }

@@ -2,7 +2,7 @@
 <!-- Copyright (c) 2025 mrveiss -->
 <!-- Author: mrveiss -->
 <template>
-  <div class="admin-users-view">
+  <div class="admin-users-view view-container">
     <div class="page-header">
       <div class="page-header-content">
         <h2 class="page-title">User Management</h2>

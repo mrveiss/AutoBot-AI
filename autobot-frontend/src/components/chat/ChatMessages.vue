@@ -1515,60 +1515,64 @@ onMounted(async () => {
   @apply font-mono text-xs text-amber-100;
 }
 
-/* UTILITY MESSAGES - Slate theme for tool/utility output */
+/* UTILITY MESSAGES - Neutral theme-aware for tool/utility output */
 .message-wrapper.type-utility {
-  @apply bg-slate-100 border-slate-300 text-slate-800;
-  border-left: 4px solid var(--color-slate-500);
+  @apply bg-autobot-bg-tertiary border-autobot-border text-autobot-text-primary;
+  border-left: 4px solid var(--border-strong);
 }
 
 .message-wrapper.type-utility .message-avatar {
-  @apply bg-slate-600;
+  @apply bg-autobot-text-secondary;
 }
 
 .message-wrapper.type-utility .sender-name {
-  @apply text-slate-700;
+  @apply text-autobot-text-primary;
 }
 
 .message-wrapper.type-utility .message-time {
-  @apply text-slate-500;
+  @apply text-autobot-text-secondary;
 }
 
-/* SOURCES MESSAGES - Teal theme for source references */
+/* SOURCES MESSAGES - Info-tinted theme-aware for source references */
 .message-wrapper.type-sources {
-  @apply bg-teal-50 border-teal-300 text-teal-900;
-  border-left: 4px solid var(--color-teal-500);
+  background: var(--color-info-bg);
+  border-color: var(--color-info-bg-hover);
+  color: var(--text-primary);
+  border-left: 4px solid var(--color-info);
 }
 
 .message-wrapper.type-sources .message-avatar {
-  @apply bg-teal-600;
+  background: var(--color-info);
 }
 
 .message-wrapper.type-sources .sender-name {
-  @apply text-teal-800;
+  @apply text-autobot-text-primary;
 }
 
 .message-wrapper.type-sources .message-time {
-  @apply text-teal-600;
+  @apply text-autobot-text-secondary;
 }
 
-/* JSON MESSAGES - Cyan theme for structured data */
+/* JSON MESSAGES - Primary-tinted theme-aware for structured data */
 .message-wrapper.type-json {
-  @apply bg-cyan-50 border-cyan-300 text-cyan-900;
-  border-left: 4px solid var(--color-cyan-500);
+  background: var(--color-primary-bg);
+  border-color: var(--color-primary-bg-hover);
+  color: var(--text-primary);
+  border-left: 4px solid var(--color-primary);
 }
 
 .message-wrapper.type-json .message-avatar {
-  @apply bg-cyan-600;
+  background: var(--color-primary);
 }
 
 .message-wrapper.type-json .message-text {
   @apply font-mono text-xs;
 }
 
-/* TERMINAL OUTPUT MESSAGES - Dark theme for terminal output */
+/* TERMINAL OUTPUT MESSAGES - Always-dark (intentional terminal aesthetic) */
 .message-wrapper.type-terminal_output {
   @apply bg-gray-900 border-gray-700 text-gray-100;
-  border-left: 4px solid var(--color-green-500);
+  border-left: 4px solid var(--color-success);
 }
 
 .message-wrapper.type-terminal_output .message-avatar {
@@ -1592,10 +1596,12 @@ onMounted(async () => {
   @apply text-gray-100;
 }
 
-/* COMMAND APPROVAL REQUEST - Yellow/Warning theme */
+/* COMMAND APPROVAL REQUEST - Warning theme-aware */
 .message-wrapper.type-command_approval_request {
-  @apply bg-yellow-900/20 border-yellow-500/40 text-yellow-200;
-  border-left: 4px solid var(--color-yellow-500);
+  background: var(--color-warning-bg);
+  border-color: var(--color-warning-border);
+  color: var(--text-primary);
+  border-left: 4px solid var(--color-warning);
 }
 
 .message-wrapper.type-command_approval_request .message-avatar {
@@ -1603,7 +1609,7 @@ onMounted(async () => {
 }
 
 .message-wrapper.type-command_approval_request .message-content {
-  @apply text-yellow-200;
+  color: var(--text-primary);
 }
 
 /* Message type indicator badge */
@@ -1623,17 +1629,20 @@ onMounted(async () => {
 
 .message-wrapper.type-debug::after {
   content: 'Debug';
-  @apply bg-amber-200 text-amber-800;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning-border);
 }
 
 .message-wrapper.type-utility::after {
   content: 'Utility';
-  @apply bg-slate-200 text-slate-800;
+  @apply bg-autobot-bg-tertiary text-autobot-text-secondary;
 }
 
 .message-wrapper.type-sources::after {
   content: 'Sources';
-  @apply bg-teal-200 text-teal-800;
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .message-wrapper.type-terminal_output::after {
@@ -1766,11 +1775,17 @@ onMounted(async () => {
 }
 
 .assistant-message .message-text :deep(pre) {
-  @apply bg-gray-800 text-gray-100 p-3 rounded-lg overflow-x-auto my-1.5;
+  @apply p-3 rounded-lg overflow-x-auto my-1.5;
+  background: var(--code-bg);
+  color: var(--code-text);
 }
 
 .assistant-message .message-text :deep(a) {
-  @apply text-blue-600 hover:text-blue-800 underline;
+  color: var(--text-link);
+  text-decoration: underline;
+}
+.assistant-message .message-text :deep(a):hover {
+  color: var(--text-link-hover);
 }
 
 /* User message metadata - lighter border for blue background */
@@ -2019,7 +2034,7 @@ onMounted(async () => {
 }
 
 .interactive-reasons {
-  @apply mt-2 p-2 bg-white rounded border border-blue-100;
+  @apply mt-2 p-2 bg-autobot-bg-secondary rounded border border-autobot-border;
 }
 
 .approval-actions {
