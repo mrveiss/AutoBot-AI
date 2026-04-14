@@ -105,6 +105,30 @@ class TestComputeDriftExclusions:
             drifted, _ = compute_drift(str(src), str(dep))
             assert any(d["path"] == "services/code_sync.py" for d in drifted)
 
+    def test_total_compared_excludes_expected_drift_paths(self):
+        """total_compared must count only non-excluded paths (Issue #4631)."""
+        with tempfile.TemporaryDirectory() as src_root, \
+                tempfile.TemporaryDirectory() as dep_root:
+            src = Path(src_root)
+            dep = Path(dep_root)
+
+            # Two regular files that will be evaluated.
+            self._write(src, "main.py", b"import os")
+            self._write(dep, "main.py", b"import os")
+            self._write(src, "config.py", b"X=1")
+            self._write(dep, "config.py", b"X=2")
+
+            # Expected-drift file — must NOT be counted in total_compared.
+            self._write(dep, "autobot_shared/foo.py", b"# shared")
+
+            _, total = compute_drift(str(src), str(dep))
+
+            # Only main.py and config.py are evaluated; autobot_shared/foo.py
+            # is excluded by _is_expected_drift() before counting.
+            assert total == 2, (
+                f"expected total_compared=2 (excluding autobot_shared/foo.py), got {total}"
+            )
+
     def test_build_drift_report_excludes_expected_files(self):
         """build_drift_report() should not flag expected-drift paths."""
         with tempfile.TemporaryDirectory() as src_root, \
