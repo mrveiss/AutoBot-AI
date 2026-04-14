@@ -24,6 +24,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from services.knowledge.synthesis_provenance import SynthesisProvenanceLog
+
 from .config import AutoResearchConfig
 from .store import ExperimentStore
 
@@ -96,11 +98,13 @@ class KnowledgeSynthesizer(BaseSynthesizer):
         store: ExperimentStore,
         llm_service: Any,
         config: Optional[AutoResearchConfig] = None,
+        provenance_log: Optional[SynthesisProvenanceLog] = None,
     ) -> None:
         self._store = store
         self._llm = llm_service
         self._config = config or AutoResearchConfig()
         self._insights_collection = None
+        self._provenance_log = provenance_log or SynthesisProvenanceLog()
 
     async def _get_collection(self):
         """Return the insights ChromaDB collection (lazy-init)."""
@@ -170,7 +174,8 @@ class KnowledgeSynthesizer(BaseSynthesizer):
             )
             insights.append(insight)
 
-        await self._index_insights(insights)
+        source_doc_ids = [e.id for e in session_experiments]
+        await self._index_insights(insights, source_doc_ids=source_doc_ids)
         return insights
 
     async def query_insights(
@@ -265,8 +270,12 @@ class KnowledgeSynthesizer(BaseSynthesizer):
         """BaseSynthesizer ABC implementation — delegates to _index_insights."""
         await self._index_insights(docs)
 
-    async def _index_insights(self, insights: List[ExperimentInsight]) -> None:
-        """Store insights in ChromaDB."""
+    async def _index_insights(
+        self,
+        insights: List[ExperimentInsight],
+        source_doc_ids: Optional[List[str]] = None,
+    ) -> None:
+        """Store insights in ChromaDB and log provenance."""
         if not insights:
             return
 
@@ -284,8 +293,21 @@ class KnowledgeSynthesizer(BaseSynthesizer):
             for i in insights
         ]
 
+        run_id = str(uuid.uuid4())
+        start = time.monotonic()
         try:
             await collection.upsert(ids=ids, documents=documents, metadatas=metadatas)
             logger.info("Indexed %d insights in ChromaDB", len(insights))
         except Exception:
             logger.exception("Failed to index insights in ChromaDB")
+            return
+
+        duration_ms = int((time.monotonic() - start) * 1000)
+        await self._provenance_log.log_run(
+            run_id=run_id,
+            source_docs=source_doc_ids or [],
+            synthesis_ids=ids,
+            llm_model=getattr(self._llm, "model", "unknown"),
+            prompt_template="synthesis_system_prompt_v1",
+            duration_ms=duration_ms,
+        )
