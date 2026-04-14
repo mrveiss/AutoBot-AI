@@ -301,11 +301,16 @@ def test_get_kb_synthesizer_returns_instance():
 # ---------------------------------------------------------------------------
 
 
-def _make_collection_config(name: str = "test_col", prompt_template: str = "Custom prompt: {documents}"):
+def _make_collection_config(
+    name: str = "test_col",
+    prompt_template: str = "Custom prompt: {documents}",
+    synthesis_target: str = "",
+):
     """Return a minimal CollectionConfig-like object for testing."""
     cfg = MagicMock()
     cfg.name = name
     cfg.prompt_template = prompt_template
+    cfg.synthesis_target = synthesis_target
     cfg.paths = ["docs/test"]
     return cfg
 
@@ -488,3 +493,120 @@ async def test_synthesize_cluster_default_prompt_no_documents_placeholder(tmp_pa
     assert len(messages) == 2
     assert messages[0]["role"] == "system"
     assert messages[1]["role"] == "user"
+
+
+# ---------------------------------------------------------------------------
+# Tests: synthesis_target routing (#4635)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_synthesize_cluster_writes_to_synthesis_target(tmp_path):
+    """When synthesis_target is set, _index_documents is called with that name."""
+    f = tmp_path / "arch.md"
+    f.write_text("# Architecture", encoding="utf-8")
+
+    target_col = _make_collection()
+    default_col = _make_collection()
+
+    llm = _make_llm("Architecture summary")
+    synth = KBSynthesizer(llm_service=llm)
+    # Inject default collection to verify it is NOT written to.
+    synth._collection = default_col
+
+    # Inject named collection so _get_collection(collection_name) returns target_col.
+    synth._named_collections["autobot_synthesis_architecture"] = target_col
+
+    cfg = _make_collection_config(
+        name="architecture_adrs",
+        synthesis_target="autobot_synthesis_architecture",
+    )
+
+    await synth.synthesize_docs([str(f)], collection_config=cfg)
+
+    # Must write to synthesis_target, not to the default collection.
+    target_col.upsert.assert_awaited_once()
+    default_col.upsert.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_synthesize_cluster_falls_back_to_default_when_no_target(tmp_path):
+    """When synthesis_target is empty, output goes to the default collection."""
+    f = tmp_path / "doc.md"
+    f.write_text("# Topic\nContent.", encoding="utf-8")
+
+    col = _make_collection()
+    llm = _make_llm("Generic summary")
+    synth = KBSynthesizer(llm_service=llm)
+    synth._collection = col
+
+    cfg = _make_collection_config(name="no_target_col", synthesis_target="")
+
+    await synth.synthesize_docs([str(f)], collection_config=cfg)
+
+    col.upsert.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_synthesize_cluster_falls_back_when_config_is_none(tmp_path):
+    """When collection_config is None, output goes to the default collection."""
+    f = tmp_path / "doc.md"
+    f.write_text("# Topic\nContent.", encoding="utf-8")
+
+    col = _make_collection()
+    llm = _make_llm("Summary")
+    synth = KBSynthesizer(llm_service=llm)
+    synth._collection = col
+
+    await synth.synthesize_docs([str(f)], collection_config=None)
+
+    col.upsert.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_get_relevant_context_queries_extra_collections():
+    """get_relevant_context queries extra collection names in addition to default."""
+    default_results = {
+        "ids": [["id1"]],
+        "documents": [["Default summary."]],
+        "metadatas": [[{}]],
+    }
+    extra_results = {
+        "ids": [["id2"]],
+        "documents": [["Architecture summary."]],
+        "metadatas": [[{}]],
+    }
+    default_col = _make_collection(default_results)
+    extra_col = _make_collection(extra_results)
+
+    synth = KBSynthesizer(llm_service=_make_llm())
+    synth._collection = default_col
+    synth._named_collections["autobot_synthesis_architecture"] = extra_col
+
+    ctx = await synth.get_relevant_context(
+        "architecture", collection_names=["autobot_synthesis_architecture"]
+    )
+
+    assert "Default summary." in ctx
+    assert "Architecture summary." in ctx
+
+
+@pytest.mark.asyncio
+async def test_get_relevant_context_deduplicates_default_collection():
+    """Passing the default collection name twice must not query it twice."""
+    default_results = {
+        "ids": [["id1"]],
+        "documents": [["Default summary."]],
+        "metadatas": [[{}]],
+    }
+    col = _make_collection(default_results)
+    synth = KBSynthesizer(llm_service=_make_llm())
+    synth._collection = col
+
+    # Pass default name explicitly — should be deduplicated.
+    await synth.get_relevant_context(
+        "topic", collection_names=[_kb_synth_mod._KB_SYNTHESIS_COLLECTION]
+    )
+
+    # Default collection queried exactly once (not twice).
+    assert col.query.await_count == 1

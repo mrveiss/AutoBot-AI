@@ -39,7 +39,8 @@ class KBSynthesizer:
     """Synthesize KB doc clusters into topic-summary pages in ChromaDB.
 
     Issue #4564: Subclass of BaseSynthesizer for KB documentation synthesis.
-    Summaries are stored in the ``kb_synthesis`` ChromaDB collection and
+    Summaries are stored in ChromaDB collections (default: ``kb_synthesis``,
+    or the per-collection ``synthesis_target`` from synthesis_schema.yaml) and
     queried by RAGService as optional context enrichment.
     """
 
@@ -48,47 +49,101 @@ class KBSynthesizer:
     def __init__(self, llm_service: Any) -> None:
         self._llm = llm_service
         self._collection: Optional[Any] = None
+        # Cache of named collections keyed by collection name.
+        self._named_collections: dict[str, Any] = {}
 
     # ------------------------------------------------------------------
     # BaseSynthesizer ABC interface
     # ------------------------------------------------------------------
 
-    async def _get_collection(self) -> Any:
-        """Return the kb_synthesis ChromaDB collection (lazy-init)."""
-        if self._collection is None:
+    async def _get_collection(self, collection_name: Optional[str] = None) -> Any:
+        """Return a ChromaDB collection (lazy-init).
+
+        Args:
+            collection_name: Override the collection name.  When None, the
+                default ``_KB_SYNTHESIS_COLLECTION`` is used and the result is
+                cached on ``self._collection`` for backward compatibility.
+        """
+        name = collection_name or self.COLLECTION_NAME
+        if collection_name is None:
+            if self._collection is None:
+                from utils.chromadb_client import get_async_chromadb_client
+
+                client = await get_async_chromadb_client()
+                self._collection = await client.get_or_create_collection(
+                    name=name,
+                    metadata={"description": "LLM-synthesized KB topic summaries"},
+                )
+            return self._collection
+
+        if name not in self._named_collections:
             from utils.chromadb_client import get_async_chromadb_client
 
             client = await get_async_chromadb_client()
-            self._collection = await client.get_or_create_collection(
-                name=self.COLLECTION_NAME,
+            self._named_collections[name] = await client.get_or_create_collection(
+                name=name,
                 metadata={"description": "LLM-synthesized KB topic summaries"},
             )
-        return self._collection
+        return self._named_collections[name]
 
-    async def _index_documents(self, docs: List[Any]) -> None:
-        """Persist synthesized SummaryPage dicts into ChromaDB."""
+    async def _index_documents(
+        self, docs: List[Any], collection_name: Optional[str] = None
+    ) -> None:
+        """Persist synthesized SummaryPage dicts into ChromaDB.
+
+        Args:
+            docs: List of summary page dicts with at least ``id`` and ``summary``.
+            collection_name: Target collection name override; None uses the default.
+        """
         if not docs:
             return
-        collection = await self._get_collection()
+        collection = await self._get_collection(collection_name)
         ids = [d["id"] for d in docs]
         documents = [d["summary"] for d in docs]
         metadatas = [{k: v for k, v in d.items() if k not in ("id", "summary")} for d in docs]
         try:
             await collection.upsert(ids=ids, documents=documents, metadatas=metadatas)
-            logger.info("KBSynthesizer: indexed %d summaries in ChromaDB", len(docs))
+            logger.info(
+                "KBSynthesizer: indexed %d summaries in ChromaDB collection '%s'",
+                len(docs),
+                collection_name or self.COLLECTION_NAME,
+            )
         except Exception:
             logger.exception("KBSynthesizer: failed to index summaries")
 
-    async def get_relevant_context(self, topic: str, limit: int = 3) -> str:
-        """Return synthesized KB summaries as a RAG context string."""
-        results = await self._query_summaries(topic, limit=limit)
-        if not results:
-            return ""
+    async def get_relevant_context(
+        self,
+        topic: str,
+        limit: int = 3,
+        collection_names: Optional[List[str]] = None,
+    ) -> str:
+        """Return synthesized KB summaries as a RAG context string.
+
+        Queries the default ``kb_synthesis`` collection plus any additional
+        names provided via ``collection_names`` (e.g. from synthesis_schema).
+
+        Args:
+            topic: Query text.
+            limit: Maximum results per collection.
+            collection_names: Extra collection names to query in addition to
+                the default.  Duplicates are skipped.
+        """
+        all_names: List[Optional[str]] = [None]  # None → default collection
+        seen = {self.COLLECTION_NAME}
+        for name in (collection_names or []):
+            if name and name not in seen:
+                all_names.append(name)
+                seen.add(name)
+
         lines = ["KB synthesis context:"]
-        for doc, meta in results:
-            source = meta.get("source_paths", "")
-            lines.append(f"- {doc}" + (f" [sources: {source}]" if source else ""))
-        return "\n".join(lines)
+        found_any = False
+        for col_name in all_names:
+            results = await self._query_summaries(topic, limit=limit, collection_name=col_name)
+            for doc, meta in results:
+                found_any = True
+                source = meta.get("source_paths", "")
+                lines.append(f"- {doc}" + (f" [sources: {source}]" if source else ""))
+        return "\n".join(lines) if found_any else ""
 
     # ------------------------------------------------------------------
     # Public API
@@ -146,7 +201,12 @@ class KBSynthesizer:
         file_paths: List[str],
         collection_config: "Optional[CollectionConfig]" = None,
     ) -> None:
-        """Build one summary page from a batch of docs."""
+        """Build one summary page from a batch of docs.
+
+        Writes the result to the collection named by
+        ``collection_config.synthesis_target`` when that field is non-empty;
+        otherwise falls back to the default ``kb_synthesis`` collection.
+        """
         docs_text = await asyncio.to_thread(self._read_docs, file_paths)
         if not docs_text.strip():
             return
@@ -181,7 +241,16 @@ class KBSynthesizer:
             "synthesized_at": time.time(),
             "doc_count": len(file_paths),
         }
-        await self._index_documents([page])
+        target_collection: Optional[str] = None
+        if collection_config is not None:
+            target = collection_config.synthesis_target.strip()
+            if target:
+                target_collection = target
+                logger.debug(
+                    "KBSynthesizer: writing cluster to synthesis_target '%s'",
+                    target_collection,
+                )
+        await self._index_documents([page], collection_name=target_collection)
 
     @staticmethod
     def _read_docs(file_paths: List[str]) -> str:
@@ -203,17 +272,26 @@ class KBSynthesizer:
         return "kb_syn_" + hashlib.md5(key.encode(), usedforsecurity=False).hexdigest()[:12]
 
     async def _query_summaries(
-        self, query: str, limit: int = 3
+        self, query: str, limit: int = 3, collection_name: Optional[str] = None
     ) -> List[tuple[str, dict]]:
-        """Query kb_synthesis collection; return list of (document, metadata)."""
+        """Query a synthesis collection; return list of (document, metadata).
+
+        Args:
+            query: Query text.
+            limit: Maximum results.
+            collection_name: Collection to query.  None uses the default.
+        """
         try:
-            collection = await self._get_collection()
+            collection = await self._get_collection(collection_name)
             results = await collection.query(
                 query_texts=[query],
                 n_results=limit,
             )
         except Exception:
-            logger.exception("KBSynthesizer: query failed")
+            logger.debug(
+                "KBSynthesizer: query failed for collection '%s' (non-fatal)",
+                collection_name or self.COLLECTION_NAME,
+            )
             return []
 
         output: List[tuple[str, dict]] = []
