@@ -40,7 +40,15 @@ RESEARCH_PATTERNS = {
     "current",
     "recent",
 }
-KNOWLEDGE_PATTERNS = {"according to", "based on documents", "analyze", "summarize"}
+KNOWLEDGE_PATTERNS = {
+    "according to",
+    "based on documents",
+    "analyze",
+    "summarize",
+    "knowledge base",
+    "in the documents",
+    "in my documents",
+}
 
 # Issue #60: Routing patterns for specialized agents
 DATA_ANALYSIS_PATTERNS = {
