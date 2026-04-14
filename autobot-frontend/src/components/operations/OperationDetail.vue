@@ -322,7 +322,7 @@ async function copyId() {
 .section-title {
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--blue-gray-700);
+  color: var(--text-primary);
   margin: 0 0 0.5rem 0;
 }
 
@@ -331,12 +331,12 @@ async function copyId() {
 .timing-section,
 .checkpoints-section {
   padding-top: 0.75rem;
-  border-top: 1px solid var(--blue-gray-100);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .description-text {
   font-size: 0.875rem;
-  color: var(--blue-gray-600);
+  color: var(--text-secondary);
   margin: 0;
   line-height: 1.5;
 }
@@ -355,12 +355,12 @@ async function copyId() {
 
 .timing-label {
   font-size: 0.75rem;
-  color: var(--blue-gray-500);
+  color: var(--text-muted);
 }
 
 .timing-value {
   font-size: 0.875rem;
-  color: var(--blue-gray-700);
+  color: var(--text-primary);
 }
 
 .error-section {
@@ -390,18 +390,18 @@ async function copyId() {
   align-items: center;
   gap: 1rem;
   font-size: 0.875rem;
-  color: var(--blue-gray-600);
+  color: var(--text-secondary);
 }
 
 .can-resume {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  color: var(--green-600);
+  color: var(--color-success);
 }
 
 .context-section {
-  border-top: 1px solid var(--blue-gray-100);
+  border-top: 1px solid var(--border-subtle);
   padding-top: 0.75rem;
 }
 
@@ -413,11 +413,11 @@ async function copyId() {
   border: none;
   padding: 0;
   cursor: pointer;
-  color: var(--blue-gray-600);
+  color: var(--text-secondary);
 }
 
 .context-toggle:hover {
-  color: var(--blue-gray-800);
+  color: var(--text-primary);
 }
 
 .context-toggle .section-title {
@@ -430,7 +430,7 @@ async function copyId() {
 
 .context-json {
   font-size: 0.75rem;
-  background-color: var(--blue-gray-50);
+  background-color: var(--code-bg);
   padding: 1rem;
   border-radius: 0.375rem;
   overflow-x: auto;
@@ -441,7 +441,7 @@ async function copyId() {
   display: flex;
   gap: 0.75rem;
   padding-top: 1rem;
-  border-top: 1px solid var(--blue-gray-200);
+  border-top: 1px solid var(--border-default);
 }
 
 .action-btn {
@@ -483,12 +483,12 @@ async function copyId() {
 
 .refresh-btn {
   background-color: var(--bg-card);
-  color: var(--blue-gray-700);
-  border: 1px solid var(--blue-gray-300);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
 }
 
 .refresh-btn:hover:not(:disabled) {
-  background-color: var(--blue-gray-50);
+  background-color: var(--bg-hover);
 }
 
 .detail-footer {
@@ -496,28 +496,28 @@ async function copyId() {
   align-items: center;
   justify-content: space-between;
   padding-top: 0.75rem;
-  border-top: 1px solid var(--blue-gray-100);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .operation-id {
   font-size: 0.75rem;
   font-family: monospace;
-  color: var(--blue-gray-400);
+  color: var(--text-muted);
 }
 
 .copy-id-btn {
   padding: 0.25rem 0.5rem;
   font-size: 0.75rem;
   background: none;
-  border: 1px solid var(--blue-gray-200);
-  color: var(--blue-gray-500);
+  border: 1px solid var(--border-default);
+  color: var(--text-muted);
   border-radius: 0.25rem;
   cursor: pointer;
 }
 
 .copy-id-btn:hover {
-  background-color: var(--blue-gray-50);
-  color: var(--blue-gray-700);
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 /* Responsive */

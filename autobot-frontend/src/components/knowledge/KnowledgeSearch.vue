@@ -574,7 +574,7 @@ const clearResults = () => {
 
 .clear-chip {
   @apply px-3 py-1.5 text-sm font-medium rounded-full border-2 transition-all flex items-center gap-1.5;
-  @apply border-red-300 bg-white text-red-600 hover:bg-red-50 hover:border-red-400;
+  @apply border-red-300 bg-autobot-bg-card text-red-600 hover:bg-red-50 hover:border-red-400;
 }
 
 .toggle-container {
@@ -693,7 +693,7 @@ const clearResults = () => {
 }
 
 .synthesis-content p {
-  @apply text-gray-800 leading-relaxed;
+  @apply text-autobot-text-primary leading-relaxed;
 }
 
 .query-reformulation {

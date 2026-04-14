@@ -330,7 +330,7 @@ const handleRemove = () => {
 </script>
 
 <style scoped>
-.showcase-container { padding: 24px; max-width: 1400px; margin: 0 auto; background-color: var(--bg-primary); min-height: 100vh; }
+.showcase-container { padding: 24px; max-width: 1400px; margin: 0 auto; background-color: var(--bg-primary); min-height: 100%; overflow-y: auto; }
 .showcase-header { margin-bottom: 32px; }
 .showcase-title { font-size: 32px; font-weight: 600; color: var(--text-primary); margin: 0 0 8px 0; font-family: var(--font-sans); }
 .showcase-subtitle { font-size: 16px; color: var(--text-secondary); margin: 0; }

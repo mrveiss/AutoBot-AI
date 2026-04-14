@@ -322,7 +322,7 @@
 
       <!-- Interaction Overlay -->
       <div v-if="showInteractionOverlay" class="absolute inset-0 bg-black/50 flex items-center justify-center">
-        <div class="bg-white rounded-lg p-6 max-w-md mx-4">
+        <div class="bg-autobot-bg-elevated rounded-lg p-6 max-w-md mx-4">
           <div class="flex items-center mb-4">
             <i class="fas fa-exclamation-triangle text-yellow-500 text-2xl mr-3"></i>
             <h3 class="text-lg font-semibold">{{ $t('desktop.popoutBrowser.interactionRequired') }}</h3>

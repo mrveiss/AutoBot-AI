@@ -25,8 +25,8 @@
     <div class="container mx-auto px-4 py-6">
       <!-- Header -->
       <div class="mb-6">
-        <h1 class="text-3xl font-bold text-blueGray-700">useAsyncOperation Examples</h1>
-        <p class="text-blueGray-600 mt-2">
+        <h1 class="text-3xl font-bold text-autobot-text-primary">useAsyncOperation Examples</h1>
+        <p class="text-autobot-text-secondary mt-2">
           Practical demonstrations of the async operation composable pattern
         </p>
       </div>
@@ -1162,7 +1162,7 @@ const loadAnalytics = () => analytics.execute(async () => {
 }
 
 .benefit-item {
-  background: var(--bg-white-alpha-10);
+  background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
   border-radius: 8px;
   padding: 20px;
@@ -1173,7 +1173,7 @@ const loadAnalytics = () => analytics.execute(async () => {
 
 .benefit-item:hover {
   transform: translateY(-4px);
-  background: var(--bg-white-alpha-15);
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .benefit-icon {

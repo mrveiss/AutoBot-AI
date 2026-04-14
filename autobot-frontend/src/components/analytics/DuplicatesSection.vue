@@ -112,6 +112,7 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import { useAggregationMemo } from '@/composables/useComputedMemo'
 
 const { t } = useI18n()
 

@@ -273,12 +273,12 @@ function canResumeOperation(operation: Operation): boolean {
 
 .operation-name {
   font-weight: 500;
-  color: var(--blue-gray-800);
+  color: var(--text-primary);
 }
 
 .operation-step {
   font-size: 0.75rem;
-  color: var(--blue-gray-500);
+  color: var(--text-muted);
   max-width: 250px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -295,7 +295,7 @@ function canResumeOperation(operation: Operation): boolean {
 .progress-text {
   font-size: 0.75rem;
   font-weight: 500;
-  color: var(--blue-gray-600);
+  color: var(--text-secondary);
 }
 
 .type-badge {
@@ -303,12 +303,12 @@ function canResumeOperation(operation: Operation): boolean {
   align-items: center;
   gap: 0.375rem;
   font-size: 0.75rem;
-  color: var(--blue-gray-600);
+  color: var(--text-secondary);
 }
 
 .time-text {
   font-size: 0.75rem;
-  color: var(--blue-gray-500);
+  color: var(--text-muted);
 }
 
 .action-buttons {
@@ -338,18 +338,18 @@ function canResumeOperation(operation: Operation): boolean {
 }
 
 .view-btn {
-  background-color: var(--blue-gray-100);
-  color: var(--blue-gray-600);
+  background-color: var(--bg-tertiary);
+  color: var(--text-secondary);
 }
 
 .list-footer {
   padding: 0.75rem 1rem;
-  border-top: 1px solid var(--blue-gray-200);
-  background-color: var(--blue-gray-50);
+  border-top: 1px solid var(--border-default);
+  background-color: var(--bg-secondary);
 }
 
 .footer-text {
   font-size: 0.75rem;
-  color: var(--blue-gray-500);
+  color: var(--text-muted);
 }
 </style>
