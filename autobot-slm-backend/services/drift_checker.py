@@ -170,7 +170,7 @@ def compute_drift(
     dep_checksums = _collect_checksums(dep_path)
 
     all_paths = set(src_checksums) | set(dep_checksums)
-    total_compared = len(all_paths)
+    compared = 0
     drifted: List[dict] = []
 
     for rel_path in sorted(all_paths):
@@ -178,6 +178,7 @@ def compute_drift(
             logger.debug("drift_checker: skipping expected-drift path: %s", rel_path)
             continue
 
+        compared += 1
         src_cs = src_checksums.get(rel_path)
         dep_cs = dep_checksums.get(rel_path)
 
@@ -201,7 +202,7 @@ def compute_drift(
             }
         )
 
-    return drifted, total_compared
+    return drifted, compared
 
 
 def build_drift_report(
