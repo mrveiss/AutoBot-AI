@@ -261,6 +261,18 @@
   notify: reload firewall
   tags: ['browser', 'firewall', 'vnc']
 
+- name: "Browser | Remove stale UFW rule for old playwright port 3000 (#4609)"
+  community.general.ufw:
+    rule: allow
+    port: "3000"
+    proto: tcp
+    from_ip: "{{ network_subnet }}"
+    delete: true
+  become: yes
+  when: playwright_port | int != 3000
+  ignore_errors: true  # Rule may not exist on fresh installs
+  tags: ['browser', 'firewall']
+
 - name: "Browser | Configure firewall - Allow Playwright API"
   ufw:
     rule: allow
