@@ -15,7 +15,10 @@ import asyncio
 import hashlib
 import logging
 import time
-from typing import Any, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
+
+if TYPE_CHECKING:
+    from services.knowledge.synthesis_schema_loader import CollectionConfig
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +94,11 @@ class KBSynthesizer:
     # Public API
     # ------------------------------------------------------------------
 
-    async def synthesize_docs(self, file_paths: List[str]) -> None:
+    async def synthesize_docs(
+        self,
+        file_paths: List[str],
+        collection_config: "Optional[CollectionConfig]" = None,
+    ) -> None:
         """Synthesize indexed KB docs into topic-summary pages (best-effort).
 
         Called after each tier ingest in DocIndexerService.  Errors are
@@ -99,11 +106,13 @@ class KBSynthesizer:
 
         Args:
             file_paths: Absolute paths to recently indexed markdown files.
+            collection_config: Optional schema config whose ``prompt_template``
+                overrides the generic synthesis prompt for this cluster.
         """
         if not file_paths:
             return
         try:
-            await self._synthesize_cluster(file_paths)
+            await self._synthesize_cluster(file_paths, collection_config=collection_config)
         except Exception:
             logger.exception("KBSynthesizer.synthesize_docs failed (non-fatal)")
 
@@ -111,17 +120,43 @@ class KBSynthesizer:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    async def _synthesize_cluster(self, file_paths: List[str]) -> None:
+    def _resolve_prompt(self, collection_config: "Optional[CollectionConfig]") -> str:
+        """Return the synthesis prompt for this cluster.
+
+        Uses the collection config's ``prompt_template`` when provided;
+        falls back to the generic ``_SYNTHESIS_PROMPT`` otherwise.
+        """
+        if collection_config is None:
+            return _SYNTHESIS_PROMPT
+        template = collection_config.prompt_template.strip()
+        if not template:
+            logger.warning(
+                "KBSynthesizer: collection '%s' has empty prompt_template — using default",
+                collection_config.name,
+            )
+            return _SYNTHESIS_PROMPT
+        logger.debug(
+            "KBSynthesizer: using prompt_template from collection '%s'",
+            collection_config.name,
+        )
+        return template
+
+    async def _synthesize_cluster(
+        self,
+        file_paths: List[str],
+        collection_config: "Optional[CollectionConfig]" = None,
+    ) -> None:
         """Build one summary page from a batch of docs."""
         docs_text = await asyncio.to_thread(self._read_docs, file_paths)
         if not docs_text.strip():
             return
 
         cluster_id = self._cluster_id(file_paths)
+        prompt = self._resolve_prompt(collection_config)
         try:
             response = await self._llm.chat(
                 messages=[
-                    {"role": "system", "content": _SYNTHESIS_PROMPT},
+                    {"role": "system", "content": prompt},
                     {"role": "user", "content": docs_text},
                 ],
                 temperature=0.3,
