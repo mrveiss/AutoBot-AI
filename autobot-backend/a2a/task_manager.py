@@ -216,8 +216,11 @@ class TaskManager:
         raw = self._redis.get(key)
         if raw is None:
             return None
-        # Slide TTL — reset expiry from now so active pollers stay alive
-        self._redis.expire(key, self._ttl())
+        # Slide TTL — reset expiry from now so active pollers stay alive.
+        # Slide the audit key too so it doesn't expire before the task does.
+        ttl = self._ttl()
+        self._redis.expire(key, ttl)
+        self._redis.expire(_KEY_AUDIT.format(task_id), ttl)
         return _task_from_json(raw if isinstance(raw, str) else raw.decode("utf-8"))
 
     def list_tasks(self) -> List[Task]:

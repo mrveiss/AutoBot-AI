@@ -307,42 +307,61 @@ async def stream_task_events(task_id: str) -> StreamingResponse:
         channel = f"a2a:events:{task_id}"
 
         redis = await get_async_redis_client(database="main")
+        if redis is None:
+            yield 'data: {"event":"error","message":"Redis unavailable"}\n\n'
+            return
+
         pubsub = redis.pubsub()
+        # Subscribe BEFORE reading current state so events published in the
+        # gap between subscribe and the snapshot are not lost.
         await pubsub.subscribe(channel)
 
-        # Yield the current state immediately so the client is never blind
+        # Yield the current state immediately so the client is never blind.
+        # (Intentional: if a state_change event also arrives via pub/sub in
+        # this window, clients will receive the state twice — that is safe
+        # because state_change events are idempotent.)
         current = manager.get_task(task_id)
-        if current:
-            initial_payload = json.dumps(
-                {
-                    "event": "state_change",
-                    "state": current.status.state.value,
-                    "task_id": task_id,
-                }
-            )
-            yield f"data: {initial_payload}\n\n"
-            if current.status.state.value in _TERMINAL_STATES:
-                await pubsub.unsubscribe(channel)
-                await pubsub.close()
-                return
+        if current is None:
+            yield 'data: {"event":"error","message":"Task expired"}\n\n'
+            await pubsub.unsubscribe(channel)
+            await pubsub.close()
+            return
+        initial_payload = json.dumps(
+            {
+                "event": "state_change",
+                "state": current.status.state.value,
+                "task_id": task_id,
+            }
+        )
+        yield f"data: {initial_payload}\n\n"
+        if current.status.state.value in _TERMINAL_STATES:
+            await pubsub.unsubscribe(channel)
+            await pubsub.close()
+            return
 
         # Feed pub/sub messages into an asyncio.Queue so we can apply a
         # heartbeat timeout without blocking the event loop.
         queue: asyncio.Queue = asyncio.Queue()
 
         async def _reader():
-            async for msg in pubsub.listen():
-                if msg["type"] == "message":
-                    data = msg["data"]
-                    if isinstance(data, bytes):
-                        data = data.decode("utf-8")
-                    await queue.put(data)
-                    try:
-                        if json.loads(data).get("terminal"):
-                            await queue.put(None)  # sentinel — stop the loop
-                            return
-                    except Exception:
-                        pass
+            try:
+                async for msg in pubsub.listen():
+                    if msg["type"] == "message":
+                        data = msg["data"]
+                        if isinstance(data, bytes):
+                            data = data.decode("utf-8")
+                        await queue.put(data)
+                        try:
+                            if json.loads(data).get("terminal"):
+                                await queue.put(None)  # sentinel — stop the loop
+                                return
+                        except Exception:
+                            logger.debug(
+                                "Could not parse pub/sub payload for task %s", task_id
+                            )
+            except Exception as exc:
+                logger.warning("pubsub listener error for task %s: %s", task_id, exc)
+                await queue.put(None)  # unblock the outer loop on Redis failure
 
         reader_task = asyncio.create_task(_reader())
         try:
