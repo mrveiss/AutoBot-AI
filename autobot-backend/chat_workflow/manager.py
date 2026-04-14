@@ -2808,6 +2808,7 @@ before summarizing.
         terminal_session_id: str,
         message: str,
         workflow_messages: List[WorkflowMessage],
+        context: Optional[Dict[str, Any]] = None,
     ) -> LLMIterationContext:
         """
         Create LLMIterationContext from prepared parameters.
@@ -2829,6 +2830,7 @@ before summarizing.
             system_prompt=llm_params.get("system_prompt", ""),
             initial_prompt=llm_params["prompt"],
             message=message,
+            context=context or {},
         )
 
     async def _execute_llm_workflow(
@@ -2857,7 +2859,7 @@ before summarizing.
         llm_params = await self._prepare_llm_workflow_params(session, message, context)
 
         ctx = self._create_llm_iteration_context(
-            llm_params, session_id, terminal_session_id, message, workflow_messages
+            llm_params, session_id, terminal_session_id, message, workflow_messages, context
         )
 
         all_llm_responses = []

@@ -355,6 +355,7 @@ class LLMIterationContext:
     message: Optional[str] = None
     agent_context: Optional[AgentContext] = None  # Issue #657: Agent hierarchy
     consecutive_invalid_tool_calls: int = 0  # Issue #2310: Track invalid tool calls
+    context: Dict[str, Any] = field(default_factory=dict)  # Issue #4264: Request-level context for hooks
 
 
 @dataclass
