@@ -11,6 +11,7 @@ for service use (SSOT config, proper path constants, thread-safe singleton).
 Replaces the dual Redis KB + ChromaDB CLI approach with a single ChromaDB-based system.
 """
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -624,12 +625,14 @@ class DocIndexerService:
 
     COLLECTION_NAME = "autobot_docs"
 
-    def __init__(self):
+    def __init__(self, llm_service: Optional[Any] = None):
         self._client = None
         self._collection = None
         self._embed_model = None
         self._initialized = False
         self._root_dir = PATH.PROJECT_ROOT
+        # Issue #4564: optional LLM service for KB synthesis
+        self._llm_service = llm_service
 
     async def initialize(self) -> bool:
         """Initialize ChromaDB client and embedding model.
@@ -927,6 +930,20 @@ class DocIndexerService:
             return files, new_hashes, True
         return files, new_hashes, False
 
+    async def _run_kb_synthesis(self, indexed_paths: List[str]) -> None:
+        """Run KBSynthesizer after tier ingest (best-effort, Issue #4564).
+
+        Errors are logged and swallowed so indexing is never interrupted.
+        KBSynthesizer is imported lazily to avoid circular imports.
+        """
+        try:
+            from services.knowledge.kb_synthesizer import get_kb_synthesizer
+
+            synthesizer = get_kb_synthesizer(self._llm_service)
+            await synthesizer.synthesize_docs(indexed_paths)
+        except Exception:
+            logger.exception("DocIndexerService: KB synthesis failed (non-fatal)")
+
     async def index_all(self, force: bool = False) -> IndexResult:
         """Index all documentation files.
 
@@ -971,8 +988,18 @@ class DocIndexerService:
             files, new_hashes = _filter_changed_files(files, hash_cache, self._root_dir)
 
         logger.info("Indexing %d documentation files...", len(files))
+        indexed_paths: List[str] = []
         for file_path, tier in files:
+            before = total_result.success
             await self._index_single_file_content(file_path, tier, total_result)
+            if total_result.success > before:
+                indexed_paths.append(file_path)
+
+        # Issue #4564: trigger KBSynthesizer after ingest (best-effort, non-blocking)
+        if indexed_paths:
+            asyncio.ensure_future(
+                self._run_kb_synthesis(indexed_paths)
+            )
 
         if new_hashes:
             existing_cache = _load_hash_cache()

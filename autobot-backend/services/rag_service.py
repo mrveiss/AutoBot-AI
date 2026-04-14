@@ -689,11 +689,38 @@ class RAGService:
                 query=query, max_context_length=context_length
             )
 
+            # Issue #4564: enrich context with KB synthesis summaries (optional)
+            synthesis_prefix = await self._get_kb_synthesis_context(query)
+            if synthesis_prefix:
+                context = synthesis_prefix + "\n\n" + context
+
             return context, metrics
 
         except Exception as e:
             logger.error("Failed to get optimized context: %s", e)
             return "Error: RAG context retrieval failed", RAGMetrics()
+
+    async def _get_kb_synthesis_context(self, query: str) -> str:
+        """Query kb_synthesis ChromaDB collection for enrichment (Issue #4564).
+
+        Best-effort: returns empty string on any error so the main context
+        path is never interrupted.
+        """
+        try:
+            from utils.chromadb_client import get_async_chromadb_client
+
+            client = await get_async_chromadb_client()
+            collection = await client.get_or_create_collection(name="kb_synthesis")
+            results = await collection.query(query_texts=[query], n_results=2)
+            if not (results and results.get("ids") and results["ids"][0]):
+                return ""
+            docs = results.get("documents", [[]])[0]
+            if not docs:
+                return ""
+            return "KB synthesis summaries:\n" + "\n".join(f"- {d}" for d in docs)
+        except Exception as exc:
+            logger.debug("KB synthesis context fetch failed (non-fatal): %s", exc)
+            return ""
 
     async def rerank_results(
         self,
