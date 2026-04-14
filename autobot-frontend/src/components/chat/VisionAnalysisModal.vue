@@ -551,6 +551,11 @@ onUnmounted(() => {
   outline: none;
   border-color: var(--color-primary);
 }
+.option-group select:focus-visible,
+.option-group input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 /* Analyze button */
 .btn-analyze {

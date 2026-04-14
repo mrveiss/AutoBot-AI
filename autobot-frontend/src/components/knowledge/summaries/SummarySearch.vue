@@ -243,6 +243,11 @@ async function handleSearch(): Promise<void> {
   outline: none;
 }
 
+.search-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 .search-input::placeholder {
   color: var(--text-tertiary);
 }

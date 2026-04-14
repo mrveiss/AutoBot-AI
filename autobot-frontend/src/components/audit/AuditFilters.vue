@@ -314,6 +314,11 @@ function clearFilters() {
   border-color: var(--color-primary);
   box-shadow: var(--ring-primary);
 }
+.filter-group input:focus-visible,
+.filter-group select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .filter-actions {
   display: flex;

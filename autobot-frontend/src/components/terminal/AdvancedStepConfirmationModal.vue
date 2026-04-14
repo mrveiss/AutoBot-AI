@@ -511,6 +511,10 @@ function resetEdit(): void {
   border-color: var(--color-info, #3b82f6);
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
 }
+.edit-textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .edit-error {
   display: flex;

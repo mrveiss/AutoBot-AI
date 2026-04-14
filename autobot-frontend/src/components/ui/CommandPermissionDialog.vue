@@ -663,6 +663,10 @@ export default {
   border-color: var(--color-success);
   box-shadow: var(--shadow-focus-success);
 }
+.comment-textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .comment-textarea:disabled {
   background: var(--bg-secondary);

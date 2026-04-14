@@ -550,6 +550,11 @@ onMounted(() => {
   border-color: var(--color-info);
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
 }
+.form-input:focus-visible,
+.form-select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .form-input--error {
   border-color: var(--color-error);

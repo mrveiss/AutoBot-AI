@@ -221,6 +221,11 @@ defineExpose({
   transition: color 150ms ease;
 }
 
+.base-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 .base-input::placeholder {
   color: var(--text-muted);
 }

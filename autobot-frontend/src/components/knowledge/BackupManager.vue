@@ -428,6 +428,10 @@ onMounted(() => {
   border-color: var(--color-primary);
   box-shadow: var(--shadow-focus);
 }
+.description-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .backups-list-section h5 {
   font-size: var(--text-sm);

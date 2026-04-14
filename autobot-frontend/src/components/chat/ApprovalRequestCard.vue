@@ -453,6 +453,10 @@ const submitWithComment = () => {
   border-color: var(--color-info);
   box-shadow: 0 0 0 2px var(--color-info-bg);
 }
+.comment-textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .comment-actions {
   display: flex;

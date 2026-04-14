@@ -256,6 +256,10 @@ function copyPath(finding: Finding): void {
   border-color: var(--color-info);
   box-shadow: 0 0 0 3px var(--color-info-bg);
 }
+.search-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 /* Issue #901: Technical Precision severity badges */
 .severity-badge {

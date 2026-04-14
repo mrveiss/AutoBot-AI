@@ -922,6 +922,10 @@ onMounted(() => {
   outline: none;
   border-color: var(--accent-color);
 }
+.input-group input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .language-chips {
   display: flex;

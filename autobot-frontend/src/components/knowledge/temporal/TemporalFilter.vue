@@ -175,6 +175,10 @@ h5 i {
   outline: none;
   border-color: var(--color-primary);
 }
+.filter-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 /* Checkboxes */
 .checkbox-list {

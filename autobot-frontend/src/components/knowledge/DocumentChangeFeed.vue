@@ -426,6 +426,10 @@ onUnmounted(() => {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 2px var(--color-primary-alpha, rgba(59, 130, 246, 0.2));
 }
+.section-select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .auto-refresh-toggle {
   display: flex;

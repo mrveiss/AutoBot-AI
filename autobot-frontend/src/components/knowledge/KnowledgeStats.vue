@@ -1223,6 +1223,10 @@ onMounted(() => {
   box-shadow: 0 0 0 2px var(--color-info);
   background: var(--color-info-bg);
 }
+.tag-cloud-item:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 /* Vector Database Statistics Section */
 .vector-stats-section {

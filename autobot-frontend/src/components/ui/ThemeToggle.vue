@@ -184,6 +184,10 @@ function getThemeIcon(themeOption: Theme): string {
   border-color: var(--color-primary);
   box-shadow: var(--shadow-focus);
 }
+.theme-toggle__select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .theme-toggle__dropdown-icon {
   position: absolute;
@@ -252,6 +256,10 @@ function getThemeIcon(themeOption: Theme): string {
   outline: none;
   border-color: var(--color-primary);
   box-shadow: var(--shadow-focus);
+}
+.theme-toggle__simple:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* Compact mode adjustments */

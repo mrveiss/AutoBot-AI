@@ -1077,6 +1077,10 @@ onMounted(async () => {
   outline: none;
   border-color: var(--color-primary);
 }
+.config-editor:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .config-error {
   font-size: var(--text-sm);

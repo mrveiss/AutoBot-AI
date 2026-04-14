@@ -593,6 +593,10 @@ onMounted(() => {
   background: var(--bg-card);
   box-shadow: var(--shadow-focus);
 }
+.search-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .search-input::placeholder {
   color: var(--text-muted);
