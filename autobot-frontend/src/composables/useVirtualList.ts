@@ -31,7 +31,7 @@
  * ```
  */
 
-import { ref, computed, onMounted, onUnmounted, watch, type Ref, type ComputedRef } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, toValue, type MaybeRefOrGetter } from 'vue'
 
 interface VirtualItem<T> {
   data: T
@@ -47,7 +47,7 @@ interface VirtualItem<T> {
  * @returns Virtual list utilities
  */
 export function useVirtualList<T extends { id: string | number }>(
-  items: Ref<T[]> | ComputedRef<T[]>,
+  items: MaybeRefOrGetter<T[]>,
   itemHeight: number,
   overscan: number = 3
 ) {
@@ -60,7 +60,7 @@ export function useVirtualList<T extends { id: string | number }>(
 
     const container = containerRef.value
     const visibleHeight = container.clientHeight
-    const itemsArray = items.value as T[]
+    const itemsArray = toValue(items)
 
     if (itemsArray.length === 0) return []
 
@@ -80,7 +80,7 @@ export function useVirtualList<T extends { id: string | number }>(
 
   // Total height of all items
   const totalHeight = computed(() => {
-    return items.value.length * itemHeight
+    return toValue(items).length * itemHeight
   })
 
   // Handle scroll events
