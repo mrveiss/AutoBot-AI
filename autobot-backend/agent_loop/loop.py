@@ -378,6 +378,18 @@ class AgentLoop:
         events_context = await self._analyze_events()
         result.events_analyzed = len(events_context.get("events", []))
 
+        # Issue #4528: inject first_turn_note into user content on first turn.
+        # _analyze_events() sets context["first_turn_note"] on iteration 1 when
+        # first_turn_priming_enabled=True, but nothing downstream consumed it.
+        # Extract it here, append to the task description carried in events_context,
+        # then clear it so subsequent iterations are not affected.
+        first_turn_note = events_context.pop("first_turn_note", None)
+        if first_turn_note and self.config.first_turn_priming_enabled:
+            task_content = events_context.get("task_description", "")
+            events_context["task_description"] = (
+                task_content + "\n\n" + first_turn_note if task_content else first_turn_note
+            )
+
         # Phase 2: Select Tools
         self._current_phase = LoopPhase.SELECT_TOOLS
         tools_to_execute = await self._select_tools(events_context)
