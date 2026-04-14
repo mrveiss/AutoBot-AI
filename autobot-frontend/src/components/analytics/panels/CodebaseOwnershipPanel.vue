@@ -508,7 +508,7 @@ function formatFactorName(factor: string): string {
   align-items: center;
   gap: 6px;
   font-size: 0.9em;
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .ownership-tabs .tab-btn:hover {
@@ -573,7 +573,7 @@ function formatFactorName(factor: string): string {
 .ownership-metrics .metric-bar-fill {
   height: 100%;
   border-radius: var(--radius-default);
-  transition: width 0.3s ease;
+  transition: width var(--duration-300) var(--ease-out);
 }
 
 .ownership-metrics .metric-bar-fill.ok {

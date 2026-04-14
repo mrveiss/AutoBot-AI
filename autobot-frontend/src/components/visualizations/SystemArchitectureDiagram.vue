@@ -1400,7 +1400,7 @@ watch(() => currentView.value, () => {
 
 /* Connections */
 .connection path {
-  transition: stroke-width 0.2s, opacity 0.2s;
+  transition: stroke-width var(--duration-200), opacity var(--duration-200);
 }
 
 .connection.highlighted path {
@@ -1423,7 +1423,7 @@ watch(() => currentView.value, () => {
 /* Components */
 .component {
   cursor: pointer;
-  transition: transform 0.2s, opacity 0.2s;
+  transition: transform var(--duration-200), opacity var(--duration-200);
 }
 
 .component:hover {
@@ -1718,7 +1718,7 @@ watch(() => currentView.value, () => {
   border-radius: var(--radius-md);
   margin-bottom: var(--spacing-2);
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background var(--duration-200);
 }
 
 .connections-list li:hover {

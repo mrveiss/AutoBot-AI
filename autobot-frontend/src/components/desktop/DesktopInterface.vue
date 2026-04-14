@@ -499,7 +499,7 @@ onUnmounted(() => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background-color 0.15s ease;
+  transition: background-color var(--duration-150) var(--ease-out);
 }
 
 .control-btn:hover {
@@ -540,7 +540,7 @@ onUnmounted(() => {
   border: 1px solid var(--color-primary-light);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background-color 0.15s ease;
+  transition: background-color var(--duration-150) var(--ease-out);
 }
 
 .action-btn:hover {
@@ -610,7 +610,7 @@ onUnmounted(() => {
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background-color 0.15s ease;
+  transition: background-color var(--duration-150) var(--ease-out);
 }
 
 .download-btn:hover {
@@ -624,7 +624,7 @@ onUnmounted(() => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background-color 0.15s ease;
+  transition: background-color var(--duration-150) var(--ease-out);
 }
 
 .cancel-btn:hover {
@@ -637,7 +637,7 @@ onUnmounted(() => {
   background: none;
   border: none;
   cursor: pointer;
-  transition: color 0.15s ease;
+  transition: color var(--duration-150) var(--ease-out);
 }
 
 .close-btn:hover {
@@ -683,7 +683,7 @@ onUnmounted(() => {
   background-color: var(--bg-secondary);
   color: var(--text-primary);
   resize: none;
-  transition: border-color 0.15s ease;
+  transition: border-color var(--duration-150) var(--ease-out);
 }
 
 .type-textarea:focus {
@@ -712,7 +712,7 @@ onUnmounted(() => {
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background-color 0.15s ease;
+  transition: background-color var(--duration-150) var(--ease-out);
 }
 
 .type-btn:hover {

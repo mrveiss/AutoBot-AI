@@ -527,7 +527,7 @@ onUnmounted(() => {
   gap: 0.75rem;
   padding: 0.75rem;
   border-radius: var(--radius-md);
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .change-item:hover {

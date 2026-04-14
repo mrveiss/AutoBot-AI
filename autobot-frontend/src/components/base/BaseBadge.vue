@@ -71,7 +71,7 @@ const handleRemove = (event: MouseEvent) => {
   gap: 4px;
   font-weight: 500;
   white-space: nowrap;
-  transition: all 150ms ease;
+  transition: all var(--duration-150) var(--ease-out);
   line-height: 1;
   font-family: var(--font-sans);
 }
@@ -225,7 +225,7 @@ const handleRemove = (event: MouseEvent) => {
   color: currentColor;
   cursor: pointer;
   border-radius: 50%;
-  transition: all 150ms ease;
+  transition: all var(--duration-150) var(--ease-out);
   opacity: 0.6;
 }
 

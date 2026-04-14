@@ -838,7 +838,7 @@ onMounted(() => {
   font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .action-btn.primary {
@@ -940,7 +940,7 @@ onMounted(() => {
   border-radius: var(--radius-2xl);
   font-size: var(--text-xs);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .chip.active {
@@ -1074,7 +1074,7 @@ onMounted(() => {
   border-radius: var(--radius-md);
   border-left: 3px solid;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .issue-card:hover {
@@ -1326,7 +1326,7 @@ onMounted(() => {
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .history-item:hover {

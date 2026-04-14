@@ -291,7 +291,7 @@ const formattedUpdatedAt = computed(() => {
   outline: none;
   padding: 2px 4px;
   border-radius: var(--radius-default);
-  transition: background 0.15s;
+  transition: background var(--duration-150);
 }
 .document-title:focus-visible {
   outline: 2px solid var(--color-primary);

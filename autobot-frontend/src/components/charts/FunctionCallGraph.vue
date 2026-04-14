@@ -1440,7 +1440,7 @@ watch(viewMode, async (newMode) => {
   border-radius: var(--radius-md);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all var(--duration-200) ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .view-toggle button.active {
@@ -1482,7 +1482,7 @@ watch(viewMode, async (newMode) => {
   cursor: pointer;
   padding: var(--spacing-2) var(--spacing-3);
   border-radius: var(--radius-md);
-  transition: all var(--duration-200) ease;
+  transition: all var(--duration-200) var(--ease-out);
   border: 1px solid transparent;
 }
 
@@ -1597,7 +1597,7 @@ watch(viewMode, async (newMode) => {
   gap: var(--spacing-2);
   padding: var(--spacing-2) var(--spacing-3);
   cursor: pointer;
-  transition: background var(--duration-200) ease;
+  transition: background var(--duration-200) var(--ease-out);
 }
 
 .func-header:hover {
@@ -1999,7 +1999,7 @@ watch(viewMode, async (newMode) => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--duration-150) var(--ease-out);
 }
 
 .orphaned-item:hover {
@@ -2060,7 +2060,7 @@ watch(viewMode, async (newMode) => {
   border-radius: var(--radius-md);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--duration-150) var(--ease-out);
 }
 
 .btn-show-more:hover {
@@ -2087,7 +2087,7 @@ watch(viewMode, async (newMode) => {
 /* Orphaned stat styling */
 .stat-orphaned {
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--duration-150) var(--ease-out);
 }
 
 .stat-orphaned:hover,

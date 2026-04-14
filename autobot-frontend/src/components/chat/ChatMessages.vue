@@ -2280,11 +2280,11 @@ onMounted(async () => {
 
 /* Citation slide transition */
 .slide-fade-enter-active {
-  transition: all 0.2s ease-out;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .slide-fade-leave-active {
-  transition: all 0.15s ease-in;
+  transition: all var(--duration-150) var(--ease-in);
 }
 
 .slide-fade-enter-from,

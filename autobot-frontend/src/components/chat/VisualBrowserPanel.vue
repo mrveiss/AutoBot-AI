@@ -596,7 +596,7 @@ onMounted(() => {
 /* Panel slide transition */
 .slide-panel-enter-active,
 .slide-panel-leave-active {
-  transition: width 0.25s ease, opacity 0.25s ease;
+  transition: width var(--duration-250) var(--ease-out), opacity var(--duration-250) var(--ease-out);
 }
 
 .slide-panel-enter-from,

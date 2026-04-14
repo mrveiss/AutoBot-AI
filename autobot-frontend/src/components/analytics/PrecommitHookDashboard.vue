@@ -665,7 +665,7 @@ onMounted(() => {
   font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .action-btn.primary {
@@ -1024,7 +1024,7 @@ onMounted(() => {
   background: var(--bg-quaternary);
   border-radius: var(--radius-xl);
   cursor: pointer;
-  transition: 0.3s;
+  transition: var(--duration-300);
 }
 
 .toggle-slider::before {
@@ -1036,7 +1036,7 @@ onMounted(() => {
   bottom: 3px;
   background: white;
   border-radius: 50%;
-  transition: 0.3s;
+  transition: var(--duration-300);
 }
 
 .check-toggle input:checked + .toggle-slider {
@@ -1105,7 +1105,7 @@ onMounted(() => {
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .history-item:hover {
@@ -1227,7 +1227,7 @@ onMounted(() => {
   height: 100%;
   background: var(--accent-color);
   border-radius: var(--radius-default);
-  transition: width 0.3s;
+  transition: width var(--duration-300);
 }
 
 .issue-count {

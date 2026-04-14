@@ -573,7 +573,7 @@ onMounted(() => {
   flex-direction: column;
   justify-content: space-between;
   min-height: 200px;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .action-card:hover {
@@ -696,7 +696,7 @@ onMounted(() => {
 .progress-fill {
   height: 100%;
   background: var(--color-primary);
-  transition: width 0.3s ease;
+  transition: width var(--duration-300) var(--ease-out);
 }
 
 .progress-stats {

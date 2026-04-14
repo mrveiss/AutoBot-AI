@@ -356,7 +356,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .btn-refresh:hover:not(:disabled) {
@@ -401,7 +401,7 @@ onMounted(() => {
   border-radius: var(--radius-xl);
   padding: 16px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .opportunity-card:hover {
@@ -491,7 +491,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .btn-execute {
@@ -565,7 +565,7 @@ onMounted(() => {
   align-items: center;
   padding: 16px 20px;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background var(--duration-200);
 }
 
 .reference-header:hover {

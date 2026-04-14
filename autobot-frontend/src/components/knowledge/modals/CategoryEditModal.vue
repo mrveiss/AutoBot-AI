@@ -515,7 +515,7 @@ function selectIcon(icon: string): void {
   font-size: var(--text-sm);
   background: var(--bg-input);
   color: var(--text-primary);
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: border-color var(--duration-200), box-shadow var(--duration-200);
 }
 
 .form-input:focus,
@@ -559,7 +559,7 @@ function selectIcon(icon: string): void {
   background: var(--bg-card);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
   font-size: var(--text-base);
 }
 
@@ -592,7 +592,7 @@ function selectIcon(icon: string): void {
   border-radius: var(--radius-md);
   border: 2px solid transparent;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
   position: relative;
 }
 

@@ -181,7 +181,7 @@ const handleGroupChange = () => {
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
   cursor: pointer;
-  transition: border-color 0.2s;
+  transition: border-color var(--duration-200);
   background-color: var(--bg-secondary);
   color: var(--text-primary);
 }
@@ -255,7 +255,7 @@ const handleGroupChange = () => {
   padding: 0.5rem;
   border-radius: var(--radius-default);
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: background-color var(--duration-200);
 }
 
 .group-item:hover {

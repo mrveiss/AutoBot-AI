@@ -361,7 +361,7 @@ watch(saveSuccess, (val) => {
   background: var(--color-bg-secondary, #1e293b);
   color: var(--color-text-primary, #e2e8f0);
   font-size: var(--text-sm);
-  transition: border-color 0.15s;
+  transition: border-color var(--duration-150);
 }
 .field-input:focus {
   outline: none;
@@ -496,7 +496,7 @@ watch(saveSuccess, (val) => {
   font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background var(--duration-150);
 }
 .btn-save:hover:not(:disabled) {
   background: var(--color-primary-hover, #2563eb);

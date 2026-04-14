@@ -332,7 +332,7 @@ onMounted(() => {
   font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition: opacity var(--duration-200);
 }
 
 .retry-btn:hover {

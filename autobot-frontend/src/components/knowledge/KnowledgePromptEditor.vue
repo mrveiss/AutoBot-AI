@@ -673,7 +673,7 @@ onBeforeUnmount(() => {
   padding: 0.625rem 0.75rem;
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .prompt-item:hover {
@@ -872,7 +872,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .history-item:hover {

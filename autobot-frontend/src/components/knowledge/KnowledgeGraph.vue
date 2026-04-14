@@ -1372,7 +1372,7 @@ watch(layoutMode, () => {
 /* Slide down transition */
 .slide-down-enter-active,
 .slide-down-leave-active {
-  transition: all var(--duration-300) ease;
+  transition: all var(--duration-300) var(--ease-out);
   overflow: hidden;
 }
 
@@ -1959,7 +1959,7 @@ watch(layoutMode, () => {
 /* Transitions */
 .slide-enter-active,
 .slide-leave-active {
-  transition: all var(--duration-300) ease;
+  transition: all var(--duration-300) var(--ease-out);
 }
 
 .slide-enter-from,

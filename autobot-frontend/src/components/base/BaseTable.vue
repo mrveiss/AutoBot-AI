@@ -308,7 +308,7 @@ const formatCellValue = (value: any, column: TableColumn) => {
 
 .sortable-header {
   cursor: pointer;
-  transition: color 150ms ease;
+  transition: color var(--duration-150) var(--ease-out);
 }
 
 .sortable-header:hover {
@@ -329,7 +329,7 @@ const formatCellValue = (value: any, column: TableColumn) => {
 .sort-icon {
   width: 14px;
   height: 14px;
-  transition: transform 150ms ease, color 150ms ease;
+  transition: transform var(--duration-150) var(--ease-out), color var(--duration-150) var(--ease-out);
   color: var(--color-info);
 }
 
@@ -353,7 +353,7 @@ const formatCellValue = (value: any, column: TableColumn) => {
 }
 
 .table-row {
-  transition: background-color 150ms ease;
+  transition: background-color var(--duration-150) var(--ease-out);
   border-bottom: 1px solid var(--border-subtle);
 }
 

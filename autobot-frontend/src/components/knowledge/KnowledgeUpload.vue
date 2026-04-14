@@ -1570,7 +1570,7 @@ onMounted(() => {
 .progress-fill {
   height: 100%;
   background: var(--color-primary);
-  transition: width var(--duration-300) ease;
+  transition: width var(--duration-300) var(--ease-out);
 }
 
 .progress-status {
@@ -1581,7 +1581,7 @@ onMounted(() => {
 /* Transitions */
 .slide-enter-active,
 .slide-leave-active {
-  transition: all var(--duration-200) ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .slide-enter-from,

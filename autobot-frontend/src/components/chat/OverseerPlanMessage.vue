@@ -145,7 +145,7 @@ const getStepIcon = (step: { step_number: number }): string => {
 
 .step-preview {
   @apply flex items-center gap-3 px-3 py-2 rounded bg-autobot-bg-primary border border-autobot-border;
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .step-preview.running {

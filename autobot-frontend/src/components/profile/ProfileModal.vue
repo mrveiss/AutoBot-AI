@@ -386,7 +386,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-default);
-  transition: background-color 0.2s;
+  transition: background-color var(--duration-200);
 }
 
 .close-button:hover {
@@ -413,7 +413,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   cursor: pointer;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color var(--duration-150), border-color var(--duration-150);
 }
 
 .tab-btn:hover {
@@ -511,7 +511,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   color: var(--text-primary);
   cursor: pointer;
   font-size: var(--text-sm);
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .option-btn:hover {
@@ -556,7 +556,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: opacity var(--duration-150);
 }
 
 .save-btn:hover {

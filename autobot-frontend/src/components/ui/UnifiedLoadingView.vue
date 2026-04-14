@@ -192,7 +192,7 @@ const cancelLoading = () => {
   @apply relative h-full flex flex-col;
   /* CRITICAL FIX: Remove w-full to allow parent to control width */
   /* CRITICAL FIX: Add flex flex-col to ensure children fill height */
-  transition: opacity 0.2s ease;
+  transition: opacity var(--duration-200) var(--ease-out);
 }
 
 .content-container.loading-overlay {

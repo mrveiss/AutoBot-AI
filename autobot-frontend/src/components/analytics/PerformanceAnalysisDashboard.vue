@@ -646,7 +646,7 @@ onMounted(() => {
   font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .action-btn.primary {
@@ -768,7 +768,7 @@ onMounted(() => {
 .score-progress {
   transform: rotate(-90deg);
   transform-origin: center;
-  transition: stroke-dasharray 0.5s ease;
+  transition: stroke-dasharray var(--duration-500) var(--ease-out);
 }
 
 .score-value {
@@ -899,7 +899,7 @@ onMounted(() => {
   border-radius: var(--radius-md);
   border-left: 3px solid;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .issue-card:hover {
@@ -1173,7 +1173,7 @@ onMounted(() => {
 
 .bar-fill {
   height: 100%;
-  transition: width 0.3s;
+  transition: width var(--duration-300);
 }
 
 .bar-fill.critical { background: var(--color-error); }

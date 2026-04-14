@@ -370,7 +370,7 @@ const formatTime = (timestamp: number) => {
   border-radius: var(--radius-lg);
   cursor: pointer;
   color: var(--text-secondary);
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .btn-refresh:hover:not(:disabled) {
@@ -564,7 +564,7 @@ const formatTime = (timestamp: number) => {
   padding: 8px;
   margin: -8px;
   border-radius: var(--radius-md);
-  transition: background 0.15s;
+  transition: background var(--duration-150);
 }
 
 .breakdown-item.clickable:hover {
@@ -602,7 +602,7 @@ code.item-label {
   height: 100%;
   background: var(--color-error);
   border-radius: var(--radius-default);
-  transition: width 0.3s ease;
+  transition: width var(--duration-300) var(--ease-out);
 }
 
 .item-count {
@@ -644,7 +644,7 @@ code.item-label {
   background: var(--color-error);
   border-radius: var(--radius-default) 4px 0 0;
   min-height: 4px;
-  transition: height 0.3s ease;
+  transition: height var(--duration-300) var(--ease-out);
 }
 
 .day-label {

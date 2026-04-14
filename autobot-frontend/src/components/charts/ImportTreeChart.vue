@@ -969,7 +969,7 @@ onUnmounted(() => {
   color: var(--text-secondary);
   cursor: pointer;
   font-size: var(--text-sm);
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .view-toggle button.active {
@@ -1058,7 +1058,7 @@ onUnmounted(() => {
   color: var(--text-primary);
   cursor: pointer;
   font-size: var(--text-sm);
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .network-controls button:hover {
@@ -1216,7 +1216,7 @@ onUnmounted(() => {
   padding: var(--spacing-2) var(--spacing-3);
   cursor: pointer;
   background: var(--bg-primary);
-  transition: background 0.15s ease;
+  transition: background var(--duration-150) var(--ease-out);
 }
 
 .node-header:hover {
@@ -1315,7 +1315,7 @@ onUnmounted(() => {
   border-radius: var(--radius-sm);
   background: var(--bg-primary);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--duration-150) var(--ease-out);
   color: var(--text-secondary);
 }
 

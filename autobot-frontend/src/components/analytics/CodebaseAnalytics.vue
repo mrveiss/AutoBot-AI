@@ -1095,7 +1095,7 @@ onUnmounted(() => {
   background: var(--bg-tertiary);
   border-radius: var(--radius-xl);
   position: relative;
-  transition: all 0.3s;
+  transition: all var(--duration-300);
 }
 
 .toggle-slider:before {
@@ -1107,7 +1107,7 @@ onUnmounted(() => {
   position: absolute;
   top: 2px;
   left: 2px;
-  transition: all 0.3s;
+  transition: all var(--duration-300);
 }
 
 .toggle-switch input:checked + .toggle-slider {
@@ -1125,7 +1125,7 @@ onUnmounted(() => {
   padding: 8px 16px;
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1244,7 +1244,7 @@ onUnmounted(() => {
   color: var(--text-secondary);
   text-decoration: none;
   border-bottom: 2px solid transparent;
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-150) var(--ease-in-out);
   position: relative;
   top: 1px;
   white-space: nowrap;

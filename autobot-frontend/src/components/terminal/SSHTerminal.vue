@@ -371,7 +371,7 @@ defineExpose({
   color: inherit;
   font-size: var(--text-xs);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .reconnect-btn:hover {

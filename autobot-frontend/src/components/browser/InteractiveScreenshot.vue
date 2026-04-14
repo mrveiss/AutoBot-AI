@@ -194,7 +194,7 @@ function submitType() {
   height: 100%;
   object-fit: contain;
   display: block;
-  transition: opacity 0.2s ease;
+  transition: opacity var(--duration-200) var(--ease-out);
 }
 
 .screenshot-img--loading {
@@ -260,7 +260,7 @@ function submitType() {
   color: var(--color-text-secondary, #a1a1aa);
   cursor: pointer;
   font-size: var(--text-xs);
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--duration-150), color var(--duration-150);
 }
 
 .toolbar-btn:hover:not(:disabled) {

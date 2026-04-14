@@ -268,7 +268,7 @@ function formatDuration(seconds: number): string {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  transition: border-color 0.2s;
+  transition: border-color var(--duration-200);
 }
 
 .agent-card:hover {
@@ -407,7 +407,7 @@ function formatDuration(seconds: number): string {
 .reliability-fill {
   height: 100%;
   border-radius: var(--radius-xs);
-  transition: width 0.4s ease;
+  transition: width 0.4s var(--ease-out);
 }
 
 .reliability-fill.reliability-high { background: var(--color-success); }

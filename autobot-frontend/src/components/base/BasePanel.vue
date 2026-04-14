@@ -74,7 +74,7 @@ const toggleCollapse = () => {
 /** Issue #704: Migrated to design tokens */
 .base-panel {
   background-color: var(--bg-primary);
-  transition: all var(--duration-200) ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .panel-default {

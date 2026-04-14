@@ -75,7 +75,7 @@ const typeIcon = (type: string): string => {
   padding: 4px 12px;
   cursor: pointer;
   gap: 8px;
-  transition: background-color 0.1s;
+  transition: background-color var(--duration-100);
 }
 
 .completion-item:hover,

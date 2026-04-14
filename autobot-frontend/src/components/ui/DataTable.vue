@@ -357,7 +357,7 @@ const formatCell = (value: any, column: Column) => {
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   cursor: pointer;
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-150) var(--ease-in-out);
 }
 
 .pagination-btn:hover:not(:disabled) {

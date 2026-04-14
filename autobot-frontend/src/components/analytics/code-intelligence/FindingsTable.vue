@@ -248,7 +248,7 @@ function copyPath(finding: Finding): void {
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   width: 200px;
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-150) var(--ease-in-out);
 }
 
 .search-input:focus {
@@ -346,7 +346,7 @@ th {
 
 .finding-row {
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background var(--duration-150);
   position: relative;
 }
 
@@ -431,7 +431,7 @@ code {
   font-size: var(--text-sm);
   font-weight: 500;
   font-family: var(--font-sans);
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-150) var(--ease-in-out);
   display: inline-flex;
   align-items: center;
   gap: 6px;

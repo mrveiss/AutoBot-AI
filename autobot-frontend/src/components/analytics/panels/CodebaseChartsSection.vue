@@ -366,7 +366,7 @@ function getCategoryIcon(categoryId: string): string {
   font-size: 0.85rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -457,7 +457,7 @@ function getCategoryIcon(categoryId: string): string {
   font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .category-tab:hover {
@@ -537,7 +537,7 @@ function getCategoryIcon(categoryId: string): string {
   padding: 16px;
   text-align: center;
   border: 1px solid rgba(71, 85, 105, 0.5);
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .summary-stat:hover {
@@ -734,7 +734,7 @@ function getCategoryIcon(categoryId: string): string {
   padding: 8px 12px;
   background: rgba(51, 65, 85, 0.4);
   border-radius: var(--radius-default);
-  transition: background 0.2s ease;
+  transition: background var(--duration-200) var(--ease-out);
 }
 
 .dep-row:hover {

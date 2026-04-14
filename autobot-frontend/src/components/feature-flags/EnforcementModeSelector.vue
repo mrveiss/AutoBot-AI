@@ -175,7 +175,7 @@ const selectMode = (mode: EnforcementMode) => {
   border: 2px solid var(--border-default);
   border-radius: var(--radius-xl);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .mode-option:hover:not(.updating) {
@@ -294,7 +294,7 @@ const selectMode = (mode: EnforcementMode) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .mode-option.active .radio-outer {

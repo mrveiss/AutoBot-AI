@@ -268,7 +268,7 @@ input[type='range']::-webkit-slider-thumb {
   border-radius: 50%;
   background: var(--color-primary);
   cursor: pointer;
-  transition: background-color 0.15s ease;
+  transition: background-color var(--duration-150) var(--ease-out);
 }
 
 input[type='range']::-webkit-slider-thumb:hover {
@@ -283,7 +283,7 @@ input[type='range']::-moz-range-thumb {
   background: var(--color-primary);
   cursor: pointer;
   border: none;
-  transition: background-color 0.15s ease;
+  transition: background-color var(--duration-150) var(--ease-out);
 }
 
 input[type='range']::-moz-range-thumb:hover {

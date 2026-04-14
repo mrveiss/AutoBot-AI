@@ -1264,7 +1264,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   gap: 12px;
   padding: 10px 20px;
   cursor: pointer;
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-150) var(--ease-in-out);
   color: var(--text-secondary);
   border-left: 2px solid transparent;
   /* Reset button styles */
@@ -1341,7 +1341,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-150) var(--ease-in-out);
 }
 
 .btn-refresh:hover:not(:disabled) {
@@ -1491,7 +1491,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .stat-card.active {
@@ -1581,7 +1581,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
   color: var(--text-secondary);
 }
 
@@ -1653,7 +1653,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .example-item:hover {
@@ -1934,7 +1934,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .btn-refresh-sm:hover:not(:disabled) {
@@ -2028,7 +2028,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   height: 100%;
   background: var(--color-success);
   border-radius: var(--radius-default);
-  transition: width 0.3s;
+  transition: width var(--duration-300);
 }
 
 .agent-performance .value {
@@ -2053,7 +2053,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -2077,7 +2077,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .btn-success:hover {
@@ -2096,7 +2096,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .btn-danger:hover {

@@ -425,7 +425,7 @@ const cleanupSessionOrphans = async () => {
   flex-direction: column;
   justify-content: space-between;
   min-height: 200px;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .action-card:hover {

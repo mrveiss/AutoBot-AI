@@ -355,7 +355,7 @@ const getDeclarationTypeClass = (type: string): string => {
   display: flex;
   align-items: center;
   gap: 4px;
-  transition: all 0.15s ease;
+  transition: all var(--duration-150) var(--ease-out);
 }
 
 .export-btn:hover {

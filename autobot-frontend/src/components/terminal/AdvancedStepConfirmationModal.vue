@@ -388,7 +388,7 @@ function resetEdit(): void {
   height: 100%;
   background: var(--color-info, #3b82f6);
   border-radius: var(--radius-full);
-  transition: width 0.3s ease;
+  transition: width var(--duration-300) var(--ease-out);
 }
 
 /* Step Detail */
@@ -468,7 +468,7 @@ function resetEdit(): void {
   text-transform: none;
   letter-spacing: 0;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color var(--duration-150), border-color var(--duration-150);
 }
 
 .edit-trigger:hover {
@@ -541,7 +541,7 @@ function resetEdit(): void {
   font-weight: var(--font-medium, 500);
   cursor: pointer;
   border: 1px solid transparent;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--duration-150), color var(--duration-150);
 }
 
 .edit-action-cancel {

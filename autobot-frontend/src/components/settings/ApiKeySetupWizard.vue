@@ -314,7 +314,7 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
   align-items: center;
   gap: var(--spacing-xs, 4px);
   opacity: 0.5;
-  transition: opacity 0.2s;
+  transition: opacity var(--duration-200);
 }
 
 .step-dot.active,
@@ -372,7 +372,7 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
   border: 1px solid var(--color-border, #333);
   border-radius: var(--radius-md, 8px);
   cursor: pointer;
-  transition: border-color 0.2s;
+  transition: border-color var(--duration-200);
 }
 
 .role-card:hover {

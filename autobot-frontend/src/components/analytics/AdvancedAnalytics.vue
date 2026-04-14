@@ -563,7 +563,7 @@ onMounted(() => {
   color: var(--text-secondary);
   cursor: pointer;
   border-radius: var(--radius-default);
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .tab-btn:hover {
@@ -765,7 +765,7 @@ onMounted(() => {
   height: 100%;
   background: var(--color-primary);
   border-radius: var(--radius-default);
-  transition: width 0.3s ease;
+  transition: width var(--duration-300) var(--ease-out);
 }
 
 .peak-hours-list {

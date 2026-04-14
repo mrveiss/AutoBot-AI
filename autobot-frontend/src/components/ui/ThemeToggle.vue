@@ -171,7 +171,7 @@ function getThemeIcon(themeOption: Theme): string {
   font-size: var(--text-sm);
   padding: var(--spacing-2) var(--spacing-8) var(--spacing-2) var(--spacing-3);
   cursor: pointer;
-  transition: border-color var(--duration-150) ease,
+  transition: border-color var(--duration-150) var(--ease-out),
               box-shadow var(--duration-150) ease;
 }
 
@@ -218,7 +218,7 @@ function getThemeIcon(themeOption: Theme): string {
   color: var(--text-secondary);
   font-size: var(--text-sm);
   cursor: pointer;
-  transition: all var(--duration-150) ease;
+  transition: all var(--duration-150) var(--ease-out);
 }
 
 .theme-toggle__btn:hover {
@@ -244,7 +244,7 @@ function getThemeIcon(themeOption: Theme): string {
   color: var(--text-primary);
   font-size: var(--text-sm);
   cursor: pointer;
-  transition: all var(--duration-150) ease;
+  transition: all var(--duration-150) var(--ease-out);
 }
 
 .theme-toggle__simple:hover {

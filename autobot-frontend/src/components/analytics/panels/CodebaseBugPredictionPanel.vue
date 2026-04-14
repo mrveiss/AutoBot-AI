@@ -576,7 +576,7 @@ function formatTimestamp(timestamp: string | undefined): string {
   border-radius: var(--radius-lg);
   margin-bottom: 12px;
   border-left: 4px solid var(--text-tertiary);
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .bug-prediction-section .list-item:hover {

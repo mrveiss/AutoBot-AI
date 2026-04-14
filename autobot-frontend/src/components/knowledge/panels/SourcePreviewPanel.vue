@@ -305,7 +305,7 @@ onUnmounted(() => {
   width: 4px;
   cursor: ew-resize;
   background: transparent;
-  transition: background 0.15s;
+  transition: background var(--duration-150);
   z-index: 10;
 }
 
@@ -380,7 +380,7 @@ onUnmounted(() => {
   color: var(--text-secondary);
   cursor: pointer;
   border-radius: var(--radius-md);
-  transition: all 0.15s;
+  transition: all var(--duration-150);
   flex-shrink: 0;
 }
 
@@ -477,12 +477,12 @@ onUnmounted(() => {
 /* Transition */
 .panel-enter-active,
 .panel-leave-active {
-  transition: opacity 0.2s ease;
+  transition: opacity var(--duration-200) var(--ease-out);
 }
 
 .panel-enter-active .source-preview-panel,
 .panel-leave-active .source-preview-panel {
-  transition: transform 0.2s ease;
+  transition: transform var(--duration-200) var(--ease-out);
 }
 
 .panel-enter-from,

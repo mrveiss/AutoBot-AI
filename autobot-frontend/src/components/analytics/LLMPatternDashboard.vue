@@ -762,7 +762,7 @@ onMounted(() => {
   color: #fff;
   font-size: var(--text-sm);
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background var(--duration-200);
 }
 
 .analyze-btn:hover:not(:disabled) {
@@ -991,7 +991,7 @@ onMounted(() => {
   height: 100%;
   background: var(--color-info);
   border-radius: var(--radius-xs);
-  transition: width 0.3s;
+  transition: width var(--duration-300);
 }
 
 /* Category List */
@@ -1033,7 +1033,7 @@ onMounted(() => {
   height: 100%;
   background: var(--color-success);
   border-radius: var(--radius-xs);
-  transition: width 0.3s;
+  transition: width var(--duration-300);
 }
 
 .category-meta {

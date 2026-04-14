@@ -329,7 +329,7 @@ defineExpose({
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .host-selector-collapsed:hover {
@@ -385,7 +385,7 @@ defineExpose({
 .expand-icon {
   color: var(--text-muted);
   font-size: var(--text-xs);
-  transition: transform 0.2s;
+  transition: transform var(--duration-200);
 }
 
 .host-selector-collapsed:hover .expand-icon {
@@ -448,7 +448,7 @@ defineExpose({
   font-size: var(--text-xs);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .filter-btn:hover {
@@ -474,7 +474,7 @@ defineExpose({
   padding: 10px 12px;
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .host-item:hover {
@@ -585,7 +585,7 @@ defineExpose({
   align-items: center;
   justify-content: center;
   gap: 6px;
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .btn-secondary {

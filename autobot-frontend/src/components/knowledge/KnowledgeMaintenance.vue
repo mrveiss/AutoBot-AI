@@ -550,7 +550,7 @@ onMounted(() => {
 .dimension-fill {
   height: 100%;
   border-radius: var(--radius-full);
-  transition: width 0.5s ease;
+  transition: width var(--duration-500) var(--ease-out);
 }
 
 .dimension-fill.good {

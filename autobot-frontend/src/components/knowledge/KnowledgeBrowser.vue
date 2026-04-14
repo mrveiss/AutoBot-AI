@@ -1148,7 +1148,7 @@ watch(() => props.mode, () => {
 
 .category-tab {
   white-space: nowrap;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-250) var(--ease-in-out);
   position: relative;
 }
 
@@ -1158,7 +1158,7 @@ watch(() => props.mode, () => {
 
 .category-tab-icon {
   margin-right: 0.25rem;
-  transition: transform 0.2s ease;
+  transition: transform var(--duration-200) var(--ease-out);
 }
 
 .category-tab:hover .category-tab-icon {
@@ -1166,7 +1166,7 @@ watch(() => props.mode, () => {
 }
 
 .category-tab-label {
-  transition: color 0.2s ease;
+  transition: color var(--duration-200) var(--ease-out);
 }
 
 .category-count {
@@ -1181,7 +1181,7 @@ watch(() => props.mode, () => {
   font-size: var(--text-xs);
   font-weight: 600;
   margin-left: 0.375rem;
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .category-count-active {
@@ -1220,7 +1220,7 @@ watch(() => props.mode, () => {
   border-radius: 50%;
   color: var(--text-tertiary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .clear-filter-btn:hover {
@@ -1231,7 +1231,7 @@ watch(() => props.mode, () => {
 /* Category tab transitions */
 .category-tab-enter-active,
 .category-tab-leave-active {
-  transition: all 0.3s ease;
+  transition: all var(--duration-300) var(--ease-out);
 }
 
 .category-tab-enter-from {
@@ -1245,13 +1245,13 @@ watch(() => props.mode, () => {
 }
 
 .category-tab-move {
-  transition: transform 0.3s ease;
+  transition: transform var(--duration-300) var(--ease-out);
 }
 
 /* Fade transition for filter badge */
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: opacity var(--duration-200) var(--ease-out), transform var(--duration-200) var(--ease-out);
 }
 
 .fade-enter-from,
@@ -1323,7 +1323,7 @@ watch(() => props.mode, () => {
 
 .slide-down-enter-active,
 .slide-down-leave-active {
-  transition: all 0.3s ease;
+  transition: all var(--duration-300) var(--ease-out);
 }
 
 .slide-down-enter-from,
@@ -1354,7 +1354,7 @@ watch(() => props.mode, () => {
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .search-input:focus {

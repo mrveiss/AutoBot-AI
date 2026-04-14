@@ -253,7 +253,7 @@ function getPhaseIcon(status: string): string {
 .progress-fill {
   height: 100%;
   background: var(--color-success);
-  transition: width 0.3s ease;
+  transition: width var(--duration-300) var(--ease-out);
   border-radius: var(--radius-default);
 }
 
@@ -366,7 +366,7 @@ function getPhaseIcon(status: string): string {
 .batch-fill {
   height: 100%;
   background: var(--color-success);
-  transition: width 0.3s ease;
+  transition: width var(--duration-300) var(--ease-out);
   border-radius: var(--radius-default);
 }
 
@@ -430,7 +430,7 @@ function getPhaseIcon(status: string): string {
 .scan-runner-progress .mini-progress-bar {
   height: 100%;
   background: var(--color-purple);
-  transition: width 0.3s ease;
+  transition: width var(--duration-300) var(--ease-out);
 }
 .scan-runner-items {
   display: flex;

@@ -541,7 +541,7 @@ onUnmounted(() => {
   padding: 40px;
   text-align: center;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
   min-height: 200px;
   display: flex;
   align-items: center;
@@ -714,7 +714,7 @@ onUnmounted(() => {
 .progress-fill {
   height: 100%;
   background: var(--color-primary);
-  transition: width 0.3s;
+  transition: width var(--duration-300);
 }
 
 .progress-info {
@@ -769,7 +769,7 @@ onUnmounted(() => {
   border-radius: var(--radius-lg);
   padding: 12px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .frame-card:hover {

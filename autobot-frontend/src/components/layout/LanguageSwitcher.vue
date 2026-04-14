@@ -136,7 +136,7 @@ onUnmounted(() => document.removeEventListener('click', handleOutsideClick))
   background-color: rgba(255, 255, 255, 0.1);
   color: white;
   font-size: var(--text-lg);
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
   cursor: pointer;
 }
 
@@ -173,7 +173,7 @@ onUnmounted(() => document.removeEventListener('click', handleOutsideClick))
   cursor: pointer;
   font-size: var(--font-size-sm);
   color: var(--text-primary);
-  transition: background 0.15s;
+  transition: background var(--duration-150);
 }
 
 .lang-option:hover {
@@ -228,7 +228,7 @@ onUnmounted(() => document.removeEventListener('click', handleOutsideClick))
 /* Dropdown transition */
 .lang-dropdown-enter-active,
 .lang-dropdown-leave-active {
-  transition: opacity 0.15s ease, transform 0.15s ease;
+  transition: opacity var(--duration-150) var(--ease-out), transform var(--duration-150) var(--ease-out);
 }
 
 .lang-dropdown-enter-from,

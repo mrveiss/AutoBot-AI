@@ -1121,7 +1121,7 @@ function _extractCompleteSentences(text: string): string[] {
 /* File Panel Transitions */
 .slide-left-enter-active,
 .slide-left-leave-active {
-  transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+  transition: transform var(--duration-300) var(--ease-out), opacity var(--duration-300) var(--ease-out);
 }
 
 .slide-left-enter-from {

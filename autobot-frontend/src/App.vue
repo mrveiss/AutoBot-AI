@@ -863,7 +863,7 @@ export default {
   border-radius: 0 0 4px 0;
   font-size: var(--text-sm);
   font-weight: 500;
-  transition: top 0.2s ease-in-out;
+  transition: top var(--duration-200) var(--ease-in-out);
   z-index: var(--z-maximum);
 }
 
@@ -882,7 +882,7 @@ nav a:focus-visible {
 
 /* Add any component-specific styles here */
 .fade-enter-active, .fade-leave-active {
-  transition: opacity 0.5s;
+  transition: opacity var(--duration-500);
 }
 .fade-enter-from, .fade-leave-to {
   opacity: 0;
@@ -896,7 +896,7 @@ nav a:focus-visible {
 /* Smooth transitions for navigation state changes */
 .transition-transform {
   transition-property: transform;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 300ms;
+  transition-timing-function: var(--ease-in-out);
+  transition-duration: var(--duration-300);
 }
 </style>

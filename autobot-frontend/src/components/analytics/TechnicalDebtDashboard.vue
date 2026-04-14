@@ -1096,7 +1096,7 @@ watch(selectedPeriod, () => {
 
 .health-fill {
   height: 100%;
-  transition: width var(--duration-300) ease;
+  transition: width var(--duration-300) var(--ease-out);
 }
 
 .health-fill.healthy {
@@ -1388,7 +1388,7 @@ watch(selectedPeriod, () => {
 .bar-fill {
   height: 100%;
   border-radius: var(--radius-xs);
-  transition: width var(--duration-200) ease;
+  transition: width var(--duration-200) var(--ease-out);
 }
 
 /* Priority List */
