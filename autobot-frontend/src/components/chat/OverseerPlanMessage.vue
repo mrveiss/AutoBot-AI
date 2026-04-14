@@ -149,15 +149,18 @@ const getStepIcon = (step: { step_number: number }): string => {
 }
 
 .step-preview.running {
-  @apply border-blue-500 bg-blue-900/20;
+  border-color: var(--color-primary);
+  background: var(--color-info-bg);
 }
 
 .step-preview.completed {
-  @apply border-green-600/50 bg-green-900/20;
+  border-color: var(--color-success);
+  background: var(--color-success-bg);
 }
 
 .step-preview.failed {
-  @apply border-red-600/50 bg-red-900/20;
+  border-color: var(--color-error);
+  background: var(--color-error-bg);
 }
 
 .step-number {
@@ -165,11 +168,13 @@ const getStepIcon = (step: { step_number: number }): string => {
 }
 
 .step-preview.completed .step-number {
-  @apply bg-green-700 text-green-100;
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .step-preview.running .step-number {
-  @apply bg-blue-600 text-white;
+  background: var(--color-primary);
+  color: var(--text-inverse);
 }
 
 .step-info {
