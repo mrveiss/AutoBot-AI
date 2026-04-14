@@ -701,26 +701,50 @@ class RAGService:
             return "Error: RAG context retrieval failed", RAGMetrics()
 
     async def _get_kb_synthesis_context(self, query: str) -> str:
-        """Query kb_synthesis ChromaDB collection for enrichment (Issue #4564).
+        """Query all KB synthesis ChromaDB collections for enrichment (Issue #4564, #4635).
 
-        Best-effort: returns empty string on any error so the main context
-        path is never interrupted.
+        Queries the default ``kb_synthesis`` collection plus any
+        ``synthesis_target`` collections defined in synthesis_schema.yaml.
+        Results from all collections are merged.  Per-collection errors are
+        logged and swallowed so the main context path is never interrupted.
         """
-        try:
-            from utils.chromadb_client import get_async_chromadb_client
+        from utils.chromadb_client import get_async_chromadb_client
 
-            client = await get_async_chromadb_client()
-            collection = await client.get_or_create_collection(name="kb_synthesis")
-            results = await collection.query(query_texts=[query], n_results=2)
-            if not (results and results.get("ids") and results["ids"][0]):
-                return ""
-            docs = results.get("documents", [[]])[0]
-            if not docs:
-                return ""
-            return "KB synthesis summaries:\n" + "\n".join(f"- {d}" for d in docs)
+        # Collect all synthesis collection names: default + schema-defined targets.
+        collection_names: List[str] = ["kb_synthesis"]
+        try:
+            from services.knowledge.synthesis_schema_loader import load_synthesis_schema
+
+            schema = load_synthesis_schema()
+            for col in schema.collections:
+                target = col.synthesis_target.strip()
+                if target and target not in collection_names:
+                    collection_names.append(target)
         except Exception as exc:
-            logger.debug("KB synthesis context fetch failed (non-fatal): %s", exc)
+            logger.debug("Could not load synthesis schema (non-fatal): %s", exc)
+
+        all_docs: List[str] = []
+        try:
+            client = await get_async_chromadb_client()
+        except Exception as exc:
+            logger.debug("KB synthesis ChromaDB client unavailable (non-fatal): %s", exc)
             return ""
+
+        for col_name in collection_names:
+            try:
+                collection = await client.get_or_create_collection(name=col_name)
+                results = await collection.query(query_texts=[query], n_results=2)
+                if results and results.get("ids") and results["ids"][0]:
+                    docs = results.get("documents", [[]])[0]
+                    all_docs.extend(d for d in docs if d)
+            except Exception as exc:
+                logger.debug(
+                    "KB synthesis fetch from '%s' failed (non-fatal): %s", col_name, exc
+                )
+
+        if not all_docs:
+            return ""
+        return "KB synthesis summaries:\n" + "\n".join(f"- {d}" for d in all_docs)
 
     async def rerank_results(
         self,
