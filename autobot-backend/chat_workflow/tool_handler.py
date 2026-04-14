@@ -98,6 +98,126 @@ def validate_tool_arguments(
         return None
 
 
+# Issue #4529: JSON Schema definitions for built-in tools dispatched directly
+# (not via MCP).  Used by _validate_builtin_tool_arguments() so every dispatch
+# path passes through validate_tool_arguments() before execution.
+_BUILTIN_TOOL_SCHEMAS: dict[str, dict] = {
+    "execute_command": {
+        "type": "object",
+        "properties": {
+            "command": {"type": "string"},
+            "host": {"type": "string"},
+        },
+        "required": ["command"],
+    },
+    "web_search": {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string"},
+        },
+        "required": ["query"],
+    },
+    # Browser tools share a common structure: at minimum one string parameter.
+    # Each tool is registered with its specific required field.
+    "navigate": {
+        "type": "object",
+        "properties": {"url": {"type": "string"}},
+        "required": ["url"],
+    },
+    "click": {
+        "type": "object",
+        "properties": {"selector": {"type": "string"}},
+        "required": ["selector"],
+    },
+    "fill": {
+        "type": "object",
+        "properties": {
+            "selector": {"type": "string"},
+            "value": {"type": "string"},
+        },
+        "required": ["selector", "value"],
+    },
+    "select": {
+        "type": "object",
+        "properties": {
+            "selector": {"type": "string"},
+            "value": {"type": "string"},
+        },
+        "required": ["selector", "value"],
+    },
+    "hover": {
+        "type": "object",
+        "properties": {"selector": {"type": "string"}},
+        "required": ["selector"],
+    },
+    "screenshot": {
+        "type": "object",
+        "properties": {},
+    },
+    "evaluate": {
+        "type": "object",
+        "properties": {"script": {"type": "string"}},
+        "required": ["script"],
+    },
+    "get_text": {
+        "type": "object",
+        "properties": {"selector": {"type": "string"}},
+        "required": ["selector"],
+    },
+    "get_attribute": {
+        "type": "object",
+        "properties": {
+            "selector": {"type": "string"},
+            "attribute": {"type": "string"},
+        },
+        "required": ["selector", "attribute"],
+    },
+    "wait_for_selector": {
+        "type": "object",
+        "properties": {"selector": {"type": "string"}},
+        "required": ["selector"],
+    },
+}
+
+
+def _validate_builtin_tool_arguments(
+    tool_name: str, tool_call: dict[str, Any]
+) -> WorkflowMessage | None:
+    """Validate params for a direct-dispatch built-in tool. Issue #4529.
+
+    Built-in tools use the ``params`` key (not ``arguments`` like MCP tools).
+    Returns a WorkflowMessage error if validation fails, or None on success.
+    The error message mirrors the pattern used in ``_try_mcp_dispatch()`` so
+    the agent loop can feed it back as a tool_result for self-correction.
+    """
+    schema = _BUILTIN_TOOL_SCHEMAS.get(tool_name)
+    if not schema:
+        return None  # No schema defined — skip validation
+
+    params = tool_call.get("params", {})
+    schema_error = validate_tool_arguments(tool_name, params, schema)
+    if schema_error is None:
+        return None
+
+    logger.info(
+        "[Issue #4529] Schema validation failed for built-in tool %s: %s",
+        tool_name,
+        schema_error["error"],
+    )
+    return WorkflowMessage(
+        type="tool_result",
+        content=schema_error["error"],
+        metadata={
+            "tool_name": tool_name,
+            "schema_validation_failed": True,
+            "self_correction_hint": (
+                f"Fix the argument errors above and retry '{tool_name}' "
+                f"with corrected arguments."
+            ),
+        },
+    )
+
+
 # Issue #1368: Browser tool names that route to browser_mcp handlers.
 # Exported (no leading underscore) so ToolRegistry can derive its list from this
 # single source of truth rather than maintaining a duplicate. Issue #2609.
@@ -1922,6 +2042,19 @@ class ToolHandlerMixin:
         if tool_name in BROWSER_TOOL_NAMES:
             if ctx is not None:
                 ctx.consecutive_invalid_tool_calls = 0
+            # Issue #4529: Validate arguments against schema before dispatch.
+            validation_msg = _validate_builtin_tool_arguments(tool_name, tool_call)
+            if validation_msg is not None:
+                execution_results.append(
+                    {
+                        "tool": tool_name,
+                        "status": "schema_error",
+                        "error": validation_msg.content,
+                        "schema_validation_failed": True,
+                    }
+                )
+                yield validation_msg
+                return
             async for msg in self._handle_browser_tool(tool_call, execution_results, session_id):
                 yield msg
             return
@@ -1930,6 +2063,19 @@ class ToolHandlerMixin:
         if tool_name == "web_search":
             if ctx is not None:
                 ctx.consecutive_invalid_tool_calls = 0
+            # Issue #4529: Validate arguments against schema before dispatch.
+            validation_msg = _validate_builtin_tool_arguments(tool_name, tool_call)
+            if validation_msg is not None:
+                execution_results.append(
+                    {
+                        "tool": tool_name,
+                        "status": "schema_error",
+                        "error": validation_msg.content,
+                        "schema_validation_failed": True,
+                    }
+                )
+                yield validation_msg
+                return
             async for msg in self._handle_web_search_tool(tool_call, execution_results, session_id):
                 yield msg
             return
@@ -1943,6 +2089,19 @@ class ToolHandlerMixin:
 
         if ctx is not None:
             ctx.consecutive_invalid_tool_calls = 0
+        # Issue #4529: Validate arguments against schema before dispatch.
+        validation_msg = _validate_builtin_tool_arguments(tool_name, tool_call)
+        if validation_msg is not None:
+            execution_results.append(
+                {
+                    "tool": tool_name,
+                    "status": "schema_error",
+                    "error": validation_msg.content,
+                    "schema_validation_failed": True,
+                }
+            )
+            yield validation_msg
+            return
         async for msg in self._dispatch_execute_command(
             tool_call,
             session_id,
