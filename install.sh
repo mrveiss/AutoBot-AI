@@ -901,7 +901,7 @@ uninstall() {
         svc="${unit%.service}"
         systemctl stop "${svc}" >> "${LOG_FILE}" 2>&1 && success "  Stopped ${svc}" || true
         systemctl disable "${svc}" >> "${LOG_FILE}" 2>&1 || true
-    done < <(systemctl list-units --all --no-legend 'autobot-*' 2>/dev/null | awk '{print $1}')
+    done < <(systemctl list-units --all --no-legend 'autobot-*' 2>/dev/null | grep -oP 'autobot-\S+\.service')
 
     local services=(nginx grafana-server postgresql)
     for svc in "${services[@]}"; do
