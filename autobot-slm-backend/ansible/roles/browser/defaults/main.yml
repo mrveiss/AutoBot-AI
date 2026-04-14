@@ -16,7 +16,7 @@ vnc_port: 5901
 vnc_display: ":1"
 
 # Playwright configuration
-playwright_port: 3000
+playwright_port: 9001
 browser_timeout: 30
 
 # Desktop environment
