@@ -1177,7 +1177,7 @@ watch(() => props.mode, () => {
   height: 1.25rem;
   padding: 0 0.375rem;
   background: rgba(0, 0, 0, 0.1);
-  border-radius: 0.625rem;
+  border-radius: var(--radius-xl);
   font-size: var(--text-xs);
   font-weight: 600;
   margin-left: 0.375rem;

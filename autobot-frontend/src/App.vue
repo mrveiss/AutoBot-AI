@@ -860,7 +860,7 @@ export default {
   color: #fff;
   padding: 8px 16px;
   text-decoration: none;
-  border-radius: 0 0 4px 0;
+  border-radius: 0 0 var(--radius-default) 0;
   font-size: var(--text-sm);
   font-weight: 500;
   transition: top var(--duration-200) var(--ease-in-out);

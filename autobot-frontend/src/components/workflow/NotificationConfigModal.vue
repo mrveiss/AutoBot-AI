@@ -367,7 +367,7 @@ async function handleSave(): Promise<void> {
   padding: 4px 10px;
   background: var(--color-primary-bg);
   color: var(--color-primary);
-  border-radius: 14px;
+  border-radius: var(--radius-2xl);
   font-size: var(--text-xs);
   font-weight: 500;
 }

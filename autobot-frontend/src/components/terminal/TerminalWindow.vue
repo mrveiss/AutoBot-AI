@@ -2018,7 +2018,7 @@ export default {
   padding: 20px 24px;
   border-top: 1px solid #444;
   background-color: #252525;
-  border-radius: 0 0 12px 12px;
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
 }
 
 /* Enhanced animations */
