@@ -11,8 +11,6 @@ Uses no network connections and no external dependencies.
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from a2a.agent_card import build_agent_card
 from a2a.task_manager import TaskManager
 from a2a.types import AgentCapabilities, AgentCard, AgentSkill, TaskArtifact, TaskState
