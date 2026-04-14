@@ -473,7 +473,7 @@ export class KnowledgeRepository extends ApiRepository {
       `${getApiBase()}/knowledge_base/verification/pending?page=${page}&page_size=${pageSize}`,
       { skipCache: true }
     )
-    return response.data
+    return response.data as { sources: PendingSource[]; total: number; page: number }
   }
 
   /**
@@ -487,7 +487,7 @@ export class KnowledgeRepository extends ApiRepository {
       `${getApiBase()}/knowledge_base/verification/${encodeURIComponent(factId)}/approve`,
       { user, delete_on_reject: false }
     )
-    return response.data
+    return response.data as { status: string; message: string }
   }
 
   /**
@@ -502,7 +502,7 @@ export class KnowledgeRepository extends ApiRepository {
       `${getApiBase()}/knowledge_base/verification/${encodeURIComponent(factId)}/reject`,
       { user, delete_on_reject: deleteOnReject }
     )
-    return response.data
+    return response.data as { status: string; message: string }
   }
 
   /**
@@ -513,7 +513,7 @@ export class KnowledgeRepository extends ApiRepository {
       `${getApiBase()}/knowledge_base/verification/config`,
       { skipCache: true }
     )
-    return response.data
+    return response.data as VerificationConfig
   }
 
   /**
@@ -526,7 +526,7 @@ export class KnowledgeRepository extends ApiRepository {
       `${getApiBase()}/knowledge_base/verification/config`,
       config
     )
-    return response.data
+    return response.data as { status: string; config: VerificationConfig }
   }
 
   // ==========================================================================
@@ -544,7 +544,7 @@ export class KnowledgeRepository extends ApiRepository {
       `${getApiBase()}/knowledge_base/connectors`,
       { skipCache: true }
     )
-    return response.data
+    return response.data as { connectors: ConnectorConfig[]; statuses: Record<string, ConnectorStatus> }
   }
 
   /**
@@ -557,7 +557,7 @@ export class KnowledgeRepository extends ApiRepository {
       `${getApiBase()}/knowledge_base/connectors`,
       config
     )
-    return response.data
+    return response.data as ConnectorConfig
   }
 
   /**
@@ -570,7 +570,7 @@ export class KnowledgeRepository extends ApiRepository {
       `${getApiBase()}/knowledge_base/connectors/${encodeURIComponent(id)}`,
       { skipCache: true }
     )
-    return response.data
+    return response.data as { config: ConnectorConfig; status: ConnectorStatus }
   }
 
   /**
@@ -584,7 +584,7 @@ export class KnowledgeRepository extends ApiRepository {
       `${getApiBase()}/knowledge_base/connectors/${encodeURIComponent(id)}`,
       updates
     )
-    return response.data
+    return response.data as ConnectorConfig
   }
 
   /**
@@ -605,7 +605,7 @@ export class KnowledgeRepository extends ApiRepository {
     const response = await this.post(
       `${getApiBase()}/knowledge_base/connectors/${encodeURIComponent(id)}/test`
     )
-    return response.data
+    return response.data as { success: boolean; message: string }
   }
 
   /**
@@ -618,7 +618,7 @@ export class KnowledgeRepository extends ApiRepository {
     const response = await this.post(
       `${getApiBase()}/knowledge_base/connectors/${encodeURIComponent(id)}/sync?incremental=${incremental}`
     )
-    return response.data
+    return response.data as SyncResult
   }
 
   /**
@@ -632,7 +632,7 @@ export class KnowledgeRepository extends ApiRepository {
       `${getApiBase()}/knowledge_base/connectors/${encodeURIComponent(id)}/history?limit=${limit}`,
       { skipCache: true }
     )
-    return response.data
+    return response.data as SyncResult[]
   }
 
 
@@ -658,7 +658,13 @@ export class KnowledgeRepository extends ApiRepository {
     const response = await this.get(url)
 
     // Normalize response format
-    const data = response.data
+    const data = response.data as {
+      entries?: Array<{
+        id: string; fact_id?: string; fact?: string; content?: string
+        metadata?: Record<string, unknown>; created_at?: string; updated_at?: string
+      }>
+      total?: number
+    }
     return {
       success: true,
       entries: data.entries || [],
