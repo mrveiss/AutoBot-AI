@@ -402,7 +402,7 @@ defineExpose({
   border: 1px solid var(--border-default);
   border-radius: 8px;
   box-shadow: var(--shadow-lg);
-  z-index: 100;
+  z-index: var(--z-popover);
 }
 
 .selector-header {

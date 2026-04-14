@@ -1664,6 +1664,11 @@ export default {
   min-width: 0;
 }
 
+.terminal-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 .cursor {
   color: #00ff00;
   font-weight: bold;
@@ -1730,7 +1735,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
 }
 
 .modal-content {
@@ -1850,7 +1855,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2000;
+  z-index: var(--z-popover);
   backdrop-filter: blur(2px);
 }
 

@@ -243,6 +243,10 @@ function handleSourceChange(event: Event) {
   border-color: var(--color-info);
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
 }
+.source-select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .select-chevron {
   position: absolute;

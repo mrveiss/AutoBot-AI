@@ -1422,6 +1422,11 @@ watch(viewMode, async (newMode) => {
   border-color: var(--color-primary);
   box-shadow: var(--shadow-focus);
 }
+.graph-search:focus-visible,
+.module-filter:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .view-toggle {
   display: flex;
@@ -1973,6 +1978,11 @@ watch(viewMode, async (newMode) => {
 .orphaned-module-filter:focus {
   outline: none;
   border-color: var(--color-primary);
+}
+.orphaned-search:focus-visible,
+.orphaned-module-filter:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .orphaned-list {

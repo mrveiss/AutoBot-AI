@@ -253,6 +253,11 @@ defineExpose({
   min-width: 0;
 }
 
+.terminal-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 .send-button {
   background: var(--terminal-green-bg);
   border: 1px solid var(--terminal-green-border);

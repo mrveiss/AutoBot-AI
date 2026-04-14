@@ -159,7 +159,7 @@ onUnmounted(() => document.removeEventListener('click', handleOutsideClick))
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
-  z-index: 100;
+  z-index: var(--z-popover);
   padding: var(--spacing-xs) 0;
   list-style: none;
   margin: 0;

@@ -510,6 +510,11 @@ watch(() => props.modelValue, (newValue) => {
   border-color: var(--color-primary);
   box-shadow: var(--ring-primary);
 }
+.form-select:focus-visible,
+.form-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .form-hint {
   font-size: var(--text-xs);

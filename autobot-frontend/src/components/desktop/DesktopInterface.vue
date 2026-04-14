@@ -691,6 +691,10 @@ onUnmounted(() => {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 2px var(--color-primary-bg);
 }
+.type-textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .type-dialog-footer {
   padding: 1rem 1.5rem;

@@ -985,6 +985,10 @@ watch([debouncedSearchQuery, filterCategory, filterType], () => {
   border-color: var(--color-info);
   box-shadow: 0 0 0 3px var(--color-info-bg);
 }
+.search-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 /* Filter bar */
 .filter-bar {
@@ -1025,6 +1029,10 @@ watch([debouncedSearchQuery, filterCategory, filterType], () => {
   outline: none;
   border-color: var(--color-info);
   box-shadow: 0 0 0 3px var(--color-info-bg);
+}
+.filter-select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* Loading and empty states */
@@ -1288,6 +1296,13 @@ tr.selected {
   border-color: var(--color-primary);
   box-shadow: var(--shadow-focus);
 }
+.form-input:focus-visible,
+.form-select:focus-visible,
+.form-textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.form-input:focus-visible,
 
 .form-row {
   display: grid;

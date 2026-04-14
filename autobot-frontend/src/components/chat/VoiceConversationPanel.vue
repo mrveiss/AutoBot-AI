@@ -439,6 +439,11 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
+.voice-panel__slider:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 .voice-panel__slider::-webkit-slider-thumb {
   appearance: none;
   width: 10px;

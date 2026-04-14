@@ -390,6 +390,7 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .node-body { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 .node-body input, .node-body select { width: 100%; padding: 6px 8px; background: var(--bg-primary); border: 1px solid var(--border-default); border-radius: 4px; color: var(--text-primary); font-size: 12px; }
 .node-body input:focus, .node-body select:focus { outline: none; border-color: var(--color-primary); }
+.node-body input:focus-visible, .node-body select:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .node-body input.mono { font-family: monospace; }
 .node-row { display: flex; gap: 8px; align-items: center; }
 .node-row select { flex: 1; }
@@ -406,12 +407,13 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .empty-state h3 { margin: 0 0 8px; color: var(--text-primary); }
 .empty-state p { margin: 0 0 20px; color: var(--text-tertiary); }
 
-.dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: var(--z-modal-backdrop); }
 .dialog { width: 400px; background: var(--bg-secondary); border-radius: 12px; padding: 24px; }
 .dialog h3 { margin: 0 0 20px; display: flex; align-items: center; gap: 10px; color: var(--text-primary); }
 .dialog h3 i { color: var(--color-primary); }
 .dialog input, .dialog textarea { width: 100%; padding: 10px 12px; margin-bottom: 12px; background: var(--bg-primary); border: 1px solid var(--border-default); border-radius: 6px; color: var(--text-primary); font-size: 14px; font-family: inherit; }
 .dialog input:focus, .dialog textarea:focus { outline: none; border-color: var(--color-primary); }
+.dialog input:focus-visible, .dialog textarea:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 12px; }
 
 .btn-primary { padding: 10px 20px; background: var(--color-primary); color: var(--text-on-primary); border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }

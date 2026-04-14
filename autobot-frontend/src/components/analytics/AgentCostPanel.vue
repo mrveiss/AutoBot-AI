@@ -445,6 +445,10 @@ defineExpose({ fetchAgentCosts })
   outline: none;
   border-color: var(--color-primary);
 }
+.budget-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .budget-dialog-actions {
   display: flex;

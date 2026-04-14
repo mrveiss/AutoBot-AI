@@ -410,7 +410,7 @@ defineExpose({ loadSources })
   position: fixed;
   inset: 0;
   background: var(--bg-overlay-dark);
-  z-index: 1000;
+  z-index: var(--z-modal);
   display: flex;
   align-items: flex-start;
   justify-content: flex-end;

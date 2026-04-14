@@ -352,7 +352,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
 }
 
 .vision-modal {
@@ -550,6 +550,11 @@ onUnmounted(() => {
 .option-group input:focus {
   outline: none;
   border-color: var(--color-primary);
+}
+.option-group select:focus-visible,
+.option-group input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* Analyze button */

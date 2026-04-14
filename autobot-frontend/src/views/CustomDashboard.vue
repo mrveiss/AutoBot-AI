@@ -933,7 +933,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
 }
 
 .modal-content {
@@ -1019,6 +1019,11 @@ onMounted(() => {
 .form-group select:focus {
   outline: none;
   border-color: var(--color-primary);
+}
+.form-group input:focus-visible,
+.form-group select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .modal-footer {

@@ -574,6 +574,10 @@ onMounted(() => {
   outline: none;
   border-color: var(--color-info);
 }
+.search-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 /* Export Dropdown */
 .export-dropdown {
@@ -589,7 +593,7 @@ onMounted(() => {
   border: 1px solid var(--border-default);
   border-radius: 0.375rem;
   box-shadow: var(--shadow-lg);
-  z-index: 100;
+  z-index: var(--z-popover);
   display: none;
   min-width: 150px;
 }

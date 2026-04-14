@@ -264,7 +264,7 @@ watch(() => props.source, (source) => {
   position: fixed;
   inset: 0;
   background: var(--bg-overlay-dark);
-  z-index: 1100;
+  z-index: var(--z-popover);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -403,6 +403,10 @@ watch(() => props.source, (source) => {
   outline: none;
   border-color: var(--color-info);
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+.form-textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .form-hint {

@@ -325,6 +325,7 @@ onMounted(async () => {
 .search-box { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: 8px; }
 .search-box i { color: var(--text-muted); }
 .search-box input { flex: 1; background: none; border: none; color: var(--text-primary); font-size: 14px; outline: none; }
+.search-box input:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .category-filters { display: flex; gap: 8px; flex-wrap: wrap; }
 .filter-btn { padding: 6px 14px; background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: 20px; color: var(--text-secondary); font-size: 13px; cursor: pointer; transition: all 0.15s; display: flex; align-items: center; gap: 6px; }
 .filter-btn:hover { background: var(--bg-hover); }

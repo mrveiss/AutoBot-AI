@@ -1140,7 +1140,7 @@ onUnmounted(() => {
   position: fixed;
   bottom: var(--spacing-6);
   right: var(--spacing-6);
-  z-index: 900;
+  z-index: var(--z-modal-backdrop);
   max-width: 480px;
   width: 100%;
 }

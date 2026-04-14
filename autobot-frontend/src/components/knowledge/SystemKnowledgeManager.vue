@@ -795,6 +795,10 @@ export default {
   border-color: var(--color-info);
   box-shadow: var(--shadow-focus);
 }
+.host-select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .status-cards {
   display: grid;

@@ -450,6 +450,10 @@ onMounted(async () => {
   outline: none;
   border-color: var(--color-primary);
 }
+.search-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .filter-select {
   padding: 6px 10px;
@@ -464,6 +468,10 @@ onMounted(async () => {
 .filter-select:focus {
   outline: none;
   border-color: var(--color-primary);
+}
+.filter-select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .btn-filter-toggle {

@@ -429,7 +429,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
+  z-index: var(--z-maximum);
   backdrop-filter: blur(4px);
 }
 
@@ -662,6 +662,10 @@ export default {
   outline: none;
   border-color: var(--color-success);
   box-shadow: var(--shadow-focus-success);
+}
+.comment-textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .comment-textarea:disabled {

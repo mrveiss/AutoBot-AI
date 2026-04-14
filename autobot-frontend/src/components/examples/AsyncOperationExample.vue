@@ -958,6 +958,10 @@ const loadAnalytics = () => analytics.execute(async () => {
   border-color: var(--color-primary);
   box-shadow: var(--shadow-focus);
 }
+.form-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 /* Notifications */
 .notification-toast {
@@ -969,7 +973,7 @@ const loadAnalytics = () => analytics.execute(async () => {
   font-weight: 500;
   box-shadow: var(--shadow-lg);
   animation: slideIn 0.3s ease;
-  z-index: 1000;
+  z-index: var(--z-modal);
 }
 
 .notification-toast.success {

@@ -717,6 +717,10 @@ onMounted(() => {
   outline: none;
   border-color: var(--accent-color);
 }
+.input-group input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .quick-paths {
   display: flex;
@@ -1211,7 +1215,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: var(--z-modal-backdrop);
 }
 
 .modal {

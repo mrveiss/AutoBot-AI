@@ -293,6 +293,10 @@ const formattedUpdatedAt = computed(() => {
   border-radius: 4px;
   transition: background 0.15s;
 }
+.document-title:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .document-title:hover {
   background: var(--color-background-hover, #2a2a2a);
@@ -308,6 +312,10 @@ const formattedUpdatedAt = computed(() => {
   font-weight: 600;
   padding: 2px 8px;
   outline: none;
+}
+.title-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .header-actions {
@@ -350,6 +358,10 @@ const formattedUpdatedAt = computed(() => {
 .refine-textarea:focus {
   border-color: var(--color-primary, #4caf50);
 }
+.refine-textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .refine-actions {
   display: flex;
@@ -375,6 +387,10 @@ const formattedUpdatedAt = computed(() => {
   outline: none;
   width: 100%;
   box-sizing: border-box;
+}
+.content-editor:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .editor-footer {
