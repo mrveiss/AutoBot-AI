@@ -222,6 +222,7 @@ class TaskManager:
         ttl = self._ttl()
         self._redis.expire(key, ttl)
         self._redis.expire(_KEY_AUDIT.format(task_id), ttl)
+        self._redis.expire(_KEY_TASKS, ttl)
         return _task_from_json(raw if isinstance(raw, str) else raw.decode("utf-8"))
 
     def list_tasks(self) -> List[Task]:
