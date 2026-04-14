@@ -5401,6 +5401,30 @@
       "noConfig": "No configuration stored for this plugin.",
       "invalidJson": "Invalid JSON — please fix before saving.",
       "saveFailed": "Failed to save configuration."
+    },
+    "marketplace": {
+      "title": "Plugin Marketplace",
+      "subtitle": "Discover, install, and manage community plugins and agents",
+      "refresh": "Refresh",
+      "searchPlaceholder": "Search plugins...",
+      "allCategories": "All categories",
+      "sortDownloads": "Most downloaded",
+      "sortRating": "Top rated",
+      "sortName": "Name A–Z",
+      "installedOnly": "Installed only",
+      "showing": "Showing {count} of {total} plugins",
+      "installedCount": "{count} installed",
+      "loading": "Loading marketplace...",
+      "noResults": "No plugins found",
+      "noResultsHint": "Try adjusting your search or category filter.",
+      "installed": "Installed",
+      "available": "Available",
+      "install": "Install",
+      "uninstall": "Uninstall",
+      "source": "Source",
+      "loadError": "Failed to load marketplace catalog.",
+      "installError": "Failed to install plugin.",
+      "uninstallError": "Failed to uninstall plugin."
     }
   },
   "auth": {
@@ -6779,7 +6803,8 @@
     "services": "Services",
     "skipToContent": "Skip to content",
     "skipToNavigation": "Skip to navigation",
-    "systemStatus": "System Status"
+    "systemStatus": "System Status",
+    "marketplace": "Marketplace"
   },
   "reasoningTrace": {
     "title": "Reasoning trace",

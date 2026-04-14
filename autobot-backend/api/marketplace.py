@@ -268,3 +268,104 @@ async def list_categories() -> dict[str, list[str]]:
         "categories": sorted(_VALID_CATEGORIES),
         "sort_options": sorted(_VALID_SORT),
     }
+
+
+# ---------------------------------------------------------------------------
+# Installed plugin management
+# ---------------------------------------------------------------------------
+
+
+class InstallRequest(BaseModel):
+    """Request body for installing a marketplace plugin."""
+
+    plugin_name: str = Field(..., description="Name of the plugin to install from catalog")
+
+
+async def _get_installed() -> set[str]:
+    """Return the set of installed plugin names from Redis."""
+    try:
+        redis = await get_async_redis_client(database="main")
+        members = await redis.smembers(_INSTALLED_KEY)
+        return {m.decode() if isinstance(m, bytes) else m for m in members}
+    except Exception as exc:
+        logger.warning("Marketplace: Redis read of installed set failed: %s", exc)
+        return set()
+
+
+@router.get("/installed")
+async def list_installed() -> dict[str, list[str]]:
+    """
+    List names of installed marketplace plugins.
+
+    Issue #1803: Plugin and agent marketplace.
+    """
+    installed = await _get_installed()
+    return {"installed": sorted(installed)}
+
+
+@router.post("/install", status_code=status.HTTP_201_CREATED)
+async def install_plugin(body: InstallRequest) -> dict[str, str]:
+    """
+    Mark a catalog plugin as installed.
+
+    Validates the plugin exists in the catalog then records it in the
+    installed set in Redis so the UI can reflect installation state.
+
+    Issue #1803: Plugin and agent marketplace.
+    """
+    catalog = await _get_catalog()
+    entry = next((e for e in catalog if e.get("name") == body.plugin_name), None)
+    if not entry:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Plugin not found in marketplace: {body.plugin_name}",
+        )
+
+    try:
+        redis = await get_async_redis_client(database="main")
+        await redis.sadd(_INSTALLED_KEY, body.plugin_name)
+        # Bump download counter in cached catalog
+        updated = [
+            {**e, "downloads": e.get("downloads", 0) + 1}
+            if e.get("name") == body.plugin_name
+            else e
+            for e in catalog
+        ]
+        await redis.set(_CATALOG_KEY, json.dumps(updated), ex=_CATALOG_TTL)
+    except Exception as exc:
+        logger.error("Marketplace: install failed for %s: %s", body.plugin_name, exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to record plugin installation",
+        ) from exc
+
+    logger.info("Marketplace: installed plugin %s", body.plugin_name)
+    return {"status": "installed", "plugin": body.plugin_name}
+
+
+@router.delete("/install/{plugin_name}")
+async def uninstall_plugin(plugin_name: str) -> dict[str, str]:
+    """
+    Remove a marketplace plugin from the installed set.
+
+    Issue #1803: Plugin and agent marketplace.
+    """
+    installed = await _get_installed()
+    if plugin_name not in installed:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Plugin not installed: {plugin_name}",
+        )
+
+    try:
+        redis = await get_async_redis_client(database="main")
+        await redis.srem(_INSTALLED_KEY, plugin_name)
+    except Exception as exc:
+        logger.error("Marketplace: uninstall failed for %s: %s", plugin_name, exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to remove plugin installation",
+        ) from exc
+
+    logger.info("Marketplace: uninstalled plugin %s", plugin_name)
+    return {"status": "uninstalled", "plugin": plugin_name}
