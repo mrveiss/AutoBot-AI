@@ -36,6 +36,67 @@ from chat_workflow.session_handler import (
 
 logger = logging.getLogger(__name__)
 
+# Issue #4482: Default retry count for schema self-correction loop.
+_DEFAULT_SCHEMA_RETRIES = 3
+
+
+def _format_schema_validation_errors(errors: list) -> str:
+    """Format jsonschema ValidationError list into a concise field-level message.
+
+    Args:
+        errors: List of jsonschema.ValidationError instances.
+
+    Returns:
+        Human-readable error string listing each field and its problem.
+    """
+    lines = []
+    for err in errors:
+        field = ".".join(str(p) for p in err.absolute_path) or "<root>"
+        lines.append(f"  - {field}: {err.message}")
+    return "Tool argument validation failed:\n" + "\n".join(lines)
+
+
+def validate_tool_arguments(
+    tool_name: str, arguments: dict, schema: dict
+) -> dict | None:
+    """Validate *arguments* against *schema* using jsonschema.
+
+    Issue #4482: Central validation helper used by the schema self-correction
+    retry loop.  Returns None on success, or a structured error dict on failure
+    so the caller can feed it back to the model as a tool_result.
+
+    Args:
+        tool_name: Name of the tool (for context in the error message).
+        arguments: The argument dict provided by the LLM.
+        schema: JSON Schema dict (typically the tool's ``input_schema``).
+
+    Returns:
+        None when valid, or ``{"error": "...", "schema_validation_failed": True}``
+        when invalid.
+    """
+    try:
+        import jsonschema
+
+        validator = jsonschema.Draft7Validator(schema)
+        errors = sorted(validator.iter_errors(arguments), key=lambda e: list(e.path))
+        if errors:
+            msg = _format_schema_validation_errors(errors)
+            logger.info(
+                "[Issue #4482] Schema validation failed for tool %s: %s",
+                tool_name,
+                msg,
+            )
+            return {"error": msg, "schema_validation_failed": True, "tool": tool_name}
+        return None
+    except Exception as exc:
+        # If jsonschema itself fails (e.g. bad schema), log and continue without
+        # blocking execution — a broken schema should not prevent tool dispatch.
+        logger.warning(
+            "[Issue #4482] Could not run schema validation for %s: %s", tool_name, exc
+        )
+        return None
+
+
 # Issue #1368: Browser tool names that route to browser_mcp handlers.
 # Exported (no leading underscore) so ToolRegistry can derive its list from this
 # single source of truth rather than maintaining a duplicate. Issue #2609.
@@ -266,8 +327,14 @@ async def _try_mcp_dispatch(
     execution_results: list[dict[str, Any]],
     role: str = "user",
     session_id: str = "",
+    max_schema_retries: int = _DEFAULT_SCHEMA_RETRIES,
 ) -> WorkflowMessage | None:
     """Attempt to dispatch tool_name via the MCP registry. Issue #2513.
+
+    Issue #4482: Validates arguments against the tool's input_schema before
+    dispatch.  On failure the error is returned as a structured WorkflowMessage
+    so the agent loop can feed it back as a tool_result and self-correct.
+    The caller may retry up to *max_schema_retries* times (default 3).
 
     Args:
         tool_name: Name of the tool to dispatch.
@@ -275,6 +342,7 @@ async def _try_mcp_dispatch(
         execution_results: Accumulator list for execution results.
         role: Caller RBAC role forwarded to the dispatcher (#2629).
         session_id: Session identifier for hook invocation (#4261).
+        max_schema_retries: Max allowed retries for schema self-correction (#4482).
 
     Returns a WorkflowMessage on success, or None if the tool is not found
     in the registry (so the caller can fall through to the unknown-tool error).
@@ -290,6 +358,44 @@ async def _try_mcp_dispatch(
         return None
 
     arguments = tool_call.get("arguments", {})
+
+    # Issue #4482: Validate arguments against the tool's input_schema before
+    # dispatching.  Return a structured error WorkflowMessage so the agent
+    # loop can feed it back as a tool_result and retry.  The retry counter is
+    # owned by the caller (agent loop); here we just surface the error clearly.
+    input_schema = tool.get("input_schema", {})
+    if input_schema:
+        schema_error = validate_tool_arguments(tool_name, arguments, input_schema)
+        if schema_error is not None:
+            retries_left = max_schema_retries - tool_call.get("_schema_retry_count", 0)
+            logger.info(
+                "[Issue #4482] Schema validation error for %s (retries_left=%d): %s",
+                tool_name,
+                retries_left,
+                schema_error["error"],
+            )
+            execution_results.append(
+                {
+                    "tool": tool_name,
+                    "status": "schema_error",
+                    "error": schema_error["error"],
+                    "schema_validation_failed": True,
+                    "retries_left": retries_left,
+                }
+            )
+            return WorkflowMessage(
+                type="tool_result",
+                content=schema_error["error"],
+                metadata={
+                    "tool_name": tool_name,
+                    "schema_validation_failed": True,
+                    "retries_left": retries_left,
+                    "self_correction_hint": (
+                        f"Fix the argument errors above and retry '{tool_name}' "
+                        f"with corrected arguments. {retries_left} attempt(s) remaining."
+                    ),
+                },
+            )
 
     # Issue #4261: Wire BEFORE_TOOL_EXECUTE hook for MCP tools
     should_execute = await _emit_before_tool_execute(tool_name, arguments, session_id)
