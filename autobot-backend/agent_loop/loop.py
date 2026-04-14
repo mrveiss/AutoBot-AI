@@ -491,6 +491,17 @@ class AgentLoop:
             ][-5:],
         }
 
+        # Issue #4481: inject a first-turn context hint so the LLM knows no
+        # prior tool results exist yet.  Only added on iteration 1 (the very
+        # first call) when the feature is enabled.
+        if (
+            self.config.first_turn_priming_enabled
+            and self._iteration_count == 1
+        ):
+            context["first_turn_note"] = (
+                "Note: This is the first iteration — no tool results exist yet."
+            )
+
         return context
 
     async def _select_tools(

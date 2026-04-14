@@ -188,6 +188,9 @@ class AgentLoopConfig:
     require_approval_for_sensitive: bool = True  # Gate sensitive ops behind user approval
     approval_timeout_seconds: int = 300  # Max seconds to wait for user response
 
+    # First-turn priming (Issue #4481)
+    first_turn_priming_enabled: bool = True  # Inject context note on first iteration
+
     # Logging
     log_iterations: bool = True  # Log each iteration
     log_tool_results: bool = True  # Log tool execution results
