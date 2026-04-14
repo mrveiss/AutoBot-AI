@@ -5,10 +5,11 @@
 A2A Protocol Unit Tests
 
 Issue #961: Tests for types, agent_card builder, and task_manager.
+Issue #4502: TaskManager tests now mock Redis instead of the in-process dict.
 Uses no network connections and no external dependencies.
 """
 
-import asyncio
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -141,14 +142,71 @@ class TestBuildAgentCard:
 
 
 # ---------------------------------------------------------------------------
+# Redis mock fixture
+# ---------------------------------------------------------------------------
+
+
+def _make_redis_mock():
+    """Return a MagicMock that mimics the subset of redis.Redis used by TaskManager."""
+    store: dict = {}
+    audit_lists: dict = {}
+    task_set: set = set()
+
+    mock = MagicMock()
+
+    def _set(key, value, ex=None):
+        store[key] = value if isinstance(value, str) else value.decode("utf-8")
+
+    def _get(key):
+        v = store.get(key)
+        return v.encode("utf-8") if v is not None else None
+
+    def _sadd(key, member):
+        task_set.add(member if isinstance(member, str) else member.decode("utf-8"))
+
+    def _srem(key, member):
+        task_set.discard(member if isinstance(member, str) else member.decode("utf-8"))
+
+    def _smembers(key):
+        return {m.encode("utf-8") for m in task_set}
+
+    def _rpush(key, value):
+        audit_lists.setdefault(key, []).append(
+            value if isinstance(value, str) else value.decode("utf-8")
+        )
+
+    def _lrange(key, start, end):
+        entries = audit_lists.get(key, [])
+        result = entries[start : end + 1 if end != -1 else None]
+        return [e.encode("utf-8") for e in result]
+
+    def _expire(key, ttl):
+        pass  # TTL not needed in unit tests
+
+    mock.set.side_effect = _set
+    mock.get.side_effect = _get
+    mock.sadd.side_effect = _sadd
+    mock.srem.side_effect = _srem
+    mock.smembers.side_effect = _smembers
+    mock.rpush.side_effect = _rpush
+    mock.lrange.side_effect = _lrange
+    mock.expire.side_effect = _expire
+
+    return mock
+
+
+# ---------------------------------------------------------------------------
 # TaskManager tests
 # ---------------------------------------------------------------------------
 
 
 class TestTaskManager:
     def setup_method(self):
-        """Fresh manager for each test."""
-        self.mgr = TaskManager()
+        """Fresh manager with mocked Redis for each test."""
+        with patch(
+            "a2a.task_manager.get_redis_client", return_value=_make_redis_mock()
+        ):
+            self.mgr = TaskManager()
 
     def test_create_task_returns_task(self):
         task = self.mgr.create_task("Summarize this document")
@@ -256,114 +314,85 @@ class TestTaskManager:
         fetched = self.mgr.get_task(task.id)
         assert fetched.context == ctx
 
+    def test_get_audit_log(self):
+        task = self.mgr.create_task("Audit me", caller_id="user:test")
+        self.mgr.update_state(task.id, TaskState.WORKING)
+        log = self.mgr.get_audit_log(task.id)
+        assert log is not None
+        assert len(log) >= 2  # task.submitted + task.state_transition
+        events = [e["event"] for e in log]
+        assert "task.submitted" in events
+        assert "task.state_transition" in events
+
+    def test_get_audit_log_missing_task_returns_none(self):
+        assert self.mgr.get_audit_log("nonexistent") is None
+
 
 # ---------------------------------------------------------------------------
-# Issue #3823: Task eviction after TTL
+# Issue #4502: TTL eviction — Redis TTL handles expiry; test via mock deletion
 # ---------------------------------------------------------------------------
 
 
 class TestTaskManagerEviction:
-    """Verify that terminal tasks are evicted from _tasks after the TTL expires."""
+    """Verify that expired tasks are no longer visible (Redis TTL handles eviction).
+
+    Issue #4502: Eviction is now delegated to Redis key expiry instead of
+    asyncio-scheduled coroutines.  These tests simulate key expiry by removing
+    the key from the mock store directly, matching the real Redis behaviour.
+    """
 
     def setup_method(self):
-        self.mgr = TaskManager()
+        self._redis_mock = _make_redis_mock()
+        with patch(
+            "a2a.task_manager.get_redis_client", return_value=self._redis_mock
+        ):
+            self.mgr = TaskManager()
 
-    @pytest.mark.asyncio
-    async def test_completed_task_evicted_after_ttl(self) -> None:
-        """A task that reaches COMPLETED is removed from _tasks after the TTL."""
+    def test_completed_task_visible_before_expiry(self):
         task = self.mgr.create_task("Eviction test")
         self.mgr.update_state(task.id, TaskState.WORKING)
         self.mgr.update_state(task.id, TaskState.COMPLETED)
-
-        # Still present immediately after transition
+        # Still present before TTL fires
         assert self.mgr.get_task(task.id) is not None
 
-        # Override TTL to near-zero so the test is fast
-        handle = self.mgr._eviction_handles.get(task.id)
-        assert handle is not None, "Eviction handle must be scheduled"
+    def test_task_invisible_after_redis_key_expires(self):
+        """Simulate Redis TTL expiry by deleting the key from the mock store."""
+        task = self.mgr.create_task("Expiry test")
+        self.mgr.update_state(task.id, TaskState.COMPLETED)
+        assert self.mgr.get_task(task.id) is not None
 
-        # Cancel the real handle and inject a fast one
-        handle.cancel()
-        async def _fast_evict():
-            await asyncio.sleep(0.01)
-            self.mgr._tasks.pop(task.id, None)
-            self.mgr._eviction_handles.pop(task.id, None)
+        # Simulate Redis key expiry (as the real Redis TTL would do)
+        from a2a.task_manager import _KEY_TASK
 
-        self.mgr._eviction_handles[task.id] = asyncio.create_task(_fast_evict())
-        await asyncio.sleep(0.05)
+        key = _KEY_TASK.format(task.id)
+        # Bypass mock to force a None return for this key
+        original_get = self._redis_mock.get.side_effect
 
-        assert self.mgr.get_task(task.id) is None, "Task must be evicted after TTL"
+        def expired_get(k):
+            if k == key:
+                return None
+            return original_get(k)
 
-    @pytest.mark.asyncio
-    async def test_failed_task_evicted_after_ttl(self) -> None:
-        """A task that reaches FAILED is removed from _tasks after the TTL."""
+        self._redis_mock.get.side_effect = expired_get
+        assert self.mgr.get_task(task.id) is None
+
+    def test_failed_task_visible_before_expiry(self):
         task = self.mgr.create_task("Failing task")
         self.mgr.update_state(task.id, TaskState.WORKING)
         self.mgr.update_state(task.id, TaskState.FAILED, message="timeout")
+        assert self.mgr.get_task(task.id) is not None
+        assert self.mgr.get_task(task.id).status.state == TaskState.FAILED
 
-        handle = self.mgr._eviction_handles.get(task.id)
-        assert handle is not None
-
-        handle.cancel()
-        async def _fast_evict():
-            await asyncio.sleep(0.01)
-            self.mgr._tasks.pop(task.id, None)
-            self.mgr._eviction_handles.pop(task.id, None)
-
-        self.mgr._eviction_handles[task.id] = asyncio.create_task(_fast_evict())
-        await asyncio.sleep(0.05)
-
-        assert self.mgr.get_task(task.id) is None
-
-    @pytest.mark.asyncio
-    async def test_cancelled_task_evicted_after_ttl(self) -> None:
-        """A cancelled task is removed from _tasks after the TTL."""
+    def test_cancelled_task_visible_before_expiry(self):
         task = self.mgr.create_task("Cancel-eviction test")
         self.mgr.cancel_task(task.id)
+        assert self.mgr.get_task(task.id) is not None
+        assert self.mgr.get_task(task.id).status.state == TaskState.CANCELLED
 
-        handle = self.mgr._eviction_handles.get(task.id)
-        assert handle is not None
-
-        handle.cancel()
-        async def _fast_evict():
-            await asyncio.sleep(0.01)
-            self.mgr._tasks.pop(task.id, None)
-            self.mgr._eviction_handles.pop(task.id, None)
-
-        self.mgr._eviction_handles[task.id] = asyncio.create_task(_fast_evict())
-        await asyncio.sleep(0.05)
-
-        assert self.mgr.get_task(task.id) is None
-
-    @pytest.mark.asyncio
-    async def test_task_queryable_before_ttl_expires(self) -> None:
+    def test_terminal_task_still_queryable_immediately(self):
         """A terminal task must still be queryable immediately after transition."""
         task = self.mgr.create_task("Query before TTL")
         self.mgr.update_state(task.id, TaskState.COMPLETED)
-
-        # Cancel eviction so the task stays in store for this assertion
-        handle = self.mgr._eviction_handles.get(task.id)
-        if handle:
-            handle.cancel()
-
         fetched = self.mgr.get_task(task.id)
         assert fetched is not None
         assert fetched.status.state == TaskState.COMPLETED
-
-    @pytest.mark.asyncio
-    async def test_duplicate_terminal_transition_resets_eviction_clock(self) -> None:
-        """Calling update_state on an already-terminal task does not create a second handle."""
-        task = self.mgr.create_task("Double terminal")
-        self.mgr.update_state(task.id, TaskState.COMPLETED)
-        first_handle = self.mgr._eviction_handles.get(task.id)
-
-        # update_state on a terminal task is a no-op (returns task, no new eviction)
-        self.mgr.update_state(task.id, TaskState.FAILED)
-        second_handle = self.mgr._eviction_handles.get(task.id)
-
-        # The handle should be unchanged — no new eviction was kicked off
-        # because update_state guards with _TERMINAL_STATES check.
-        assert first_handle is second_handle
-
-        if first_handle:
-            first_handle.cancel()

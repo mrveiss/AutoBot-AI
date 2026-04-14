@@ -6,6 +6,8 @@ A2A Task Manager
 
 Issue #961: In-memory task lifecycle manager for A2A tasks.
 Issue #968: Adds TraceContext per task for distributed tracing + audit log.
+Issue #4502: Replace in-process dict with Redis-backed storage to fix 404
+             flapping across multiple uvicorn workers.
 Manages task state transitions per the A2A spec §4.2.
 
 State machine:
@@ -14,17 +16,23 @@ State machine:
   SUBMITTED → CANCELLED
   WORKING   → INPUT_REQUIRED → WORKING
   WORKING   → CANCELLED
+
+Redis key layout:
+  a2a:task:{id}   — JSON-serialised Task (TTL: AUTOBOT_A2A_TASK_TTL_SECONDS)
+  a2a:audit:{id}  — Redis list of JSON-serialised TraceEvent entries (same TTL)
+  a2a:tasks       — Redis set of all known task IDs
 """
 
-import asyncio
+import json
 import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config
 
-from .tracing import TraceContext, new_trace_id
+from .tracing import TraceContext, TraceEvent, new_trace_id
 from .types import Task, TaskArtifact, TaskState, TaskStatus
 
 logger = logging.getLogger(__name__)
@@ -32,17 +40,130 @@ logger = logging.getLogger(__name__)
 # Terminal states — no further transitions allowed
 _TERMINAL_STATES = {TaskState.COMPLETED, TaskState.FAILED, TaskState.CANCELLED}
 
+_KEY_TASK = "a2a:task:{}"
+_KEY_AUDIT = "a2a:audit:{}"
+_KEY_TASKS = "a2a:tasks"
+
 
 def _utcnow() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+# ---------------------------------------------------------------------------
+# Serialisation helpers
+# ---------------------------------------------------------------------------
+
+
+def _task_to_json(task: Task) -> str:
+    """Serialise a Task (without trace_context) to JSON."""
+    d: Dict[str, Any] = {
+        "id": task.id,
+        "status": {
+            "state": task.status.state.value,
+            "message": task.status.message,
+            "timestamp": task.status.timestamp,
+        },
+        "input": task.input,
+        "context": task.context,
+        "artifacts": [
+            {
+                "artifact_type": a.artifact_type,
+                "content": a.content,
+                "created_at": a.created_at,
+            }
+            for a in task.artifacts
+        ],
+        "created_at": task.created_at,
+        "updated_at": task.updated_at,
+        # Trace metadata only (full event log lives in a2a:audit:{id})
+        "trace_id": task.trace_context.trace_id if task.trace_context else None,
+        "caller_id": task.trace_context.caller_id if task.trace_context else None,
+    }
+    return json.dumps(d)
+
+
+def _task_from_json(raw: str) -> Task:
+    """Deserialise a Task from JSON.  TraceContext events are NOT reloaded here."""
+    d = json.loads(raw)
+    status = TaskStatus(
+        state=TaskState(d["status"]["state"]),
+        message=d["status"].get("message"),
+        timestamp=d["status"]["timestamp"],
+    )
+    artifacts = [
+        TaskArtifact(
+            artifact_type=a["artifact_type"],
+            content=a["content"],
+            created_at=a["created_at"],
+        )
+        for a in d.get("artifacts", [])
+    ]
+    tc: Optional[TraceContext] = None
+    if d.get("trace_id"):
+        tc = TraceContext(
+            trace_id=d["trace_id"],
+            caller_id=d.get("caller_id", "anonymous"),
+        )
+    task = Task(
+        id=d["id"],
+        status=status,
+        input=d["input"],
+        context=d.get("context"),
+        artifacts=artifacts,
+        created_at=d["created_at"],
+        updated_at=d["updated_at"],
+        trace_context=tc,
+    )
+    return task
+
+
+def _audit_entry_to_json(event: TraceEvent) -> str:
+    return json.dumps(event.to_dict())
+
+
+# ---------------------------------------------------------------------------
+# TaskManager
+# ---------------------------------------------------------------------------
+
+
 class TaskManager:
-    """Thread-safe (asyncio-safe) in-memory A2A task store."""
+    """Redis-backed A2A task store — safe across multiple uvicorn workers.
+
+    Issue #4502: Replaces the per-process in-memory dict with Redis so that
+    tasks created on worker A are visible to worker B/C.
+    """
 
     def __init__(self) -> None:
-        self._tasks: Dict[str, Task] = {}
-        self._eviction_handles: Dict[str, asyncio.Task] = {}
+        self._redis = get_redis_client(database="main")
+
+    # ------------------------------------------------------------------
+    # Internal Redis helpers
+    # ------------------------------------------------------------------
+
+    def _ttl(self) -> int:
+        return int(config.timeout.a2a_task_ttl)
+
+    def _save(self, task: Task) -> None:
+        """Persist task JSON and register its ID in the task-set."""
+        ttl = self._ttl()
+        key = _KEY_TASK.format(task.id)
+        self._redis.set(key, _task_to_json(task), ex=ttl)
+        self._redis.sadd(_KEY_TASKS, task.id)
+
+    def _load(self, task_id: str) -> Optional[Task]:
+        raw = self._redis.get(_KEY_TASK.format(task_id))
+        if raw is None:
+            return None
+        return _task_from_json(raw if isinstance(raw, str) else raw.decode("utf-8"))
+
+    def _append_audit(self, task_id: str, event: TraceEvent) -> None:
+        key = _KEY_AUDIT.format(task_id)
+        self._redis.rpush(key, _audit_entry_to_json(event))
+        self._redis.expire(key, self._ttl())
+
+    # ------------------------------------------------------------------
+    # Public API (same signatures as the old in-memory implementation)
+    # ------------------------------------------------------------------
 
     def create_task(
         self,
@@ -51,18 +172,14 @@ class TaskManager:
         caller_id: str = "anonymous",
         trace_id: Optional[str] = None,
     ) -> Task:
-        """
-        Create and register a new task in SUBMITTED state.
-
-        Issue #968: Assigns a TraceContext to every task for distributed
-        tracing and audit.  caller_id identifies the submitting agent/user.
-        """
+        """Create and register a new task in SUBMITTED state."""
         task_id = str(uuid.uuid4())
         tc = TraceContext(
             trace_id=trace_id or new_trace_id(),
             caller_id=caller_id,
         )
-        tc.record("task.submitted", {"task_id": task_id})
+        event = TraceEvent(event="task.submitted", data={"task_id": task_id})
+        tc.events.append(event)
 
         task = Task(
             id=task_id,
@@ -71,7 +188,8 @@ class TaskManager:
             context=context,
             trace_context=tc,
         )
-        self._tasks[task_id] = task
+        self._save(task)
+        self._append_audit(task_id, event)
         logger.info(
             "A2A task created: %s trace=%s caller=%s",
             task_id,
@@ -82,11 +200,21 @@ class TaskManager:
 
     def get_task(self, task_id: str) -> Optional[Task]:
         """Retrieve a task by ID, or None if not found."""
-        return self._tasks.get(task_id)
+        return self._load(task_id)
 
     def list_tasks(self) -> List[Task]:
-        """Return all tasks."""
-        return list(self._tasks.values())
+        """Return all tasks whose keys are still alive in Redis."""
+        ids = self._redis.smembers(_KEY_TASKS)
+        tasks: List[Task] = []
+        for tid in ids:
+            tid_str = tid if isinstance(tid, str) else tid.decode("utf-8")
+            task = self._load(tid_str)
+            if task is not None:
+                tasks.append(task)
+            else:
+                # TTL expired — remove from tracking set
+                self._redis.srem(_KEY_TASKS, tid)
+        return tasks
 
     def update_state(
         self,
@@ -94,12 +222,11 @@ class TaskManager:
         state: TaskState,
         message: Optional[str] = None,
     ) -> Optional[Task]:
-        """
-        Transition a task to a new state.
+        """Transition a task to a new state.
 
         Returns the updated task, or None if task not found or already terminal.
         """
-        task = self._tasks.get(task_id)
+        task = self._load(task_id)
         if not task:
             logger.warning("update_state: task %s not found", task_id)
             return None
@@ -114,104 +241,69 @@ class TaskManager:
 
         task.status = TaskStatus(state=state, message=message)
         task.updated_at = _utcnow()
+        event = TraceEvent(
+            event="task.state_transition",
+            data={"state": state.value, "message": message},
+        )
         if task.trace_context:
-            task.trace_context.record(
-                "task.state_transition",
-                {"state": state.value, "message": message},
-            )
+            task.trace_context.events.append(event)
+        self._save(task)
+        self._append_audit(task_id, event)
         logger.debug("A2A task %s → %s", task_id, state.value)
-        if state in _TERMINAL_STATES:
-            self._schedule_eviction(task_id)
         return task
 
     def add_artifact(self, task_id: str, artifact: TaskArtifact) -> bool:
         """Append an artifact to a task. Returns False if task not found."""
-        task = self._tasks.get(task_id)
+        task = self._load(task_id)
         if not task:
             logger.warning("add_artifact: task %s not found", task_id)
             return False
         task.artifacts.append(artifact)
         task.updated_at = _utcnow()
+        self._save(task)
         return True
 
     def cancel_task(self, task_id: str) -> bool:
-        """
-        Cancel a task if it is not already in a terminal state.
+        """Cancel a task if it is not already in a terminal state.
 
         Returns True on success, False if not found or already terminal.
         """
-        task = self._tasks.get(task_id)
+        task = self._load(task_id)
         if not task:
             return False
         if task.status.state in _TERMINAL_STATES:
             return False
         task.status = TaskStatus(state=TaskState.CANCELLED)
         task.updated_at = _utcnow()
+        event = TraceEvent(event="task.cancelled")
         if task.trace_context:
-            task.trace_context.record("task.cancelled")
+            task.trace_context.events.append(event)
+        self._save(task)
+        self._append_audit(task_id, event)
         logger.info("A2A task cancelled: %s", task_id)
-        self._schedule_eviction(task_id)
         return True
-
-    def _schedule_eviction(self, task_id: str) -> None:
-        """Schedule removal of *task_id* from *_tasks* after the configured TTL.
-
-        Issue #3823: Prevents unbounded growth of _tasks by evicting terminal
-        tasks after AUTOBOT_A2A_TASK_TTL_SECONDS (default 60 s).  The task
-        remains queryable during the TTL window so callers can still poll the
-        final status.
-
-        If an eviction is already scheduled for this task_id (e.g. cancel_task
-        called after update_state already triggered it) the earlier handle is
-        cancelled and a new one is started to reset the clock.
-        """
-        ttl = config.timeout.a2a_task_ttl
-
-        # Cancel any pre-existing eviction handle for this task
-        existing = self._eviction_handles.pop(task_id, None)
-        if existing and not existing.done():
-            existing.cancel()
-
-        async def _evict_after_delay() -> None:
-            await asyncio.sleep(ttl)
-            removed = self._tasks.pop(task_id, None)
-            self._eviction_handles.pop(task_id, None)
-            if removed is not None:
-                logger.debug(
-                    "A2A task evicted after TTL %.0fs: %s state=%s",
-                    ttl,
-                    task_id,
-                    removed.status.state.value,
-                )
-
-        try:
-            handle = asyncio.get_running_loop().create_task(_evict_after_delay())
-            self._eviction_handles[task_id] = handle
-        except RuntimeError:
-            # No running event loop (e.g. unit tests using sync calls).
-            # Eviction will not be scheduled — the store still bounds itself
-            # via explicit get_task() returning None after eviction in async use.
-            logger.debug(
-                "A2A task eviction skipped (no event loop): %s", task_id
-            )
 
     def get_audit_log(self, task_id: str) -> Optional[List[Dict[str, Any]]]:
         """Return the full trace event log for a task, or None if not found."""
-        task = self._tasks.get(task_id)
-        if not task or not task.trace_context:
+        if not self._load(task_id):
             return None
-        return [e.to_dict() for e in task.trace_context.events]
+        raw_entries = self._redis.lrange(_KEY_AUDIT.format(task_id), 0, -1)
+        result: List[Dict[str, Any]] = []
+        for raw in raw_entries:
+            entry = raw if isinstance(raw, str) else raw.decode("utf-8")
+            result.append(json.loads(entry))
+        return result
 
     def stats(self) -> Dict[str, int]:
         """Return task counts per state."""
         counts: Dict[str, int] = {}
-        for task in self._tasks.values():
+        for task in self.list_tasks():
             key = task.status.state.value
             counts[key] = counts.get(key, 0) + 1
         return counts
 
 
-# Module-level singleton — one manager per backend process
+# Module-level singleton — Redis-backed, safe across all uvicorn workers
 _task_manager = TaskManager()
 
 
