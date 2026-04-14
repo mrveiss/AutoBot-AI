@@ -1,0 +1,111 @@
+metadata:
+  category: web_fetch
+  description: Web page fetching, content extraction, and HTTP request tools
+  last_updated: "2024-01-01T00:00:00"
+  version: "1.0.0"
+
+tools:
+  - name: jina-reader
+    type: web_content_extractor
+    purpose: Extract clean markdown content from any URL via Jina Reader API
+    installation:
+      system: No installation required — uses curl with r.jina.ai prefix
+    usage:
+      fetch_url: "curl -s 'https://r.jina.ai/{url}'"
+      fetch_with_header: "curl -s -H 'Accept: application/json' 'https://r.jina.ai/{url}'"
+      fetch_raw: "curl -s -H 'X-Return-Format: text' 'https://r.jina.ai/{url}'"
+    common_examples:
+      - description: Fetch a web page as clean markdown
+        command: "curl -s 'https://r.jina.ai/https://example.com/article'"
+        expected_output: "Clean markdown version of the article without ads/nav"
+      - description: Fetch with JSON response metadata
+        command: "curl -s -H 'Accept: application/json' 'https://r.jina.ai/https://docs.python.org/3/library/asyncio.html'"
+        expected_output: "JSON with title, url, content, and description fields"
+      - description: Return plain text only
+        command: "curl -s -H 'X-Return-Format: text' 'https://r.jina.ai/https://example.com'"
+        expected_output: "Plain text content without markdown formatting"
+    troubleshooting:
+      - problem: "Rate limit exceeded"
+        solution: "Add JINA_API_KEY header for higher rate limits: -H 'Authorization: Bearer {key}'"
+      - problem: "Content truncated"
+        solution: "Some pages with heavy JavaScript may not render fully; try wget or httpx fallback"
+      - problem: "SSL certificate error"
+        solution: "Use -k flag to skip verification only for trusted internal URLs"
+    related_tools: ["wget", "httpx", "curl"]
+    performance_notes:
+      - "Jina Reader is the preferred fast-path for text extraction from public URLs"
+      - "Response time is typically 1-3 seconds for most pages"
+      - "Caches results; repeated requests for same URL are faster"
+
+  - name: wget
+    type: web_downloader
+    purpose: Download files and web pages from HTTP/HTTPS/FTP URLs
+    installation:
+      apt: sudo apt-get install wget
+      yum: sudo yum install wget
+      pacman: sudo pacman -S wget
+      brew: brew install wget
+    usage:
+      download_file: "wget {url}"
+      output_file: "wget -O {filename} {url}"
+      quiet_output: "wget -q -O {filename} {url}"
+      stdout: "wget -q -O - {url}"
+      recursive: "wget -r -l {depth} {url}"
+      user_agent: "wget -U '{user_agent}' {url}"
+    common_examples:
+      - description: Download a file to current directory
+        command: "wget https://example.com/file.tar.gz"
+        expected_output: "Downloads file with progress bar"
+      - description: Fetch page content to stdout
+        command: "wget -q -O - https://example.com/page.html"
+        expected_output: "Raw HTML content printed to stdout"
+      - description: Download with custom User-Agent
+        command: "wget -U 'Mozilla/5.0' -q -O page.html https://example.com"
+        expected_output: "HTML page saved as page.html"
+      - description: Mirror site with depth limit
+        command: "wget -r -l 2 --no-parent https://docs.example.com/"
+        expected_output: "Recursive download up to 2 levels deep"
+    troubleshooting:
+      - problem: "SSL certificate error"
+        solution: "Use --no-check-certificate for known-trusted self-signed certs only"
+      - problem: "403 Forbidden"
+        solution: "Set User-Agent with -U flag to mimic a browser"
+      - problem: "Redirect loop"
+        solution: "Increase --max-redirect or use --trust-server-names"
+    security_notes:
+      - "Verify checksums after downloading sensitive files"
+      - "Avoid --no-check-certificate for untrusted sources"
+    related_tools: ["curl", "httpx", "jina-reader"]
+
+  - name: httpx
+    type: http_client
+    purpose: Fast async HTTP client for fetching URLs with rich output options
+    installation:
+      pip: pip install httpx[cli]
+      pipx: pipx install httpx[cli]
+    usage:
+      get_url: "httpx {url}"
+      json_output: "httpx {url} --json"
+      headers_only: "httpx {url} --headers"
+      follow_redirects: "httpx {url} --follow-redirects"
+      timeout: "httpx {url} --timeout {seconds}"
+      post: "httpx {url} -m POST -d '{data}'"
+    common_examples:
+      - description: Fetch URL with formatted output
+        command: "httpx https://api.example.com/data"
+        expected_output: "Response body with status and headers summary"
+      - description: Get JSON API response
+        command: "httpx https://api.example.com/v1/status --json"
+        expected_output: "Pretty-printed JSON response"
+      - description: Check redirect chain
+        command: "httpx https://short.url/abc --follow-redirects"
+        expected_output: "Final destination URL and response"
+      - description: POST with JSON body
+        command: "httpx https://api.example.com/submit -m POST -d '{\"key\":\"value\"}' -H 'Content-Type: application/json'"
+        expected_output: "Server response to POST request"
+    troubleshooting:
+      - problem: "SSL verification failed"
+        solution: "Use --verify false only for trusted internal endpoints"
+      - problem: "Connection timeout"
+        solution: "Increase --timeout value (default is 5 seconds)"
+    related_tools: ["curl", "wget", "requests", "jina-reader"]

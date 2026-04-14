@@ -1,0 +1,104 @@
+metadata:
+  category: github_tools
+  description: GitHub CLI and API tools for repository, issue, PR, and search operations
+  last_updated: "2024-01-01T00:00:00"
+  version: "1.0.0"
+
+tools:
+  - name: gh
+    type: github_cli
+    purpose: GitHub CLI for repository, issue, pull request, and search operations
+    installation:
+      apt: "sudo apt-get install gh  # or: curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && echo 'deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main' | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null && sudo apt update && sudo apt install gh"
+      yum: "sudo dnf install 'dnf-command(config-manager)' && sudo dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo && sudo dnf install gh"
+      pacman: sudo pacman -S github-cli
+      brew: brew install gh
+    usage:
+      auth_login: "gh auth login"
+      repo_view: "gh repo view {owner}/{repo}"
+      repo_clone: "gh repo clone {owner}/{repo}"
+      issue_list: "gh issue list --repo {owner}/{repo}"
+      issue_view: "gh issue view {number} --repo {owner}/{repo}"
+      issue_create: "gh issue create --title '{title}' --body '{body}' --label '{label}'"
+      issue_close: "gh issue close {number}"
+      pr_list: "gh pr list --repo {owner}/{repo}"
+      pr_view: "gh pr view {number}"
+      pr_create: "gh pr create --title '{title}' --body '{body}' --base {branch}"
+      pr_merge: "gh pr merge {number} --squash"
+      search_repos: "gh search repos '{query}' --limit {n}"
+      search_issues: "gh search issues '{query}' --repo {owner}/{repo}"
+      search_code: "gh search code '{query}' --repo {owner}/{repo}"
+      api_call: "gh api {endpoint}"
+      release_list: "gh release list --repo {owner}/{repo}"
+    common_examples:
+      - description: View repository info
+        command: "gh repo view mrveiss/AutoBot-AI"
+        expected_output: "Repository description, stars, language, and recent activity"
+      - description: List open issues with labels
+        command: "gh issue list --repo mrveiss/AutoBot-AI --state open --label bug"
+        expected_output: "Table of open bug issues with number, title, and date"
+      - description: View issue details
+        command: "gh issue view 4428 --repo mrveiss/AutoBot-AI"
+        expected_output: "Full issue title, body, labels, assignees, and comments"
+      - description: Search code in a repository
+        command: "gh search code 'def get_redis_client' --repo mrveiss/AutoBot-AI"
+        expected_output: "Files and lines matching the search pattern"
+      - description: Create issue with labels
+        command: "gh issue create --title 'Bug: X fails' --body 'Steps...' --label bug --label 'priority: high'"
+        expected_output: "URL of the newly created issue"
+      - description: List open pull requests
+        command: "gh pr list --state open --base Dev_new_gui"
+        expected_output: "Table of open PRs targeting Dev_new_gui"
+      - description: Get file contents via API
+        command: "gh api repos/mrveiss/AutoBot-AI/contents/autobot-backend/api/usage.py --jq '.content' | base64 -d"
+        expected_output: "Raw file content decoded from base64"
+      - description: Search GitHub repositories by topic
+        command: "gh search repos 'agent framework' --topic python --limit 10"
+        expected_output: "List of matching repositories with stars and description"
+      - description: Add comment to issue
+        command: "gh issue comment 4428 --body 'Fixed in commit abc123'"
+        expected_output: "Comment posted to the issue"
+    troubleshooting:
+      - problem: "Not authenticated"
+        solution: "Run 'gh auth login' and follow prompts; or set GITHUB_TOKEN env var"
+      - problem: "GraphQL error on PR body update"
+        solution: "Use 'gh api repos/{owner}/{repo}/pulls/{n} -X PATCH -f body=...' instead of gh pr edit --body"
+      - problem: "Rate limit exceeded"
+        solution: "gh uses authenticated rate limits (5000/hr); check with 'gh api rate_limit'"
+      - problem: "gh issue close --comment not working"
+        solution: "Use 'gh issue close {n}' then 'gh issue comment {n} --body ...' as separate commands"
+    output_formats:
+      - "Default: human-readable table or detail view"
+      - "--json: JSON output for scripting"
+      - "--jq: JQ filter applied to JSON output"
+      - "--template: Go template formatting"
+    related_tools: ["git", "curl", "jq"]
+
+  - name: gh-api
+    type: github_rest_api
+    purpose: Direct GitHub REST API access via gh api for operations not covered by gh subcommands
+    installation:
+      system: Included with gh CLI
+    usage:
+      get_resource: "gh api {path}"
+      patch_resource: "gh api {path} -X PATCH -f {field}='{value}'"
+      post_resource: "gh api {path} -X POST -F {field}='{value}'"
+      paginate: "gh api --paginate {path}"
+      jq_filter: "gh api {path} --jq '{filter}'"
+    common_examples:
+      - description: Get repository details as JSON
+        command: "gh api repos/mrveiss/AutoBot-AI"
+        expected_output: "Full repository JSON including private fields"
+      - description: List all issues with pagination
+        command: "gh api --paginate repos/mrveiss/AutoBot-AI/issues --jq '.[].number'"
+        expected_output: "All issue numbers, across multiple pages"
+      - description: Update PR body (workaround for gh pr edit GraphQL bug)
+        command: "gh api repos/mrveiss/AutoBot-AI/pulls/123 -X PATCH -f body='New description'"
+        expected_output: "Updated PR JSON"
+      - description: Add label to issue
+        command: "gh api repos/mrveiss/AutoBot-AI/issues/4428/labels -X POST -f 'labels[]=bug'"
+        expected_output: "Current labels on the issue"
+      - description: Get rate limit status
+        command: "gh api rate_limit --jq '.rate'"
+        expected_output: "JSON with limit, remaining, and reset timestamp"
+    related_tools: ["gh", "curl", "jq"]
