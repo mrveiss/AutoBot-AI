@@ -5,6 +5,37 @@
 import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
+import { existsSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+/** Best-effort check: are we co-located with the user frontend? */
+function isCoLocated(): boolean {
+  try {
+    return existsSync(resolve(__dirname, '../autobot-frontend/package.json'))
+  } catch {
+    return false
+  }
+}
+
+/** Vite plugin that warns (or errors) when VITE_API_URL is unset in a co-located build. */
+function coLocatedApiUrlGuard(): import('vite').Plugin {
+  return {
+    name: 'slm-co-located-api-url-guard',
+    configResolved(config) {
+      if (config.command !== 'build') return
+      if (process.env.VITE_API_URL) return
+      if (!isCoLocated()) return
+      // Co-located build without VITE_API_URL — all API calls will silently
+      // route to the wrong backend (port 8001 user backend instead of SLM).
+      config.logger.warn(
+        '\n[slm-frontend] WARNING: VITE_API_URL is not set.\n' +
+        '  In co-located mode every API call will default to "" (empty string)\n' +
+        '  and route to the user backend (port 8001) instead of the SLM backend.\n' +
+        '  Fix: run  VITE_API_URL=/slm npm run build  or use  npm run build:slm\n'
+      )
+    },
+  }
+}
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
@@ -13,7 +44,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     base: '/slm/',
-    plugins: [vue()],
+    plugins: [vue(), coLocatedApiUrlGuard()],
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
