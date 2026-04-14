@@ -22,9 +22,18 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Redis key prefix for marketplace catalog cache
+# Redis keys for marketplace data
 _CATALOG_KEY = "marketplace:catalog"
 _CATALOG_TTL = 3600  # 1 hour
+_INSTALLED_KEY = "marketplace:installed"  # Set of installed plugin names
+
+
+def _plugin_source_url(slug: str) -> str:
+    """Build a source URL for a core plugin from config, avoiding hardcoded paths."""
+    repo = getattr(config, "GITHUB_REPO_URL", "https://github.com/mrveiss/AutoBot-AI")
+    branch = getattr(config, "GITHUB_DEFAULT_BRANCH", "Dev_new_gui")
+    return f"{repo}/tree/{branch}/plugins/core-plugins/{slug}"
+
 
 # Built-in community catalog — seeded from core-plugins manifests + curated entries.
 # In production this would be fetched from a remote registry; for MVP it is stored
@@ -43,7 +52,7 @@ _BUILTIN_CATALOG: list[dict[str, Any]] = [
         "hooks": [],
         "downloads": 142,
         "rating": 4.2,
-        "source_url": "https://github.com/mrveiss/AutoBot-AI/tree/Dev_new_gui/plugins/core-plugins/hello-plugin",
+        "source_url": _plugin_source_url("hello-plugin"),
     },
     {
         "name": "kb-event-plugin",
@@ -61,7 +70,7 @@ _BUILTIN_CATALOG: list[dict[str, Any]] = [
         "hooks": ["on_message_received", "on_kb_search", "on_agent_complete"],
         "downloads": 87,
         "rating": 4.5,
-        "source_url": "https://github.com/mrveiss/AutoBot-AI/tree/Dev_new_gui/plugins/core-plugins/kb-event-plugin",
+        "source_url": _plugin_source_url("kb-event-plugin"),
     },
     {
         "name": "logger-plugin",
@@ -76,7 +85,7 @@ _BUILTIN_CATALOG: list[dict[str, Any]] = [
         "hooks": ["on_message_received", "on_agent_complete", "on_error"],
         "downloads": 203,
         "rating": 4.7,
-        "source_url": "https://github.com/mrveiss/AutoBot-AI/tree/Dev_new_gui/plugins/core-plugins/logger-plugin",
+        "source_url": _plugin_source_url("logger-plugin"),
     },
     {
         "name": "mcp-wrapper-plugin",
@@ -91,7 +100,7 @@ _BUILTIN_CATALOG: list[dict[str, Any]] = [
         "hooks": ["on_tool_call", "on_tool_result"],
         "downloads": 176,
         "rating": 4.3,
-        "source_url": "https://github.com/mrveiss/AutoBot-AI/tree/Dev_new_gui/plugins/core-plugins/mcp-wrapper-plugin",
+        "source_url": _plugin_source_url("mcp-wrapper-plugin"),
     },
     {
         "name": "telemetry-prompt-middleware",
@@ -106,10 +115,7 @@ _BUILTIN_CATALOG: list[dict[str, Any]] = [
         "hooks": ["on_prompt_build", "on_completion"],
         "downloads": 119,
         "rating": 4.1,
-        "source_url": (
-            "https://github.com/mrveiss/AutoBot-AI/tree/Dev_new_gui"
-            "/plugins/core-plugins/telemetry-prompt-middleware"
-        ),
+        "source_url": _plugin_source_url("telemetry-prompt-middleware"),
     },
 ]
 
