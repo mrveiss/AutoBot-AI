@@ -5,7 +5,10 @@
 Tests for smart context truncation feature (Issue #4346).
 
 Verifies that large files are truncated intelligently with head/tail preservation.
+Issue #4397: Performance validation on extremely large files (10 MB+).
 """
+
+import time
 
 from prompt_manager import _is_binary_content, _truncate_large_file, _snap_to_char_boundary
 
@@ -356,3 +359,68 @@ class TestBinaryFileHandling:
         result = _truncate_large_file(content, max_chars=20000)
         # Should truncate normally, not return placeholder
         assert "chars TRUNCATED" in result
+
+
+class TestLargeFilePerformance:
+    """Issue #4397: Performance validation on extremely large files (10 MB+).
+
+    Ensures _truncate_large_file completes well within a 1-second budget
+    regardless of input size, because it only touches the head/tail slices —
+    not the full 10 MB+ body.
+    """
+
+    _MAX_SECONDS = 1.0  # hard ceiling per call
+
+    def _time_truncation(self, content: str, max_chars: int = 20000) -> float:
+        """Return elapsed seconds for a single _truncate_large_file call."""
+        start = time.perf_counter()
+        _truncate_large_file(content, max_chars=max_chars)
+        return time.perf_counter() - start
+
+    def test_10mb_ascii_under_budget(self):
+        """10 MB ASCII file must truncate in < 1 s."""
+        content = "a" * (10 * 1024 * 1024)
+        elapsed = self._time_truncation(content)
+        assert elapsed < self._MAX_SECONDS, (
+            f"10 MB ASCII truncation took {elapsed:.3f}s — exceeds {self._MAX_SECONDS}s budget"
+        )
+
+    def test_50mb_ascii_under_budget(self):
+        """50 MB ASCII file must truncate in < 1 s."""
+        content = "b" * (50 * 1024 * 1024)
+        elapsed = self._time_truncation(content)
+        assert elapsed < self._MAX_SECONDS, (
+            f"50 MB ASCII truncation took {elapsed:.3f}s — exceeds {self._MAX_SECONDS}s budget"
+        )
+
+    def test_10mb_unicode_under_budget(self):
+        """10 MB Unicode (emoji) file must truncate in < 1 s."""
+        # Each emoji is 1 Python str codepoint; repeat to reach ~10 M chars
+        content = "\U0001F600" * (10 * 1024 * 1024)
+        elapsed = self._time_truncation(content)
+        assert elapsed < self._MAX_SECONDS, (
+            f"10 MB emoji truncation took {elapsed:.3f}s — exceeds {self._MAX_SECONDS}s budget"
+        )
+
+    def test_10mb_cjk_under_budget(self):
+        """10 MB CJK file must truncate in < 1 s."""
+        content = "\u4e2d" * (10 * 1024 * 1024)
+        elapsed = self._time_truncation(content)
+        assert elapsed < self._MAX_SECONDS, (
+            f"10 MB CJK truncation took {elapsed:.3f}s — exceeds {self._MAX_SECONDS}s budget"
+        )
+
+    def test_result_correct_after_large_truncation(self):
+        """Correctness check: 10 MB file must produce valid head/tail output."""
+        head = "HEAD" * 100      # 400 chars
+        body = "x" * (10 * 1024 * 1024)
+        tail = "TAIL" * 100      # 400 chars
+        content = head + body + tail
+
+        result = _truncate_large_file(content, max_chars=20000)
+
+        assert result.startswith("HEAD")
+        assert result.endswith("TAIL")
+        assert "[..." in result
+        assert "chars TRUNCATED...]" in result
+        assert len(result) < len(content)
