@@ -612,15 +612,23 @@ onUnmounted(() => {
 }
 
 .terminal-btn.connect-btn {
-  @apply text-green-600 hover:text-green-800 hover:bg-green-100;
+  color: var(--color-success);
+  &:hover {
+    color: var(--color-success);
+    background: var(--color-success-bg);
+  }
 }
 
 .terminal-btn.disconnect-btn {
-  @apply text-red-600 hover:text-red-800 hover:bg-red-100;
+  color: var(--color-error);
+  &:hover {
+    color: var(--color-error);
+    background: var(--color-error-bg);
+  }
 }
 
 .terminal-btn.connecting {
-  @apply text-blue-600;
+  color: var(--color-info);
 }
 
 /* Terminal body with dark theme */
@@ -728,23 +736,24 @@ onUnmounted(() => {
 }
 
 .command {
-  @apply text-blue-400 font-medium;
+  @apply font-medium;
+  color: var(--color-info);
 }
 
 .output {
-  @apply text-green-400;
+  color: var(--color-success);
 }
 
 .error {
-  @apply text-red-400;
+  color: var(--color-error);
 }
 
 .info {
-  @apply text-cyan-400;
+  color: var(--color-info);
 }
 
 .warning {
-  @apply text-yellow-400;
+  color: var(--color-warning);
 }
 
 .terminal-prompt {
