@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import yaml
 from jinja2 import Environment, FileSystemLoader, Template
 
 from constants.ttl_constants import TTL_24_HOURS
@@ -156,6 +157,12 @@ def _build_skill_context(skills: Optional[List[Dict]]) -> str:
 # Issue #380: Module-level constant for supported prompt file extensions
 _SUPPORTED_PROMPT_EXTENSIONS = frozenset({".md", ".txt", ".prompt"})
 
+# Issue #4484: YAML prompt file extensions
+_YAML_EXTENSIONS = frozenset({".yml", ".yaml"})
+
+# Issue #4484: Section assembly order for YAML-sectioned prompts
+_YAML_SECTION_ORDER = ("role", "objective", "tools", "examples", "instructions")
+
 
 class PromptManager:
     """
@@ -180,6 +187,8 @@ class PromptManager:
             self.prompts_dir = Path(__file__).parent / "resources" / "prompts"
         self.prompts: Dict[str, str] = {}
         self.templates: Dict[str, Template] = {}
+        # Issue #4484: keyed by prompt_key -> {section_name -> raw text}
+        self.yaml_sections: Dict[str, Dict[str, str]] = {}
         self.jinja_env = Environment(
             loader=FileSystemLoader(str(self.prompts_dir)),
             trim_blocks=True,
@@ -237,6 +246,79 @@ class PromptManager:
         """
         return _truncate_large_file(content, max_chars)
 
+    def _assemble_yaml_sections(self, sections: Dict[str, str]) -> str:
+        """
+        Assemble a YAML prompt's sections into a single string.
+
+        Issue #4484: Section order is role -> objective -> tools -> examples ->
+        instructions. Unknown sections are appended after in sorted order.
+
+        Args:
+            sections: Mapping of section name to raw text.
+
+        Returns:
+            Assembled prompt string.
+        """
+        parts = []
+        seen: set = set()
+        for name in _YAML_SECTION_ORDER:
+            if name in sections:
+                parts.append(sections[name].strip())
+                seen.add(name)
+        for name in sorted(sections):
+            if name not in seen:
+                parts.append(sections[name].strip())
+        return "\n\n".join(p for p in parts if p)
+
+    def _load_yaml_prompt_file(self, file_path: Path) -> None:
+        """
+        Load a YAML-sectioned prompt file.
+
+        Issue #4484: Parses named sections (role, objective, instructions,
+        examples, tools) and stores them in ``self.yaml_sections``.  The
+        assembled prompt is also stored in ``self.prompts`` / ``self.templates``
+        so that callers that do not use overrides work transparently.
+
+        Expected YAML structure::
+
+            role: |
+              You are ...
+            objective: |
+              Your goal is ...
+            instructions: |
+              1. Do this
+
+        Args:
+            file_path: Path to the ``.yml`` / ``.yaml`` file to load.
+        """
+        try:
+            relative_path = file_path.relative_to(self.prompts_dir)
+            prompt_key = self._path_to_key(relative_path)
+            raw = file_path.read_text(encoding="utf-8")
+            data = yaml.safe_load(raw)
+
+            if not isinstance(data, dict):
+                logger.warning(
+                    "YAML prompt %s must be a mapping; got %s — skipping",
+                    file_path,
+                    type(data).__name__,
+                )
+                return
+
+            sections: Dict[str, str] = {
+                k: str(v) for k, v in data.items() if isinstance(v, str)
+            }
+            self.yaml_sections[prompt_key] = sections
+
+            assembled = self._assemble_yaml_sections(sections)
+            self.prompts[prompt_key] = assembled
+            self.templates[prompt_key] = self.jinja_env.from_string(assembled)
+            logger.debug("Loaded YAML prompt: %s from %s", prompt_key, file_path)
+        except yaml.YAMLError as exc:
+            logger.error("YAML parse error in %s: %s", file_path, exc)
+        except Exception as exc:
+            logger.error("Error loading YAML prompt from %s: %s", file_path, exc)
+
     def _load_prompt_file(self, file_path: Path) -> None:
         """
         Load a single prompt file into the prompts and templates dictionaries.
@@ -261,7 +343,8 @@ class PromptManager:
     def load_all_prompts(self) -> None:
         """
         Discover and load all prompt files from the prompts directory.
-        Supports .md, .txt, and .prompt files. Uses Redis caching for faster loading.
+        Supports .md, .txt, .prompt, and .yml/.yaml files.
+        Uses Redis caching for faster loading.
         """
         if not self.prompts_dir.exists():
             logger.warning("Prompts directory '%s' not found", self.prompts_dir)
@@ -284,14 +367,16 @@ class PromptManager:
             )
 
         # Load from files (Issue #620: uses helper)
+        # Issue #4484: also load YAML-sectioned prompts
         for file_path in self.prompts_dir.rglob("*"):
             if not file_path.is_file():
                 continue
-            if file_path.suffix not in _SUPPORTED_PROMPT_EXTENSIONS:
-                continue
             if file_path.name.startswith(".") or file_path.name.startswith("_"):
                 continue
-            self._load_prompt_file(file_path)
+            if file_path.suffix in _YAML_EXTENSIONS:
+                self._load_yaml_prompt_file(file_path)
+            elif file_path.suffix in _SUPPORTED_PROMPT_EXTENSIONS:
+                self._load_prompt_file(file_path)
 
         # Cache and finalize
         self._save_to_redis_cache(self._get_cache_key(), {"prompts": self.prompts})
@@ -321,13 +406,27 @@ class PromptManager:
 
         return ".".join(key_parts)
 
-    def get(self, prompt_key: str, **kwargs) -> str:
+    def get(
+        self,
+        prompt_key: str,
+        overrides: Optional[Dict[str, str]] = None,
+        **kwargs,
+    ) -> str:
         """
         Get a prompt by key with optional template variable substitution.
+
+        Issue #4484: For YAML-sectioned prompts, ``overrides`` replaces
+        individual sections before assembly.  Each key in ``overrides`` must
+        match a section name (role, objective, tools, examples, instructions,
+        or any custom section defined in the YAML file).  Overridden prompts
+        are cached under a key derived from a hash of the overrides dict so
+        they do not collide with the base-assembled version.
 
         Args:
             prompt_key: Dot notation key for the prompt
                         (e.g., 'orchestrator.system_prompt')
+            overrides: Optional section overrides for YAML prompts.
+                       Keys are section names; values are replacement text.
             **kwargs: Template variables for Jinja2 substitution
 
         Returns:
@@ -336,6 +435,10 @@ class PromptManager:
         Raises:
             KeyError: If prompt key is not found
         """
+        # Issue #4484: handle YAML section overrides
+        if overrides and prompt_key in self.yaml_sections:
+            return self._get_with_overrides(prompt_key, overrides, **kwargs)
+
         if prompt_key not in self.templates:
             # Try fallback strategies
             fallback_prompt = self._try_fallbacks(prompt_key)
@@ -354,6 +457,52 @@ class PromptManager:
             logger.error("Error rendering template '%s': %s", prompt_key, e)
             # Return raw content as fallback
             return self.prompts.get(prompt_key, f"Error loading prompt: {prompt_key}")
+
+    def _get_with_overrides(
+        self,
+        prompt_key: str,
+        overrides: Dict[str, str],
+        **kwargs,
+    ) -> str:
+        """
+        Assemble a YAML prompt with per-section overrides and render it.
+
+        Issue #4484: The override cache key includes a hash of the overrides
+        dict so each unique override set caches separately from the base prompt
+        and from other override combinations.
+
+        Args:
+            prompt_key: Dot notation key for the YAML prompt.
+            overrides: Section name -> replacement text mapping.
+            **kwargs: Jinja2 template variables forwarded to render().
+
+        Returns:
+            Rendered assembled prompt string.
+        """
+        overrides_hash = hashlib.md5(
+            json.dumps(overrides, sort_keys=True).encode(), usedforsecurity=False
+        ).hexdigest()[:8]
+        cache_key = f"{prompt_key}.__overrides_{overrides_hash}"
+
+        if cache_key not in self.templates:
+            merged = dict(self.yaml_sections[prompt_key])
+            merged.update(overrides)
+            assembled = self._assemble_yaml_sections(merged)
+            self.templates[cache_key] = self.jinja_env.from_string(assembled)
+            logger.debug(
+                "Cached overridden YAML prompt '%s' (hash %s)", prompt_key, overrides_hash
+            )
+
+        try:
+            return self.templates[cache_key].render(**kwargs)
+        except Exception as e:
+            logger.error(
+                "Error rendering overridden template '%s': %s", prompt_key, e
+            )
+            assembled = self._assemble_yaml_sections(
+                {**self.yaml_sections[prompt_key], **overrides}
+            )
+            return assembled
 
     def _try_fallbacks(self, prompt_key: str) -> Optional[str]:
         """
