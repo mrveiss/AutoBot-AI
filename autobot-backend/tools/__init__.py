@@ -8,6 +8,7 @@ This package provides a centralized tool registry that eliminates duplication
 between the standard orchestrator and LangChain orchestrator implementations.
 """
 
+from .code_interpreter import CODE_INTERPRETER_SCHEMA, execute_code
 from .tool_registry import ToolRegistry
 
-__all__ = ["ToolRegistry"]
+__all__ = ["CODE_INTERPRETER_SCHEMA", "ToolRegistry", "execute_code"]
