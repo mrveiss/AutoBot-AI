@@ -318,6 +318,7 @@ def _build_skill_context(skills: Optional[List[Dict]]) -> str:
     header = "\n\n## Available Skills\nThe following skills are available for this agent to use:\n"
     return header + skills_text
 
+
 # Issue #380: Module-level constant for supported prompt file extensions
 _SUPPORTED_PROMPT_EXTENSIONS = frozenset({".md", ".txt", ".prompt"})
 
