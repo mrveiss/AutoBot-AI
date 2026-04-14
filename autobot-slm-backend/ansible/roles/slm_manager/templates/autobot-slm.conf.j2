@@ -349,6 +349,12 @@ server {
     location /slm/ {
         alias {{ slm_frontend_dir }}/dist/;
         try_files $uri $uri/ /slm/index.html;
+
+        # Prevent index.html from being cached so new deployments are picked up
+        location ~* /slm/index\.html$ {
+            add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+            add_header Pragma "no-cache" always;
+        }
     }
 
 {% if slm_colocated_frontend | default(false) | bool %}
