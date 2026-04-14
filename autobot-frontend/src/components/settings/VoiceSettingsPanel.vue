@@ -265,7 +265,7 @@ async function handleDelete(voiceId: string, name: string) {
   padding: var(--spacing-sm, 8px) var(--spacing-md, 12px);
   border-radius: var(--radius-md, 6px);
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background var(--duration-150);
   border: 1px solid transparent;
 }
 
@@ -341,7 +341,7 @@ async function handleDelete(voiceId: string, name: string) {
   border-radius: var(--radius-md, 6px);
   cursor: pointer;
   font-size: var(--text-sm, 14px);
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .add-voice-btn:hover {

@@ -262,7 +262,7 @@ defineExpose({ resetSyncing })
   background: var(--bg-card);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-default);
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-150) var(--ease-in-out);
   contain: layout style;}
 
 .connector-card:hover {

@@ -572,7 +572,7 @@ button {
   cursor: pointer;
   font-size: 0.8rem;
   padding: 0.3rem 0.6rem;
-  transition: background 0.15s;
+  transition: background var(--duration-150);
 }
 button:disabled {
   cursor: not-allowed;

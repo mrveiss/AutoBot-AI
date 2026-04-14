@@ -44,7 +44,7 @@ function toggleDarkMode() {
   background-color: var(--bg-hover);
   color: var(--text-primary);
   font-size: var(--text-lg);
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
   cursor: pointer;
 }
 
@@ -66,7 +66,7 @@ function toggleDarkMode() {
 /* Icon transition animation */
 .icon-fade-enter-active,
 .icon-fade-leave-active {
-  transition: opacity 0.15s ease, transform 0.15s ease;
+  transition: opacity var(--duration-150) var(--ease-out), transform var(--duration-150) var(--ease-out);
 }
 
 .icon-fade-enter-from {

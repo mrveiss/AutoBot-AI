@@ -200,7 +200,7 @@ const isDevToolsActive = computed(() => {
   color: var(--text-secondary);
   text-decoration: none;
   border-bottom: 2px solid transparent;
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-150) var(--ease-in-out);
   position: relative;
   top: 1px;
   white-space: nowrap;

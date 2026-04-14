@@ -373,7 +373,7 @@ const emit = defineEmits<{
   padding: 6px 8px;
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .refresh-btn:hover {
@@ -421,7 +421,7 @@ const emit = defineEmits<{
   padding: 16px;
   text-align: center;
   border: 1px solid rgba(71, 85, 105, 0.5);
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .summary-stat:hover {
@@ -630,7 +630,7 @@ const emit = defineEmits<{
   padding: 8px 12px;
   background: rgba(51, 65, 85, 0.4);
   border-radius: var(--radius-default);
-  transition: background 0.2s ease;
+  transition: background var(--duration-200) var(--ease-out);
 }
 
 .dep-row:hover {

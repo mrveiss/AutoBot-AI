@@ -254,7 +254,7 @@ const allCompleted = computed(() => {
   border-radius: var(--radius-md);
   color: var(--text-tertiary);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .close-btn:hover {
@@ -329,7 +329,7 @@ const allCompleted = computed(() => {
 .progress-fill {
   height: 100%;
   background: var(--color-primary);
-  transition: width 0.3s ease;
+  transition: width var(--duration-300) var(--ease-out);
   border-radius: var(--radius-xl);
 }
 
@@ -358,7 +358,7 @@ const allCompleted = computed(() => {
   background: var(--bg-card);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .document-item:hover {
@@ -452,7 +452,7 @@ const allCompleted = computed(() => {
 .mini-progress-fill {
   height: 100%;
   background: var(--color-primary);
-  transition: width 0.3s ease;
+  transition: width var(--duration-300) var(--ease-out);
   border-radius: var(--radius-default);
 }
 
@@ -481,7 +481,7 @@ const allCompleted = computed(() => {
   border-radius: var(--radius-lg);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
   border: none;
   font-size: var(--text-sm);
 }
@@ -541,12 +541,12 @@ const allCompleted = computed(() => {
 /* Modal animations */
 .modal-fade-enter-active,
 .modal-fade-leave-active {
-  transition: opacity 0.3s ease;
+  transition: opacity var(--duration-300) var(--ease-out);
 }
 
 .modal-fade-enter-active .modal-container,
 .modal-fade-leave-active .modal-container {
-  transition: transform 0.3s ease, opacity 0.3s ease;
+  transition: transform var(--duration-300) var(--ease-out), opacity var(--duration-300) var(--ease-out);
 }
 
 .modal-fade-enter-from,

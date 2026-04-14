@@ -427,7 +427,7 @@ const getHealthCheckCardClass = (status) => {
 }
 
 .health-check-card {
-  transition: transform 0.2s;
+  transition: transform var(--duration-200);
 }
 
 .health-check-card:hover {

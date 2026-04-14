@@ -261,7 +261,7 @@
   gap: 12px;
   padding: 10px 20px;
   cursor: pointer;
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-150) var(--ease-in-out);
   color: var(--text-secondary);
   text-decoration: none;
   border: none;

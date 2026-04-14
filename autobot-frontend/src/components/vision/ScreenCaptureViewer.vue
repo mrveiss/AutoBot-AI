@@ -424,7 +424,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .btn-capture:hover:not(:disabled) {
@@ -461,7 +461,7 @@ onUnmounted(() => {
   background: var(--bg-tertiary);
   border-radius: var(--radius-xl);
   position: relative;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .toggle-switch::after {
@@ -473,7 +473,7 @@ onUnmounted(() => {
   height: 16px;
   background: var(--text-tertiary);
   border-radius: 50%;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .toggle-label input:checked + .toggle-switch {
@@ -604,7 +604,7 @@ onUnmounted(() => {
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .element-item:hover {

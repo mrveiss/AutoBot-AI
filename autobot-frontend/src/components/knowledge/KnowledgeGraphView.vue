@@ -228,7 +228,7 @@ function navigateTo(path: string): void {
   text-decoration: none;
   font-size: var(--text-sm);
   font-weight: var(--font-medium);
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .nav-item:hover {
@@ -261,7 +261,7 @@ function navigateTo(path: string): void {
   color: var(--text-tertiary);
   text-decoration: none;
   font-size: var(--text-sm);
-  transition: color 0.15s;
+  transition: color var(--duration-150);
 }
 
 .back-link:hover {

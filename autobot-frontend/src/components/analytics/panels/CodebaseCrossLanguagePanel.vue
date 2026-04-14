@@ -432,7 +432,7 @@ function formatTimestamp(timestamp: string | undefined): string {
   padding: 14px 16px;
   cursor: pointer;
   background: var(--bg-secondary);
-  transition: background 0.2s ease;
+  transition: background var(--duration-200) var(--ease-out);
 }
 
 .accordion-header:hover {
@@ -448,7 +448,7 @@ function formatTimestamp(timestamp: string | undefined): string {
 .header-info i {
   color: var(--text-muted);
   font-size: 0.75em;
-  transition: transform 0.2s ease;
+  transition: transform var(--duration-200) var(--ease-out);
 }
 
 .header-name {
@@ -494,7 +494,7 @@ function formatTimestamp(timestamp: string | undefined): string {
 /* Accordion Transition */
 .accordion-enter-active,
 .accordion-leave-active {
-  transition: all 0.3s ease;
+  transition: all var(--duration-300) var(--ease-out);
   overflow: hidden;
 }
 
@@ -516,7 +516,7 @@ function formatTimestamp(timestamp: string | undefined): string {
   border-radius: var(--radius-lg);
   padding: 14px 16px;
   border-left: 4px solid var(--text-tertiary);
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .list-item:hover {
@@ -915,7 +915,7 @@ function formatTimestamp(timestamp: string | undefined): string {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition: background 0.2s;
+  transition: background var(--duration-200);
 }
 
 .btn-scan:hover:not(:disabled) {

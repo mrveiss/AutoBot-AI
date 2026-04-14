@@ -353,7 +353,7 @@ function formatStatus(status: string): string {
   font-size: var(--text-sm);
   font-weight: var(--font-medium);
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: opacity var(--duration-150);
 }
 
 .btn-load-validation:disabled {
@@ -385,7 +385,7 @@ function formatStatus(status: string): string {
 .maturity-fill {
   height: 100%;
   border-radius: var(--radius-full);
-  transition: width 0.4s ease;
+  transition: width 0.4s var(--ease-out);
 }
 
 .maturity-production { background: var(--color-success); }
@@ -485,7 +485,7 @@ function formatStatus(status: string): string {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-3);
-  transition: box-shadow 0.15s;
+  transition: box-shadow var(--duration-150);
 }
 
 .phase-card:hover {
@@ -563,7 +563,7 @@ function formatStatus(status: string): string {
 .progress-fill {
   height: 100%;
   border-radius: var(--radius-full);
-  transition: width 0.4s ease;
+  transition: width 0.4s var(--ease-out);
 }
 
 .progress-complete        { background: var(--color-success); }

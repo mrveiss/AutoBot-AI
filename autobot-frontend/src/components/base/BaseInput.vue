@@ -186,7 +186,7 @@ defineExpose({
   background-color: var(--bg-input);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xs);
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-150) var(--ease-in-out);
 }
 
 .container-focused {
@@ -218,7 +218,7 @@ defineExpose({
   color: var(--text-primary);
   font-size: var(--text-sm);
   font-family: var(--font-sans);
-  transition: color 150ms ease;
+  transition: color var(--duration-150) var(--ease-out);
 }
 
 .base-input:focus-visible {
@@ -290,7 +290,7 @@ defineExpose({
   color: var(--text-muted);
   cursor: pointer;
   border-radius: var(--radius-xs);
-  transition: all 150ms ease;
+  transition: all var(--duration-150) var(--ease-out);
 }
 
 .clear-button:hover {
@@ -336,6 +336,6 @@ defineExpose({
 .base-input:-webkit-autofill:focus {
   -webkit-text-fill-color: var(--text-primary);
   -webkit-box-shadow: 0 0 0 1000px var(--bg-input) inset;
-  transition: background-color 5000s ease-in-out 0s;
+  transition: background-color 5000s var(--ease-in-out) 0s;
 }
 </style>

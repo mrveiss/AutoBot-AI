@@ -218,7 +218,7 @@ const emit = defineEmits<{
 .btn-debug {
   font-size: 0.85em;
   font-weight: 500;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .btn-debug:hover {

@@ -343,7 +343,7 @@ function clamp(value: number, min: number, max: number): number {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease;
+  transition: background var(--duration-200) var(--ease-out), border-color var(--duration-200) var(--ease-out);
   flex-shrink: 0;
 }
 
@@ -360,7 +360,7 @@ function clamp(value: number, min: number, max: number): number {
   height: 18px;
   border-radius: 50%;
   background: white;
-  transition: transform 0.2s ease;
+  transition: transform var(--duration-200) var(--ease-out);
   pointer-events: none;
 }
 

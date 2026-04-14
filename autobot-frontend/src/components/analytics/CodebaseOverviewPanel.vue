@@ -282,7 +282,7 @@ const getQualityClass = (score: number): string => {
   padding: 6px 8px;
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .refresh-btn:hover {
@@ -305,7 +305,7 @@ const getQualityClass = (score: number): string => {
   border-radius: var(--radius-default);
   font-size: var(--text-xs);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -473,7 +473,7 @@ const getQualityClass = (score: number): string => {
   background: var(--bg-tertiary);
   border-radius: var(--radius-xl);
   position: relative;
-  transition: all 0.3s;
+  transition: all var(--duration-300);
 }
 
 .toggle-slider:before {
@@ -485,7 +485,7 @@ const getQualityClass = (score: number): string => {
   position: absolute;
   top: 2px;
   left: 2px;
-  transition: all 0.3s;
+  transition: all var(--duration-300);
 }
 
 .toggle-switch input:checked + .toggle-slider {
@@ -503,7 +503,7 @@ const getQualityClass = (score: number): string => {
   padding: 8px 16px;
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
   display: flex;
   align-items: center;
   gap: 8px;

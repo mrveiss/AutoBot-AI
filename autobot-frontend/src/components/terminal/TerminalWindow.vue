@@ -1531,7 +1531,7 @@ export default {
   border-radius: var(--radius-default);
   cursor: pointer;
   font-size: var(--text-xs);
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .control-button:hover:not(:disabled) {
@@ -1706,7 +1706,7 @@ export default {
   border-radius: var(--radius-default);
   cursor: pointer;
   font-size: var(--text-xs);
-  transition: background-color 0.2s;
+  transition: background-color var(--duration-200);
 }
 
 .footer-button:hover {
@@ -1766,7 +1766,7 @@ export default {
   border-radius: var(--radius-default);
   cursor: pointer;
   font-size: var(--text-sm);
-  transition: background-color 0.2s;
+  transition: background-color var(--duration-200);
 }
 
 .btn-primary {

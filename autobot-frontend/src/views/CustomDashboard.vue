@@ -675,7 +675,7 @@ onMounted(() => {
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .action-btn:hover {
@@ -726,7 +726,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .icon-btn:hover {
@@ -765,7 +765,7 @@ onMounted(() => {
   color: var(--text-primary);
   font-size: var(--text-sm);
   cursor: grab;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .palette-widget:hover {
@@ -813,7 +813,7 @@ onMounted(() => {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .widget-container:hover {
@@ -871,7 +871,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .widget-actions button:hover {
@@ -1049,7 +1049,7 @@ onMounted(() => {
   padding: 1.5rem;
   text-align: center;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .widget-option:hover {
@@ -1086,7 +1086,7 @@ onMounted(() => {
 /* Transitions */
 .slide-down-enter-active,
 .slide-down-leave-active {
-  transition: all 0.3s ease;
+  transition: all var(--duration-300) var(--ease-out);
 }
 
 .slide-down-enter-from,

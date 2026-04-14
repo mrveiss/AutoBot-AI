@@ -205,7 +205,7 @@ function clearFilters() {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .clear-filters-btn:hover:not(:disabled) {

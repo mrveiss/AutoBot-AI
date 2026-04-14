@@ -608,7 +608,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-default);
-  transition: background-color 0.2s;
+  transition: background-color var(--duration-200);
 }
 
 .close-btn:hover {
@@ -722,7 +722,7 @@ onMounted(() => {
   border-radius: var(--radius-default);
   cursor: pointer;
   font-size: var(--text-base);
-  transition: background-color 0.2s;
+  transition: background-color var(--duration-200);
 }
 
 .download-btn:hover {

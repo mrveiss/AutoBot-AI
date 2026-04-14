@@ -401,7 +401,7 @@ onUnmounted(() => {
   color: var(--text-tertiary);
   cursor: pointer;
   border-radius: var(--radius-md);
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .btn-close:hover {
@@ -426,7 +426,7 @@ onUnmounted(() => {
   padding: 32px;
   text-align: center;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
   display: flex;
   align-items: center;
   justify-content: center;

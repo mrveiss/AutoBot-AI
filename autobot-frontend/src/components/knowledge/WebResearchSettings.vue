@@ -803,7 +803,7 @@ onMounted(() => {
   font-size: var(--text-sm);
   min-width: 120px;
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color var(--duration-150);
 }
 
 .field-select:focus,
@@ -827,7 +827,7 @@ onMounted(() => {
   border-radius: var(--radius-xl);
   border: none;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: background-color var(--duration-200);
   outline: none;
 }
 
@@ -855,7 +855,7 @@ onMounted(() => {
   height: 20px;
   border-radius: 50%;
   background: #ffffff;
-  transition: transform 0.2s;
+  transition: transform var(--duration-200);
   box-shadow: var(--shadow-sm);
 }
 
@@ -936,7 +936,7 @@ onMounted(() => {
   font-weight: 500;
   cursor: pointer;
   border: 1px solid transparent;
-  transition: opacity 0.15s, background-color 0.15s;
+  transition: opacity var(--duration-150), background-color var(--duration-150);
   outline: none;
 }
 

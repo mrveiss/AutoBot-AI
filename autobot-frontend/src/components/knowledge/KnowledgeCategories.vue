@@ -421,7 +421,7 @@ onUnmounted(() => {
   border-radius: var(--radius-2xl);
   padding: 2rem;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-300) var(--ease-in-out);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -443,7 +443,7 @@ onUnmounted(() => {
   color: var(--text-secondary);
   cursor: pointer;
   opacity: 0;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -468,7 +468,7 @@ onUnmounted(() => {
   height: 4px;
   background: var(--card-color, var(--border-default));
   opacity: 0;
-  transition: opacity 0.3s;
+  transition: opacity var(--duration-300);
 }
 
 .main-category-card:hover {
@@ -490,7 +490,7 @@ onUnmounted(() => {
   color: var(--text-on-primary);
   font-size: 2.5rem;
   margin-bottom: 1.5rem;
-  transition: all 0.3s;
+  transition: all var(--duration-300);
 }
 
 .main-category-card:hover .category-icon-large {
@@ -550,7 +550,7 @@ onUnmounted(() => {
   margin-top: 1.5rem;
   color: var(--color-info);
   font-size: var(--text-2xl);
-  transition: transform 0.3s;
+  transition: transform var(--duration-300);
 }
 
 .main-category-card:hover .browse-arrow {
@@ -627,7 +627,7 @@ onUnmounted(() => {
   color: var(--text-secondary);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
   border-bottom: 2px solid transparent;
   margin-bottom: -2px;
 }
@@ -677,7 +677,7 @@ onUnmounted(() => {
   text-decoration: none;
   border-radius: var(--radius-lg);
   font-weight: 500;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .manage-btn:hover {
@@ -701,7 +701,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 1rem;
   box-shadow: var(--shadow-sm);
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .stat-card:hover {
@@ -755,7 +755,7 @@ onUnmounted(() => {
   gap: 1rem;
   cursor: pointer;
   border: 2px solid var(--border-default);
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .category-browse-card:hover {
@@ -795,7 +795,7 @@ onUnmounted(() => {
 .category-browse-card .browse-arrow {
   color: var(--color-info);
   font-size: var(--text-xl);
-  transition: transform 0.2s;
+  transition: transform var(--duration-200);
 }
 
 .category-browse-card:hover .browse-arrow {
@@ -860,7 +860,7 @@ onUnmounted(() => {
   border-radius: var(--radius-md);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1000,7 +1000,7 @@ onUnmounted(() => {
   border-radius: var(--radius-md);
   font-weight: 500;
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition: opacity var(--duration-200);
 }
 
 .retry-btn:hover {
@@ -1019,7 +1019,7 @@ onUnmounted(() => {
   border-radius: var(--radius-lg);
   padding: 1.5rem;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .category-card:hover {
@@ -1134,7 +1134,7 @@ onUnmounted(() => {
   border-radius: var(--radius-md);
   cursor: pointer;
   position: relative;
-  transition: transform 0.2s;
+  transition: transform var(--duration-200);
 }
 
 .color-option:hover {
@@ -1192,7 +1192,7 @@ onUnmounted(() => {
   border-radius: var(--radius-md);
   margin-bottom: 0.5rem;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .document-item:hover {
@@ -1232,7 +1232,7 @@ onUnmounted(() => {
   border-radius: var(--radius-md);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -1308,7 +1308,7 @@ onUnmounted(() => {
   border-radius: var(--radius-lg);
   padding: 1.25rem;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .document-card:hover {
@@ -1473,7 +1473,7 @@ onUnmounted(() => {
   font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
   display: flex;
   align-items: center;
 }
@@ -1513,7 +1513,7 @@ onUnmounted(() => {
   border-radius: var(--radius-lg);
   padding: 1rem;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
   display: flex;
   gap: 1rem;
 }

@@ -460,7 +460,7 @@ watch(activeCaptcha, (newVal) => {
 .timeout-bar {
   height: 100%;
   background: var(--color-info);
-  transition: width 1s linear;
+  transition: width var(--duration-1000) linear;
 }
 
 .timeout-bar.bar-warning {

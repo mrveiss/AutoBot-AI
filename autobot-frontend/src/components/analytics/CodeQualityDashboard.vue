@@ -1208,7 +1208,7 @@ watch(selectedPeriod, () => {
 }
 
 .score-progress {
-  transition: stroke-dashoffset 1s ease-out;
+  transition: stroke-dashoffset var(--duration-1000) var(--ease-out);
 }
 
 .score-content {
@@ -1368,7 +1368,7 @@ watch(selectedPeriod, () => {
 .metric-bar .bar-fill {
   height: 100%;
   border-radius: var(--radius-xs);
-  transition: width 0.5s ease;
+  transition: width var(--duration-500) var(--ease-out);
 }
 
 .bar-fill.excellent { background: var(--color-success); }

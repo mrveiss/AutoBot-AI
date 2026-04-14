@@ -413,7 +413,7 @@ const closeDialog = () => {
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-default);
-  transition: background-color 0.2s;
+  transition: background-color var(--duration-200);
 }
 
 .close-button:hover {
@@ -499,7 +499,7 @@ const closeDialog = () => {
   align-items: center;
   gap: 0.75rem;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: background-color var(--duration-200);
 }
 
 .search-result-item:hover {
@@ -598,7 +598,7 @@ const closeDialog = () => {
   cursor: pointer;
   color: #ef4444;
   border-radius: var(--radius-default);
-  transition: background-color 0.2s;
+  transition: background-color var(--duration-200);
 }
 
 .remove-button:hover {
@@ -618,7 +618,7 @@ const closeDialog = () => {
   border-radius: var(--radius-md);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
   display: flex;
   align-items: center;
   gap: 0.5rem;

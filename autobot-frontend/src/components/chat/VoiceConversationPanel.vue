@@ -316,7 +316,7 @@ onBeforeUnmount(() => {
   height: 6px;
   border-radius: 50%;
   background: rgba(239, 68, 68, 0.6);
-  transition: background 0.2s;
+  transition: background var(--duration-200);
 }
 
 .voice-panel__ws-dot--connected {
@@ -337,7 +337,7 @@ onBeforeUnmount(() => {
   border-radius: 50%;
   border: 2px solid var(--border-subtle, rgba(148, 163, 184, 0.15));
   color: var(--text-muted, #64748b);
-  transition: all 0.3s ease;
+  transition: all var(--duration-300) var(--ease-out);
 }
 
 .voice-panel__state-ring--listening {
@@ -426,7 +426,7 @@ onBeforeUnmount(() => {
   height: 100%;
   border-radius: 1.5px;
   background: linear-gradient(90deg, #60a5fa, #818cf8);
-  transition: width 0.1s ease-out;
+  transition: width var(--duration-100) var(--ease-out);
   min-width: 0;
 }
 
@@ -513,7 +513,7 @@ onBeforeUnmount(() => {
   background: rgba(37, 99, 235, 0.1);
   color: #60a5fa;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
   box-shadow: 0 0 16px -4px rgba(37, 99, 235, 0.2);
 }
 

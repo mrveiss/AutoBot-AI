@@ -123,7 +123,7 @@ onMounted(() => {
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
   line-height: 1.25rem;
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .alert-icon {
@@ -156,7 +156,7 @@ onMounted(() => {
 .alert-dismiss {
   padding: 0.25rem;
   border-radius: var(--radius-default);
-  transition: background-color 0.2s ease;
+  transition: background-color var(--duration-200) var(--ease-out);
   background: transparent;
   border: none;
   cursor: pointer;

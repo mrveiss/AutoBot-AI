@@ -349,7 +349,7 @@ watch(() => props.modelValue, (isOpen) => {
   border: 2px solid var(--border-default);
   border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .format-option:hover {

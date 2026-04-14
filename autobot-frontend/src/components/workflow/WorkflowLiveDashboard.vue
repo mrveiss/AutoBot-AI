@@ -514,7 +514,7 @@ onUnmounted(() => {
   border-radius: var(--radius-xl);
   padding: 18px;
   cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: border-color var(--duration-200), box-shadow var(--duration-200);
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -599,7 +599,7 @@ onUnmounted(() => {
 .progress-fill {
   height: 100%;
   border-radius: var(--radius-default);
-  transition: width 0.4s ease;
+  transition: width 0.4s var(--ease-out);
 }
 
 .progress-active { background: var(--color-success); }

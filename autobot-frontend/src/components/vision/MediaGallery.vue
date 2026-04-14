@@ -358,7 +358,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .btn-clear-all:hover:not(:disabled) {
@@ -384,7 +384,7 @@ onUnmounted(() => {
   border-radius: var(--radius-xl);
   overflow: hidden;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .gallery-item:hover {
@@ -462,7 +462,7 @@ onUnmounted(() => {
   border-radius: var(--radius-md);
   color: var(--text-tertiary);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .btn-action:hover {

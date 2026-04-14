@@ -443,11 +443,11 @@ onMounted(() => {
 <style scoped>
 /* Secret animations */
 .secret-enter-active {
-  transition: all 0.3s ease-out;
+  transition: all var(--duration-300) var(--ease-out);
 }
 
 .secret-leave-active {
-  transition: all 0.2s ease-in;
+  transition: all var(--duration-200) var(--ease-in);
 }
 
 .secret-enter-from {
@@ -461,7 +461,7 @@ onMounted(() => {
 }
 
 .secret-move {
-  transition: transform 0.3s ease;
+  transition: transform var(--duration-300) var(--ease-out);
 }
 
 /* Custom scrollbar */

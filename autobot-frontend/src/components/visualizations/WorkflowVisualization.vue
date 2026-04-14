@@ -658,7 +658,7 @@ defineExpose({
   border-radius: var(--radius-md);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .layout-btn:hover,
@@ -691,7 +691,7 @@ defineExpose({
   fill: none;
   stroke: var(--text-muted);
   stroke-width: 2;
-  transition: stroke 0.3s;
+  transition: stroke var(--duration-300);
 }
 
 .connection-line.active {
@@ -722,7 +722,7 @@ defineExpose({
   fill: var(--bg-secondary);
   stroke: var(--text-muted);
   stroke-width: 2;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .workflow-node:hover .node-bg {
@@ -824,7 +824,7 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .zoom-controls button:hover {
@@ -855,7 +855,7 @@ defineExpose({
 .progress-fill {
   height: 100%;
   background: var(--chart-blue);
-  transition: width 0.3s ease;
+  transition: width var(--duration-300) var(--ease-out);
 }
 
 .progress-text {
@@ -937,7 +937,7 @@ defineExpose({
   color: var(--text-tertiary);
   cursor: pointer;
   border-radius: var(--radius-default);
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .close-btn:hover {
@@ -989,7 +989,7 @@ defineExpose({
 /* Transitions */
 .slide-enter-active,
 .slide-leave-active {
-  transition: all 0.3s ease;
+  transition: all var(--duration-300) var(--ease-out);
 }
 
 .slide-enter-from,

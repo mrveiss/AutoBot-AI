@@ -1665,7 +1665,7 @@ watch(selectedScope, () => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
-  transition: all 0.2s;
+  transition: all var(--duration-200);
   background: var(--bg-input);
   color: var(--text-primary);
 }
@@ -1711,7 +1711,7 @@ watch(selectedScope, () => {
   gap: 12px;
   padding: 10px 20px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-150);
   color: var(--text-secondary);
 }
 
@@ -1776,7 +1776,7 @@ watch(selectedScope, () => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .btn-create:hover {
@@ -1829,7 +1829,7 @@ watch(selectedScope, () => {
   border-radius: var(--radius-lg);
   cursor: pointer;
   color: var(--text-secondary);
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .btn-icon:hover {
@@ -1920,7 +1920,7 @@ watch(selectedScope, () => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .credential-card:hover {
@@ -2108,7 +2108,7 @@ watch(selectedScope, () => {
   flex-direction: column;
   gap: 4px;
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity var(--duration-150);
 }
 
 .credential-card:hover .card-actions {
@@ -2126,7 +2126,7 @@ watch(selectedScope, () => {
   border-radius: var(--radius-md);
   cursor: pointer;
   color: var(--text-secondary);
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .action-btn:hover {
@@ -2179,7 +2179,7 @@ watch(selectedScope, () => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .template-card:hover {
@@ -2240,7 +2240,7 @@ watch(selectedScope, () => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .type-option:hover {
@@ -2343,7 +2343,7 @@ watch(selectedScope, () => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
-  transition: all 0.2s;
+  transition: all var(--duration-200);
   background: var(--bg-input);
   color: var(--text-primary);
 }
@@ -2405,7 +2405,7 @@ watch(selectedScope, () => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .scope-option:hover {
@@ -2642,7 +2642,7 @@ watch(selectedScope, () => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .btn-primary:hover {
@@ -2663,7 +2663,7 @@ watch(selectedScope, () => {
   font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .btn-secondary:hover {
@@ -2683,7 +2683,7 @@ watch(selectedScope, () => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .btn-danger:hover {
@@ -2711,7 +2711,7 @@ watch(selectedScope, () => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-150);
   user-select: none;
 }
 

@@ -197,7 +197,7 @@ const getInitials = (username: string): string => {
 <style scoped>
 .modal-backdrop-enter-active,
 .modal-backdrop-leave-active {
-  transition: opacity 0.3s ease;
+  transition: opacity var(--duration-300) var(--ease-out);
 }
 
 .modal-backdrop-enter-from,
@@ -206,11 +206,11 @@ const getInitials = (username: string): string => {
 }
 
 .modal-content-enter-active {
-  transition: all 0.3s ease-out;
+  transition: all var(--duration-300) var(--ease-out);
 }
 
 .modal-content-leave-active {
-  transition: all 0.2s ease-in;
+  transition: all var(--duration-200) var(--ease-in);
 }
 
 .modal-content-enter-from {

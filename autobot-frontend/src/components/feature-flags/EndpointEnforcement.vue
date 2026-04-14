@@ -318,7 +318,7 @@ const closeModal = () => {
   display: flex;
   align-items: center;
   gap: 8px;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .btn-add:hover {
@@ -388,7 +388,7 @@ const closeModal = () => {
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .override-item:hover {
@@ -462,7 +462,7 @@ const closeModal = () => {
   border-radius: var(--radius-lg);
   cursor: pointer;
   color: var(--text-secondary);
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .action-btn:hover {
@@ -504,7 +504,7 @@ const closeModal = () => {
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
   font-family: var(--font-mono);
-  transition: all 0.2s;
+  transition: all var(--duration-200);
   background: var(--bg-input);
   color: var(--text-primary);
 }
@@ -544,7 +544,7 @@ const closeModal = () => {
   border: 2px solid var(--border-default);
   border-radius: var(--radius-xl);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .mode-selector .mode-option:hover {
@@ -655,7 +655,7 @@ const closeModal = () => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .btn-primary:hover {
@@ -676,7 +676,7 @@ const closeModal = () => {
   font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .btn-secondary:hover {

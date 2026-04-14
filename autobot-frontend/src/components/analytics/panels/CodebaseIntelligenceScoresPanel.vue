@@ -802,7 +802,7 @@ function formatTimestamp(timestamp: string): string {
   border-radius: var(--radius-xl);
   padding: 20px;
   border: 1px solid rgba(71, 85, 105, 0.4);
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .score-card:hover {
@@ -829,7 +829,7 @@ function formatTimestamp(timestamp: string): string {
   color: var(--color-info-light);
   cursor: pointer;
   font-size: 0.8em;
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .score-card .score-header .card-refresh-btn:hover:not(:disabled) {
@@ -948,7 +948,7 @@ function formatTimestamp(timestamp: string): string {
 .quality-metric .metric-fill {
   height: 100%;
   border-radius: var(--radius-default);
-  transition: width 0.5s ease;
+  transition: width var(--duration-500) var(--ease-out);
 }
 
 .quality-metric .metric-fill.score-high { background: var(--chart-green); }
@@ -1133,7 +1133,7 @@ function formatTimestamp(timestamp: string): string {
   padding: 10px 14px;
   background: rgba(17, 24, 39, 0.5);
   border-radius: var(--radius-md);
-  transition: background 0.2s ease;
+  transition: background var(--duration-200) var(--ease-out);
 }
 
 .history-item:hover {
@@ -1189,7 +1189,7 @@ function formatTimestamp(timestamp: string): string {
   font-size: 0.85em;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1290,7 +1290,7 @@ function formatTimestamp(timestamp: string): string {
   padding: 14px 16px;
   margin-bottom: 10px;
   border-left: 4px solid var(--text-tertiary);
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .finding-item:last-child { margin-bottom: 0; }

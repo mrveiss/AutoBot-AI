@@ -426,7 +426,7 @@ onBeforeUnmount(() => {
   color: var(--text-secondary, #94a3b8);
   font-size: var(--text-xs);
   cursor: pointer;
-  transition: border-color 0.15s;
+  transition: border-color var(--duration-150);
 }
 
 .voice-overlay__mode-select:hover {
@@ -463,7 +463,7 @@ onBeforeUnmount(() => {
   height: 8px;
   border-radius: 50%;
   background: rgba(239, 68, 68, 0.6);
-  transition: background 0.2s;
+  transition: background var(--duration-200);
 }
 
 .voice-overlay__ws-indicator--connected {
@@ -478,7 +478,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   border-radius: var(--radius-md);
   color: var(--text-muted, #64748b);
-  transition: all 0.15s;
+  transition: all var(--duration-150);
   cursor: pointer;
   border: none;
   background: transparent;
@@ -705,7 +705,7 @@ onBeforeUnmount(() => {
   background: rgba(37, 99, 235, 0.1);
   color: #60a5fa;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
   box-shadow: 0 0 24px -4px rgba(37, 99, 235, 0.2);
 }
 
@@ -789,7 +789,7 @@ onBeforeUnmount(() => {
   height: 100%;
   border-radius: var(--radius-xs);
   background: linear-gradient(90deg, #60a5fa, #818cf8);
-  transition: width 0.1s ease-out;
+  transition: width var(--duration-100) var(--ease-out);
   min-width: 0;
 }
 
@@ -854,17 +854,17 @@ onBeforeUnmount(() => {
 
 /* Overlay enter/leave */
 .voice-overlay-enter-active {
-  transition: opacity 0.25s ease;
+  transition: opacity var(--duration-250) var(--ease-out);
 }
 .voice-overlay-enter-active .voice-overlay__panel {
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+  transition: transform var(--duration-300) cubic-bezier(0.16, 1, 0.3, 1),
               opacity 0.25s ease;
 }
 .voice-overlay-leave-active {
-  transition: opacity 0.2s ease;
+  transition: opacity var(--duration-200) var(--ease-out);
 }
 .voice-overlay-leave-active .voice-overlay__panel {
-  transition: transform 0.2s ease, opacity 0.15s ease;
+  transition: transform var(--duration-200) var(--ease-out), opacity var(--duration-150) var(--ease-out);
 }
 
 .voice-overlay-enter-from {
@@ -884,7 +884,7 @@ onBeforeUnmount(() => {
 
 /* Bubble enter */
 .bubble-enter-active {
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all var(--duration-300) cubic-bezier(0.16, 1, 0.3, 1);
 }
 .bubble-enter-from {
   opacity: 0;
@@ -894,7 +894,7 @@ onBeforeUnmount(() => {
 /* Fade */
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.2s ease;
+  transition: opacity var(--duration-200) var(--ease-out);
 }
 .fade-enter-from,
 .fade-leave-to {

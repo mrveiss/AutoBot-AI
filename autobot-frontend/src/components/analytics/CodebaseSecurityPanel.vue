@@ -188,7 +188,7 @@ const getTabCount = (tabId: string): number => {
   display: flex;
   align-items: center;
   gap: 6px;
-  transition: all 0.15s ease;
+  transition: all var(--duration-150) var(--ease-out);
 }
 
 .code-intelligence-section .action-btn:hover:not(:disabled) {
@@ -234,7 +234,7 @@ const getTabCount = (tabId: string): number => {
   align-items: center;
   gap: 8px;
   font-size: 0.9em;
-  transition: all 0.15s ease;
+  transition: all var(--duration-150) var(--ease-out);
 }
 
 .code-intel-tabs .tab-btn:hover {

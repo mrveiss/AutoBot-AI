@@ -666,7 +666,7 @@ watch([selectedGranularity, selectedDays], () => {
   font-size: var(--text-xs);
   cursor: pointer;
   opacity: 0.6;
-  transition: opacity 0.2s;
+  transition: opacity var(--duration-200);
 }
 
 .metric-toggle.active {
@@ -704,7 +704,7 @@ watch([selectedGranularity, selectedDays], () => {
 }
 
 .data-line {
-  transition: stroke-width 0.2s;
+  transition: stroke-width var(--duration-200);
 }
 
 .data-line:hover {
@@ -713,7 +713,7 @@ watch([selectedGranularity, selectedDays], () => {
 
 .data-point {
   cursor: pointer;
-  transition: r 0.2s;
+  transition: r var(--duration-200);
 }
 
 .data-point:hover {

@@ -828,7 +828,7 @@ const loadAnalytics = () => analytics.execute(async () => {
   font-weight: 500;
   border: none;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
   margin-right: 8px;
 }
 
@@ -849,7 +849,7 @@ const loadAnalytics = () => analytics.execute(async () => {
   font-weight: 500;
   border: none;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .btn-secondary:hover {
@@ -950,7 +950,7 @@ const loadAnalytics = () => analytics.execute(async () => {
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   font-size: var(--text-base);
-  transition: border-color 0.2s;
+  transition: border-color var(--duration-200);
 }
 
 .form-input:focus {
@@ -1172,7 +1172,7 @@ const loadAnalytics = () => analytics.execute(async () => {
   padding: 20px;
   display: flex;
   gap: 16px;
-  transition: transform 0.2s;
+  transition: transform var(--duration-200);
 }
 
 .benefit-item:hover {

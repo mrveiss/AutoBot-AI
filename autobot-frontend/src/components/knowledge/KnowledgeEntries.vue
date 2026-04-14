@@ -977,7 +977,7 @@ watch([debouncedSearchQuery, filterCategory, filterType], () => {
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: var(--text-sm);
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-150) var(--ease-in-out);
 }
 
 .search-input:focus {
@@ -1022,7 +1022,7 @@ watch([debouncedSearchQuery, filterCategory, filterType], () => {
   font-family: var(--font-sans);
   background: var(--bg-card);
   color: var(--text-primary);
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-150) var(--ease-in-out);
 }
 
 .filter-select:focus {

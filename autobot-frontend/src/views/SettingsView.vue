@@ -327,7 +327,7 @@ function onApiKeysSaved(): void {
   border-bottom: 2px solid transparent;
   margin-bottom: -2px;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color var(--duration-150), border-color var(--duration-150);
 }
 
 .settings-tab:hover {
@@ -384,7 +384,7 @@ function onApiKeysSaved(): void {
   border-radius: var(--radius-md, 8px);
   font-weight: 500;
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition: opacity var(--duration-200);
 }
 
 .open-wizard-btn:hover {

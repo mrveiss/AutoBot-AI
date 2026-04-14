@@ -670,7 +670,7 @@ onMounted(() => {
   padding: 0.5rem 0.75rem;
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background var(--duration-150);
 }
 
 .category-header:hover {
@@ -744,7 +744,7 @@ onMounted(() => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .doc-item:hover {

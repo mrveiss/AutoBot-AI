@@ -101,7 +101,7 @@ const scoreArc = computed(() => {
 }
 
 .score-arc {
-  transition: stroke-dasharray 0.5s ease;
+  transition: stroke-dasharray var(--duration-500) var(--ease-out);
 }
 
 .score-display {

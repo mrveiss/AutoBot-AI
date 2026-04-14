@@ -266,7 +266,7 @@ function formatDuration(ms: number): string {
 /* Collapse transition */
 .trace-collapse-enter-active,
 .trace-collapse-leave-active {
-  transition: max-height 0.2s ease, opacity 0.2s ease;
+  transition: max-height var(--duration-200) var(--ease-out), opacity var(--duration-200) var(--ease-out);
   max-height: 18rem;
   overflow: hidden;
 }

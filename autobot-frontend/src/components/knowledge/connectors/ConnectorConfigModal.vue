@@ -760,7 +760,7 @@ function closeModal() {
   border: 1px solid var(--border-default);
   background: var(--bg-secondary);
   color: var(--text-tertiary);
-  transition: all 150ms ease;
+  transition: all var(--duration-150) var(--ease-out);
 }
 
 .step-dot.active {
@@ -804,7 +804,7 @@ function closeModal() {
   border-radius: var(--radius-default);
   background: var(--bg-secondary);
   cursor: pointer;
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-150) var(--ease-in-out);
   text-align: center;
 }
 
@@ -863,7 +863,7 @@ function closeModal() {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xs);
-  transition: border-color 150ms ease;
+  transition: border-color var(--duration-150) var(--ease-out);
 }
 
 .form-input:focus,
@@ -918,7 +918,7 @@ function closeModal() {
   color: var(--text-secondary);
   background: var(--bg-secondary);
   cursor: pointer;
-  transition: all 150ms ease;
+  transition: all var(--duration-150) var(--ease-out);
   font-family: var(--font-sans);
 }
 
@@ -961,7 +961,7 @@ function closeModal() {
   font-weight: 500;
   font-family: var(--font-sans);
   cursor: pointer;
-  transition: all 150ms ease;
+  transition: all var(--duration-150) var(--ease-out);
 }
 
 .mode-btn:hover {
