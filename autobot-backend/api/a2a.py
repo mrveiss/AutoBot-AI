@@ -438,7 +438,12 @@ async def cancel_task(task_id: str) -> Dict[str, str]:
 async def task_stats() -> Dict[str, Any]:
     """Return task counts broken down by state."""
     manager = get_task_manager()
-    return {"counts": manager.stats(), "total": len(manager.list_tasks())}
+    tasks = manager.list_tasks()
+    counts: Dict[str, int] = {}
+    for t in tasks:
+        k = t.status.state.value
+        counts[k] = counts.get(k, 0) + 1
+    return {"counts": counts, "total": len(tasks)}
 
 
 # ---------------------------------------------------------------------------
