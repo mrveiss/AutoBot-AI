@@ -1,0 +1,5 @@
+{% if messages[0].role == 'system' %}{{ messages[0].content }}
+
+{% set messages = messages[1:] %}{% endif %}{% for message in messages %}{% if message.role == 'user' %}USER: {{ message.content }}
+{% elif message.role == 'assistant' %}ASSISTANT: {{ message.content }}</s>
+{% endif %}{% endfor %}ASSISTANT:
