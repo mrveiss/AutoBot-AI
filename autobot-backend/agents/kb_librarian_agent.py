@@ -48,6 +48,16 @@ class KBLibrarianAgent(StandardizedAgent):
             "agents.kb_librarian.auto_learning_enabled", True
         )
 
+        # Runtime-configurable parameters (used by api/kb_librarian.py overrides)
+        self.enabled: bool = True
+        self.max_results: int = config.get("agents.kb_librarian.max_results", 5)
+        self.similarity_threshold: float = config.get(
+            "agents.kb_librarian.similarity_threshold", 0.6
+        )
+        self.auto_summarize: bool = config.get(
+            "agents.kb_librarian.auto_summarize", False
+        )
+
         # Register action handlers for StandardizedAgent routing
         self.register_actions(
             {
@@ -170,6 +180,49 @@ class KBLibrarianAgent(StandardizedAgent):
             )
 
         return "\n---\n".join(context_parts)
+
+    def _is_question(self, query: str) -> bool:
+        """Return True if the query looks like a natural-language question."""
+        stripped = query.strip()
+        return stripped.endswith("?") or stripped.lower().startswith(
+            ("what", "who", "where", "when", "why", "how", "is", "are", "can", "does")
+        )
+
+    async def process_query(
+        self, query: str, context: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
+        """Process a KB query and return results compatible with KBQueryResponse.
+
+        This is the primary entry-point used by api/kb_librarian.py,
+        api/workflow.py, and agent_execution.py (#4531).
+
+        Args:
+            query: Natural-language query string.
+            context: Optional context dict (currently unused, reserved for future use).
+
+        Returns:
+            Dict with keys: enabled, is_question, query, documents_found,
+            documents, summary, response, knowledge_base_results, sources.
+        """
+        documents = await self.search_knowledge(query, limit=self.max_results)
+
+        summary: str = ""
+        if self.auto_summarize and documents:
+            answer_result = await self.answer_question(query, context_limit=self.max_results)
+            summary = answer_result.get("answer", "")
+
+        return {
+            "enabled": self.enabled,
+            "is_question": self._is_question(query),
+            "query": query,
+            "documents_found": len(documents),
+            "documents": documents,
+            "summary": summary,
+            # Aliases used by agent_execution.py and workflow.py
+            "response": summary or (documents[0]["content"] if documents else ""),
+            "knowledge_base_results": documents,
+            "sources": [doc.get("source", "Unknown") for doc in documents],
+        }
 
     async def answer_question(
         self, question: str, context_limit: int = 3
