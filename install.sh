@@ -894,7 +894,16 @@ uninstall() {
 
     # ---- Phase 1: Stop and disable services ----
     info "Stopping services..."
-    local services=(autobot-slm-backend nginx grafana-server postgresql)
+    # Stop all autobot-* units first (covers playwright, browser-worker, tts, npu, etc.)
+    # before removing their unit files — otherwise processes survive with no unit file.
+    while IFS= read -r unit; do
+        [[ -z "$unit" ]] && continue
+        svc="${unit%.service}"
+        systemctl stop "${svc}" >> "${LOG_FILE}" 2>&1 && success "  Stopped ${svc}" || true
+        systemctl disable "${svc}" >> "${LOG_FILE}" 2>&1 || true
+    done < <(systemctl list-units --all --no-legend 'autobot-*' 2>/dev/null | awk '{print $1}')
+
+    local services=(nginx grafana-server postgresql)
     for svc in "${services[@]}"; do
         if systemctl is-active --quiet "${svc}" 2>/dev/null; then
             systemctl stop "${svc}" >> "${LOG_FILE}" 2>&1 && success "  Stopped ${svc}" || warn "  Failed to stop ${svc}"
