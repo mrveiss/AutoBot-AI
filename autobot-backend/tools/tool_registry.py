@@ -15,6 +15,7 @@ import uuid
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from chat_workflow.tool_handler import BROWSER_TOOL_NAMES
+from tools.code_interpreter import execute_code
 
 if TYPE_CHECKING:
     from knowledge_base import KnowledgeBase
@@ -419,6 +420,16 @@ class ToolRegistry:
             "response_text": response_text,
         }
 
+    async def execute_code_tool(self, code: str, timeout_seconds: int = 30) -> Dict[str, Any]:
+        """Execute Python code in a sandboxed subprocess and return stdout/stderr."""
+        result = execute_code(code, timeout_seconds=timeout_seconds)
+        return {
+            "tool_name": "code_interpreter",
+            "tool_args": {"code": code, "timeout_seconds": timeout_seconds},
+            "result": result,
+            "status": "success" if result["exit_code"] == 0 else "error",
+        }
+
     # Tool Name Mapping for Compatibility (Issue #315 - Dispatch Table Pattern)
 
     def _get_tool_handler(self, tool_name: str):
@@ -457,6 +468,9 @@ class ToolRegistry:
                 args.get("program_name", ""), args.get("question_text", "")
             ),
             "respondconversationally": lambda args: self.respond_conversationally(args.get("response_text", "")),
+            "codeinterpreter": lambda args: self.execute_code_tool(
+                args.get("code", ""), args.get("timeout_seconds", 30)
+            ),
         }
         return dispatch.get(tool_name)
 
@@ -558,6 +572,7 @@ class ToolRegistry:
             "bring_window_to_front",
             "ask_user_for_manual",
             "respond_conversationally",
+            "code_interpreter",
         ]
         # Issue #1368/#2609: Browser tools are defined once in BROWSER_TOOL_NAMES
         # and imported here so the two lists cannot drift independently.

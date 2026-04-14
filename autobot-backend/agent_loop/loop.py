@@ -86,6 +86,8 @@ SENSITIVE_TOOLS: frozenset[str] = frozenset(
         "http_patch",
         "http_delete",
         "send_request",
+        # Code execution
+        "code_interpreter",
     }
 )
 
