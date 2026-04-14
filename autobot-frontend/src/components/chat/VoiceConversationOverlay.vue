@@ -821,7 +821,7 @@ onBeforeUnmount(() => {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: #60a5fa;
+  background: var(--color-primary);
   border: 2px solid var(--bg-card, #0f172a);
   cursor: pointer;
 }
@@ -830,7 +830,7 @@ onBeforeUnmount(() => {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: #60a5fa;
+  background: var(--color-primary);
   border: 2px solid var(--bg-card, #0f172a);
   cursor: pointer;
 }

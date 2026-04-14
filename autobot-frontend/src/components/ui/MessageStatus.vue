@@ -124,7 +124,7 @@ const statusTooltip = computed(() => {
 
 /* Status-specific styles */
 .status-sending {
-  @apply text-blue-500;
+  color: var(--color-info);
 }
 
 .status-sent {
@@ -132,23 +132,23 @@ const statusTooltip = computed(() => {
 }
 
 .status-delivered {
-  @apply text-green-500;
+  color: var(--color-success);
 }
 
 .status-read {
-  @apply text-green-600;
+  color: var(--color-success);
 }
 
 .status-failed {
-  @apply text-red-500;
+  color: var(--color-error);
 }
 
 .status-queued {
-  @apply text-yellow-500;
+  color: var(--color-warning);
 }
 
 .status-retrying {
-  @apply text-blue-500;
+  color: var(--color-info);
 }
 
 /* Animation for status changes */
