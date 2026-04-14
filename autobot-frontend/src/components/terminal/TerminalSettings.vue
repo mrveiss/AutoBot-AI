@@ -266,27 +266,29 @@ input[type='range']::-webkit-slider-thumb {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #3b82f6;
+  background: var(--color-primary);
   cursor: pointer;
   transition: background-color 0.15s ease;
 }
 
 input[type='range']::-webkit-slider-thumb:hover {
-  background: #2563eb;
+  background: var(--color-primary);
+  filter: brightness(0.9);
 }
 
 input[type='range']::-moz-range-thumb {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #3b82f6;
+  background: var(--color-primary);
   cursor: pointer;
   border: none;
   transition: background-color 0.15s ease;
 }
 
 input[type='range']::-moz-range-thumb:hover {
-  background: #2563eb;
+  background: var(--color-primary);
+  filter: brightness(0.9);
 }
 
 /* Checkbox custom styling */
