@@ -121,7 +121,7 @@ const onlineCount = computed(() => {
             class="mt-1"
           >
             <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-yellow-500/20 text-yellow-400">
-              <i class="bi bi-key mr-1" />
+              <i class="fas fa-key mr-1" />
               {{ $t('collaboration.activityFeed.secretsCount', { count: activity.activity.secretsUsed.length }) }}
             </span>
           </div>
@@ -133,7 +133,7 @@ const onlineCount = computed(() => {
         v-if="visibleActivities.length === 0"
         class="flex flex-col items-center justify-center py-8 text-autobot-text-muted"
       >
-        <i class="bi bi-activity text-2xl mb-2" />
+        <i class="fas fa-chart-line text-2xl mb-2" />
         <span class="text-sm">{{ $t('collaboration.activityFeed.noRecentActivity') }}</span>
         <span class="text-xs">{{ $t('collaboration.activityFeed.activitiesWillAppear') }}</span>
       </div>
