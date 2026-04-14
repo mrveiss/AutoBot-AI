@@ -6804,7 +6804,8 @@
     "skipToContent": "Skip to content",
     "skipToNavigation": "Skip to navigation",
     "systemStatus": "System Status",
-    "marketplace": "Marketplace"
+    "marketplace": "Marketplace",
+    "usage": "Usage & Costs"
   },
   "reasoningTrace": {
     "title": "Reasoning trace",
