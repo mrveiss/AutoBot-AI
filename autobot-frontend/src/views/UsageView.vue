@@ -10,10 +10,10 @@
           <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
           Refresh
         </button>
-        <a :href="csvExportUrl" class="btn-action-secondary" download>
-          <i class="fas fa-download"></i>
+        <button class="btn-action-secondary" :disabled="csvLoading" @click="downloadCsv">
+          <i class="fas fa-download" :class="{ 'fa-spin': csvLoading }"></i>
           Export CSV
-        </a>
+        </button>
       </div>
     </div>
 
@@ -77,11 +77,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { getApiBase } from '@/config/ssot-config'
+import { useApi } from '@/composables/useApi'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('UsageView')
+const api = useApi()
 
 interface UsageSummary {
   period: { days: number; start: string; end: string }
@@ -100,28 +102,18 @@ interface UserUsage {
 }
 
 const loading = ref(false)
+const csvLoading = ref(false)
 const error = ref<string | null>(null)
 const summary = ref<UsageSummary | null>(null)
 const users = ref<UserUsage[]>([])
-
-const csvExportUrl = computed(() => `${getApiBase()}/usage/export/csv`)
-
-async function apiFetch<T>(path: string): Promise<T> {
-  const token = localStorage.getItem('authToken') || ''
-  const res = await fetch(`${getApiBase()}${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-  return res.json() as Promise<T>
-}
 
 async function load() {
   loading.value = true
   error.value = null
   try {
     const [sum, byUser] = await Promise.all([
-      apiFetch<UsageSummary>('/usage/summary'),
-      apiFetch<{ users: UserUsage[] }>('/usage/by-user'),
+      api.get<UsageSummary>('/usage/summary'),
+      api.get<{ users: UserUsage[] }>('/usage/by-user'),
     ])
     summary.value = sum
     users.value = byUser.users ?? []
@@ -130,6 +122,29 @@ async function load() {
     error.value = 'Failed to load usage data. Check that you have admin access.'
   } finally {
     loading.value = false
+  }
+}
+
+async function downloadCsv() {
+  csvLoading.value = true
+  try {
+    const token = localStorage.getItem('authToken') || ''
+    const res = await fetch(`${getApiBase()}/usage/export/csv`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'usage.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    logger.error('CSV export failed:', e)
+    error.value = 'CSV export failed. Check that you have admin access.'
+  } finally {
+    csvLoading.value = false
   }
 }
 
