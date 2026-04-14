@@ -46,7 +46,7 @@ function resolveTab(param: unknown): UpdatesTab {
 const activeTab = computed(() => resolveTab(route.params.tab))
 
 function navigateToTab(tab: UpdatesTab): void {
-  router.push({ name: 'updates', params: { tab } })
+  router.push({ name: 'maintenance-updates-tab', params: { tab } })
 }
 </script>
 
