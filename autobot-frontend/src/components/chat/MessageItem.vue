@@ -359,13 +359,16 @@ const formattedContent = computed(() => {
 
 /* USER MESSAGES - Right side, blue theme */
 .message-wrapper.user-message {
-  @apply bg-blue-600 text-white border-blue-700 ml-auto mr-0;
+  @apply ml-auto mr-0;
+  background: var(--color-primary);
+  color: var(--text-inverse);
+  border-color: var(--color-primary);
   border-radius: 18px 18px 4px 18px;
 }
 
 .message-wrapper.user-message .sender-name,
 .message-wrapper.user-message .message-time {
-  @apply text-blue-100;
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .message-wrapper.user-message .message-content {
@@ -416,7 +419,7 @@ const formattedContent = computed(() => {
 }
 
 .message-avatar.user {
-  @apply bg-blue-700;
+  background: var(--color-primary);
 }
 
 .message-avatar.assistant {
@@ -462,15 +465,20 @@ const formattedContent = computed(() => {
 
 /* User message code styling */
 .user-message .message-text :deep(code) {
-  @apply bg-blue-500 text-blue-50 px-1.5 py-0.5 rounded text-xs font-mono;
+  @apply px-1.5 py-0.5 rounded text-xs font-mono;
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--text-inverse);
 }
 
 .user-message .message-text :deep(pre) {
-  @apply bg-blue-800 text-blue-50 p-3 rounded-lg overflow-x-auto my-1.5;
+  @apply p-3 rounded-lg overflow-x-auto my-1.5;
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--text-inverse);
 }
 
 .user-message .message-text :deep(a) {
-  @apply text-blue-100 hover:text-white underline;
+  @apply hover:text-white underline;
+  color: rgba(255, 255, 255, 0.85);
 }
 
 /* Assistant message code styling */
@@ -494,11 +502,13 @@ const formattedContent = computed(() => {
 
 /* Metadata */
 .user-message .message-metadata {
-  @apply mt-1.5 pt-1 border-t border-blue-400;
+  @apply mt-1.5 pt-1 border-t;
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 .user-message .metadata-items {
-  @apply flex flex-wrap gap-1.5 text-xs text-blue-100;
+  @apply flex flex-wrap gap-1.5 text-xs;
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .assistant-message .message-metadata {
