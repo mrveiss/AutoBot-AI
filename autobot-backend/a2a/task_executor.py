@@ -53,6 +53,9 @@ async def execute_a2a_task(
     """
     manager = get_task_manager()
     manager.update_state(task_id, TaskState.WORKING)
+    manager.publish_event(
+        task_id, {"event": "state_change", "state": "working", "task_id": task_id}
+    )
 
     try:
         # Late import to avoid circular deps at module load time
@@ -66,20 +69,28 @@ async def execute_a2a_task(
 
         # Artifact 1: primary text response
         response_text = _extract_response_text(result)
-        manager.add_artifact(
+        artifact_text = TaskArtifact(artifact_type="text", content=response_text)
+        manager.add_artifact(task_id, artifact_text)
+        manager.publish_event(
             task_id,
-            TaskArtifact(artifact_type="text", content=response_text),
+            {"event": "artifact_added", "artifact_type": "text", "task_id": task_id},
         )
 
         # Artifact 2: routing metadata (agent used, model, timing, etc.)
         metadata = _extract_routing_metadata(result)
         if metadata:
-            manager.add_artifact(
+            artifact_meta = TaskArtifact(artifact_type="json", content=metadata)
+            manager.add_artifact(task_id, artifact_meta)
+            manager.publish_event(
                 task_id,
-                TaskArtifact(artifact_type="json", content=metadata),
+                {"event": "artifact_added", "artifact_type": "json", "task_id": task_id},
             )
 
         manager.update_state(task_id, TaskState.COMPLETED)
+        manager.publish_event(
+            task_id,
+            {"event": "state_change", "state": "completed", "terminal": True, "task_id": task_id},
+        )
         logger.info("A2A task %s completed successfully", task_id)
 
     except Exception as exc:
@@ -89,3 +100,13 @@ async def execute_a2a_task(
             TaskArtifact(artifact_type="error", content=str(exc)),
         )
         manager.update_state(task_id, TaskState.FAILED, message=str(exc))
+        manager.publish_event(
+            task_id,
+            {
+                "event": "state_change",
+                "state": "failed",
+                "terminal": True,
+                "message": str(exc),
+                "task_id": task_id,
+            },
+        )

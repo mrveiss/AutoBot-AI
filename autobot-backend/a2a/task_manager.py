@@ -8,6 +8,8 @@ Issue #961: In-memory task lifecycle manager for A2A tasks.
 Issue #968: Adds TraceContext per task for distributed tracing + audit log.
 Issue #4502: Replace in-process dict with Redis-backed storage to fix 404
              flapping across multiple uvicorn workers.
+Issue #4554: Sliding TTL on get_task() so active pollers never hit 404;
+             publish_event() for SSE streaming via Redis pub/sub.
 Manages task state transitions per the A2A spec §4.2.
 
 State machine:
@@ -18,9 +20,10 @@ State machine:
   WORKING   → CANCELLED
 
 Redis key layout:
-  a2a:task:{id}   — JSON-serialised Task (TTL: AUTOBOT_A2A_TASK_TTL_SECONDS)
-  a2a:audit:{id}  — Redis list of JSON-serialised TraceEvent entries (same TTL)
-  a2a:tasks       — Redis set of all known task IDs
+  a2a:task:{id}    — JSON-serialised Task (TTL: AUTOBOT_A2A_TASK_TTL_SECONDS)
+  a2a:audit:{id}   — Redis list of JSON-serialised TraceEvent entries (same TTL)
+  a2a:tasks        — Redis set of all known task IDs
+  a2a:events:{id}  — Redis pub/sub channel for SSE streaming (Issue #4554)
 """
 
 import json
@@ -43,6 +46,7 @@ _TERMINAL_STATES = {TaskState.COMPLETED, TaskState.FAILED, TaskState.CANCELLED}
 _KEY_TASK = "a2a:task:{}"
 _KEY_AUDIT = "a2a:audit:{}"
 _KEY_TASKS = "a2a:tasks"
+_KEY_EVENTS = "a2a:events:{}"  # pub/sub channel for SSE streaming (#4554)
 
 
 def _utcnow() -> str:
@@ -131,6 +135,9 @@ class TaskManager:
 
     Issue #4502: Replaces the per-process in-memory dict with Redis so that
     tasks created on worker A are visible to worker B/C.
+
+    Issue #4554: get_task() slides the TTL on every access (active pollers
+    never expire); publish_event() pushes SSE payloads via Redis pub/sub.
     """
 
     def __init__(self) -> None:
@@ -199,8 +206,22 @@ class TaskManager:
         return task
 
     def get_task(self, task_id: str) -> Optional[Task]:
-        """Retrieve a task by ID, or None if not found."""
-        return self._load(task_id)
+        """Retrieve a task by ID, sliding its TTL on each access.
+
+        Issue #4554: Resetting the TTL on every GET means any client that
+        is actively polling will never see a 404 — tasks only expire when
+        genuinely abandoned (no polls for a full TTL window).
+        """
+        key = _KEY_TASK.format(task_id)
+        raw = self._redis.get(key)
+        if raw is None:
+            return None
+        # Slide TTL — reset expiry from now so active pollers stay alive.
+        # Slide the audit key too so it doesn't expire before the task does.
+        ttl = self._ttl()
+        self._redis.expire(key, ttl)
+        self._redis.expire(_KEY_AUDIT.format(task_id), ttl)
+        return _task_from_json(raw if isinstance(raw, str) else raw.decode("utf-8"))
 
     def list_tasks(self) -> List[Task]:
         """Return all tasks whose keys are still alive in Redis."""
@@ -293,6 +314,27 @@ class TaskManager:
             entry = raw if isinstance(raw, str) else raw.decode("utf-8")
             result.append(json.loads(entry))
         return result
+
+    def publish_event(self, task_id: str, payload: Dict[str, Any]) -> None:
+        """Publish a task event to the Redis pub/sub channel for SSE streaming.
+
+        Issue #4554: task_executor calls this at every state transition and
+        artifact addition.  The SSE endpoint subscribes to this channel and
+        forwards messages to connected clients in real time.
+
+        Args:
+            task_id: Task identifier.
+            payload: JSON-serialisable event dict, e.g.
+                     {"event": "state_change", "state": "working"}
+                     {"event": "artifact_added", "artifact": {...}}
+                     {"event": "state_change", "state": "completed", "terminal": True}
+        """
+        try:
+            channel = _KEY_EVENTS.format(task_id)
+            self._redis.publish(channel, json.dumps(payload))
+        except Exception as exc:
+            # Pub/sub is best-effort — never let it break task execution
+            logger.warning("publish_event failed for task %s: %s", task_id, exc)
 
     def stats(self) -> Dict[str, int]:
         """Return task counts per state."""
