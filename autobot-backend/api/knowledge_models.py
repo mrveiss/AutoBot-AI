@@ -39,7 +39,7 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from type_defs.common import Metadata
@@ -77,7 +77,8 @@ class FactIdValidator(BaseModel):
 
     fact_id: str = Field(..., min_length=1, max_length=255)
 
-    @validator("fact_id")
+    @field_validator("fact_id")
+    @classmethod
     def validate_fact_id(cls, v):
         """Validate fact_id format to prevent injection attacks"""
         # Allow UUID format or safe alphanumeric with underscores/hyphens
@@ -98,7 +99,8 @@ class SearchRequest(BaseModel):
     limit: int = Field(default=QueryDefaults.DEFAULT_SEARCH_LIMIT, ge=1, le=100)
     category: Optional[str] = Field(default=None, max_length=100)
 
-    @validator("category")
+    @field_validator("category")
+    @classmethod
     def validate_category(cls, v):
         """Validate category format"""
         if v and not _ALNUM_ID_RE.match(v):
@@ -159,23 +161,31 @@ class EnhancedSearchRequest(BaseModel):
         ),
     )
 
-    @validator("category")
+    @field_validator("category")
+    @classmethod
     def validate_category(cls, v):
         """Validate category format"""
         if v and not _ALNUM_ID_RE.match(v):
             raise ValueError("Invalid category format")
         return v
 
-    @validator("tags", each_item=True)
+    @field_validator("tags", mode="before")
+    @classmethod
     def validate_tag_item(cls, v):
         """Validate each tag"""
-        if v:
-            v = v.lower().strip()
-            if not _LOWERCASE_TAG_RE.match(v):
-                raise ValueError(f"Invalid tag format: {v}")
-        return v
+        if v is None:
+            return v
+        result = []
+        for item in v:
+            if item:
+                item = item.lower().strip()
+                if not _LOWERCASE_TAG_RE.match(item):
+                    raise ValueError(f"Invalid tag format: {item}")
+            result.append(item)
+        return result
 
-    @validator("mode")
+    @field_validator("mode")
+    @classmethod
     def validate_mode(cls, v):
         """Validate search mode"""
         if v not in _VALID_SEARCH_MODES:  # Issue #380: use module constant
@@ -349,30 +359,39 @@ class ConsolidatedSearchRequest(BaseModel):
         description="Session ID for analytics correlation",
     )
 
-    @validator("category")
+    @field_validator("category")
+    @classmethod
     def validate_category(cls, v):
         """Validate category format."""
         if v and not _ALNUM_ID_RE.match(v):
             raise ValueError("Invalid category format")
         return v
 
-    @validator("tags", each_item=True)
+    @field_validator("tags", mode="before")
+    @classmethod
     def validate_tag_item(cls, v):
         """Validate each tag."""
-        if v:
-            v = v.lower().strip()
-            if not _LOWERCASE_TAG_RE.match(v):
-                raise ValueError(f"Invalid tag format: {v}")
-        return v
+        if v is None:
+            return v
+        result = []
+        for item in v:
+            if item:
+                item = item.lower().strip()
+                if not _LOWERCASE_TAG_RE.match(item):
+                    raise ValueError(f"Invalid tag format: {item}")
+            result.append(item)
+        return result
 
-    @validator("mode")
+    @field_validator("mode")
+    @classmethod
     def validate_mode(cls, v):
         """Validate search mode."""
         if v not in _VALID_SEARCH_MODES:
             raise ValueError(f"Invalid mode: {v}. Must be one of {_VALID_SEARCH_MODES}")
         return v
 
-    @validator("created_after", "created_before")
+    @field_validator("created_after", "created_before")
+    @classmethod
     def validate_date(cls, v):
         """Validate date format."""
         if v:
@@ -421,14 +440,16 @@ class PaginationRequest(BaseModel):
     cursor: Optional[str] = Field(default=None, max_length=255)
     category: Optional[str] = Field(default=None, max_length=100)
 
-    @validator("cursor")
+    @field_validator("cursor")
+    @classmethod
     def validate_cursor(cls, v):
         """Validate cursor format"""
         if v and not _ALNUM_ID_RE.match(v):
             raise ValueError("Invalid cursor format")
         return v
 
-    @validator("category")
+    @field_validator("category")
+    @classmethod
     def validate_category(cls, v):
         """Validate category format"""
         if v and not _ALNUM_ID_RE.match(v):
@@ -473,14 +494,16 @@ class AddTextRequest(BaseModel):
         description="List of group/team IDs for group-level knowledge",
     )
 
-    @validator("metadata")
+    @field_validator("metadata")
+    @classmethod
     def validate_metadata(cls, v):
         """Validate metadata structure"""
         if v is not None and not isinstance(v, dict):
             raise ValueError("Metadata must be a dictionary")
         return v
 
-    @validator("visibility")
+    @field_validator("visibility")
+    @classmethod
     def validate_visibility(cls, v):
         """Validate visibility level (Issue #685: expanded)."""
         valid_levels = {
@@ -495,7 +518,8 @@ class AddTextRequest(BaseModel):
             raise ValueError(f"Invalid visibility: {v}. Must be one of: {valid_levels}")
         return v
 
-    @validator("access_level")
+    @field_validator("access_level")
+    @classmethod
     def validate_access_level(cls, v):
         """Validate access level (Issue #685)."""
         valid_levels = {"autobot", "general", "system", "user"}
@@ -505,7 +529,8 @@ class AddTextRequest(BaseModel):
             )
         return v
 
-    @validator("source_type")
+    @field_validator("source_type")
+    @classmethod
     def validate_source_type(cls, v):
         """Validate source type."""
         valid_types = {"chat", "manual", "import", "system"}
@@ -563,7 +588,8 @@ class TagValidator(BaseModel):
 
     tag: str = Field(..., min_length=1, max_length=50)
 
-    @validator("tag")
+    @field_validator("tag")
+    @classmethod
     def validate_tag(cls, v):
         """Validate tag format - lowercase alphanumeric with hyphens/underscores"""
         # Normalize to lowercase
@@ -590,15 +616,19 @@ class AddTagsRequest(BaseModel):
         description="List of tags to add (max 20 per request)",
     )
 
-    @validator("tags", each_item=True)
+    @field_validator("tags", mode="before")
+    @classmethod
     def validate_tag_item(cls, v):
         """Validate each tag in the list"""
-        v = v.lower().strip()
-        if not _LOWERCASE_TAG_RE.match(v):
-            raise ValueError(f"Invalid tag format: {v}")
-        if len(v) > 50:
-            raise ValueError(f"Tag too long: {v}")
-        return v
+        result = []
+        for item in v:
+            item = item.lower().strip()
+            if not _LOWERCASE_TAG_RE.match(item):
+                raise ValueError(f"Invalid tag format: {item}")
+            if len(item) > 50:
+                raise ValueError(f"Tag too long: {item}")
+            result.append(item)
+        return result
 
 
 class RemoveTagsRequest(BaseModel):
@@ -611,13 +641,17 @@ class RemoveTagsRequest(BaseModel):
         description="List of tags to remove",
     )
 
-    @validator("tags", each_item=True)
+    @field_validator("tags", mode="before")
+    @classmethod
     def validate_tag_item(cls, v):
         """Validate each tag in the list"""
-        v = v.lower().strip()
-        if not _LOWERCASE_TAG_RE.match(v):
-            raise ValueError(f"Invalid tag format: {v}")
-        return v
+        result = []
+        for item in v:
+            item = item.lower().strip()
+            if not _LOWERCASE_TAG_RE.match(item):
+                raise ValueError(f"Invalid tag format: {item}")
+            result.append(item)
+        return result
 
 
 class BulkTagRequest(BaseModel):
@@ -640,34 +674,42 @@ class BulkTagRequest(BaseModel):
         description="Operation: 'add' or 'remove'",
     )
 
-    @validator("fact_ids", each_item=True)
+    @field_validator("fact_ids", mode="before")
+    @classmethod
     def validate_fact_id_item(cls, v):
         """Validate each fact ID format (Critical fix #5)"""
-        # Reuse existing FactIdValidator logic
-        if not _ALNUM_ID_RE.match(v):
-            raise ValueError(
-                f"Invalid fact_id format: {v} - only alphanumeric, "
-                "underscore, and hyphen allowed"
-            )
-        # Prevent path traversal attempts (Issue #328 - uses shared validation)
-        if contains_path_traversal(v):
-            raise ValueError(f"Path traversal not allowed in fact_id: {v}")
-        return v
+        result = []
+        for item in v:
+            if not _ALNUM_ID_RE.match(item):
+                raise ValueError(
+                    f"Invalid fact_id format: {item} - only alphanumeric, "
+                    "underscore, and hyphen allowed"
+                )
+            # Prevent path traversal attempts (Issue #328 - uses shared validation)
+            if contains_path_traversal(item):
+                raise ValueError(f"Path traversal not allowed in fact_id: {item}")
+            result.append(item)
+        return result
 
-    @validator("operation")
+    @field_validator("operation")
+    @classmethod
     def validate_operation(cls, v):
         """Validate operation type"""
         if v not in _VALID_TAG_OPERATIONS:
             raise ValueError("Operation must be 'add' or 'remove'")
         return v
 
-    @validator("tags", each_item=True)
+    @field_validator("tags", mode="before")
+    @classmethod
     def validate_tag_item(cls, v):
         """Validate each tag"""
-        v = v.lower().strip()
-        if not _LOWERCASE_TAG_RE.match(v):
-            raise ValueError(f"Invalid tag format: {v}")
-        return v
+        result = []
+        for item in v:
+            item = item.lower().strip()
+            if not _LOWERCASE_TAG_RE.match(item):
+                raise ValueError(f"Invalid tag format: {item}")
+            result.append(item)
+        return result
 
 
 class SearchByTagsRequest(BaseModel):
@@ -687,13 +729,17 @@ class SearchByTagsRequest(BaseModel):
     offset: int = Field(default=QueryDefaults.DEFAULT_OFFSET, ge=0)
     category: Optional[str] = Field(default=None, max_length=100)
 
-    @validator("tags", each_item=True)
+    @field_validator("tags", mode="before")
+    @classmethod
     def validate_tag_item(cls, v):
         """Validate each tag"""
-        v = v.lower().strip()
-        if not _LOWERCASE_TAG_RE.match(v):
-            raise ValueError(f"Invalid tag format: {v}")
-        return v
+        result = []
+        for item in v:
+            item = item.lower().strip()
+            if not _LOWERCASE_TAG_RE.match(item):
+                raise ValueError(f"Invalid tag format: {item}")
+            result.append(item)
+        return result
 
 
 # ===== TAG MANAGEMENT CRUD MODELS (Issue #409) =====
@@ -709,7 +755,8 @@ class RenameTagRequest(BaseModel):
         description="New name for the tag",
     )
 
-    @validator("new_tag")
+    @field_validator("new_tag")
+    @classmethod
     def validate_new_tag(cls, v):
         """Validate new tag format."""
         v = v.lower().strip()
@@ -739,15 +786,20 @@ class MergeTagsRequest(BaseModel):
         description="Target tag to merge into",
     )
 
-    @validator("source_tags", each_item=True)
+    @field_validator("source_tags", mode="before")
+    @classmethod
     def validate_source_tag_item(cls, v):
         """Validate each source tag."""
-        v = v.lower().strip()
-        if not _LOWERCASE_TAG_RE.match(v):
-            raise ValueError(f"Invalid tag format: {v}")
-        return v
+        result = []
+        for item in v:
+            item = item.lower().strip()
+            if not _LOWERCASE_TAG_RE.match(item):
+                raise ValueError(f"Invalid tag format: {item}")
+            result.append(item)
+        return result
 
-    @validator("target_tag")
+    @field_validator("target_tag")
+    @classmethod
     def validate_target_tag(cls, v):
         """Validate target tag format."""
         v = v.lower().strip()
@@ -819,7 +871,8 @@ class UpdateTagStyleRequest(BaseModel):
         description="Optional tag description",
     )
 
-    @validator("color")
+    @field_validator("color")
+    @classmethod
     def validate_color(cls, v):
         """Validate hex color format."""
         if v is not None:
@@ -829,7 +882,8 @@ class UpdateTagStyleRequest(BaseModel):
                 )
         return v
 
-    @validator("icon")
+    @field_validator("icon")
+    @classmethod
     def validate_icon(cls, v):
         """Validate icon class format (basic sanitization)."""
         if v is not None:
@@ -882,7 +936,8 @@ class CreateCategoryRequest(BaseModel):
         description="Hex color code (e.g., '#3B82F6')",
     )
 
-    @validator("name")
+    @field_validator("name")
+    @classmethod
     def validate_name(cls, v):
         """Validate category name format."""
         v = v.lower().strip().replace(" ", "-")
@@ -895,7 +950,8 @@ class CreateCategoryRequest(BaseModel):
             raise ValueError("Invalid characters in category name")
         return v
 
-    @validator("parent_id")
+    @field_validator("parent_id")
+    @classmethod
     def validate_parent_id(cls, v):
         """Validate parent_id format."""
         if v is not None:
@@ -905,7 +961,8 @@ class CreateCategoryRequest(BaseModel):
                 raise ValueError("Invalid characters in parent_id")
         return v
 
-    @validator("color")
+    @field_validator("color")
+    @classmethod
     def validate_color(cls, v):
         """Validate hex color format."""
         if v is not None:
@@ -947,7 +1004,8 @@ class UpdateCategoryRequest(BaseModel):
         description="New hex color code",
     )
 
-    @validator("name")
+    @field_validator("name")
+    @classmethod
     def validate_name(cls, v):
         """Validate category name format if provided."""
         if v is not None:
@@ -959,7 +1017,8 @@ class UpdateCategoryRequest(BaseModel):
                 )
         return v
 
-    @validator("color")
+    @field_validator("color")
+    @classmethod
     def validate_color(cls, v):
         """Validate hex color format if provided."""
         if v is not None:
@@ -986,7 +1045,8 @@ class DeleteCategoryRequest(BaseModel):
         description="Category ID to reassign facts to. If None, facts become uncategorized.",
     )
 
-    @validator("reassign_to")
+    @field_validator("reassign_to")
+    @classmethod
     def validate_reassign_to(cls, v):
         """Validate reassign_to format if provided."""
         if v is not None:
@@ -1007,7 +1067,8 @@ class AssignFactToCategoryRequest(BaseModel):
         description="Category ID to assign fact to",
     )
 
-    @validator("category_id")
+    @field_validator("category_id")
+    @classmethod
     def validate_category_id(cls, v):
         """Validate category_id format."""
         if not _ALNUM_ID_RE.match(v):
@@ -1037,7 +1098,8 @@ class SearchCategoriesByPathRequest(BaseModel):
         description="Maximum number of categories to return",
     )
 
-    @validator("path_pattern")
+    @field_validator("path_pattern")
+    @classmethod
     def validate_path_pattern(cls, v):
         """Validate path pattern format."""
         v = v.lower().strip()
@@ -1088,7 +1150,8 @@ class CreateCollectionRequest(BaseModel):
         description="Custom metadata for the collection",
     )
 
-    @validator("name")
+    @field_validator("name")
+    @classmethod
     def validate_name(cls, v):
         """Validate collection name."""
         v = v.strip()
@@ -1098,7 +1161,8 @@ class CreateCollectionRequest(BaseModel):
             raise ValueError("Invalid characters in collection name")
         return v
 
-    @validator("color")
+    @field_validator("color")
+    @classmethod
     def validate_color(cls, v):
         """Validate hex color format."""
         if v is not None:
@@ -1143,7 +1207,8 @@ class UpdateCollectionRequest(BaseModel):
         description="New custom metadata (replaces existing)",
     )
 
-    @validator("name")
+    @field_validator("name")
+    @classmethod
     def validate_name(cls, v):
         """Validate collection name if provided."""
         if v is not None:
@@ -1152,7 +1217,8 @@ class UpdateCollectionRequest(BaseModel):
                 raise ValueError("Collection name cannot be empty")
         return v
 
-    @validator("color")
+    @field_validator("color")
+    @classmethod
     def validate_color(cls, v):
         """Validate hex color format if provided."""
         if v is not None:
@@ -1175,14 +1241,18 @@ class CollectionFactsRequest(BaseModel):
         description="List of fact IDs to add/remove",
     )
 
-    @validator("fact_ids", each_item=True)
+    @field_validator("fact_ids", mode="before")
+    @classmethod
     def validate_fact_id(cls, v):
         """Validate fact ID format."""
-        if not _ALNUM_ID_RE.match(v):
-            raise ValueError(f"Invalid fact_id format: {v}")
-        if contains_path_traversal(v):
-            raise ValueError(f"Invalid characters in fact_id: {v}")
-        return v
+        result = []
+        for item in v:
+            if not _ALNUM_ID_RE.match(item):
+                raise ValueError(f"Invalid fact_id format: {item}")
+            if contains_path_traversal(item):
+                raise ValueError(f"Invalid characters in fact_id: {item}")
+            result.append(item)
+        return result
 
 
 # ===== ML-BASED SUGGESTION MODELS (Issue #413) =====
@@ -1431,7 +1501,8 @@ class MetadataFieldDefinition(BaseModel):
         description="Field description for UI",
     )
 
-    @validator("name")
+    @field_validator("name")
+    @classmethod
     def validate_name(cls, v):
         """Validate field name format."""
         v = v.strip()
@@ -1441,14 +1512,16 @@ class MetadataFieldDefinition(BaseModel):
             )
         return v
 
-    @validator("type")
+    @field_validator("type")
+    @classmethod
     def validate_type(cls, v):
         """Validate field type."""
         if v not in VALID_FIELD_TYPES:
             raise ValueError(f"Invalid type: {v}. Must be one of: {VALID_FIELD_TYPES}")
         return v
 
-    @validator("validation")
+    @field_validator("validation")
+    @classmethod
     def validate_regex(cls, v):
         """Validate regex pattern if provided."""
         if v:
@@ -1487,7 +1560,8 @@ class CreateMetadataTemplateRequest(BaseModel):
         description="Categories this template applies to",
     )
 
-    @validator("name")
+    @field_validator("name")
+    @classmethod
     def validate_name(cls, v):
         """Validate template name."""
         v = v.strip()
@@ -1567,7 +1641,8 @@ class SearchByMetadataRequest(BaseModel):
         description="Maximum results to return",
     )
 
-    @validator("operator")
+    @field_validator("operator")
+    @classmethod
     def validate_operator(cls, v):
         """Validate comparison operator."""
         valid_ops = ("eq", "contains", "gt", "lt")
@@ -1639,7 +1714,8 @@ class ExportFilters(BaseModel):
     )
     fact_ids: Optional[List[str]] = Field(default=None, max_items=1000)
 
-    @validator("date_from", "date_to")
+    @field_validator("date_from", "date_to")
+    @classmethod
     def validate_date(cls, v):
         """Validate date format"""
         if v:
@@ -1720,7 +1796,8 @@ class DeduplicationRequest(BaseModel):
         description="Maximum number of comparisons to avoid timeout (hash mode only)",
     )
 
-    @validator("keep_strategy")
+    @field_validator("keep_strategy")
+    @classmethod
     def validate_strategy(cls, v):
         """Validate keep strategy"""
         if v not in _VALID_SORT_OPTIONS:  # Issue #380: use module constant
@@ -1744,15 +1821,19 @@ class BulkDeleteRequest(BaseModel):
         description="Must be True to actually delete",
     )
 
-    @validator("fact_ids", each_item=True)
+    @field_validator("fact_ids", mode="before")
+    @classmethod
     def validate_fact_id(cls, v):
         """Validate fact ID format"""
-        if not _ALNUM_ID_RE.match(v):
-            raise ValueError(f"Invalid fact_id format: {v}")
-        # Prevent path traversal (Issue #328 - uses shared validation)
-        if contains_path_traversal(v):
-            raise ValueError(f"Path traversal not allowed in fact_id: {v}")
-        return v
+        result = []
+        for item in v:
+            if not _ALNUM_ID_RE.match(item):
+                raise ValueError(f"Invalid fact_id format: {item}")
+            # Prevent path traversal (Issue #328 - uses shared validation)
+            if contains_path_traversal(item):
+                raise ValueError(f"Path traversal not allowed in fact_id: {item}")
+            result.append(item)
+        return result
 
 
 class BulkCategoryUpdateRequest(BaseModel):
@@ -1769,14 +1850,19 @@ class BulkCategoryUpdateRequest(BaseModel):
         max_length=100,
     )
 
-    @validator("fact_ids", each_item=True)
+    @field_validator("fact_ids", mode="before")
+    @classmethod
     def validate_fact_id(cls, v):
         """Validate fact ID format"""
-        if not _ALNUM_ID_RE.match(v):
-            raise ValueError(f"Invalid fact_id format: {v}")
-        return v
+        result = []
+        for item in v:
+            if not _ALNUM_ID_RE.match(item):
+                raise ValueError(f"Invalid fact_id format: {item}")
+            result.append(item)
+        return result
 
-    @validator("new_category")
+    @field_validator("new_category")
+    @classmethod
     def validate_category(cls, v):
         """Validate category format"""
         if not _ALNUM_ID_RE.match(v):
@@ -1856,7 +1942,8 @@ class RestoreRequest(BaseModel):
         description="Only validate backup, don't actually restore",
     )
 
-    @validator("backup_file")
+    @field_validator("backup_file")
+    @classmethod
     def validate_backup_file(cls, v):
         """Validate backup file path (Issue #419)."""
         # Prevent path traversal attempts
@@ -1878,7 +1965,8 @@ class DeleteBackupRequest(BaseModel):
         description="Path to backup file to delete",
     )
 
-    @validator("backup_file")
+    @field_validator("backup_file")
+    @classmethod
     def validate_backup_file(cls, v):
         """Validate backup file path (Issue #419)."""
         if contains_path_traversal(v):
@@ -1902,7 +1990,8 @@ class UpdateFactRequest(BaseModel):
         default=None, description="New or updated metadata"
     )
 
-    @validator("category")
+    @field_validator("category")
+    @classmethod
     def validate_category(cls, v):
         """Validate category format"""
         if v and not _ALNUM_ID_RE.match(v):
@@ -1923,12 +2012,16 @@ class ShareFactRequest(BaseModel):
         description="List of user IDs to share with",
     )
 
-    @validator("user_ids", each_item=True)
+    @field_validator("user_ids", mode="before")
+    @classmethod
     def validate_user_id(cls, v):
         """Validate user ID format."""
-        if not v or len(v) > 100:
-            raise ValueError("Invalid user_id: must be 1-100 characters")
-        return v
+        result = []
+        for item in v:
+            if not item or len(item) > 100:
+                raise ValueError("Invalid user_id: must be 1-100 characters")
+            result.append(item)
+        return result
 
 
 class UnshareFactRequest(BaseModel):
@@ -1941,12 +2034,16 @@ class UnshareFactRequest(BaseModel):
         description="List of user IDs to remove from sharing",
     )
 
-    @validator("user_ids", each_item=True)
+    @field_validator("user_ids", mode="before")
+    @classmethod
     def validate_user_id(cls, v):
         """Validate user ID format."""
-        if not v or len(v) > 100:
-            raise ValueError("Invalid user_id: must be 1-100 characters")
-        return v
+        result = []
+        for item in v:
+            if not item or len(item) > 100:
+                raise ValueError("Invalid user_id: must be 1-100 characters")
+            result.append(item)
+        return result
 
 
 class UpdateVisibilityRequest(BaseModel):
@@ -1957,7 +2054,8 @@ class UpdateVisibilityRequest(BaseModel):
         description="Visibility level: private, shared, public",
     )
 
-    @validator("visibility")
+    @field_validator("visibility")
+    @classmethod
     def validate_visibility(cls, v):
         """Validate visibility level."""
         valid_levels = {"private", "shared", "public"}
