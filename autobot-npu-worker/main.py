@@ -24,6 +24,8 @@ from npu_integration import get_npu_pool
 
 logger = logging.getLogger(__name__)
 
+__all__ = ["initialize_npu_worker", "main"]
+
 
 async def initialize_npu_worker():
     """Initialize NPU worker pool and health monitoring."""
