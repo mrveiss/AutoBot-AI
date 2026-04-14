@@ -107,7 +107,7 @@
           @loading-complete="handleContentLoadingComplete"
           @loading-error="handleContentLoadingError"
           @loading-timeout="handleContentLoadingTimeout"
-          class="flex-1 min-h-0 flex flex-col overflow-y-auto"
+          class="flex-1 min-h-0 flex flex-col overflow-hidden"
         >
           <!-- Issue #3232: Live reasoning trace panel above the chat input -->
           <ReasoningTrace
