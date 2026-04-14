@@ -88,6 +88,9 @@ For teams prioritizing **data privacy, cost efficiency, and infrastructure contr
 
 ## Architecture Overview
 
+> Full diagrams (data flows, deployment topologies, sequence diagrams): [docs/architecture/system-diagram.md](docs/architecture/system-diagram.md)  
+> Feature walkthroughs and demo recording scripts: [docs/DEMOS.md](docs/DEMOS.md)
+
 ```mermaid
 graph TB
     User["👤 User<br/>(Browser)"]
