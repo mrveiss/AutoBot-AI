@@ -166,6 +166,57 @@ class ChangePasswordResponse(BaseModel):
     message: str
 
 
+class SignupRequest(BaseModel):
+    """Self-registration request model (#1801)."""
+
+    username: str
+    email: str
+    password: str
+    display_name: str | None = None
+
+    @validator("username")
+    def validate_username(cls, v):
+        """Validate username format."""
+        v = v.strip().lower()
+        if not v or len(v) < 3:
+            raise ValueError("Username must be at least 3 characters")
+        if len(v) > 50:
+            raise ValueError("Username too long")
+        if not v.replace("_", "").replace("-", "").isalnum():
+            raise ValueError("Username contains invalid characters")
+        return v
+
+    @validator("email")
+    def validate_email(cls, v):
+        """Minimal email sanity check."""
+        if "@" not in v or len(v) > 255:
+            raise ValueError("Invalid email address")
+        return v.strip().lower()
+
+    @validator("password")
+    def validate_password(cls, v):
+        """Password strength requirements."""
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        if len(v) > 128:
+            raise ValueError("Password too long")
+        if not any(c.isupper() for c in v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not any(c.islower() for c in v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Password must contain at least one digit")
+        return v
+
+
+class SignupResponse(BaseModel):
+    """Self-registration response model (#1801)."""
+
+    success: bool
+    message: str
+    username: str | None = None
+
+
 async def _authenticate_and_build_user_data(
     username: str, password: str, ip_address: str
 ) -> Dict:
@@ -540,6 +591,55 @@ async def change_password(request: Request, password_data: ChangePasswordRequest
         raise HTTPException(
             status_code=500, detail="Failed to change password. Please try again."
         )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="signup",
+    error_code_prefix="AUTH",
+)
+@router.post("/signup", response_model=SignupResponse)
+async def signup(request: Request, signup_data: SignupRequest):
+    """
+    Self-registration endpoint for new users (#1801).
+
+    Creates a new user account with the default 'user' role.
+    Disabled in single_user deployment mode.
+    """
+    from user_management.config import DeploymentMode, get_deployment_config
+
+    deploy_cfg = get_deployment_config()
+    if deploy_cfg.mode == DeploymentMode.SINGLE_USER:
+        raise HTTPException(
+            status_code=400,
+            detail="Self-registration is not available in single-user mode",
+        )
+
+    try:
+        async with db_session_context() as session:
+            user_service = UserService(session)
+            user = await user_service.create_user(
+                email=signup_data.email,
+                username=signup_data.username,
+                password=signup_data.password,
+                display_name=signup_data.display_name or signup_data.username,
+            )
+        logger.info("New user registered via signup: %s", signup_data.username)
+        return SignupResponse(
+            success=True,
+            message="Account created successfully. You can now log in.",
+            username=user.username,
+        )
+    except Exception as exc:
+        # Re-raise HTTP exceptions (e.g. 409 duplicate)
+        if hasattr(exc, "status_code"):
+            raise
+        from user_management.services.user_service import DuplicateUserError
+
+        if isinstance(exc, DuplicateUserError):
+            raise HTTPException(status_code=409, detail=str(exc))
+        logger.error("Signup error for %s: %s", signup_data.username, exc)
+        raise HTTPException(status_code=500, detail="Registration failed. Please try again.")
 
 
 def _decode_refresh_token(token: str) -> Dict:
