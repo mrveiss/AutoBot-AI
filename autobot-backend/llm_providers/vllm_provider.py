@@ -20,6 +20,8 @@ except ImportError:
     LLM = None
     SamplingParams = None
 
+from .chat_template_loader import DEFAULT_TEMPLATE, render_chat_template
+
 logger = logging.getLogger(__name__)
 
 
@@ -129,7 +131,10 @@ class VLLMProvider:
 
         Args:
             messages: List of message dicts with 'role' and 'content'
-            **kwargs: Additional parameters (temperature, max_tokens, etc.)
+            **kwargs: Additional parameters (temperature, max_tokens, etc.).
+                      Accepts ``chat_template`` (str) to select the Jinja2
+                      prompt template (chatml/zephyr/vicuna).  Defaults to
+                      the loader DEFAULT_TEMPLATE.
 
         Returns:
             Dict with completion response
@@ -138,7 +143,8 @@ class VLLMProvider:
             await self.initialize()
 
         try:
-            prompt = self._messages_to_prompt(messages)
+            chat_template = kwargs.pop("chat_template", DEFAULT_TEMPLATE)
+            prompt = self._messages_to_prompt(messages, chat_template=chat_template)
             sampling_params = self._create_sampling_params(**kwargs)
             start_time = time.time()
 
@@ -161,26 +167,21 @@ class VLLMProvider:
         """Generate completion (runs in thread)"""
         return self.llm.generate([prompt], sampling_params)
 
-    def _messages_to_prompt(self, messages: List[Dict[str, str]]) -> str:
-        """Convert messages to a single prompt string"""
-        # Basic chat template - can be customized per model
-        prompt_parts = []
+    def _messages_to_prompt(
+        self, messages: List[Dict[str, str]], chat_template: str = DEFAULT_TEMPLATE
+    ) -> str:
+        """Convert messages to a prompt string using a Jinja2 chat template.
 
-        for message in messages:
-            role = message.get("role", "")
-            content = message.get("content", "")
+        Args:
+            messages: List of role/content dicts.
+            chat_template: Template name (chatml, zephyr, vicuna).
+                           Unknown values fall back to DEFAULT_TEMPLATE with a
+                           warning logged by render_chat_template.
 
-            if role == "system":
-                prompt_parts.append(f"System: {content}")
-            elif role == "user":
-                prompt_parts.append(f"User: {content}")
-            elif role == "assistant":
-                prompt_parts.append(f"Assistant: {content}")
-
-        # Add final assistant prompt
-        prompt_parts.append("Assistant:")
-
-        return "\n".join(prompt_parts)
+        Returns:
+            Formatted prompt string ready for vLLM generation.
+        """
+        return render_chat_template(messages, chat_template)
 
     def _create_sampling_params(self, **kwargs) -> SamplingParams:
         """Create vLLM sampling parameters"""

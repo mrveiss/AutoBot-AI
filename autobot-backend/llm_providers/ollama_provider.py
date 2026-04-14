@@ -30,6 +30,7 @@ from llm_interface_pkg.models import LLMRequest, LLMResponse
 from llm_interface_pkg.types import ProviderType
 
 from .base_provider import BaseProvider
+from .chat_template_loader import render_chat_template
 
 logger = logging.getLogger(__name__)
 
@@ -86,9 +87,29 @@ class OllamaProvider(BaseProvider):
         The delegate's ``_prepare_chat_request`` calls ``get_host_from_env()``
         which reads from SSOT config; we override ``ollama_host`` immediately
         before the call so any settings["base_url"] override is honoured.
+
+        When ``request.metadata["chat_template"]`` is set the messages are
+        rendered via Jinja2 before being forwarded so local models receive a
+        properly formatted prompt regardless of their native template support.
         """
         self._total_requests += 1
         try:
+            chat_template = request.metadata.get("chat_template")
+            if chat_template:
+                raw_messages = [
+                    {"role": m["role"], "content": m["content"]}
+                    if isinstance(m, dict)
+                    else {"role": m.role, "content": m.content}
+                    for m in request.messages
+                ]
+                rendered = render_chat_template(raw_messages, chat_template)
+                # Replace messages with a single pre-rendered user turn so the
+                # delegate forwards the correctly formatted prompt to Ollama.
+                from dataclasses import replace as _dc_replace
+                request = _dc_replace(
+                    request,
+                    messages=[{"role": "user", "content": rendered}],
+                )
             delegate = self._ensure_delegate()
             # Override host so settings["base_url"] is respected over SSOT env default.
             delegate.ollama_host = self._resolve_base_url()
@@ -131,12 +152,29 @@ class OllamaProvider(BaseProvider):
         model = request.model_name or self._get_setting("default_model", "")
         if not model:
             raise ValueError("No model specified for Ollama streaming")
-        payload = {
-            "model": model,
-            "messages": request.messages,
-            "stream": True,
-            "options": {"temperature": request.temperature},
-        }
+        chat_template = request.metadata.get("chat_template")
+        if chat_template:
+            # Render messages via Jinja2 template and use raw prompt API.
+            raw_messages = [
+                {"role": m["role"], "content": m["content"]}
+                if isinstance(m, dict)
+                else {"role": m.role, "content": m.content}
+                for m in request.messages
+            ]
+            prompt = render_chat_template(raw_messages, chat_template)
+            payload = {
+                "model": model,
+                "prompt": prompt,
+                "stream": True,
+                "options": {"temperature": request.temperature},
+            }
+        else:
+            payload = {
+                "model": model,
+                "messages": request.messages,
+                "stream": True,
+                "options": {"temperature": request.temperature},
+            }
         if request.max_tokens:
             payload["options"]["num_predict"] = request.max_tokens
         try:
@@ -160,7 +198,11 @@ class OllamaProvider(BaseProvider):
                     if not decoded:
                         continue
                     chunk = _json.loads(decoded)
-                    text = chunk.get("message", {}).get("content", "")
+                    # /api/chat returns message.content; /api/generate returns response
+                    text = (
+                        chunk.get("message", {}).get("content", "")
+                        or chunk.get("response", "")
+                    )
                     if text:
                         yield text
                     if chunk.get("done"):
