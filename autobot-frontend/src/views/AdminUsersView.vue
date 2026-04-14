@@ -388,13 +388,13 @@ onMounted(loadUsers)
 }
 
 .page-title {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 600;
   margin: 0 0 0.25rem;
 }
 
 .page-subtitle {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--color-text-secondary, #6b7280);
   margin: 0;
 }
@@ -442,7 +442,7 @@ onMounted(loadUsers)
   padding: 0.5rem 0.75rem 0.5rem 2.25rem;
   border: 1px solid var(--color-border, #d1d5db);
   border-radius: var(--radius-lg);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   box-sizing: border-box;
 }
 
@@ -467,7 +467,7 @@ onMounted(loadUsers)
 .data-table th {
   text-align: left;
   padding: 0.75rem 1rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -479,7 +479,7 @@ onMounted(loadUsers)
 .data-table td {
   padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--color-border, #f3f4f6);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .data-table tr:last-child td {
@@ -541,7 +541,7 @@ onMounted(loadUsers)
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .btn-warning {
@@ -588,7 +588,7 @@ onMounted(loadUsers)
 }
 
 .page-info {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--color-text-secondary, #6b7280);
 }
 
@@ -600,7 +600,7 @@ onMounted(loadUsers)
   gap: 0.375rem;
   padding: 0.5rem 1rem;
   border-radius: var(--radius-lg);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   border: 1px solid transparent;
   cursor: pointer;
@@ -660,7 +660,7 @@ onMounted(loadUsers)
 
 .modal-header h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
 }
 
@@ -669,7 +669,7 @@ onMounted(loadUsers)
   border: none;
   cursor: pointer;
   color: var(--color-text-secondary, #6b7280);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .modal-body {
@@ -683,7 +683,7 @@ onMounted(loadUsers)
 .form-group label {
   display: block;
   margin-bottom: 0.375rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
@@ -692,7 +692,7 @@ onMounted(loadUsers)
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--color-border, #d1d5db);
   border-radius: var(--radius-md);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   box-sizing: border-box;
 }
 

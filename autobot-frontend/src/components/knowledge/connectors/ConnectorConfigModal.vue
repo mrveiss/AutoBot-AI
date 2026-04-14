@@ -754,7 +754,7 @@ function closeModal() {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 600;
   font-family: var(--font-mono);
   border: 1px solid var(--border-default);
@@ -781,7 +781,7 @@ function closeModal() {
 }
 
 .step-description {
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   margin-bottom: var(--spacing-5);
   font-family: var(--font-sans);
@@ -826,14 +826,14 @@ function closeModal() {
 }
 
 .type-card-label {
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-sans);
 }
 
 .type-card-desc {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   font-family: var(--font-sans);
   line-height: 1.4;
@@ -846,7 +846,7 @@ function closeModal() {
 
 .form-label {
   display: block;
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
   margin-bottom: var(--spacing-1-5);
@@ -857,7 +857,7 @@ function closeModal() {
 .form-textarea {
   width: 100%;
   padding: var(--spacing-2) var(--spacing-3);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-family: var(--font-sans);
   color: var(--text-primary);
   background: var(--bg-secondary);
@@ -886,12 +886,12 @@ function closeModal() {
   resize: vertical;
   min-height: 60px;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .form-hint {
   display: block;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   margin-top: 4px;
   font-family: var(--font-sans);
@@ -914,7 +914,7 @@ function closeModal() {
   padding: var(--spacing-2) var(--spacing-3);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xs);
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   background: var(--bg-secondary);
   cursor: pointer;
@@ -957,7 +957,7 @@ function closeModal() {
   border-radius: var(--radius-xs);
   background: var(--bg-secondary);
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   font-family: var(--font-sans);
   cursor: pointer;
@@ -989,7 +989,7 @@ function closeModal() {
 }
 
 .toggle-label {
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
   font-family: var(--font-sans);
@@ -1005,7 +1005,7 @@ function closeModal() {
 }
 
 .test-result {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-family: var(--font-sans);
   padding: var(--spacing-1-5) var(--spacing-3);
   border-radius: var(--radius-xs);
@@ -1028,7 +1028,7 @@ function closeModal() {
   background: var(--color-error-bg);
   color: var(--color-error-dark);
   border-radius: var(--radius-xs);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-family: var(--font-sans);
 }
 

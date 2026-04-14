@@ -170,7 +170,7 @@ const formatRelativeTime = (timestamp: string) => {
 
 .section-header h3 {
   margin: 0 0 8px;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
@@ -184,7 +184,7 @@ const formatRelativeTime = (timestamp: string) => {
 
 .section-header .description {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -208,20 +208,20 @@ const formatRelativeTime = (timestamp: string) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
+  font-size: var(--text-2xl);
   margin-bottom: 16px;
 }
 
 .empty-state h4 {
   margin: 0 0 8px;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .empty-state p {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -250,7 +250,7 @@ const formatRelativeTime = (timestamp: string) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: var(--text-base);
   flex-shrink: 0;
 }
 
@@ -297,7 +297,7 @@ const formatRelativeTime = (timestamp: string) => {
   align-items: center;
   padding: 4px 10px;
   border-radius: var(--radius-default);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 600;
 }
 
@@ -317,7 +317,7 @@ const formatRelativeTime = (timestamp: string) => {
 }
 
 .timestamp {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -330,14 +330,14 @@ const formatRelativeTime = (timestamp: string) => {
 
 .action-text {
   margin: 0 0 10px;
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
 .meta-info {
   display: flex;
   gap: 20px;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -362,7 +362,7 @@ const formatRelativeTime = (timestamp: string) => {
 }
 
 .legend-title {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -375,7 +375,7 @@ const formatRelativeTime = (timestamp: string) => {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 

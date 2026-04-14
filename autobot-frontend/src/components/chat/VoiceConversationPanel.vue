@@ -276,7 +276,7 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-md);
   background: rgba(37, 99, 235, 0.15);
   color: #60a5fa;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .voice-panel__mode-select {
@@ -377,7 +377,7 @@ onBeforeUnmount(() => {
   background: rgba(37, 99, 235, 0.06);
   border: 1px dashed rgba(37, 99, 235, 0.2);
   color: #93c5fd;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-style: italic;
   word-break: break-word;
 }
@@ -390,7 +390,7 @@ onBeforeUnmount(() => {
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.2);
   color: #fca5a5;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 /* Cert warning */
@@ -401,7 +401,7 @@ onBeforeUnmount(() => {
   background: rgba(245, 158, 11, 0.08);
   border: 1px solid rgba(245, 158, 11, 0.25);
   color: #fcd34d;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   display: flex;
   flex-direction: column;
   gap: 0.25rem;

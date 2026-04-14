@@ -232,12 +232,12 @@ const allCompleted = computed(() => {
 }
 
 .header-content i {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   color: var(--color-primary);
 }
 
 .modal-header h3 {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
@@ -287,13 +287,13 @@ const allCompleted = computed(() => {
 }
 
 .stat-value {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .stat-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   font-weight: 500;
   margin-top: 0.25rem;
@@ -334,7 +334,7 @@ const allCompleted = computed(() => {
 }
 
 .progress-text {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-secondary);
   min-width: 3rem;
@@ -405,7 +405,7 @@ const allCompleted = computed(() => {
 }
 
 .status-icon i {
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 
 .document-details {
@@ -417,7 +417,7 @@ const allCompleted = computed(() => {
 }
 
 .document-name {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
   overflow: hidden;
@@ -426,7 +426,7 @@ const allCompleted = computed(() => {
 }
 
 .error-message {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--color-error);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -457,7 +457,7 @@ const allCompleted = computed(() => {
 }
 
 .progress-percentage {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--text-tertiary);
   min-width: 3rem;
@@ -483,7 +483,7 @@ const allCompleted = computed(() => {
   cursor: pointer;
   transition: all 0.2s;
   border: none;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .retry-btn {

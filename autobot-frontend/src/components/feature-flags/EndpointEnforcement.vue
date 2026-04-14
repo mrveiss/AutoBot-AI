@@ -287,7 +287,7 @@ const closeModal = () => {
 
 .header-info h3 {
   margin: 0 0 8px;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
@@ -301,7 +301,7 @@ const closeModal = () => {
 
 .header-info .description {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
   max-width: 500px;
 }
@@ -312,7 +312,7 @@ const closeModal = () => {
   color: var(--text-on-primary);
   border: none;
   border-radius: var(--radius-lg);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: flex;
@@ -341,19 +341,19 @@ const closeModal = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
+  font-size: var(--text-2xl);
 }
 
 .empty-state h4 {
   margin: 0 0 8px;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .empty-state p {
   margin: 0 0 20px;
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -371,7 +371,7 @@ const closeModal = () => {
   padding: 12px 16px;
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   margin-bottom: 8px;
 }
@@ -403,7 +403,7 @@ const closeModal = () => {
 
 .endpoint-path code {
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
   background: var(--bg-tertiary);
   padding: 4px 8px;
@@ -422,7 +422,7 @@ const closeModal = () => {
   gap: 6px;
   padding: 4px 10px;
   border-radius: var(--radius-default);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
 }
 
@@ -442,7 +442,7 @@ const closeModal = () => {
 }
 
 .vs-global {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -489,7 +489,7 @@ const closeModal = () => {
 }
 
 .form-group label {
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -502,7 +502,7 @@ const closeModal = () => {
   padding: 12px;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-family: var(--font-mono);
   transition: all 0.2s;
   background: var(--bg-input);
@@ -525,7 +525,7 @@ const closeModal = () => {
 }
 
 .input-hint {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
@@ -567,7 +567,7 @@ const closeModal = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: var(--text-base);
 }
 
 .mode-selector .option-icon.disabled {
@@ -593,12 +593,12 @@ const closeModal = () => {
   display: block;
   font-weight: 600;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .mode-selector .option-desc {
   display: block;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   margin-top: 4px;
 }
@@ -624,7 +624,7 @@ const closeModal = () => {
 
 .remove-content h4 {
   margin: 0 0 8px;
-  font-size: 18px;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -648,7 +648,7 @@ const closeModal = () => {
   color: var(--text-on-primary);
   border: none;
   border-radius: var(--radius-lg);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: inline-flex;
@@ -673,7 +673,7 @@ const closeModal = () => {
   color: var(--text-secondary);
   border: none;
   border-radius: var(--radius-lg);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;

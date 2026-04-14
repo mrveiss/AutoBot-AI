@@ -1178,7 +1178,7 @@ watch(() => props.mode, () => {
   padding: 0 0.375rem;
   background: rgba(0, 0, 0, 0.1);
   border-radius: 0.625rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   margin-left: 0.375rem;
   transition: all 0.2s ease;
@@ -1205,7 +1205,7 @@ watch(() => props.mode, () => {
 
 .active-filter-badge i.fa-filter {
   color: var(--color-primary);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .clear-filter-btn {
@@ -1270,7 +1270,7 @@ watch(() => props.mode, () => {
 }
 
 .refresh-status-btn i {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 /* Batch Toolbar */
@@ -1301,7 +1301,7 @@ watch(() => props.mode, () => {
 }
 
 .toolbar-info i {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
 }
 
 .toolbar-actions {
@@ -1353,7 +1353,7 @@ watch(() => props.mode, () => {
   padding: 0.625rem 2.5rem 0.625rem 2.5rem;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   transition: all 0.2s;
 }
 
@@ -1380,7 +1380,7 @@ watch(() => props.mode, () => {
   padding: 0.75rem 1.5rem;
   background: var(--bg-card);
   border-bottom: 1px solid var(--border-default);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .breadcrumb-item.active {
@@ -1390,7 +1390,7 @@ watch(() => props.mode, () => {
 
 .breadcrumb-sep {
   color: var(--border-light);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 /* Split pane layout */
@@ -1434,11 +1434,11 @@ watch(() => props.mode, () => {
   gap: 0.5rem;
   padding: 1rem;
   color: var(--text-tertiary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .loading-more i {
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 
 /* States */
@@ -1457,7 +1457,7 @@ watch(() => props.mode, () => {
 .loading-state i,
 .error-state i,
 .placeholder-state i {
-  font-size: 3rem;
+  font-size: var(--text-5xl);
   margin-bottom: 1rem;
   opacity: 0.5;
 }
@@ -1500,14 +1500,14 @@ watch(() => props.mode, () => {
 }
 
 .file-info h4 {
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 0.25rem;
 }
 
 .file-meta {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -1545,7 +1545,7 @@ watch(() => props.mode, () => {
 .content-display {
   padding: 1.5rem;
   font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   line-height: 1.6;
   color: var(--text-primary);
   white-space: pre-wrap;

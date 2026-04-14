@@ -345,7 +345,7 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 }
 
 .step-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--color-text-secondary, #999);
 }
 
@@ -389,7 +389,7 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 }
 
 .role-card i {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   color: var(--color-primary, #3b82f6);
   width: 32px;
   text-align: center;

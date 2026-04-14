@@ -314,7 +314,7 @@ watch(
 }
 
 .graph3d-empty i {
-  font-size: 3rem;
+  font-size: var(--text-5xl);
   opacity: 0.3;
 }
 

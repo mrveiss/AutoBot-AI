@@ -316,7 +316,7 @@ defineExpose({
   padding: 3px var(--spacing-2);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 10px;
+  font-size: var(--text-xs);
   transition: background-color var(--duration-200) var(--ease-in-out);
 }
 

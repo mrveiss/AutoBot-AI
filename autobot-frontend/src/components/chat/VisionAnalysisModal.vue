@@ -384,12 +384,12 @@ onUnmounted(() => {
 
 .header-title i {
   color: var(--color-primary);
-  font-size: 18px;
+  font-size: var(--text-lg);
 }
 
 .header-title h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -452,18 +452,18 @@ onUnmounted(() => {
 }
 
 .drop-placeholder i {
-  font-size: 36px;
+  font-size: var(--text-4xl);
   color: var(--text-muted);
 }
 
 .drop-placeholder p {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
 .formats {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
@@ -491,14 +491,14 @@ onUnmounted(() => {
 }
 
 .filename {
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
   word-break: break-all;
 }
 
 .filesize {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -531,7 +531,7 @@ onUnmounted(() => {
 }
 
 .option-group label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -542,7 +542,7 @@ onUnmounted(() => {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
@@ -564,7 +564,7 @@ onUnmounted(() => {
   color: var(--text-on-primary, #fff);
   border: none;
   border-radius: var(--radius-lg);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: flex;
@@ -593,7 +593,7 @@ onUnmounted(() => {
   border: 1px solid var(--color-error-border, var(--color-error));
   border-radius: var(--radius-lg);
   color: var(--color-error);
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .error-dismiss {
@@ -621,7 +621,7 @@ onUnmounted(() => {
 
 .results-header h4 {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-success);
   display: flex;
@@ -635,7 +635,7 @@ onUnmounted(() => {
 }
 
 .meta-badge {
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 3px 8px;
   border-radius: var(--radius-default);
   background: var(--bg-secondary);
@@ -656,7 +656,7 @@ onUnmounted(() => {
 }
 
 .result-label {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -664,7 +664,7 @@ onUnmounted(() => {
 
 .result-value {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
   line-height: 1.5;
 }
@@ -676,7 +676,7 @@ onUnmounted(() => {
 }
 
 .tag {
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 3px 8px;
   background: var(--color-primary-bg, rgba(59, 130, 246, 0.1));
   color: var(--color-primary);
@@ -695,12 +695,12 @@ onUnmounted(() => {
   padding: 6px 10px;
   background: var(--bg-secondary);
   border-radius: var(--radius-default);
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
 .obj-confidence {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -709,7 +709,7 @@ onUnmounted(() => {
   background: none;
   border: none;
   color: var(--text-tertiary);
-  font-size: 12px;
+  font-size: var(--text-xs);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -724,7 +724,7 @@ onUnmounted(() => {
   padding: 12px;
   background: var(--bg-secondary);
   border-radius: var(--radius-md);
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   overflow-x: auto;
   max-height: 200px;
@@ -751,7 +751,7 @@ onUnmounted(() => {
   color: var(--text-on-primary, #fff);
   border: none;
   border-radius: var(--radius-lg);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: flex;
@@ -774,7 +774,7 @@ onUnmounted(() => {
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: flex;

@@ -343,7 +343,7 @@ onUnmounted(() => {
 
 .feed-title {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
@@ -359,7 +359,7 @@ onUnmounted(() => {
 .badge {
   padding: 0.25rem 0.75rem;
   border-radius: var(--radius-full);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   display: inline-flex;
   align-items: center;
@@ -405,14 +405,14 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   white-space: nowrap;
 }
 
 .section-select {
   padding: 0.375rem 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-default);
   background: var(--bg-card);
@@ -456,7 +456,7 @@ onUnmounted(() => {
 .last-scan {
   margin-left: auto;
   color: var(--text-tertiary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   display: flex;
   align-items: center;
   gap: 0.375rem;
@@ -489,7 +489,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
@@ -553,7 +553,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
 }
 
 .change-content {
@@ -571,7 +571,7 @@ onUnmounted(() => {
 .change-command {
   color: var(--text-tertiary);
   font-weight: 400;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .change-meta {

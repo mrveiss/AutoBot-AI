@@ -397,7 +397,7 @@ function statusClass(status: string): string {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-primary, #e2e8f0);
 }
 .panel-header {
@@ -408,7 +408,7 @@ function statusClass(status: string): string {
 }
 .panel-header h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
 }
 .agent-selector {
@@ -561,7 +561,7 @@ function statusClass(status: string): string {
 .count-badge {
   background: var(--bg-input, #0f172a);
   border-radius: var(--radius-xl);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   padding: 0.1rem 0.4rem;
 }
 button {
@@ -602,7 +602,7 @@ button:not(:disabled):hover {
   border-color: var(--color-info);
 }
 .btn-sm {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   padding: 0.15rem 0.45rem;
 }
 .badge {

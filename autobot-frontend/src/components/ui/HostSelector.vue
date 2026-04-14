@@ -354,7 +354,7 @@ defineExpose({
 }
 
 .selected-host .host-address {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -384,7 +384,7 @@ defineExpose({
 
 .expand-icon {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--text-xs);
   transition: transform 0.2s;
 }
 
@@ -415,7 +415,7 @@ defineExpose({
 
 .selector-header h4 {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -445,7 +445,7 @@ defineExpose({
   background: var(--bg-tertiary);
   border: 1px solid transparent;
   border-radius: var(--radius-md);
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.15s;
@@ -511,7 +511,7 @@ defineExpose({
 }
 
 .host-details {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -526,7 +526,7 @@ defineExpose({
 
 .capability-badge {
   padding: 2px 6px;
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-weight: 600;
   border-radius: var(--radius-default);
   text-transform: uppercase;
@@ -562,7 +562,7 @@ defineExpose({
 
 .empty-state p {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .selector-actions {
@@ -578,7 +578,7 @@ defineExpose({
   padding: 8px 12px;
   border: none;
   border-radius: var(--radius-md);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: flex;

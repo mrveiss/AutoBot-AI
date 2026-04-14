@@ -368,11 +368,11 @@ function resetEdit(): void {
   gap: var(--spacing-2, 0.5rem);
   font-weight: var(--font-semibold, 600);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .progress-percent {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   font-weight: var(--font-medium, 500);
 }
@@ -393,7 +393,7 @@ function resetEdit(): void {
 
 /* Step Detail */
 .step-description {
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: var(--font-semibold, 600);
   color: var(--text-primary);
   margin: 0 0 var(--spacing-2, 0.5rem) 0;
@@ -401,7 +401,7 @@ function resetEdit(): void {
 
 .step-explanation {
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   margin: 0;
   line-height: 1.5;
 }
@@ -420,7 +420,7 @@ function resetEdit(): void {
   gap: var(--spacing-2, 0.5rem);
   padding: var(--spacing-2, 0.5rem) var(--spacing-3, 0.75rem);
   background: var(--bg-tertiary, #374151);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: var(--font-medium, 500);
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -431,7 +431,7 @@ function resetEdit(): void {
   display: block;
   padding: var(--spacing-3, 0.75rem);
   font-family: var(--font-mono, monospace);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--color-success, #10b981);
   word-break: break-all;
   white-space: pre-wrap;
@@ -487,7 +487,7 @@ function resetEdit(): void {
 }
 
 .edit-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: var(--font-medium, 500);
   color: var(--text-secondary);
 }
@@ -495,7 +495,7 @@ function resetEdit(): void {
 .edit-textarea {
   width: 100%;
   font-family: var(--font-mono, monospace);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-primary);
   background: var(--bg-terminal, #1a1b26);
   border: 1px solid var(--border-default);
@@ -584,7 +584,7 @@ function resetEdit(): void {
 .guide-title {
   margin: 0 0 var(--spacing-2, 0.5rem) 0;
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .guide-list {

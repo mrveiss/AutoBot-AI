@@ -303,7 +303,7 @@ const getQualityClass = (score: number): string => {
   color: var(--text-muted);
   padding: 4px 8px;
   border-radius: var(--radius-default);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   cursor: pointer;
   transition: all 0.2s;
   display: inline-flex;

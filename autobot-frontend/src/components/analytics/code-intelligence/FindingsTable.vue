@@ -246,7 +246,7 @@ function copyPath(finding: Finding): void {
   background: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--text-sm);
   width: 200px;
   transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -265,7 +265,7 @@ function copyPath(finding: Finding): void {
 .severity-badge {
   padding: 2px 8px;
   border-radius: var(--radius-xs);
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 500;
   font-family: var(--font-sans);
   text-transform: uppercase;
@@ -340,7 +340,7 @@ th, td {
 th {
   background: var(--bg-tertiary);
   font-weight: var(--font-medium);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -366,7 +366,7 @@ th {
 /* Issue #901: Monospace for file paths and line numbers */
 code {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-primary);
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
@@ -407,7 +407,7 @@ code {
   background: var(--color-info-bg);
   color: var(--color-info-dark);
   border-radius: var(--radius-xs);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-family: var(--font-mono);
   font-weight: 500;
   letter-spacing: 0.05em;
@@ -428,7 +428,7 @@ code {
   border-radius: var(--radius-xs);
   color: var(--text-primary);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   font-family: var(--font-sans);
   transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);

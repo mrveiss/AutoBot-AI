@@ -1210,7 +1210,7 @@ onUnmounted(() => {
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
-  font-size: 12px;
+  font-size: var(--text-xs);
   flex-shrink: 0;
   transition: color var(--duration-200);
 }
@@ -1239,7 +1239,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   padding: 10px 16px;
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
   text-decoration: none;

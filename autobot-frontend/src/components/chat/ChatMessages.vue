@@ -1727,7 +1727,7 @@ onMounted(async () => {
 /* Issue #1310: Type badges for clear message identification */
 .message-type-badge {
   @apply inline-flex items-center text-xs font-semibold px-1.5 py-0.5 rounded ml-2;
-  font-size: 10px;
+  font-size: var(--text-xs);
   line-height: 1.2;
 }
 

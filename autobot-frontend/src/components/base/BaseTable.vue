@@ -278,7 +278,7 @@ const formatCellValue = (value: any, column: TableColumn) => {
 .base-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-family: var(--font-sans);
 }
 
@@ -295,7 +295,7 @@ const formatCellValue = (value: any, column: TableColumn) => {
 
 .table-header-cell {
   padding: 12px 8px;
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -387,7 +387,7 @@ const formatCellValue = (value: any, column: TableColumn) => {
 
 .monospace-cell {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 /* Selection Cells */
@@ -436,7 +436,7 @@ const formatCellValue = (value: any, column: TableColumn) => {
 
 .empty-text {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 /* Table Footer */

@@ -635,7 +635,7 @@ onMounted(() => {
   align-items: center;
   gap: 0.5rem;
   margin: 0;
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   color: var(--text-primary);
 }
 
@@ -646,7 +646,7 @@ onMounted(() => {
 .subtitle {
   color: var(--text-secondary);
   margin: 0.25rem 0 0 0;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .header-actions {
@@ -662,7 +662,7 @@ onMounted(() => {
   padding: 0.5rem 1rem;
   border: none;
   border-radius: var(--radius-md);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
@@ -741,7 +741,7 @@ onMounted(() => {
 }
 
 .status-icon {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
 }
 
 .status-content {
@@ -789,7 +789,7 @@ onMounted(() => {
 }
 
 .card-icon {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
 }
 
 .card-content {
@@ -798,13 +798,13 @@ onMounted(() => {
 }
 
 .card-value {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .card-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -833,7 +833,7 @@ onMounted(() => {
 
 .panel-header h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--text-base);
   color: var(--text-primary);
 }
 
@@ -854,7 +854,7 @@ onMounted(() => {
   background: transparent;
   border: none;
   border-radius: var(--radius-default);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   cursor: pointer;
 }
@@ -898,11 +898,11 @@ onMounted(() => {
 }
 
 .severity-badge {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .check-code {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--accent-color);
   background: var(--bg-quaternary);
@@ -916,7 +916,7 @@ onMounted(() => {
 }
 
 .result-location {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-family: monospace;
   color: var(--text-secondary);
   margin-bottom: 0.5rem;
@@ -937,7 +937,7 @@ onMounted(() => {
 
 .result-snippet pre {
   margin: 0;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-primary);
   overflow-x: auto;
 }
@@ -946,13 +946,13 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--color-success);
 }
 
 /* Config Panel */
 .check-count {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -971,7 +971,7 @@ onMounted(() => {
 }
 
 .category-icon {
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 
 .category-name {
@@ -981,7 +981,7 @@ onMounted(() => {
 }
 
 .category-count {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -1121,7 +1121,7 @@ onMounted(() => {
 }
 
 .history-status {
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 
 .history-info {
@@ -1136,7 +1136,7 @@ onMounted(() => {
 }
 
 .history-files {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -1180,19 +1180,19 @@ onMounted(() => {
 
 .stat-value {
   display: block;
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .stat-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
 .common-issues h4 {
   margin: 0 0 0.75rem 0;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
@@ -1233,7 +1233,7 @@ onMounted(() => {
 .issue-count {
   width: 24px;
   text-align: right;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -1259,7 +1259,7 @@ onMounted(() => {
 
 .empty-state p {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 /* Responsive */

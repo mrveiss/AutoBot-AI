@@ -43,7 +43,7 @@ function toggleDarkMode() {
   border-radius: var(--radius-md);
   background-color: var(--bg-hover);
   color: var(--text-primary);
-  font-size: 18px;
+  font-size: var(--text-lg);
   transition: all 0.2s ease;
   cursor: pointer;
 }

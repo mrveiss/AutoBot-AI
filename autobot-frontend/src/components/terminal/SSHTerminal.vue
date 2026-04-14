@@ -319,7 +319,7 @@ defineExpose({
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: var(--text-xs);
   border-bottom: 1px solid #333;
 }
 
@@ -369,7 +369,7 @@ defineExpose({
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: var(--radius-default);
   color: inherit;
-  font-size: 12px;
+  font-size: var(--text-xs);
   cursor: pointer;
   transition: all 0.15s;
 }

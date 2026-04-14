@@ -398,7 +398,7 @@ const formattedUpdatedAt = computed(() => {
   align-items: center;
   gap: 16px;
   padding: 6px 16px;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--color-text-muted, #888);
   border-top: 1px solid var(--color-border, #333);
 }

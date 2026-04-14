@@ -237,7 +237,7 @@ function submitType() {
   align-items: center;
   justify-content: center;
   color: var(--color-text-muted, #9ca3af);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .toolbar {
@@ -259,7 +259,7 @@ function submitType() {
   background: transparent;
   color: var(--color-text-secondary, #a1a1aa);
   cursor: pointer;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   transition: background 0.15s, color 0.15s;
 }
 
@@ -311,6 +311,6 @@ function submitType() {
   background: var(--color-primary, #3b82f6);
   color: white;
   cursor: pointer;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 </style>

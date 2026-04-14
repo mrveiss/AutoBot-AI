@@ -861,7 +861,7 @@ export default {
   padding: 8px 16px;
   text-decoration: none;
   border-radius: 0 0 4px 0;
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   transition: top 0.2s ease-in-out;
   z-index: var(--z-maximum);

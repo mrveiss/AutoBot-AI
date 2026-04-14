@@ -121,7 +121,7 @@ onMounted(() => {
   gap: 0.75rem;
   padding: 0.75rem 1rem;
   border-radius: var(--radius-lg);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   line-height: 1.25rem;
   transition: all 0.2s ease;
 }

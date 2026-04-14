@@ -771,7 +771,7 @@ function formatTimestamp(timestamp: string | undefined): string {
   display: inline-block;
   padding: 2px 8px;
   border-radius: var(--radius-default);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 500;
   text-transform: uppercase;
   margin-right: 8px;
@@ -797,7 +797,7 @@ function formatTimestamp(timestamp: string | undefined): string {
   display: inline-block;
   padding: 2px 8px;
   border-radius: var(--radius-default);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 500;
   margin-right: 8px;
   background: rgba(59, 130, 246, 0.2);
@@ -810,7 +810,7 @@ function formatTimestamp(timestamp: string | undefined): string {
   display: inline-block;
   padding: 2px 8px;
   border-radius: var(--radius-default);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   background: rgba(34, 197, 94, 0.2);
   color: var(--color-success-light);
@@ -829,7 +829,7 @@ function formatTimestamp(timestamp: string | undefined): string {
   padding: 2px 8px;
   margin-left: 8px;
   border-radius: var(--radius-default);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 500;
   background: rgba(100, 116, 139, 0.2);
   color: var(--text-muted);
@@ -899,7 +899,7 @@ function formatTimestamp(timestamp: string | undefined): string {
 /* Analysis Time */
 .analysis-time {
   color: var(--text-tertiary);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   margin-left: 4px;
 }
 

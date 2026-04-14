@@ -294,7 +294,7 @@ watch(() => props.modelValue, (isOpen) => {
   padding: 0.75rem 1rem;
   border-radius: var(--radius-md);
   margin-bottom: 1rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .alert-error {
@@ -313,11 +313,11 @@ watch(() => props.modelValue, (isOpen) => {
   border-radius: var(--radius-lg);
   margin-bottom: 1.5rem;
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .export-summary i {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   color: var(--color-info);
 }
 
@@ -331,7 +331,7 @@ watch(() => props.modelValue, (isOpen) => {
   margin-bottom: 0.5rem;
   font-weight: 500;
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 /* Format Options */
@@ -371,7 +371,7 @@ watch(() => props.modelValue, (isOpen) => {
   background: var(--bg-secondary);
   border-radius: var(--radius-md);
   color: var(--color-info);
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 
 .format-option.selected .format-icon {
@@ -392,7 +392,7 @@ watch(() => props.modelValue, (isOpen) => {
 
 .format-desc {
   display: block;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -406,7 +406,7 @@ watch(() => props.modelValue, (isOpen) => {
   align-items: center;
   gap: 0.5rem;
   cursor: pointer;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 

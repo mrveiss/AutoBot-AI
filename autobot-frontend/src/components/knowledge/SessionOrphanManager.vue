@@ -276,7 +276,7 @@ const cleanupSessionOrphans = async () => {
 }
 
 .section-header h4 {
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0 0 0.25rem 0;
@@ -288,7 +288,7 @@ const cleanupSessionOrphans = async () => {
 .header-description {
   color: var(--text-tertiary);
   margin: 0;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .orphan-content {
@@ -321,7 +321,7 @@ const cleanupSessionOrphans = async () => {
 
 .stat-value {
   display: block;
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -332,7 +332,7 @@ const cleanupSessionOrphans = async () => {
 
 .stat-label {
   display: block;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   margin-top: 0.25rem;
 }
@@ -345,7 +345,7 @@ const cleanupSessionOrphans = async () => {
 }
 
 .orphan-preview h5 {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-warning-darker);
   margin: 0 0 0.75rem 0;
@@ -373,7 +373,7 @@ const cleanupSessionOrphans = async () => {
 }
 
 .orphan-category {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   padding: 0.125rem 0.5rem;
   background: var(--color-primary-bg);
   color: var(--color-primary-dark);
@@ -381,7 +381,7 @@ const cleanupSessionOrphans = async () => {
 }
 
 .orphan-important {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   padding: 0.125rem 0.5rem;
   background: var(--color-warning-bg);
   color: var(--color-warning-dark);
@@ -389,7 +389,7 @@ const cleanupSessionOrphans = async () => {
 }
 
 .orphan-content-text {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   margin: 0 0 0.25rem 0;
   line-height: 1.4;
@@ -399,12 +399,12 @@ const cleanupSessionOrphans = async () => {
 }
 
 .orphan-session {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
 .orphan-more {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
   font-style: italic;
   margin: 0.75rem 0 0 0;
@@ -453,7 +453,7 @@ const cleanupSessionOrphans = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   margin-bottom: 1rem;
 }
 
@@ -468,7 +468,7 @@ const cleanupSessionOrphans = async () => {
 }
 
 .action-card h5 {
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0 0 0.5rem 0;
@@ -482,7 +482,7 @@ const cleanupSessionOrphans = async () => {
 
 .action-meta {
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   display: block;
   margin-bottom: 1rem;
 }

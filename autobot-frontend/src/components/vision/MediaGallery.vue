@@ -320,14 +320,14 @@ onUnmounted(() => {
 
 .header-info h3 {
   margin: 0 0 4px;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .header-info p {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -342,7 +342,7 @@ onUnmounted(() => {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
@@ -352,7 +352,7 @@ onUnmounted(() => {
   color: var(--color-error);
   border: 1px solid var(--color-error);
   border-radius: var(--radius-lg);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: flex;
@@ -408,7 +408,7 @@ onUnmounted(() => {
 }
 
 .thumbnail-placeholder {
-  font-size: 48px;
+  font-size: var(--text-5xl);
   color: var(--text-muted);
 }
 
@@ -424,7 +424,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .item-info {
@@ -435,7 +435,7 @@ onUnmounted(() => {
 }
 
 .item-name {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
   white-space: nowrap;
@@ -444,7 +444,7 @@ onUnmounted(() => {
 }
 
 .item-date {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -502,13 +502,13 @@ onUnmounted(() => {
 
 .empty-state h4 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--text-base);
   color: var(--text-primary);
 }
 
 .empty-state p {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
   text-align: center;
 }
@@ -549,7 +549,7 @@ onUnmounted(() => {
 
 .modal-header h4 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   white-space: nowrap;
@@ -612,12 +612,12 @@ onUnmounted(() => {
 }
 
 .detail-row .label {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
 .detail-row .value {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
@@ -629,7 +629,7 @@ onUnmounted(() => {
 
 .analysis-section h5 {
   margin: 0 0 12px;
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -651,12 +651,12 @@ onUnmounted(() => {
 }
 
 .data-row .label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
 .data-row .value {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--text-primary);
 }
@@ -666,7 +666,7 @@ onUnmounted(() => {
   background: none;
   border: none;
   color: var(--text-tertiary);
-  font-size: 13px;
+  font-size: var(--text-sm);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -682,7 +682,7 @@ onUnmounted(() => {
   padding: 12px;
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   overflow-x: auto;
   max-height: 200px;
@@ -702,7 +702,7 @@ onUnmounted(() => {
   color: var(--text-on-primary);
   border: none;
   border-radius: var(--radius-lg);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: flex;
@@ -721,7 +721,7 @@ onUnmounted(() => {
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: flex;
@@ -739,7 +739,7 @@ onUnmounted(() => {
   color: var(--color-error);
   border: 1px solid var(--color-error);
   border-radius: var(--radius-lg);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: flex;
@@ -786,19 +786,19 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   color: var(--color-warning);
-  font-size: 20px;
+  font-size: var(--text-xl);
 }
 
 .confirm-modal h4 {
   margin: 0 0 8px;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .confirm-modal p {
   margin: 0 0 20px;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -814,7 +814,7 @@ onUnmounted(() => {
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
 }
@@ -830,7 +830,7 @@ onUnmounted(() => {
   color: white;
   border: none;
   border-radius: var(--radius-lg);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
 }

@@ -808,7 +808,7 @@ onMounted(() => {
   align-items: center;
   gap: 0.5rem;
   margin: 0;
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   color: var(--text-primary);
 }
 
@@ -819,7 +819,7 @@ onMounted(() => {
 .subtitle {
   color: var(--text-secondary);
   margin: 0.25rem 0 0 0;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .header-actions {
@@ -835,7 +835,7 @@ onMounted(() => {
   padding: 0.5rem 1rem;
   border: none;
   border-radius: var(--radius-md);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
@@ -902,7 +902,7 @@ onMounted(() => {
 }
 
 .input-group label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -915,7 +915,7 @@ onMounted(() => {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .input-group input:focus {
@@ -938,7 +938,7 @@ onMounted(() => {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-2xl);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -967,7 +967,7 @@ onMounted(() => {
 }
 
 .card-icon {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
 }
 
 .card-content {
@@ -976,13 +976,13 @@ onMounted(() => {
 }
 
 .card-value {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .card-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -1011,7 +1011,7 @@ onMounted(() => {
 
 .panel-header h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--text-base);
   color: var(--text-primary);
 }
 
@@ -1024,7 +1024,7 @@ onMounted(() => {
 .close-btn {
   background: none;
   border: none;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   color: var(--text-secondary);
   cursor: pointer;
 }
@@ -1044,7 +1044,7 @@ onMounted(() => {
   background: transparent;
   border: none;
   border-radius: var(--radius-default);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   cursor: pointer;
 }
@@ -1106,11 +1106,11 @@ onMounted(() => {
 }
 
 .severity-badge {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .severity-badge.large {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
 }
 
 .severity-badge.small {
@@ -1121,7 +1121,7 @@ onMounted(() => {
 }
 
 .issue-code {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--accent-color);
   background: var(--bg-quaternary);
@@ -1137,7 +1137,7 @@ onMounted(() => {
 .issue-location {
   display: flex;
   gap: 0.5rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   margin-bottom: 0.5rem;
 }
@@ -1164,7 +1164,7 @@ onMounted(() => {
 
 .detail-section label {
   display: block;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -1180,13 +1180,13 @@ onMounted(() => {
 
 .detail-title h4 {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--text-base);
   color: var(--text-primary);
 }
 
 .location-info {
   font-family: monospace;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
@@ -1211,7 +1211,7 @@ onMounted(() => {
 }
 
 .suggestion-icon {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
 }
 
 .suggestion-box p {
@@ -1341,12 +1341,12 @@ onMounted(() => {
 
 .history-path {
   font-family: monospace;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
 .history-date {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -1398,7 +1398,7 @@ onMounted(() => {
 
 .empty-state p {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 /* Modal */
@@ -1447,7 +1447,7 @@ onMounted(() => {
 
 .pattern-category h4 {
   margin: 0 0 0.75rem 0;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
@@ -1486,14 +1486,14 @@ onMounted(() => {
 
 .pattern-code {
   font-family: monospace;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--accent-color);
 }
 
 .pattern-name {
   flex: 1;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 

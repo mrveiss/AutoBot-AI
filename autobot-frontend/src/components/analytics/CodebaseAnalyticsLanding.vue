@@ -478,7 +478,7 @@ onUnmounted(() => {
 }
 
 .landing-loading i {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
 }
 
 /* Projects Grid */
@@ -533,7 +533,7 @@ onUnmounted(() => {
 }
 
 .project-card--add i {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
 }
 
 .project-card--add:hover {

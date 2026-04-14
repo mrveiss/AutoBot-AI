@@ -586,7 +586,7 @@ onMounted(() => {
 }
 
 .metric-value {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -601,7 +601,7 @@ onMounted(() => {
 
 .metric-trend {
   margin-top: 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .trend-up {
@@ -631,7 +631,7 @@ onMounted(() => {
 .data-table th {
   font-weight: 600;
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .text-right {
@@ -643,7 +643,7 @@ onMounted(() => {
   padding: 0.25rem 0.5rem;
   background: var(--bg-tertiary);
   border-radius: var(--radius-default);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .success {
@@ -731,7 +731,7 @@ onMounted(() => {
   width: 1.5rem;
   height: 1.5rem;
   border-radius: 50%;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   margin-right: 0.5rem;
   background: var(--bg-tertiary);
@@ -792,7 +792,7 @@ onMounted(() => {
   background: var(--color-primary);
   color: var(--text-on-primary);
   border-radius: 50%;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
 }
 
@@ -804,6 +804,6 @@ onMounted(() => {
 
 .peak-events {
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 </style>

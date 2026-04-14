@@ -412,7 +412,7 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-lg);
   background: rgba(37, 99, 235, 0.15);
   color: #60a5fa;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .voice-overlay__mode-select {
@@ -424,7 +424,7 @@ onBeforeUnmount(() => {
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M3 4.5L6 8l3-3.5H3z'/%3E%3C/svg%3E")
     no-repeat right 0.5rem center;
   color: var(--text-secondary, #94a3b8);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   cursor: pointer;
   transition: border-color 0.15s;
 }
@@ -508,7 +508,7 @@ onBeforeUnmount(() => {
   height: 100%;
   min-height: 120px;
   color: var(--text-muted, #64748b);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 /* Bubbles */
@@ -547,7 +547,7 @@ onBeforeUnmount(() => {
   max-width: 80%;
   padding: 0.625rem 0.875rem;
   border-radius: 0.875rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   line-height: 1.5;
   color: var(--text-primary, #e2e8f0);
 }
@@ -613,7 +613,7 @@ onBeforeUnmount(() => {
 
 .voice-overlay__cert-warning-title {
   font-weight: 600;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .voice-overlay__cert-warning-body {
@@ -632,13 +632,13 @@ onBeforeUnmount(() => {
   background: rgba(0, 0, 0, 0.3);
   padding: 0.1rem 0.3rem;
   border-radius: var(--radius-default);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   word-break: break-all;
 }
 
 .voice-overlay__cert-warning-fallback {
   color: #94a3b8;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   margin-top: 0.25rem;
 }
 
@@ -761,7 +761,7 @@ onBeforeUnmount(() => {
 }
 
 .voice-overlay__hint {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted, #64748b);
   letter-spacing: 0.02em;
 }

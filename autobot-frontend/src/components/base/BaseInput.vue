@@ -166,7 +166,7 @@ defineExpose({
 /* Label */
 .input-label {
   display: block;
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
   margin-bottom: 4px;
@@ -216,7 +216,7 @@ defineExpose({
   border: none;
   outline: none;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-family: var(--font-sans);
   transition: color 150ms ease;
 }
@@ -242,7 +242,7 @@ defineExpose({
 }
 
 .input-size-sm .base-input {
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .input-size-md .input-container {
@@ -251,7 +251,7 @@ defineExpose({
 }
 
 .input-size-md .base-input {
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .input-size-lg .input-container {
@@ -260,7 +260,7 @@ defineExpose({
 }
 
 .input-size-lg .base-input {
-  font-size: 16px;
+  font-size: var(--text-base);
 }
 
 /* Prefix/Suffix */
@@ -304,14 +304,14 @@ defineExpose({
 }
 
 .helper-text {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   margin: 0;
   font-family: var(--font-sans);
 }
 
 .error-text {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-error);
   margin: 0;
   font-family: var(--font-sans);

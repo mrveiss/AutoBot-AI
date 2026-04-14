@@ -333,19 +333,19 @@ const handleRemove = () => {
 .showcase-container { padding: 24px; max-width: 1400px; margin: 0 auto; background-color: var(--bg-primary); min-height: 100%; overflow-y: auto; }
 .showcase-header { margin-bottom: 32px; }
 .showcase-title { font-size: 32px; font-weight: 600; color: var(--text-primary); margin: 0 0 8px 0; font-family: var(--font-sans); }
-.showcase-subtitle { font-size: 16px; color: var(--text-secondary); margin: 0; }
+.showcase-subtitle { font-size: var(--text-base); color: var(--text-secondary); margin: 0; }
 .showcase-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 24px; }
 .showcase-full-width { grid-column: 1 / -1; }
 .component-section { display: flex; flex-direction: column; gap: 20px; }
-.section-heading { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin: 0; padding-bottom: 8px; border-bottom: 1px solid var(--border-subtle); }
+.section-heading { font-size: var(--text-sm); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin: 0; padding-bottom: 8px; border-bottom: 1px solid var(--border-subtle); }
 .button-group { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .input-stack { display: flex; flex-direction: column; gap: 12px; }
 .badge-group { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .card-stack { display: flex; flex-direction: column; gap: 16px; }
 .color-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
 .color-swatch { aspect-ratio: 1; border-radius: var(--radius-default); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 12px; box-shadow: var(--shadow-md); }
-.swatch-label { font-size: 11px; font-weight: 600; color: white; text-transform: uppercase; letter-spacing: 0.05em; }
-.swatch-hex { font-size: 10px; font-family: var(--font-mono); color: rgba(255, 255, 255, 0.8); }
+.swatch-label { font-size: var(--text-xs); font-weight: 600; color: white; text-transform: uppercase; letter-spacing: 0.05em; }
+.swatch-hex { font-size: var(--text-xs); font-family: var(--font-mono); color: rgba(255, 255, 255, 0.8); }
 .type-samples { padding: 16px; background-color: var(--bg-secondary); border-radius: var(--radius-default); border: 1px solid var(--border-default); }
 @media (max-width: 768px) {
   .showcase-grid { grid-template-columns: 1fr; }

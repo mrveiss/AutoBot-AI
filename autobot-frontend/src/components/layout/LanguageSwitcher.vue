@@ -135,7 +135,7 @@ onUnmounted(() => document.removeEventListener('click', handleOutsideClick))
   border-radius: var(--radius-md);
   background-color: rgba(255, 255, 255, 0.1);
   color: white;
-  font-size: 18px;
+  font-size: var(--text-lg);
   transition: all 0.2s ease;
   cursor: pointer;
 }

@@ -333,14 +333,14 @@ onMounted(() => {
 
 .header-info h3 {
   margin: 0 0 4px;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .header-info p {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -350,7 +350,7 @@ onMounted(() => {
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: flex;
@@ -424,7 +424,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 16px;
+  font-size: var(--text-base);
 }
 
 .card-info {
@@ -435,20 +435,20 @@ onMounted(() => {
 }
 
 .action-name {
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .element-type {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
 .confidence-badge {
   padding: 4px 10px;
   border-radius: var(--radius-xl);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
 }
 
@@ -468,7 +468,7 @@ onMounted(() => {
 }
 
 .card-description {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   margin-bottom: 12px;
   line-height: 1.4;
@@ -484,7 +484,7 @@ onMounted(() => {
   flex: 1;
   padding: 8px 12px;
   border-radius: var(--radius-md);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   cursor: pointer;
   display: flex;
@@ -541,13 +541,13 @@ onMounted(() => {
 
 .empty-state h4 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--text-base);
   color: var(--text-primary);
 }
 
 .empty-state p {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -574,7 +574,7 @@ onMounted(() => {
 
 .reference-header h4 {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-secondary);
   display: flex;
@@ -613,7 +613,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .type-info {
@@ -624,13 +624,13 @@ onMounted(() => {
 }
 
 .type-name {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
 }
 
 .type-desc {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -654,7 +654,7 @@ onMounted(() => {
 }
 
 .interaction-name {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
@@ -690,7 +690,7 @@ onMounted(() => {
 
 .modal-header h4 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -721,14 +721,14 @@ onMounted(() => {
 }
 
 .detail-section label {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .detail-section span {
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
@@ -746,7 +746,7 @@ onMounted(() => {
   color: var(--text-on-primary);
   border: none;
   border-radius: var(--radius-lg);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: flex;
@@ -765,7 +765,7 @@ onMounted(() => {
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
 }

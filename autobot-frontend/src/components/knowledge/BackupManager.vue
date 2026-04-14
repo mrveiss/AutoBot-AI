@@ -499,7 +499,7 @@ onMounted(() => {
   background: var(--color-primary-bg);
   color: var(--color-primary);
   border-radius: var(--radius-md);
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 
 .backup-info {

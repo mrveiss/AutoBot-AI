@@ -113,27 +113,27 @@ const scoreArc = computed(() => {
 }
 
 .score-value {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
 }
 
 .score-grade {
   display: block;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: var(--font-medium);
 }
 
 .gauge-label {
   margin-top: var(--spacing-2);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   font-weight: var(--font-medium);
 }
 
 .status-message {
   margin-top: var(--spacing-1);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   text-align: center;
   max-width: 150px;

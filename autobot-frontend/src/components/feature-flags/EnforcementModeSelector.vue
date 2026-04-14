@@ -142,7 +142,7 @@ const selectMode = (mode: EnforcementMode) => {
 
 .selector-header h3 {
   margin: 0 0 8px;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
@@ -156,7 +156,7 @@ const selectMode = (mode: EnforcementMode) => {
 
 .selector-header .description {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -199,7 +199,7 @@ const selectMode = (mode: EnforcementMode) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: var(--text-lg);
   flex-shrink: 0;
 }
 
@@ -236,7 +236,7 @@ const selectMode = (mode: EnforcementMode) => {
 }
 
 .current-badge {
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 2px 8px;
   background: var(--color-primary);
   color: var(--text-on-primary);
@@ -246,7 +246,7 @@ const selectMode = (mode: EnforcementMode) => {
 
 .option-description {
   margin: 0 0 10px;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   line-height: 1.4;
 }
@@ -261,7 +261,7 @@ const selectMode = (mode: EnforcementMode) => {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .detail-item.neutral {
@@ -329,7 +329,7 @@ const selectMode = (mode: EnforcementMode) => {
 
 .mode-warning i,
 .mode-info i {
-  font-size: 18px;
+  font-size: var(--text-lg);
   flex-shrink: 0;
   margin-top: 2px;
 }
@@ -343,7 +343,7 @@ const selectMode = (mode: EnforcementMode) => {
 .warning-content p,
 .info-content p {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-sm);
   opacity: 0.9;
 }
 </style>

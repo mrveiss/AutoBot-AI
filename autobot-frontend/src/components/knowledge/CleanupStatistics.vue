@@ -412,7 +412,7 @@ const runCleanup = async () => {
 }
 
 .result-icon {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   color: var(--text-secondary);
 }
 

@@ -115,7 +115,7 @@ function formatDuration(ms: number): string {
   margin-bottom: 0.5rem;
   background: var(--color-bg-subtle, #0f172a);
   overflow: hidden;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .reasoning-trace--active {

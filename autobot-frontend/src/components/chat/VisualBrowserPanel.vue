@@ -525,7 +525,7 @@ onMounted(() => {
 }
 
 .viewport-icon {
-  font-size: 3rem;
+  font-size: var(--text-5xl);
   color: var(--text-secondary);
 }
 

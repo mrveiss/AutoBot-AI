@@ -368,7 +368,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 
 .modal-header h2 {
   margin: 0;
-  font-size: 24px;
+  font-size: var(--text-2xl);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -408,7 +408,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   border: none;
   background: none;
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   border-bottom: 2px solid transparent;
@@ -426,7 +426,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 }
 
 .tab-btn i {
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .modal-body {
@@ -442,7 +442,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 }
 
 .profile-section h3 {
-  font-size: 18px;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 16px;
@@ -475,7 +475,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 .role-badge {
   padding: 2px 8px;
   border-radius: var(--radius-xl);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
 }
@@ -492,7 +492,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   display: block;
   font-weight: 500;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--text-sm);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 8px;
@@ -510,7 +510,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   background: var(--bg-secondary);
   color: var(--text-primary);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--text-sm);
   transition: all 0.15s;
 }
 
@@ -534,7 +534,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
   cursor: pointer;
 }
@@ -553,7 +553,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   color: white;
   border: none;
   border-radius: var(--radius-md);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   transition: opacity 0.15s;
@@ -580,7 +580,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   border-radius: var(--radius-md);
   background: var(--bg-secondary);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: var(--text-sm);
   width: 100%;
   box-sizing: border-box;
 }

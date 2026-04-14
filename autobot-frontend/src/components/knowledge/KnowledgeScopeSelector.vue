@@ -179,7 +179,7 @@ const handleGroupChange = () => {
   padding: 0.5rem;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   cursor: pointer;
   transition: border-color 0.2s;
   background-color: var(--bg-secondary);

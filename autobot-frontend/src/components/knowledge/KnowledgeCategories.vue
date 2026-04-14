@@ -403,7 +403,7 @@ onUnmounted(() => {
 
 .selection-header .subtitle {
   color: var(--text-secondary);
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
 }
 
 /* Main Categories Grid */
@@ -503,7 +503,7 @@ onUnmounted(() => {
 }
 
 .category-content h3 {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 700;
   color: var(--text-primary);
   margin-bottom: 0.75rem;
@@ -511,14 +511,14 @@ onUnmounted(() => {
 
 .category-description {
   color: var(--text-secondary);
-  font-size: 1rem;
+  font-size: var(--text-base);
   margin-bottom: 0.75rem;
   line-height: 1.6;
 }
 
 .category-examples {
   color: var(--text-tertiary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-style: italic;
   margin-bottom: 1.5rem;
   padding: 0.75rem;
@@ -538,7 +538,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.5rem;
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
@@ -549,7 +549,7 @@ onUnmounted(() => {
 .browse-arrow {
   margin-top: 1.5rem;
   color: var(--color-info);
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   transition: transform 0.3s;
 }
 
@@ -587,7 +587,7 @@ onUnmounted(() => {
 /* Button styling handled by BaseButton component */
 
 .browser-header-bar h3 {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
@@ -655,7 +655,7 @@ onUnmounted(() => {
 }
 
 .view-header h3 {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 0.5rem;
@@ -718,7 +718,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
 }
 
 .stat-content {
@@ -734,7 +734,7 @@ onUnmounted(() => {
 
 .stat-label {
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   margin-top: 0.25rem;
 }
 
@@ -781,7 +781,7 @@ onUnmounted(() => {
 }
 
 .category-browse-card .category-info h4 {
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 0.25rem;
@@ -789,12 +789,12 @@ onUnmounted(() => {
 
 .category-browse-card .category-info p {
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .category-browse-card .browse-arrow {
   color: var(--color-info);
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   transition: transform 0.2s;
 }
 
@@ -899,7 +899,7 @@ onUnmounted(() => {
 }
 
 .kb-stats h4 {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 1rem;
@@ -918,14 +918,14 @@ onUnmounted(() => {
 }
 
 .stat-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 .stat-value {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 600;
   color: var(--color-info);
 }
@@ -934,7 +934,7 @@ onUnmounted(() => {
 .kb-message {
   padding: 0.75rem 1rem;
   border-radius: var(--radius-md);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .kb-message.success {
@@ -957,7 +957,7 @@ onUnmounted(() => {
 }
 
 .categories-header h3 {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -988,7 +988,7 @@ onUnmounted(() => {
 }
 
 .categories-error-state p {
-  font-size: 1rem;
+  font-size: var(--text-base);
   margin-bottom: 1.25rem;
 }
 
@@ -1047,7 +1047,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   color: var(--text-on-primary);
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
 }
 
 .category-actions {
@@ -1058,7 +1058,7 @@ onUnmounted(() => {
 /* Button styling handled by BaseButton component */
 
 .category-name {
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 0.5rem;
@@ -1066,7 +1066,7 @@ onUnmounted(() => {
 
 .category-description {
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   margin-bottom: 1rem;
 }
 
@@ -1074,7 +1074,7 @@ onUnmounted(() => {
   display: flex;
   gap: 1rem;
   margin-bottom: 1rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -1105,7 +1105,7 @@ onUnmounted(() => {
   padding: 0.625rem;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   background: var(--bg-input);
   color: var(--text-primary);
 }
@@ -1218,7 +1218,7 @@ onUnmounted(() => {
 }
 
 .doc-meta {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -1284,7 +1284,7 @@ onUnmounted(() => {
 }
 
 .modal-header h3 {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
@@ -1333,13 +1333,13 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   color: var(--color-info);
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
 }
 
 .doc-title {
   font-weight: 600;
   color: var(--text-primary);
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 
 .doc-info {
@@ -1347,14 +1347,14 @@ onUnmounted(() => {
 }
 
 .doc-source {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--color-info);
   margin-bottom: 0.5rem;
   font-family: var(--font-mono);
 }
 
 .doc-preview {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   line-height: 1.5;
   display: -webkit-box;
@@ -1368,7 +1368,7 @@ onUnmounted(() => {
   justify-content: between;
   align-items: center;
   gap: 1rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
@@ -1417,7 +1417,7 @@ onUnmounted(() => {
 }
 
 .viewer-header h3 {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
@@ -1430,7 +1430,7 @@ onUnmounted(() => {
 }
 
 .document-source {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--color-info);
   font-family: var(--font-mono);
   background: var(--color-info-bg);
@@ -1447,7 +1447,7 @@ onUnmounted(() => {
 .document-content {
   padding: 2rem;
   font-family: var(--font-mono);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   line-height: 1.6;
   white-space: pre-wrap;
   word-wrap: break-word;
@@ -1470,7 +1470,7 @@ onUnmounted(() => {
   background: transparent;
   border-radius: var(--radius-md);
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
@@ -1495,7 +1495,7 @@ onUnmounted(() => {
 
 .subtitle {
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   margin-top: 0.5rem;
 }
 
@@ -1533,7 +1533,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   flex-shrink: 0;
 }
 
@@ -1543,7 +1543,7 @@ onUnmounted(() => {
 }
 
 .doc-details h4 {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 0.25rem;
@@ -1553,7 +1553,7 @@ onUnmounted(() => {
 }
 
 .doc-path {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   margin-bottom: 0.5rem;
   overflow: hidden;
@@ -1564,7 +1564,7 @@ onUnmounted(() => {
 .doc-meta {
   display: flex;
   gap: 1rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
@@ -1584,7 +1584,7 @@ onUnmounted(() => {
 
 .meta-item {
   margin-bottom: 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .meta-item:last-child {
@@ -1602,7 +1602,7 @@ onUnmounted(() => {
 }
 
 .document-content h4 {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 0.75rem;
@@ -1613,7 +1613,7 @@ onUnmounted(() => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   padding: 1rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   overflow-x: auto;
   white-space: pre-wrap;
   word-wrap: break-word;

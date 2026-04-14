@@ -29,7 +29,7 @@ const qualityClass = computed(() => {
   display: inline-block;
   padding: 2px 8px;
   border-radius: var(--radius-xs);
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;

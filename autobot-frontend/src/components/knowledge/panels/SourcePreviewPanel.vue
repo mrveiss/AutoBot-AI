@@ -340,7 +340,7 @@ onUnmounted(() => {
   background: var(--color-info-bg);
   color: var(--color-info);
   border-radius: var(--radius-lg);
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   flex-shrink: 0;
 }
 
@@ -350,7 +350,7 @@ onUnmounted(() => {
 }
 
 .panel-title {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 0.25rem;
@@ -361,7 +361,7 @@ onUnmounted(() => {
 
 .panel-path {
   display: block;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   font-family: var(--font-mono);
   overflow: hidden;
@@ -426,7 +426,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 

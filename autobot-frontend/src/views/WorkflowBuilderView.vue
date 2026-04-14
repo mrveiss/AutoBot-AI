@@ -1196,7 +1196,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 .sidebar-header h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-sans);
@@ -1221,7 +1221,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 .category-divider {
   padding: 12px 20px 8px;
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.8px;
@@ -1295,13 +1295,13 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 .category-item span:first-of-type:not(.count) {
   flex: 1;
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   font-family: var(--font-sans);
 }
 
 .category-item .count {
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-family: var(--font-mono);
   background: var(--bg-tertiary);
   padding: 2px 8px;
@@ -1333,7 +1333,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xs);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   font-family: var(--font-sans);
   cursor: pointer;
@@ -1392,13 +1392,13 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 .header-left h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .header-left .subtitle {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -1414,7 +1414,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   gap: 8px;
   padding: 8px 14px;
   border-radius: var(--radius-2xl);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
@@ -1506,7 +1506,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: var(--text-xl);
   color: var(--text-secondary);
 }
 
@@ -1526,13 +1526,13 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .stat-value {
-  font-size: 20px;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .stat-label {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -1552,7 +1552,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 .overview-card h4 {
   margin: 0 0 16px;
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
@@ -1592,11 +1592,11 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .quick-action i {
-  font-size: 20px;
+  font-size: var(--text-xl);
 }
 
 .quick-action span {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
@@ -1630,13 +1630,13 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .strategy-description {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   margin: 0 0 8px;
 }
 
 .strategy-best-for {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   font-style: italic;
 }
@@ -1674,7 +1674,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .example-strategy {
-  font-size: 12px;
+  font-size: var(--text-xs);
   padding: 2px 8px;
   background: var(--color-primary-bg);
   color: var(--color-primary);
@@ -1682,7 +1682,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .example-description {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   margin: 0;
 }
@@ -1700,7 +1700,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 .nl-header h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
@@ -1732,7 +1732,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: var(--text-sm);
   resize: vertical;
   font-family: inherit;
 }
@@ -1763,7 +1763,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   gap: 8px;
   cursor: pointer;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .checkbox-option input {
@@ -1777,7 +1777,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .nl-actions {
@@ -1802,7 +1802,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .approval-header i {
-  font-size: 20px;
+  font-size: var(--text-xl);
   color: var(--color-warning);
 }
 
@@ -1819,7 +1819,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 .approval-meta {
   display: flex;
   gap: 16px;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -1855,12 +1855,12 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .step-description {
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
 .risk-badge {
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 2px 8px;
   border-radius: var(--radius-xl);
   text-transform: uppercase;
@@ -1887,7 +1887,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   padding: 8px;
   background: var(--bg-primary);
   border-radius: var(--radius-default);
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   overflow-x: auto;
 }
@@ -1915,7 +1915,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 .agents-header h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
@@ -1974,7 +1974,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .agent-header i {
-  font-size: 18px;
+  font-size: var(--text-lg);
   color: var(--color-primary);
 }
 
@@ -1991,7 +1991,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .capability-tag {
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 2px 8px;
   background: var(--bg-secondary);
   color: var(--text-secondary);
@@ -2011,7 +2011,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .agent-performance .label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   min-width: 70px;
 }
@@ -2032,7 +2032,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .agent-performance .value {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--text-primary);
   min-width: 40px;
@@ -2046,7 +2046,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   color: var(--text-on-primary);
   border: none;
   border-radius: var(--radius-lg);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: inline-flex;
@@ -2071,7 +2071,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   color: var(--text-on-primary);
   border: none;
   border-radius: var(--radius-lg);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: inline-flex;
@@ -2090,7 +2090,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   color: var(--text-on-primary);
   border: none;
   border-radius: var(--radius-lg);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: inline-flex;

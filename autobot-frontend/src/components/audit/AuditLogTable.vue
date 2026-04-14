@@ -489,7 +489,7 @@ th span {
 /* Issue #901: Monospace font for timestamps */
 .mono-timestamp {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-xs);
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
@@ -520,7 +520,7 @@ th span {
   gap: var(--spacing-1);
   padding: var(--spacing-1) var(--spacing-2);
   border-radius: var(--radius-xs);
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 500;
   font-family: var(--font-sans);
   text-transform: uppercase;
@@ -569,7 +569,7 @@ th span {
 /* Issue #901: Monospace font for IDs */
 .mono-id {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-xs);
   letter-spacing: -0.02em;
 }
 
@@ -730,7 +730,7 @@ th span {
 /* Issue #901: Monospace for technical data in modal */
 .mono {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-xs);
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
@@ -741,12 +741,12 @@ th span {
   padding: var(--spacing-2);
   border-radius: var(--radius-xs);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .details-json {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-xs);
   background: var(--bg-secondary);
   padding: var(--spacing-3);
   border-radius: var(--radius-xs);

@@ -418,7 +418,7 @@ onUnmounted(() => {
   color: var(--text-on-primary);
   border: none;
   border-radius: var(--radius-lg);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: flex;
@@ -447,7 +447,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -490,7 +490,7 @@ onUnmounted(() => {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
@@ -501,7 +501,7 @@ onUnmounted(() => {
 }
 
 .filter-group label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -510,7 +510,7 @@ onUnmounted(() => {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
@@ -519,7 +519,7 @@ onUnmounted(() => {
 }
 
 .confidence-value {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   min-width: 35px;
 }
@@ -553,7 +553,7 @@ onUnmounted(() => {
 
 .panel-header h4 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -564,7 +564,7 @@ onUnmounted(() => {
 }
 
 .analysis-meta span {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   display: flex;
   align-items: center;
@@ -583,7 +583,7 @@ onUnmounted(() => {
 .text-section h5,
 .layout-section h5 {
   margin: 0 0 12px;
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-secondary);
 }
@@ -624,7 +624,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .element-info {
@@ -636,13 +636,13 @@ onUnmounted(() => {
 }
 
 .element-type {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
 }
 
 .element-text {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   white-space: nowrap;
   overflow: hidden;
@@ -650,7 +650,7 @@ onUnmounted(() => {
 }
 
 .element-confidence {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   padding: 2px 8px;
   background: var(--bg-secondary);
@@ -668,7 +668,7 @@ onUnmounted(() => {
 }
 
 .no-elements i {
-  font-size: 24px;
+  font-size: var(--text-2xl);
 }
 
 /* Text Regions */
@@ -685,7 +685,7 @@ onUnmounted(() => {
 }
 
 .text-content {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
@@ -695,7 +695,7 @@ onUnmounted(() => {
   padding: 12px;
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   overflow-x: auto;
   max-height: 200px;
@@ -728,13 +728,13 @@ onUnmounted(() => {
 
 .empty-state h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--text-lg);
   color: var(--text-primary);
 }
 
 .empty-state p {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -773,7 +773,7 @@ onUnmounted(() => {
 
 .modal-header h4 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -805,14 +805,14 @@ onUnmounted(() => {
 }
 
 .detail-row .label {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .detail-row .value {
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
@@ -823,7 +823,7 @@ onUnmounted(() => {
 }
 
 .interaction-tag {
-  font-size: 12px;
+  font-size: var(--text-xs);
   padding: 4px 10px;
   background: var(--color-primary-bg);
   color: var(--color-primary);
