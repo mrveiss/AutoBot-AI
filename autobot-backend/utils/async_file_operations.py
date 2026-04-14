@@ -25,6 +25,10 @@ from constants.ttl_constants import TTL_5_MINUTES
 
 logger = logging.getLogger(__name__)
 
+# Issue #4397: skip in-memory cache for files larger than 1 MiB to prevent
+# unbounded memory growth when processing 10 MB+ files.
+_MAX_CACHE_ENTRY_BYTES = 1 * 1024 * 1024  # 1 MiB
+
 
 class AsyncFileOperations:
     """
@@ -34,7 +38,7 @@ class AsyncFileOperations:
     - Using aiofiles for true async I/O
     - Wrapping sync operations with asyncio.to_thread()
     - Providing immediate returns with proper error handling
-    - Caching frequently accessed files
+    - Caching frequently accessed files (≤1 MiB only)
     """
 
     def __init__(self):
@@ -60,8 +64,14 @@ class AsyncFileOperations:
             async with aiofiles.open(file_path, mode="r", encoding=encoding) as f:
                 content = await f.read()
 
-            # Cache the content
-            self._cache_file_content(file_path, content)
+            # Issue #4397: only cache files ≤1 MiB to bound memory usage for
+            # large files (10 MB+); oversized files are read fresh each call.
+            if len(content.encode(encoding)) <= _MAX_CACHE_ENTRY_BYTES:
+                self._cache_file_content(file_path, content)
+            else:
+                logger.debug(
+                    "Skipping cache for large file %s (%d chars)", file_path, len(content)
+                )
 
             logger.debug("📖 Read %s chars from %s", len(content), file_path)
             return content
