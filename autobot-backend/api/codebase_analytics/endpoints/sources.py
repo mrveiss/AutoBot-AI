@@ -439,20 +439,18 @@ async def _get_last_indexed(source_id: str) -> Optional[str]:
     Issue #1716: Reads per-source stats doc first, falls back to global.
     """
     try:
-        from ..storage import get_code_collection
+        from ..storage import get_code_collection_async
 
-        collection = await get_code_collection()
+        collection = await get_code_collection_async()
         if collection:
             # Try per-source stats first (#1716), fall back to global
             stats_id = f"codebase_stats_{source_id}"
-            results = await asyncio.to_thread(
-                collection.get,
+            results = await collection.get(
                 ids=[stats_id],
                 include=["metadatas"],
             )
             if not results or not results.get("metadatas"):
-                results = await asyncio.to_thread(
-                    collection.get,
+                results = await collection.get(
                     ids=["codebase_stats"],
                     include=["metadatas"],
                 )
