@@ -87,8 +87,8 @@ class TestNewHookPoints:
         assert HookPoint.FULL_PROMPT_READY is not None
 
     def test_total_hook_count_increased(self):
-        # Original 22 hooks + 2 new ones = 24
-        assert len(HookPoint) == 24
+        # Original 22 hooks + 3 new ones = 25
+        assert len(HookPoint) == 25
 
 
 class TestEmitSystemPromptReady:
