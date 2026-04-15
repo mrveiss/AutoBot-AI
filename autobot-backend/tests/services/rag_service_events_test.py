@@ -719,3 +719,117 @@ class TestRetrievedVsRankedIdsSeparation:
         _, kwargs = mock_store.call_args
         assert kwargs["retrieved_ids"] == ["chunk_a", "chunk_b"]
         assert kwargs["ranked_ids"] == ["chunk_b", "chunk_a"]
+
+
+# =============================================================================
+# _filter_stale_chunks Tests (#4689)
+# =============================================================================
+
+
+class TestFilterStaleChunks:
+    """Tests for RAGService._filter_stale_chunks() — provenance validation."""
+
+    def _make_service(self):
+        from services.rag_service import RAGService
+
+        svc = RAGService.__new__(RAGService)
+        svc._initialized = True
+        return svc
+
+    def _make_chunk(self, source_path: str):
+        from advanced_rag_optimizer import SearchResult
+
+        return SearchResult(
+            content="text",
+            metadata={"relative_path": source_path},
+            semantic_score=0.9,
+            keyword_score=0.0,
+            hybrid_score=0.9,
+            relevance_rank=1,
+            source_path=source_path,
+            chunk_index=0,
+        )
+
+    @pytest.mark.asyncio
+    async def test_valid_chunk_passes_through(self, tmp_path):
+        """Chunk whose source_path IS in the hash cache is kept."""
+        cache_file = tmp_path / ".doc_index_hashes.json"
+        cache_file.write_text('{"docs/guide.md": "abc123"}', encoding="utf-8")
+
+        svc = self._make_service()
+        chunk = self._make_chunk("docs/guide.md")
+
+        with patch("services.knowledge.doc_indexer.HASH_CACHE_FILE", cache_file):
+            result = await svc._filter_stale_chunks([chunk])
+
+        assert result == [chunk]
+
+    @pytest.mark.asyncio
+    async def test_stale_chunk_is_filtered(self, tmp_path):
+        """Chunk whose source_path is ABSENT from the hash cache is dropped."""
+        cache_file = tmp_path / ".doc_index_hashes.json"
+        cache_file.write_text('{"docs/present.md": "abc123"}', encoding="utf-8")
+
+        svc = self._make_service()
+        stale = self._make_chunk("docs/removed.md")
+        valid = self._make_chunk("docs/present.md")
+
+        with patch("services.knowledge.doc_indexer.HASH_CACHE_FILE", cache_file):
+            result = await svc._filter_stale_chunks([stale, valid])
+
+        assert result == [valid]
+
+    @pytest.mark.asyncio
+    async def test_warning_logged_for_stale_chunks(self, tmp_path):
+        """A warning is emitted when stale chunks are dropped."""
+        cache_file = tmp_path / ".doc_index_hashes.json"
+        cache_file.write_text('{"docs/present.md": "abc123"}', encoding="utf-8")
+
+        svc = self._make_service()
+        stale = self._make_chunk("docs/gone.md")
+
+        with patch("services.knowledge.doc_indexer.HASH_CACHE_FILE", cache_file):
+            with patch("services.rag_service.logger") as mock_logger:
+                await svc._filter_stale_chunks([stale])
+
+        mock_logger.warning.assert_called_once()
+        call_args = mock_logger.warning.call_args[0]
+        assert "stale" in call_args[0]
+
+    @pytest.mark.asyncio
+    async def test_cache_unavailable_returns_all_chunks(self, tmp_path):
+        """If the hash cache module cannot be imported, all chunks are returned unchanged."""
+        svc = self._make_service()
+        chunk = self._make_chunk("docs/anything.md")
+
+        with patch.dict("sys.modules", {"services.knowledge.doc_indexer": None}):
+            result = await svc._filter_stale_chunks([chunk])
+
+        assert result == [chunk]
+
+    @pytest.mark.asyncio
+    async def test_empty_cache_skips_filter(self, tmp_path):
+        """An empty hash cache (indexer hasn't run) passes all chunks through."""
+        cache_file = tmp_path / ".doc_index_hashes.json"
+        cache_file.write_text("{}", encoding="utf-8")
+
+        svc = self._make_service()
+        chunk = self._make_chunk("docs/anything.md")
+
+        with patch("services.knowledge.doc_indexer.HASH_CACHE_FILE", cache_file):
+            result = await svc._filter_stale_chunks([chunk])
+
+        assert result == [chunk]
+
+    @pytest.mark.asyncio
+    async def test_missing_cache_file_skips_filter(self, tmp_path):
+        """If hash cache file does not exist, all chunks pass through."""
+        cache_file = tmp_path / "nonexistent_hashes.json"
+
+        svc = self._make_service()
+        chunk = self._make_chunk("docs/anything.md")
+
+        with patch("services.knowledge.doc_indexer.HASH_CACHE_FILE", cache_file):
+            result = await svc._filter_stale_chunks([chunk])
+
+        assert result == [chunk]
