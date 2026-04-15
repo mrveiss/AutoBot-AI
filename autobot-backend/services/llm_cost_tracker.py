@@ -712,7 +712,7 @@ class LLMCostTracker:
             Dict mapping model names to cost/usage data
         """
         model_costs = {}
-        model_keys = await redis.keys(f"{self.MODEL_TOTALS_KEY}:*")
+        model_keys = [key async for key in redis.scan_iter(f"{self.MODEL_TOTALS_KEY}:*")]
 
         if not model_keys:
             return model_costs
@@ -901,7 +901,7 @@ class LLMCostTracker:
             redis = await self.get_redis()
             pattern = f"{self.AGENT_TOTALS_KEY}:*"
             agent_keys = [
-                k for k in await redis.keys(pattern)
+                k async for k in redis.scan_iter(pattern)
                 if b":daily:" not in (k if isinstance(k, bytes) else k.encode())
             ]
 
@@ -1053,10 +1053,9 @@ class LLMCostTracker:
         try:
             redis = await self.get_redis()
             pattern = f"{self.USER_TOTALS_KEY}:*"
-            all_keys = await redis.keys(pattern)
-            # Exclude daily sub-keys
+            # Exclude daily sub-keys; use SCAN to avoid O(N) block on large keyspaces (#4443)
             user_keys = [
-                k for k in all_keys
+                k async for k in redis.scan_iter(pattern)
                 if b":daily:" not in (k if isinstance(k, bytes) else k.encode())
             ]
 
