@@ -15,8 +15,9 @@
           <div class="shrink-0 flex items-center">
             <button
               @click="toggleSystemStatus"
-              class="flex items-center space-x-3 hover:bg-autobot-bg-tertiary rounded-md px-2 py-1 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-autobot-primary/50"
+              class="flex items-center space-x-3 hover:bg-autobot-bg-tertiary rounded-md px-2 py-1 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-autobot-primary"
               :title="getSystemStatusTooltip()"
+              :aria-label="getSystemStatusTooltip()"
             >
               <div class="relative w-8 h-8 bg-white rounded flex items-center justify-center">
                 <span class="text-slate-800 font-bold text-sm font-mono">AB</span>
@@ -65,8 +66,10 @@
                 <a
                   :href="slmAdminUrl"
                   target="_blank"
+                  rel="noopener noreferrer"
                   class="px-3 py-2 rounded text-sm font-medium transition-colors duration-150 text-autobot-text-primary hover:bg-autobot-bg-tertiary"
                   :title="$t('nav.slmAdminTitle')"
+                  :aria-label="$t('nav.slmAdminTitle')"
                 >
                   <div class="flex items-center space-x-1">
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
@@ -166,8 +169,11 @@
             <!-- SLM Admin: external link (Issue #729) -->
             <a
               :href="slmAdminUrl"
+              target="_blank"
+              rel="noopener noreferrer"
               @click="closeMobileNav"
               class="w-full text-start px-3 py-2 rounded text-sm font-medium transition-colors duration-150 block text-autobot-text-primary hover:bg-autobot-bg-tertiary"
+              :aria-label="$t('nav.slmAdminTitle')"
             >
               <div class="flex items-center space-x-2">
                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
@@ -534,6 +540,12 @@ export default {
       }
     };
 
+    const closeNavbarOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && showMobileNav.value) {
+        showMobileNav.value = false;
+      }
+    };
+
     const clearAllCaches = async () => {
       try {
         // Clear all stores
@@ -687,8 +699,9 @@ export default {
     onMounted(async () => {
       logger.debug('Initializing optimized AutoBot application...');
 
-      // Add global click listener for mobile nav
+      // Add global click and keyboard listeners for mobile nav
       document.addEventListener('click', closeNavbarOnClickOutside);
+      document.addEventListener('keydown', closeNavbarOnEscape);
 
       // Set up global error handling (#2849: use named handlers for cleanup)
       window.addEventListener('error', handleWindowError);
@@ -749,6 +762,7 @@ export default {
 
       // Clean up listeners (#2849: remove all event listeners added in onMounted)
       document.removeEventListener('click', closeNavbarOnClickOutside);
+      document.removeEventListener('keydown', closeNavbarOnEscape);
       window.removeEventListener('error', handleWindowError);
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
       stopOptimizedNotificationCleanup();
