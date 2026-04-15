@@ -18,7 +18,7 @@ import yaml
 logger = logging.getLogger(__name__)
 
 _REQUIRED_KEYS = {"name", "paths", "synthesis_target", "prompt_template"}
-_ALLOWED_KEYS = _REQUIRED_KEYS | {"synthesis_model"}
+_ALLOWED_KEYS = _REQUIRED_KEYS | {"synthesis_model", "prompt_variants"}
 
 
 @dataclass
@@ -30,6 +30,8 @@ class CollectionConfig:
     synthesis_target: str
     prompt_template: str
     synthesis_model: Optional[str] = None
+    # Issue #4675: alternate prompt variants for evolutionary selection.
+    prompt_variants: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -68,12 +70,22 @@ def _parse_collection(raw: dict, index: int, repo_root: Optional[Path] = None) -
             )
         synthesis_model = model_val
 
+    prompt_variants: List[str] = []
+    if "prompt_variants" in raw:
+        raw_variants = raw["prompt_variants"]
+        if not isinstance(raw_variants, list):
+            raise ValueError(
+                f"Collection[{index}] 'prompt_variants' must be a list of strings when present"
+            )
+        prompt_variants = [str(v) for v in raw_variants if str(v).strip()]
+
     config = CollectionConfig(
         name=str(raw["name"]),
         paths=[str(p) for p in raw["paths"]],
         synthesis_target=str(raw["synthesis_target"]),
         prompt_template=str(raw["prompt_template"]),
         synthesis_model=synthesis_model,
+        prompt_variants=prompt_variants,
     )
     if repo_root is not None:
         for p in config.paths:

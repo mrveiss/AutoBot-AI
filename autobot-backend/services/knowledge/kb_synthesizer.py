@@ -193,6 +193,117 @@ class KBSynthesizer:
     # Internal helpers
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # Issue #4675: prompt evolution helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _score_synthesis_output(text: str) -> float:
+        """Score a synthesis output on [0.0, 1.0].
+
+        Combines a token-count score (rewards 50–2000 words) with a
+        uniqueness score (penalises repetitive sentences).
+
+        Issue #4675.
+        """
+        words = text.split()
+        word_count = len(words)
+        if word_count == 0:
+            return 0.0
+
+        # Token-count score — linear decay outside [50, 2000].
+        if 50 <= word_count <= 2000:
+            token_score = 1.0
+        elif word_count < 50:
+            token_score = word_count / 50.0
+        else:
+            token_score = max(0.0, 1.0 - (word_count - 2000) / 2000.0)
+
+        # Uniqueness score — unique sentences / total sentences.
+        sentences = [s.strip() for s in text.replace("!", ".").replace("?", ".").split(".") if s.strip()]
+        total = len(sentences)
+        if total == 0:
+            uniqueness_score = 1.0
+        else:
+            uniqueness_score = len(set(sentences)) / total
+
+        return min(1.0, token_score * 0.6 + uniqueness_score * 0.4)
+
+    async def _select_prompt_variant(
+        self,
+        collection_name: str,
+        variants: list,
+        fallback: str,
+    ) -> tuple:
+        """Select a prompt variant via UCB1 bandit strategy.
+
+        Reads recent provenance entries for ``collection_name`` and applies
+        UCB1 to balance exploration vs. exploitation across ``variants``.
+
+        Args:
+            collection_name: Collection key used for provenance lookup.
+            variants: List of alternate prompt strings from CollectionConfig.
+            fallback: Base prompt text used when no variants are defined.
+
+        Returns:
+            Tuple of (prompt_text, variant_id) where variant_id is one of
+            "base", "variant_0", "variant_1", …
+
+        Issue #4675.
+        """
+        if not variants:
+            return (fallback, "base")
+
+        # Build variant map: id → text
+        all_variants = {"base": fallback}
+        for i, v in enumerate(variants):
+            all_variants[f"variant_{i}"] = v
+
+        # Read recent runs for this collection.
+        try:
+            entries = await self._provenance_log.get_recent(limit=10)
+        except Exception:
+            logger.debug("_select_prompt_variant: provenance read failed, defaulting to base")
+            return (fallback, "base")
+
+        # Accumulate (n_pulls, total_score) per variant.
+        import math
+
+        stats: dict = {vid: [0, 0.0] for vid in all_variants}
+        for entry in entries:
+            if entry.get("prompt_template") != collection_name and entry.get("collection_name") != collection_name:
+                continue
+            vid = str(entry.get("prompt_variant", "base"))
+            if vid not in stats:
+                continue
+            stats[vid][0] += 1
+            stats[vid][1] += float(entry.get("score", 0.0))
+
+        total_runs = sum(s[0] for s in stats.values())
+
+        # Cold-start: pick first untried variant.
+        for vid in all_variants:
+            if stats[vid][0] == 0:
+                logger.debug(
+                    "_select_prompt_variant: cold-start exploration → %s for '%s'",
+                    vid,
+                    collection_name,
+                )
+                return (all_variants[vid], vid)
+
+        # UCB1 selection.
+        log_total = math.log(max(total_runs, 1))
+        best_vid = max(
+            all_variants,
+            key=lambda v: (stats[v][1] / stats[v][0]) + math.sqrt(2 * log_total / stats[v][0]),
+        )
+        logger.debug(
+            "_select_prompt_variant: UCB1 selected %s for '%s'",
+            best_vid,
+            collection_name,
+        )
+        return (all_variants[best_vid], best_vid)
+
     def _resolve_prompt(self, collection_config: "Optional[CollectionConfig]") -> str:
         """Return the synthesis prompt for this cluster.
 
@@ -230,7 +341,15 @@ class KBSynthesizer:
             return
 
         cluster_id = self._cluster_id(file_paths)
-        prompt = self._resolve_prompt(collection_config)
+        # Issue #4675: UCB1 variant selection.
+        base_prompt = self._resolve_prompt(collection_config)
+        variants = collection_config.prompt_variants if collection_config is not None else []
+        collection_key_for_ucb = (
+            collection_config.name if collection_config is not None else "default"
+        )
+        prompt, variant_id = await self._select_prompt_variant(
+            collection_key_for_ucb, variants, base_prompt
+        )
         if "{documents}" in prompt:
             messages = [{"role": "user", "content": prompt.format(documents=docs_text)}]
         else:
@@ -296,8 +415,8 @@ class KBSynthesizer:
             duration_ms=duration_ms,
             parent_run_id=parent_run_id,
             source_doc_ids=file_paths[:_MAX_DOCS_PER_CLUSTER],
-            prompt_variant=prompt,
-            score=min(len(summary_text) / max(len(docs_text), 1), 1.0),
+            prompt_variant=variant_id,
+            score=self._score_synthesis_output(summary_text),
             collection_name=collection_key,
         )
         # Advance lineage pointer for this collection.

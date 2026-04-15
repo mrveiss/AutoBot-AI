@@ -76,6 +76,44 @@ class SynthesisProvenanceLog:
         except Exception:
             logger.exception("Failed to write provenance log for run %s", run_id)
 
+
+    async def get_best_prompt_variant(
+        self,
+        collection_name: str,
+        limit: int = 50,
+    ) -> str:
+        """Return the prompt variant with the highest average score for a collection.
+
+        Reads the most recent provenance entries, filters to those whose
+        ``prompt_template`` matches ``collection_name``, then returns the
+        ``prompt_variant`` with the highest mean score.  Returns an empty
+        string when no scored history exists (cold-start).
+
+        Issue #4675.
+
+        Args:
+            collection_name: The collection name used as ``prompt_template`` key.
+            limit: Maximum number of recent entries to consider.
+        """
+        entries = await self.get_recent(limit=limit)
+        # Accumulate scores per variant for this collection.
+        variant_scores: Dict[str, List[float]] = {}
+        for entry in entries:
+            if entry.get("prompt_template") != collection_name:
+                continue
+            variant = str(entry.get("prompt_variant", ""))
+            if not variant or variant == collection_name:
+                # Skip entries where variant == base template name (not a named variant).
+                continue
+            score = float(entry.get("score", 0.0))
+            variant_scores.setdefault(variant, []).append(score)
+
+        if not variant_scores:
+            return ""
+
+        best = max(variant_scores, key=lambda v: sum(variant_scores[v]) / len(variant_scores[v]))
+        return best
+
     async def get_recent(self, limit: int = 50) -> List[Dict[str, Any]]:
         """Return the most recent provenance entries.
 
