@@ -220,12 +220,21 @@ class KBSynthesizer:
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": docs_text},
             ]
-        try:
-            response = await self._llm.chat(
-                messages=messages,
-                temperature=0.3,
-                max_tokens=600,
+        override_model: Optional[str] = (
+            collection_config.synthesis_model
+            if collection_config is not None
+            else None
+        )
+        chat_kwargs: dict = {"messages": messages, "temperature": 0.3, "max_tokens": 600}
+        if override_model:
+            chat_kwargs["model"] = override_model
+            logger.debug(
+                "KBSynthesizer: using synthesis_model override '%s' for collection '%s'",
+                override_model,
+                collection_config.name if collection_config else "<default>",  # type: ignore[union-attr]
             )
+        try:
+            response = await self._llm.chat(**chat_kwargs)
         except Exception:
             logger.exception("KBSynthesizer: LLM call failed")
             return

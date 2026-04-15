@@ -14,6 +14,7 @@ collections:
       - docs/architecture
       - docs/adr
     synthesis_target: autobot_synthesis_architecture
+    # synthesis_model: claude-opus-4-6  # optional: override the default LLM for this collection
     prompt_template: |
       You are an AutoBot architecture assistant. Given the following architecture
       documentation and Architecture Decision Records (ADRs), produce a concise
