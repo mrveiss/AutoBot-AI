@@ -611,8 +611,8 @@ class AdvancedRAGOptimizer:
             context = self._analyze_query_context(query)
             metrics.query_processing_time = time.time() - query_start
 
-            # Step 2: Multi-strategy retrieval
-            hybrid_results = await self._retrieve_hybrid_results(query, metrics)
+            # Step 2: Multi-strategy retrieval (Issue #4685: pass context for expanded queries)
+            hybrid_results = await self._retrieve_hybrid_results(query, metrics, context)
 
             # Step 3: Result diversification and reranking
             final_results = await self._diversify_and_rerank(
@@ -641,9 +641,19 @@ class AdvancedRAGOptimizer:
             return [], metrics
 
     async def _retrieve_hybrid_results(
-        self, query: str, metrics: RAGMetrics
+        self,
+        query: str,
+        metrics: RAGMetrics,
+        context: Optional["QueryContext"] = None,
     ) -> List[SearchResult]:
-        """Perform hybrid retrieval (Issue #665: extracted helper)."""
+        """Perform hybrid retrieval (Issue #665: extracted helper).
+
+        If *context* contains expanded queries (Issue #4685), supplemental
+        searches are run for each expanded term and their results are merged
+        into the primary result set (deduplication by content hash).  The
+        primary query remains the authoritative search — expanded results are
+        supplemental and do not displace primary hits.
+        """
         retrieval_start = time.time()
 
         # Issue #619: Parallelize semantic search and facts retrieval
@@ -657,6 +667,41 @@ class AdvancedRAGOptimizer:
 
         # Combine with hybrid scoring
         hybrid_results = self._combine_hybrid_results(semantic_results, keyword_results)
+
+        # Issue #4685: wire expanded queries into retrieval
+        expanded_queries = (
+            context.expanded_queries
+            if context is not None and context.expanded_queries
+            else []
+        )
+        if expanded_queries:
+            logger.debug(
+                "Running %d supplemental searches for expanded queries: %s",
+                len(expanded_queries),
+                expanded_queries,
+            )
+            # Build a dedup set from primary results (content hash → already present)
+            seen_keys = {hash(r.content[:100]) for r in hybrid_results}
+
+            # Fan-out supplemental semantic searches in parallel
+            expanded_semantic_lists = await asyncio.gather(
+                *[
+                    self._perform_semantic_search(eq, limit=self.max_results_per_stage)
+                    for eq in expanded_queries
+                ]
+            )
+            for eq, eq_semantic in zip(expanded_queries, expanded_semantic_lists):
+                eq_keyword = self._perform_keyword_search(eq, all_facts)
+                eq_combined = self._combine_hybrid_results(eq_semantic, eq_keyword)
+                for result in eq_combined:
+                    key = hash(result.content[:100])
+                    if key not in seen_keys:
+                        hybrid_results.append(result)
+                        seen_keys.add(key)
+
+            logger.debug(
+                "After expanded-query merge: %d total candidates", len(hybrid_results)
+            )
 
         metrics.retrieval_time = time.time() - retrieval_start
         metrics.documents_considered = len(hybrid_results)
