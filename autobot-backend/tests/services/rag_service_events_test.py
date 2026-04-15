@@ -165,7 +165,7 @@ class TestStoreFeedbackInStream:
         mock_redis = self._make_redis_mock()
 
         with patch(
-            "services.rag_service.get_redis_client",
+            "services.rag_service.get_async_redis_client",
             new_callable=AsyncMock,
             return_value=mock_redis,
         ):
@@ -186,7 +186,7 @@ class TestStoreFeedbackInStream:
         mock_redis = self._make_redis_mock()
 
         with patch(
-            "services.rag_service.get_redis_client",
+            "services.rag_service.get_async_redis_client",
             new_callable=AsyncMock,
             return_value=mock_redis,
         ):
@@ -207,7 +207,7 @@ class TestStoreFeedbackInStream:
         mock_redis = self._make_redis_mock()
 
         with patch(
-            "services.rag_service.get_redis_client",
+            "services.rag_service.get_async_redis_client",
             new_callable=AsyncMock,
             return_value=mock_redis,
         ):
@@ -228,7 +228,7 @@ class TestStoreFeedbackInStream:
         mock_redis = self._make_redis_mock()
 
         with patch(
-            "services.rag_service.get_redis_client",
+            "services.rag_service.get_async_redis_client",
             new_callable=AsyncMock,
             return_value=mock_redis,
         ):
@@ -247,7 +247,7 @@ class TestStoreFeedbackInStream:
     async def test_redis_unavailable_does_not_raise(self):
         """When Redis client is None, method completes without raising."""
         with patch(
-            "services.rag_service.get_redis_client",
+            "services.rag_service.get_async_redis_client",
             new_callable=AsyncMock,
             return_value=None,
         ):
@@ -264,7 +264,7 @@ class TestStoreFeedbackInStream:
         mock_redis = self._make_redis_mock(xadd_side_effect=ConnectionError("redis gone"))
 
         with patch(
-            "services.rag_service.get_redis_client",
+            "services.rag_service.get_async_redis_client",
             new_callable=AsyncMock,
             return_value=mock_redis,
         ):
@@ -365,7 +365,7 @@ class TestComplexityInStoreFeedbackInStream:
         mock_redis = self._make_redis_mock()
 
         with patch(
-            "services.rag_service.get_redis_client",
+            "services.rag_service.get_async_redis_client",
             new_callable=AsyncMock,
             return_value=mock_redis,
         ):
@@ -386,7 +386,7 @@ class TestComplexityInStoreFeedbackInStream:
         mock_redis = self._make_redis_mock()
 
         with patch(
-            "services.rag_service.get_redis_client",
+            "services.rag_service.get_async_redis_client",
             new_callable=AsyncMock,
             return_value=mock_redis,
         ):
@@ -407,7 +407,7 @@ class TestComplexityInStoreFeedbackInStream:
         mock_redis = self._make_redis_mock()
 
         with patch(
-            "services.rag_service.get_redis_client",
+            "services.rag_service.get_async_redis_client",
             new_callable=AsyncMock,
             return_value=mock_redis,
         ):
