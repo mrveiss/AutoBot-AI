@@ -315,8 +315,8 @@ class StartupValidator:
         logger.info("Validating system requirements...")
 
         # Check Python version
-        if sys.version_info < (3, 8):
-            self.result.add_error(f"Python 3.8+ required, found {sys.version}")
+        if sys.version_info < (3, 12):
+            self.result.add_error(f"Python 3.12+ required, found {sys.version}")
 
         # Check disk space for logs and data
         try:
