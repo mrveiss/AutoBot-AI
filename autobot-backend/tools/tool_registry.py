@@ -14,7 +14,6 @@ import time
 import uuid
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from chat_workflow.tool_handler import BROWSER_TOOL_NAMES
 from tools.code_interpreter import execute_code
 
 if TYPE_CHECKING:
@@ -576,4 +575,8 @@ class ToolRegistry:
         ]
         # Issue #1368/#2609: Browser tools are defined once in BROWSER_TOOL_NAMES
         # and imported here so the two lists cannot drift independently.
+        # Lazy import breaks the circular dependency:
+        #   chat_workflow -> tool_handler -> tools -> tool_registry -> chat_workflow
+        # (#4557)
+        from chat_workflow.tool_handler import BROWSER_TOOL_NAMES  # noqa: PLC0415
         return registry_tools + sorted(BROWSER_TOOL_NAMES)
