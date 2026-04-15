@@ -10,12 +10,12 @@ Contains distributed agent registration, health monitoring, and lifecycle manage
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
 from constants.threshold_constants import TimingConstants, WorkStealingConfig
 
-from .types import DistributedAgentInfo
+from .types import CircuitState, DistributedAgentInfo
 
 if TYPE_CHECKING:
     from agents.base_agent import AgentHealth, BaseAgent
@@ -34,6 +34,8 @@ class DistributedAgentManager:
         grace_period_seconds: int = WorkStealingConfig.GRACE_PERIOD_SECONDS,
         max_reassignments: int = WorkStealingConfig.MAX_REASSIGNMENTS,
         progress_ttl_seconds: int = WorkStealingConfig.PROGRESS_TTL_SECONDS,
+        circuit_failure_threshold: int = 3,
+        circuit_recovery_timeout_seconds: int = 300,
     ):
         """
         Initialize the distributed agent manager.
@@ -45,8 +47,11 @@ class DistributedAgentManager:
             grace_period_seconds: Minimum task age before it is eligible for stealing
             max_reassignments: Hard cap on how many times one task may be stolen
             progress_ttl_seconds: Recent-progress window that marks a task as alive
+            circuit_failure_threshold: Consecutive unhealthy results before opening circuit
+            circuit_recovery_timeout_seconds: Seconds before a half-open probe is attempted
 
         Issue #2109: work-stealing parameters added.
+        Issue #4694: circuit breaker parameters added.
         """
         self.distributed_agents: Dict[str, DistributedAgentInfo] = {}
         self.builtin_distributed_agents = builtin_agents
@@ -59,6 +64,10 @@ class DistributedAgentManager:
         self.grace_period_seconds = grace_period_seconds
         self.max_reassignments = max_reassignments
         self.progress_ttl_seconds = progress_ttl_seconds
+
+        # Circuit breaker configuration (Issue #4694)
+        self.circuit_failure_threshold = circuit_failure_threshold
+        self.circuit_recovery_timeout_seconds = circuit_recovery_timeout_seconds
 
         # task_id -> assigned_at (UTC) — set when add_active_task is called
         self._task_assigned_at: Dict[str, datetime] = {}
@@ -189,26 +198,90 @@ class DistributedAgentManager:
         health: Optional["AgentHealth"],
         error: Optional[Exception],
     ) -> None:
-        """Process a single health check result (Issue #334 - extracted helper)."""
+        """Process a single health check result and update circuit breaker state.
+
+        Issue #334: extracted helper.
+        Issue #4694: circuit breaker transitions added.
+
+        State machine:
+        - CLOSED  → OPEN      when circuit_failure_count reaches circuit_failure_threshold
+        - OPEN    → HALF_OPEN when circuit_recovery_timeout_seconds has elapsed
+        - HALF_OPEN → CLOSED  on a healthy result
+        - HALF_OPEN → OPEN    on an unhealthy result (reset opened_at for new backoff)
+        """
         agent_info = self.distributed_agents.get(agent_id)
         if not agent_info:
             return
 
+        now = datetime.now(tz=timezone.utc)
+
         if error:
             logger.error(
-                f"Health check failed for distributed agent {agent_id}: {error}"
+                "Health check failed for distributed agent %s: %s", agent_id, error
             )
+            self._on_agent_failure(agent_id, agent_info, now)
             return
 
         if not health:
             return
 
         agent_info.health = health
-        agent_info.last_health_check = datetime.now(tz=timezone.utc)
+        agent_info.last_health_check = now
 
-        if health.status.value != "healthy":
+        is_healthy = health.status.value == "healthy"
+
+        if is_healthy:
+            self._on_agent_success(agent_id, agent_info)
+        else:
             logger.warning(
-                f"Distributed agent {agent_id} health issue: {health.status.value}"
+                "Distributed agent %s health issue: %s", agent_id, health.status.value
+            )
+            self._on_agent_failure(agent_id, agent_info, now)
+
+    def _on_agent_success(self, agent_id: str, agent_info: DistributedAgentInfo) -> None:
+        """Handle a successful health check — reset failure counter and close circuit."""
+        prev_state = agent_info.circuit_state
+        agent_info.circuit_failure_count = 0
+        agent_info.circuit_state = CircuitState.CLOSED
+        agent_info.circuit_opened_at = None
+        agent_info.circuit_probe_dispatched_at = None
+
+        if prev_state != CircuitState.CLOSED:
+            logger.info(
+                "Circuit breaker CLOSED for agent %s (recovered from %s)",
+                agent_id,
+                prev_state.value,
+            )
+
+    def _on_agent_failure(
+        self, agent_id: str, agent_info: DistributedAgentInfo, now: datetime
+    ) -> None:
+        """Handle an unhealthy health check — increment failure count; open if threshold met."""
+        agent_info.circuit_failure_count += 1
+
+        if agent_info.circuit_state == CircuitState.HALF_OPEN:
+            # Probe failed → extend backoff, re-open circuit.
+            agent_info.circuit_state = CircuitState.OPEN
+            agent_info.circuit_opened_at = now
+            agent_info.circuit_probe_dispatched_at = None
+            logger.warning(
+                "Circuit breaker re-OPENED for agent %s (half-open probe failed, "
+                "failure count=%d)",
+                agent_id,
+                agent_info.circuit_failure_count,
+            )
+            return
+
+        if (
+            agent_info.circuit_state == CircuitState.CLOSED
+            and agent_info.circuit_failure_count >= self.circuit_failure_threshold
+        ):
+            agent_info.circuit_state = CircuitState.OPEN
+            agent_info.circuit_opened_at = now
+            logger.warning(
+                "Circuit breaker OPENED for agent %s after %d consecutive failures",
+                agent_id,
+                agent_info.circuit_failure_count,
             )
 
     async def _run_health_checks(self, agents_snapshot: list) -> None:
@@ -254,12 +327,48 @@ class DistributedAgentManager:
                 await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY)
 
     def get_healthy_agents(self) -> list:
-        """Get list of healthy distributed agents."""
-        return [
-            info.agent
-            for info in self.distributed_agents.values()
-            if info.health.status.value == "healthy"
-        ]
+        """Return agents available for task routing, respecting circuit breaker state.
+
+        Issue #4694: circuit breaker — OPEN agents are excluded; HALF_OPEN agents
+        are included for a single probe dispatch then re-excluded until the probe
+        resolves (tracked via circuit_probe_dispatched_at).
+        """
+        now = datetime.now(tz=timezone.utc)
+        available = []
+        for agent_id, info in self.distributed_agents.items():
+            if info.circuit_state == CircuitState.OPEN:
+                # Promote to HALF_OPEN once the recovery timeout has elapsed.
+                if (
+                    info.circuit_opened_at is not None
+                    and (now - info.circuit_opened_at).total_seconds()
+                    >= self.circuit_recovery_timeout_seconds
+                ):
+                    info.circuit_state = CircuitState.HALF_OPEN
+                    info.circuit_probe_dispatched_at = None
+                    logger.info(
+                        "Circuit breaker HALF_OPEN for agent %s — probe allowed",
+                        agent_id,
+                    )
+                else:
+                    # Still in backoff window — skip agent entirely.
+                    continue
+
+            if info.circuit_state == CircuitState.HALF_OPEN:
+                # Allow only one probe task at a time.
+                if info.circuit_probe_dispatched_at is not None:
+                    continue
+                info.circuit_probe_dispatched_at = now
+                logger.info(
+                    "Circuit breaker half-open probe dispatched for agent %s", agent_id
+                )
+                available.append(info.agent)
+                continue
+
+            # CLOSED: include only if underlying health status is healthy.
+            if info.health.status.value == "healthy":
+                available.append(info.agent)
+
+        return available
 
     def get_agent_info(self, agent_id: str) -> Optional[DistributedAgentInfo]:
         """Get info for a specific agent."""
@@ -430,9 +539,10 @@ class DistributedAgentManager:
         return reassigned
 
     def get_statistics(self) -> Dict[str, Any]:
-        """Get distributed agent statistics, including work-stealing counters.
+        """Get distributed agent statistics, including work-stealing and circuit breaker state.
 
         Issue #2109: reassignment_counts added to per-agent task entries.
+        Issue #4694: circuit breaker fields added per agent.
         """
         stats: Dict[str, Any] = {}
         for agent_id, agent_info in self.distributed_agents.items():
@@ -446,6 +556,14 @@ class DistributedAgentManager:
                 "task_reassignment_counts": {
                     t: self._task_reassignment_count.get(t, 0) for t in task_list
                 },
+                # Circuit breaker state (Issue #4694)
+                "circuit_state": agent_info.circuit_state.value,
+                "circuit_failure_count": agent_info.circuit_failure_count,
+                "circuit_opened_at": (
+                    agent_info.circuit_opened_at.isoformat()
+                    if agent_info.circuit_opened_at
+                    else None
+                ),
             }
         stats["_work_stealing"] = {
             "stale_task_timeout_seconds": self.stale_task_timeout_seconds,
@@ -453,5 +571,9 @@ class DistributedAgentManager:
             "max_reassignments": self.max_reassignments,
             "progress_ttl_seconds": self.progress_ttl_seconds,
             "total_tracked_tasks": len(self._task_assigned_at),
+        }
+        stats["_circuit_breaker"] = {
+            "failure_threshold": self.circuit_failure_threshold,
+            "recovery_timeout_seconds": self.circuit_recovery_timeout_seconds,
         }
         return stats

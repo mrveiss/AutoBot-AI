@@ -8,10 +8,10 @@ Issue #381: Extracted from agent_orchestrator.py god class refactoring.
 Contains type definitions, enums, and routing pattern constants.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, List, Set
+from typing import TYPE_CHECKING, List, Optional, Set
 
 if TYPE_CHECKING:
     from agents.base_agent import AgentHealth, BaseAgent
@@ -155,6 +155,14 @@ class AgentCapability:
     resource_usage: str
 
 
+class CircuitState(Enum):
+    """Circuit breaker state for a distributed agent (Issue #4694)."""
+
+    CLOSED = "closed"      # Normal operation — agent receives tasks.
+    OPEN = "open"          # Agent quarantined — excluded from routing.
+    HALF_OPEN = "half_open"  # Recovery probe: one task allowed; result decides next state.
+
+
 @dataclass
 class DistributedAgentInfo:
     """Information about a distributed agent."""
@@ -163,6 +171,13 @@ class DistributedAgentInfo:
     health: "AgentHealth"
     last_health_check: datetime
     active_tasks: Set[str]
+
+    # Circuit breaker fields (Issue #4694)
+    circuit_state: CircuitState = field(default=CircuitState.CLOSED)
+    circuit_failure_count: int = field(default=0)
+    circuit_opened_at: Optional[datetime] = field(default=None)
+    # Timestamp of the last half-open probe task dispatch.
+    circuit_probe_dispatched_at: Optional[datetime] = field(default=None)
 
 
 # Default agent capabilities configuration
