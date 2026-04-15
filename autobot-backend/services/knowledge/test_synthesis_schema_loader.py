@@ -144,3 +144,56 @@ class TestValidationError:
         path = _write_yaml(tmp_path, bad_yaml)
         with pytest.raises(ValueError, match="collections"):
             load_synthesis_schema(path)
+
+
+class TestPathExistenceWarnings:
+    """load_synthesis_schema warns on missing paths but does not raise."""
+
+    def _yaml_with_paths(self, *paths: str) -> str:
+        paths_block = "\n".join(f"          - {p}" for p in paths)
+        return (
+            "collections:\n"
+            "  - name: test_col\n"
+            "    paths:\n"
+            f"{paths_block}\n"
+            "    synthesis_target: autobot_test\n"
+            '    prompt_template: "test {documents}"\n'
+        )
+
+    def test_no_warning_for_existing_path(self, tmp_path, caplog):
+        real_dir = tmp_path / "existing_docs"
+        real_dir.mkdir()
+        schema_path = _write_yaml(tmp_path, self._yaml_with_paths("existing_docs"))
+        import logging
+        with caplog.at_level(logging.WARNING):
+            load_synthesis_schema(schema_path, repo_root=tmp_path)
+        warnings = [r for r in caplog.records if r.levelname == "WARNING" and "does not exist" in r.message]
+        assert warnings == [], f"Unexpected warnings: {[r.message for r in warnings]}"
+
+    def test_warning_for_missing_path(self, tmp_path, caplog):
+        schema_path = _write_yaml(tmp_path, self._yaml_with_paths("nonexistent_dir"))
+        import logging
+        with caplog.at_level(logging.WARNING):
+            schema = load_synthesis_schema(schema_path, repo_root=tmp_path)
+        # Schema still loads — no exception
+        assert len(schema.collections) == 1
+        warnings = [r for r in caplog.records if r.levelname == "WARNING" and "does not exist" in r.message]
+        assert len(warnings) == 1
+        assert "nonexistent_dir" in warnings[0].message
+
+    def test_warning_per_missing_path_in_mixed_list(self, tmp_path, caplog):
+        real_dir = tmp_path / "real_docs"
+        real_dir.mkdir()
+        schema_path = _write_yaml(
+            tmp_path,
+            self._yaml_with_paths("real_docs", "missing_one", "missing_two"),
+        )
+        import logging
+        with caplog.at_level(logging.WARNING):
+            schema = load_synthesis_schema(schema_path, repo_root=tmp_path)
+        assert len(schema.collections) == 1
+        warnings = [r for r in caplog.records if r.levelname == "WARNING" and "does not exist" in r.message]
+        assert len(warnings) == 2
+        missing_paths_warned = {w.message for w in warnings}
+        assert any("missing_one" in m for m in missing_paths_warned)
+        assert any("missing_two" in m for m in missing_paths_warned)

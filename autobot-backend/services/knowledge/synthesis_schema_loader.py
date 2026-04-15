@@ -38,8 +38,15 @@ class SynthesisSchema:
     collections: List[CollectionConfig] = field(default_factory=list)
 
 
-def _parse_collection(raw: dict, index: int) -> CollectionConfig:
-    """Parse and validate a single collection entry. Raises ValueError on unknown keys."""
+def _parse_collection(raw: dict, index: int, repo_root: Optional[Path] = None) -> CollectionConfig:
+    """Parse and validate a single collection entry. Raises ValueError on unknown keys.
+
+    Args:
+        raw: Raw dict from YAML for this collection.
+        index: Zero-based position in the collections list (for error messages).
+        repo_root: Optional repo root used to check whether declared paths exist on disk.
+            Missing paths emit a WARNING but do not raise — schemas may forward-declare paths.
+    """
     unknown = set(raw.keys()) - _ALLOWED_KEYS
     if unknown:
         raise ValueError(
@@ -51,20 +58,36 @@ def _parse_collection(raw: dict, index: int) -> CollectionConfig:
         raise ValueError(
             f"Collection[{index}] is missing required keys: {sorted(missing)}"
         )
-    return CollectionConfig(
+    config = CollectionConfig(
         name=str(raw["name"]),
         paths=[str(p) for p in raw["paths"]],
         synthesis_target=str(raw["synthesis_target"]),
         prompt_template=str(raw["prompt_template"]),
     )
+    if repo_root is not None:
+        for p in config.paths:
+            resolved = repo_root / p
+            if not resolved.exists():
+                logger.warning(
+                    "Collection '%s': path '%s' does not exist — will match no documents",
+                    config.name,
+                    p,
+                )
+    return config
 
 
-def load_synthesis_schema(path: Optional[Path] = None) -> SynthesisSchema:
+def load_synthesis_schema(
+    path: Optional[Path] = None,
+    repo_root: Optional[Path] = None,
+) -> SynthesisSchema:
     """Load and validate synthesis_schema.yaml.
 
     Args:
         path: Explicit path to the YAML file. Defaults to the bundled
               resources/knowledge/synthesis_schema.yaml relative to this file.
+        repo_root: Root directory used to resolve collection paths for existence
+            checks. Defaults to four levels above this file (the repository root).
+            Pass ``None`` explicitly to disable path existence warnings.
 
     Returns:
         SynthesisSchema with validated collection configs, or an empty schema
@@ -81,6 +104,10 @@ def load_synthesis_schema(path: Optional[Path] = None) -> SynthesisSchema:
             / "synthesis_schema.yaml"
         )
 
+    if repo_root is None:
+        # __file__ → services/knowledge/ → services/ → autobot-backend/ → repo root
+        repo_root = Path(__file__).parent.parent.parent.parent
+
     if not path.exists():
         logger.debug("Synthesis schema not found at %s — returning empty schema", path)
         return SynthesisSchema()
@@ -95,7 +122,7 @@ def load_synthesis_schema(path: Optional[Path] = None) -> SynthesisSchema:
         )
 
     collections = [
-        _parse_collection(entry, i)
+        _parse_collection(entry, i, repo_root)
         for i, entry in enumerate(raw_data["collections"])
     ]
     return SynthesisSchema(collections=collections)
