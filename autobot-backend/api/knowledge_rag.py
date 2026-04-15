@@ -332,6 +332,82 @@ async def update_rag_configuration(
 
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
+    operation="get_loop_status",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.get("/loop/status")
+async def get_loop_status(
+    current_user: dict = Depends(get_current_user),
+):
+    """Get autonomous improvement loop status.
+
+    Returns last run time, variants tested, winner, current baseline config,
+    and any variant pending human approval.
+
+    Issue #4680.
+    """
+    from services.rag_config import get_rag_config
+
+    cfg = get_rag_config()
+
+    # Import lazily to avoid hard startup dependency
+    try:
+        from services.knowledge.autonomous_loop import get_loop_orchestrator
+
+        orchestrator = await get_loop_orchestrator(None, dry_run=cfg.autonomous_loop_dry_run)
+        status = orchestrator.get_status()
+    except Exception as exc:
+        logger.warning("Loop status unavailable: %s", exc)
+        from services.knowledge.autonomous_loop import LoopStatus
+
+        status = LoopStatus(
+            enabled=cfg.autonomous_loop_enabled,
+            dry_run=cfg.autonomous_loop_dry_run,
+            last_run=None,
+        )
+
+    return {
+        "loop_status": status.to_dict(),
+        "current_config": cfg.to_dict(),
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="approve_loop_variant",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.post("/loop/approve")
+async def approve_loop_variant(
+    current_user: dict = Depends(get_current_user),
+):
+    """Promote the pending staging variant to production RAGConfig.
+
+    The autonomous loop stores a "pending approval" variant when the improvement
+    margin is below the auto-promotion threshold.  This endpoint applies it.
+
+    Returns 409 if no variant is pending.
+
+    Issue #4680.
+    """
+    from services.rag_config import get_rag_config
+    from services.knowledge.autonomous_loop import get_loop_orchestrator
+
+    cfg = get_rag_config()
+    orchestrator = await get_loop_orchestrator(None, dry_run=cfg.autonomous_loop_dry_run)
+    applied = await orchestrator.approve_pending()
+
+    if not applied:
+        raise HTTPException(status_code=409, detail="No variant pending approval")
+
+    return {
+        "message": "Pending variant promoted to production config",
+        "config": get_rag_config().to_dict(),
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
     operation="get_rag_stats",
     error_code_prefix="KNOWLEDGE",
 )

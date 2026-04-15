@@ -106,6 +106,12 @@ class RAGConfig:
     # session.  Default off for safety; enable via config or runtime update.
     enable_session_adaptive_reranking: bool = False
 
+    # Issue #4680: Autonomous improvement loop configuration
+    autonomous_loop_enabled: bool = False  # opt-in; false by default for safety
+    autonomous_loop_cron: str = "0 2 * * *"  # 2 am nightly
+    autonomous_loop_dry_run: bool = True  # dry-run until explicitly disabled
+    autonomous_loop_promotion_threshold: float = 0.05  # 5 % improvement required
+
     def __post_init__(self):
         """Validate configuration values and propagate mmr_lambda to rerank_weights.
 
@@ -268,6 +274,11 @@ class RAGConfig:
             "enable_analyzer_lessons": self.enable_analyzer_lessons,
             # Issue #4690: Session-scoped adaptive reranking
             "enable_session_adaptive_reranking": self.enable_session_adaptive_reranking,
+            # Issue #4680: Autonomous improvement loop
+            "autonomous_loop_enabled": self.autonomous_loop_enabled,
+            "autonomous_loop_cron": self.autonomous_loop_cron,
+            "autonomous_loop_dry_run": self.autonomous_loop_dry_run,
+            "autonomous_loop_promotion_threshold": self.autonomous_loop_promotion_threshold,
         }
 
 
