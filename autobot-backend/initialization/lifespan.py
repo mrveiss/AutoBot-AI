@@ -745,7 +745,7 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
     try:
         from services.graph_rag_service import GraphRAGService
         from services.rag_config import RAGConfig
-        from services.rag_service import RAGService
+        from services.rag_service import RAGService, register_shared_mesh_retriever
 
         if app.state.knowledge_base:
             rag_config = RAGConfig(enable_advanced_rag=True, timeout_seconds=10.0)
@@ -796,7 +796,6 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
 
                 # Register as shared singleton so ALL future RAGService.initialize() calls
                 # auto-wire without changes at each call site (#4757).
-                from services.rag_service import register_shared_mesh_retriever
                 import services.rag_service as _rag_mod
                 register_shared_mesh_retriever(rag_service._mesh_retriever)
 
