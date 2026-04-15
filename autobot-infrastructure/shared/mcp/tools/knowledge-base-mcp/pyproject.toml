@@ -6,7 +6,7 @@ authors = [
     {name = "mrveiss"}
 ]
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = {text = "MIT"}
 keywords = ["mcp", "knowledge-base", "autobot", "llm", "vector-search"]
 
