@@ -102,12 +102,35 @@ See memory for [Worktree Isolation (CRITICAL)](https://github.com/mrveiss/AutoBo
 Before spawning agents or starting worktree work:
 
 1. **Verify branch isolation:** `git branch --show-current` in main session. Should be `Dev_new_gui`. If on a feature branch, STOP — you'll break parallel worktrees.
-2. **Create worktrees correctly:** Each issue gets `.worktrees/issue-XXXX/` with dedicated branch. NO shared branches between worktrees.
-3. **Check git status:** `git status` — main session must be clean (no uncommitted changes).
-4. **Verify issue isn't resolved:** Check if issue is already closed or if `Dev_new_gui` already has the fix.
-5. **Confirm approach:** For architectural decisions, state in 1-2 sentences and wait for confirmation.
+2. **Verify Bash is approved:** Main session must have Bash permission approved — sub-agents inherit from parent. If Bash requires a prompt, approve it once before spawning any agents.
+3. **Create worktrees correctly:** Each issue gets `.worktrees/issue-XXXX/` with dedicated branch. NO shared branches between worktrees.
+4. **Check git status:** `git status` — main session must be clean (no uncommitted changes).
+5. **Verify issue isn't resolved:** Check if issue is already closed or if `Dev_new_gui` already has the fix via `git log origin/Dev_new_gui --oneline --grep="#XXXX"`.
+6. **Confirm approach:** For architectural decisions, state in 1-2 sentences and wait for confirmation.
 
 **Critical:** If you accidentally switched to a feature branch during parallel work, immediately switch back to `Dev_new_gui`. You may have broken active worktrees.
+
+---
+
+## Branch Safety (MANDATORY)
+
+**Never run these operations without explicit user confirmation:**
+- `git reset --hard` — discards uncommitted work permanently
+- `git push --force` / `git push -f` — rewrites remote history
+- `git branch -D` / deleting remote branches — permanent unless reflog exists
+- `git clean -fd` / mass file deletion — unrecoverable
+- `git cherry-pick` across divergent histories — high conflict risk
+- Any operation touching `main` or `master` directly
+
+**Before any bulk git operation:**
+1. Run `git status` and `git diff --stat` — confirm exactly what will be affected
+2. State the operation and its scope in one sentence to the user before executing
+3. For branch deletions: verify the branch content is merged (`git branch -r --merged origin/Dev_new_gui`) before deleting
+4. For file deletions: `grep -r` to confirm nothing references the files first
+
+**If something goes wrong:** Stop immediately. Do not attempt recovery with more destructive commands. Report current state to user and wait for instructions.
+
+**Why:** In past sessions, Claude staged 5,371 files for deletion in a worktree, nearly reset `main` during a cherry-pick with 30+ conflicts, and committed fixes to wrong branches. These incidents required manual recovery.
 
 ---
 
@@ -140,6 +163,23 @@ git checkout issue-XXXX  # or create new: git checkout -b issue-XXXX origin/Dev_
 # Re-apply your changes
 git add -A && git commit -m "..."
 ```
+
+---
+
+## Batch Execution Default
+
+When the user says "implement all X-labeled issues", "fix all Y bugs", or "run `/team-implement` on Z" — **launch immediately without asking for scope clarification.** The pattern is well-established.
+
+Default behavior:
+- Batch size: 3 agents max per round (API rate limit)
+- All issues get their own worktree: `.worktrees/issue-XXXX/`
+- Main session stays on `Dev_new_gui` — never switches
+- Agents commit locally; main session pushes and creates PRs
+- After each batch: review, merge, file discovery issues, then next batch
+
+**Do NOT ask:** "Which issues should I include?", "Should I do them in parallel?", "How many at a time?" — just run the pre-flight checklist and start.
+
+**Only stop to ask** if: a specific issue has unresolved dependencies, an architectural decision is needed, or the pre-flight checklist finds a problem (dirty branch, unresolved PRs, etc.).
 
 ---
 
@@ -204,16 +244,20 @@ After ALL PRs merged:
 
 ---
 
-## Sub-Agent Permission Enforcement (NEW)
+## Sub-Agent Permission Enforcement (CRITICAL)
 
-**When spawning agents for parallel work:**
+Sub-agents without Bash permissions cannot complete git operations and will stall mid-batch, forcing manual intervention. This is the #1 cause of batch failures.
 
-1. **Verify permissions upfront:** Ensure agents have Bash, Read, Edit, Grep tool access
-2. **Document in agent prompt:** "If you lose Bash permissions, STOP and report — don't retry"
-3. **Monitor for permission failures:** After each batch, check for "Permission denied" errors
-4. **Main session as fallback:** If agent fails on git push, main session handles it (main session has full credentials)
+**Required tools for every implementation agent:** `Bash, Read, Edit, Write, Grep, Glob`
 
-**Key principle:** Agents commit locally only. Main session (with SSH/credentials) always handles pushes.
+**Every agent prompt MUST include this line:**
+> "You have Bash, Read, Edit, Write, Grep, and Glob permissions. If you lose Bash permissions at any point, STOP immediately and report — do not retry or work around it."
+
+**Pre-launch check:** Before spawning any agent batch, confirm the main session has Bash approved. Sub-agents inherit from the parent session — if Bash requires approval in the main session, it will also require approval in each sub-agent, blocking all parallel work.
+
+**Main session as fallback:** Agents commit locally only — they do NOT push. Main session handles all git push and `gh pr create` operations (SSH credentials always available in main session).
+
+**On permission failure:** Do not retry the same agent. Report to user with: which agent failed, at which step, and what was left incomplete. Main session then completes the git operation manually.
 
 ---
 
@@ -293,6 +337,18 @@ gh api repos/mrveiss/AutoBot-AI/issues/<number>/comments -f body="✅ Closed wit
 - ✅ Criterion 2 — evidence here
 - ✅ Criterion 3 — evidence here"
 ```
+
+### Discovery Issues (File During Every Task)
+
+While implementing, if you notice **any** bug, inconsistency, dead code, missing test, hardcoded value, or tech debt that is NOT part of the current issue — file a GitHub issue for it immediately. Do not fix it inline, do not add a TODO comment, do not ignore it.
+
+```bash
+gh issue create --title "discovery(<area>): <what you found>" --body "..." --label "tech-debt"
+```
+
+**Before closing any issue**, confirm: did I file a GitHub issue for every gap I noticed during implementation? If not, file them now. This is mandatory — not optional.
+
+**Why:** Gaps noticed inline and not filed are permanently lost. Discovery issues filed during implementation are the primary source of the issue backlog and prevent regressions from accumulating silently.
 
 ### If ANY Criterion Not Met
 
