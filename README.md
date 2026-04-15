@@ -1,12 +1,36 @@
-# AutoBot: Self-Hosted AI Automation Platform
+<div align="center">
 
-> **Self-Hosted Infrastructure Automation with Conversational AI**
->
-> AutoBot is a **self-hosted AI platform** that brings conversational AI to distributed Linux administration, fleet management, and infrastructure automation — all from a beautiful, modern interface. Own your data. Control your infrastructure. No vendor lock-in.
+# Your data. Your AI.
+
+**AutoBot is the self-hosted AI platform that belongs to you — not to us.**
+
+Feed it your docs, your codebase, your business knowledge.
+Plug in any brain you want — Ollama, OpenAI, Claude, Gemini, or any LLM.
+Your data stays on your machine. Your AI stays yours.
+
+[Get Started](#quick-start-3-steps) · [Documentation](docs/) · [Community](https://github.com/mrveiss/AutoBot-AI/discussions) · [Sponsor](https://github.com/sponsors/mrveiss)
 
 [![Docker Smoke Test](https://github.com/mrveiss/AutoBot-AI/actions/workflows/docker-smoke-test.yml/badge.svg)](https://github.com/mrveiss/AutoBot-AI/actions/workflows/docker-smoke-test.yml)
 [![codecov](https://codecov.io/gh/mrveiss/AutoBot-AI/branch/main/graph/badge.svg)](https://codecov.io/gh/mrveiss/AutoBot-AI)
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/mrveiss?label=Sponsor&logo=GitHub&style=flat-square)](https://github.com/sponsors/mrveiss)
+
+</div>
+
+---
+
+> WordPress gave everyone a website. AutoBot gives everyone an AI.
+> Self-hosted. Open source. Yours to extend.
+
+**AutoBot is not a SaaS subscription. It's infrastructure you own.**
+Deploy it once with Docker Compose. Feed your knowledge base — drag in docs, paste URLs, upload files.
+Connect whatever LLM you trust. Run it forever, on your terms.
+
+| What you get | What stays yours |
+|---|---|
+| Chat interface | Your prompts |
+| RAG knowledge base | Your documents |
+| Fleet management | Your infrastructure |
+| Plugin ecosystem | Your data |
 
 ## Quick Start (3 Steps)
 
