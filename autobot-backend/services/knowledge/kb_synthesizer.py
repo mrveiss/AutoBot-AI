@@ -15,6 +15,7 @@ import asyncio
 import hashlib
 import logging
 import time
+import uuid
 from typing import TYPE_CHECKING, Any, List, Optional
 
 if TYPE_CHECKING:
@@ -46,11 +47,21 @@ class KBSynthesizer:
 
     COLLECTION_NAME = _KB_SYNTHESIS_COLLECTION
 
-    def __init__(self, llm_service: Any) -> None:
+    def __init__(
+        self,
+        llm_service: Any,
+        provenance_log: "Optional[Any]" = None,
+    ) -> None:
         self._llm = llm_service
         self._collection: Optional[Any] = None
         # Cache of named collections keyed by collection name.
         self._named_collections: dict[str, Any] = {}
+        # Lazy import to avoid circular deps at module load time.
+        if provenance_log is None:
+            from services.knowledge.synthesis_provenance import SynthesisProvenanceLog
+
+            provenance_log = SynthesisProvenanceLog()
+        self._provenance_log = provenance_log
 
     # ------------------------------------------------------------------
     # BaseSynthesizer ABC interface
@@ -250,7 +261,21 @@ class KBSynthesizer:
                     "KBSynthesizer: writing cluster to synthesis_target '%s'",
                     target_collection,
                 )
+        start = time.monotonic()
         await self._index_documents([page], collection_name=target_collection)
+        duration_ms = int((time.monotonic() - start) * 1000)
+
+        prompt_name = (
+            collection_config.name if collection_config is not None else "default"
+        )
+        await self._provenance_log.log_run(
+            run_id=cluster_id,
+            source_docs=file_paths[:_MAX_DOCS_PER_CLUSTER],
+            synthesis_ids=[cluster_id],
+            llm_model=getattr(self._llm, "model", "unknown"),
+            prompt_template=prompt_name,
+            duration_ms=duration_ms,
+        )
 
     @staticmethod
     def _read_docs(file_paths: List[str]) -> str:

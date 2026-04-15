@@ -240,6 +240,51 @@ async def test_synthesize_docs_llm_error_is_swallowed(tmp_path):
     col.upsert.assert_not_awaited()
 
 
+@pytest.mark.asyncio
+async def test_synthesize_docs_calls_provenance_log_run(tmp_path):
+    """After a successful synthesis, log_run must be called on the provenance log (#4656)."""
+    f = tmp_path / "doc.md"
+    f.write_text("# Topic\nContent here.", encoding="utf-8")
+
+    col = _make_collection()
+    llm = _make_llm("Synthesized summary")
+    provenance_log = MagicMock()
+    provenance_log.log_run = AsyncMock()
+
+    synth = KBSynthesizer(llm_service=llm, provenance_log=provenance_log)
+    synth._collection = col
+
+    await synth.synthesize_docs([str(f)])
+
+    provenance_log.log_run.assert_awaited_once()
+    call_kwargs = provenance_log.log_run.call_args.kwargs
+    assert call_kwargs["source_docs"] == [str(f)]
+    assert len(call_kwargs["synthesis_ids"]) == 1
+    assert call_kwargs["synthesis_ids"][0].startswith("kb_syn_")
+    assert call_kwargs["run_id"] == call_kwargs["synthesis_ids"][0]
+    assert isinstance(call_kwargs["duration_ms"], int)
+
+
+@pytest.mark.asyncio
+async def test_synthesize_docs_provenance_log_not_called_on_llm_error(tmp_path):
+    """When LLM fails, log_run must NOT be called (#4656)."""
+    f = tmp_path / "doc.md"
+    f.write_text("content", encoding="utf-8")
+
+    llm = MagicMock()
+    llm.chat = AsyncMock(side_effect=RuntimeError("LLM down"))
+    col = _make_collection()
+    provenance_log = MagicMock()
+    provenance_log.log_run = AsyncMock()
+
+    synth = KBSynthesizer(llm_service=llm, provenance_log=provenance_log)
+    synth._collection = col
+
+    await synth.synthesize_docs([str(f)])  # must not raise
+
+    provenance_log.log_run.assert_not_awaited()
+
+
 # ---------------------------------------------------------------------------
 # Tests: KBSynthesizer.get_relevant_context
 # ---------------------------------------------------------------------------
