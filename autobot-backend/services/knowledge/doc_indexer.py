@@ -1143,11 +1143,27 @@ _doc_indexer: Optional[DocIndexerService] = None
 _doc_indexer_lock = threading.Lock()
 
 
-def get_doc_indexer_service() -> DocIndexerService:
-    """Get or create the global DocIndexerService instance (thread-safe)."""
+def get_doc_indexer_service(llm_service: Optional[Any] = None) -> DocIndexerService:
+    """Get or create the global DocIndexerService instance (thread-safe).
+
+    Args:
+        llm_service: LLM service for KB synthesis.  When omitted the factory
+            resolves the process-level singleton from ``services.llm_service``
+            so DocIndexerService is never created with ``llm_service=None``.
+    """
     global _doc_indexer
     if _doc_indexer is None:
         with _doc_indexer_lock:
             if _doc_indexer is None:
-                _doc_indexer = DocIndexerService()
+                if llm_service is None:
+                    try:
+                        from services.llm_service import get_llm_service
+
+                        llm_service = get_llm_service()
+                    except Exception:
+                        logger.warning(
+                            "get_doc_indexer_service: could not resolve LLM service "
+                            "— KB synthesis will be disabled"
+                        )
+                _doc_indexer = DocIndexerService(llm_service=llm_service)
     return _doc_indexer

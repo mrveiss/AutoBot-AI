@@ -1031,3 +1031,63 @@ class TestGetDocIndexerService:
             assert isinstance(svc, DocIndexerService)
         finally:
             mod._doc_indexer = original
+
+    def test_factory_resolves_llm_service_lazily(self):
+        """Factory calls get_llm_service() when llm_service arg is omitted (#4655)."""
+        import services.knowledge.doc_indexer as mod
+
+        original = mod._doc_indexer
+        mod._doc_indexer = None
+        mock_llm = MagicMock()
+        try:
+            with patch.dict(
+                "sys.modules",
+                {"services.llm_service": MagicMock(get_llm_service=lambda: mock_llm)},
+            ):
+                svc = get_doc_indexer_service()
+            assert svc._llm_service is mock_llm
+        finally:
+            mod._doc_indexer = original
+
+    def test_factory_accepts_explicit_llm_service(self):
+        """Explicit llm_service arg is forwarded to DocIndexerService (#4655)."""
+        import services.knowledge.doc_indexer as mod
+
+        original = mod._doc_indexer
+        mod._doc_indexer = None
+        mock_llm = MagicMock()
+        try:
+            svc = get_doc_indexer_service(llm_service=mock_llm)
+            assert svc._llm_service is mock_llm
+        finally:
+            mod._doc_indexer = original
+
+
+class TestRunKbSynthesis:
+    """Tests for DocIndexerService._run_kb_synthesis → LLM call path (#4655)."""
+
+    @pytest.mark.asyncio
+    async def test_run_kb_synthesis_calls_synthesize_docs_with_llm_service(self):
+        """_run_kb_synthesis passes self._llm_service to get_kb_synthesizer (#4655)."""
+        mock_llm = MagicMock()
+        svc = DocIndexerService.__new__(DocIndexerService)
+        svc._llm_service = mock_llm
+        svc.synthesis_schema = MagicMock()
+        svc.synthesis_schema.collections = []
+
+        mock_synthesizer = MagicMock()
+        mock_synthesizer.synthesize_docs = AsyncMock()
+
+        with patch.dict(
+            "sys.modules",
+            {
+                "services.knowledge.kb_synthesizer": MagicMock(
+                    get_kb_synthesizer=MagicMock(return_value=mock_synthesizer)
+                )
+            },
+        ):
+            await svc._run_kb_synthesis(["/docs/readme.md"])
+
+        mock_synthesizer.synthesize_docs.assert_awaited_once()
+        called_paths = mock_synthesizer.synthesize_docs.call_args[0][0]
+        assert called_paths == ["/docs/readme.md"]
