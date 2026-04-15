@@ -754,6 +754,49 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
             )
             await rag_service.initialize()
 
+
+            # Wire NeuralMeshRetriever now that RAGService and the DB engine are ready.
+            # Issue #4724: was never wired despite the full mesh_brain/ implementation.
+            try:
+                from autobot_shared.redis_client import get_async_redis_client
+                from knowledge.search_components.query_classifier import QueryClassifier
+                from knowledge.search_components.reranking import ResultReranker
+                from services.mesh_brain.edge_learner import EdgeLearner
+                from services.mesh_brain.mesh_db_adapter import create_mesh_db_adapter
+                from services.mesh_brain.ppr import PersonalizedPageRank
+                from services.neural_mesh_retriever import NeuralMeshRetriever
+                from user_management.database import get_async_engine
+
+                _mesh_db = create_mesh_db_adapter(get_async_engine())
+                _redis = get_async_redis_client()
+                _ppr = PersonalizedPageRank(db=_mesh_db)
+                _edge_learner = EdgeLearner(db=_mesh_db, redis=_redis)
+
+                async def _chroma_search(query: str, k: int) -> list:
+                    return await rag_service.optimizer._perform_semantic_search(query, limit=k)
+
+                async def _hybrid_search(query: str, top_k: int = 5) -> list:
+                    from advanced_rag_optimizer import RAGMetrics
+                    results, _ = await rag_service.optimizer._retrieve_hybrid_results(
+                        query, RAGMetrics()
+                    )
+                    return results[:top_k]
+
+                rag_service._mesh_retriever = NeuralMeshRetriever(
+                    chroma_search=_chroma_search,
+                    hybrid_search=_hybrid_search,
+                    ppr=_ppr,
+                    edge_learner=_edge_learner,
+                    reranker=ResultReranker(),
+                    classifier=QueryClassifier(),
+                    mesh_db=_mesh_db,
+                    llm=None,
+                )
+                rag_config.mesh_retriever_enabled = True
+                logger.info("✅ [ 87%] Neural Mesh RAG: NeuralMeshRetriever wired into RAGService (#4724)")
+            except Exception as _mesh_wire_err:
+                logger.warning("Neural Mesh RAG wiring skipped (non-fatal): %s", _mesh_wire_err)
+
             graph_rag_service = GraphRAGService(
                 rag_service=rag_service,
                 memory_graph=memory_graph,
