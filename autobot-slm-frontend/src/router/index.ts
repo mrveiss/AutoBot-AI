@@ -354,10 +354,10 @@ const router = createRouter({
       },
     },
     {
-      // Issue #850: Consolidated into unified orchestration view (Tab 3)
+      // Issue #841/#1129: Role Registry — standalone CRUD view (wired via #4706)
       path: '/roles',
       name: 'roles',
-      redirect: '/orchestration/roles',
+      component: () => import('@/views/RolesView.vue'),
       meta: { title: 'Role Registry' }
     },
     {
