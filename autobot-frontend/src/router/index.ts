@@ -634,7 +634,19 @@ const routes: RouteRecordRaw[] = [
       admin: true,
     },
   },
-  // Issue #4491: Desktop removed — VNC is the noVNC tab in /chat
+  // Issue #4704: Wire DesktopView.vue as /desktop route — re-enables direct desktop access
+  // Issue #4491 removed from router; re-wired here so DesktopView.vue is not orphaned
+  {
+    path: '/desktop',
+    name: 'desktop',
+    component: () => import('@/views/DesktopView.vue'),
+    meta: {
+      title: 'Desktop',
+      icon: 'fas fa-desktop',
+      description: 'Remote desktop via VNC/noVNC',
+      requiresAuth: true,
+    },
+  },
   // Issue #3502: Custom Dashboard renamed to /home (see home route above)
 
   // Issue #729: Infrastructure routes redirected to slm-admin
