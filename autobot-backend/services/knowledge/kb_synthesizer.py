@@ -43,6 +43,9 @@ class KBSynthesizer:
     Summaries are stored in ChromaDB collections (default: ``kb_synthesis``,
     or the per-collection ``synthesis_target`` from synthesis_schema.yaml) and
     queried by RAGService as optional context enrichment.
+
+    Issue #4678: After each successful synthesis the AnalyzerService is called
+    to distil lessons into ``autobot_lessons`` for future context injection.
     """
 
     COLLECTION_NAME = _KB_SYNTHESIS_COLLECTION
@@ -56,6 +59,8 @@ class KBSynthesizer:
         self._collection: Optional[Any] = None
         # Cache of named collections keyed by collection name.
         self._named_collections: dict[str, Any] = {}
+        # Issue #4678: lazy-init AnalyzerService (same LLM service).
+        self._analyzer: Optional[Any] = None
         # Lazy import to avoid circular deps at module load time.
         if provenance_log is None:
             from services.knowledge.synthesis_provenance import SynthesisProvenanceLog
@@ -285,6 +290,37 @@ class KBSynthesizer:
             prompt_template=prompt_name,
             duration_ms=duration_ms,
         )
+
+        # Issue #4678: distil lessons from this synthesis run (best-effort).
+        await self._run_analyzer(
+            run_id=cluster_id,
+            input_docs=docs_text,
+            output_summary=summary_text,
+        )
+
+    async def _run_analyzer(
+        self, run_id: str, input_docs: str, output_summary: str
+    ) -> None:
+        """Invoke AnalyzerService post-synthesis; errors are logged and swallowed.
+
+        Issue #4678.
+        """
+        try:
+            from services.knowledge.analyzer_service import get_analyzer_service
+
+            if self._analyzer is None:
+                self._analyzer = get_analyzer_service(self._llm)
+            score = min(len(output_summary) / max(len(input_docs), 1), 1.0)
+            lessons = await self._analyzer.analyze_synthesis_run(
+                run_id=run_id,
+                input_docs=[input_docs],
+                output_summary=output_summary,
+                score=score,
+            )
+            if lessons:
+                await self._analyzer.store_lessons(lessons)
+        except Exception:
+            logger.debug("_run_analyzer: best-effort call failed, skipping", exc_info=True)
 
     @staticmethod
     def _read_docs(file_paths: List[str]) -> str:

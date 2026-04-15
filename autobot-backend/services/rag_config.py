@@ -10,7 +10,7 @@ All reranking parameters are configurable without code changes.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from autobot_shared.logging_manager import get_llm_logger
 from constants.model_constants import model_config
@@ -93,6 +93,12 @@ class RAGConfig:
     # Higher values → more exploration of under-sampled patterns.
     # sqrt(2) ≈ 1.414 is the classic UCB1 constant.
     ucb1_exploration_constant: float = 1.414
+
+    # Issue #4677: MAP-Elites structured diversity grid (opt-in, default preserves cosine behaviour)
+    diversity_strategy: Literal["cosine", "map_elites"] = "cosine"
+
+    # Issue #4678: Inject AnalyzerService lessons as supplemental RAG context
+    enable_analyzer_lessons: bool = True
 
     def __post_init__(self):
         """Validate configuration values and propagate mmr_lambda to rerank_weights.
@@ -245,6 +251,10 @@ class RAGConfig:
             "mesh_staleness_decay": self.mesh_staleness_decay,
             "mesh_staleness_threshold": self.mesh_staleness_threshold,
             "mesh_staleness_ttl": self.mesh_staleness_ttl,
+            # Issue #4677: MAP-Elites diversity strategy
+            "diversity_strategy": self.diversity_strategy,
+            # Issue #4678: AnalyzerService lesson injection
+            "enable_analyzer_lessons": self.enable_analyzer_lessons,
         }
 
 
