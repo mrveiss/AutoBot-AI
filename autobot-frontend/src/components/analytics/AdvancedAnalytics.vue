@@ -244,9 +244,9 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(feature, idx) in engagementMetrics.feature_popularity" :key="feature.feature">
+            <tr v-for="(feature, idx) in (engagementMetrics.feature_popularity as any[])" :key="feature.feature">
               <td>
-                <span class="rank-badge" :class="'rank-' + (idx + 1)">{{ idx + 1 }}</span>
+                <span class="rank-badge" :class="'rank-' + ((idx as number) + 1)">{{ (idx as number) + 1 }}</span>
                 {{ feature.feature }}
               </td>
               <td class="text-right">{{ formatNumber(feature.views) }}</td>
@@ -271,11 +271,11 @@
         </template>
         <div class="peak-hours-list">
           <div
-            v-for="(peak, idx) in usageHeatmap.peak_hours"
+            v-for="(peak, idx) in (usageHeatmap.peak_hours as any[])"
             :key="peak.hour"
             class="peak-hour-item"
           >
-            <span class="peak-rank">{{ idx + 1 }}</span>
+            <span class="peak-rank">{{ (idx as number) + 1 }}</span>
             <span class="peak-time">{{ peak.hour }}:00</span>
             <span class="peak-events">{{ formatNumber(peak.total_events) }} {{ $t('analytics.advanced.events') }}</span>
           </div>
