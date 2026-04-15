@@ -498,3 +498,206 @@ class TestGetTaskTTLSliding:
 
         assert result is None
         self._redis_mock.expire.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Issue #4687: Self-Evaluator unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestSelfEvaluator:
+    """Unit tests for a2a.self_evaluator — Issue #4687.
+
+    All tests are pure-Python (no I/O, no network) and verify the heuristic
+    scoring logic and EvalResult dataclass directly.
+    """
+
+    def _run(self, coro):
+        import asyncio
+
+        return asyncio.get_event_loop().run_until_complete(coro)
+
+    def test_high_confidence_response_passes(self):
+        from a2a.self_evaluator import evaluate_task_output
+
+        result = self._run(
+            evaluate_task_output(
+                input_text="What is 2 + 2?",
+                response_text="The answer is 4. Addition of 2 and 2 yields 4.",
+                metadata={},
+                threshold=0.6,
+            )
+        )
+        assert result.passed is True
+        assert result.confidence >= 0.6
+        assert result.eval_reason == ""
+
+    def test_uncertain_response_fails(self):
+        from a2a.self_evaluator import evaluate_task_output
+
+        # Response with 4+ uncertainty phrases drives confidence below 0.6
+        result = self._run(
+            evaluate_task_output(
+                input_text="What is the capital of France?",
+                response_text=(
+                    "I don't know. I am not sure. I cannot answer this. "
+                    "Unable to provide information here. I have no data on this."
+                ),
+                metadata={},
+                threshold=0.6,
+            )
+        )
+        assert result.passed is False
+        assert result.confidence < 0.6
+        assert result.eval_reason != ""
+
+    def test_empty_response_fails(self):
+        from a2a.self_evaluator import evaluate_task_output
+
+        result = self._run(
+            evaluate_task_output(
+                input_text="Summarise this document.",
+                response_text="   ",
+                metadata={},
+                threshold=0.6,
+            )
+        )
+        assert result.passed is False
+        assert result.confidence == 0.0
+
+    def test_custom_threshold_respected(self):
+        """A response that passes default threshold can fail a stricter one."""
+        from a2a.self_evaluator import evaluate_task_output
+
+        good_response = "Python is a high-level programming language used widely."
+        # Should pass at default 0.6
+        result_default = self._run(
+            evaluate_task_output("Describe Python", good_response, {}, threshold=0.6)
+        )
+        assert result_default.passed is True
+
+        # Force failure with threshold above 1.0 (impossible to pass)
+        result_strict = self._run(
+            evaluate_task_output("Describe Python", good_response, {}, threshold=1.1)
+        )
+        assert result_strict.passed is False
+
+    def test_confidence_is_bounded(self):
+        from a2a.self_evaluator import _score_response
+
+        assert _score_response("x" * 100, "short") <= 1.0
+        assert _score_response("x" * 100, "short") >= 0.0
+        assert _score_response("", "question") == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Issue #4687: execute_a2a_task quality-gate integration tests
+# ---------------------------------------------------------------------------
+
+
+class TestExecuteA2aTaskEvalGate:
+    """Verify that execute_a2a_task respects the self-eval quality gate.
+
+    Mocks:
+      - get_task_manager() → in-process TaskManager with mock Redis
+      - get_agent_orchestrator() → mock that returns a controllable result
+      - evaluate_task_output() → tested separately; here we mock to control pass/fail
+    """
+
+    def _make_manager(self):
+        with patch("a2a.task_manager.get_redis_client", return_value=_make_redis_mock()):
+            mgr = TaskManager()
+        return mgr
+
+    def _run(self, coro):
+        import asyncio
+
+        return asyncio.get_event_loop().run_until_complete(coro)
+
+    def test_pass_threshold_transitions_to_completed(self):
+        """When eval passes, task must reach COMPLETED."""
+        import sys
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from a2a.self_evaluator import EvalResult
+        from a2a.task_executor import execute_a2a_task
+        from a2a.types import TaskState
+
+        mgr = self._make_manager()
+        task = mgr.create_task("Describe Python")
+
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.process_request = AsyncMock(
+            return_value={"response": "Python is a popular programming language."}
+        )
+        # Stub heavy modules so the late import in task_executor succeeds
+        mock_ao_module = MagicMock()
+        mock_ao_module.get_agent_orchestrator = MagicMock(return_value=mock_orchestrator)
+
+        passed_eval = EvalResult(passed=True, confidence=0.9, eval_reason="")
+
+        with (
+            patch("a2a.task_executor.get_task_manager", return_value=mgr),
+            patch(
+                "a2a.task_executor.evaluate_task_output",
+                new=AsyncMock(return_value=passed_eval),
+            ),
+            patch.dict(sys.modules, {"agents.agent_orchestration": mock_ao_module}),
+        ):
+            self._run(execute_a2a_task(task.id, "Describe Python"))
+
+        final = mgr.get_task(task.id)
+        assert final.status.state == TaskState.COMPLETED
+
+    def test_fail_threshold_transitions_to_failed_with_eval_reason(self):
+        """When eval fails, task must reach FAILED with eval_reason artifact."""
+        import sys
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from a2a.self_evaluator import EvalResult
+        from a2a.task_executor import execute_a2a_task
+        from a2a.types import TaskState
+
+        mgr = self._make_manager()
+        task = mgr.create_task("Explain quantum entanglement")
+
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.process_request = AsyncMock(
+            return_value={"response": "I'm not sure about this."}
+        )
+        mock_ao_module = MagicMock()
+        mock_ao_module.get_agent_orchestrator = MagicMock(return_value=mock_orchestrator)
+
+        failed_eval = EvalResult(
+            passed=False,
+            confidence=0.3,
+            eval_reason="Self-evaluation failed: confidence 0.3000 below threshold 0.6000.",
+        )
+
+        with (
+            patch("a2a.task_executor.get_task_manager", return_value=mgr),
+            patch(
+                "a2a.task_executor.evaluate_task_output",
+                new=AsyncMock(return_value=failed_eval),
+            ),
+            patch.dict(sys.modules, {"agents.agent_orchestration": mock_ao_module}),
+        ):
+            self._run(execute_a2a_task(task.id, "Explain quantum entanglement"))
+
+        final = mgr.get_task(task.id)
+        assert final.status.state == TaskState.FAILED
+        assert final.status.message is not None
+        assert (
+            "eval" in final.status.message.lower()
+            or "confidence" in final.status.message.lower()
+        )
+
+        # eval_reason artifact must be present
+        eval_artifacts = [
+            a
+            for a in final.artifacts
+            if a.artifact_type == "json"
+            and isinstance(a.content, dict)
+            and "eval_reason" in a.content
+        ]
+        assert len(eval_artifacts) == 1, "Expected exactly one eval_reason artifact"
