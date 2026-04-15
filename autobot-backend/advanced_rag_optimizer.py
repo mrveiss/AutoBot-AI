@@ -21,6 +21,9 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
+# MAP-Elites minimum category coverage required to activate grid-based selection.
+_MAP_ELITES_MIN_CATEGORIES = 2
+
 from autobot_shared.logging_manager import get_llm_logger
 from constants.model_constants import model_config
 from constants.ttl_constants import TTL_5_MINUTES
@@ -72,6 +75,14 @@ class RAGMetrics:
     final_results_count: int = 0
     gpu_acceleration_used: bool = False
     hybrid_search_enabled: bool = False
+
+
+@dataclass
+class _MapElitesCell:
+    """One occupied cell in the MAP-Elites coverage grid. Issue #4677."""
+
+    result: "SearchResult"
+    score: float
 
 
 class AdvancedRAGOptimizer:
@@ -496,6 +507,83 @@ class AdvancedRAGOptimizer:
         logger.debug("Diversification: %s → %s results", len(results), len(diversified))
         return diversified
 
+    def _map_elites_select(
+        self, results: List[SearchResult], max_results: int = 10
+    ) -> List[SearchResult]:
+        """Select results using a MAP-Elites coverage grid. Issue #4677.
+
+        Axes:
+          - chunk_category: metadata key ``category`` (fallback ``"unknown"``)
+          - source_domain: top-level path component of ``source_path``
+
+        Selection rule: prefer results that fill an empty (category, source)
+        cell over those that would double-fill an already-occupied cell.
+        Tie-breaking within the same cell uses the hybrid_score.
+
+        Fallback: when fewer than ``_MAP_ELITES_MIN_CATEGORIES`` distinct
+        categories are represented in *results*, the standard cosine-distance
+        diversification is used instead.
+        """
+        if len(results) <= 1:
+            return results
+
+        # Compute grid keys for all results
+        def _cell_key(r: SearchResult) -> tuple:
+            category = r.metadata.get("category") or r.metadata.get("chunk_category") or "unknown"
+            source_parts = r.source_path.replace("\\", "/").split("/")
+            domain = source_parts[0] if source_parts else "unknown"
+            return (str(category), str(domain))
+
+        # Fallback when too few categories
+        categories = {_cell_key(r)[0] for r in results}
+        if len(categories) < _MAP_ELITES_MIN_CATEGORIES:
+            logger.debug(
+                "MAP-Elites fallback: only %d category/categories — using cosine dedup",
+                len(categories),
+            )
+            return self._diversify_results(results, max_results)
+
+        # Build grid: cell_key → best result already selected
+        grid: Dict[tuple, _MapElitesCell] = {}
+        selected: List[SearchResult] = []
+
+        for candidate in results:
+            if len(selected) >= max_results:
+                break
+            key = _cell_key(candidate)
+            score = candidate.hybrid_score
+            if key not in grid:
+                # Empty cell — always take it
+                grid[key] = _MapElitesCell(result=candidate, score=score)
+                selected.append(candidate)
+            else:
+                # Cell occupied — only replace if score is strictly better
+                # (this is a tie-break within a cell, no new slot consumed)
+                if score > grid[key].score:
+                    grid[key] = _MapElitesCell(result=candidate, score=score)
+
+        # If we still have capacity, fill remaining slots from candidates that
+        # double-fill cells (sorted by score descending)
+        if len(selected) < max_results:
+            selected_set = {id(r) for r in selected}
+            remaining = sorted(
+                (r for r in results if id(r) not in selected_set),
+                key=lambda r: r.hybrid_score,
+                reverse=True,
+            )
+            for r in remaining:
+                if len(selected) >= max_results:
+                    break
+                selected.append(r)
+
+        logger.debug(
+            "MAP-Elites selection: %d candidates → %d results (%d cells occupied)",
+            len(results),
+            len(selected),
+            len(grid),
+        )
+        return selected
+
     def _ensure_cross_encoder_loaded(self) -> None:
         """Load cross-encoder model via process-wide singleton (Issue #398: extracted).
 
@@ -586,10 +674,21 @@ class AdvancedRAGOptimizer:
             return results
 
     async def advanced_search(
-        self, query: str, max_results: int = 5, enable_reranking: bool = True
+        self,
+        query: str,
+        max_results: int = 5,
+        enable_reranking: bool = True,
+        diversity_strategy: str = "cosine",
     ) -> Tuple[List[SearchResult], RAGMetrics]:
         """
         Perform advanced RAG search with all optimizations (Issue #665: refactored).
+
+        Args:
+            query: Search query string.
+            max_results: Maximum number of results to return.
+            enable_reranking: Whether to apply cross-encoder reranking.
+            diversity_strategy: ``"cosine"`` (default word-overlap dedup) or
+                ``"map_elites"`` (structured coverage grid, Issue #4677).
 
         Returns:
             (search_results, performance_metrics)
@@ -614,9 +713,14 @@ class AdvancedRAGOptimizer:
             # Step 2: Multi-strategy retrieval (Issue #4685: pass context for expanded queries)
             hybrid_results = await self._retrieve_hybrid_results(query, metrics, context)
 
-            # Step 3: Result diversification and reranking
+            # Step 3: Result diversification and reranking (Issue #4677: strategy-aware)
             final_results = await self._diversify_and_rerank(
-                query, hybrid_results, enable_reranking, metrics, max_results
+                query,
+                hybrid_results,
+                enable_reranking,
+                metrics,
+                max_results,
+                diversity_strategy=diversity_strategy,
             )
 
             # Step 4: Apply context optimization and limit results
@@ -716,12 +820,22 @@ class AdvancedRAGOptimizer:
         enable_reranking: bool,
         metrics: RAGMetrics,
         max_results: int = 10,
+        diversity_strategy: str = "cosine",
     ) -> List[SearchResult]:
-        """Diversify and optionally rerank results (Issue #665: extracted helper)."""
+        """Diversify and optionally rerank results (Issue #665: extracted helper).
+
+        Issue #4677: ``diversity_strategy`` selects the diversification algorithm:
+          - ``"cosine"`` (default) — existing word-overlap dedup behaviour
+          - ``"map_elites"`` — structured coverage grid across (category, source)
+        """
         # #2103: Skip crude word-overlap diversity when reranking is enabled
         # — the reranker's blend weights (RerankWeights) handle scoring,
         # and _diversify_results would drop results before they can be scored.
-        if enable_reranking:
+        # Issue #4677: MAP-Elites runs regardless of reranking because it's a
+        # selection step, not a scoring step.
+        if diversity_strategy == "map_elites":
+            diversified_results = self._map_elites_select(results, max_results)
+        elif enable_reranking:
             diversified_results = results
         else:
             diversified_results = self._diversify_results(results, max_results)
