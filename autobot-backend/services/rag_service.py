@@ -28,6 +28,7 @@ from services.context_sufficiency import (
 )
 from services.knowledge_base_adapter import KnowledgeBaseAdapter
 from services.rag_config import RAGConfig, get_rag_config
+from services.session_adaptive_reranker import get_session_adaptive_reranker
 from services.semantic_query_cache import get_semantic_query_cache
 from services.topic_retrieval_cache import CachedChunk, get_topic_retrieval_cache
 from type_defs.common import Metadata
@@ -69,6 +70,11 @@ class RAGService:
         self._cache_lock = asyncio.Lock()  # CRITICAL: Protect concurrent cache access
         # Neural Mesh RAG retriever (Issue #2059); injected at startup when Phase 3 is active.
         self._mesh_retriever: Optional[Any] = None
+        # Issue #4690: Session-adaptive reranking weight adjuster.
+        self._session_reranker = get_session_adaptive_reranker(
+            default_semantic=self.config.hybrid_weight_semantic,
+            default_keyword=self.config.hybrid_weight_keyword,
+        )
         logger.info(f"RAGService initialized with {self.kb_adapter.implementation_type}")
 
     async def initialize(self) -> bool:
@@ -406,6 +412,44 @@ class RAGService:
         except Exception as exc:
             logger.debug("RetrievalLearner outcome recording failed (non-fatal): %s", exc)
 
+    def _record_session_signal(
+        self,
+        session_id: str,
+        results: List[SearchResult],
+    ) -> None:
+        """Feed retrieval success/miss signal into the session-adaptive reranker. Issue #4690.
+
+        Uses hybrid_score >= 0.5 as the success threshold (mirrors context-sufficiency
+        evaluator).  Semantic success is indicated by a high semantic_score component;
+        keyword success by a high keyword_score component.
+
+        Args:
+            session_id: Conversation/session identifier.
+            results:    Final search results after all filtering.
+        """
+        # A result is a semantic hit if its semantic contribution exceeds threshold.
+        # A result is a keyword hit if its keyword contribution exceeds threshold.
+        _THRESHOLD = 0.5
+        semantic_success = any(r.semantic_score >= _THRESHOLD for r in results)
+        keyword_success = any(r.keyword_score >= _THRESHOLD for r in results)
+        self._session_reranker.record_signal(
+            session_id,
+            semantic_success=semantic_success,
+            keyword_success=keyword_success,
+        )
+
+    def end_session(self, session_id: str) -> None:
+        """Discard session-scoped adaptive reranking state for this session. Issue #4690.
+
+        Call at conversation/session end to prevent memory leaks and ensure no
+        cross-session state bleed.  No-op if session was never created or feature
+        flag is disabled.
+
+        Args:
+            session_id: Conversation/session identifier to clear.
+        """
+        self._session_reranker.end_session(session_id)
+
     async def _emit_retrieval_feedback(
         self,
         query: str,
@@ -596,6 +640,7 @@ class RAGService:
         timeout: Optional[float] = None,
         categories: Optional[List[str]] = None,
         user_id: Optional[str] = None,
+        session_id: Optional[str] = None,
     ) -> Tuple[List[SearchResult], RAGMetrics]:
         """Perform advanced RAG search with reranking.
 
@@ -603,6 +648,8 @@ class RAGService:
         Issue #1376: topic cache. Issue #1374: sufficiency guard.
         Issue #3240: user_id scopes retrieval pattern lookup and feedback
         storage to the authenticated user, enabling personalised RAG behaviour.
+        Issue #4690: session_id enables session-adaptive reranking weight
+        adjustment when ``enable_session_adaptive_reranking`` is True.
 
         Args:
             query:            Search query string.
@@ -611,6 +658,7 @@ class RAGService:
             timeout:          Override timeout in seconds.
             categories:       Optional category filter list.
             user_id:          Authenticated user identifier; None uses global scope.
+            session_id:       Conversation session identifier for adaptive reranking.
         """
         if not self.config.enable_advanced_rag:
             return await self._fallback_basic_search(query, max_results, categories)
@@ -626,6 +674,23 @@ class RAGService:
         if not await self.initialize():
             logger.warning("RAG init failed, using fallback")
             return await self._fallback_basic_search(query, max_results, categories)
+
+        # Issue #4690: Apply session-adapted weights before executing the search so
+        # the optimizer uses weights refined by earlier hits/misses in this session.
+        _prev_semantic: Optional[float] = None
+        _prev_keyword: Optional[float] = None
+        if self.config.enable_session_adaptive_reranking and session_id and self.optimizer:
+            _prev_semantic = self.optimizer.hybrid_weight_semantic
+            _prev_keyword = self.optimizer.hybrid_weight_keyword
+            adapted_sem, adapted_kw = self._session_reranker.get_weights(session_id)
+            self.optimizer.hybrid_weight_semantic = adapted_sem
+            self.optimizer.hybrid_weight_keyword = adapted_kw
+            logger.debug(
+                "Session adaptive reranking [%s]: sem=%.3f kw=%.3f",
+                session_id,
+                adapted_sem,
+                adapted_kw,
+            )
 
         # Issue #2095/#3240: consult retrieval learner with user_id for personalised hints.
         classifier = get_query_classifier()
@@ -648,6 +713,11 @@ class RAGService:
             cache_key,
         )
 
+        # Issue #4690: Restore original weights so other non-session callers are unaffected.
+        if _prev_semantic is not None and self.optimizer:
+            self.optimizer.hybrid_weight_semantic = _prev_semantic
+            self.optimizer.hybrid_weight_keyword = _prev_keyword  # type: ignore[assignment]
+
         # Issue #4689: filter chunks whose source_path is absent from the hash cache
         # (file was removed/moved since last index run).
         results = await self._filter_stale_chunks(results)
@@ -661,6 +731,10 @@ class RAGService:
 
         # Issue #2095/#3240: record outcome so the learner can update success_rate.
         await self._record_retrieval_outcome(pattern_hash, results, user_id=user_id)
+
+        # Issue #4690: Record session-scoped retrieval signal for future weight adaptation.
+        if self.config.enable_session_adaptive_reranking and session_id:
+            self._record_session_signal(session_id, results)
 
         return results, metrics
 

@@ -101,6 +101,11 @@ class RAGConfig:
     # Issue #4678: Inject AnalyzerService lessons as supplemental RAG context
     enable_analyzer_lessons: bool = True
 
+    # Issue #4690: Session-scoped adaptive reranking — feed per-session retrieval
+    # hit/miss signals back into hybrid weights for subsequent queries in the same
+    # session.  Default off for safety; enable via config or runtime update.
+    enable_session_adaptive_reranking: bool = False
+
     def __post_init__(self):
         """Validate configuration values and propagate mmr_lambda to rerank_weights.
 
@@ -257,6 +262,8 @@ class RAGConfig:
             "diversity_strategy": self.diversity_strategy,
             # Issue #4678: AnalyzerService lesson injection
             "enable_analyzer_lessons": self.enable_analyzer_lessons,
+            # Issue #4690: Session-scoped adaptive reranking
+            "enable_session_adaptive_reranking": self.enable_session_adaptive_reranking,
         }
 
 
