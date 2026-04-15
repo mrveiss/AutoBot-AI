@@ -153,10 +153,10 @@ const router = createRouter({
           meta: { title: 'General Settings', parent: 'settings' }
         },
         {
-          // Issue #850: Consolidated into unified orchestration view (Tab 5)
+          // Issue #4705: Wire InfrastructureSettings view into settings router
           path: 'infrastructure',
           name: 'settings-infrastructure',
-          redirect: '/orchestration/infrastructure',
+          component: () => import('@/views/settings/InfrastructureSettings.vue'),
           meta: { title: 'Infrastructure', parent: 'settings' }
         },
         {
