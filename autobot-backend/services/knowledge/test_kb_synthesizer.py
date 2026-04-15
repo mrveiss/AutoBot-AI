@@ -209,6 +209,9 @@ async def test_synthesize_docs_happy_path(tmp_path):
     llm = _make_llm("Synthesized summary")
     synth = KBSynthesizer(llm_service=llm)
     synth._collection = col
+    # Issue #4785: AnalyzerService (#4678) makes a second llm.chat call; patch it
+    # out so the synthesis-only assertion on assert_awaited_once() stays valid.
+    synth._run_analyzer = AsyncMock()
 
     await synth.synthesize_docs([str(f)])
 
