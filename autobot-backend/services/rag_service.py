@@ -643,6 +643,10 @@ class RAGService:
             cache_key,
         )
 
+        # Issue #4689: filter chunks whose source_path is absent from the hash cache
+        # (file was removed/moved since last index run).
+        results = await self._filter_stale_chunks(results)
+
         # Store in semantic + topic caches for future lookups
         await self._store_in_semantic_cache(query, results)
         await self._store_in_topic_cache(results)
@@ -801,6 +805,72 @@ class RAGService:
         except Exception as e:
             logger.error("Reranking failed: %s", e)
             return results
+
+    async def _filter_stale_chunks(
+        self,
+        results: List[SearchResult],
+    ) -> List[SearchResult]:
+        """Filter out chunks whose source_path is absent from the DocIndexer hash cache.
+
+        Issue #4689: chunks for files removed/moved since the last index run must
+        not reach the LLM context.  If the hash cache is unavailable (file missing,
+        parse error) the method returns the original list unchanged so RAG is never
+        disrupted by a cache I/O failure.
+
+        The check is path-presence only (not hash equality); we trust that the
+        DocIndexer re-indexes changed files on the next cycle.
+
+        Returns:
+            Filtered list (stale chunks dropped) or original list on cache failure.
+        """
+        import json as _json
+        from pathlib import Path as _Path
+
+        try:
+            from services.knowledge.doc_indexer import HASH_CACHE_FILE
+
+            cache_path: _Path = HASH_CACHE_FILE
+        except Exception as exc:
+            logger.debug("Could not import HASH_CACHE_FILE (skipping provenance check): %s", exc)
+            return results
+
+        def _load() -> dict:
+            if not cache_path.exists():
+                return {}
+            try:
+                with open(cache_path, "r", encoding="utf-8") as fh:
+                    return _json.load(fh)
+            except Exception:
+                return {}
+
+        try:
+            hash_cache: dict = await asyncio.to_thread(_load)
+        except Exception as exc:
+            logger.debug("Hash cache load failed (skipping provenance check): %s", exc)
+            return results
+
+        if not hash_cache:
+            # Empty cache means indexer hasn't run yet; skip filtering to avoid
+            # dropping all results on a fresh deployment.
+            return results
+
+        valid: List[SearchResult] = []
+        stale_paths: List[str] = []
+        for chunk in results:
+            if chunk.source_path in hash_cache:
+                valid.append(chunk)
+            else:
+                stale_paths.append(chunk.source_path)
+
+        if stale_paths:
+            logger.warning(
+                "Provenance check: dropped %d stale chunk(s) — source paths absent from "
+                "hash cache: %s",
+                len(stale_paths),
+                stale_paths[:10],  # cap log line length
+            )
+
+        return valid
 
     def _filter_by_categories(
         self,
