@@ -788,7 +788,8 @@ export default {
       // Issue #4703: Agent Registry — backend + specialized agent dashboard
       { to: '/agents/registry', labelKey: 'nav.agentRegistry', icon: 'M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18', iconStroke: true },
       // Code Intelligence removed from main nav — merged into /analytics/codebase
-      // Issue #4491: Desktop removed — VNC is the noVNC tab in /chat
+      // Issue #4704: Desktop re-wired as /desktop route (DesktopView.vue); nav entry restored here (#4778)
+      { to: '/desktop', labelKey: 'nav.desktop', icon: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z', iconStroke: true },
       // Issue #902: Dev Tools moved into /analytics/dev-tools tab
       // Issue #4492: Custom Dashboard renamed to /home (removed separate nav entry)
       { to: '/preferences', labelKey: 'nav.preferences', icon: 'M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z', iconRule: 'evenodd' },
