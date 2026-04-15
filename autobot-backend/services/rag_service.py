@@ -102,6 +102,15 @@ class RAGService:
             self.optimizer.kb = self.kb_adapter.kb
 
             self._initialized = True
+
+            # Auto-wire shared NeuralMeshRetriever if registered and not already set (#4757).
+            # Covers per-request instances in knowledge_rag.py / knowledge_search.py and
+            # the chat_workflow manager's set_knowledge_base() path.
+            if self._mesh_retriever is None and _shared_mesh_retriever is not None:
+                self._mesh_retriever = _shared_mesh_retriever
+                self.config.mesh_retriever_enabled = True
+                logger.debug("Auto-wired shared NeuralMeshRetriever into RAGService instance")
+
             logger.info("AdvancedRAGOptimizer initialized successfully")
             return True
 
@@ -1068,6 +1077,24 @@ class RAGService:
             "cache_entries": len(self._cache),
             "config": self.config.to_dict(),
         }
+
+
+# Shared NeuralMeshRetriever singleton — registered by lifespan at startup (#4757).
+# Auto-wired into every RAGService.initialize() call so ALL instances (per-request
+# API deps, chat_workflow manager, get_rag_service singleton) receive the mesh retriever
+# without requiring changes at every call site.
+_shared_mesh_retriever: Optional[Any] = None
+
+
+def register_shared_mesh_retriever(retriever: Any) -> None:
+    """Register NeuralMeshRetriever for auto-wiring into all future RAGService instances.
+
+    Called once by lifespan._init_graph_rag_service() after the retriever is built.
+    Every subsequent RAGService.initialize() will pick it up automatically.
+    """
+    global _shared_mesh_retriever
+    _shared_mesh_retriever = retriever
+    logger.info("NeuralMeshRetriever registered as shared singleton (#4757)")
 
 
 # Global service instance (lazily initialized per knowledge base)

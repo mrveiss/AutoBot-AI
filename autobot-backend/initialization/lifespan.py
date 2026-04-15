@@ -793,6 +793,29 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
                     llm=None,
                 )
                 rag_config.mesh_retriever_enabled = True
+
+                # Register as shared singleton so ALL future RAGService.initialize() calls
+                # auto-wire without changes at each call site (#4757).
+                from services.rag_service import register_shared_mesh_retriever
+                import services.rag_service as _rag_mod
+                register_shared_mesh_retriever(rag_service._mesh_retriever)
+
+                # Back-patch chat_workflow_manager's RAGService — it was created by
+                # set_knowledge_base() before this function ran (Phase 2 ordering).
+                _cwm = getattr(app.state, "chat_workflow_manager", None)
+                if _cwm is not None:
+                    _ks = getattr(_cwm, "knowledge_service", None)
+                    if _ks is not None and hasattr(_ks, "rag_service"):
+                        _ks.rag_service._mesh_retriever = rag_service._mesh_retriever
+                        _ks.rag_service.config.mesh_retriever_enabled = True
+                        logger.info("Re-wired NeuralMeshRetriever into chat_workflow_manager RAGService (#4757)")
+
+                # Back-patch get_rag_service() singleton if already created.
+                if _rag_mod._rag_service_instance is not None:
+                    _rag_mod._rag_service_instance._mesh_retriever = rag_service._mesh_retriever
+                    _rag_mod._rag_service_instance.config.mesh_retriever_enabled = True
+                    logger.info("Re-wired NeuralMeshRetriever into get_rag_service() singleton (#4757)")
+
                 logger.info("✅ [ 87%] Neural Mesh RAG: NeuralMeshRetriever wired into RAGService (#4724)")
             except Exception as _mesh_wire_err:
                 logger.warning("Neural Mesh RAG wiring skipped (non-fatal): %s", _mesh_wire_err)
