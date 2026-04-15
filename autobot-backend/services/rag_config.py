@@ -89,6 +89,9 @@ class RAGConfig:
     # Issue #4696: RLM-driven refinement loop via advanced_search_with_refinement()
     enable_rlm_refinement: bool = False
 
+    # Issue #4678: Inject AnalyzerService lessons as supplemental RAG context
+    enable_analyzer_lessons: bool = True
+
     def __post_init__(self):
         """Validate configuration values and propagate mmr_lambda to rerank_weights.
 
@@ -240,6 +243,8 @@ class RAGConfig:
             "mesh_staleness_decay": self.mesh_staleness_decay,
             "mesh_staleness_threshold": self.mesh_staleness_threshold,
             "mesh_staleness_ttl": self.mesh_staleness_ttl,
+            # Issue #4678: AnalyzerService lesson injection
+            "enable_analyzer_lessons": self.enable_analyzer_lessons,
         }
 
 

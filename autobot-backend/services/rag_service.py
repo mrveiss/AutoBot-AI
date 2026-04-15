@@ -683,6 +683,12 @@ class RAGService:
             if synthesis_prefix:
                 context = synthesis_prefix + "\n\n" + context
 
+            # Issue #4678: optionally inject AnalyzerService lessons (low-weight)
+            if self.config.enable_analyzer_lessons:
+                lessons_ctx = await self._get_analyzer_lessons_context(query)
+                if lessons_ctx:
+                    context = context + "\n\n" + lessons_ctx
+
             return context, metrics
 
         except Exception as e:
@@ -734,6 +740,33 @@ class RAGService:
         if not all_docs:
             return ""
         return "KB synthesis summaries:\n" + "\n".join(f"- {d}" for d in all_docs)
+
+    async def _get_analyzer_lessons_context(self, query: str) -> str:
+        """Query the ``autobot_lessons`` ChromaDB collection for supplemental context.
+
+        Issue #4678: Injects AnalyzerService-distilled lessons as low-weight
+        supplemental context after primary synthesis summaries.  Requires
+        ``RAGConfig.enable_analyzer_lessons`` to be True (checked by caller).
+
+        Returns an empty string on any error so the main context path is never
+        interrupted.
+        """
+        try:
+            from utils.chromadb_client import get_async_chromadb_client
+
+            client = await get_async_chromadb_client()
+            collection = await client.get_or_create_collection(name="autobot_lessons")
+            results = await collection.query(query_texts=[query], n_results=2)
+            if not (results and results.get("ids") and results["ids"][0]):
+                return ""
+            docs = results.get("documents", [[]])[0]
+            relevant = [d for d in docs if d]
+            if not relevant:
+                return ""
+            return "Analyzer lessons:\n" + "\n".join(f"- {d}" for d in relevant)
+        except Exception as exc:
+            logger.debug("Analyzer lessons fetch failed (non-fatal): %s", exc)
+            return ""
 
     async def rerank_results(
         self,
