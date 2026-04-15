@@ -5221,6 +5221,12 @@
     }
   },
   "operations": {
+    "view": {
+      "title": "Operations",
+      "subtitle": "Monitor and manage ongoing operations",
+      "refresh": "Refresh",
+      "loadError": "Failed to load operations"
+    },
     "detail": {
       "close": "Schließen",
       "priorityLabel": "Priorität: {priority}",
