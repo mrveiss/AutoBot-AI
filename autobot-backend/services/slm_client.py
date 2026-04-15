@@ -138,16 +138,38 @@ class ServiceDiscoveryCache:
 
 
 def _create_permissive_ssl_context():
-    """Create SSL context for internal SLM communication (#1048, #2852).
+    """Create SSL context for internal SLM communication (#1048, #2852, #4664).
 
-    By default TLS verification is enabled.  Set AUTOBOT_SKIP_TLS_VERIFY=true
-    ONLY in dev/test environments that use self-signed certificates — never in
+    Trust hierarchy (first match wins):
+    1. AUTOBOT_TLS_CA_PATH env var → load that CA cert (production mTLS)
+    2. AUTOBOT_SKIP_TLS_VERIFY=true → disable verification (dev/test only)
+    3. AutoBot project CA fallback (certs/ca/ca-cert.pem) → load if present
+    4. System trust store → default Python SSL behaviour
+
+    Set AUTOBOT_SKIP_TLS_VERIFY=true ONLY in dev/test environments — never in
     production.
     """
     ctx = ssl.create_default_context()
+
+    # 1. Explicit CA path from env (production deployment)
+    ca_path = os.environ.get("AUTOBOT_TLS_CA_PATH")
+    if ca_path and os.path.isfile(ca_path):
+        ctx.load_verify_locations(ca_path)
+        return ctx
+
+    # 2. Dev/test override — skip verification entirely
     if os.environ.get("AUTOBOT_SKIP_TLS_VERIFY", "").lower() == "true":
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
+        return ctx
+
+    # 3. AutoBot project CA fallback (covers single-host installs with self-signed certs)
+    _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    _cert_dir = os.environ.get("AUTOBOT_TLS_CERT_DIR", "certs")
+    _fallback_ca = os.path.join(_project_root, _cert_dir, "ca", "ca-cert.pem")
+    if os.path.isfile(_fallback_ca):
+        ctx.load_verify_locations(_fallback_ca)
+
     return ctx
 
 
