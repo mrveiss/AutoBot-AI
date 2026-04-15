@@ -15,6 +15,7 @@ from knowledge.search_components.retrieval_learner import (
     _compute_pattern_hash,
     _extract_categories,
     _jaccard_similarity,
+    _ucb1_score,
     get_retrieval_learner,
 )
 
@@ -476,3 +477,139 @@ class TestSingleton:
 
     def test_singleton_is_retrieval_learner_instance(self):
         assert isinstance(get_retrieval_learner(), RetrievalLearner)
+
+
+# ---------------------------------------------------------------------------
+# UCB1 score helper (Issue #4674)
+# ---------------------------------------------------------------------------
+
+
+import math as _math
+
+
+class TestUcb1Score:
+    def test_zero_usage_returns_inf(self):
+        """Unexplored patterns always score highest."""
+        score = _ucb1_score(0.5, usage_count=0, total_queries=10, exploration_constant=_math.sqrt(2))
+        assert score == float("inf")
+
+    def test_zero_total_queries_returns_success_rate(self):
+        """When total_queries is 0, fall back to success_rate alone."""
+        score = _ucb1_score(0.7, usage_count=5, total_queries=0, exploration_constant=_math.sqrt(2))
+        assert score == pytest.approx(0.7)
+
+    def test_higher_usage_gives_lower_bonus(self):
+        """The exploration bonus shrinks as usage_count grows."""
+        total = 100
+        score_low = _ucb1_score(0.8, usage_count=5, total_queries=total, exploration_constant=_math.sqrt(2))
+        score_high = _ucb1_score(0.8, usage_count=50, total_queries=total, exploration_constant=_math.sqrt(2))
+        assert score_low > score_high
+
+    def test_equal_success_rates_prefer_low_usage(self):
+        """With equal success_rate, the lower-usage pattern has a higher UCB1 score."""
+        total = 20
+        score_a = _ucb1_score(0.75, usage_count=4, total_queries=total, exploration_constant=_math.sqrt(2))
+        score_b = _ucb1_score(0.75, usage_count=16, total_queries=total, exploration_constant=_math.sqrt(2))
+        assert score_a > score_b
+
+    def test_exploration_constant_scales_bonus(self):
+        """Larger C increases the exploration bonus proportionally."""
+        s_low_c = _ucb1_score(0.5, usage_count=3, total_queries=30, exploration_constant=0.5)
+        s_high_c = _ucb1_score(0.5, usage_count=3, total_queries=30, exploration_constant=2.0)
+        assert s_high_c > s_low_c
+
+
+# ---------------------------------------------------------------------------
+# get_matching_pattern — UCB1 ranking (Issue #4674)
+# ---------------------------------------------------------------------------
+
+
+class TestGetMatchingPatternUCB1:
+    def _make_pattern(self, ph, success_rate, usage_count, query_type="simple"):
+        return RetrievalPattern(
+            pattern_hash=ph,
+            query_type=query_type,
+            chunk_categories=[],
+            strategy_hints={},
+            success_rate=success_rate,
+            usage_count=usage_count,
+        )
+
+    @pytest.mark.asyncio
+    async def test_equal_success_rates_prefer_low_usage(self):
+        """With equal success_rates, UCB1 should prefer the less-used pattern."""
+        redis = _make_redis_mock()
+
+        p_high_usage = self._make_pattern("hash_high", success_rate=0.8, usage_count=50)
+        p_low_usage = self._make_pattern("hash_low", success_rate=0.8, usage_count=3)
+
+        # Both patterns match the same complexity-only key — we wire exact key → high,
+        # complexity-only key → low so both qualify for comparison.
+        exact_hash = _compute_pattern_hash("simple", [])
+        complexity_hash = _compute_pattern_hash("simple", [])
+        # exact_hash == complexity_hash when categories=[] → only one lookup happens
+        # so instead we use categories to split them.
+        exact_hash_with_cat = _compute_pattern_hash("simple", ["cat"])
+        complexity_only_hash = _compute_pattern_hash("simple", [])
+
+        from knowledge.search_components.retrieval_learner import _PATTERN_KEY_PREFIX, GLOBAL_USER
+
+        key_exact = f"{_PATTERN_KEY_PREFIX}{GLOBAL_USER}:{exact_hash_with_cat}"
+        key_complexity = f"{_PATTERN_KEY_PREFIX}{GLOBAL_USER}:{complexity_only_hash}"
+
+        # Assign patterns to keys.
+        async def fake_hgetall(key):
+            if key == key_exact:
+                return p_high_usage.to_redis_mapping()
+            if key == key_complexity:
+                return p_low_usage.to_redis_mapping()
+            return {}
+
+        redis.hgetall = AsyncMock(side_effect=fake_hgetall)
+        learner = _make_learner(redis)
+
+        result = await learner.get_matching_pattern(
+            "",
+            complexity="simple",
+            categories=["cat"],
+            exploration_constant=_math.sqrt(2),
+        )
+        # UCB1 should select the low-usage pattern (higher exploration bonus).
+        assert result is not None
+        assert result.pattern_hash == "hash_low"
+
+    @pytest.mark.asyncio
+    async def test_greedy_fallback_when_all_usage_equal(self):
+        """When all usage counts are equal, UCB1 degrades to selecting highest success_rate."""
+        redis = _make_redis_mock()
+
+        p_low_rate = self._make_pattern("hash_low_rate", success_rate=0.65, usage_count=5)
+        p_high_rate = self._make_pattern("hash_high_rate", success_rate=0.90, usage_count=5)
+
+        exact_hash_with_cat = _compute_pattern_hash("simple", ["cat"])
+        complexity_only_hash = _compute_pattern_hash("simple", [])
+
+        from knowledge.search_components.retrieval_learner import _PATTERN_KEY_PREFIX, GLOBAL_USER
+
+        key_exact = f"{_PATTERN_KEY_PREFIX}{GLOBAL_USER}:{exact_hash_with_cat}"
+        key_complexity = f"{_PATTERN_KEY_PREFIX}{GLOBAL_USER}:{complexity_only_hash}"
+
+        async def fake_hgetall(key):
+            if key == key_exact:
+                return p_low_rate.to_redis_mapping()
+            if key == key_complexity:
+                return p_high_rate.to_redis_mapping()
+            return {}
+
+        redis.hgetall = AsyncMock(side_effect=fake_hgetall)
+        learner = _make_learner(redis)
+
+        result = await learner.get_matching_pattern(
+            "",
+            complexity="simple",
+            categories=["cat"],
+            exploration_constant=_math.sqrt(2),
+        )
+        # Equal usage → exploration bonuses cancel → highest success_rate wins.
+        assert result is not None
+        assert result.pattern_hash == "hash_high_rate"
