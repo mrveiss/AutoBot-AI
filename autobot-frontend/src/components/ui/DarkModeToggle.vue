@@ -15,8 +15,8 @@ Issue #753: Dark/Light Mode Refinement
     :aria-label="t('ui.darkModeToggle.toggleDarkMode')"
   >
     <transition name="icon-fade" mode="out-in">
-      <i v-if="isDark" key="moon" class="fas fa-moon"></i>
-      <i v-else key="sun" class="fas fa-sun"></i>
+      <i v-if="isDark" key="moon" class="fas fa-moon" aria-hidden="true"></i>
+      <i v-else key="sun" class="fas fa-sun" aria-hidden="true"></i>
     </transition>
   </button>
 </template>
@@ -38,8 +38,9 @@ function toggleDarkMode() {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  /* 44×44 minimum touch target (WCAG 2.5.5, Apple HIG) */
+  min-width: 44px;
+  min-height: 44px;
   border-radius: var(--radius-md);
   background-color: var(--bg-hover);
   color: var(--text-primary);
