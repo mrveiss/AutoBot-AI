@@ -1073,13 +1073,14 @@ export class ChatController {
     await Promise.allSettled(
       localOnly.map(async (session: ChatSession) => {
         try {
-          await chatRepository.createNewChat(session.title)
+          const newSession = await chatRepository.createNewChat(session.title)
+          const backendId = newSession?.id ?? session.id
           await chatRepository.saveChatMessages({
-            chatId: session.id,
+            chatId: backendId,
             messages: session.messages,
             name: session.title || ''
           })
-          logger.debug(`[Issue #4431] Pushed local session ${session.id} to backend`)
+          logger.debug(`[Issue #4431] Pushed local session ${session.id} to backend as ${backendId}`)
         } catch (error) {
           logger.warn(`[Issue #4431] Failed to push local session ${session.id}:`, error)
         }
