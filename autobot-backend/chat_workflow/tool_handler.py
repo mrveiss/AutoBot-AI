@@ -19,6 +19,7 @@ import re
 from typing import TYPE_CHECKING, Any
 
 from async_chat_workflow import WorkflowMessage
+from tools.code_interpreter import CODE_INTERPRETER_SCHEMA
 from utils.errors import RepairableException
 
 if TYPE_CHECKING:
@@ -177,6 +178,11 @@ _BUILTIN_TOOL_SCHEMAS: dict[str, dict] = {
         "properties": {"selector": {"type": "string"}},
         "required": ["selector"],
     },
+    # Imported from tools.code_interpreter — single source of truth for the schema.
+    # Issue #4561: was missing, causing code_interpreter args to bypass validation
+    # (Issue #4562).  All future built-in tool schemas should follow this pattern:
+    # define the schema constant in the tool module and import it here.
+    "code_interpreter": CODE_INTERPRETER_SCHEMA["parameters"],
 }
 
 
