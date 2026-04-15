@@ -242,6 +242,10 @@ class RAGConfig:
             "enable_agentic_search": self.enable_agentic_search,
             "rewrite_enabled": self.rewrite_enabled,
             "max_search_iterations": self.max_search_iterations,
+            # Issue #4696: RLM-driven refinement loop
+            "enable_rlm_refinement": self.enable_rlm_refinement,
+            # Issue #4674: UCB1 exploration constant for RetrievalLearner
+            "ucb1_exploration_constant": self.ucb1_exploration_constant,
             # Neural Mesh RAG feature flags (Issue #2059)
             "mesh_retriever_enabled": self.mesh_retriever_enabled,
             "mesh_seed_edges": self.mesh_seed_edges,
