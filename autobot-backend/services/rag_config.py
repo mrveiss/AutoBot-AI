@@ -89,6 +89,11 @@ class RAGConfig:
     # Issue #4696: RLM-driven refinement loop via advanced_search_with_refinement()
     enable_rlm_refinement: bool = False
 
+    # Issue #4674: UCB1 exploration constant for RetrievalLearner pattern selection.
+    # Higher values → more exploration of under-sampled patterns.
+    # sqrt(2) ≈ 1.414 is the classic UCB1 constant.
+    ucb1_exploration_constant: float = 1.414
+
     def __post_init__(self):
         """Validate configuration values and propagate mmr_lambda to rerank_weights.
 
