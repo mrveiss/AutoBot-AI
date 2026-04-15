@@ -12,6 +12,7 @@ with the task ID while execution continues asynchronously.
 import logging
 from typing import Any, Dict, Optional
 
+from .self_evaluator import DEFAULT_EVAL_THRESHOLD, evaluate_task_output
 from .task_manager import get_task_manager
 from .types import TaskArtifact, TaskState
 
@@ -41,15 +42,25 @@ async def execute_a2a_task(
     task_id: str,
     input_text: str,
     context: Optional[Dict[str, Any]] = None,
+    eval_threshold: float = DEFAULT_EVAL_THRESHOLD,
 ) -> None:
     """
     Execute an A2A task via the existing AgentOrchestrator.
 
     Lifecycle:
-      SUBMITTED → WORKING → (adds text + metadata artifacts) → COMPLETED
-                                                              → FAILED
+      SUBMITTED → WORKING → (adds text + metadata artifacts)
+                          → [self-eval quality gate]
+                          → COMPLETED  (confidence >= eval_threshold)
+                          → FAILED     (confidence < eval_threshold, eval_reason in metadata)
 
     This function is intentionally fire-and-forget (called via BackgroundTasks).
+
+    Args:
+        task_id: Unique A2A task identifier.
+        input_text: Original task input from the caller.
+        context: Optional extra context forwarded to the orchestrator.
+        eval_threshold: Minimum self-eval confidence score required before
+            transitioning to COMPLETED (default: DEFAULT_EVAL_THRESHOLD = 0.6).
     """
     manager = get_task_manager()
     manager.update_state(task_id, TaskState.WORKING)
@@ -86,12 +97,63 @@ async def execute_a2a_task(
                 {"event": "artifact_added", "artifact_type": "json", "task_id": task_id},
             )
 
-        manager.update_state(task_id, TaskState.COMPLETED)
-        manager.publish_event(
-            task_id,
-            {"event": "state_change", "state": "completed", "terminal": True, "task_id": task_id},
+        # Issue #4687: self-evaluation quality gate before COMPLETED transition.
+        eval_result = await evaluate_task_output(
+            input_text=input_text,
+            response_text=response_text,
+            metadata=metadata or {},
+            threshold=eval_threshold,
         )
-        logger.info("A2A task %s completed successfully", task_id)
+
+        if eval_result.passed:
+            manager.update_state(task_id, TaskState.COMPLETED)
+            manager.publish_event(
+                task_id,
+                {
+                    "event": "state_change",
+                    "state": "completed",
+                    "terminal": True,
+                    "task_id": task_id,
+                    "eval_confidence": eval_result.confidence,
+                },
+            )
+            logger.info(
+                "A2A task %s completed (confidence=%.4f)",
+                task_id,
+                eval_result.confidence,
+            )
+        else:
+            eval_artifact = TaskArtifact(
+                artifact_type="json",
+                content={
+                    "eval_reason": eval_result.eval_reason,
+                    "eval_confidence": eval_result.confidence,
+                    "eval_threshold": eval_threshold,
+                },
+            )
+            manager.add_artifact(task_id, eval_artifact)
+            manager.update_state(
+                task_id,
+                TaskState.FAILED,
+                message=eval_result.eval_reason,
+            )
+            manager.publish_event(
+                task_id,
+                {
+                    "event": "state_change",
+                    "state": "failed",
+                    "terminal": True,
+                    "task_id": task_id,
+                    "eval_confidence": eval_result.confidence,
+                    "eval_reason": eval_result.eval_reason,
+                },
+            )
+            logger.warning(
+                "A2A task %s failed self-eval (confidence=%.4f): %s",
+                task_id,
+                eval_result.confidence,
+                eval_result.eval_reason,
+            )
 
     except Exception as exc:
         logger.error("A2A task %s failed: %s", task_id, exc)
