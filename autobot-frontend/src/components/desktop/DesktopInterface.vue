@@ -59,9 +59,17 @@
       <button @click="reconnect" class="control-btn">
         {{ $t('desktop.interface.reconnect') }}
       </button>
+      <button @click="showContextPanel = !showContextPanel" class="control-btn" :title="$t('desktop.interface.contextPanel')">
+        ℹ️
+      </button>
       <div class="connection-status">
         <span :class="connectionStatusClass">{{ connectionStatusDisplay }}</span>
       </div>
+    </div>
+
+    <!-- Context Panel (collapsible right-side) -->
+    <div v-if="showContextPanel" class="context-panel-overlay">
+      <DesktopContextPanel />
     </div>
 
     <!-- Desktop Actions Toolbar (Issue #74) -->
@@ -167,6 +175,7 @@ import { useI18n } from 'vue-i18n'
 import appConfig from '@/config/AppConfig.js'
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
 import TouchFriendlyButton from '@/components/ui/TouchFriendlyButton.vue'
+import DesktopContextPanel from '@/components/desktop/DesktopContextPanel.vue'
 import { useAsyncOperation } from '@/composables/useAsyncOperation'
 import { useVncControls } from '@/composables/useVncControls'
 import { createLogger } from '@/utils/debugUtils'
@@ -180,6 +189,7 @@ const { execute: executeCheckConnection, loading: loadingCheck, error: errorChec
 
 // VNC controls (Issue #74)
 const vncControls = useVncControls()
+const showContextPanel = ref(false)
 const showScreenshotModal = ref(false)
 const screenshotData = ref<string | null>(null)
 const textToType = ref('')
@@ -453,6 +463,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
+  position: relative;
   background-color: var(--bg-primary);
 }
 
@@ -722,5 +733,20 @@ onUnmounted(() => {
 .type-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Context Panel (Issue #4771) */
+.context-panel-overlay {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 20rem;
+  height: 100%;
+  overflow-y: auto;
+  z-index: 10;
+  padding: 1rem;
+  background-color: var(--bg-card);
+  border-left: 1px solid var(--border-default);
+  box-shadow: var(--shadow-lg, -2px 0 8px rgba(0, 0, 0, 0.15));
 }
 </style>
