@@ -465,6 +465,7 @@ interface HealthScore {
   grade: string;
   trend: number;
   breakdown: Record<string, number>;
+  components: Record<string, number>;
   recommendations: string[];
 }
 
@@ -512,6 +513,7 @@ const healthScore = ref<HealthScore>({
   grade: 'C',
   trend: 0,
   breakdown: {},
+  components: {},
   recommendations: [],
 });
 
