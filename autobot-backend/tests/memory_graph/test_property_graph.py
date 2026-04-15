@@ -26,10 +26,32 @@ _autobot_shared.__path__ = []
 
 _redis_client_mod = types.ModuleType("autobot_shared.redis_client")
 _redis_client_mod.get_redis_client = MagicMock(return_value=AsyncMock())
+_redis_client_mod.get_async_redis_client = MagicMock(return_value=AsyncMock())
+
+_redis_mgmt_pkg = types.ModuleType("autobot_shared.redis_management")
+_redis_mgmt_pkg.__path__ = []
+
+_redis_mgmt_types = types.ModuleType("autobot_shared.redis_management.types")
+_redis_mgmt_types.DATABASE_MAPPING = {
+    "main": 0,
+    "knowledge": 1,
+    "prompts": 2,
+    "agents": 3,
+}
+
+_ssot_config_mod = types.ModuleType("autobot_shared.ssot_config")
+_vm_config = MagicMock()
+_vm_config.redis = "127.0.0.1"
+_ssot_config_obj = MagicMock()
+_ssot_config_obj.vm = _vm_config
+_ssot_config_mod.config = _ssot_config_obj
 
 for name, mod in [
     ("autobot_shared", _autobot_shared),
     ("autobot_shared.redis_client", _redis_client_mod),
+    ("autobot_shared.redis_management", _redis_mgmt_pkg),
+    ("autobot_shared.redis_management.types", _redis_mgmt_types),
+    ("autobot_shared.ssot_config", _ssot_config_mod),
 ]:
     sys.modules.setdefault(name, mod)
 
