@@ -854,7 +854,7 @@ class TerminalService {
   async getSessions(): Promise<SessionInfo[]> {
     try {
       const result = await apiClient.getTerminalSessions()
-      return (result || []) as SessionInfo[]
+      return (result || []) as unknown as SessionInfo[]
     } catch (error) {
       logger.error('Error getting sessions:', error)
       return []
