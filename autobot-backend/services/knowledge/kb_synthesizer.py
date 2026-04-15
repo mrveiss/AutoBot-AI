@@ -61,6 +61,8 @@ class KBSynthesizer:
         self._named_collections: dict[str, Any] = {}
         # Issue #4678: lazy-init AnalyzerService (same LLM service).
         self._analyzer: Optional[Any] = None
+        # Issue #4681: track last run_id per collection for parent→child chain.
+        self._last_run_id: dict[str, str] = {}
         # Lazy import to avoid circular deps at module load time.
         if provenance_log is None:
             from services.knowledge.synthesis_provenance import SynthesisProvenanceLog
@@ -279,9 +281,12 @@ class KBSynthesizer:
         await self._index_documents([page], collection_name=target_collection)
         duration_ms = int((time.monotonic() - start) * 1000)
 
+        collection_key = target_collection or self.COLLECTION_NAME
         prompt_name = (
             collection_config.name if collection_config is not None else "default"
         )
+        # Issue #4681: link this run to its predecessor for lineage chain.
+        parent_run_id: Optional[str] = self._last_run_id.get(collection_key)
         await self._provenance_log.log_run(
             run_id=cluster_id,
             source_docs=file_paths[:_MAX_DOCS_PER_CLUSTER],
@@ -289,7 +294,14 @@ class KBSynthesizer:
             llm_model=getattr(self._llm, "model", "unknown"),
             prompt_template=prompt_name,
             duration_ms=duration_ms,
+            parent_run_id=parent_run_id,
+            source_doc_ids=file_paths[:_MAX_DOCS_PER_CLUSTER],
+            prompt_variant=prompt,
+            score=min(len(summary_text) / max(len(docs_text), 1), 1.0),
+            collection_name=collection_key,
         )
+        # Advance lineage pointer for this collection.
+        self._last_run_id[collection_key] = cluster_id
 
         # Issue #4678: distil lessons from this synthesis run (best-effort).
         await self._run_analyzer(

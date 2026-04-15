@@ -5,6 +5,8 @@
 
 Issue #4567: Add synthesis provenance log so operators can audit which source
 documents and LLM models produced which insight IDs.
+Issue #4681: Extended with parent_run_id, source_doc_ids, prompt_variant for
+evolutionary lineage tracking.
 """
 
 from __future__ import annotations
@@ -12,7 +14,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import get_async_redis_client
 
@@ -32,16 +34,26 @@ class SynthesisProvenanceLog:
         llm_model: str,
         prompt_template: str,
         duration_ms: int,
+        parent_run_id: Optional[str] = None,
+        source_doc_ids: Optional[List[str]] = None,
+        prompt_variant: Optional[str] = None,
+        score: float = 0.0,
+        collection_name: Optional[str] = None,
     ) -> None:
         """Append a provenance entry to the Redis stream.
 
         Args:
             run_id: Unique identifier for this synthesis run.
-            source_docs: List of source document IDs used as input.
+            source_docs: List of source document file paths used as input.
             synthesis_ids: List of insight/synthesis IDs produced.
             llm_model: Name/identifier of the LLM model used.
             prompt_template: Name or key of the prompt template used.
             duration_ms: Total synthesis duration in milliseconds.
+            parent_run_id: ID of the prior synthesis run this evolved from (#4681).
+            source_doc_ids: ChromaDB IDs of input documents (#4681).
+            prompt_variant: Prompt variant identifier used for this run (#4681).
+            score: Quality score for this run (0.0–1.0) (#4681).
+            collection_name: Target ChromaDB collection name (#4681).
         """
         entry: Dict[str, Any] = {
             "run_id": run_id,
@@ -51,6 +63,11 @@ class SynthesisProvenanceLog:
             "prompt_template": prompt_template,
             "ran_at": datetime.now(timezone.utc).isoformat(),
             "duration_ms": str(duration_ms),
+            "parent_run_id": parent_run_id or "",
+            "source_doc_ids": json.dumps(source_doc_ids or source_docs),
+            "prompt_variant": prompt_variant or prompt_template,
+            "score": str(score),
+            "collection_name": collection_name or "",
         }
         try:
             redis = await get_async_redis_client(database="main")
@@ -83,7 +100,7 @@ class SynthesisProvenanceLog:
                 )
                 for k, v in fields.items()
             }
-            for list_field in ("source_docs", "synthesis_ids"):
+            for list_field in ("source_docs", "synthesis_ids", "source_doc_ids"):
                 if list_field in entry:
                     try:
                         entry[list_field] = json.loads(entry[list_field])
@@ -94,5 +111,16 @@ class SynthesisProvenanceLog:
                     entry["duration_ms"] = int(entry["duration_ms"])
                 except (ValueError, TypeError):
                     pass
+            if "score" in entry:
+                try:
+                    entry["score"] = float(entry["score"])
+                except (ValueError, TypeError):
+                    entry["score"] = 0.0
+            # Normalize optional lineage fields introduced in #4681
+            entry.setdefault("parent_run_id", None)
+            if entry["parent_run_id"] == "":
+                entry["parent_run_id"] = None
+            entry.setdefault("prompt_variant", entry.get("prompt_template", ""))
+            entry.setdefault("collection_name", "")
             results.append(entry)
         return results
