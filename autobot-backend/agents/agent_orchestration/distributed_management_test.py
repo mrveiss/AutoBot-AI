@@ -2,7 +2,8 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Tests for DistributedAgentManager work-stealing logic (Issue #2109).
+Tests for DistributedAgentManager work-stealing logic (Issue #2109) and
+circuit breaker logic (Issue #4694).
 
 All tests are pure in-memory; no Redis, no actual agents, no network I/O.
 """
@@ -13,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from .distributed_management import DistributedAgentManager
-from .types import DistributedAgentInfo
+from .types import CircuitState, DistributedAgentInfo
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -360,3 +361,176 @@ class TestGetStatisticsWorkStealing:
         mgr._task_reassignment_count["t1"] = 2
         stats = mgr.get_statistics()
         assert stats["a1"]["task_reassignment_counts"]["t1"] == 2
+
+
+# ---------------------------------------------------------------------------
+# Circuit breaker helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_cb_manager(
+    failure_threshold: int = 3,
+    recovery_timeout_seconds: int = 300,
+) -> DistributedAgentManager:
+    """Return a manager configured for circuit breaker tests."""
+    return DistributedAgentManager(
+        builtin_agents={},
+        health_check_interval=30.0,
+        circuit_failure_threshold=failure_threshold,
+        circuit_recovery_timeout_seconds=recovery_timeout_seconds,
+    )
+
+
+def _make_health_stub(status: str = "healthy") -> MagicMock:
+    """Return a minimal AgentHealth stub."""
+    h = MagicMock()
+    h.status.value = status
+    return h
+
+
+# ---------------------------------------------------------------------------
+# Circuit breaker — _process_health_result / state transitions (Issue #4694)
+# ---------------------------------------------------------------------------
+
+
+class TestCircuitBreakerHealthTransitions:
+    def test_healthy_result_resets_failure_count(self):
+        mgr = _make_cb_manager(failure_threshold=3)
+        _register_agent(mgr, "a1")
+        mgr.distributed_agents["a1"].circuit_failure_count = 2
+        mgr._process_health_result("a1", _make_health_stub("healthy"), None)
+        assert mgr.distributed_agents["a1"].circuit_failure_count == 0
+
+    def test_consecutive_failures_open_circuit(self):
+        mgr = _make_cb_manager(failure_threshold=3)
+        _register_agent(mgr, "a1")
+        for _ in range(3):
+            mgr._process_health_result("a1", _make_health_stub("unhealthy"), None)
+        info = mgr.distributed_agents["a1"]
+        assert info.circuit_state == CircuitState.OPEN
+        assert info.circuit_opened_at is not None
+
+    def test_failure_below_threshold_does_not_open_circuit(self):
+        mgr = _make_cb_manager(failure_threshold=3)
+        _register_agent(mgr, "a1")
+        for _ in range(2):
+            mgr._process_health_result("a1", _make_health_stub("unhealthy"), None)
+        assert mgr.distributed_agents["a1"].circuit_state == CircuitState.CLOSED
+
+    def test_exception_in_health_check_counts_as_failure(self):
+        mgr = _make_cb_manager(failure_threshold=2)
+        _register_agent(mgr, "a1")
+        mgr._process_health_result("a1", None, RuntimeError("timeout"))
+        mgr._process_health_result("a1", None, RuntimeError("timeout"))
+        assert mgr.distributed_agents["a1"].circuit_state == CircuitState.OPEN
+
+    def test_healthy_after_open_half_open_closes_circuit(self):
+        mgr = _make_cb_manager(failure_threshold=3)
+        _register_agent(mgr, "a1")
+        info = mgr.distributed_agents["a1"]
+        info.circuit_state = CircuitState.HALF_OPEN
+        info.circuit_failure_count = 3
+        mgr._process_health_result("a1", _make_health_stub("healthy"), None)
+        assert info.circuit_state == CircuitState.CLOSED
+        assert info.circuit_failure_count == 0
+        assert info.circuit_opened_at is None
+
+    def test_failure_in_half_open_reopens_circuit(self):
+        mgr = _make_cb_manager(failure_threshold=3)
+        _register_agent(mgr, "a1")
+        info = mgr.distributed_agents["a1"]
+        info.circuit_state = CircuitState.HALF_OPEN
+        info.circuit_failure_count = 3
+        original_opened_at = datetime.now(timezone.utc) - timedelta(seconds=600)
+        info.circuit_opened_at = original_opened_at
+        mgr._process_health_result("a1", _make_health_stub("degraded"), None)
+        assert info.circuit_state == CircuitState.OPEN
+        # opened_at must be reset (new backoff window)
+        assert info.circuit_opened_at is not None
+        assert info.circuit_opened_at > original_opened_at
+
+
+# ---------------------------------------------------------------------------
+# Circuit breaker — get_healthy_agents routing exclusion (Issue #4694)
+# ---------------------------------------------------------------------------
+
+
+class TestCircuitBreakerRouting:
+    def test_closed_healthy_agent_is_included(self):
+        mgr = _make_cb_manager()
+        _register_agent(mgr, "a1")
+        agents = mgr.get_healthy_agents()
+        assert len(agents) == 1
+
+    def test_open_agent_excluded_from_routing(self):
+        mgr = _make_cb_manager(recovery_timeout_seconds=300)
+        _register_agent(mgr, "a1")
+        info = mgr.distributed_agents["a1"]
+        info.circuit_state = CircuitState.OPEN
+        info.circuit_opened_at = datetime.now(timezone.utc)
+        assert mgr.get_healthy_agents() == []
+
+    def test_open_agent_promoted_to_half_open_after_backoff(self):
+        mgr = _make_cb_manager(recovery_timeout_seconds=60)
+        _register_agent(mgr, "a1")
+        info = mgr.distributed_agents["a1"]
+        info.circuit_state = CircuitState.OPEN
+        info.circuit_opened_at = datetime.now(timezone.utc) - timedelta(seconds=120)
+        agents = mgr.get_healthy_agents()
+        assert info.circuit_state == CircuitState.HALF_OPEN
+        assert len(agents) == 1
+
+    def test_half_open_allows_single_probe_then_blocks(self):
+        mgr = _make_cb_manager()
+        _register_agent(mgr, "a1")
+        info = mgr.distributed_agents["a1"]
+        info.circuit_state = CircuitState.HALF_OPEN
+
+        # First call: probe dispatched.
+        agents_first = mgr.get_healthy_agents()
+        assert len(agents_first) == 1
+        assert info.circuit_probe_dispatched_at is not None
+
+        # Second call: probe already dispatched — excluded.
+        agents_second = mgr.get_healthy_agents()
+        assert agents_second == []
+
+    def test_unhealthy_closed_agent_excluded(self):
+        mgr = _make_cb_manager()
+        _register_agent(mgr, "a1")
+        mgr.distributed_agents["a1"].health.status.value = "degraded"
+        assert mgr.get_healthy_agents() == []
+
+
+# ---------------------------------------------------------------------------
+# Circuit breaker — get_statistics exposes circuit state (Issue #4694)
+# ---------------------------------------------------------------------------
+
+
+class TestCircuitBreakerStatistics:
+    def test_circuit_state_in_agent_stats(self):
+        mgr = _make_cb_manager(failure_threshold=2, recovery_timeout_seconds=120)
+        _register_agent(mgr, "a1")
+        stats = mgr.get_statistics()
+        a1_stats = stats["a1"]
+        assert a1_stats["circuit_state"] == "closed"
+        assert a1_stats["circuit_failure_count"] == 0
+        assert a1_stats["circuit_opened_at"] is None
+
+    def test_circuit_breaker_section_present(self):
+        mgr = _make_cb_manager(failure_threshold=4, recovery_timeout_seconds=600)
+        stats = mgr.get_statistics()
+        cb = stats["_circuit_breaker"]
+        assert cb["failure_threshold"] == 4
+        assert cb["recovery_timeout_seconds"] == 600
+
+    def test_open_circuit_exposes_opened_at(self):
+        mgr = _make_cb_manager()
+        _register_agent(mgr, "a1")
+        opened_at = datetime.now(timezone.utc)
+        info = mgr.distributed_agents["a1"]
+        info.circuit_state = CircuitState.OPEN
+        info.circuit_opened_at = opened_at
+        stats = mgr.get_statistics()
+        assert stats["a1"]["circuit_state"] == "open"
+        assert stats["a1"]["circuit_opened_at"] == opened_at.isoformat()
