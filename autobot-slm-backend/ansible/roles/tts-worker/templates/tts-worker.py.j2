@@ -15,6 +15,7 @@ import json
 import logging
 import os
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -48,12 +49,24 @@ BUILTIN_VOICES = [
 ]
 DEFAULT_VOICE = "alba"
 
-app = FastAPI(title="AutoBot TTS Worker", version="2.0.0")
-
 _model = None
 _model_loaded = False
 _model_error: Optional[str] = None
 _voice_cache: dict = {}  # voice_id -> voice_state
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Load Pocket TTS model on startup."""
+    global _model_loaded, _model_error
+    loop = asyncio.get_event_loop()
+    success, err = await loop.run_in_executor(None, _load_model)
+    _model_loaded = success
+    _model_error = err
+    yield
+
+
+app = FastAPI(title="AutoBot TTS Worker", version="2.0.0", lifespan=lifespan)
 
 
 _GATED_MODEL_PREFIXES = (
@@ -243,16 +256,6 @@ def _run_create_voice(name: str, audio_path: str) -> str:
     _voice_cache[vid] = voice_state
     logger.info("Voice profile created: %s (%s)", name, vid)
     return vid
-
-
-@app.on_event("startup")
-async def on_startup() -> None:
-    """Load Pocket TTS model on startup."""
-    global _model_loaded, _model_error
-    loop = asyncio.get_event_loop()
-    success, err = await loop.run_in_executor(None, _load_model)
-    _model_loaded = success
-    _model_error = err
 
 
 @app.get("/health")
