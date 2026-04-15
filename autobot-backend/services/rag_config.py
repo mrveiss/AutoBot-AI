@@ -58,7 +58,6 @@ class RAGConfig:
     fallback_to_basic_search: bool = True
 
     # Neural Mesh RAG feature flags (Phase 3, Issue #2059)
-    mesh_retriever_enabled: bool = False
     mesh_seed_edges: bool = True
     mesh_edge_learner: bool = False
     mesh_edge_discoverer: bool = False
@@ -227,7 +226,6 @@ class RAGConfig:
             "rewrite_enabled": self.rewrite_enabled,
             "max_search_iterations": self.max_search_iterations,
             # Neural Mesh RAG feature flags (Issue #2059)
-            "mesh_retriever_enabled": self.mesh_retriever_enabled,
             "mesh_seed_edges": self.mesh_seed_edges,
             "mesh_edge_learner": self.mesh_edge_learner,
             "mesh_edge_discoverer": self.mesh_edge_discoverer,
