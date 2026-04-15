@@ -777,7 +777,7 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
 
                 async def _hybrid_search(query: str, top_k: int = 5) -> list:
                     from advanced_rag_optimizer import RAGMetrics
-                    results, _ = await rag_service.optimizer._retrieve_hybrid_results(
+                    results = await rag_service.optimizer._retrieve_hybrid_results(
                         query, RAGMetrics()
                     )
                     return results[:top_k]
