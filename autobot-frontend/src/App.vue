@@ -173,7 +173,7 @@
               rel="noopener noreferrer"
               @click="closeMobileNav"
               class="w-full text-start px-3 py-2 rounded text-sm font-medium transition-colors duration-150 block text-autobot-text-primary hover:bg-autobot-bg-tertiary"
-              :aria-label="`${$t('nav.slmAdmin')} (${$t('nav.opensInNewTab')})`"
+              :aria-label="$t('nav.slmAdminTitle')"
             >
               <div class="flex items-center space-x-2">
                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
