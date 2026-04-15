@@ -1181,6 +1181,23 @@ async def _init_backup_scheduler(app: FastAPI) -> None:
         app.state.backup_scheduler = None
 
 
+async def _start_autonomous_loop(app: FastAPI) -> None:
+    """Start the autonomous RAG/synthesis improvement loop background task (Issue #4680).
+
+    NON-CRITICAL: loop failures do not affect request handling.
+    Only fires a background task when ``autonomous_loop_enabled`` is True.
+    """
+    logger.info("[100%%] AutonomousLoop: Initializing...")
+    try:
+        from workflow_scheduler import start_autonomous_loop
+
+        llm_service = getattr(app.state, "llm_service", None)
+        start_autonomous_loop(llm_service)
+        logger.info("[100%%] AutonomousLoop: background task started")
+    except Exception as exc:
+        logger.warning("AutonomousLoop initialization failed (non-critical): %s", exc)
+
+
 async def _wire_scheduler_executor() -> None:
     """Wire the orchestration WorkflowExecutor into the global WorkflowScheduler (#2166).
 
@@ -1309,6 +1326,7 @@ async def initialize_background_services(app: FastAPI):
         await _init_voice_interface(app)
         await _init_plugin_manager(app)
         await _init_backup_scheduler(app)
+        await _start_autonomous_loop(app)
 
         await update_app_state_multi(
             initialization_status="ready",

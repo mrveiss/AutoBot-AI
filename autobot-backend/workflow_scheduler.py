@@ -951,3 +951,79 @@ async def _default_template_executor(
 
 # Global scheduler instance
 workflow_scheduler = WorkflowScheduler()
+
+
+# ---------------------------------------------------------------------------
+# Autonomous improvement loop integration (Issue #4680)
+# ---------------------------------------------------------------------------
+
+_autonomous_loop_task: Optional[asyncio.Task] = None
+
+
+async def _autonomous_loop_runner(llm_service: Any) -> None:
+    """Background task that polls the autonomous_loop_cron schedule and fires runs.
+
+    Uses a simple asyncio loop with 60-second resolution rather than a full cron
+    library to avoid adding a new dependency.  Checks ``autonomous_loop_enabled``
+    on every tick so the feature can be toggled at runtime without restart.
+    """
+    from services.knowledge.autonomous_loop import run_scheduled_loop
+    from services.rag_config import get_rag_config
+
+    import re
+    from datetime import timedelta
+
+    def _cron_matches_now(cron_expr: str) -> bool:
+        """Return True when the current UTC time matches *cron_expr*.
+
+        Only handles the ``minute hour * * *`` form produced by the default
+        ``"0 2 * * *"`` setting.  Full cron support is intentionally deferred.
+        """
+        try:
+            parts = cron_expr.split()
+            if len(parts) < 5:
+                return False
+            now = datetime.now(tz=timezone.utc)
+            minute_match = parts[0] == "*" or int(parts[0]) == now.minute
+            hour_match = parts[1] == "*" or int(parts[1]) == now.hour
+            return minute_match and hour_match and now.second < 60
+        except Exception:
+            return False
+
+    logger.info("AutonomousLoopRunner: background task started")
+    _last_fired_minute: Optional[int] = None
+
+    while True:
+        try:
+            cfg = get_rag_config()
+            if cfg.autonomous_loop_enabled:
+                now = datetime.now(tz=timezone.utc)
+                current_minute = now.hour * 60 + now.minute
+                if _cron_matches_now(cfg.autonomous_loop_cron) and current_minute != _last_fired_minute:
+                    _last_fired_minute = current_minute
+                    logger.info("AutonomousLoopRunner: cron matched — firing loop run")
+                    asyncio.create_task(run_scheduled_loop(llm_service))
+        except Exception:
+            logger.exception("AutonomousLoopRunner: tick error (non-fatal)")
+
+        await asyncio.sleep(30)  # 30-second tick resolution
+
+
+def start_autonomous_loop(llm_service: Any) -> None:
+    """Schedule the autonomous improvement loop background task.
+
+    Call this from the application lifespan startup after the event loop is running.
+    Safe to call multiple times — only starts once.
+
+    Issue #4680.
+    """
+    global _autonomous_loop_task
+    if _autonomous_loop_task is not None and not _autonomous_loop_task.done():
+        logger.debug("AutonomousLoopRunner: already running — skipping duplicate start")
+        return
+
+    _autonomous_loop_task = asyncio.create_task(
+        _autonomous_loop_runner(llm_service),
+        name="autonomous_loop_runner",
+    )
+    logger.info("AutonomousLoopRunner: task created")
