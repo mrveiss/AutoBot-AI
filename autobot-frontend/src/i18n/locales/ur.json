@@ -6128,6 +6128,15 @@
       "statusLabel": "Status",
       "allTypes": "All Types",
       "allStatuses": "All Statuses"
+    },
+    "view": {
+      "title": "Long-Running Operations",
+      "subtitle": "Monitor and manage background tasks",
+      "refresh": "Refresh",
+      "loadError": "Failed to load operations"
+    },
+    "panel": {
+      "selectOperation": "Select an operation to view details"
     }
   },
   "fileBrowser": {

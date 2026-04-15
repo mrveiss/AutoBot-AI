@@ -5265,6 +5265,15 @@
       "resume": "Atsākt",
       "viewDetails": "Skatīt detaļas",
       "showingCount": "Rāda {shown} no {total} operācijām"
+    },
+    "view": {
+      "title": "Long-Running Operations",
+      "subtitle": "Monitor and manage background tasks",
+      "refresh": "Refresh",
+      "loadError": "Failed to load operations"
+    },
+    "panel": {
+      "selectOperation": "Select an operation to view details"
     }
   },
   "secrets": {

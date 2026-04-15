@@ -5265,6 +5265,15 @@
       "resume": "Retomar",
       "viewDetails": "Ver detalhes",
       "showingCount": "A mostrar {shown} de {total} operações"
+    },
+    "view": {
+      "title": "Long-Running Operations",
+      "subtitle": "Monitor and manage background tasks",
+      "refresh": "Refresh",
+      "loadError": "Failed to load operations"
+    },
+    "panel": {
+      "selectOperation": "Select an operation to view details"
     }
   },
   "secrets": {
