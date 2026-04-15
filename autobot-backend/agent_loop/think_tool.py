@@ -134,6 +134,20 @@ Think through this situation:
 
 Provide your reasoning and conclusion.
 """,
+    ThinkCategory.CAUSAL_ANALYSIS: """
+Apply a Causal Reasoning Framework to identify WHY, not just WHAT:
+
+1. What is the direct cause? (mechanism, not just correlation)
+2. What are the secondary/cascading effects along the causal chain?
+3. What confounders could explain the observation without a causal link?
+4. How would you isolate the cause from confounders?
+5. What is the confidence level and what would change it?
+
+Structure your answer as a causal chain: A → B → C (each arrow is a mechanism).
+Distinguish: X CAUSES Y (mechanistic) vs X CORRELATES WITH Y (observational).
+
+Provide your causal reasoning and conclusion.
+""",
 }
 
 
@@ -487,3 +501,23 @@ async def think_before_transition(
     """
     tool = think_tool or ThinkTool()
     return await tool.think(ThinkCategory.TRANSITION, context, task_id)
+
+
+async def think_causally(
+    context: str,
+    think_tool: Optional[ThinkTool] = None,
+    task_id: Optional[str] = None,
+) -> ThinkResult:
+    """
+    Convenience function for causal reasoning — WHY not just WHAT.
+
+    Args:
+        context: Situation or problem to analyse causally
+        think_tool: Optional ThinkTool instance
+        task_id: Optional task ID
+
+    Returns:
+        ThinkResult with causal chain reasoning
+    """
+    tool = think_tool or ThinkTool()
+    return await tool.think(ThinkCategory.CAUSAL_ANALYSIS, context, task_id)
