@@ -804,6 +804,13 @@ class DocIndexerService:
             "indexed_at": datetime.now(tz=timezone.utc).isoformat(),
             "chunk_index": chunk_index,
             "total_chunks": total_chunks,
+            # Issue #4681: evolutionary lineage fields.
+            # lineage_parent_id and lineage_source_run_id are populated by
+            # LineageService.stamp_upsert() after synthesis runs; seeded with
+            # defaults on initial index so callers can always read them.
+            "lineage_parent_id": "",
+            "lineage_version": 1,
+            "lineage_source_run_id": "",
         }
 
         content = chunk["content"]

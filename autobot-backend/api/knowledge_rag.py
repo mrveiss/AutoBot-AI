@@ -7,6 +7,8 @@ Advanced RAG endpoints for knowledge base - Reranking and optimized search.
 
 These endpoints provide enhanced search capabilities using the AdvancedRAGOptimizer
 with cross-encoder reranking for improved relevance scoring.
+
+Issue #4681: Added GET /entity/{id}/history for evolutionary lineage tracking.
 """
 
 import logging
@@ -354,4 +356,49 @@ async def get_rag_stats(
     return {
         "stats": stats,
         "service_available": True,
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_entity_history",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.get("/entity/{entity_id}/history")
+async def get_entity_history(
+    entity_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Return the version list for a ChromaDB entity (evolutionary lineage).
+
+    Each entry includes lineage_version, lineage_source_run_id, score, and
+    timestamp so callers can trace every change back to its synthesis run.
+
+    Issue #4681: Evolutionary lineage tracking.
+
+    **Parameters:**
+    - **entity_id**: ChromaDB document ID of the entity.
+
+    **Returns:**
+    - **entity_id**: The requested entity ID.
+    - **versions**: List of version dicts sorted by lineage_version ascending.
+    - **count**: Number of versions found.
+    """
+    from services.knowledge.lineage_service import LineageService
+    from services.knowledge.synthesis_provenance import SynthesisProvenanceLog
+    from utils.chromadb_client import get_async_chromadb_client
+
+    async def _collection_factory(name: str):
+        client = await get_async_chromadb_client()
+        return await client.get_or_create_collection(name=name)
+
+    svc = LineageService(
+        provenance_log=SynthesisProvenanceLog(),
+        chromadb_collection_factory=_collection_factory,
+    )
+    versions = await svc.get_entity_history(entity_id)
+    return {
+        "entity_id": entity_id,
+        "versions": versions,
+        "count": len(versions),
     }
