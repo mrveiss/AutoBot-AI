@@ -18,7 +18,7 @@ import yaml
 logger = logging.getLogger(__name__)
 
 _REQUIRED_KEYS = {"name", "paths", "synthesis_target", "prompt_template"}
-_ALLOWED_KEYS = _REQUIRED_KEYS
+_ALLOWED_KEYS = _REQUIRED_KEYS | {"synthesis_model"}
 
 
 @dataclass
@@ -29,6 +29,7 @@ class CollectionConfig:
     paths: List[str]
     synthesis_target: str
     prompt_template: str
+    synthesis_model: Optional[str] = None
 
 
 @dataclass
@@ -58,11 +59,21 @@ def _parse_collection(raw: dict, index: int, repo_root: Optional[Path] = None) -
         raise ValueError(
             f"Collection[{index}] is missing required keys: {sorted(missing)}"
         )
+    synthesis_model: Optional[str] = None
+    if "synthesis_model" in raw:
+        model_val = str(raw["synthesis_model"]).strip()
+        if not model_val:
+            raise ValueError(
+                f"Collection[{index}] 'synthesis_model' must be a non-empty string when present"
+            )
+        synthesis_model = model_val
+
     config = CollectionConfig(
         name=str(raw["name"]),
         paths=[str(p) for p in raw["paths"]],
         synthesis_target=str(raw["synthesis_target"]),
         prompt_template=str(raw["prompt_template"]),
+        synthesis_model=synthesis_model,
     )
     if repo_root is not None:
         for p in config.paths:

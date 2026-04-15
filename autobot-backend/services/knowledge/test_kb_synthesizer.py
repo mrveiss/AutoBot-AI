@@ -655,3 +655,85 @@ async def test_get_relevant_context_deduplicates_default_collection():
 
     # Default collection queried exactly once (not twice).
     assert col.query.await_count == 1
+
+
+# ---------------------------------------------------------------------------
+# Tests: synthesis_model override (#4688)
+# ---------------------------------------------------------------------------
+
+
+def _make_collection_config_with_model(
+    name: str = "test_col",
+    prompt_template: str = "Custom prompt: {documents}",
+    synthesis_target: str = "",
+    synthesis_model: str | None = None,
+):
+    """Return a CollectionConfig-like mock with synthesis_model support."""
+    cfg = MagicMock()
+    cfg.name = name
+    cfg.prompt_template = prompt_template
+    cfg.synthesis_target = synthesis_target
+    cfg.paths = ["docs/test"]
+    cfg.synthesis_model = synthesis_model
+    return cfg
+
+
+@pytest.mark.asyncio
+async def test_synthesize_docs_passes_model_override_to_llm(tmp_path):
+    """When synthesis_model is set, llm.chat() receives model= kwarg."""
+    f = tmp_path / "doc.md"
+    f.write_text("Architecture notes.", encoding="utf-8")
+
+    col = _make_collection()
+    llm = _make_llm("Summary")
+    synth = KBSynthesizer(llm_service=llm)
+    synth._collection = col
+
+    cfg = _make_collection_config_with_model(
+        name="hq_col",
+        synthesis_model="claude-opus-4-6",
+    )
+
+    await synth.synthesize_docs([str(f)], collection_config=cfg)
+
+    llm.chat.assert_awaited_once()
+    call_kwargs = llm.chat.call_args.kwargs
+    assert call_kwargs.get("model") == "claude-opus-4-6"
+
+
+@pytest.mark.asyncio
+async def test_synthesize_docs_no_model_override_omits_model_kwarg(tmp_path):
+    """When synthesis_model is None, llm.chat() is NOT passed a model= kwarg."""
+    f = tmp_path / "doc.md"
+    f.write_text("Some content.", encoding="utf-8")
+
+    col = _make_collection()
+    llm = _make_llm("Summary")
+    synth = KBSynthesizer(llm_service=llm)
+    synth._collection = col
+
+    cfg = _make_collection_config_with_model(name="default_col", synthesis_model=None)
+
+    await synth.synthesize_docs([str(f)], collection_config=cfg)
+
+    llm.chat.assert_awaited_once()
+    call_kwargs = llm.chat.call_args.kwargs
+    assert "model" not in call_kwargs
+
+
+@pytest.mark.asyncio
+async def test_synthesize_docs_no_collection_config_omits_model_kwarg(tmp_path):
+    """When collection_config is None, llm.chat() is NOT passed a model= kwarg."""
+    f = tmp_path / "doc.md"
+    f.write_text("Content.", encoding="utf-8")
+
+    col = _make_collection()
+    llm = _make_llm("Summary")
+    synth = KBSynthesizer(llm_service=llm)
+    synth._collection = col
+
+    await synth.synthesize_docs([str(f)], collection_config=None)
+
+    llm.chat.assert_awaited_once()
+    call_kwargs = llm.chat.call_args.kwargs
+    assert "model" not in call_kwargs

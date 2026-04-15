@@ -146,6 +146,78 @@ class TestValidationError:
             load_synthesis_schema(path)
 
 
+class TestSynthesisModelOverride:
+    """synthesis_model is optional; validates non-empty when present."""
+
+    def test_synthesis_model_omitted_defaults_to_none(self, tmp_path):
+        path = _write_yaml(tmp_path, VALID_YAML)
+        schema = load_synthesis_schema(path)
+        for col in schema.collections:
+            assert col.synthesis_model is None
+
+    def test_synthesis_model_parsed_when_present(self, tmp_path):
+        yaml_with_model = """\
+            collections:
+              - name: high_quality_col
+                paths:
+                  - docs/hq
+                synthesis_target: autobot_synthesis_hq
+                synthesis_model: claude-opus-4-6
+                prompt_template: "Summarize: {documents}"
+        """
+        path = _write_yaml(tmp_path, yaml_with_model)
+        schema = load_synthesis_schema(path)
+        assert schema.collections[0].synthesis_model == "claude-opus-4-6"
+
+    def test_synthesis_model_empty_string_raises(self, tmp_path):
+        yaml_empty_model = """\
+            collections:
+              - name: bad_col
+                paths:
+                  - docs/bad
+                synthesis_target: autobot_synthesis_bad
+                synthesis_model: ""
+                prompt_template: "Summarize: {documents}"
+        """
+        path = _write_yaml(tmp_path, yaml_empty_model)
+        with pytest.raises(ValueError, match="non-empty string"):
+            load_synthesis_schema(path)
+
+    def test_synthesis_model_whitespace_raises(self, tmp_path):
+        yaml_ws_model = """\
+            collections:
+              - name: bad_col
+                paths:
+                  - docs/bad
+                synthesis_target: autobot_synthesis_bad
+                synthesis_model: "   "
+                prompt_template: "Summarize: {documents}"
+        """
+        path = _write_yaml(tmp_path, yaml_ws_model)
+        with pytest.raises(ValueError, match="non-empty string"):
+            load_synthesis_schema(path)
+
+    def test_mixed_collections_some_with_model(self, tmp_path):
+        mixed_yaml = """\
+            collections:
+              - name: col_with_model
+                paths:
+                  - docs/a
+                synthesis_target: target_a
+                synthesis_model: claude-opus-4-6
+                prompt_template: "Docs: {documents}"
+              - name: col_without_model
+                paths:
+                  - docs/b
+                synthesis_target: target_b
+                prompt_template: "Docs: {documents}"
+        """
+        path = _write_yaml(tmp_path, mixed_yaml)
+        schema = load_synthesis_schema(path)
+        assert schema.collections[0].synthesis_model == "claude-opus-4-6"
+        assert schema.collections[1].synthesis_model is None
+
+
 class TestPathExistenceWarnings:
     """load_synthesis_schema warns on missing paths but does not raise."""
 
