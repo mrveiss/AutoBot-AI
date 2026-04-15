@@ -369,6 +369,19 @@ class LongTermMemoryManager:
         query = " ".join(str(v) for v in metadata_query.values())
         return await self._unified.search_memories(query)
 
+    async def initialize(self) -> None:
+        """Initialize the underlying storage (called by orchestrator on startup)."""
+        await self._unified._ensure_initialized()
+        logger.info("LongTermMemoryManager initialized")
+
+    async def cleanup(self) -> None:
+        """Cleanup hook called by orchestrator on shutdown (no-op: no resources to release)."""
+        logger.info("LongTermMemoryManager cleanup complete")
+
+    async def search_relevant_context(self, query: str) -> List[MemoryEntry]:
+        """Search memories for context relevant to the given query."""
+        return await self._unified.search_memories(query)
+
     async def cleanup_old_memories(self, retention_days: Optional[int] = None) -> int:
         """Cleanup old memories"""
         return await self._unified.cleanup_old_memories(retention_days)
