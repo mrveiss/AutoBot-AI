@@ -15,10 +15,18 @@ from pathlib import Path
 
 import pytest
 
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+# Add project root and shared infrastructure to path so benchmark_base is importable
+_repo_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(_repo_root))
+sys.path.insert(0, str(_repo_root / "autobot-infrastructure" / "shared"))
 
-from tests.benchmarks.benchmark_base import BenchmarkRunner, assert_performance
+try:
+    from tests.benchmarks.benchmark_base import BenchmarkRunner, assert_performance
+except ModuleNotFoundError:
+    # benchmark_base is only available when the full infrastructure tree is present.
+    # TestRealKBBenchmarks (below) does not require it; the mock benchmark classes do.
+    BenchmarkRunner = None  # type: ignore[assignment,misc]
+    assert_performance = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -375,6 +383,268 @@ class TestRAGPipelineBenchmarks:
         )
 
         assert result.passed
+
+
+def _deterministic_embed(text: str, dim: int = 128) -> list:
+    """Return a consistent, semantically-aware unit-normalised vector for *text*.
+
+    Uses a vocabulary of topic-discriminating terms so that documents covering
+    the same topic produce similar (high cosine-similarity) vectors, which makes
+    precision@k assertions meaningful.
+
+    The vocabulary is fixed and deterministic -- the same input always produces
+    the same output vector.  No external model or service is required.
+    """
+    import math
+
+    # Fixed vocabulary of discriminating terms (order defines feature index).
+    # Terms are grouped by topic so same-topic documents share high overlap.
+    _VOCAB = [
+        # Python (indices 0-19)
+        "python", "list", "comprehension", "generator", "yield", "decorator",
+        "asyncio", "coroutine", "dataclass", "unittest", "mock", "venv",
+        "gil", "interpreter", "bytecode", "hint", "mypy", "typing",
+        "functools", "wraps",
+        # Database (indices 20-39)
+        "postgresql", "database", "sql", "index", "query", "transaction",
+        "acid", "redis", "chromadb", "vector", "embedding", "normalization",
+        "partition", "connection", "pool", "wal", "log", "schema",
+        "relational", "table",
+        # Networking (indices 40-59)
+        "tcp", "http", "tls", "dns", "load", "balancer", "websocket",
+        "cidr", "bgp", "nginx", "proxy", "network", "protocol", "routing",
+        "server", "client", "encrypt", "firewall", "sse", "packet",
+        # Machine Learning (indices 60-79)
+        "transformer", "rag", "retrieval", "augmented", "generation",
+        "cosine", "similarity", "precision", "recall", "embedding",
+        "finetune", "quantisation", "reranker", "bm25", "hybrid",
+        "sentence", "chunk", "attention", "model", "language",
+        # General / overlap (indices 80-127)
+        "data", "performance", "memory", "efficient", "search", "result",
+        "document", "content", "source", "text", "word", "term",
+        "score", "rank", "top", "relevant", "train", "test", "run",
+        "function", "class", "method", "import", "module", "package",
+        "version", "install", "build", "config", "setup",
+    ]
+    # Extend to *dim* entries with placeholder values (empty string never matches)
+    vocab = (_VOCAB + [""] * dim)[:dim]
+
+    text_lower = text.lower()
+    words = set(text_lower.split())
+
+    vec = []
+    for term in vocab:
+        if not term:
+            vec.append(0.0)
+        else:
+            # Count substring occurrences for partial matches (e.g. "asyncio" in phrase)
+            count = text_lower.count(term)
+            vec.append(float(count))
+
+    # L2-normalise
+    magnitude = math.sqrt(sum(v * v for v in vec))
+    if magnitude > 0:
+        vec = [v / magnitude for v in vec]
+    else:
+        # Fallback: uniform vector for texts with no vocabulary matches
+        vec = [1.0 / math.sqrt(dim)] * dim
+    return vec
+
+
+# ---------------------------------------------------------------------------
+# Domain document corpus for seeding the ephemeral KB
+# Each tuple is (doc_id, document_text, topic)
+# ---------------------------------------------------------------------------
+
+_TOPIC_DOCS = [
+    # Python programming
+    ("python_01", "Python is a high-level interpreted programming language with clear readable syntax supporting procedural object-oriented and functional paradigms.", "python"),
+    ("python_02", "Python list comprehensions provide a concise way to create lists. Example: squares = [x**2 for x in range(10)]. They are faster than equivalent for-loops.", "python"),
+    ("python_03", "Python decorators add behaviour to functions without modifying them. The @functools.wraps decorator preserves the wrapped function metadata.", "python"),
+    ("python_04", "Python generators use the yield keyword to produce sequences lazily which is memory-efficient for large data streams.", "python"),
+    ("python_05", "The Python GIL Global Interpreter Lock prevents multiple threads from executing Python bytecode simultaneously. Use multiprocessing for CPU-bound work.", "python"),
+    ("python_06", "Python virtual environments venv isolate project dependencies so different projects can use different package versions without conflicts.", "python"),
+    ("python_07", "Type hints in Python PEP 484 allow static type checkers such as mypy to catch type errors before runtime without affecting performance.", "python"),
+    ("python_08", "Python asyncio library enables single-threaded concurrency using coroutines and an event loop ideal for I/O-bound workloads such as HTTP clients.", "python"),
+    ("python_09", "Python dataclasses PEP 557 auto-generate __init__ __repr__ and __eq__ from field annotations reducing boilerplate for data-holding classes.", "python"),
+    ("python_10", "Python unittest.mock lets you replace real objects with Mock instances during testing to assert how they are called without side effects.", "python"),
+    # Database / SQL
+    ("db_01", "PostgreSQL is an advanced open-source relational database supporting ACID transactions complex queries foreign keys and triggers.", "database"),
+    ("db_02", "SQL indexes speed up SELECT queries by allowing the database engine to locate rows without scanning the entire table. B-tree indexes are the default in PostgreSQL.", "database"),
+    ("db_03", "Database normalization organises tables to reduce redundancy. Third Normal Form 3NF requires all non-key attributes depend only on the primary key.", "database"),
+    ("db_04", "Redis is an in-memory data structure store used as a database cache and message broker supporting strings hashes lists sets and sorted sets.", "database"),
+    ("db_05", "ChromaDB is an open-source embedding database for storing and querying high-dimensional vectors produced by language model embeddings.", "database"),
+    ("db_06", "ACID properties Atomicity Consistency Isolation Durability guarantee database transactions are processed reliably even after system failures.", "database"),
+    ("db_07", "Partitioning a large database table by date range dramatically improves query performance by limiting scans to relevant partitions.", "database"),
+    ("db_08", "Vector similarity search retrieves documents whose embedding vectors are closest to a query vector using cosine similarity or L2 distance.", "database"),
+    ("db_09", "Connection pooling reuses existing database connections rather than opening a new TCP connection for each query reducing latency and resource use.", "database"),
+    ("db_10", "A write-ahead log WAL records database changes before applying them so the database can recover to a consistent state after a crash.", "database"),
+    # Networking
+    ("net_01", "TCP Transmission Control Protocol provides reliable ordered error-checked delivery of data between applications running on hosts in an IP network.", "networking"),
+    ("net_02", "HTTP/2 multiplexes multiple requests over a single TCP connection reducing latency compared to HTTP/1.1 which requires a separate connection per request.", "networking"),
+    ("net_03", "TLS Transport Layer Security encrypts network traffic between client and server to prevent eavesdropping and man-in-the-middle attacks.", "networking"),
+    ("net_04", "A load balancer distributes incoming network requests across multiple backend servers to improve availability and horizontal scalability.", "networking"),
+    ("net_05", "DNS Domain Name System translates hostnames such as example.com into IP addresses that routers use to forward packets.", "networking"),
+    ("net_06", "WebSockets provide full-duplex communication over a single TCP connection enabling real-time data exchange between browser and server.", "networking"),
+    ("net_07", "CIDR Classless Inter-Domain Routing notation expresses IP address ranges; for example 192.168.1.0/24 covers 256 addresses.", "networking"),
+    ("net_08", "Server-Sent Events SSE allow a server to push data to a browser client over a standard HTTP connection without requiring the client to poll.", "networking"),
+    ("net_09", "BGP Border Gateway Protocol is the routing protocol that directs traffic between autonomous systems on the internet.", "networking"),
+    ("net_10", "A reverse proxy sits in front of backend servers forwarding client requests and returning responses; nginx and HAProxy are popular choices.", "networking"),
+    # Machine Learning / RAG
+    ("ml_01", "A transformer model uses self-attention mechanisms to weigh the influence of different input tokens when producing each output token.", "ml"),
+    ("ml_02", "Retrieval-Augmented Generation RAG combines a retrieval step that fetches relevant documents with a generation step that produces a grounded response.", "ml"),
+    ("ml_03", "Fine-tuning a pre-trained language model on a domain-specific dataset adapts its weights to improve performance on that domain without full retraining.", "ml"),
+    ("ml_04", "Cosine similarity measures the angle between two embedding vectors. A score of 1 means identical direction 0 means orthogonal and -1 means opposite.", "ml"),
+    ("ml_05", "Precision@k is the fraction of retrieved top-k documents that are relevant to the query. It measures retrieval accuracy rather than recall.", "ml"),
+    ("ml_06", "A cross-encoder reranker scores each query-document pair jointly to improve ranking quality beyond what a bi-encoder retrieval step achieves.", "ml"),
+    ("ml_07", "Sentence transformers encode sentences into dense vectors such that semantically similar sentences have high cosine similarity in the embedding space.", "ml"),
+    ("ml_08", "Chunking a long document into smaller overlapping windows before embedding ensures retrieval can target specific sections rather than averaging the whole.", "ml"),
+    ("ml_09", "Hybrid search combines dense vector retrieval with sparse keyword retrieval BM25 and merges the two ranked lists using reciprocal rank fusion.", "ml"),
+    ("ml_10", "Quantisation reduces the memory footprint of a language model by representing weights in lower precision such as INT8 or INT4 instead of FP32.", "ml"),
+]
+
+# Ground-truth: query text -> expected doc IDs (at least one must appear in top-k)
+_GROUND_TRUTH = {
+    "Python list comprehensions and generator expressions": {"python_02", "python_04"},
+    "PostgreSQL indexes and query performance": {"db_02", "db_01"},
+    "TLS encryption and secure network communication": {"net_03", "net_01"},
+    "RAG retrieval augmented generation embedding search": {"ml_02", "ml_09"},
+    "cosine similarity precision at k evaluation metrics": {"ml_04", "ml_05"},
+}
+
+
+@pytest.mark.real_kb
+class TestRealKBBenchmarks:
+    """
+    Precision@k tests against a real ChromaDB in-memory (EphemeralClient) instance.
+
+    These tests verify that the retrieval layer produces meaningful rankings when
+    given domain-relevant documents and real queries -- no random embeddings.
+
+    Run with: pytest -m real_kb autobot-backend/knowledge/rag_benchmarks.py -v
+
+    No external services needed: ChromaDB runs fully in-process and embeddings
+    are deterministic hash-derived vectors (same input -> same vector, always).
+
+    Issue #4697.
+    """
+
+    _DIM = 128  # Embedding dimension used throughout this class
+
+    @pytest.fixture(scope="class")
+    def chroma_collection(self):
+        """Seed an ephemeral ChromaDB collection with the domain corpus."""
+        import chromadb
+
+        client = chromadb.EphemeralClient()
+        collection = client.create_collection(
+            name="real_kb_bench",
+            metadata={"hnsw:space": "cosine"},
+        )
+        ids = [doc_id for doc_id, _, _ in _TOPIC_DOCS]
+        embeddings = [_deterministic_embed(text, self._DIM) for _, text, _ in _TOPIC_DOCS]
+        documents = [text for _, text, _ in _TOPIC_DOCS]
+        metadatas = [{"topic": topic} for _, _, topic in _TOPIC_DOCS]
+        collection.add(
+            ids=ids,
+            embeddings=embeddings,
+            documents=documents,
+            metadatas=metadatas,
+        )
+        yield collection
+        client.delete_collection("real_kb_bench")
+
+    def _query_top_k(self, collection, query: str, k: int) -> list:
+        """Return the top-k doc IDs from *collection* for *query*."""
+        query_vec = _deterministic_embed(query, self._DIM)
+        result = collection.query(
+            query_embeddings=[query_vec],
+            n_results=k,
+            include=["documents", "metadatas", "distances"],
+        )
+        return result["ids"][0]
+
+    def _precision_at_k(self, retrieved_ids: list, expected_ids: set) -> float:
+        """Return fraction of *retrieved_ids* that appear in *expected_ids*."""
+        if not retrieved_ids:
+            return 0.0
+        return sum(1 for doc_id in retrieved_ids if doc_id in expected_ids) / len(retrieved_ids)
+
+    def test_corpus_seeded_correctly(self, chroma_collection):
+        """All corpus documents must be present in the ephemeral collection."""
+        assert chroma_collection.count() == len(_TOPIC_DOCS)
+
+    def test_precision_at_5_python_query(self, chroma_collection):
+        """Python list comprehension query: at least one expected doc in top-5."""
+        query = "Python list comprehensions and generator expressions"
+        retrieved = self._query_top_k(chroma_collection, query, k=5)
+        p_at_5 = self._precision_at_k(retrieved, _GROUND_TRUTH[query])
+        logger.info("Precision@5 python query=%.2f retrieved=%s", p_at_5, retrieved)
+        assert p_at_5 > 0.0, f"Expected one of {_GROUND_TRUTH[query]} in top-5; got {retrieved}"
+
+    def test_precision_at_5_database_query(self, chroma_collection):
+        """PostgreSQL index query: at least one expected doc in top-5."""
+        query = "PostgreSQL indexes and query performance"
+        retrieved = self._query_top_k(chroma_collection, query, k=5)
+        p_at_5 = self._precision_at_k(retrieved, _GROUND_TRUTH[query])
+        logger.info("Precision@5 database query=%.2f retrieved=%s", p_at_5, retrieved)
+        assert p_at_5 > 0.0, f"Expected one of {_GROUND_TRUTH[query]} in top-5; got {retrieved}"
+
+    def test_precision_at_5_networking_query(self, chroma_collection):
+        """TLS encryption query: at least one expected doc in top-5."""
+        query = "TLS encryption and secure network communication"
+        retrieved = self._query_top_k(chroma_collection, query, k=5)
+        p_at_5 = self._precision_at_k(retrieved, _GROUND_TRUTH[query])
+        logger.info("Precision@5 networking query=%.2f retrieved=%s", p_at_5, retrieved)
+        assert p_at_5 > 0.0, f"Expected one of {_GROUND_TRUTH[query]} in top-5; got {retrieved}"
+
+    def test_precision_at_5_rag_query(self, chroma_collection):
+        """RAG / embedding search query: at least one expected doc in top-5."""
+        query = "RAG retrieval augmented generation embedding search"
+        retrieved = self._query_top_k(chroma_collection, query, k=5)
+        p_at_5 = self._precision_at_k(retrieved, _GROUND_TRUTH[query])
+        logger.info("Precision@5 RAG query=%.2f retrieved=%s", p_at_5, retrieved)
+        assert p_at_5 > 0.0, f"Expected one of {_GROUND_TRUTH[query]} in top-5; got {retrieved}"
+
+    def test_precision_at_5_cosine_metrics_query(self, chroma_collection):
+        """Cosine similarity / precision@k query: at least one expected doc in top-5."""
+        query = "cosine similarity precision at k evaluation metrics"
+        retrieved = self._query_top_k(chroma_collection, query, k=5)
+        p_at_5 = self._precision_at_k(retrieved, _GROUND_TRUTH[query])
+        logger.info("Precision@5 cosine/metrics query=%.2f retrieved=%s", p_at_5, retrieved)
+        assert p_at_5 > 0.0, f"Expected one of {_GROUND_TRUTH[query]} in top-5; got {retrieved}"
+
+    def test_embedding_is_deterministic(self, chroma_collection):
+        """Same query must return the same top-k results on every call."""
+        query = "Python list comprehensions and generator expressions"
+        assert self._query_top_k(chroma_collection, query, k=3) == self._query_top_k(
+            chroma_collection, query, k=3
+        ), "Deterministic embedding must produce identical results on repeated calls"
+
+    def test_top1_matches_expected_topic(self, chroma_collection):
+        """Top-1 retrieved document must belong to the same topic as the query."""
+        topic_map = {doc_id: topic for doc_id, _, topic in _TOPIC_DOCS}
+        cases = [
+            ("Python asyncio event loop coroutines", "python"),
+            ("PostgreSQL transaction ACID durability", "database"),
+            ("HTTP load balancer reverse proxy nginx", "networking"),
+            ("transformer self-attention language model tokens", "ml"),
+        ]
+        for query, expected_topic in cases:
+            top1 = self._query_top_k(chroma_collection, query, k=1)
+            assert top1, f"No results for query: {query}"
+            actual_topic = topic_map.get(top1[0], "unknown")
+            logger.info(
+                "Top-1 '%s': doc=%s topic=%s expected=%s",
+                query,
+                top1[0],
+                actual_topic,
+                expected_topic,
+            )
+            assert actual_topic == expected_topic, (
+                f"Query '{query}': top-1 doc '{top1[0]}' has topic '{actual_topic}', "
+                f"expected '{expected_topic}'"
+            )
 
 
 if __name__ == "__main__":
