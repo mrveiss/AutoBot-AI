@@ -55,10 +55,10 @@ const router = createRouter({
       },
     },
     {
-      // Issue #850: Consolidated into unified orchestration view
+      // Issue #4762: Wire ServicesView as direct route (was redirect to /orchestration/per-node)
       path: '/services',
       name: 'services',
-      redirect: '/orchestration/per-node',
+      component: () => import('@/views/ServicesView.vue'),
       meta: { title: 'Services' }
     },
     {
