@@ -49,6 +49,8 @@ const navItems = [
   { name: 'Fleet Overview', path: '/fleet', icon: 'grid' },
   // Issue #850: Consolidated Services and Roles into Orchestration
   { name: 'Orchestration', path: '/orchestration', icon: 'orchestration' },
+  // Issue #4706: Wire RolesView into router
+  { name: 'Roles', path: '/roles', icon: 'roles' },
   { name: 'Deployments', path: '/deployments', icon: 'rocket' },
   { name: 'Backups', path: '/backups', icon: 'database' },
   { name: 'Replication', path: '/replications', icon: 'replicate' },
