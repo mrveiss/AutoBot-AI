@@ -543,6 +543,18 @@ const routes: RouteRecordRaw[] = [
     redirect: '/',
     meta: { title: 'LLM Configuration' }
   },
+  // Issue #4270: Wire OperationDetail via OperationsView — long-running operations tracker
+  {
+    path: '/operations',
+    name: 'operations',
+    component: () => import('@/views/OperationsView.vue'),
+    meta: {
+      title: 'Operations',
+      icon: 'fas fa-tasks',
+      description: 'Monitor and manage long-running operations',
+      requiresAuth: true
+    }
+  },
   // Issue #4703: Wire AgentRegistryView into router (#1794, #1822)
   {
     path: '/agents/registry',
