@@ -161,3 +161,80 @@ class TestMeshFlagEnabledRetrieverNone:
             await svc.advanced_search("test query")
             mock_mesh.assert_not_called()
             svc.optimizer.advanced_search.assert_called_once()
+
+
+# =============================================================================
+# Test: register_shared_mesh_retriever auto-wires on initialize() (#4757)
+# =============================================================================
+
+
+class TestSharedMeshRetrieverAutoWire:
+    def setup_method(self):
+        """Clear shared singleton before each test to avoid cross-test contamination."""
+        import services.rag_service as _mod
+        self._orig = _mod._shared_mesh_retriever
+        _mod._shared_mesh_retriever = None
+
+    def teardown_method(self):
+        import services.rag_service as _mod
+        _mod._shared_mesh_retriever = self._orig
+
+    @pytest.mark.asyncio
+    async def test_register_then_initialize_wires_retriever(self):
+        """RAGService.initialize() picks up the shared singleton when _mesh_retriever is None."""
+        from services.rag_service import RAGService, register_shared_mesh_retriever
+        from services.rag_config import RAGConfig
+        from unittest.mock import patch, AsyncMock
+
+        sentinel = MagicMock(name="NeuralMeshRetriever")
+        register_shared_mesh_retriever(sentinel)
+
+        svc = RAGService.__new__(RAGService)
+        svc._initialized = False
+        svc._cache = {}
+        svc._cache_lock = MagicMock()
+        svc.config = RAGConfig()
+        svc._mesh_retriever = None
+        svc.kb_adapter = MagicMock()
+        svc.kb_adapter.kb = MagicMock()
+
+        with patch("services.rag_service.AdvancedRAGOptimizer") as MockOpt:
+            mock_opt = MagicMock()
+            mock_opt.initialize = AsyncMock(return_value=True)
+            MockOpt.return_value = mock_opt
+
+            result = await svc.initialize()
+
+        assert result is True
+        assert svc._mesh_retriever is sentinel
+        assert svc.config.mesh_retriever_enabled is True
+
+    @pytest.mark.asyncio
+    async def test_already_set_retriever_not_overwritten(self):
+        """An existing _mesh_retriever is not replaced by the shared singleton."""
+        from services.rag_service import RAGService, register_shared_mesh_retriever
+        from services.rag_config import RAGConfig
+        from unittest.mock import patch, AsyncMock
+
+        existing = MagicMock(name="existing_retriever")
+        shared = MagicMock(name="shared_retriever")
+        register_shared_mesh_retriever(shared)
+
+        svc = RAGService.__new__(RAGService)
+        svc._initialized = False
+        svc._cache = {}
+        svc._cache_lock = MagicMock()
+        svc.config = RAGConfig()
+        svc.config.mesh_retriever_enabled = True
+        svc._mesh_retriever = existing
+        svc.kb_adapter = MagicMock()
+        svc.kb_adapter.kb = MagicMock()
+
+        with patch("services.rag_service.AdvancedRAGOptimizer") as MockOpt:
+            mock_opt = MagicMock()
+            mock_opt.initialize = AsyncMock(return_value=True)
+            MockOpt.return_value = mock_opt
+
+            await svc.initialize()
+
+        assert svc._mesh_retriever is existing  # not replaced
