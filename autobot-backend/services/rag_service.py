@@ -67,6 +67,8 @@ class RAGService:
         self._initialized = False
         self._cache: Dict[str, Tuple[List[SearchResult], float]] = {}
         self._cache_lock = asyncio.Lock()  # CRITICAL: Protect concurrent cache access
+        # Neural Mesh RAG retriever (Issue #2059); injected at startup when Phase 3 is active.
+        self._mesh_retriever: Optional[Any] = None
         logger.info(f"RAGService initialized with {self.kb_adapter.implementation_type}")
 
     async def initialize(self) -> bool:
@@ -513,6 +515,36 @@ class RAGService:
 
         return None
 
+    async def _run_mesh_retriever(
+        self,
+        query: str,
+        max_results: int,
+    ) -> Tuple[List[SearchResult], RAGMetrics]:
+        """Delegate retrieval to NeuralMeshRetriever and emit feedback. Issue #2059.
+
+        Called only when mesh_retriever_enabled=True and _mesh_retriever is set.
+        The mesh retriever returns SearchResult-compatible chunks directly; this
+        helper handles feedback emission so the caller stays clean.
+        """
+        logger.info("Using NeuralMeshRetriever for query (mesh_retriever_enabled=True)")
+        mesh_result = await self._mesh_retriever.retrieve(query, max_results)
+        results: List[SearchResult] = mesh_result.chunks
+        metrics = RAGMetrics()
+        metrics.final_results_count = len(results)
+
+        retrieved_ids = [r.metadata.get("chunk_id", r.source_path) for r in results]
+        await self._emit_retrieval_feedback(
+            query=query,
+            retrieved_ids=retrieved_ids,
+            ranked_ids=retrieved_ids,
+        )
+        await self._store_feedback_in_stream(
+            query=query,
+            retrieved_ids=retrieved_ids,
+            ranked_ids=retrieved_ids,
+        )
+        return results, metrics
+
     async def _emit_ranked_feedback(
         self,
         query: str,
@@ -577,6 +609,10 @@ class RAGService:
         hit = await self._check_cache_tiers(query, max_results, enable_reranking, categories)
         if hit is not None:
             return hit[0], hit[1]
+
+        # Neural Mesh RAG path (Issue #2059)
+        if self.config.mesh_retriever_enabled and self._mesh_retriever is not None:
+            return await self._run_mesh_retriever(query, max_results)
 
         if not await self.initialize():
             logger.warning("RAG init failed, using fallback")
