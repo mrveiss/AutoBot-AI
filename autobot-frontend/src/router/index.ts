@@ -543,7 +543,18 @@ const routes: RouteRecordRaw[] = [
     redirect: '/',
     meta: { title: 'LLM Configuration' }
   },
-  // Issue #4490: Agent Registry removed — lives in SLM admin at /slm/agents/
+  // Issue #4703: Wire AgentRegistryView into router (#1794, #1822)
+  {
+    path: '/agents/registry',
+    name: 'agent-registry',
+    component: () => import('@/views/AgentRegistryView.vue'),
+    meta: {
+      title: 'Agent Registry',
+      icon: 'fas fa-robot',
+      description: 'Browse backend and specialized agents, and manage agent settings',
+      requiresAuth: true
+    }
+  },
   // Issue #1521: Agent Heartbeat Panel — real-time agent run status
   {
     path: '/agents/heartbeat',
