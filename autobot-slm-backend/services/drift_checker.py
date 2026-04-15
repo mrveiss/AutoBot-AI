@@ -137,7 +137,7 @@ def compute_drift(
 ) -> Tuple[List[dict], int]:
     """Compare file checksums between *source_dir* and *deployed_dir*.
 
-    Returns a tuple of (drifted_file_dicts, total_compared_count).
+    Returns a tuple of (drifted_file_dicts, total_compared).
 
     Each drifted file dict has keys:
         path            – POSIX relative path
