@@ -199,6 +199,7 @@ interface Props {
   communicationPatterns: CommunicationPatternsData | null
   codeQuality: CodeQualityData | null
   performanceMetrics: PerformanceMetricsData | null
+  realTimeEnabled?: boolean
 }
 
 defineProps<Props>()
