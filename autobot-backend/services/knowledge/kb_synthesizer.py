@@ -91,9 +91,7 @@ class KBSynthesizer:
             )
         return self._named_collections[name]
 
-    async def _index_documents(
-        self, docs: List[Any], collection_name: Optional[str] = None
-    ) -> None:
+    async def _index_documents(self, docs: List[Any], collection_name: Optional[str] = None) -> None:
         """Persist synthesized SummaryPage dicts into ChromaDB.
 
         Args:
@@ -135,7 +133,7 @@ class KBSynthesizer:
         """
         all_names: List[Optional[str]] = [None]  # None → default collection
         seen = {self.COLLECTION_NAME}
-        for name in (collection_names or []):
+        for name in collection_names or []:
             if name and name not in seen:
                 all_names.append(name)
                 seen.add(name)
@@ -264,9 +262,7 @@ class KBSynthesizer:
             output_summary=summary_text,
         )
 
-    async def _run_analyzer(
-        self, run_id: str, input_docs: str, output_summary: str
-    ) -> None:
+    async def _run_analyzer(self, run_id: str, input_docs: str, output_summary: str) -> None:
         """Invoke AnalyzerService post-synthesis; errors are logged and swallowed.
 
         Uses output length / input length ratio capped at 1.0 as a simple

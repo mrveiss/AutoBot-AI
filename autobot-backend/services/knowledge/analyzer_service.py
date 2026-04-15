@@ -129,10 +129,7 @@ class AnalyzerService:
             return []
 
         truncated_docs = self._truncate_docs(input_docs)
-        user_content = (
-            f"=== Input documents ===\n{truncated_docs}\n\n"
-            f"=== Synthesized output ===\n{output_summary}"
-        )
+        user_content = f"=== Input documents ===\n{truncated_docs}\n\n" f"=== Synthesized output ===\n{output_summary}"
         messages = [
             {"role": "system", "content": _SYNTHESIS_ANALYSIS_PROMPT},
             {"role": "user", "content": user_content},
@@ -170,11 +167,7 @@ class AnalyzerService:
 
         results_text = self._format_results(results)
         feedback_section = f"\n\n=== User feedback ===\n{user_feedback}" if user_feedback else ""
-        user_content = (
-            f"=== Query ===\n{query}\n\n"
-            f"=== Retrieved results ===\n{results_text}"
-            f"{feedback_section}"
-        )
+        user_content = f"=== Query ===\n{query}\n\n" f"=== Retrieved results ===\n{results_text}" f"{feedback_section}"
         messages = [
             {"role": "system", "content": _RAG_ANALYSIS_PROMPT},
             {"role": "user", "content": user_content},
