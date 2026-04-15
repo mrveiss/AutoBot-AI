@@ -31,8 +31,6 @@
 import { ref, shallowRef, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import ForceGraph3D, { type ForceGraph3DInstance } from '3d-force-graph'
 import SpriteText from 'three-spritetext'
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore – 'three' ships without bundled type declarations in this version; types are provided transitively via 3d-force-graph
 import * as THREE from 'three'
 import { getCssVar } from '@/composables/useCssVars'
 import { createLogger } from '@/utils/debugUtils'
