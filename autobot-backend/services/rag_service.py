@@ -133,12 +133,34 @@ class RAGService:
         enable_reranking: bool,
         timeout_seconds: float,
     ) -> Tuple[List[SearchResult], RAGMetrics]:
-        """Execute search with timeout protection (Issue #665: extracted helper)."""
+        """Execute search with timeout protection (Issue #665: extracted helper).
+
+        Issue #4696: when enable_rlm_refinement is True, delegates to
+        advanced_search_with_refinement() for RLM-driven query refinement.
+        The extra refinement_history is logged at debug level and discarded.
+        """
+        reranking = enable_reranking and self.config.enable_reranking
+        if self.config.enable_rlm_refinement:
+            results, metrics, history = await asyncio.wait_for(
+                self.optimizer.advanced_search_with_refinement(
+                    query=query,
+                    max_results=fetch_limit,
+                    enable_reranking=reranking,
+                ),
+                timeout=timeout_seconds,
+            )
+            if history:
+                logger.debug(
+                    "RLM refinement completed: %d iteration(s) for query %r",
+                    len(history),
+                    query,
+                )
+            return results, metrics
         return await asyncio.wait_for(
             self.optimizer.advanced_search(
                 query=query,
                 max_results=fetch_limit,
-                enable_reranking=enable_reranking and self.config.enable_reranking,
+                enable_reranking=reranking,
             ),
             timeout=timeout_seconds,
         )
