@@ -970,6 +970,9 @@ class RAGService:
                 search_results = self._filter_by_categories(search_results, categories)
                 search_results = search_results[:max_results]
 
+            # Issue #4721: filter stale chunks on the fallback path too.
+            search_results = await self._filter_stale_chunks(search_results)
+
             metrics.total_time = time.time() - start_time
             metrics.final_results_count = len(search_results)
 
