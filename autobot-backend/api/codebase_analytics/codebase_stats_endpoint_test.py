@@ -11,7 +11,7 @@ Tests the following functionality:
 - Thread-safe access to indexing_tasks
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -33,7 +33,7 @@ class TestIsTaskStale:
 
         task_info = {
             "status": "running",
-            "started_at": datetime.now().isoformat(),
+            "started_at": datetime.now(timezone.utc).isoformat(),
         }
         assert _is_task_stale(task_info) is False
 
@@ -44,7 +44,7 @@ class TestIsTaskStale:
             _is_task_stale,
         )
 
-        old_time = datetime.now() - timedelta(seconds=_STALE_TASK_TIMEOUT_SECONDS + 60)
+        old_time = datetime.now(timezone.utc) - timedelta(seconds=_STALE_TASK_TIMEOUT_SECONDS + 60)
         task_info = {
             "status": "running",
             "started_at": old_time.isoformat(),
@@ -108,7 +108,7 @@ class TestGetActiveIndexingTask:
                 "progress": {"current": 50, "total": 100},
                 "phases": {"current_phase": "scan"},
                 "stats": {"files_scanned": 50},
-                "started_at": datetime.now().isoformat(),
+                "started_at": datetime.now(timezone.utc).isoformat(),
             }
         }
         with patch.object(stats, "indexing_tasks", mock_tasks):
@@ -125,7 +125,7 @@ class TestGetActiveIndexingTask:
             _get_active_indexing_task,
         )
 
-        old_time = datetime.now() - timedelta(seconds=_STALE_TASK_TIMEOUT_SECONDS + 60)
+        old_time = datetime.now(timezone.utc) - timedelta(seconds=_STALE_TASK_TIMEOUT_SECONDS + 60)
         mock_tasks = {
             "stale-task": {
                 "status": "running",
@@ -147,8 +147,8 @@ class TestGetActiveIndexingTask:
             _get_active_indexing_task,
         )
 
-        old_time = datetime.now() - timedelta(seconds=_STALE_TASK_TIMEOUT_SECONDS + 60)
-        fresh_time = datetime.now()
+        old_time = datetime.now(timezone.utc) - timedelta(seconds=_STALE_TASK_TIMEOUT_SECONDS + 60)
+        fresh_time = datetime.now(timezone.utc)
 
         mock_tasks = {
             "stale-task": {
