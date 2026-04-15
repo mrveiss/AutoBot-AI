@@ -730,6 +730,43 @@ class DocIndexerService:
 
         return result
 
+    @staticmethod
+    def _is_oversized_error(exc: Exception) -> bool:
+        """Return True if *exc* indicates the embedding model rejected an oversized input.
+
+        Covers error messages from Ollama, OpenAI, and similar providers that surface
+        token/context-length violations as plain-text exceptions.
+        """
+        msg = str(exc).lower()
+        _OVERSIZED_KEYWORDS = (
+            "too large",
+            "too long",
+            "token",
+            "sequence length",
+            "context length",
+            "input length",
+            "max_length",
+            "exceeds",
+            "truncat",
+            "overflow",
+        )
+        return any(kw in msg for kw in _OVERSIZED_KEYWORDS)
+
+    def _embed_and_upsert(
+        self,
+        content: str,
+        chunk_id: str,
+        metadata: Dict[str, Any],
+    ) -> None:
+        """Embed *content* and upsert into ChromaDB. Raises on failure."""
+        embedding = self._embed_model.get_text_embedding(content)
+        self._collection.upsert(
+            ids=[chunk_id],
+            embeddings=[embedding],
+            documents=[content],
+            metadatas=[metadata],
+        )
+
     def _index_chunk(
         self,
         chunk: Dict[str, Any],
@@ -739,7 +776,15 @@ class DocIndexerService:
         file_tags: List[str],
         tier: int,
     ) -> bool:
-        """Index a single chunk into ChromaDB. Returns True on success."""
+        """Index a single chunk into ChromaDB.
+
+        If the embedding model rejects the chunk as oversized, the content is
+        split in half and each half is retried once.  A WARNING is logged when
+        splitting occurs so the failure is always visible (fixes #4665 — chunks
+        were previously dropped silently with no diagnostic).
+
+        Returns True when at least one (sub-)chunk was stored successfully.
+        """
         priority_map = {1: "critical", 2: "high", 3: "medium"}
         chunk_id = hashlib.md5(
             f"{rel_path}:{chunk['section']}:{chunk_index}".encode()
@@ -761,18 +806,50 @@ class DocIndexerService:
             "total_chunks": total_chunks,
         }
 
+        content = chunk["content"]
+        _oversized_exc: Optional[Exception] = None
         try:
-            embedding = self._embed_model.get_text_embedding(chunk["content"])
-            self._collection.upsert(
-                ids=[chunk_id],
-                embeddings=[embedding],
-                documents=[chunk["content"]],
-                metadatas=[metadata],
-            )
+            self._embed_and_upsert(content, chunk_id, metadata)
             return True
         except Exception as e:
-            logger.error("Failed to index chunk %s: %s", chunk_id, e)
-            return False
+            if not self._is_oversized_error(e):
+                logger.error("Failed to index chunk %s: %s", chunk_id, e)
+                return False
+            # Capture before Python deletes the name at except-block exit.
+            _oversized_exc = e
+
+        # Oversized chunk: split in half and retry each part once (#4665).
+        char_count = len(content)
+        logger.warning(
+            "Oversized chunk detected — splitting and retrying "
+            "(doc=%s, chunk_id=%s, chars=%d): %s",
+            rel_path,
+            chunk_id,
+            char_count,
+            _oversized_exc,
+        )
+        mid = char_count // 2
+        halves = [content[:mid].strip(), content[mid:].strip()]
+        any_ok = False
+        for part_idx, half in enumerate(halves):
+            if not half:
+                continue
+            half_id = f"{chunk_id}_{part_idx}"
+            half_meta = {**metadata, "chunk_id_parent": chunk_id, "split_part": part_idx}
+            try:
+                self._embed_and_upsert(half, half_id, half_meta)
+                any_ok = True
+            except Exception as split_err:
+                logger.warning(
+                    "Oversized chunk half still too large — dropping "
+                    "(doc=%s, chunk_id=%s, part=%d, chars=%d): %s",
+                    rel_path,
+                    half_id,
+                    part_idx,
+                    len(half),
+                    split_err,
+                )
+        return any_ok
 
     def _check_hash_and_update_cache(self, file_str: str, force: bool) -> bool:
         """Check incremental hash cache; update cache entry if changed. Issue #2735.
