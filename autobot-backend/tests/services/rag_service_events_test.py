@@ -833,3 +833,112 @@ class TestFilterStaleChunks:
             result = await svc._filter_stale_chunks([chunk])
 
         assert result == [chunk]
+
+
+# =============================================================================
+# _fallback_basic_search stale-chunk filtering tests (#4721)
+# =============================================================================
+
+
+class TestFallbackBasicSearchFiltersStaleChunks:
+    """Verify that _fallback_basic_search() passes results through _filter_stale_chunks().
+
+    Issue #4721: the fallback path previously returned results without calling
+    _filter_stale_chunks(), silently returning stale/moved source paths.
+    """
+
+    def _make_service(self):
+        from services.rag_service import RAGService
+
+        svc = RAGService.__new__(RAGService)
+        svc._initialized = True
+        return svc
+
+    def _make_kb_result(self, source: str, score: float = 0.8):
+        return {"content": f"content from {source}", "metadata": {"source": source}, "score": score}
+
+    @pytest.mark.asyncio
+    async def test_filter_stale_chunks_is_called_on_fallback_path(self):
+        """_filter_stale_chunks is awaited once during _fallback_basic_search."""
+        svc = self._make_service()
+
+        mock_kb_adapter = AsyncMock()
+        mock_kb_adapter.search = AsyncMock(return_value=[self._make_kb_result("docs/a.md")])
+        svc.kb_adapter = mock_kb_adapter
+
+        with patch(
+            "services.rag_service.RAGService._filter_stale_chunks",
+            new_callable=AsyncMock,
+            return_value=[],
+        ) as mock_filter:
+            await svc._fallback_basic_search(query="test query", max_results=5)
+
+        mock_filter.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_stale_chunks_removed_in_fallback_results(self, tmp_path):
+        """Stale chunks are absent from the returned results on the fallback path."""
+        cache_file = tmp_path / ".doc_index_hashes.json"
+        cache_file.write_text('{"docs/present.md": "abc"}', encoding="utf-8")
+
+        svc = self._make_service()
+        mock_kb_adapter = AsyncMock()
+        mock_kb_adapter.search = AsyncMock(
+            return_value=[
+                self._make_kb_result("docs/present.md"),
+                self._make_kb_result("docs/removed.md"),
+            ]
+        )
+        svc.kb_adapter = mock_kb_adapter
+
+        with patch("services.knowledge.doc_indexer.HASH_CACHE_FILE", cache_file):
+            results, metrics = await svc._fallback_basic_search(query="test", max_results=10)
+
+        source_paths = [r.source_path for r in results]
+        assert "docs/present.md" in source_paths
+        assert "docs/removed.md" not in source_paths
+
+    @pytest.mark.asyncio
+    async def test_valid_chunks_preserved_in_fallback_results(self, tmp_path):
+        """Non-stale chunks are kept in the returned results on the fallback path."""
+        cache_file = tmp_path / ".doc_index_hashes.json"
+        cache_file.write_text('{"docs/guide.md": "hash1", "docs/ref.md": "hash2"}', encoding="utf-8")
+
+        svc = self._make_service()
+        mock_kb_adapter = AsyncMock()
+        mock_kb_adapter.search = AsyncMock(
+            return_value=[
+                self._make_kb_result("docs/guide.md"),
+                self._make_kb_result("docs/ref.md"),
+            ]
+        )
+        svc.kb_adapter = mock_kb_adapter
+
+        with patch("services.knowledge.doc_indexer.HASH_CACHE_FILE", cache_file):
+            results, metrics = await svc._fallback_basic_search(query="test", max_results=10)
+
+        assert len(results) == 2
+        assert metrics.final_results_count == 2
+
+    @pytest.mark.asyncio
+    async def test_metrics_reflect_post_filter_count(self, tmp_path):
+        """metrics.final_results_count matches the count after stale filtering."""
+        cache_file = tmp_path / ".doc_index_hashes.json"
+        # Only one of two source paths is present in the cache
+        cache_file.write_text('{"docs/kept.md": "hash"}', encoding="utf-8")
+
+        svc = self._make_service()
+        mock_kb_adapter = AsyncMock()
+        mock_kb_adapter.search = AsyncMock(
+            return_value=[
+                self._make_kb_result("docs/kept.md"),
+                self._make_kb_result("docs/gone.md"),
+            ]
+        )
+        svc.kb_adapter = mock_kb_adapter
+
+        with patch("services.knowledge.doc_indexer.HASH_CACHE_FILE", cache_file):
+            results, metrics = await svc._fallback_basic_search(query="test", max_results=10)
+
+        assert len(results) == 1
+        assert metrics.final_results_count == 1
