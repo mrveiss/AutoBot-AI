@@ -29,6 +29,11 @@ chromadb_port: 8100
 ollama_host: "{{ backend_host | default(ansible_host) }}"
 ollama_port: 11434
 
+# Agent LLM endpoints — injected into ai-stack.env; default to Ollama (#4661)
+ai_chat_endpoint: "http://{{ ollama_host }}:{{ ollama_port }}"
+ai_rag_endpoint: "http://{{ ollama_host }}:{{ ollama_port }}"
+ai_classification_endpoint: "http://{{ ollama_host }}:{{ ollama_port }}"
+
 # Redis connection (resolved from inventory)
 ai_redis_host: "{{ redis_host | default(ansible_host) }}"
 ai_redis_port: "{{ redis_port | default(6379) }}"
