@@ -87,6 +87,9 @@ class RAGConfig:
     rewrite_enabled: bool = True
     max_search_iterations: int = 3
 
+    # Issue #4696: RLM-driven refinement loop via advanced_search_with_refinement()
+    enable_rlm_refinement: bool = False
+
     def __post_init__(self):
         """Validate configuration values and propagate mmr_lambda to rerank_weights.
 
