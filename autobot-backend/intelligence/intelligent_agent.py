@@ -22,6 +22,7 @@ _SUDO_PACKAGE_MANAGERS: FrozenSet[str] = frozenset(
 )
 
 from constants.threshold_constants import TimingConstants
+from reasoning.causal_reasoning import CAUSAL_REASONING_SNIPPET
 
 # Import our new intelligent agent components
 from intelligence.os_detector import OSDetector, OSInfo, get_os_detector
@@ -666,9 +667,11 @@ IMPORTANT INSTRUCTIONS:
 4. Be security-conscious and warn about risky operations
 5. Provide step-by-step commands if multiple steps are needed
 
+{CAUSAL_REASONING_SNIPPET}
+
 Format your response as:
 COMMAND: [specific command]
-EXPLANATION: [what this command does]
+EXPLANATION: [what this command does — explain the causal mechanism]
 NEXT: [what to do with the results, if anything]
 
 If multiple commands are needed, provide them in order.
