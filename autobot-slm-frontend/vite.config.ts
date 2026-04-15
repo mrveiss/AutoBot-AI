@@ -17,16 +17,25 @@ function isCoLocated(): boolean {
   }
 }
 
-/** Vite plugin that warns (or errors) when VITE_API_URL is unset in a co-located build. */
+/**
+ * Vite plugin that errors when VITE_API_URL is unset in a co-located build.
+ *
+ * NOTE: This guard only applies to `vite build` (built artifacts).
+ * During `vite dev`, API routing is handled by the `server.proxy` config
+ * below, so VITE_API_URL is never read — the dev server never bakes it into
+ * the bundle.  No guard is needed (or useful) for the dev server.
+ */
 function coLocatedApiUrlGuard(): import('vite').Plugin {
   return {
     name: 'slm-co-located-api-url-guard',
     configResolved(config) {
+      // Only check during builds — dev server uses proxy config, not baked VITE_API_URL.
       if (config.command !== 'build') return
       if (process.env.VITE_API_URL) return
       if (!isCoLocated()) return
-      // Co-located build without VITE_API_URL — all API calls will silently
-      // route to the wrong backend (port 8001 user backend instead of SLM).
+      // Co-located build without VITE_API_URL — the baked-in base URL will be
+      // empty string, so all API calls will silently route to the wrong backend
+      // (port 8001 user backend instead of the SLM backend).
       // Throw to abort the build rather than silently writing a broken dist/.
       throw new Error(
         '[slm-frontend] VITE_API_URL is not set.\n' +
