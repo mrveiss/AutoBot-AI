@@ -59,7 +59,7 @@
       <button @click="reconnect" class="control-btn">
         {{ $t('desktop.interface.reconnect') }}
       </button>
-      <button @click="showContextPanel = !showContextPanel" class="control-btn" :title="$t('desktop.interface.contextPanel')">
+      <button @click="showContextPanel = !showContextPanel" class="control-btn" :title="$t('desktop.contextPanel.title')">
         ℹ️
       </button>
       <div class="connection-status">
