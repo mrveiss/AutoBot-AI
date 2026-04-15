@@ -19,6 +19,7 @@ import json
 import sys
 import types
 from pathlib import Path
+from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -819,6 +820,187 @@ class TestHashCacheEdgeCases4382:
         # Circular symlink → hash is '' → cached hash preserved, not marked changed
         assert len(changed) == 0
         assert new_hashes.get("loop_a.md") == "cafebabe"
+
+
+class TestIndexChunkOversized4665:
+    """Tests for oversized-chunk detection and split-retry logic — Issue #4665."""
+
+    def _make_chunk(self, content: str = "x" * 200) -> Dict[str, Any]:
+        return {
+            "content": content,
+            "section": "Section",
+            "subsection": None,
+            "file_path": "docs/test.md",
+            "doc_type": "documentation",
+            "category": "general",
+            "title": "Test Doc",
+        }
+
+    # ------------------------------------------------------------------
+    # _is_oversized_error
+    # ------------------------------------------------------------------
+
+    def test_is_oversized_error_too_large(self):
+        """'too large' in error message → oversized."""
+        assert DocIndexerService._is_oversized_error(ValueError("input too large"))
+
+    def test_is_oversized_error_token(self):
+        """'token' in error message → oversized."""
+        assert DocIndexerService._is_oversized_error(RuntimeError("token limit exceeded"))
+
+    def test_is_oversized_error_sequence_length(self):
+        """'sequence length' in error message → oversized."""
+        assert DocIndexerService._is_oversized_error(Exception("sequence length 600 > 512"))
+
+    def test_is_oversized_error_context_length(self):
+        """'context length' in error message → oversized."""
+        assert DocIndexerService._is_oversized_error(Exception("context length exceeded"))
+
+    def test_is_oversized_error_exceeds(self):
+        """'exceeds' in error message → oversized."""
+        assert DocIndexerService._is_oversized_error(Exception("length exceeds maximum"))
+
+    def test_is_oversized_error_truncat(self):
+        """'truncat' in error message → oversized (truncated/truncation)."""
+        assert DocIndexerService._is_oversized_error(Exception("input truncated"))
+
+    def test_is_oversized_error_generic_error_not_oversized(self):
+        """Generic network error → not oversized."""
+        assert not DocIndexerService._is_oversized_error(ConnectionError("connection refused"))
+
+    def test_is_oversized_error_key_error_not_oversized(self):
+        """KeyError → not oversized."""
+        assert not DocIndexerService._is_oversized_error(KeyError("missing_key"))
+
+    # ------------------------------------------------------------------
+    # _index_chunk: normal success path
+    # ------------------------------------------------------------------
+
+    def test_index_chunk_returns_true_on_success(self):
+        """_index_chunk returns True when embed+upsert succeed."""
+        svc = _make_service()
+        chunk = self._make_chunk("Short content for embedding.")
+        ok = svc._index_chunk(chunk, 0, 1, "docs/test.md", [], 2)
+        assert ok is True
+        svc._embed_model.get_text_embedding.assert_called_once()
+
+    # ------------------------------------------------------------------
+    # _index_chunk: non-oversized error → logged, returns False, no split
+    # ------------------------------------------------------------------
+
+    def test_index_chunk_returns_false_on_non_oversized_error(self):
+        """Non-oversized error → returns False, no split attempted."""
+        svc = _make_service()
+        svc._embed_model.get_text_embedding.side_effect = ConnectionError("connection refused")
+        chunk = self._make_chunk()
+        ok = svc._index_chunk(chunk, 0, 1, "docs/test.md", [], 2)
+        assert ok is False
+        # upsert must NOT be called (error happened before it)
+        svc._collection.upsert.assert_not_called()
+
+    # ------------------------------------------------------------------
+    # _index_chunk: oversized → split, both halves succeed
+    # ------------------------------------------------------------------
+
+    def test_index_chunk_splits_on_oversized_both_halves_succeed(self):
+        """Oversized embed error → content split in half, both halves stored, returns True."""
+        svc = _make_service()
+
+        content = "A" * 400
+        # First call (full chunk) raises oversized; subsequent calls succeed.
+        call_count = [0]
+
+        def _fake_embed(text):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise ValueError("input too large for model context length")
+            return [0.1] * 128
+
+        svc._embed_model.get_text_embedding.side_effect = _fake_embed
+        chunk = self._make_chunk(content)
+        ok = svc._index_chunk(chunk, 0, 1, "docs/test.md", [], 2)
+
+        assert ok is True
+        # 1 failed call + 2 half calls = 3 total embed calls
+        assert call_count[0] == 3
+        # Two successful upserts (one per half)
+        assert svc._collection.upsert.call_count == 2
+
+    # ------------------------------------------------------------------
+    # _index_chunk: oversized → split, one half fails (still non-silent)
+    # ------------------------------------------------------------------
+
+    def test_index_chunk_splits_on_oversized_one_half_fails(self):
+        """Oversized: first half embeds OK, second half also oversized → True (partial)."""
+        svc = _make_service()
+
+        content = "B" * 400
+        call_count = [0]
+
+        def _fake_embed(text):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                # Full chunk too large
+                raise ValueError("token limit exceeded")
+            if call_count[0] == 3:
+                # Second half also too large
+                raise ValueError("token limit exceeded")
+            return [0.2] * 128
+
+        svc._embed_model.get_text_embedding.side_effect = _fake_embed
+        chunk = self._make_chunk(content)
+        ok = svc._index_chunk(chunk, 0, 1, "docs/test.md", [], 2)
+
+        # Partial success (first half OK)
+        assert ok is True
+        assert svc._collection.upsert.call_count == 1
+
+    # ------------------------------------------------------------------
+    # _index_chunk: oversized → split, BOTH halves fail → returns False
+    # ------------------------------------------------------------------
+
+    def test_index_chunk_splits_on_oversized_both_halves_fail(self):
+        """Oversized: both halves fail → returns False (no silent drop — warning logged)."""
+        svc = _make_service()
+
+        svc._embed_model.get_text_embedding.side_effect = ValueError("token limit exceeded")
+        chunk = self._make_chunk("C" * 400)
+        ok = svc._index_chunk(chunk, 0, 1, "docs/test.md", [], 2)
+
+        assert ok is False
+        svc._collection.upsert.assert_not_called()
+
+    # ------------------------------------------------------------------
+    # Warning is logged (not silently dropped) — #4665 regression guard
+    # ------------------------------------------------------------------
+
+    def test_index_chunk_logs_warning_on_oversized(self, caplog):
+        """Oversized chunk must emit a WARNING with doc path and char count (#4665)."""
+        import logging
+
+        svc = _make_service()
+
+        call_count = [0]
+
+        def _fake_embed(text):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise ValueError("input too large")
+            return [0.3] * 128
+
+        svc._embed_model.get_text_embedding.side_effect = _fake_embed
+
+        with caplog.at_level(logging.WARNING, logger="services.knowledge.doc_indexer"):
+            chunk = self._make_chunk("D" * 400)
+            svc._index_chunk(chunk, 0, 1, "docs/oversized.md", [], 1)
+
+        assert any(
+            "oversized" in r.message.lower() or "oversized" in r.getMessage().lower()
+            for r in caplog.records
+        ), "Expected WARNING with 'oversized' in message"
+        assert any(
+            "docs/oversized.md" in r.getMessage() for r in caplog.records
+        ), "WARNING must include the document path"
 
 
 class TestGetDocIndexerService:
