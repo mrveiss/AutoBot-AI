@@ -6412,7 +6412,8 @@
     "services": "Services",
     "skipToNavigation": "Skip to navigation",
     "profile": "Profile",
-    "systemStatus": "System Status"
+    "systemStatus": "System Status",
+    "operations": "Darbības"
   },
   "reasoningTrace": {
     "title": "Reasoning trace",

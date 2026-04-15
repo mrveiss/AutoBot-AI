@@ -6414,7 +6414,8 @@
     "services": "Services",
     "skipToNavigation": "Skip to navigation",
     "profile": "Profile",
-    "systemStatus": "System Status"
+    "systemStatus": "System Status",
+    "operations": "العمليات"
   },
   "reasoningTrace": {
     "title": "Reasoning trace",

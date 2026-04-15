@@ -118,7 +118,8 @@
     "systemStatus": "System Status",
     "services": "Services",
     "skipToNavigation": "Skip to navigation",
-    "openMainMenu": "Open main menu"
+    "openMainMenu": "Open main menu",
+    "operations": "פעולות"
   },
   "agent": {
     "registry": {
