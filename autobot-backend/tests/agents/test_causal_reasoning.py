@@ -258,6 +258,7 @@ class TestCausalReasoningIntegration:
     """Integration tests for causal reasoning across components."""
 
     @pytest.mark.asyncio
+    @pytest.mark.xfail(reason="llama_index is an optional heavy dependency not installed in test env")
     async def test_intelligent_agent_causal_prompt(self):
         """Verify intelligent agent prompts include causal reasoning."""
         from intelligence.intelligent_agent import IntelligentAgent
