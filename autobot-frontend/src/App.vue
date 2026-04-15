@@ -110,7 +110,7 @@
               @click="toggleMobileNav"
               class="lg:hidden inline-flex items-center justify-center p-2 rounded text-autobot-text-primary hover:bg-autobot-bg-tertiary focus:outline-none focus:ring-2 focus:ring-autobot-primary"
               aria-controls="mobile-nav"
-              :aria-expanded="showMobileNav.toString()"
+              :aria-expanded="showMobileNav"
             >
               <span class="sr-only">{{ $t('nav.openMainMenu') }}</span>
               <!-- Hamburger / X icon toggle (#1804) -->
@@ -763,7 +763,17 @@ export default {
     const slmAdminUrl = computed(() => getSLMAdminUrl());
 
     // Data-driven navigation items: single source of truth for desktop + mobile nav
-    const navItems = [
+    // iconRule is typed as a literal union to satisfy SVG fill-rule / clip-rule prop types (#4699)
+    type SvgFillRule = 'evenodd' | 'nonzero' | 'inherit';
+    const navItems: Array<{
+      to: string;
+      labelKey: string;
+      icon?: string;
+      iconPaths?: string[];
+      iconRule?: SvgFillRule;
+      iconStroke?: boolean;
+      adminOnly?: boolean;
+    }> = [
       { to: '/home', labelKey: 'nav.home', icon: 'M10.707 2.293a1 1 0 00-1.414 0l-7 7v11a1 1 0 001 1h2a1 1 0 001-1v-5a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 001 1h2a1 1 0 001-1v-7l7-7a1 1 0 000-1.414z', iconRule: 'evenodd' },
       { to: '/about', labelKey: 'nav.about', icon: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z', iconStroke: true },
       { to: '/chat', labelKey: 'nav.chat', icon: 'M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z', iconRule: 'evenodd' },
