@@ -29,10 +29,17 @@ PORT = int(os.getenv("NPU_PORT", "8081"))
 
 app = FastAPI(title="AutoBot NPU Worker", version="1.0.0")
 
+# Cached at startup — prevents per-request WARNING flood (#4666)
+_npu_capabilities: Dict[str, Any] = {}
+
 
 def _detect_npu_capabilities() -> Dict[str, Any]:
-    """Detect NPU hardware capabilities."""
-    capabilities = {
+    """Detect NPU hardware capabilities once at startup and cache the result."""
+    global _npu_capabilities
+    if _npu_capabilities:
+        return _npu_capabilities
+
+    capabilities: Dict[str, Any] = {
         "device": DEVICE,
         "available": False,
         "models_dir": str(MODELS_DIR),
@@ -60,7 +67,8 @@ def _detect_npu_capabilities() -> Dict[str, Any]:
         logger.error("Error detecting NPU: %s", e)
         capabilities["error"] = str(e)
 
-    return capabilities
+    _npu_capabilities = capabilities
+    return _npu_capabilities
 
 
 @app.get("/health")
@@ -96,6 +104,9 @@ def main():
     logger.info("Device: %s", DEVICE)
     logger.info("Models directory: %s", MODELS_DIR)
     logger.info("=" * 60)
+
+    # Warm capability cache at startup — warning logged once here, never per-request
+    _detect_npu_capabilities()
 
     try:
         uvicorn.run(
