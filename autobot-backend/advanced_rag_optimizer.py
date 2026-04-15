@@ -181,19 +181,13 @@ class AdvancedRAGOptimizer:
         if len(self.query_cache) < self.MAX_CACHE_ENTRIES:
             return
         now = time.time()
-        expired = [
-            k
-            for k, v in self.query_cache.items()
-            if now - v["timestamp"] > self.cache_ttl_seconds
-        ]
+        expired = [k for k, v in self.query_cache.items() if now - v["timestamp"] > self.cache_ttl_seconds]
         for k in expired:
             del self.query_cache[k]
         if len(self.query_cache) < self.MAX_CACHE_ENTRIES:
             return
         overage = len(self.query_cache) - self.MAX_CACHE_ENTRIES + 1
-        oldest = sorted(
-            self.query_cache, key=lambda k: self.query_cache[k]["timestamp"]
-        )
+        oldest = sorted(self.query_cache, key=lambda k: self.query_cache[k]["timestamp"])
         for k in oldest[:overage]:
             del self.query_cache[k]
         logger.debug(
@@ -202,15 +196,11 @@ class AdvancedRAGOptimizer:
             overage,
         )
 
-    def _make_cache_key(
-        self, query: str, max_results: int, enable_reranking: bool
-    ) -> str:
+    def _make_cache_key(self, query: str, max_results: int, enable_reranking: bool) -> str:
         """Build a deterministic cache key from search parameters. Issue #1548."""
         return f"{query}|{max_results}|{enable_reranking}"
 
-    def _get_cached_result(
-        self, key: str
-    ) -> Optional[Tuple[List[SearchResult], RAGMetrics]]:
+    def _get_cached_result(self, key: str) -> Optional[Tuple[List[SearchResult], RAGMetrics]]:
         """Return cached result if present and within TTL, else None. Issue #1548."""
         entry = self.query_cache.get(key)
         if entry is None:
@@ -291,9 +281,7 @@ class AdvancedRAGOptimizer:
             suggested_chunk_count=suggested_chunk_count,
         )
 
-        logger.debug(
-            f"Query analysis: type={query_type}, complexity={complexity_score:.2f}"
-        )
+        logger.debug(f"Query analysis: type={query_type}, complexity={complexity_score:.2f}")
         return context
 
     def _expand_query(self, query: str, query_type: str) -> List[str]:
@@ -327,9 +315,7 @@ class AdvancedRAGOptimizer:
         logger.debug("Query expansion: %s variants generated", len(unique_expanded))
         return unique_expanded
 
-    async def _perform_semantic_search(
-        self, query: str, limit: int = 20
-    ) -> List[SearchResult]:
+    async def _perform_semantic_search(self, query: str, limit: int = 20) -> List[SearchResult]:
         """Perform semantic similarity search using embeddings."""
         try:
             # Use knowledge base's search method for semantic search
@@ -365,9 +351,7 @@ class AdvancedRAGOptimizer:
             logger.error("Semantic search failed: %s", e)
             return []
 
-    def _calculate_keyword_score(
-        self, query_lower: str, query_terms: set, combined_text: str
-    ) -> float:
+    def _calculate_keyword_score(self, query_lower: str, query_terms: set, combined_text: str) -> float:
         """Calculate keyword score for a fact. Issue #620."""
         matches = sum(1 for term in query_terms if term in combined_text)
         if matches == 0:
@@ -392,9 +376,7 @@ class AdvancedRAGOptimizer:
             chunk_index=metadata.get("chunk_index", 0),
         )
 
-    def _perform_keyword_search(
-        self, query: str, all_facts: List[Dict]
-    ) -> List[SearchResult]:
+    def _perform_keyword_search(self, query: str, all_facts: List[Dict]) -> List[SearchResult]:
         """Perform keyword-based search with TF-IDF-like scoring. Issue #620."""
         try:
             query_lower = query.lower()
@@ -406,9 +388,7 @@ class AdvancedRAGOptimizer:
                 metadata_str = json.dumps(fact.get("metadata", {})).lower()
                 combined_text = f"{content} {metadata_str}"
 
-                score = self._calculate_keyword_score(
-                    query_lower, query_terms, combined_text
-                )
+                score = self._calculate_keyword_score(query_lower, query_terms, combined_text)
                 if score > 0:
                     keyword_results.append(self._create_keyword_result(fact, score))
 
@@ -443,9 +423,7 @@ class AdvancedRAGOptimizer:
             if key in result_map:
                 # Combine scores
                 existing = result_map[key]
-                existing.keyword_score = max(
-                    existing.keyword_score, result.keyword_score
-                )
+                existing.keyword_score = max(existing.keyword_score, result.keyword_score)
             else:
                 # New result from keyword search
                 result_map[key] = result
@@ -454,8 +432,7 @@ class AdvancedRAGOptimizer:
         combined_results = []
         for result in result_map.values():
             result.hybrid_score = (
-                self.hybrid_weight_semantic * result.semantic_score
-                + self.hybrid_weight_keyword * result.keyword_score
+                self.hybrid_weight_semantic * result.semantic_score + self.hybrid_weight_keyword * result.keyword_score
             )
             combined_results.append(result)
 
@@ -469,9 +446,7 @@ class AdvancedRAGOptimizer:
         logger.debug("Hybrid combination produced %s results", len(combined_results))
         return combined_results
 
-    def _diversify_results(
-        self, results: List[SearchResult], max_results: int = 10
-    ) -> List[SearchResult]:
+    def _diversify_results(self, results: List[SearchResult], max_results: int = 10) -> List[SearchResult]:
         """Remove redundant results to improve diversity (#2200)."""
         if len(results) <= 1:
             return results
@@ -507,9 +482,7 @@ class AdvancedRAGOptimizer:
         logger.debug("Diversification: %s → %s results", len(results), len(diversified))
         return diversified
 
-    def _map_elites_select(
-        self, results: List[SearchResult], max_results: int = 10
-    ) -> List[SearchResult]:
+    def _map_elites_select(self, results: List[SearchResult], max_results: int = 10) -> List[SearchResult]:
         """Select results using a MAP-Elites coverage grid. Issue #4677.
 
         Axes:
@@ -597,9 +570,7 @@ class AdvancedRAGOptimizer:
 
         self._cross_encoder = get_cross_encoder()
 
-    async def _apply_cross_encoder_scores(
-        self, query: str, results: List[SearchResult]
-    ) -> None:
+    async def _apply_cross_encoder_scores(self, query: str, results: List[SearchResult]) -> None:
         """Apply cross-encoder scores to results (Issue #398: extracted).
 
         Issue #1526: Normalize cross-encoder logits with sigmoid before
@@ -610,9 +581,7 @@ class AdvancedRAGOptimizer:
         import math
 
         pairs = [(query, result.content) for result in results]
-        cross_encoder_scores = await asyncio.to_thread(
-            self._cross_encoder.predict, pairs
-        )
+        cross_encoder_scores = await asyncio.to_thread(self._cross_encoder.predict, pairs)
 
         for result, ce_score in zip(results, cross_encoder_scores):
             # Sigmoid normalization: raw logits → 0-1 probability
@@ -625,9 +594,7 @@ class AdvancedRAGOptimizer:
 
         logger.debug("Cross-encoder reranking completed for %s results", len(results))
 
-    def _apply_fallback_reranking(
-        self, query: str, results: List[SearchResult]
-    ) -> None:
+    def _apply_fallback_reranking(self, query: str, results: List[SearchResult]) -> None:
         """Apply term-based fallback reranking (Issue #398: extracted)."""
         logger.debug("Using fallback term-based reranking")
         query_lower = query.lower()
@@ -640,14 +607,10 @@ class AdvancedRAGOptimizer:
             # Issue #1526: Use semantic_score (real similarity) as base,
             # not hybrid_score which is already weighted down
             result.rerank_score = (
-                result.semantic_score * 0.7
-                + (term_matches / len(query_terms)) * 0.2
-                + exact_match_bonus * 0.1
+                result.semantic_score * 0.7 + (term_matches / len(query_terms)) * 0.2 + exact_match_bonus * 0.1
             )
 
-    def _finalize_rerank_results(
-        self, results: List[SearchResult]
-    ) -> List[SearchResult]:
+    def _finalize_rerank_results(self, results: List[SearchResult]) -> List[SearchResult]:
         """Sort and rank results after reranking (Issue #398: extracted)."""
         results.sort(key=lambda x: x.rerank_score or 0, reverse=True)
         for i, result in enumerate(results):
@@ -655,9 +618,7 @@ class AdvancedRAGOptimizer:
         logger.debug("Reranking completed: top score = %.3f", results[0].rerank_score)
         return results
 
-    async def _rerank_with_cross_encoder(
-        self, query: str, results: List[SearchResult]
-    ) -> List[SearchResult]:
+    async def _rerank_with_cross_encoder(self, query: str, results: List[SearchResult]) -> List[SearchResult]:
         """Rerank results using cross-encoder model (Issue #398: refactored)."""
         try:
             self._ensure_cross_encoder_loaded()
@@ -724,9 +685,7 @@ class AdvancedRAGOptimizer:
             )
 
             # Step 4: Apply context optimization and limit results
-            optimized_results = self._optimize_result_count(
-                final_results, max_results, context
-            )
+            optimized_results = self._optimize_result_count(final_results, max_results, context)
 
             metrics.final_results_count = len(optimized_results)
             metrics.total_time = time.time() - start_time
@@ -773,11 +732,7 @@ class AdvancedRAGOptimizer:
         hybrid_results = self._combine_hybrid_results(semantic_results, keyword_results)
 
         # Issue #4685: wire expanded queries into retrieval
-        expanded_queries = (
-            context.expanded_queries
-            if context is not None and context.expanded_queries
-            else []
-        )
+        expanded_queries = context.expanded_queries if context is not None and context.expanded_queries else []
         if expanded_queries:
             logger.debug(
                 "Running %d supplemental searches for expanded queries: %s",
@@ -789,10 +744,7 @@ class AdvancedRAGOptimizer:
 
             # Fan-out supplemental semantic searches in parallel
             expanded_semantic_lists = await asyncio.gather(
-                *[
-                    self._perform_semantic_search(eq, limit=self.max_results_per_stage)
-                    for eq in expanded_queries
-                ]
+                *[self._perform_semantic_search(eq, limit=self.max_results_per_stage) for eq in expanded_queries]
             )
             for eq, eq_semantic in zip(expanded_queries, expanded_semantic_lists):
                 eq_keyword = self._perform_keyword_search(eq, all_facts)
@@ -803,9 +755,7 @@ class AdvancedRAGOptimizer:
                         hybrid_results.append(result)
                         seen_keys.add(key)
 
-            logger.debug(
-                "After expanded-query merge: %d total candidates", len(hybrid_results)
-            )
+            logger.debug("After expanded-query merge: %d total candidates", len(hybrid_results))
 
         metrics.retrieval_time = time.time() - retrieval_start
         metrics.documents_considered = len(hybrid_results)
@@ -842,9 +792,7 @@ class AdvancedRAGOptimizer:
 
         if enable_reranking and len(diversified_results) > 1:
             rerank_start = time.time()
-            final_results = await self._rerank_with_cross_encoder(
-                query, diversified_results
-            )
+            final_results = await self._rerank_with_cross_encoder(query, diversified_results)
             metrics.reranking_time = time.time() - rerank_start
             return final_results
 
@@ -860,10 +808,7 @@ class AdvancedRAGOptimizer:
         optimized_results = results[:max_results]
 
         # Adjust chunk count based on query context
-        if (
-            len(optimized_results) < context.suggested_chunk_count
-            and len(results) > max_results
-        ):
+        if len(optimized_results) < context.suggested_chunk_count and len(results) > max_results:
             optimized_results = results[: context.suggested_chunk_count]
 
         return optimized_results
@@ -916,9 +861,7 @@ class AdvancedRAGOptimizer:
 
         return context_parts
 
-    def _build_context_header(
-        self, query: str, context_parts: List[str], query_context: QueryContext
-    ) -> str:
+    def _build_context_header(self, query: str, context_parts: List[str], query_context: QueryContext) -> str:
         """Build the header for optimized context output.
 
         Args:
@@ -936,9 +879,7 @@ class AdvancedRAGOptimizer:
         header += f"Query type: {query_context.query_type}\n\n"
         return header
 
-    async def get_optimized_context(
-        self, query: str, max_context_length: int = 2000
-    ) -> Tuple[str, RAGMetrics]:
+    async def get_optimized_context(self, query: str, max_context_length: int = 2000) -> Tuple[str, RAGMetrics]:
         """Get optimized context for RAG-based response generation."""
         try:
             results, metrics = await self.advanced_search(query, max_results=8)
@@ -947,9 +888,7 @@ class AdvancedRAGOptimizer:
                 return "No relevant information found.", metrics
 
             query_context = self._analyze_query_context(query)
-            context_parts = self._build_context_parts(
-                results, max_context_length, query_context
-            )
+            context_parts = self._build_context_parts(results, max_context_length, query_context)
             header = self._build_context_header(query, context_parts, query_context)
             final_context = header + "\n---\n".join(context_parts)
 
@@ -995,9 +934,7 @@ class AdvancedRAGOptimizer:
         try:
             from rlm.rag_refiner import AdaptiveRAGRefiner
         except ImportError:
-            results, metrics = await self.advanced_search(
-                query, max_results, enable_reranking
-            )
+            results, metrics = await self.advanced_search(query, max_results, enable_reranking)
             return results, metrics, []
 
         refiner = AdaptiveRAGRefiner()
@@ -1010,9 +947,7 @@ class AdvancedRAGOptimizer:
 
         # Re-run with metrics for the final query
         final_query = history[-1]["query"] if history else query
-        final_results, metrics = await self.advanced_search(
-            final_query, max_results, enable_reranking
-        )
+        final_results, metrics = await self.advanced_search(final_query, max_results, enable_reranking)
 
         return final_results, metrics, history
 
@@ -1039,9 +974,7 @@ async def get_rag_optimizer() -> AdvancedRAGOptimizer:
 
 
 # Convenience functions for integration
-async def advanced_knowledge_search(
-    query: str, max_results: int = 5
-) -> List[SearchResult]:
+async def advanced_knowledge_search(query: str, max_results: int = 5) -> List[SearchResult]:
     """Perform advanced knowledge search with all optimizations."""
     optimizer = await get_rag_optimizer()
     results, _ = await optimizer.advanced_search(query, max_results)

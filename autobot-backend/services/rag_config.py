@@ -114,34 +114,22 @@ class RAGConfig:
 
         # Validate ranges
         if not 0 <= self.hybrid_weight_semantic <= 1:
-            raise ValueError(
-                f"hybrid_weight_semantic must be 0-1, got {self.hybrid_weight_semantic}"
-            )
+            raise ValueError(f"hybrid_weight_semantic must be 0-1, got {self.hybrid_weight_semantic}")
 
         if not 0 <= self.hybrid_weight_keyword <= 1:
-            raise ValueError(
-                f"hybrid_weight_keyword must be 0-1, got {self.hybrid_weight_keyword}"
-            )
+            raise ValueError(f"hybrid_weight_keyword must be 0-1, got {self.hybrid_weight_keyword}")
 
         if not 0 <= self.diversity_threshold <= 1:
-            raise ValueError(
-                f"diversity_threshold must be 0-1, got {self.diversity_threshold}"
-            )
+            raise ValueError(f"diversity_threshold must be 0-1, got {self.diversity_threshold}")
 
         if self.max_results_per_stage < 1:
-            raise ValueError(
-                f"max_results_per_stage must be >= 1, got {self.max_results_per_stage}"
-            )
+            raise ValueError(f"max_results_per_stage must be >= 1, got {self.max_results_per_stage}")
 
         if self.default_max_results < 1:
-            raise ValueError(
-                f"default_max_results must be >= 1, got {self.default_max_results}"
-            )
+            raise ValueError(f"default_max_results must be >= 1, got {self.default_max_results}")
 
         if self.cache_ttl_seconds < 0:
-            raise ValueError(
-                f"cache_ttl_seconds must be >= 0, got {self.cache_ttl_seconds}"
-            )
+            raise ValueError(f"cache_ttl_seconds must be >= 0, got {self.cache_ttl_seconds}")
 
         if self.timeout_seconds <= 0:
             raise ValueError(f"timeout_seconds must be > 0, got {self.timeout_seconds}")
@@ -150,18 +138,14 @@ class RAGConfig:
             raise ValueError(f"ewc_lambda must be >= 0, got {self.ewc_lambda}")
 
         if self.ewc_consolidation_interval < 1:
-            raise ValueError(
-                f"ewc_consolidation_interval must be >= 1, got {self.ewc_consolidation_interval}"
-            )
+            raise ValueError(f"ewc_consolidation_interval must be >= 1, got {self.ewc_consolidation_interval}")
 
         if not 0.0 <= self.mmr_lambda <= 1.0:
             raise ValueError(f"mmr_lambda must be in [0, 1], got {self.mmr_lambda}")
 
         # Issue #1718: Agentic search iteration guard
         if self.max_search_iterations < 1:
-            raise ValueError(
-                f"max_search_iterations must be >= 1, got {self.max_search_iterations}"
-            )
+            raise ValueError(f"max_search_iterations must be >= 1, got {self.max_search_iterations}")
 
     @classmethod
     def from_dict(cls, config_dict: Metadata) -> "RAGConfig":
@@ -183,9 +167,7 @@ class RAGConfig:
 
         # Deserialise nested RerankWeights when the value is a plain dict.
         if isinstance(filtered_config.get("rerank_weights"), dict):
-            filtered_config["rerank_weights"] = RerankWeights(
-                **filtered_config["rerank_weights"]
-            )
+            filtered_config["rerank_weights"] = RerankWeights(**filtered_config["rerank_weights"])
 
         return cls(**filtered_config)
 
