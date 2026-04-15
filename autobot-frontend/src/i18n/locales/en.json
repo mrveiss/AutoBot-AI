@@ -6814,7 +6814,8 @@
     "skipToNavigation": "Skip to navigation",
     "systemStatus": "System Status",
     "marketplace": "Marketplace",
-    "usage": "Usage & Costs"
+    "usage": "Usage & Costs",
+    "operations": "Operations"
   },
   "reasoningTrace": {
     "title": "Reasoning trace",
