@@ -32,6 +32,7 @@ from api.http_client_mcp import router as http_client_mcp_router
 from api.intelligent_agent import router as intelligent_agent_router
 from api.knowledge import router as knowledge_router
 from api.knowledge_audit import router as knowledge_audit_router
+from api.knowledge_cognition import router as knowledge_cognition_router
 from api.knowledge_categories import router as knowledge_categories_router
 from api.knowledge_collaboration import router as knowledge_collaboration_router
 from api.knowledge_collections import router as knowledge_collections_router
@@ -135,6 +136,12 @@ def _get_core_knowledge_routers() -> list:
             "/knowledge_base",
             ["knowledge-rag-feedback"],
             "knowledge_rag_feedback",
+        ),
+        (
+            knowledge_cognition_router,
+            "/knowledge",
+            ["knowledge-cognition"],
+            "knowledge_cognition",
         ),
     ]
 

@@ -25,6 +25,7 @@ from autobot_shared.logging_manager import get_llm_logger
 from constants.model_constants import model_config
 from constants.ttl_constants import TTL_5_MINUTES
 from knowledge.search_components.reranking import RerankWeights, compute_blended_score
+from services.knowledge.cognition_seeder import SEED_PRIORITY_BOOST
 from utils.semantic_chunker_gpu import get_gpu_semantic_chunker
 
 logger = get_llm_logger("advanced_rag_optimizer")
@@ -412,6 +413,28 @@ class AdvancedRAGOptimizer:
             logger.error("Keyword search failed: %s", e)
             return []
 
+    def _apply_seed_priority_boost(self, result: SearchResult) -> float:
+        """Return *result.hybrid_score* boosted when the result is a Cognition Store seed.
+
+        Issue #4679: seeded documents carry ``seeded: "true"`` and
+        ``seed_priority: high/medium/low`` metadata set by CognitionSeeder.
+        A small additive boost ensures foundational knowledge surfaces even when
+        semantic similarity with the query is moderate.  The boost is capped at 1.0.
+        """
+        meta = result.metadata or {}
+        if meta.get("seeded") != "true":
+            return result.hybrid_score
+        priority = meta.get("seed_priority", "low")
+        boost = SEED_PRIORITY_BOOST.get(priority, 0.0)
+        if boost:
+            logger.debug(
+                "Seed priority boost +%.2f applied to '%s' (priority=%s)",
+                boost,
+                result.source_path,
+                priority,
+            )
+        return min(1.0, result.hybrid_score + boost)
+
     def _combine_hybrid_results(
         self, semantic_results: List[SearchResult], keyword_results: List[SearchResult]
     ) -> List[SearchResult]:
@@ -446,6 +469,8 @@ class AdvancedRAGOptimizer:
                 self.hybrid_weight_semantic * result.semantic_score
                 + self.hybrid_weight_keyword * result.keyword_score
             )
+            # Issue #4679: apply Cognition Store priority boost for seeded docs
+            result.hybrid_score = self._apply_seed_priority_boost(result)
             combined_results.append(result)
 
         # Sort by hybrid score
