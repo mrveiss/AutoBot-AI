@@ -774,8 +774,9 @@ export default {
       { to: '/plugins', labelKey: 'nav.plugins', icon: 'M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z', iconStroke: true },
       // Issue #1803: Plugin and agent marketplace
       { to: '/marketplace', labelKey: 'nav.marketplace', icon: 'M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z', iconStroke: true },
+      // Issue #4703: Agent Registry — backend + specialized agent dashboard
+      { to: '/agents/registry', labelKey: 'nav.agentRegistry', icon: 'M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18', iconStroke: true },
       // Code Intelligence removed from main nav — merged into /analytics/codebase
-      // Issue #4490: Agent Registry removed — lives in SLM admin at /slm/agents/
       // Issue #4491: Desktop removed — VNC is the noVNC tab in /chat
       // Issue #902: Dev Tools moved into /analytics/dev-tools tab
       // Issue #4492: Custom Dashboard renamed to /home (removed separate nav entry)
