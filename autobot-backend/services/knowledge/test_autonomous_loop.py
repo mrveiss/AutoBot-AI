@@ -326,18 +326,24 @@ async def test_promote_never_promotes_degradation():
 
 @pytest.mark.asyncio
 async def test_approve_pending_applies_and_clears():
-    """approve_pending() applies the staged variant and clears the pending slot."""
+    """approve_pending() applies the staged variant, clears in-memory, and removes Redis key."""
     orch = _make_orchestrator(dry_run=False)
     orch._pending_approval = {"hybrid_weight_semantic": 0.8}
 
+    mock_redis = AsyncMock()
     with patch("services.knowledge.autonomous_loop.update_rag_config") as mock_update, \
-         patch("services.knowledge.autonomous_loop.SynthesisProvenanceLog") as MockPlog:
+         patch("services.knowledge.autonomous_loop.SynthesisProvenanceLog") as MockPlog, \
+         patch(
+             "services.knowledge.autonomous_loop.get_async_redis_client",
+             new=AsyncMock(return_value=mock_redis),
+         ):
         MockPlog.return_value.log_run = AsyncMock()
         result = await orch.approve_pending()
 
     assert result is True
     assert orch._pending_approval is None
     mock_update.assert_called_once()
+    mock_redis.delete.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -445,3 +451,104 @@ async def test_run_once_appends_to_history():
         await orch.run_once()
 
     assert len(orch._history) == 1
+
+
+# ---------------------------------------------------------------------------
+# Redis persistence (Issue #4792)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_promote_stores_pending_in_redis():
+    """_phase_promote persists pending_approval to Redis when below auto-promote threshold."""
+    from services.knowledge.autonomous_loop import VariantResult
+
+    orch = _make_orchestrator(dry_run=False, promotion_threshold=0.5)
+    best = VariantResult("v00", {"hybrid_weight_semantic": 0.75}, 0.6, 0.6, 0.6)
+
+    mock_redis = AsyncMock()
+    with patch("services.knowledge.autonomous_loop.update_rag_config"), \
+         patch(
+             "services.knowledge.autonomous_loop.get_async_redis_client",
+             new=AsyncMock(return_value=mock_redis),
+         ):
+        await orch._phase_promote(best, baseline_score=0.5, run_id="pending-redis")
+
+    assert orch._pending_approval == best.params
+    mock_redis.set.assert_awaited_once()
+    call_args = mock_redis.set.call_args
+    assert call_args[0][0] == "autobot:loop:pending_approval"
+    assert json.loads(call_args[0][1]) == best.params
+
+
+@pytest.mark.asyncio
+async def test_reject_pending_clears_in_memory_and_redis():
+    """reject_pending() clears _pending_approval in-memory and deletes the Redis key."""
+    orch = _make_orchestrator()
+    orch._pending_approval = {"hybrid_weight_semantic": 0.75}
+
+    mock_redis = AsyncMock()
+    with patch(
+        "services.knowledge.autonomous_loop.get_async_redis_client",
+        new=AsyncMock(return_value=mock_redis),
+    ):
+        result = await orch.reject_pending()
+
+    assert result is True
+    assert orch._pending_approval is None
+    mock_redis.delete.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_reject_pending_returns_false_when_none():
+    """reject_pending() returns False when there is no pending variant."""
+    orch = _make_orchestrator()
+    result = await orch.reject_pending()
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_restore_state_loads_from_redis():
+    """restore_state() reads persisted pending_approval from Redis and restores in-memory."""
+    orch = _make_orchestrator()
+    stored_params = {"hybrid_weight_semantic": 0.8, "diversity_threshold": 0.4}
+
+    mock_redis = AsyncMock()
+    mock_redis.get = AsyncMock(return_value=json.dumps(stored_params))
+    with patch(
+        "services.knowledge.autonomous_loop.get_async_redis_client",
+        new=AsyncMock(return_value=mock_redis),
+    ):
+        await orch.restore_state()
+
+    assert orch._pending_approval == stored_params
+
+
+@pytest.mark.asyncio
+async def test_restore_state_no_op_when_redis_empty():
+    """restore_state() leaves _pending_approval as None when Redis key is absent."""
+    orch = _make_orchestrator()
+
+    mock_redis = AsyncMock()
+    mock_redis.get = AsyncMock(return_value=None)
+    with patch(
+        "services.knowledge.autonomous_loop.get_async_redis_client",
+        new=AsyncMock(return_value=mock_redis),
+    ):
+        await orch.restore_state()
+
+    assert orch._pending_approval is None
+
+
+@pytest.mark.asyncio
+async def test_restore_state_graceful_on_redis_failure():
+    """restore_state() silently skips when Redis is unavailable."""
+    orch = _make_orchestrator()
+
+    with patch(
+        "services.knowledge.autonomous_loop.get_async_redis_client",
+        new=AsyncMock(side_effect=Exception("redis down")),
+    ):
+        await orch.restore_state()  # must not raise
+
+    assert orch._pending_approval is None
