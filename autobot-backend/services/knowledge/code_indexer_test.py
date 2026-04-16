@@ -179,3 +179,103 @@ async def test_index_directory_unsupported_extension_skipped(tmp_path):
     assert result.success == 0
     assert result.skipped == 0  # skipped only counts supported-but-hash-match; unsupported = 0
     assert not indexer._collection.upsert.called
+
+
+# ---------------------------------------------------------------------------
+# index_code endpoint — path traversal validation (#4894)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_index_code_rejects_out_of_root_path(tmp_path):
+    """POST /index/code must return 400 when root_dir is outside PROJECT_ROOT."""
+    from unittest.mock import patch
+
+    import pytest
+    from fastapi import HTTPException
+
+    from api.knowledge_population import index_code
+
+    with patch("constants.path_constants.PATH") as mock_path:
+        mock_path.PROJECT_ROOT = str(tmp_path / "project")
+        with pytest.raises(HTTPException) as exc_info:
+            await index_code({"root_dir": "/etc"})
+    assert exc_info.value.status_code == 400
+    assert "project root" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_index_code_rejects_prefix_confusion_path(tmp_path):
+    """root_dir=/tmp/projectroot_evil must not match /tmp/projectroot."""
+    from unittest.mock import patch
+
+    import pytest
+    from fastapi import HTTPException
+
+    from api.knowledge_population import index_code
+
+    project = tmp_path / "projectroot"
+    evil = tmp_path / "projectroot_evil"
+
+    with patch("constants.path_constants.PATH") as mock_path:
+        mock_path.PROJECT_ROOT = str(project)
+        with pytest.raises(HTTPException) as exc_info:
+            await index_code({"root_dir": str(evil)})
+    assert exc_info.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_index_code_accepts_project_root_itself(tmp_path):
+    """root_dir equal to PROJECT_ROOT is allowed and proceeds to indexing."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from api.knowledge_population import index_code
+
+    project = tmp_path / "project"
+    project.mkdir()
+
+    mock_result = MagicMock(success=0, failed=0, skipped=0, errors=[])
+    mock_indexer = MagicMock()
+    mock_indexer.index_directory = AsyncMock(return_value=mock_result)
+
+    mock_doc_svc = MagicMock()
+    mock_doc_svc.initialize = AsyncMock(return_value=True)
+    mock_doc_svc._collection = MagicMock()
+    mock_doc_svc._embed_model = MagicMock()
+
+    with patch("constants.path_constants.PATH") as mock_path, \
+         patch("services.knowledge.doc_indexer.get_doc_indexer_service", return_value=mock_doc_svc), \
+         patch("services.knowledge.code_indexer.CodeIndexer", return_value=mock_indexer):
+        mock_path.PROJECT_ROOT = str(project)
+        response = await index_code({"root_dir": str(project)})
+
+    assert response["status"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_index_code_accepts_subdir_of_project_root(tmp_path):
+    """root_dir within PROJECT_ROOT is allowed and proceeds to indexing."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from api.knowledge_population import index_code
+
+    project = tmp_path / "project"
+    subdir = project / "autobot-backend" / "services"
+    subdir.mkdir(parents=True)
+
+    mock_result = MagicMock(success=0, failed=0, skipped=0, errors=[])
+    mock_indexer = MagicMock()
+    mock_indexer.index_directory = AsyncMock(return_value=mock_result)
+
+    mock_doc_svc = MagicMock()
+    mock_doc_svc.initialize = AsyncMock(return_value=True)
+    mock_doc_svc._collection = MagicMock()
+    mock_doc_svc._embed_model = MagicMock()
+
+    with patch("constants.path_constants.PATH") as mock_path, \
+         patch("services.knowledge.doc_indexer.get_doc_indexer_service", return_value=mock_doc_svc), \
+         patch("services.knowledge.code_indexer.CodeIndexer", return_value=mock_indexer):
+        mock_path.PROJECT_ROOT = str(project)
+        response = await index_code({"root_dir": str(subdir)})
+
+    assert response["status"] == "ok"

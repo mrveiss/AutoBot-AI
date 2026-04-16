@@ -23,7 +23,7 @@ import re
 from pathlib import Path as PathLib
 
 import aiofiles
-from fastapi import APIRouter, BackgroundTasks, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -1171,6 +1171,14 @@ async def index_code(request: dict = None):
     params = request or {}
     root_dir = str(params.get("root_dir") or PATH.PROJECT_ROOT)
     force = bool(params.get("force", False))
+
+    # Issue #4894: Prevent directory traversal — root_dir must be within PROJECT_ROOT.
+    root_dir_path = PathLib(root_dir).resolve()
+    allowed_root = PathLib(PATH.PROJECT_ROOT).resolve()
+    if root_dir_path != allowed_root and not str(root_dir_path).startswith(
+        str(allowed_root) + "/"
+    ):
+        raise HTTPException(status_code=400, detail="root_dir must be within the project root")
 
     doc_svc = get_doc_indexer_service()
     if not await doc_svc.initialize():
