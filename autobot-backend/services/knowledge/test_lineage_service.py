@@ -71,8 +71,29 @@ def _entry(
 
 
 def _make_provenance_log(entries: List[Dict[str, Any]]) -> MagicMock:
+    """Build a mock SynthesisProvenanceLog from a flat list of entries.
+
+    - get_recent returns the full list (used by get_best_ancestor).
+    - get_by_run_id does an O(1) dict lookup by run_id (used by get_ancestors).
+    """
+    by_id = {e["run_id"]: e for e in entries if e.get("run_id")}
+
+    async def _get_by_run_id(run_id: str):
+        entry = by_id.get(run_id)
+        if entry is None:
+            return None
+        # Normalise parent_run_id the same way SynthesisProvenanceLog does.
+        result = dict(entry)
+        result.setdefault("parent_run_id", None)
+        if result["parent_run_id"] == "":
+            result["parent_run_id"] = None
+        result.setdefault("prompt_variant", result.get("prompt_template", ""))
+        result.setdefault("collection_name", "")
+        return result
+
     log = MagicMock()
     log.get_recent = AsyncMock(return_value=entries)
+    log.get_by_run_id = AsyncMock(side_effect=_get_by_run_id)
     return log
 
 

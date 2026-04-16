@@ -107,21 +107,16 @@ class LineageService:
         Returns:
             List of SynthesisRun from oldest ancestor to run_id, inclusive.
         """
-        all_entries = await self._provenance_log.get_recent(limit=500)
-        by_id: Dict[str, SynthesisRun] = {
-            e["run_id"]: SynthesisRun.from_provenance_entry(e)
-            for e in all_entries
-            if e.get("run_id")
-        }
         chain: List[SynthesisRun] = []
         current_id: Optional[str] = run_id
         seen: set = set()
         for _ in range(depth + 1):
             if current_id is None or current_id in seen:
                 break
-            run = by_id.get(current_id)
-            if run is None:
+            entry = await self._provenance_log.get_by_run_id(current_id)
+            if entry is None:
                 break
+            run = SynthesisRun.from_provenance_entry(entry)
             seen.add(current_id)
             chain.append(run)
             current_id = run.parent_run_id
