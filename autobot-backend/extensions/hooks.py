@@ -20,11 +20,11 @@ class HookPoint(Enum):
     - LLM interaction (BEFORE_LLM_CALL, DURING_LLM_STREAMING, etc.)
     - Tool execution (BEFORE_TOOL_PARSE, BEFORE_TOOL_EXECUTE, etc.)
     - Continuation loop (BEFORE_CONTINUATION, AFTER_CONTINUATION, etc.)
-    - Error handling (ON_REPAIRABLE_ERROR, ON_CRITICAL_ERROR)
+    - Error handling (REPAIRABLE_ERROR, CRITICAL_ERROR)
     - Response (BEFORE_RESPONSE_SEND, AFTER_RESPONSE_SEND)
-    - Session lifecycle (ON_SESSION_CREATE, ON_SESSION_DESTROY)
+    - Session lifecycle (SESSION_CREATE, SESSION_DESTROY)
     - Knowledge integration (BEFORE_RAG_QUERY, AFTER_RAG_RESULTS)
-    - Approval flow (ON_APPROVAL_REQUIRED, ON_APPROVAL_RECEIVED)
+    - Approval flow (APPROVAL_REQUIRED, APPROVAL_RECEIVED)
 
     Usage:
         from extensions.hooks import HookPoint
