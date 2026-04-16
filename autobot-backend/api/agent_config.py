@@ -158,7 +158,7 @@ DEFAULT_AGENT_CONFIGS = {
         "tasks": ["workflow_planning", "task_classification", "agent_coordination"],
         "mcp_tools": ["memory_mcp", "sequential_thinking_mcp", "structured_thinking_mcp", "shrimp_task_manager_mcp"],
         "invoked_by": "AsyncChatWorkflow (automatic on every request)",
-        "source_file": "src/orchestrator.py, src/agents/agent_orchestrator.py",
+        "source_file": "orchestrator.py, agents/agent_orchestration/coordinator.py",
     },
     "chat": {
         "name": "Chat Agent",
