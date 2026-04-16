@@ -788,7 +788,7 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
         # Issue #3874: preserve non-dict arg identity; {} would alias all
         # non-dict calls to the same bucket
         if not isinstance(args, dict):
-            args = {"_raw": str(args)}
+            args = {"_raw": str(args), "_type": type(args).__name__}
         try:
             # Issue #3868: default=str handles datetime, bytes, custom objects
             canonical = json.dumps({"n": tool_name, "a": args}, sort_keys=True, default=str)
