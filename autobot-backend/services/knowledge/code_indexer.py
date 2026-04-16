@@ -26,6 +26,19 @@ from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
+# Process-level locks keyed by cache file path.  Two concurrent index_directory()
+# calls that share the same cache file (same CodeIndexer instance or different
+# instances pointing at the same path) will serialize through this lock so that
+# neither loses the other's cache entries.
+_CACHE_FILE_LOCKS: dict[str, asyncio.Lock] = {}
+
+
+def _get_cache_lock(path: str) -> asyncio.Lock:
+    """Return (creating if necessary) the asyncio.Lock for *path*."""
+    if path not in _CACHE_FILE_LOCKS:
+        _CACHE_FILE_LOCKS[path] = asyncio.Lock()
+    return _CACHE_FILE_LOCKS[path]
+
 
 @dataclass
 class CodeIndexResult:
@@ -318,25 +331,33 @@ class CodeIndexer:
 
         Skips hidden directories (starting with '.') and node_modules/venv/
         directories to avoid indexing third-party code.
+
+        A process-level asyncio.Lock serialises concurrent calls that share the
+        same cache file, preventing last-write-wins cache corruption (#4895).
         """
-        aggregate = CodeIndexResult()
-        root = Path(root_dir)
-        _SKIP_DIRS = {".git", "node_modules", "venv", ".venv", "__pycache__", ".mypy_cache"}
-        files = await asyncio.to_thread(lambda: sorted(root.rglob("*")))
-        for path in files:
-            if path.is_dir():
-                continue
-            # Skip files inside ignored directories
-            if any(part.startswith(".") or part in _SKIP_DIRS for part in path.parts):
-                continue
-            if path.suffix.lower() not in _EXTRACTORS:
-                continue
-            result = await self.index_file(str(path), root_dir=root_dir, force=force)
-            aggregate.success += result.success
-            aggregate.failed += result.failed
-            aggregate.skipped += result.skipped
-            aggregate.errors.extend(result.errors)
-        return aggregate
+        async with _get_cache_lock(str(self._cache_file)):
+            # Reload cache inside the lock so we start from the freshest snapshot
+            # before this batch begins.
+            self._hash_cache = self._load_cache()
+
+            aggregate = CodeIndexResult()
+            root = Path(root_dir)
+            _SKIP_DIRS = {".git", "node_modules", "venv", ".venv", "__pycache__", ".mypy_cache"}
+            files = await asyncio.to_thread(lambda: sorted(root.rglob("*")))
+            for path in files:
+                if path.is_dir():
+                    continue
+                # Skip files inside ignored directories
+                if any(part.startswith(".") or part in _SKIP_DIRS for part in path.parts):
+                    continue
+                if path.suffix.lower() not in _EXTRACTORS:
+                    continue
+                result = await self.index_file(str(path), root_dir=root_dir, force=force)
+                aggregate.success += result.success
+                aggregate.failed += result.failed
+                aggregate.skipped += result.skipped
+                aggregate.errors.extend(result.errors)
+            return aggregate
 
     async def _upsert_node(self, node: dict, rel_path: str, calls_by_source: dict[str, list[str]]) -> bool:
         content = (
