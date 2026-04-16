@@ -32,9 +32,10 @@ import json
 import logging
 import time
 import uuid
+from collections import deque
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Deque, Dict, List, Optional
 
 # Module-level imports for patchability in tests.
 # Deferred via try/except to survive environments where these aren't installed yet.
@@ -285,7 +286,7 @@ class AutonomousLoopOrchestrator:
         self.max_no_improvement_rounds = max_no_improvement_rounds
 
         self._evaluator = _RAGEvaluator()
-        self._history: List[LoopRunRecord] = []
+        self._history: Deque[LoopRunRecord] = deque(maxlen=100)
         self._pending_approval: Optional[Dict[str, Any]] = None
         self._no_improvement_count: int = 0
         self._running = False
