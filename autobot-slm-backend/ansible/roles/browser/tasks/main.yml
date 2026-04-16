@@ -166,6 +166,18 @@
   become: yes
   tags: ['browser', 'packages']
 
+# Guard: skip the ~2-minute install when Chromium is already present. (#4855)
+# Playwright installs into a versioned subdir (chromium-NNNN/chrome-linux/chrome);
+# find the first match rather than hard-coding the version number.
+- name: "Browser | Check if Playwright Chromium is already installed"
+  ansible.builtin.find:
+    paths: /opt/autobot/autobot-browser-worker/browsers
+    patterns: "chrome"
+    recurse: yes
+    file_type: file
+  register: _chromium_binary
+  tags: ['browser', 'packages']
+
 - name: "Browser | Install Playwright chromium browser via Node.js"
   ansible.builtin.command:
     cmd: node_modules/.bin/playwright install chromium
@@ -173,8 +185,10 @@
   become: yes
   environment:
     PLAYWRIGHT_BROWSERS_PATH: /opt/autobot/autobot-browser-worker/browsers
-  changed_when: false
-  when: _browser_worker_dir.stat.exists | default(false)
+  changed_when: true
+  when:
+    - _browser_worker_dir.stat.exists | default(false)
+    - _chromium_binary.matched == 0
   tags: ['browser', 'packages']
 
 - name: "Browser | Fix Playwright browsers directory ownership"
