@@ -23,6 +23,7 @@ from services.knowledge.autonomous_loop import (
     LoopRunRecord,
     LoopStatus,
     _DEFAULT_PROMOTION_THRESHOLD,
+    get_loop_orchestrator,
 )
 
 
@@ -598,3 +599,92 @@ async def test_restore_state_graceful_on_redis_failure():
         await orch.restore_state()  # must not raise
 
     assert orch._pending_approval is None
+
+
+# ---------------------------------------------------------------------------
+# _running flag — Issue #4937
+# ---------------------------------------------------------------------------
+
+
+def test_running_starts_false():
+    """_running is False immediately after construction."""
+    orch = _make_orchestrator()
+    assert orch._running is False
+
+
+@pytest.mark.asyncio
+async def test_running_true_during_run_once(monkeypatch):
+    """_running is True while run_once() is executing."""
+    orch = _make_orchestrator()
+    running_during = []
+
+    async def fake_phase_learn(_run_id):
+        running_during.append(orch._running)
+        raise RuntimeError("stop early")
+
+    monkeypatch.setattr(orch, "_phase_learn", fake_phase_learn)
+    with patch(
+        "services.knowledge.autonomous_loop.get_async_redis_client",
+        new=AsyncMock(return_value=None),
+    ):
+        await orch.run_once()
+
+    assert running_during == [True], "_running must be True inside run_once"
+
+
+@pytest.mark.asyncio
+async def test_running_false_after_run_once():
+    """_running is reset to False after run_once() completes."""
+    orch = _make_orchestrator()
+
+    with patch.object(orch, "_phase_learn", new=AsyncMock(side_effect=RuntimeError("abort"))):
+        with patch(
+            "services.knowledge.autonomous_loop.get_async_redis_client",
+            new=AsyncMock(return_value=None),
+        ):
+            await orch.run_once()
+
+    assert orch._running is False
+
+
+@pytest.mark.asyncio
+async def test_get_loop_orchestrator_returns_singleton_when_running():
+    """get_loop_orchestrator() returns existing instance when _running=True."""
+    import services.knowledge.autonomous_loop as mod
+
+    original = mod._loop_orchestrator
+    try:
+        existing = _make_orchestrator()
+        existing._running = True
+        mod._loop_orchestrator = existing
+
+        result = await get_loop_orchestrator(llm_service=MagicMock())
+        assert result is existing
+    finally:
+        mod._loop_orchestrator = original
+
+
+@pytest.mark.asyncio
+async def test_get_loop_orchestrator_replaces_when_not_running():
+    """get_loop_orchestrator() replaces the singleton when _running=False."""
+    import services.knowledge.autonomous_loop as mod
+
+    original = mod._loop_orchestrator
+    try:
+        existing = _make_orchestrator()
+        existing._running = False
+        existing._llm = None  # triggers the None-llm replacement path
+        mod._loop_orchestrator = existing
+
+        new_llm = MagicMock()
+        with patch.object(
+            AutonomousLoopOrchestrator,
+            "restore_state",
+            new=AsyncMock(),
+        ):
+            result = await get_loop_orchestrator(llm_service=new_llm)
+
+        assert result is not existing
+        assert result._llm is new_llm
+    finally:
+        mod._loop_orchestrator = original
