@@ -815,6 +815,9 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
                     _rag_mod._rag_service_instance.config.mesh_retriever_enabled = True
                     logger.info("Re-wired NeuralMeshRetriever into get_rag_service() singleton (#4757)")
 
+                # Expose mesh_db on app.state so _start_community_clustering_loop can use it (#4834).
+                app.state.mesh_db = _mesh_db
+
                 logger.info("✅ [ 87%] Neural Mesh RAG: NeuralMeshRetriever wired into RAGService (#4724)")
             except Exception as _mesh_wire_err:
                 logger.warning("Neural Mesh RAG wiring skipped (non-fatal): %s", _mesh_wire_err)
@@ -1251,6 +1254,34 @@ async def _wire_scheduler_executor() -> None:
         )
 
 
+async def _start_community_clustering_loop(app: FastAPI) -> None:
+    """Start a periodic CommunityClusterer background loop every 6 hours (#4834).
+
+    Uses the MeshDB adapter stored on app.state.mesh_db by _init_graph_rag_service.
+    NON-CRITICAL: clustering failures do not affect request handling.
+    """
+    mesh_db = getattr(app.state, "mesh_db", None)
+    if mesh_db is None:
+        logger.info("CommunityClusterer: mesh_db not available, skipping periodic loop")
+        return
+
+    from services.mesh_brain.community_clusterer import CommunityClusterer
+
+    _CLUSTER_INTERVAL_SECONDS = 6 * 3600  # 6 hours
+
+    async def _loop() -> None:
+        while True:
+            try:
+                promoted = await CommunityClusterer(mesh_db).run()
+                logger.info("CommunityClusterer periodic run: %d anchors promoted", len(promoted))
+            except Exception as exc:
+                logger.warning("CommunityClusterer periodic run failed (non-fatal): %s", exc)
+            await asyncio.sleep(_CLUSTER_INTERVAL_SECONDS)
+
+    asyncio.create_task(_loop())
+    logger.info("CommunityClusterer: periodic loop started (interval=%dh)", _CLUSTER_INTERVAL_SECONDS // 3600)
+
+
 async def _init_plugin_manager(app: FastAPI) -> None:
     """Discover and load plugins from the configured plugins directory.
 
@@ -1327,6 +1358,7 @@ async def initialize_background_services(app: FastAPI):
         await _init_plugin_manager(app)
         await _init_backup_scheduler(app)
         await _start_autonomous_loop(app)
+        await _start_community_clustering_loop(app)
 
         await update_app_state_multi(
             initialization_status="ready",
