@@ -44,6 +44,20 @@ _hash_cache_memo: dict = {}
 _hash_cache_loaded_at: float = 0.0
 _HASH_CACHE_TTL: float = 60.0  # seconds
 
+# Module-level singleton cache for synthesis schema — avoids repeated disk reads on the
+# hot path (_get_kb_synthesis_context is called on every advanced_search). (#4654)
+_SYNTHESIS_SCHEMA_CACHE: "object | None" = None
+
+
+def _get_synthesis_schema() -> "object":
+    """Return the cached SynthesisSchema, loading from disk only on first call."""
+    global _SYNTHESIS_SCHEMA_CACHE
+    if _SYNTHESIS_SCHEMA_CACHE is None:
+        from services.knowledge.synthesis_schema_loader import load_synthesis_schema
+
+        _SYNTHESIS_SCHEMA_CACHE = load_synthesis_schema()
+    return _SYNTHESIS_SCHEMA_CACHE
+
 
 class RAGService:
     """
@@ -809,9 +823,7 @@ class RAGService:
         # Collect all synthesis collection names: default + schema-defined targets.
         collection_names: List[str] = ["kb_synthesis"]
         try:
-            from services.knowledge.synthesis_schema_loader import load_synthesis_schema
-
-            schema = load_synthesis_schema()
+            schema = _get_synthesis_schema()
             for col in schema.collections:
                 target = col.synthesis_target.strip()
                 if target and target not in collection_names:
