@@ -668,10 +668,19 @@ async def get_loop_orchestrator(
 
     Parameters are only applied on first call; subsequent calls return the
     cached instance regardless of arguments.
+
+    Race-condition guard: if the singleton was previously created with
+    ``llm_service=None`` (e.g. an API endpoint called before the background
+    scheduler provides a real service), and the caller now supplies a real
+    service, the None-locked instance is replaced so the orchestrator can
+    actually reach the LLM.  A singleton that already has a real ``_llm``
+    is never replaced.
     """
     global _loop_orchestrator
     async with _loop_lock:
-        if _loop_orchestrator is None:
+        if _loop_orchestrator is None or (
+            _loop_orchestrator._llm is None and llm_service is not None
+        ):
             _loop_orchestrator = AutonomousLoopOrchestrator(
                 llm_service,
                 dry_run=dry_run,
