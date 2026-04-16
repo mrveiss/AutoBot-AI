@@ -382,7 +382,7 @@ onBeforeUnmount(() => {
   width: 100%;
   max-width: 480px;
   max-height: 85vh;
-  margin: 1rem;
+  margin: var(--spacing-4);
   border-radius: 1.25rem;
   background: var(--bg-card, #0f172a);
   border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.1));
@@ -493,7 +493,7 @@ onBeforeUnmount(() => {
 .voice-overlay__conversation {
   flex: 1;
   overflow-y: auto;
-  padding: 1.25rem;
+  padding: var(--spacing-5);
   min-height: 200px;
   max-height: 40vh;
   scroll-behavior: smooth;
@@ -504,7 +504,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   height: 100%;
   min-height: 120px;
   color: var(--text-muted, #64748b);
@@ -514,7 +514,7 @@ onBeforeUnmount(() => {
 /* Bubbles */
 .voice-overlay__bubble {
   display: flex;
-  gap: 0.625rem;
+  gap: var(--spacing-2-5);
   align-items: flex-start;
 }
 
@@ -570,13 +570,13 @@ onBeforeUnmount(() => {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  margin-bottom: 0.125rem;
+  margin-bottom: var(--spacing-0-5);
   opacity: 0.6;
 }
 
 /* Live transcript */
 .voice-overlay__live-transcript {
-  margin-top: 0.75rem;
+  margin-top: var(--spacing-3);
   padding: 0.5rem 0.75rem;
   border-radius: var(--radius-lg);
   background: rgba(37, 99, 235, 0.06);
@@ -621,11 +621,11 @@ onBeforeUnmount(() => {
 }
 
 .voice-overlay__cert-warning-steps {
-  padding-left: 1.25rem;
+  padding-left: var(--spacing-5);
   list-style: decimal;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 
 .voice-overlay__cert-warning-steps code {
@@ -639,7 +639,7 @@ onBeforeUnmount(() => {
 .voice-overlay__cert-warning-fallback {
   color: #94a3b8;
   font-size: var(--text-xs);
-  margin-top: 0.25rem;
+  margin-top: var(--spacing-1);
 }
 
 /* Controls area */
@@ -647,7 +647,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   padding: 1.5rem 1.25rem 2rem;
   border-top: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.08));
   background: linear-gradient(
@@ -774,7 +774,7 @@ onBeforeUnmount(() => {
   padding: 0.75rem 1.25rem 0;
   display: flex;
   flex-direction: column;
-  gap: 0.625rem;
+  gap: var(--spacing-2-5);
 }
 
 /* Amplitude meter */
@@ -797,7 +797,7 @@ onBeforeUnmount(() => {
 .voice-overlay__threshold {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .voice-overlay__threshold-label {

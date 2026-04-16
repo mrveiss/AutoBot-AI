@@ -403,7 +403,7 @@ watch(() => props.modelValue, (newValue) => {
 .edit-description {
   color: var(--text-secondary);
   font-size: var(--text-sm);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 /* Selected Preview */
@@ -519,7 +519,7 @@ watch(() => props.modelValue, (newValue) => {
 .form-hint {
   font-size: var(--text-xs);
   color: var(--text-secondary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 /* Existing Tags */

@@ -274,7 +274,7 @@ function clamp(value: number, min: number, max: number): number {
   font-size: var(--font-size-lg);
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .panel-title i {
@@ -293,8 +293,8 @@ function clamp(value: number, min: number, max: number): number {
   flex-direction: column;
   gap: var(--spacing-md);
   border: none;
-  padding: 0;
-  margin: 0;
+  padding: var(--spacing-0);
+  margin: var(--spacing-0);
 }
 
 .preference-label {
@@ -316,7 +316,7 @@ function clamp(value: number, min: number, max: number): number {
 .preference-hint {
   font-size: var(--font-size-sm);
   color: var(--text-secondary);
-  margin: 0;
+  margin: var(--spacing-0);
   line-height: var(--leading-normal);
 }
 

@@ -463,7 +463,7 @@ onUnmounted(() => {
 .landing-subtitle {
   font-size: var(--text-sm);
   color: var(--text-muted);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 /* Loading */
@@ -576,7 +576,7 @@ onUnmounted(() => {
   border-radius: var(--radius-full);
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
   text-transform: capitalize;
 }
 

@@ -311,7 +311,7 @@ const openDocument = () => {
   justify-content: center;
   width: 1.5rem;
   height: 1.5rem;
-  padding: 0;
+  padding: var(--spacing-0);
   background: none;
   border: none;
   border-radius: var(--radius-default);
@@ -348,7 +348,7 @@ const openDocument = () => {
   font-size: 0.8125rem;
   color: var(--text-secondary);
   line-height: var(--leading-relaxed);
-  margin: 0;
+  margin: var(--spacing-0);
   white-space: pre-wrap;
 }
 
@@ -390,7 +390,7 @@ const openDocument = () => {
   justify-content: center;
   width: 1.75rem;
   height: 1.75rem;
-  padding: 0;
+  padding: var(--spacing-0);
   background: none;
   border: 1px solid transparent;
   border-radius: var(--radius-default);

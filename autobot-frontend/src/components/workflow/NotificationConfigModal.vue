@@ -271,12 +271,12 @@ async function handleSave(): Promise<void> {
 }
 
 .notif-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-base);
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .notif-header h3 i { color: var(--color-primary); }
@@ -293,21 +293,21 @@ async function handleSave(): Promise<void> {
 .btn-close:hover { background: var(--bg-hover); color: var(--text-primary); }
 
 .notif-loading {
-  padding: 48px;
+  padding: var(--spacing-12);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-3);
   color: var(--text-tertiary);
 }
 
 .notif-body {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
+  padding: var(--spacing-5);
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--spacing-5);
 }
 
 .notif-error {
@@ -318,14 +318,14 @@ async function handleSave(): Promise<void> {
   font-size: var(--text-sm);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .notif-field {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  padding: 14px;
-  margin: 0;
+  padding: var(--spacing-3-5);
+  margin: var(--spacing-0);
 }
 
 .notif-field legend {
@@ -351,19 +351,19 @@ async function handleSave(): Promise<void> {
 .tag-input-wrapper {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .tag-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 .tag {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
   padding: 4px 10px;
   background: var(--color-primary-bg);
   color: var(--color-primary);
@@ -373,7 +373,7 @@ async function handleSave(): Promise<void> {
 }
 
 .tag-remove {
-  padding: 0;
+  padding: var(--spacing-0);
   background: transparent;
   border: none;
   color: inherit;
@@ -411,7 +411,7 @@ async function handleSave(): Promise<void> {
 .channel-grid {
   display: grid;
   grid-template-columns: 1fr repeat(4, 64px);
-  gap: 4px;
+  gap: var(--spacing-1);
   align-items: center;
 }
 
@@ -421,7 +421,7 @@ async function handleSave(): Promise<void> {
   color: var(--text-tertiary);
   text-align: center;
   text-transform: uppercase;
-  padding: 4px;
+  padding: var(--spacing-1);
 }
 
 .event-label {
@@ -446,7 +446,7 @@ async function handleSave(): Promise<void> {
 .notif-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  gap: var(--spacing-2-5);
   padding: 14px 20px;
   border-top: 1px solid var(--border-default);
 }
@@ -462,7 +462,7 @@ async function handleSave(): Promise<void> {
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 .btn-primary:hover:not(:disabled) { filter: brightness(1.1); }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }

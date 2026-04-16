@@ -465,7 +465,7 @@ onUnmounted(() => {
 }
 
 .dialog-subtitle {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--font-size-sm);
   opacity: 0.9;
 }

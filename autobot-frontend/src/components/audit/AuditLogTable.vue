@@ -557,7 +557,7 @@ th span {
   color: var(--color-info);
   font-size: inherit;
   cursor: pointer;
-  padding: 0;
+  padding: var(--spacing-0);
   text-decoration: underline;
   font-family: var(--font-sans);
 }
@@ -689,7 +689,7 @@ th span {
 }
 
 .modal-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-lg);
   font-weight: var(--font-semibold);
 }
@@ -751,7 +751,7 @@ th span {
   padding: var(--spacing-3);
   border-radius: var(--radius-xs);
   overflow-x: auto;
-  margin: 0;
+  margin: var(--spacing-0);
   white-space: pre-wrap;
   word-break: break-word;
   letter-spacing: -0.02em;

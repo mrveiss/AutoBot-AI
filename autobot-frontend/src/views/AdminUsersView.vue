@@ -373,7 +373,7 @@ onMounted(loadUsers)
 
 <style scoped>
 .admin-users-view {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   max-width: 1200px;
   margin: 0 auto;
 }
@@ -382,8 +382,8 @@ onMounted(loadUsers)
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 1.5rem;
-  gap: 1rem;
+  margin-bottom: var(--spacing-6);
+  gap: var(--spacing-4);
   flex-wrap: wrap;
 }
 
@@ -396,23 +396,23 @@ onMounted(loadUsers)
 .page-subtitle {
   font-size: var(--text-sm);
   color: var(--color-text-secondary, #6b7280);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .header-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .error-banner {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   padding: 0.75rem 1rem;
   background: var(--color-error-bg, #fef2f2);
   border: 1px solid var(--color-error-border, #fca5a5);
   border-radius: var(--radius-lg);
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
   color: var(--color-error, #dc2626);
 }
 
@@ -426,7 +426,7 @@ onMounted(loadUsers)
 
 .search-bar {
   position: relative;
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .search-icon {
@@ -454,7 +454,7 @@ onMounted(loadUsers)
 }
 
 .loading-state {
-  padding: 2rem;
+  padding: var(--spacing-8);
   text-align: center;
   color: var(--color-text-secondary, #6b7280);
 }
@@ -489,7 +489,7 @@ onMounted(loadUsers)
 .username-cell {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .username {
@@ -529,7 +529,7 @@ onMounted(loadUsers)
 
 .actions-cell {
   display: flex;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 
 .btn-icon {
@@ -569,8 +569,8 @@ onMounted(loadUsers)
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
-  padding: 0.75rem;
+  gap: var(--spacing-4);
+  padding: var(--spacing-3);
   border-top: 1px solid var(--color-border, #e5e7eb);
 }
 
@@ -597,7 +597,7 @@ onMounted(loadUsers)
 .btn-action-danger {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--spacing-1-5);
   padding: 0.5rem 1rem;
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
@@ -659,7 +659,7 @@ onMounted(loadUsers)
 }
 
 .modal-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-base);
   font-weight: 600;
 }
@@ -673,16 +673,16 @@ onMounted(loadUsers)
 }
 
 .modal-body {
-  padding: 1.25rem;
+  padding: var(--spacing-5);
 }
 
 .form-group {
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .form-group label {
   display: block;
-  margin-bottom: 0.375rem;
+  margin-bottom: var(--spacing-1-5);
   font-size: var(--text-sm);
   font-weight: 500;
 }
@@ -699,13 +699,13 @@ onMounted(loadUsers)
 .error-inline {
   color: var(--color-error, #dc2626);
   font-size: 0.8125rem;
-  margin-top: 0.5rem;
+  margin-top: var(--spacing-2);
 }
 
 .modal-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 0.5rem;
-  padding-top: 1rem;
+  gap: var(--spacing-2);
+  padding-top: var(--spacing-4);
 }
 </style>

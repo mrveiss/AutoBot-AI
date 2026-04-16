@@ -137,6 +137,6 @@ function formatMetricName(metric: string): string {
 .base-chart {
   background: var(--bg-secondary);
   border-radius: var(--radius-lg);
-  padding: 1rem;
+  padding: var(--spacing-4);
 }
 </style>

@@ -338,14 +338,14 @@ watch(saveSuccess, (val) => {
 .notification-config {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--spacing-4);
   max-width: 48rem;
 }
 
 .config-section {
   display: flex;
   flex-direction: column;
-  gap: 0.375rem;
+  gap: var(--spacing-1-5);
 }
 
 .field-label {
@@ -386,7 +386,7 @@ watch(saveSuccess, (val) => {
 .toggle-label {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   cursor: pointer;
   user-select: none;
 }
@@ -405,11 +405,11 @@ watch(saveSuccess, (val) => {
 
 .config-fieldset {
   border: none;
-  padding: 0;
-  margin: 0;
+  padding: var(--spacing-0);
+  margin: var(--spacing-0);
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 .config-fieldset:disabled {
   opacity: 0.45;
@@ -420,7 +420,7 @@ watch(saveSuccess, (val) => {
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-text-primary, #e2e8f0);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 /* Routing matrix */
@@ -430,7 +430,7 @@ watch(saveSuccess, (val) => {
   border: 1px solid var(--color-border, #374151);
   border-radius: var(--radius-md);
   overflow: hidden;
-  margin-top: 0.5rem;
+  margin-top: var(--spacing-2);
 }
 
 .matrix-row {
@@ -480,14 +480,14 @@ watch(saveSuccess, (val) => {
 .config-actions {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding-top: 0.5rem;
+  gap: var(--spacing-3);
+  padding-top: var(--spacing-2);
 }
 
 .btn-save {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--spacing-1-5);
   padding: 0.5rem 1.25rem;
   border: none;
   border-radius: var(--radius-md);
@@ -516,7 +516,7 @@ watch(saveSuccess, (val) => {
 .loading-indicator {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   font-size: var(--text-sm);
   color: var(--color-text-secondary, #94a3b8);
   padding: 0.75rem 0;

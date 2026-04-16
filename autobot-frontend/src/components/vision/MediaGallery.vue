@@ -302,7 +302,7 @@ onUnmounted(() => {
 .media-gallery {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--spacing-5);
 }
 
 /* Header */
@@ -310,12 +310,12 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px;
+  padding: var(--spacing-5);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
   flex-wrap: wrap;
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .header-info h3 {
@@ -326,14 +326,14 @@ onUnmounted(() => {
 }
 
 .header-info p {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
 .header-actions {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
   align-items: center;
 }
 
@@ -357,7 +357,7 @@ onUnmounted(() => {
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   transition: all var(--duration-200);
 }
 
@@ -375,7 +375,7 @@ onUnmounted(() => {
 .gallery-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .gallery-item {
@@ -428,10 +428,10 @@ onUnmounted(() => {
 }
 
 .item-info {
-  padding: 12px;
+  padding: var(--spacing-3);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .item-name {
@@ -450,13 +450,13 @@ onUnmounted(() => {
 
 .item-actions {
   display: flex;
-  gap: 4px;
+  gap: var(--spacing-1);
   padding: 0 12px 12px;
 }
 
 .btn-action {
   flex: 1;
-  padding: 8px;
+  padding: var(--spacing-2);
   background: var(--bg-tertiary);
   border: none;
   border-radius: var(--radius-md);
@@ -481,7 +481,7 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: var(--spacing-4);
   padding: 80px 20px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
@@ -501,13 +501,13 @@ onUnmounted(() => {
 }
 
 .empty-state h4 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-base);
   color: var(--text-primary);
 }
 
 .empty-state p {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
   color: var(--text-tertiary);
   text-align: center;
@@ -525,7 +525,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   z-index: var(--z-modal);
-  padding: 20px;
+  padding: var(--spacing-5);
 }
 
 .detail-modal {
@@ -548,7 +548,7 @@ onUnmounted(() => {
 }
 
 .modal-header h4 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
@@ -558,7 +558,7 @@ onUnmounted(() => {
 }
 
 .btn-close {
-  padding: 8px;
+  padding: var(--spacing-2);
   background: none;
   border: none;
   color: var(--text-tertiary);
@@ -572,11 +572,11 @@ onUnmounted(() => {
 .modal-content {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
+  padding: var(--spacing-5);
 }
 
 .preview-section {
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-5);
 }
 
 .preview-image {
@@ -602,7 +602,7 @@ onUnmounted(() => {
 .details-section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .detail-row {
@@ -622,8 +622,8 @@ onUnmounted(() => {
 }
 
 .analysis-section {
-  margin-top: 20px;
-  padding-top: 20px;
+  margin-top: var(--spacing-5);
+  padding-top: var(--spacing-5);
   border-top: 1px solid var(--border-default);
 }
 
@@ -637,8 +637,8 @@ onUnmounted(() => {
 .analysis-data {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-3);
 }
 
 .data-row {
@@ -670,7 +670,7 @@ onUnmounted(() => {
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .btn-toggle:hover {
@@ -678,8 +678,8 @@ onUnmounted(() => {
 }
 
 .json-display {
-  margin-top: 12px;
-  padding: 12px;
+  margin-top: var(--spacing-3);
+  padding: var(--spacing-3);
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
   font-size: var(--text-xs);
@@ -690,7 +690,7 @@ onUnmounted(() => {
 
 .modal-actions {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
   padding: 16px 20px;
   border-top: 1px solid var(--border-default);
 }
@@ -708,7 +708,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .btn-primary:hover {
@@ -726,7 +726,7 @@ onUnmounted(() => {
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .btn-secondary:hover {
@@ -744,7 +744,7 @@ onUnmounted(() => {
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .btn-danger:hover {
@@ -764,13 +764,13 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   z-index: var(--z-popover);
-  padding: 20px;
+  padding: var(--spacing-5);
 }
 
 .confirm-modal {
   background: var(--bg-secondary);
   border-radius: var(--radius-xl);
-  padding: 24px;
+  padding: var(--spacing-6);
   width: 100%;
   max-width: 360px;
   text-align: center;
@@ -804,7 +804,7 @@ onUnmounted(() => {
 
 .confirm-actions {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .btn-cancel {

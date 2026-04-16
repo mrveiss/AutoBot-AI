@@ -248,7 +248,7 @@ async function copyId() {
 .type-icon {
   font-size: var(--text-2xl);
   color: var(--color-info);
-  margin-top: 0.125rem;
+  margin-top: var(--spacing-0-5);
 }
 
 .header-info {
@@ -260,7 +260,7 @@ async function copyId() {
   font-size: var(--text-xl);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .operation-type {
@@ -330,27 +330,27 @@ async function copyId() {
 .description-section,
 .timing-section,
 .checkpoints-section {
-  padding-top: 0.75rem;
+  padding-top: var(--spacing-3);
   border-top: 1px solid var(--border-subtle);
 }
 
 .description-text {
   font-size: var(--text-sm);
   color: var(--text-secondary);
-  margin: 0;
+  margin: var(--spacing-0);
   line-height: 1.5;
 }
 
 .timing-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .timing-item {
   display: flex;
   flex-direction: column;
-  gap: 0.125rem;
+  gap: var(--spacing-0-5);
 }
 
 .timing-label {
@@ -364,7 +364,7 @@ async function copyId() {
 }
 
 .error-section {
-  padding: 1rem;
+  padding: var(--spacing-4);
   background-color: #fef2f2;
   border: 1px solid #fecaca;
   border-radius: var(--radius-md);
@@ -373,7 +373,7 @@ async function copyId() {
 .error-title {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--spacing-1-5);
   color: #991b1b;
 }
 
@@ -388,7 +388,7 @@ async function copyId() {
 .checkpoints-info {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--spacing-4);
   font-size: var(--text-sm);
   color: var(--text-secondary);
 }
@@ -396,22 +396,22 @@ async function copyId() {
 .can-resume {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
   color: var(--color-success);
 }
 
 .context-section {
   border-top: 1px solid var(--border-subtle);
-  padding-top: 0.75rem;
+  padding-top: var(--spacing-3);
 }
 
 .context-toggle {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   background: none;
   border: none;
-  padding: 0;
+  padding: var(--spacing-0);
   cursor: pointer;
   color: var(--text-secondary);
 }
@@ -421,33 +421,33 @@ async function copyId() {
 }
 
 .context-toggle .section-title {
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .context-content {
-  margin-top: 0.75rem;
+  margin-top: var(--spacing-3);
 }
 
 .context-json {
   font-size: var(--text-xs);
   background-color: var(--code-bg);
-  padding: 1rem;
+  padding: var(--spacing-4);
   border-radius: var(--radius-md);
   overflow-x: auto;
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .actions-section {
   display: flex;
-  gap: 0.75rem;
-  padding-top: 1rem;
+  gap: var(--spacing-3);
+  padding-top: var(--spacing-4);
   border-top: 1px solid var(--border-default);
 }
 
 .action-btn {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--spacing-1-5);
   padding: 0.5rem 1rem;
   font-size: var(--text-sm);
   font-weight: 500;
@@ -495,7 +495,7 @@ async function copyId() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 0.75rem;
+  padding-top: var(--spacing-3);
   border-top: 1px solid var(--border-subtle);
 }
 

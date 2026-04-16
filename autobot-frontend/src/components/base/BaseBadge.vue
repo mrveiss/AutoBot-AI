@@ -68,7 +68,7 @@ const handleRemove = (event: MouseEvent) => {
 .base-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
   font-weight: 500;
   white-space: nowrap;
   transition: all var(--duration-150) var(--ease-out);
@@ -212,14 +212,14 @@ const handleRemove = (event: MouseEvent) => {
 
 /* Removable Badge */
 .badge-removable {
-  padding-right: 4px;
+  padding-right: var(--spacing-1);
 }
 
 .badge-remove {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2px;
+  padding: var(--spacing-0-5);
   background: transparent;
   border: none;
   color: currentColor;

@@ -243,7 +243,7 @@ const formatSize = (bytes: number): string => {
   border: none;
   color: var(--text-secondary);
   cursor: pointer;
-  padding: 0;
+  padding: var(--spacing-0);
   transition: transform var(--duration-200) var(--ease-in-out);
 }
 
@@ -268,7 +268,7 @@ const formatSize = (bytes: number): string => {
   justify-content: center;
   background: none;
   border: none;
-  padding: 0;
+  padding: var(--spacing-0);
   cursor: pointer;
   color: var(--color-primary);
   transition: all var(--duration-150) var(--ease-in-out);
@@ -300,7 +300,7 @@ const formatSize = (bytes: number): string => {
   cursor: pointer;
   background: none;
   border: none;
-  padding: 0;
+  padding: var(--spacing-0);
   font-family: inherit;
   text-align: left;
   transition: all var(--duration-150) var(--ease-in-out);

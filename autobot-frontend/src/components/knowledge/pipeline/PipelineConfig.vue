@@ -256,7 +256,7 @@ function emitConfig(): void {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .config-header h4 i {
@@ -419,7 +419,7 @@ h5 i {
   font-size: var(--text-xs);
   color: var(--text-primary);
   overflow-x: auto;
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 /* Actions */

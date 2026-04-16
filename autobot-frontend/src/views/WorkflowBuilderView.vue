@@ -1190,19 +1190,19 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .sidebar-header {
-  padding: 20px;
+  padding: var(--spacing-5);
   border-bottom: 1px solid var(--border-default);
 }
 
 .sidebar-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-sans);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
   line-height: 1.5;
 }
 
@@ -1261,7 +1261,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 .category-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-3);
   padding: 10px 20px;
   cursor: pointer;
   transition: all var(--duration-150) var(--ease-in-out);
@@ -1340,7 +1340,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   transition: all var(--duration-150) var(--ease-in-out);
 }
 
@@ -1391,7 +1391,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .header-left h2 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
@@ -1404,14 +1404,14 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 .header-actions {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
   align-items: center;
 }
 
 .status-badge {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   padding: 8px 14px;
   border-radius: var(--radius-2xl);
   font-size: var(--text-sm);
@@ -1441,9 +1441,9 @@ watch(hasActiveWorkflows, (hasActive) => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: var(--spacing-4);
   color: var(--text-tertiary);
-  padding: 40px;
+  padding: var(--spacing-10);
 }
 
 .error-container .error-icon {
@@ -1459,12 +1459,12 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .error-container h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-primary);
 }
 
 .error-container p {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-secondary);
 }
 
@@ -1472,22 +1472,22 @@ watch(hasActiveWorkflows, (hasActive) => {
 .content-body {
   flex: 1;
   overflow-y: auto;
-  padding: 24px;
+  padding: var(--spacing-6);
 }
 
 /* Overview Stats Grid */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
 }
 
 .stat-card {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 20px;
+  gap: var(--spacing-4);
+  padding: var(--spacing-5);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
@@ -1540,14 +1540,14 @@ watch(hasActiveWorkflows, (hasActive) => {
 .overview-sections {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--spacing-6);
 }
 
 .overview-card {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
-  padding: 20px;
+  padding: var(--spacing-5);
 }
 
 .overview-card h4 {
@@ -1557,7 +1557,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .overview-card h4 i {
@@ -1568,15 +1568,15 @@ watch(hasActiveWorkflows, (hasActive) => {
 .quick-actions-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .quick-action {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 16px;
+  gap: var(--spacing-2);
+  padding: var(--spacing-4);
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
@@ -1604,11 +1604,11 @@ watch(hasActiveWorkflows, (hasActive) => {
 .strategies-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .strategy-item {
-  padding: 16px;
+  padding: var(--spacing-4);
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
 }
@@ -1616,8 +1616,8 @@ watch(hasActiveWorkflows, (hasActive) => {
 .strategy-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: var(--spacing-2-5);
+  margin-bottom: var(--spacing-2);
 }
 
 .strategy-header i {
@@ -1645,7 +1645,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 .examples-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .example-item {
@@ -1664,7 +1664,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
+  margin-bottom: var(--spacing-1);
 }
 
 .example-name {
@@ -1684,7 +1684,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 .example-description {
   font-size: var(--text-sm);
   color: var(--text-secondary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 /* Natural Language Section */
@@ -1695,18 +1695,18 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 .nl-header {
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: var(--spacing-6);
 }
 
 .nl-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .nl-header h3 i {
@@ -1722,12 +1722,12 @@ watch(hasActiveWorkflows, (hasActive) => {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
-  padding: 20px;
+  padding: var(--spacing-5);
 }
 
 .nl-input-area textarea {
   width: 100%;
-  padding: 12px;
+  padding: var(--spacing-3);
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
@@ -1760,7 +1760,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 .checkbox-option {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   cursor: pointer;
   color: var(--text-secondary);
   font-size: var(--text-sm);
@@ -1787,18 +1787,18 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 /* Approval Panel */
 .approval-panel {
-  margin-top: 24px;
+  margin-top: var(--spacing-6);
   background: var(--bg-secondary);
   border: 1px solid var(--color-warning);
   border-radius: var(--radius-xl);
-  padding: 20px;
+  padding: var(--spacing-5);
 }
 
 .approval-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 16px;
+  gap: var(--spacing-2-5);
+  margin-bottom: var(--spacing-4);
 }
 
 .approval-header i {
@@ -1807,7 +1807,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .approval-header h4 {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-primary);
 }
 
@@ -1818,7 +1818,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 .approval-meta {
   display: flex;
-  gap: 16px;
+  gap: var(--spacing-4);
   font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
@@ -1826,18 +1826,18 @@ watch(hasActiveWorkflows, (hasActive) => {
 .approval-meta span {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 .approval-steps {
   margin: 16px 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .approval-step {
-  padding: 12px;
+  padding: var(--spacing-3);
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
   border-left: 3px solid var(--border-default);
@@ -1851,7 +1851,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
 }
 
 .step-description {
@@ -1884,7 +1884,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 .step-command {
   display: block;
-  padding: 8px;
+  padding: var(--spacing-2);
   background: var(--bg-primary);
   border-radius: var(--radius-default);
   font-size: var(--text-xs);
@@ -1894,7 +1894,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 .approval-actions {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
   justify-content: flex-end;
 }
 
@@ -1903,24 +1903,24 @@ watch(hasActiveWorkflows, (hasActive) => {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
-  padding: 24px;
+  padding: var(--spacing-6);
 }
 
 .agents-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-5);
 }
 
 .agents-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .agents-header h3 i {
@@ -1928,7 +1928,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .btn-refresh-sm {
-  padding: 8px;
+  padding: var(--spacing-2);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: none;
@@ -1949,28 +1949,28 @@ watch(hasActiveWorkflows, (hasActive) => {
 .loading-inline {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 20px;
+  gap: var(--spacing-3);
+  padding: var(--spacing-5);
   color: var(--text-tertiary);
 }
 
 .agents-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .agent-card {
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
-  padding: 16px;
+  padding: var(--spacing-4);
 }
 
 .agent-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: var(--spacing-2-5);
+  margin-bottom: var(--spacing-3);
 }
 
 .agent-header i {
@@ -1986,8 +1986,8 @@ watch(hasActiveWorkflows, (hasActive) => {
 .agent-capabilities {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 12px;
+  gap: var(--spacing-1-5);
+  margin-bottom: var(--spacing-3);
 }
 
 .capability-tag {
@@ -2001,13 +2001,13 @@ watch(hasActiveWorkflows, (hasActive) => {
 .agent-performance {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .agent-performance .perf-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .agent-performance .label {
@@ -2052,7 +2052,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   transition: all var(--duration-200);
 }
 
@@ -2076,7 +2076,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   transition: all var(--duration-200);
 }
 
@@ -2095,7 +2095,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   transition: all var(--duration-200);
 }
 

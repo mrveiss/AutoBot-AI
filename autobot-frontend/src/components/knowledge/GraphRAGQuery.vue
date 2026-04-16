@@ -374,7 +374,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  margin: 0;
+  margin: var(--spacing-0);
   flex: 1;
 }
 
@@ -426,7 +426,7 @@ onMounted(() => {
 }
 
 .form-group.compact {
-  margin-bottom: 0;
+  margin-bottom: var(--spacing-0);
 }
 
 .form-group label {
@@ -499,7 +499,7 @@ onMounted(() => {
 
 .toggle-label input[type="checkbox"] {
   width: auto;
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .toggle-text {
@@ -583,7 +583,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .metrics-badges {
@@ -663,7 +663,7 @@ onMounted(() => {
   font-size: var(--text-sm);
   color: var(--text-primary);
   line-height: 1.6;
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .result-source {
@@ -703,7 +703,7 @@ onMounted(() => {
 }
 
 .no-results p {
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .no-results .hint {

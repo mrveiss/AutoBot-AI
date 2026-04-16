@@ -400,7 +400,7 @@ onMounted(() => {
 }
 
 .header-content h2 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-2xl);
   color: var(--text-primary);
 }
@@ -549,7 +549,7 @@ onMounted(() => {
 }
 
 .panel-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-base);
   color: var(--text-primary);
 }
@@ -797,7 +797,7 @@ onMounted(() => {
   display: flex;
   align-items: flex-end;
   height: 120px;
-  gap: 4px;
+  gap: var(--spacing-1);
   padding-top: var(--spacing-4);
 }
 
@@ -892,7 +892,7 @@ onMounted(() => {
 }
 
 .modal-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-primary);
 }
 

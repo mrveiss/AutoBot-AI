@@ -249,7 +249,7 @@ const getEfficiencyClass = (score: number): string => {
 }
 
 .card-header-content h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--color-info);
   font-size: var(--text-base);
   display: flex;

@@ -169,8 +169,8 @@ defineExpose({
 }
 
 .terminal-line {
-  margin: 0;
-  padding: 0;
+  margin: var(--spacing-0);
+  padding: var(--spacing-0);
   min-height: 1.4em;
 }
 

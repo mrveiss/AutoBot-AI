@@ -200,7 +200,7 @@ watch(() => props.documentId, loadOverview)
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .overview-header h4 i {
@@ -217,7 +217,7 @@ watch(() => props.documentId, loadOverview)
   color: var(--text-secondary);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .header-stat i {
@@ -332,7 +332,7 @@ watch(() => props.documentId, loadOverview)
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .sections-list h5 i {

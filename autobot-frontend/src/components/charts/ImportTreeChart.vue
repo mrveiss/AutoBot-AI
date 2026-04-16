@@ -833,7 +833,7 @@ onUnmounted(() => {
 }
 
 .chart-title {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-lg);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
@@ -843,7 +843,7 @@ onUnmounted(() => {
   display: block;
   font-size: var(--text-sm);
   color: var(--text-secondary);
-  margin-top: 4px;
+  margin-top: var(--spacing-1);
 }
 
 .chart-loading,
@@ -908,7 +908,7 @@ onUnmounted(() => {
   cursor: pointer;
   text-decoration: underline;
   font-size: var(--text-sm);
-  padding: 0;
+  padding: var(--spacing-0);
 }
 
 .tree-container {
@@ -958,7 +958,7 @@ onUnmounted(() => {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   background: var(--bg-primary);
-  padding: 2px;
+  padding: var(--spacing-0-5);
 }
 
 .view-toggle button {
@@ -1124,7 +1124,7 @@ onUnmounted(() => {
   color: var(--text-secondary);
   cursor: pointer;
   font-size: var(--text-lg);
-  padding: 0;
+  padding: var(--spacing-0);
   width: 24px;
   height: 24px;
   display: flex;
@@ -1146,7 +1146,7 @@ onUnmounted(() => {
 .detail-row {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .detail-label {
@@ -1292,7 +1292,7 @@ onUnmounted(() => {
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-bottom: 4px;
+  margin-bottom: var(--spacing-1);
 }
 
 .section-icon {
@@ -1302,7 +1302,7 @@ onUnmounted(() => {
 .import-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
   padding-left: var(--spacing-2);
 }
 

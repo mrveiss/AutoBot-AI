@@ -318,7 +318,7 @@ const formatCellValue = (value: any, column: TableColumn) => {
 .header-content {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .sort-indicator {
@@ -393,7 +393,7 @@ const formatCellValue = (value: any, column: TableColumn) => {
 /* Selection Cells */
 .select-cell {
   width: 40px;
-  padding: 8px;
+  padding: var(--spacing-2);
   text-align: center;
 }
 
@@ -409,7 +409,7 @@ const formatCellValue = (value: any, column: TableColumn) => {
 .actions-cell {
   width: 120px;
   text-align: right;
-  padding-right: 16px;
+  padding-right: var(--spacing-4);
 }
 
 .actions-cell {
@@ -435,7 +435,7 @@ const formatCellValue = (value: any, column: TableColumn) => {
 }
 
 .empty-text {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
 }
 

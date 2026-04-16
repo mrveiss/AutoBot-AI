@@ -134,13 +134,13 @@ onMounted(() => {
   font-size: var(--text-2xl);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .page-subtitle {
   font-size: var(--text-sm);
   color: var(--text-tertiary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .header-actions {
@@ -199,7 +199,7 @@ onMounted(() => {
   border: none;
   color: currentColor;
   cursor: pointer;
-  padding: 0;
+  padding: var(--spacing-0);
   flex-shrink: 0;
 }
 </style>

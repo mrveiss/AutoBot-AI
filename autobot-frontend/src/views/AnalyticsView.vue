@@ -157,7 +157,7 @@ const isDevToolsActive = computed(() => {
 }
 
 .page-title {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-2xl);
   font-weight: 600;
   color: var(--text-primary);
@@ -183,7 +183,7 @@ const isDevToolsActive = computed(() => {
 
 .nav-tabs {
   display: flex;
-  gap: 2px;
+  gap: var(--spacing-0-5);
   padding: 0 32px;
   max-width: 1400px;
   margin: 0 auto;
@@ -193,7 +193,7 @@ const isDevToolsActive = computed(() => {
 .nav-tab {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   padding: 12px 16px;
   font-size: var(--text-sm);
   font-weight: 500;
@@ -251,13 +251,13 @@ const isDevToolsActive = computed(() => {
 
   .nav-tabs {
     padding: 0 16px;
-    gap: 0;
+    gap: var(--spacing-0);
   }
 
   .nav-tab {
     padding: 10px 12px;
     font-size: var(--text-sm);
-    gap: 6px;
+    gap: var(--spacing-1-5);
   }
 
   .tab-icon {
@@ -266,7 +266,7 @@ const isDevToolsActive = computed(() => {
   }
 
   .analytics-router-view {
-    padding: 16px;
+    padding: var(--spacing-4);
   }
 }
 

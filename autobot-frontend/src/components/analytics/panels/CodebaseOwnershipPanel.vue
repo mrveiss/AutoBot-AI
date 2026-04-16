@@ -439,8 +439,8 @@ function formatFactorName(factor: string): string {
 
 <style scoped>
 .ownership-section {
-  margin-top: 32px;
-  padding: 24px;
+  margin-top: var(--spacing-8);
+  padding: var(--spacing-6);
   background: rgba(30, 41, 59, 0.5);
   border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
@@ -449,9 +449,9 @@ function formatFactorName(factor: string): string {
 .ownership-section h3 {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
   color: var(--text-primary);
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-4);
   font-size: 1.2em;
   font-weight: 600;
 }
@@ -465,8 +465,8 @@ function formatFactorName(factor: string): string {
 .ownership-section .success-state {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 16px;
+  gap: var(--spacing-2-5);
+  padding: var(--spacing-4);
   border-radius: var(--radius-lg);
 }
 
@@ -491,10 +491,10 @@ function formatFactorName(factor: string): string {
 /* Ownership Tabs */
 .ownership-tabs {
   display: flex;
-  gap: 8px;
-  margin-bottom: 20px;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-5);
   border-bottom: 1px solid rgba(71, 85, 105, 0.5);
-  padding-bottom: 12px;
+  padding-bottom: var(--spacing-3);
 }
 
 .ownership-tabs .tab-btn {
@@ -506,7 +506,7 @@ function formatFactorName(factor: string): string {
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
   font-size: 0.9em;
   transition: all var(--duration-200) var(--ease-out);
 }
@@ -536,17 +536,17 @@ function formatFactorName(factor: string): string {
 
 /* Ownership Overview */
 .ownership-overview .ownership-metrics {
-  margin-top: 20px;
+  margin-top: var(--spacing-5);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .ownership-metrics .metric-item {
   display: grid;
   grid-template-columns: 180px 80px 1fr;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .ownership-metrics .metric-label {
@@ -590,16 +590,16 @@ function formatFactorName(factor: string): string {
 
 /* Top Contributors Preview */
 .top-contributors-preview {
-  margin-top: 24px;
+  margin-top: var(--spacing-6);
 }
 
 .top-contributors-preview h4 {
   color: var(--text-secondary);
   font-size: 1em;
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .top-contributors-preview h4 i {
@@ -609,7 +609,7 @@ function formatFactorName(factor: string): string {
 .contributor-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .contributor-item {
@@ -646,22 +646,22 @@ function formatFactorName(factor: string): string {
 
 /* Risk Distribution */
 .risk-distribution {
-  margin-top: 24px;
+  margin-top: var(--spacing-6);
 }
 
 .risk-distribution h4 {
   color: var(--text-secondary);
   font-size: 1em;
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .risk-badges {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .risk-badge {
@@ -699,11 +699,11 @@ function formatFactorName(factor: string): string {
 .ownership-contributors {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .expert-card {
-  padding: 16px;
+  padding: var(--spacing-4);
   background: rgba(17, 24, 39, 0.5);
   border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.3);
@@ -712,8 +712,8 @@ function formatFactorName(factor: string): string {
 .expert-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: var(--spacing-2-5);
+  margin-bottom: var(--spacing-3);
 }
 
 .expert-rank {
@@ -739,15 +739,15 @@ function formatFactorName(factor: string): string {
 
 .expert-stats {
   display: flex;
-  gap: 16px;
-  margin-bottom: 12px;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-3);
   flex-wrap: wrap;
 }
 
 .expert-stats .stat {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
   color: var(--text-muted);
   font-size: 0.85em;
 }
@@ -759,14 +759,14 @@ function formatFactorName(factor: string): string {
 .expert-scores {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .score-bar {
   display: grid;
   grid-template-columns: 60px 1fr 40px;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .score-label {
@@ -801,10 +801,10 @@ function formatFactorName(factor: string): string {
 }
 
 .expertise-areas {
-  margin-top: 10px;
+  margin-top: var(--spacing-2-5);
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 .area-tag {
@@ -818,16 +818,16 @@ function formatFactorName(factor: string): string {
 /* Files Tab */
 .ownership-files .directories-section,
 .ownership-files .files-section {
-  margin-bottom: 24px;
+  margin-bottom: var(--spacing-6);
 }
 
 .ownership-files h4 {
   color: var(--text-secondary);
   font-size: 1em;
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .ownership-files h4 i {
@@ -838,7 +838,7 @@ function formatFactorName(factor: string): string {
 .file-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .directory-item,
@@ -869,14 +869,14 @@ function formatFactorName(factor: string): string {
   color: var(--text-secondary);
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 0.9em;
-  margin-bottom: 6px;
+  margin-bottom: var(--spacing-1-5);
 }
 
 .dir-meta,
 .file-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--spacing-3);
   font-size: 0.85em;
 }
 
@@ -910,11 +910,11 @@ function formatFactorName(factor: string): string {
 .ownership-gaps .gaps-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .gap-item {
-  padding: 16px;
+  padding: var(--spacing-4);
   background: rgba(17, 24, 39, 0.5);
   border-radius: var(--radius-xl);
   border-left: 4px solid var(--color-error-light);
@@ -936,8 +936,8 @@ function formatFactorName(factor: string): string {
 .gap-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: var(--spacing-2-5);
+  margin-bottom: var(--spacing-2-5);
 }
 
 .gap-risk-badge {
@@ -983,10 +983,10 @@ function formatFactorName(factor: string): string {
   color: var(--chart-purple-light);
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 0.9em;
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 .gap-area i {
@@ -997,7 +997,7 @@ function formatFactorName(factor: string): string {
   color: var(--text-secondary);
   font-size: 0.9em;
   line-height: 1.4;
-  margin-bottom: 10px;
+  margin-bottom: var(--spacing-2-5);
 }
 
 .gap-recommendation {
@@ -1005,15 +1005,15 @@ function formatFactorName(factor: string): string {
   font-size: 0.85em;
   display: flex;
   align-items: flex-start;
-  gap: 6px;
-  padding: 10px;
+  gap: var(--spacing-1-5);
+  padding: var(--spacing-2-5);
   background: rgba(34, 197, 94, 0.1);
   border-radius: var(--radius-md);
 }
 
 .gap-recommendation i {
   color: var(--color-warning-light);
-  margin-top: 2px;
+  margin-top: var(--spacing-0-5);
 }
 
 /* Issue #566: Code Intelligence Section Styles */

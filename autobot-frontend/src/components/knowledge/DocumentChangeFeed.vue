@@ -328,32 +328,32 @@ onUnmounted(() => {
   background: var(--bg-card);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
+  padding: var(--spacing-6);
+  margin-bottom: var(--spacing-6);
 }
 
 .feed-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
-  padding-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
+  padding-bottom: var(--spacing-4);
   border-bottom: 1px solid var(--border-default);
 }
 
 .feed-title {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .change-badges {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .badge {
@@ -363,7 +363,7 @@ onUnmounted(() => {
   font-weight: 500;
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--spacing-1-5);
 }
 
 .badge-success {
@@ -389,8 +389,8 @@ onUnmounted(() => {
 .feed-controls {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin-bottom: 1rem;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-4);
   flex-wrap: wrap;
 }
 
@@ -398,13 +398,13 @@ onUnmounted(() => {
 .section-filter {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .filter-label {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--spacing-1-5);
   font-size: var(--text-sm);
   color: var(--text-secondary);
   white-space: nowrap;
@@ -444,7 +444,7 @@ onUnmounted(() => {
 .toggle-label {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   cursor: pointer;
   user-select: none;
 }
@@ -459,7 +459,7 @@ onUnmounted(() => {
   font-size: var(--text-sm);
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--spacing-1-5);
 }
 
 .vectorization-status {
@@ -467,28 +467,28 @@ onUnmounted(() => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   padding: 0.75rem 1rem;
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .status-header {
   font-weight: 600;
   color: var(--text-secondary);
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .status-stats {
   display: flex;
-  gap: 1rem;
+  gap: var(--spacing-4);
   flex-wrap: wrap;
 }
 
 .stat-item {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--spacing-1-5);
   font-size: var(--text-sm);
   font-weight: 500;
 }
@@ -507,25 +507,25 @@ onUnmounted(() => {
 
 .change-filters {
   display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-4);
   flex-wrap: wrap;
 }
 
 .change-list {
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .change-items {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .change-item {
   display: flex;
-  gap: 0.75rem;
-  padding: 0.75rem;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3);
   border-radius: var(--radius-md);
   transition: all var(--duration-200);
 }
@@ -564,7 +564,7 @@ onUnmounted(() => {
 .change-title {
   font-weight: 500;
   color: var(--text-primary);
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--spacing-1);
   word-break: break-word;
 }
 
@@ -576,7 +576,7 @@ onUnmounted(() => {
 
 .change-meta {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   font-size: 0.8125rem;
   color: var(--text-tertiary);
   flex-wrap: wrap;
@@ -589,8 +589,8 @@ onUnmounted(() => {
 
 .feed-actions {
   display: flex;
-  gap: 0.75rem;
-  padding-top: 1rem;
+  gap: var(--spacing-3);
+  padding-top: var(--spacing-4);
   border-top: 1px solid var(--border-default);
 }
 

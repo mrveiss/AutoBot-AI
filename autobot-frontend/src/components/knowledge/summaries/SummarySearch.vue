@@ -200,7 +200,7 @@ async function handleSearch(): Promise<void> {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .search-header h4 i {

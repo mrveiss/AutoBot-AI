@@ -956,7 +956,7 @@ watch(selectedPeriod, () => {
   font-size: var(--text-2xl);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .dashboard-subtitle {
@@ -1146,7 +1146,7 @@ watch(selectedPeriod, () => {
 }
 
 .panel-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-base);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
@@ -1853,7 +1853,7 @@ watch(selectedPeriod, () => {
 }
 
 .modal-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-lg);
   color: var(--text-primary);
 }

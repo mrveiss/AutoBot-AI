@@ -402,7 +402,7 @@ function resetEdit(): void {
 .step-explanation {
   color: var(--text-secondary);
   font-size: var(--text-sm);
-  margin: 0;
+  margin: var(--spacing-0);
   line-height: 1.5;
 }
 
@@ -441,7 +441,7 @@ function resetEdit(): void {
 .modified-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
   padding: 0.125rem 0.5rem;
   background: var(--color-warning-bg, rgba(245, 158, 11, 0.15));
   color: var(--color-warning, #f59e0b);
@@ -457,7 +457,7 @@ function resetEdit(): void {
   margin-left: auto;
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
   padding: 0.125rem 0.5rem;
   background: transparent;
   border: 1px solid var(--border-default);
@@ -522,7 +522,7 @@ function resetEdit(): void {
   gap: var(--spacing-1, 0.25rem);
   font-size: 0.8125rem;
   color: var(--color-danger, #ef4444);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .edit-actions {
@@ -534,7 +534,7 @@ function resetEdit(): void {
 .edit-action-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
   padding: 0.3125rem 0.75rem;
   border-radius: var(--radius-sm, 0.25rem);
   font-size: 0.8125rem;
@@ -588,8 +588,8 @@ function resetEdit(): void {
 }
 
 .guide-list {
-  margin: 0;
-  padding-left: 1.25rem;
+  margin: var(--spacing-0);
+  padding-left: var(--spacing-5);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-1, 0.25rem);

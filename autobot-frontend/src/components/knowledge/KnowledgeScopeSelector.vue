@@ -155,13 +155,13 @@ const handleGroupChange = () => {
 .scope-selector {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .scope-label {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -176,7 +176,7 @@ const handleGroupChange = () => {
 }
 
 .scope-dropdown {
-  padding: 0.5rem;
+  padding: var(--spacing-2);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
@@ -207,8 +207,8 @@ const handleGroupChange = () => {
 }
 
 .scope-help {
-  margin-top: 0.5rem;
-  padding: 0.75rem;
+  margin-top: var(--spacing-2);
+  padding: var(--spacing-3);
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -216,11 +216,11 @@ const handleGroupChange = () => {
 }
 
 .help-item {
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
 }
 
 .help-item:last-child {
-  margin-bottom: 0;
+  margin-bottom: var(--spacing-0);
 }
 
 .help-item strong {
@@ -228,8 +228,8 @@ const handleGroupChange = () => {
 }
 
 .group-selector {
-  margin-top: 0.75rem;
-  padding: 0.75rem;
+  margin-top: var(--spacing-3);
+  padding: var(--spacing-3);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   background-color: var(--bg-secondary);
@@ -237,7 +237,7 @@ const handleGroupChange = () => {
 
 .group-selector label {
   display: block;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -245,14 +245,14 @@ const handleGroupChange = () => {
 .group-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .group-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2);
   border-radius: var(--radius-default);
   cursor: pointer;
   transition: background-color var(--duration-200);

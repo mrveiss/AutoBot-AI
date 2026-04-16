@@ -221,7 +221,7 @@ const formatTime = (seconds: number): string => {
 
 /* Compact layout adjustments */
 .progress-compact .progress-label {
-  margin-bottom: 0;
+  margin-bottom: var(--spacing-0);
   margin-right: var(--spacing-3);
   flex-shrink: 0;
 }
@@ -231,7 +231,7 @@ const formatTime = (seconds: number): string => {
 }
 
 .progress-compact .progress-details {
-  margin-top: 0;
+  margin-top: var(--spacing-0);
   margin-left: var(--spacing-3);
   flex-shrink: 0;
 }

@@ -353,13 +353,13 @@ function selectSession(session: typeof sessions.value[0]) {
 .cell-mono { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--text-secondary); }
 .cell-url { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cell-actions { display: flex; gap: var(--spacing-3); }
-.btn-link { background: none; border: none; color: var(--color-primary); cursor: pointer; font-size: var(--text-sm); padding: 0; transition: color var(--duration-150) var(--ease-in-out); }
+.btn-link { background: none; border: none; color: var(--color-primary); cursor: pointer; font-size: var(--text-sm); padding: var(--spacing-0); transition: color var(--duration-150) var(--ease-in-out); }
 .btn-link:hover { color: var(--color-primary-hover); }
 .btn-link-danger { color: var(--color-error); }
 .btn-link-danger:hover { color: var(--color-error-hover); }
 .empty-state { text-align: center; padding: var(--spacing-12) var(--spacing-4); color: var(--text-secondary); }
 .empty-state i { font-size: var(--text-3xl); margin-bottom: var(--spacing-3); display: block; color: var(--text-muted); }
-.empty-state p { margin: 0; font-size: var(--text-sm); }
+.empty-state p { margin: var(--spacing-0); font-size: var(--text-sm); }
 @media (max-width: 768px) {
   .input-action-row { flex-direction: column; }
   .screenshots-grid { grid-template-columns: 1fr 1fr; }

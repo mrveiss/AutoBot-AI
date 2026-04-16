@@ -181,7 +181,7 @@ defineEmits<Emits>()
 
   .category-tabs {
     overflow-x: auto;
-    padding-bottom: 0.5rem;
+    padding-bottom: var(--spacing-2);
     margin-bottom: -0.5rem;
   }
 

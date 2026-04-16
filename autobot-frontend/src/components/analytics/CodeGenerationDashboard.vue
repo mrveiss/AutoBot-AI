@@ -608,7 +608,7 @@ onMounted(() => {
   font-size: var(--text-2xl);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .subtitle {
@@ -926,7 +926,7 @@ onMounted(() => {
 
 .validation-warnings ul,
 .validation-errors ul {
-  margin: 0;
+  margin: var(--spacing-0);
   padding-left: var(--spacing-6);
   font-size: 0.8125rem;
 }
@@ -956,7 +956,7 @@ onMounted(() => {
 }
 
 .changes-list ul {
-  margin: 0;
+  margin: var(--spacing-0);
   padding-left: var(--spacing-6);
   font-size: 0.8125rem;
   color: var(--color-info-light);
@@ -1003,7 +1003,7 @@ onMounted(() => {
 }
 
 .code-block {
-  margin: 0;
+  margin: var(--spacing-0);
   padding: var(--spacing-4);
   background: var(--code-bg);
   border: 1px solid var(--border-subtle);
@@ -1047,7 +1047,7 @@ onMounted(() => {
 }
 
 .diff-block {
-  margin: 0;
+  margin: var(--spacing-0);
   padding: var(--spacing-4);
   background: var(--code-bg);
   border: 1px solid var(--border-subtle);

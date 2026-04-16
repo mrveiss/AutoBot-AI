@@ -330,7 +330,7 @@ onUnmounted(() => {
 .workflow-live-dashboard {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--spacing-5);
   height: 100%;
   overflow-y: auto;
 }
@@ -339,7 +339,7 @@ onUnmounted(() => {
 .connection-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   padding: 8px 14px;
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
@@ -375,7 +375,7 @@ onUnmounted(() => {
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 .btn-reconnect:hover:not(:disabled) {
@@ -390,14 +390,14 @@ onUnmounted(() => {
 /* Stats Bar */
 .stats-bar {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
   flex-wrap: wrap;
 }
 
 .stat-chip {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   padding: 10px 16px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
@@ -432,16 +432,16 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-4);
 }
 
 .section-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: 15px;
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .section-header h3 i {
@@ -486,7 +486,7 @@ onUnmounted(() => {
 .empty-state i,
 .loading-state i {
   font-size: 40px;
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
 }
 
 .empty-state h4 {
@@ -496,7 +496,7 @@ onUnmounted(() => {
 }
 
 .empty-state p {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
 }
 
@@ -504,7 +504,7 @@ onUnmounted(() => {
 .execution-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 /* Execution Card */
@@ -517,7 +517,7 @@ onUnmounted(() => {
   transition: border-color var(--duration-200), box-shadow var(--duration-200);
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--spacing-3-5);
 }
 
 .execution-card:hover {
@@ -534,14 +534,14 @@ onUnmounted(() => {
 .card-header {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .card-title-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .card-name {
@@ -566,7 +566,7 @@ onUnmounted(() => {
 .status-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
   padding: 3px 10px;
   border-radius: var(--radius-xl);
   font-size: var(--text-xs);
@@ -586,7 +586,7 @@ onUnmounted(() => {
 .card-progress {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 .progress-track {
@@ -618,7 +618,7 @@ onUnmounted(() => {
 .step-timeline {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
   flex-wrap: wrap;
 }
 
@@ -674,7 +674,7 @@ onUnmounted(() => {
 .timeline-overflow {
   font-size: var(--text-xs);
   color: var(--text-muted);
-  padding-left: 4px;
+  padding-left: var(--spacing-1);
 }
 
 /* Card Footer */
@@ -682,19 +682,19 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .footer-meta {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .mode-tag,
 .phase-tag {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
   padding: 2px 8px;
   background: var(--bg-tertiary);
   border-radius: var(--radius-default);
@@ -706,7 +706,7 @@ onUnmounted(() => {
 .footer-time {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
   font-size: var(--text-xs);
   color: var(--text-tertiary);
 }

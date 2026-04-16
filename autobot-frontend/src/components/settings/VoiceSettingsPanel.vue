@@ -306,7 +306,7 @@ async function handleDelete(voiceId: string, name: string) {
   border: none;
   color: var(--text-tertiary, #64748b);
   cursor: pointer;
-  padding: 4px;
+  padding: var(--spacing-1);
   border-radius: var(--radius-sm, 4px);
 }
 
@@ -478,7 +478,7 @@ async function handleDelete(voiceId: string, name: string) {
 .personality-voice-details {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--spacing-0-5);
 }
 
 .personality-voice-hint strong {

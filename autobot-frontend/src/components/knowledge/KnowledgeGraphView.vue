@@ -166,7 +166,7 @@ function navigateTo(path: string): void {
 }
 
 .sidebar-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-base);
   font-weight: var(--font-bold);
   color: var(--text-primary);
@@ -351,7 +351,7 @@ function navigateTo(path: string): void {
 .feature-card p {
   font-size: var(--text-sm);
   color: var(--text-secondary);
-  margin: 0;
+  margin: var(--spacing-0);
   line-height: 1.5;
 }
 

@@ -237,7 +237,7 @@ onMounted(async () => {
   font-size: var(--text-lg);
   font-weight: var(--font-bold);
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -335,7 +335,7 @@ onMounted(async () => {
   font-size: var(--text-sm);
   color: var(--text-secondary);
   line-height: 1.6;
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 /* Properties */

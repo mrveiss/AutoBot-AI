@@ -210,7 +210,7 @@ function toggleDetails(id: string) {
 }
 
 .header-content h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-base);
   font-weight: var(--font-semibold);
   display: flex;
@@ -415,7 +415,7 @@ function toggleDetails(id: string) {
   color: var(--color-primary);
   font-size: var(--text-xs);
   cursor: pointer;
-  padding: 0;
+  padding: var(--spacing-0);
 }
 
 .details-toggle:hover {
@@ -433,7 +433,7 @@ function toggleDetails(id: string) {
   padding: var(--spacing-2);
   border-radius: var(--radius-default);
   overflow-x: auto;
-  margin: 0;
+  margin: var(--spacing-0);
   white-space: pre-wrap;
   word-break: break-word;
 }

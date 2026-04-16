@@ -41,7 +41,7 @@ defineProps<{
 }
 
 .panel-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-base);
   font-weight: var(--font-medium);
   color: var(--text-primary);

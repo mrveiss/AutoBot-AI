@@ -206,7 +206,7 @@ const { formatDate } = useKnowledgeBase()
 .command-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .command-tag {
@@ -223,7 +223,7 @@ const { formatDate } = useKnowledgeBase()
   align-items: center;
   justify-content: center;
   gap: 15px;
-  padding: 40px;
+  padding: var(--spacing-10);
   color: var(--text-muted);
   font-style: italic;
 }

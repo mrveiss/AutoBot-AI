@@ -202,7 +202,7 @@ const allCompleted = computed(() => {
   align-items: center;
   justify-content: center;
   z-index: var(--z-modal);
-  padding: 1rem;
+  padding: var(--spacing-4);
 }
 
 .modal-container {
@@ -221,14 +221,14 @@ const allCompleted = computed(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   border-bottom: 2px solid var(--border-default);
 }
 
 .header-content {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .header-content i {
@@ -240,7 +240,7 @@ const allCompleted = computed(() => {
   font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .close-btn {
@@ -264,7 +264,7 @@ const allCompleted = computed(() => {
 
 /* Progress Summary */
 .progress-summary {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-default);
 }
@@ -272,15 +272,15 @@ const allCompleted = computed(() => {
 .summary-stats {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
 }
 
 .stat-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 1rem;
+  padding: var(--spacing-4);
   background: var(--bg-card);
   border-radius: var(--radius-lg);
   border: 2px solid var(--border-default);
@@ -296,7 +296,7 @@ const allCompleted = computed(() => {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
   font-weight: 500;
-  margin-top: 0.25rem;
+  margin-top: var(--spacing-1);
 }
 
 .stat-completed .stat-value {
@@ -315,7 +315,7 @@ const allCompleted = computed(() => {
 .overall-progress {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .progress-bar {
@@ -345,7 +345,7 @@ const allCompleted = computed(() => {
 .document-list {
   flex: 1;
   overflow-y: auto;
-  padding: 1rem;
+  padding: var(--spacing-4);
   max-height: 400px;
 }
 
@@ -353,8 +353,8 @@ const allCompleted = computed(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.75rem;
-  margin-bottom: 0.5rem;
+  padding: var(--spacing-3);
+  margin-bottom: var(--spacing-2);
   background: var(--bg-card);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
@@ -369,7 +369,7 @@ const allCompleted = computed(() => {
 .document-info {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   flex: 1;
   min-width: 0;
 }
@@ -413,7 +413,7 @@ const allCompleted = computed(() => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 
 .document-name {
@@ -437,8 +437,8 @@ const allCompleted = computed(() => {
 .document-progress {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-right: 0.75rem;
+  gap: var(--spacing-2);
+  margin-right: var(--spacing-3);
 }
 
 .mini-progress-bar {
@@ -467,8 +467,8 @@ const allCompleted = computed(() => {
 .modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 1.5rem;
+  gap: var(--spacing-3);
+  padding: var(--spacing-6);
   border-top: 2px solid var(--border-default);
   background: var(--bg-secondary);
 }
@@ -476,7 +476,7 @@ const allCompleted = computed(() => {
 .action-btn {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   padding: 0.625rem 1.25rem;
   border-radius: var(--radius-lg);
   font-weight: 500;

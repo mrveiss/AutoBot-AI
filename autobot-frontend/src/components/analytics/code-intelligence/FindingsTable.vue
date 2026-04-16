@@ -373,7 +373,7 @@ code {
 }
 
 .detail-row td {
-  padding: 0;
+  padding: var(--spacing-0);
   background: var(--bg-tertiary);
 }
 
@@ -397,7 +397,7 @@ code {
 
 .detail-section p {
   color: var(--text-secondary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 /* Issue #901: Electric blue for OWASP tags */
@@ -434,7 +434,7 @@ code {
   transition: all var(--duration-150) var(--ease-in-out);
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 .btn-small:hover {
