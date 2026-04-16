@@ -79,35 +79,35 @@ def _make_indexer(tmp_path: Path):
 
 
 @requires_tree_sitter
-def test_index_python_file_upserts_nodes(tmp_path):
+async def test_index_python_file_upserts_nodes(tmp_path):
     src = tmp_path / "module.py"
     src.write_bytes(SIMPLE_PYTHON)
     indexer = _make_indexer(tmp_path)
-    result = indexer.index_file(str(src), root_dir=str(tmp_path))
+    result = await indexer.index_file(str(src), root_dir=str(tmp_path))
     assert result.success > 0
     assert indexer._collection.upsert.called
 
 
-def test_index_unchanged_file_skips(tmp_path):
+async def test_index_unchanged_file_skips(tmp_path):
     src = tmp_path / "module.py"
     src.write_bytes(SIMPLE_PYTHON)
     indexer = _make_indexer(tmp_path)
-    indexer.index_file(str(src), root_dir=str(tmp_path))
+    await indexer.index_file(str(src), root_dir=str(tmp_path))
     call_count_first = indexer._collection.upsert.call_count
 
-    result = indexer.index_file(str(src), root_dir=str(tmp_path))
+    result = await indexer.index_file(str(src), root_dir=str(tmp_path))
     assert result.skipped == 1
     assert indexer._collection.upsert.call_count == call_count_first
 
 
 @requires_tree_sitter
-def test_force_reindex_bypasses_cache(tmp_path):
+async def test_force_reindex_bypasses_cache(tmp_path):
     src = tmp_path / "module.py"
     src.write_bytes(SIMPLE_PYTHON)
     indexer = _make_indexer(tmp_path)
-    indexer.index_file(str(src), root_dir=str(tmp_path))
+    await indexer.index_file(str(src), root_dir=str(tmp_path))
     call_count_first = indexer._collection.upsert.call_count
 
-    result = indexer.index_file(str(src), root_dir=str(tmp_path), force=True)
+    result = await indexer.index_file(str(src), root_dir=str(tmp_path), force=True)
     assert result.success > 0
     assert indexer._collection.upsert.call_count > call_count_first
