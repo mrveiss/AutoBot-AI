@@ -303,6 +303,34 @@ class CodeIndexer:
 
         return result
 
+    async def index_directory(
+        self,
+        root_dir: str,
+        force: bool = False,
+    ) -> CodeIndexResult:
+        """Walk *root_dir* recursively and index every supported source file.
+
+        Skips hidden directories (starting with '.') and node_modules/venv/
+        directories to avoid indexing third-party code.
+        """
+        aggregate = CodeIndexResult()
+        root = Path(root_dir)
+        _SKIP_DIRS = {".git", "node_modules", "venv", ".venv", "__pycache__", ".mypy_cache"}
+        for path in sorted(root.rglob("*")):
+            if path.is_dir():
+                continue
+            # Skip files inside ignored directories
+            if any(part.startswith(".") or part in _SKIP_DIRS for part in path.parts):
+                continue
+            if path.suffix.lower() not in _EXTRACTORS:
+                continue
+            result = await self.index_file(str(path), root_dir=root_dir, force=force)
+            aggregate.success += result.success
+            aggregate.failed += result.failed
+            aggregate.skipped += result.skipped
+            aggregate.errors.extend(result.errors)
+        return aggregate
+
     async def _upsert_node(self, node: dict, rel_path: str, calls_by_source: dict[str, list[str]]) -> bool:
         content = (
             f"{node['kind'].upper()} {node['name']}\n"

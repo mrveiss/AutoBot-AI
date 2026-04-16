@@ -1144,6 +1144,62 @@ async def get_populate_status(task_id: str):
 
 
 # =========================================================================
+# Issue #4835: Code Indexer endpoint — wire CodeIndexer into production
+# =========================================================================
+
+
+@with_error_handling(
+    operation="index_code",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.post("/index/code")
+async def index_code(request: dict = None):
+    """Index source files in *root_dir* via AST-based CodeIndexer (#4835).
+
+    Body (all optional):
+      ``root_dir`` — directory to scan (default: project root)
+      ``force``    — skip hash cache and re-index everything (default: false)
+
+    Returns a summary of success/failed/skipped node counts.
+    """
+    import asyncio
+
+    from constants.path_constants import PATH
+    from services.knowledge.code_indexer import CodeIndexer
+    from services.knowledge.doc_indexer import get_doc_indexer_service
+
+    params = request or {}
+    root_dir = str(params.get("root_dir") or PATH.PROJECT_ROOT)
+    force = bool(params.get("force", False))
+
+    doc_svc = get_doc_indexer_service()
+    if not await doc_svc.initialize():
+        return {"status": "error", "message": "Failed to initialize ChromaDB / embed model"}
+
+    # Reuse the same ChromaDB collection and embed model as DocIndexerService
+    # so code nodes live alongside doc chunks in the same vector store.
+    code_indexer = CodeIndexer(
+        collection=doc_svc._collection,
+        embed_model=doc_svc._embed_model,
+    )
+
+    result = await code_indexer.index_directory(root_dir, force)
+
+    logger.info(
+        "CodeIndexer scan complete: root=%s success=%d failed=%d skipped=%d",
+        root_dir, result.success, result.failed, result.skipped,
+    )
+    return {
+        "status": "ok",
+        "root_dir": root_dir,
+        "success": result.success,
+        "failed": result.failed,
+        "skipped": result.skipped,
+        "errors": result.errors[:20],  # cap to avoid huge response
+    }
+
+
+# =========================================================================
 # Issue #423: Scan Man Pages Endpoint with Structured Parsing
 # =========================================================================
 
