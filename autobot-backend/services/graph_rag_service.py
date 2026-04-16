@@ -56,6 +56,7 @@ from advanced_rag_optimizer import RAGMetrics, SearchResult
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import error_boundary
 from autobot_shared.logging_manager import get_llm_logger
+from knowledge.search_components.reranking import provenance_adjustment
 from services.rag_service import RAGService
 
 logger = get_llm_logger("graph_rag_service")
@@ -465,6 +466,16 @@ class GraphRAGService:
         """
         content_hashes = self._build_content_hash_map(results)
         deduplicated = list(content_hashes.values())
+
+        # Issue #4914: apply provenance boost/penalty to hybrid_score before
+        # ranking so that graph-expanded results with "extracted" relations rank
+        # above "ambiguous" ones when base scores are equal.
+        for r in deduplicated:
+            prov = r.metadata.get("source_provenance") if hasattr(r, "metadata") else None
+            adjustment = provenance_adjustment(prov)
+            if adjustment != 0.0:
+                r.hybrid_score = r.hybrid_score + adjustment
+
         final_results = self._assign_relevance_ranks(deduplicated, max_results)
 
         logger.info(
