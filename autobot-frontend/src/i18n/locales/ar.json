@@ -5223,10 +5223,10 @@
   },
   "operations": {
     "view": {
-      "title": "Operations",
-      "subtitle": "Monitor and manage ongoing operations",
-      "refresh": "Refresh",
-      "loadError": "Failed to load operations"
+      "title": "العمليات طويلة الأمد",
+      "subtitle": "مراقبة المهام الخلفية وإدارتها",
+      "refresh": "تحديث",
+      "loadError": "فشل تحميل العمليات"
     },
     "detail": {
       "close": "إغلاق",
@@ -5273,12 +5273,6 @@
       "resume": "Resume",
       "viewDetails": "View Details",
       "showingCount": "Showing {shown} of {total} operations"
-    },
-    "view": {
-      "title": "Long-Running Operations",
-      "subtitle": "Monitor and manage background tasks",
-      "refresh": "Refresh",
-      "loadError": "Failed to load operations"
     },
     "panel": {
       "selectOperation": "Select an operation to view details"

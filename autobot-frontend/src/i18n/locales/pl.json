@@ -5222,10 +5222,10 @@
   },
   "operations": {
     "view": {
-      "title": "Operations",
-      "subtitle": "Monitor and manage ongoing operations",
-      "refresh": "Refresh",
-      "loadError": "Failed to load operations"
+      "title": "Długotrwałe operacje",
+      "subtitle": "Monitoruj i zarządzaj zadaniami w tle",
+      "refresh": "Odśwież",
+      "loadError": "Nie udało się załadować operacji"
     },
     "detail": {
       "close": "Zamknij",
@@ -5271,12 +5271,6 @@
       "resume": "Wznów",
       "viewDetails": "Zobacz szczegóły",
       "showingCount": "Wyświetlanie {shown} z {total} operacji"
-    },
-    "view": {
-      "title": "Long-Running Operations",
-      "subtitle": "Monitor and manage background tasks",
-      "refresh": "Refresh",
-      "loadError": "Failed to load operations"
     },
     "panel": {
       "selectOperation": "Select an operation to view details"

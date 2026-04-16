@@ -6131,10 +6131,10 @@
       "allStatuses": "All Statuses"
     },
     "view": {
-      "title": "Long-Running Operations",
-      "subtitle": "Monitor and manage background tasks",
-      "refresh": "Refresh",
-      "loadError": "Failed to load operations"
+      "title": "عملیات طولانی‌مدت",
+      "subtitle": "نظارت و مدیریت وظایف پس‌زمینه",
+      "refresh": "بازخوانی",
+      "loadError": "بارگذاری عملیات ناموفق بود"
     },
     "panel": {
       "selectOperation": "Select an operation to view details"
