@@ -1175,9 +1175,7 @@ async def index_code(request: dict = None):
     # Issue #4894: Prevent directory traversal — root_dir must be within PROJECT_ROOT.
     root_dir_path = PathLib(root_dir).resolve()
     allowed_root = PathLib(PATH.PROJECT_ROOT).resolve()
-    if root_dir_path != allowed_root and not str(root_dir_path).startswith(
-        str(allowed_root) + "/"
-    ):
+    if not root_dir_path.is_relative_to(allowed_root):
         raise HTTPException(status_code=400, detail="root_dir must be within the project root")
 
     doc_svc = get_doc_indexer_service()
