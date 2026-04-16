@@ -1160,6 +1160,64 @@ class DocIndexerService:
 
         return total_result
 
+    async def search(self, query: str, n_results: int = 5) -> List[Any]:
+        """Query the autobot_docs ChromaDB collection.
+
+        Issue #4953: expose doc search so RAGService can merge results with
+        the main KB, giving the agent access to AutoBot's own documentation.
+
+        Returns SearchResult objects (from advanced_rag_optimizer).
+        Returns an empty list if not initialised, collection is empty, or on
+        any error — callers always receive a safe (possibly empty) list.
+        """
+        import asyncio
+
+        from advanced_rag_optimizer import SearchResult
+
+        if not self._initialized or self._collection is None or self._embed_model is None:
+            return []
+
+        doc_count = self._collection.count()
+        if doc_count == 0:
+            return []
+
+        k = min(n_results, doc_count)
+        try:
+            embedding: list = await asyncio.to_thread(
+                self._embed_model.get_text_embedding, query
+            )
+            raw = await asyncio.to_thread(
+                self._collection.query,
+                query_embeddings=[embedding],
+                n_results=k,
+                include=["documents", "metadatas", "distances"],
+            )
+        except Exception as exc:
+            logger.warning("autobot_docs search failed: %s", exc)
+            return []
+
+        documents = raw.get("documents", [[]])[0]
+        metadatas = raw.get("metadatas", [[]])[0]
+        distances = raw.get("distances", [[]])[0]
+
+        results = []
+        for i, (doc, meta, dist) in enumerate(zip(documents, metadatas, distances)):
+            # ChromaDB cosine distance → similarity score
+            score = max(0.0, 1.0 - dist)
+            results.append(
+                SearchResult(
+                    content=doc or "",
+                    metadata={**meta, "source": "autobot_docs"},
+                    semantic_score=score,
+                    keyword_score=0.0,
+                    hybrid_score=score,
+                    relevance_rank=i,
+                    source_path=meta.get("file_path", ""),
+                    chunk_index=int(meta.get("chunk_index", i)),
+                )
+            )
+        return results
+
 
 # ============================================================================
 # SINGLETON
