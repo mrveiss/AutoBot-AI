@@ -930,8 +930,13 @@ class TestIndexChunkOversized4665:
     # _index_chunk: oversized → split, one half fails (still non-silent)
     # ------------------------------------------------------------------
 
-    def test_index_chunk_splits_on_oversized_one_half_fails(self):
-        """Oversized: first half embeds OK, second half also oversized → True (partial)."""
+    def test_index_chunk_splits_on_oversized_one_half_still_oversized(self):
+        """Oversized: first half OK, second half oversized → recursion splits second half further.
+
+        With multi-level splitting (#4702), a still-oversized half is split
+        recursively rather than dropped.  This test verifies that the second
+        half is split into quarters (depth 1) which then succeed.
+        """
         svc = _make_service()
 
         content = "B" * 400
@@ -943,7 +948,7 @@ class TestIndexChunkOversized4665:
                 # Full chunk too large
                 raise ValueError("token limit exceeded")
             if call_count[0] == 3:
-                # Second half also too large
+                # Second half at depth 0 also too large → recursion continues
                 raise ValueError("token limit exceeded")
             return [0.2] * 128
 
@@ -951,9 +956,9 @@ class TestIndexChunkOversized4665:
         chunk = self._make_chunk(content)
         ok = svc._index_chunk(chunk, 0, 1, "docs/test.md", [], 2)
 
-        # Partial success (first half OK)
+        # Full success: first half (call 2) + two quarters of second half (calls 4+5)
         assert ok is True
-        assert svc._collection.upsert.call_count == 1
+        assert svc._collection.upsert.call_count == 3
 
     # ------------------------------------------------------------------
     # _index_chunk: oversized → split, BOTH halves fail → returns False
@@ -1001,6 +1006,156 @@ class TestIndexChunkOversized4665:
         assert any(
             "docs/oversized.md" in r.getMessage() for r in caplog.records
         ), "WARNING must include the document path"
+
+
+class TestIndexChunkMultiLevelSplit4702:
+    """Tests for multi-level recursive oversized-chunk split — Issue #4702."""
+
+    def _make_chunk(self, content: str) -> Dict[str, Any]:
+        return {
+            "content": content,
+            "section": "Section",
+            "subsection": None,
+            "file_path": "docs/test.md",
+            "doc_type": "documentation",
+            "category": "general",
+            "title": "Test Doc",
+        }
+
+    # ------------------------------------------------------------------
+    # Two-level split: halves are still too large, quarters succeed
+    # ------------------------------------------------------------------
+
+    def test_two_level_split_all_quarters_succeed(self):
+        """Chunk too large → halves too large → quarters succeed → returns True."""
+        svc = _make_service()
+
+        # Track calls to identify which content sizes fail
+        call_count = [0]
+
+        def _fake_embed(text):
+            call_count[0] += 1
+            # First 3 calls (original + 2 halves) raise oversized;
+            # subsequent calls (4 quarters) succeed.
+            if call_count[0] <= 3:
+                raise ValueError("input too large for model context length")
+            return [0.1] * 128
+
+        svc._embed_model.get_text_embedding.side_effect = _fake_embed
+        chunk = self._make_chunk("A" * 800)
+        ok = svc._index_chunk(chunk, 0, 1, "docs/test.md", [], 2)
+
+        assert ok is True
+        # 3 failed + 4 successful = 7 total embed calls
+        assert call_count[0] == 7
+        assert svc._collection.upsert.call_count == 4
+
+    # ------------------------------------------------------------------
+    # Three-level split: only some leaf nodes succeed
+    # ------------------------------------------------------------------
+
+    def test_three_level_split_partial_success(self):
+        """Three-level split where some deepest pieces succeed → True (partial)."""
+        svc = _make_service()
+
+        call_count = [0]
+
+        def _fake_embed(text):
+            call_count[0] += 1
+            # Calls 1–7 (original + 2 halves + 4 quarters) raise oversized;
+            # 8 of the 8 depth-3 pieces: first 4 succeed, last 4 fail.
+            if call_count[0] <= 7:
+                raise ValueError("token limit exceeded")
+            if call_count[0] <= 11:
+                return [0.1] * 128
+            raise ValueError("token limit exceeded")
+
+        svc._embed_model.get_text_embedding.side_effect = _fake_embed
+        chunk = self._make_chunk("B" * 1600)
+        ok = svc._index_chunk(chunk, 0, 1, "docs/test.md", [], 2)
+
+        assert ok is True
+        # At least one piece stored
+        assert svc._collection.upsert.call_count >= 1
+
+    # ------------------------------------------------------------------
+    # max_depth=4 cap: beyond depth 4, chunk is dropped (returns False
+    # only if no sibling succeeded)
+    # ------------------------------------------------------------------
+
+    def test_always_oversized_drops_at_max_depth(self):
+        """If every embed call raises oversized, chunk is dropped at max_depth → False."""
+        svc = _make_service()
+        svc._embed_model.get_text_embedding.side_effect = ValueError(
+            "input too large for model context length"
+        )
+        chunk = self._make_chunk("C" * 3200)
+        ok = svc._index_chunk(chunk, 0, 1, "docs/test.md", [], 2)
+
+        assert ok is False
+        svc._collection.upsert.assert_not_called()
+
+    # ------------------------------------------------------------------
+    # Chunk IDs at each depth carry the _L/_R suffix chain
+    # ------------------------------------------------------------------
+
+    def test_split_chunk_ids_carry_depth_suffix(self):
+        """Sub-chunk IDs at depth 1 must end with _L0 or _R0."""
+        svc = _make_service()
+
+        call_count = [0]
+        upserted_ids = []
+
+        def _fake_embed(text):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise ValueError("too large")
+            return [0.1] * 128
+
+        def _fake_upsert(ids, embeddings, documents, metadatas):
+            upserted_ids.extend(ids)
+
+        svc._embed_model.get_text_embedding.side_effect = _fake_embed
+        svc._collection.upsert.side_effect = _fake_upsert
+
+        chunk = self._make_chunk("D" * 400)
+        svc._index_chunk(chunk, 0, 1, "docs/test.md", [], 2)
+
+        # Both sub-IDs must end with the depth-0 suffix
+        assert any(uid.endswith("_L0") for uid in upserted_ids), (
+            f"Expected _L0 suffix in {upserted_ids}"
+        )
+        assert any(uid.endswith("_R0") for uid in upserted_ids), (
+            f"Expected _R0 suffix in {upserted_ids}"
+        )
+
+    # ------------------------------------------------------------------
+    # Non-oversized error at any depth stops recursion immediately
+    # ------------------------------------------------------------------
+
+    def test_non_oversized_error_at_depth_1_drops_that_branch(self):
+        """Non-oversized error at depth 1 → that branch is dropped, no deeper recursion."""
+        svc = _make_service()
+
+        call_count = [0]
+
+        def _fake_embed(text):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                # Original chunk: oversized
+                raise ValueError("input too large")
+            if call_count[0] == 2:
+                # Left half: non-oversized error
+                raise ConnectionError("network error")
+            return [0.1] * 128
+
+        svc._embed_model.get_text_embedding.side_effect = _fake_embed
+        chunk = self._make_chunk("E" * 400)
+        ok = svc._index_chunk(chunk, 0, 1, "docs/test.md", [], 2)
+
+        # Right half succeeded → partial success
+        assert ok is True
+        assert svc._collection.upsert.call_count == 1
 
 
 class TestGetDocIndexerService:
