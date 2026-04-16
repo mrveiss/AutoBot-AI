@@ -254,13 +254,22 @@ def _parse_cron_field(field_str: str, min_val: int, max_val: int) -> List[int]:
     return out
 
 
+def _normalize_dow_field(field: str) -> str:
+    """Normalize day-of-week field: replace standalone '7' tokens with '0' (both mean Sunday)."""
+    import re
+
+    return re.sub(r"(?<![0-9])7(?![0-9])", "0", field)
+
+
 def validate_cron_expression(expression: str) -> bool:
     """Return True when *expression* is a valid 5-field cron string."""
     try:
         parts = expression.split()
         if len(parts) != 5:
             return False
-        for part, (lo, hi) in zip(parts, _CRON_RANGES):
+        for i, (part, (lo, hi)) in enumerate(zip(parts, _CRON_RANGES)):
+            if i == 4:
+                part = _normalize_dow_field(part)
             _parse_cron_field(part, lo, hi)
         return True
     except (ValueError, TypeError):
@@ -284,7 +293,7 @@ def next_cron_run(expression: str, after: Optional[datetime] = None) -> datetime
     hours = _parse_cron_field(parts[1], 0, 23)
     days = _parse_cron_field(parts[2], 1, 31)
     months = _parse_cron_field(parts[3], 1, 12)
-    weekdays = _parse_cron_field(parts[4], 0, 6)
+    weekdays = _parse_cron_field(_normalize_dow_field(parts[4]), 0, 6)
 
     base = after or datetime.now(timezone.utc)
     # Advance by at least one minute
