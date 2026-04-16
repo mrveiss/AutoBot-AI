@@ -1277,7 +1277,7 @@ async def _start_community_clustering_loop(app: FastAPI) -> None:
                 promoted = await CommunityClusterer(mesh_db).run()
                 logger.info("CommunityClusterer periodic run: %d anchors promoted", len(promoted))
             except ImportError as exc:
-                logger.critical(
+                logger.warning(
                     "graspologic not installed — community clustering disabled. "
                     "Install with: pip install graspologic. Error: %s",
                     exc,
