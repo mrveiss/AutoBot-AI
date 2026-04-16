@@ -977,7 +977,9 @@ async def _autonomous_loop_runner(llm_service: Any) -> None:
         """Return True when the current UTC time matches *cron_expr*.
 
         Evaluates all 5 standard cron fields: minute hour day-of-month month day-of-week.
-        Day-of-week uses 0=Monday convention (Python ``weekday()``).
+        Day-of-week uses standard cron convention: 0=Sunday, 1=Monday, …, 6=Saturday.
+        Conversion to Python weekday(): ``(cron_dow - 1) % 7``
+          cron 0 (Sun) → Python 6, cron 1 (Mon) → Python 0, …, cron 6 (Sat) → Python 5.
         """
         try:
             parts = cron_expr.split()
@@ -988,7 +990,7 @@ async def _autonomous_loop_runner(llm_service: Any) -> None:
             hour_match = parts[1] == "*" or int(parts[1]) == now.hour
             dom_match = parts[2] == "*" or int(parts[2]) == now.day
             month_match = parts[3] == "*" or int(parts[3]) == now.month
-            dow_match = parts[4] == "*" or int(parts[4]) == now.weekday()
+            dow_match = parts[4] == "*" or (int(parts[4]) - 1) % 7 == now.weekday()
             return minute_match and hour_match and dom_match and month_match and dow_match
         except Exception:
             return False
