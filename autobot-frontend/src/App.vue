@@ -859,6 +859,7 @@ export default {
       // System status methods (from composable)
       toggleSystemStatus,
       getSystemStatusTooltip,
+      getSystemStatusAriaLabel,
       getSystemStatusText,
       getSystemStatusDescription,
       refreshSystemStatus,
