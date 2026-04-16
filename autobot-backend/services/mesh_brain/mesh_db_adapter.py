@@ -72,6 +72,10 @@ class MeshDBAdapter:
         """Increment access_count and set last_accessed for the given node UUIDs."""
         await self._db.update_access_count(node_ids)
 
+    async def get_anchor_neighbors(self, seed_ids: list[str]) -> list[str]:
+        """Return IDs of anchor nodes adjacent to any seed_id (#4819)."""
+        return await self._db.get_anchor_neighbors(seed_ids)
+
     # ------------------------------------------------------------------
     # MeshGraph protocol — StalenessPropagor surface
     # ------------------------------------------------------------------

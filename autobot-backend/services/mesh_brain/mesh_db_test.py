@@ -474,3 +474,37 @@ class TestGetGraphDensity:
         density = await db.get_graph_density()
 
         assert density == 0.0
+
+
+# =============================================================================
+# Tests — get_anchor_neighbors
+# =============================================================================
+
+
+class TestGetAnchorNeighbors:
+    """MeshDB.get_anchor_neighbors returns anchor node IDs adjacent to seeds."""
+
+    @pytest.mark.asyncio
+    async def test_get_anchor_neighbors_returns_anchor_nodes_adjacent_to_seeds(self):
+        """get_anchor_neighbors returns UUIDs of anchor nodes reachable from seed_ids."""
+        anchor_id = "aaaaaaaa-0000-0000-0000-000000000001"
+        seed_id = "bbbbbbbb-0000-0000-0000-000000000002"
+
+        rows = [{"id": anchor_id}]
+        engine, _ = _make_engine(mappings=rows)
+        db = MeshDB(engine)
+
+        result = await db.get_anchor_neighbors([seed_id])
+
+        assert result == [anchor_id]
+
+    @pytest.mark.asyncio
+    async def test_get_anchor_neighbors_empty_seeds_returns_empty(self):
+        """get_anchor_neighbors returns [] without touching DB when seed_ids is empty."""
+        engine, conn = _make_engine()
+        db = MeshDB(engine)
+
+        result = await db.get_anchor_neighbors([])
+
+        assert result == []
+        conn.execute.assert_not_awaited()

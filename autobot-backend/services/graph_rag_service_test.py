@@ -505,3 +505,72 @@ async def test_get_metrics(graph_rag_service):
     assert "graph_weight" in metrics
     assert "entity_extraction_enabled" in metrics
     assert "graph_initialized" in metrics
+
+
+# ============================================================================
+# Source Provenance Tests
+# ============================================================================
+
+
+def test_create_search_result_includes_source_extracted():
+    """source='extracted' propagates into metadata when relation has origin='extracted'."""
+    rag = AsyncMock()
+    graph = AsyncMock()
+    graph.initialized = True
+    svc = GraphRAGService(rag, graph)
+
+    entity = {"id": "e1", "type": "module", "name": "auth", "observations": ["handles login"]}
+    relation = {"type": "imports", "metadata": {"strength": 0.9, "origin": "extracted"}}
+
+    result = svc._create_search_result_from_entity(entity, relation, "outgoing", 1.0, 2)
+
+    assert result is not None
+    assert result.metadata["source_provenance"] == "extracted"
+
+
+def test_create_search_result_includes_source_inferred():
+    """source='inferred' propagates when origin is absent (defaults to inferred)."""
+    rag = AsyncMock()
+    graph = AsyncMock()
+    graph.initialized = True
+    svc = GraphRAGService(rag, graph)
+
+    entity = {"id": "e2", "type": "function", "name": "login", "observations": ["validates token"]}
+    relation = {"type": "calls", "metadata": {"strength": 0.5}}
+
+    result = svc._create_search_result_from_entity(entity, relation, "incoming", 0.8, 2)
+
+    assert result is not None
+    assert result.metadata["source_provenance"] == "inferred"
+
+
+def test_create_search_result_includes_source_ambiguous():
+    """source='ambiguous' passes through when origin='ambiguous'."""
+    rag = AsyncMock()
+    graph = AsyncMock()
+    graph.initialized = True
+    svc = GraphRAGService(rag, graph)
+
+    entity = {"id": "e3", "type": "module", "name": "utils", "observations": ["helpers"]}
+    relation = {"type": "related", "metadata": {"strength": 0.4, "origin": "ambiguous"}}
+
+    result = svc._create_search_result_from_entity(entity, relation, "outgoing", 0.6, 2)
+
+    assert result is not None
+    assert result.metadata["source_provenance"] == "ambiguous"
+
+
+def test_create_search_result_unknown_origin_defaults_to_inferred():
+    """Unknown origin value falls back to 'inferred' via whitelist guard."""
+    rag = AsyncMock()
+    graph = AsyncMock()
+    graph.initialized = True
+    svc = GraphRAGService(rag, graph)
+
+    entity = {"id": "e4", "type": "class", "name": "Config", "observations": ["settings"]}
+    relation = {"type": "uses", "metadata": {"strength": 0.7, "origin": "garbage_value"}}
+
+    result = svc._create_search_result_from_entity(entity, relation, "incoming", 0.9, 2)
+
+    assert result is not None
+    assert result.metadata["source_provenance"] == "inferred"
