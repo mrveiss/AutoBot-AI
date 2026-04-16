@@ -255,10 +255,31 @@ def _parse_cron_field(field_str: str, min_val: int, max_val: int) -> List[int]:
 
 
 def _normalize_dow_field(field: str) -> str:
-    """Normalize day-of-week field: replace standalone '7' tokens with '0' (both mean Sunday)."""
+    """Normalize day-of-week: replace 7 with 0 (both mean Sunday).
+
+    Handles scalars (7->0), lists (0,7->0,0), ranges (1-7->1-6,0),
+    and steps (*/7 left unchanged -- step-of-7 is unusual but valid).
+    """
     import re
 
-    return re.sub(r"(?<![0-9])7(?![0-9])", "0", field)
+    def _replace_token(token: str) -> str:
+        # Range like "1-7" or "0-7"
+        m = re.fullmatch(r"(\d+)-(\d+)", token)
+        if m:
+            lo, hi = int(m.group(1)), int(m.group(2))
+            if hi == 7:
+                if lo == 0:
+                    return "0-6"
+                return f"{lo}-6,0"  # wrap: Mon-Sun = Mon-Sat + Sun(0)
+            return token
+        # Step like "*/7" -- leave as-is (unusual but not invalid)
+        if re.fullmatch(r"\*/\d+", token):
+            return token
+        # Scalar
+        return "0" if token == "7" else token
+
+    # Split on comma, normalize each part, rejoin
+    return ",".join(_replace_token(part) for part in field.split(","))
 
 
 def validate_cron_expression(expression: str) -> bool:
