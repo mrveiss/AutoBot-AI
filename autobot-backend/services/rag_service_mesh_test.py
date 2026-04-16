@@ -195,7 +195,7 @@ class TestSharedMeshComponentsPerInstanceBuild:
         """initialize() builds a fresh NeuralMeshRetriever bound to this instance's optimizer."""
         from services.rag_service import RAGService, register_shared_mesh_components
         from services.rag_config import RAGConfig
-        from unittest.mock import patch, AsyncMock, call
+        from unittest.mock import patch, AsyncMock
 
         register_shared_mesh_components(self._make_components())
 
