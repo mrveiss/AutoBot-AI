@@ -150,3 +150,81 @@ async def test_stream_terminal_task_closes_after_initial_state():
     assert payload["task_id"] == "test-task-id"
     # Stream must have closed without additional events
     assert len(data_lines) == 1
+
+
+# ---------------------------------------------------------------------------
+# Test 4: task expires after pubsub subscribe → error SSE event
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_event_generator_task_expires_after_subscribe():
+    """Task exists on 404 guard but expires before snapshot — yields error event."""
+    mock_manager = MagicMock()
+    # First call (HTTP 404 guard in stream_task_events): task exists
+    # Second call (snapshot inside _event_generator): task is gone
+    mock_manager.get_task.side_effect = [_make_task_mock("submitted"), None]
+
+    mock_pubsub = AsyncMock()
+    mock_redis = MagicMock()
+    mock_redis.pubsub.return_value = mock_pubsub
+
+    with patch("api.a2a.get_task_manager", return_value=mock_manager), patch(
+        "autobot_shared.redis_client.get_async_redis_client",
+        new=AsyncMock(return_value=mock_redis),
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            async with client.stream(
+                "GET", "/api/a2a/tasks/test-task-id/stream"
+            ) as response:
+                assert response.status_code == 200
+                data_lines = await _collect_sse(response)
+
+    assert len(data_lines) == 1
+    payload = json.loads(data_lines[0])
+    assert payload["event"] == "error"
+    assert "expired" in payload["message"].lower()
+
+
+# ---------------------------------------------------------------------------
+# Test 5: pubsub listener raises exception → sentinel unblocks stream, closes cleanly
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_event_generator_reader_exception_unblocks_stream():
+    """pubsub.listen() raising causes _reader to put None sentinel, stream closes cleanly."""
+    mock_manager = MagicMock()
+    # Both calls return a non-terminal task so we enter the pub/sub loop
+    mock_manager.get_task.return_value = _make_task_mock("working")
+
+    async def _failing_listen():
+        raise Exception("Redis connection lost")
+        yield  # make it an async generator
+
+    mock_pubsub = AsyncMock()
+    mock_pubsub.listen = _failing_listen
+    mock_redis = MagicMock()
+    mock_redis.pubsub.return_value = mock_pubsub
+
+    with patch("api.a2a.get_task_manager", return_value=mock_manager), patch(
+        "autobot_shared.redis_client.get_async_redis_client",
+        new=AsyncMock(return_value=mock_redis),
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            async with client.stream(
+                "GET", "/api/a2a/tasks/test-task-id/stream"
+            ) as response:
+                assert response.status_code == 200
+                data_lines = await _collect_sse(response)
+
+    # Stream must close without hanging — we get the initial state_change event
+    # and then the stream closes after the _reader exception puts the None sentinel.
+    assert len(data_lines) >= 1
+    payload = json.loads(data_lines[0])
+    assert payload["event"] == "state_change"
+    assert payload["state"] == "working"
