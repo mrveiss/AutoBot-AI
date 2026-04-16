@@ -976,8 +976,8 @@ async def _autonomous_loop_runner(llm_service: Any) -> None:
     def _cron_matches_now(cron_expr: str) -> bool:
         """Return True when the current UTC time matches *cron_expr*.
 
-        Only handles the ``minute hour * * *`` form produced by the default
-        ``"0 2 * * *"`` setting.  Full cron support is intentionally deferred.
+        Evaluates all 5 standard cron fields: minute hour day-of-month month day-of-week.
+        Day-of-week uses 0=Monday convention (Python ``weekday()``).
         """
         try:
             parts = cron_expr.split()
@@ -986,7 +986,10 @@ async def _autonomous_loop_runner(llm_service: Any) -> None:
             now = datetime.now(tz=timezone.utc)
             minute_match = parts[0] == "*" or int(parts[0]) == now.minute
             hour_match = parts[1] == "*" or int(parts[1]) == now.hour
-            return minute_match and hour_match and now.second < 60
+            dom_match = parts[2] == "*" or int(parts[2]) == now.day
+            month_match = parts[3] == "*" or int(parts[3]) == now.month
+            dow_match = parts[4] == "*" or int(parts[4]) == now.weekday()
+            return minute_match and hour_match and dom_match and month_match and dow_match
         except Exception:
             return False
 
