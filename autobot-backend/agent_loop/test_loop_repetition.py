@@ -118,7 +118,7 @@ def test_hash_int_args_vs_string_args_differ():
 def test_hash_missing_args_vs_none_differ():
     """A tool with no args key and one with args=None must hash differently."""
     tool_no_args = {"tool_name": "t"}  # no "args" key at all — falls back to {}
-    tool_none = _make_tool("t", None)
+    tool_none = {"tool_name": "t", "args": None}  # explicit None; _make_tool drops None args
     h_no_args = AgentLoop._compute_tool_call_hash(tool_no_args)
     h_none = AgentLoop._compute_tool_call_hash(tool_none)
     assert h_no_args != h_none
