@@ -37,6 +37,9 @@ _LEARNING_RATE = 0.1
 # Evict sessions that have not been accessed for this many seconds (1 hour).
 SESSION_TTL_SECONDS = 3600
 
+# Minimum interval between eviction sweeps to avoid O(n) scan on every request.
+_EVICTION_INTERVAL = 60.0
+
 
 @dataclass
 class _SessionState:
@@ -92,6 +95,7 @@ class SessionAdaptiveReranker:
         # session_id → _SessionState
         self._sessions: Dict[str, _SessionState] = {}
         self._registry_lock = threading.Lock()
+        self._last_eviction: float = 0.0  # monotonic timestamp of last eviction run
 
     # ------------------------------------------------------------------
     # Public API
@@ -106,7 +110,8 @@ class SessionAdaptiveReranker:
         Returns:
             Tuple[float, float] — normalised to sum ≤ 1.0, each in [0.1, 0.9].
         """
-        self._evict_stale_sessions()
+        if time.monotonic() - self._last_eviction >= _EVICTION_INTERVAL:
+            self._evict_stale_sessions()
         state = self._get_or_create(session_id)
         with state.lock:
             state.last_updated = time.monotonic()
@@ -182,6 +187,7 @@ class SessionAdaptiveReranker:
             stale = [sid for sid, sw in self._sessions.items() if sw.last_updated < cutoff]
             for sid in stale:
                 del self._sessions[sid]
+            self._last_eviction = time.monotonic()
         if stale:
             logger.debug("SessionAdaptiveReranker: evicted %d stale session(s)", len(stale))
 
