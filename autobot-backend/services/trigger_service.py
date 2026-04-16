@@ -304,7 +304,7 @@ def next_cron_run(expression: str, after: Optional[datetime] = None) -> datetime
                 candidate = candidate.replace(month=next_month, day=1, hour=0, minute=0)
             continue
 
-        if candidate.day not in days or candidate.weekday() not in [w % 7 for w in weekdays]:
+        if candidate.day not in days or candidate.weekday() not in [(w - 1) % 7 for w in weekdays]:
             candidate += timedelta(days=1)
             candidate = candidate.replace(hour=0, minute=0)
             continue

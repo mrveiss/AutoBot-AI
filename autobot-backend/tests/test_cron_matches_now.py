@@ -1,8 +1,10 @@
-"""Tests for _cron_matches_now — all 5 cron fields evaluated correctly."""
-from datetime import datetime, timezone
-from unittest.mock import patch
+"""Tests for _cron_matches_now — all 5 cron fields evaluated correctly.
 
-import pytest
+Day-of-week field follows standard cron convention:
+  0 = Sunday, 1 = Monday, 2 = Tuesday, 3 = Wednesday,
+  4 = Thursday, 5 = Friday, 6 = Saturday
+"""
+from datetime import datetime, timezone
 
 # _cron_matches_now is a nested function inside _autonomous_loop_runner.
 # Extract it by re-implementing it here identically so tests are deterministic
@@ -11,7 +13,11 @@ import pytest
 
 
 def _cron_matches_now_impl(cron_expr: str, now: datetime) -> bool:
-    """Mirror of _cron_matches_now with an injected *now* for testing."""
+    """Mirror of _cron_matches_now with an injected *now* for testing.
+
+    Day-of-week uses standard cron convention (0=Sunday).
+    Conversion to Python weekday(): ``(cron_dow - 1) % 7``
+    """
     try:
         parts = cron_expr.split()
         if len(parts) < 5:
@@ -20,7 +26,7 @@ def _cron_matches_now_impl(cron_expr: str, now: datetime) -> bool:
         hour_match = parts[1] == "*" or int(parts[1]) == now.hour
         dom_match = parts[2] == "*" or int(parts[2]) == now.day
         month_match = parts[3] == "*" or int(parts[3]) == now.month
-        dow_match = parts[4] == "*" or int(parts[4]) == now.weekday()
+        dow_match = parts[4] == "*" or (int(parts[4]) - 1) % 7 == now.weekday()
         return minute_match and hour_match and dom_match and month_match and dow_match
     except Exception:
         return False
@@ -34,7 +40,7 @@ def dt(year=2024, month=3, day=15, hour=2, minute=0, weekday_=4):
     return d
 
 
-# 2024-03-15 02:00 UTC — Friday (weekday=4)
+# 2024-03-15 02:00 UTC — Friday (weekday=4, standard cron dow=5)
 NOW = dt()
 
 
@@ -97,16 +103,45 @@ class TestMonth:
 
 
 class TestDayOfWeek:
-    def test_friday_matches(self):
-        # 2024-03-15 is Friday, weekday()=4
-        assert _cron_matches_now_impl("0 2 * * 4", NOW) is True
+    def test_friday_matches_standard_cron_5(self):
+        # 2024-03-15 is Friday; standard cron 5 = Friday (Mon=1..Sat=6)
+        # (5 - 1) % 7 = 4 = Python Friday weekday
+        assert _cron_matches_now_impl("0 2 * * 5", NOW) is True
 
-    def test_monday_no_match_on_friday(self):
+    def test_sunday_matches_standard_cron_0(self):
+        # Standard cron 0 = Sunday; (0 - 1) % 7 = 6 = Python Sunday weekday
+        sunday = datetime(2024, 3, 17, 4, 0, tzinfo=timezone.utc)  # 2024-03-17 is Sunday
+        assert sunday.weekday() == 6, "2024-03-17 must be Sunday"
+        assert _cron_matches_now_impl("0 4 * * 0", sunday) is True
+
+    def test_monday_matches_standard_cron_1(self):
+        # Standard cron 1 = Monday; (1 - 1) % 7 = 0 = Python Monday weekday
+        monday = datetime(2024, 3, 18, 9, 0, tzinfo=timezone.utc)  # 2024-03-18 is Monday
+        assert monday.weekday() == 0, "2024-03-18 must be Monday"
+        assert _cron_matches_now_impl("0 9 * * 1", monday) is True
+
+    def test_wrong_dow_no_match_on_friday(self):
+        # Standard cron 1 = Monday — should not match Friday
+        assert _cron_matches_now_impl("0 2 * * 1", NOW) is False
+
+    def test_standard_cron_0_sunday_does_not_match_friday(self):
+        # Standard cron 0 = Sunday — should not match Friday
         assert _cron_matches_now_impl("0 2 * * 0", NOW) is False
 
-    def test_all_five_fields_exact_match(self):
-        # minute=0, hour=2, dom=15, month=3, dow=4 (Friday)
-        assert _cron_matches_now_impl("0 2 15 3 4", NOW) is True
+    def test_all_five_fields_exact_match_friday(self):
+        # minute=0, hour=2, dom=15, month=3, dow=5 (standard cron Friday)
+        assert _cron_matches_now_impl("0 2 15 3 5", NOW) is True
 
     def test_all_five_fields_wrong_dow(self):
-        assert _cron_matches_now_impl("0 2 15 3 3", NOW) is False  # Thursday, not Friday
+        # standard cron 4 = Thursday — should not match Friday
+        assert _cron_matches_now_impl("0 2 15 3 4", NOW) is False
+
+    def test_mesh_pruner_cron_0_4_sunday(self):
+        # "0 4 * * 0" is the mesh_pruner schedule — standard cron 0 = Sunday at 04:00
+        # Must match Sunday, not Monday
+        sunday = datetime(2024, 3, 17, 4, 0, tzinfo=timezone.utc)
+        monday = datetime(2024, 3, 18, 4, 0, tzinfo=timezone.utc)
+        assert sunday.weekday() == 6, "2024-03-17 must be Sunday"
+        assert monday.weekday() == 0, "2024-03-18 must be Monday"
+        assert _cron_matches_now_impl("0 4 * * 0", sunday) is True
+        assert _cron_matches_now_impl("0 4 * * 0", monday) is False
