@@ -26,6 +26,7 @@ from services.context_sufficiency import (
     SufficiencyVerdict,
     get_context_sufficiency_evaluator,
 )
+from services.neural_mesh_retriever import NeuralMeshRetriever
 from services.knowledge_base_adapter import KnowledgeBaseAdapter
 from services.rag_config import RAGConfig, get_rag_config
 from services.session_adaptive_reranker import get_session_adaptive_reranker
@@ -109,13 +110,36 @@ class RAGService:
 
             self._initialized = True
 
-            # Auto-wire shared NeuralMeshRetriever if registered and not already set (#4757).
-            # Covers per-request instances in knowledge_rag.py / knowledge_search.py and
-            # the chat_workflow manager's set_knowledge_base() path.
-            if self._mesh_retriever is None and _shared_mesh_retriever is not None:
-                self._mesh_retriever = _shared_mesh_retriever
-                self.config.mesh_retriever_enabled = True
-                logger.debug("Auto-wired shared NeuralMeshRetriever into RAGService instance")
+            # Build a per-instance NeuralMeshRetriever from shared components if not already
+            # set (#4765).  Each instance gets its OWN retriever so the search closures bind
+            # to THIS instance's optimizer — not to the GraphRAGService optimizer singleton.
+            if self._mesh_retriever is None and _shared_mesh_components is not None:
+                try:
+                    from advanced_rag_optimizer import RAGMetrics as _RAGMetrics
+
+                    _opt = self.optimizer
+
+                    async def _chroma(q: str, k: int) -> list:
+                        return await _opt._perform_semantic_search(q, limit=k)
+
+                    async def _hybrid(q: str, top_k: int = 5) -> list:
+                        results = await _opt._retrieve_hybrid_results(q, _RAGMetrics())
+                        return results[:top_k]
+
+                    self._mesh_retriever = NeuralMeshRetriever(
+                        chroma_search=_chroma,
+                        hybrid_search=_hybrid,
+                        **_shared_mesh_components,
+                    )
+                    self.config.mesh_retriever_enabled = True
+                    logger.debug(
+                        "Built per-instance NeuralMeshRetriever from shared components (#4765)"
+                    )
+                except Exception as _mesh_err:
+                    logger.warning(
+                        "Per-instance NeuralMeshRetriever build failed (non-fatal): %s",
+                        _mesh_err,
+                    )
 
             logger.info("AdvancedRAGOptimizer initialized successfully")
             return True
@@ -1153,22 +1177,49 @@ class RAGService:
         }
 
 
-# Shared NeuralMeshRetriever singleton — registered by lifespan at startup (#4757).
-# Auto-wired into every RAGService.initialize() call so ALL instances (per-request
-# API deps, chat_workflow manager, get_rag_service singleton) receive the mesh retriever
-# without requiring changes at every call site.
+# Shared mesh components — registered by lifespan at startup (#4765).
+# Each RAGService.initialize() builds its OWN NeuralMeshRetriever from these components so
+# the search closures are bound to THAT instance's optimizer, not to a shared singleton.
+_shared_mesh_components: Optional[Dict[str, Any]] = None
+
+
+def register_shared_mesh_components(components: Dict[str, Any]) -> None:
+    """Register mesh brain components for per-instance NeuralMeshRetriever construction.
+
+    Called once by lifespan._init_graph_rag_service().  Every subsequent
+    RAGService.initialize() builds its own retriever with closures bound to its
+    own optimizer (#4765).
+
+    Args:
+        components: dict with keys mesh_db, ppr, edge_learner, reranker, classifier.
+    """
+    global _shared_mesh_components
+    _shared_mesh_components = components
+    logger.info("Mesh brain components registered for per-instance retriever (#4765)")
+
+
+def get_shared_mesh_components() -> Optional[Dict[str, Any]]:
+    """Return the registered mesh components, or None if not yet registered."""
+    return _shared_mesh_components
+
+
+# ---------------------------------------------------------------------------
+# Legacy singleton kept for backward compatibility — no longer used by
+# RAGService.initialize() (replaced by per-instance build from components above).
+# Retained so external callers importing this symbol don't break.
+# ---------------------------------------------------------------------------
 _shared_mesh_retriever: Optional[Any] = None
 
 
 def register_shared_mesh_retriever(retriever: Any) -> None:
-    """Register NeuralMeshRetriever for auto-wiring into all future RAGService instances.
+    """Deprecated: register a pre-built retriever singleton.
 
-    Called once by lifespan._init_graph_rag_service() after the retriever is built.
-    Every subsequent RAGService.initialize() will pick it up automatically.
+    Kept for backward compatibility.  Prefer register_shared_mesh_components()
+    so each RAGService gets its own retriever bound to its own optimizer (#4765).
     """
     global _shared_mesh_retriever
     _shared_mesh_retriever = retriever
-    logger.info("NeuralMeshRetriever registered as shared singleton (#4757)")
+    logger.info("NeuralMeshRetriever registered as shared singleton (legacy #4757)")
 
 
 # Global service instance (lazily initialized per knowledge base)
