@@ -25,7 +25,6 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.config_revision_service import ConfigRevisionService
 from services.config_service import ConfigService
 from services.slm_client import get_slm_client
-from utils.connection_utils import ModelManager
 
 logger = logging.getLogger(__name__)
 
