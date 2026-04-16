@@ -164,30 +164,40 @@ class TestMeshFlagEnabledRetrieverNone:
 
 
 # =============================================================================
-# Test: register_shared_mesh_retriever auto-wires on initialize() (#4757)
+# Test: register_shared_mesh_components builds per-instance retriever (#4765)
 # =============================================================================
 
 
-class TestSharedMeshRetrieverAutoWire:
+class TestSharedMeshComponentsPerInstanceBuild:
+    """Per-instance NeuralMeshRetriever is built from shared components (#4765)."""
+
     def setup_method(self):
-        """Clear shared singleton before each test to avoid cross-test contamination."""
         import services.rag_service as _mod
-        self._orig = _mod._shared_mesh_retriever
-        _mod._shared_mesh_retriever = None
+        self._orig = _mod._shared_mesh_components
+        _mod._shared_mesh_components = None
 
     def teardown_method(self):
         import services.rag_service as _mod
-        _mod._shared_mesh_retriever = self._orig
+        _mod._shared_mesh_components = self._orig
+
+    def _make_components(self):
+        return {
+            "mesh_db": MagicMock(name="mesh_db"),
+            "ppr": MagicMock(name="ppr"),
+            "edge_learner": MagicMock(name="edge_learner"),
+            "reranker": MagicMock(name="reranker"),
+            "classifier": MagicMock(name="classifier"),
+            "llm": None,
+        }
 
     @pytest.mark.asyncio
-    async def test_register_then_initialize_wires_retriever(self):
-        """RAGService.initialize() picks up the shared singleton when _mesh_retriever is None."""
-        from services.rag_service import RAGService, register_shared_mesh_retriever
+    async def test_builds_per_instance_retriever_on_initialize(self):
+        """initialize() builds a fresh NeuralMeshRetriever bound to this instance's optimizer."""
+        from services.rag_service import RAGService, register_shared_mesh_components
         from services.rag_config import RAGConfig
         from unittest.mock import patch, AsyncMock
 
-        sentinel = MagicMock(name="NeuralMeshRetriever")
-        register_shared_mesh_retriever(sentinel)
+        register_shared_mesh_components(self._make_components())
 
         svc = RAGService.__new__(RAGService)
         svc._initialized = False
@@ -198,7 +208,9 @@ class TestSharedMeshRetrieverAutoWire:
         svc.kb_adapter = MagicMock()
         svc.kb_adapter.kb = MagicMock()
 
-        with patch("services.rag_service.AdvancedRAGOptimizer") as MockOpt:
+        built_retriever = MagicMock(name="built_NeuralMeshRetriever")
+        with patch("services.rag_service.AdvancedRAGOptimizer") as MockOpt, \
+             patch("services.rag_service.NeuralMeshRetriever", return_value=built_retriever) as MockNMR:
             mock_opt = MagicMock()
             mock_opt.initialize = AsyncMock(return_value=True)
             MockOpt.return_value = mock_opt
@@ -206,19 +218,68 @@ class TestSharedMeshRetrieverAutoWire:
             result = await svc.initialize()
 
         assert result is True
-        assert svc._mesh_retriever is sentinel
+        assert MockNMR.called, "NeuralMeshRetriever should have been instantiated"
+        # chroma_search and hybrid_search closures must be present
+        kwargs = MockNMR.call_args.kwargs
+        assert callable(kwargs.get("chroma_search")), "chroma_search closure missing"
+        assert callable(kwargs.get("hybrid_search")), "hybrid_search closure missing"
+        assert svc._mesh_retriever is built_retriever
         assert svc.config.mesh_retriever_enabled is True
 
     @pytest.mark.asyncio
-    async def test_already_set_retriever_not_overwritten(self):
-        """An existing _mesh_retriever is not replaced by the shared singleton."""
-        from services.rag_service import RAGService, register_shared_mesh_retriever
+    async def test_two_instances_get_independent_retrievers(self):
+        """Two RAGService instances each get their own NeuralMeshRetriever."""
+        from services.rag_service import RAGService, register_shared_mesh_components
         from services.rag_config import RAGConfig
         from unittest.mock import patch, AsyncMock
 
+        register_shared_mesh_components(self._make_components())
+
+        def _make_svc():
+            svc = RAGService.__new__(RAGService)
+            svc._initialized = False
+            svc._cache = {}
+            svc._cache_lock = MagicMock()
+            svc.config = RAGConfig()
+            svc._mesh_retriever = None
+            svc.kb_adapter = MagicMock()
+            svc.kb_adapter.kb = MagicMock()
+            return svc
+
+        svc1, svc2 = _make_svc(), _make_svc()
+
+        call_count = {"n": 0}
+        retrievers = []
+
+        def _fake_nmr(**kwargs):
+            r = MagicMock(name=f"retriever_{call_count['n']}")
+            call_count["n"] += 1
+            retrievers.append(r)
+            return r
+
+        with patch("services.rag_service.AdvancedRAGOptimizer") as MockOpt, \
+             patch("services.rag_service.NeuralMeshRetriever", side_effect=_fake_nmr):
+            mock_opt = MagicMock()
+            mock_opt.initialize = AsyncMock(return_value=True)
+            MockOpt.return_value = mock_opt
+
+            await svc1.initialize()
+            await svc2.initialize()
+
+        assert len(retrievers) == 2, "Expected two distinct NeuralMeshRetriever instances"
+        assert retrievers[0] is not retrievers[1], "Instances should be independent"
+        assert svc1._mesh_retriever is not svc2._mesh_retriever
+
+    @pytest.mark.asyncio
+    async def test_already_set_retriever_not_overwritten(self):
+        """An existing _mesh_retriever is NOT replaced even when components are registered."""
+        from services.rag_service import RAGService, register_shared_mesh_components
+        from services.rag_config import RAGConfig
+        from unittest.mock import patch, AsyncMock
+
+        register_shared_mesh_components(self._make_components())
+
         existing = MagicMock(name="existing_retriever")
-        shared = MagicMock(name="shared_retriever")
-        register_shared_mesh_retriever(shared)
 
         svc = RAGService.__new__(RAGService)
         svc._initialized = False
@@ -230,11 +291,44 @@ class TestSharedMeshRetrieverAutoWire:
         svc.kb_adapter = MagicMock()
         svc.kb_adapter.kb = MagicMock()
 
-        with patch("services.rag_service.AdvancedRAGOptimizer") as MockOpt:
+        with patch("services.rag_service.AdvancedRAGOptimizer") as MockOpt, \
+             patch("services.rag_service.NeuralMeshRetriever") as MockNMR:
             mock_opt = MagicMock()
             mock_opt.initialize = AsyncMock(return_value=True)
             MockOpt.return_value = mock_opt
 
             await svc.initialize()
 
-        assert svc._mesh_retriever is existing  # not replaced
+        MockNMR.assert_not_called()
+        assert svc._mesh_retriever is existing
+
+    @pytest.mark.asyncio
+    async def test_no_components_no_retriever_built(self):
+        """If components are not registered, no retriever is built."""
+        from services.rag_service import RAGService
+        from services.rag_config import RAGConfig
+        from unittest.mock import patch, AsyncMock
+
+        # _shared_mesh_components is None (cleared in setup_method)
+
+        svc = RAGService.__new__(RAGService)
+        svc._initialized = False
+        svc._cache = {}
+        svc._cache_lock = MagicMock()
+        svc.config = RAGConfig()
+        svc._mesh_retriever = None
+        svc.kb_adapter = MagicMock()
+        svc.kb_adapter.kb = MagicMock()
+
+        with patch("services.rag_service.AdvancedRAGOptimizer") as MockOpt, \
+             patch("services.rag_service.NeuralMeshRetriever") as MockNMR:
+            mock_opt = MagicMock()
+            mock_opt.initialize = AsyncMock(return_value=True)
+            MockOpt.return_value = mock_opt
+
+            result = await svc.initialize()
+
+        assert result is True
+        MockNMR.assert_not_called()
+        assert svc._mesh_retriever is None
+        assert svc.config.mesh_retriever_enabled is False
