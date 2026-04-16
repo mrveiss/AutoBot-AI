@@ -37,6 +37,13 @@ logger = get_llm_logger("rag_service")
 
 _STREAM_TTL_SECONDS = TTL_30_DAYS
 
+# In-process cache for the DocIndexer hash cache file (Issue #4723).
+# The file is only rewritten when indexing completes (infrequent), so reading
+# it on every advanced_search() call is unnecessary I/O.
+_hash_cache_memo: dict = {}
+_hash_cache_loaded_at: float = 0.0
+_HASH_CACHE_TTL: float = 60.0  # seconds
+
 
 class RAGService:
     """
@@ -952,7 +959,12 @@ class RAGService:
                 return {}
 
         try:
-            hash_cache: dict = await asyncio.to_thread(_load)
+            global _hash_cache_memo, _hash_cache_loaded_at
+            now = time.monotonic()
+            if now - _hash_cache_loaded_at > _HASH_CACHE_TTL:
+                _hash_cache_memo = await asyncio.to_thread(_load)
+                _hash_cache_loaded_at = now
+            hash_cache: dict = _hash_cache_memo
         except Exception as exc:
             logger.debug("Hash cache load failed (skipping provenance check): %s", exc)
             return results

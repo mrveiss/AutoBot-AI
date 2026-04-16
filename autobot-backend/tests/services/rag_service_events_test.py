@@ -3,7 +3,9 @@
 # Author: mrveiss
 """Unit tests for RAGService retrieval feedback event emission (#1516)."""
 
+import asyncio
 import json
+import time
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -729,6 +731,17 @@ class TestRetrievedVsRankedIdsSeparation:
 class TestFilterStaleChunks:
     """Tests for RAGService._filter_stale_chunks() — provenance validation."""
 
+    @pytest.fixture(autouse=True)
+    def reset_hash_cache_memo(self):
+        """Reset module-level TTL cache before each test to ensure isolation."""
+        import services.rag_service as rag_mod
+
+        rag_mod._hash_cache_memo = {}
+        rag_mod._hash_cache_loaded_at = 0.0
+        yield
+        rag_mod._hash_cache_memo = {}
+        rag_mod._hash_cache_loaded_at = 0.0
+
     def _make_service(self):
         from services.rag_service import RAGService
 
@@ -834,6 +847,99 @@ class TestFilterStaleChunks:
 
         assert result == [chunk]
 
+    # ------------------------------------------------------------------
+    # TTL memo-cache tests (Issue #4723)
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_first_call_loads_from_disk(self, tmp_path):
+        """First call triggers a disk read via asyncio.to_thread."""
+        import services.rag_service as rag_mod
+
+        cache_file = tmp_path / ".doc_index_hashes.json"
+        cache_file.write_text('{"docs/guide.md": "abc"}', encoding="utf-8")
+
+        svc = self._make_service()
+        chunk = self._make_chunk("docs/guide.md")
+
+        # Reset module-level state so we always start cold.
+        rag_mod._hash_cache_loaded_at = 0.0
+        rag_mod._hash_cache_memo = {}
+
+        load_call_count = 0
+        original_to_thread = asyncio.to_thread
+
+        async def counting_to_thread(fn, *args, **kwargs):
+            nonlocal load_call_count
+            load_call_count += 1
+            return await original_to_thread(fn, *args, **kwargs)
+
+        with patch("services.knowledge.doc_indexer.HASH_CACHE_FILE", cache_file):
+            with patch("services.rag_service.asyncio.to_thread", side_effect=counting_to_thread):
+                await svc._filter_stale_chunks([chunk])
+
+        assert load_call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_second_call_within_ttl_skips_disk(self, tmp_path):
+        """Second call within TTL window uses the in-process memo — no disk read."""
+        import services.rag_service as rag_mod
+
+        cache_file = tmp_path / ".doc_index_hashes.json"
+        cache_file.write_text('{"docs/guide.md": "abc"}', encoding="utf-8")
+
+        svc = self._make_service()
+        chunk = self._make_chunk("docs/guide.md")
+
+        # Seed memo as if we already loaded recently.
+        rag_mod._hash_cache_memo = {"docs/guide.md": "abc"}
+        rag_mod._hash_cache_loaded_at = time.monotonic()  # just now — within TTL
+
+        load_call_count = 0
+        original_to_thread = asyncio.to_thread
+
+        async def counting_to_thread(fn, *args, **kwargs):
+            nonlocal load_call_count
+            load_call_count += 1
+            return await original_to_thread(fn, *args, **kwargs)
+
+        with patch("services.knowledge.doc_indexer.HASH_CACHE_FILE", cache_file):
+            with patch("services.rag_service.asyncio.to_thread", side_effect=counting_to_thread):
+                result = await svc._filter_stale_chunks([chunk])
+
+        assert load_call_count == 0, "Should not re-read disk within TTL"
+        assert result == [chunk]
+
+    @pytest.mark.asyncio
+    async def test_call_after_ttl_expiry_reloads(self, tmp_path):
+        """A call made after the TTL expires triggers a fresh disk read."""
+        import services.rag_service as rag_mod
+
+        cache_file = tmp_path / ".doc_index_hashes.json"
+        cache_file.write_text('{"docs/guide.md": "abc"}', encoding="utf-8")
+
+        svc = self._make_service()
+        chunk = self._make_chunk("docs/guide.md")
+
+        # Simulate an expired memo: loaded_at is older than TTL.
+        rag_mod._hash_cache_memo = {"docs/guide.md": "abc"}
+        rag_mod._hash_cache_loaded_at = time.monotonic() - rag_mod._HASH_CACHE_TTL - 1.0
+
+        load_call_count = 0
+        original_to_thread = asyncio.to_thread
+
+        async def counting_to_thread(fn, *args, **kwargs):
+            nonlocal load_call_count
+            load_call_count += 1
+            return await original_to_thread(fn, *args, **kwargs)
+
+        with patch("services.knowledge.doc_indexer.HASH_CACHE_FILE", cache_file):
+            with patch("services.rag_service.asyncio.to_thread", side_effect=counting_to_thread):
+                result = await svc._filter_stale_chunks([chunk])
+
+        assert load_call_count == 1, "Should reload disk after TTL expiry"
+        assert result == [chunk]
+
 
 # =============================================================================
 # _fallback_basic_search stale-chunk filtering tests (#4721)
@@ -846,6 +952,17 @@ class TestFallbackBasicSearchFiltersStaleChunks:
     Issue #4721: the fallback path previously returned results without calling
     _filter_stale_chunks(), silently returning stale/moved source paths.
     """
+
+    @pytest.fixture(autouse=True)
+    def reset_hash_cache_memo(self):
+        """Reset module-level TTL cache before each test to ensure isolation."""
+        import services.rag_service as rag_mod
+
+        rag_mod._hash_cache_memo = {}
+        rag_mod._hash_cache_loaded_at = 0.0
+        yield
+        rag_mod._hash_cache_memo = {}
+        rag_mod._hash_cache_loaded_at = 0.0
 
     def _make_service(self):
         from services.rag_service import RAGService
