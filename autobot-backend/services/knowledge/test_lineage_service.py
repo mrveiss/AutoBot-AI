@@ -73,8 +73,10 @@ def _entry(
 def _make_provenance_log(entries: List[Dict[str, Any]]) -> MagicMock:
     """Build a mock SynthesisProvenanceLog from a flat list of entries.
 
-    - get_recent returns the full list (used by get_best_ancestor).
+    - get_recent returns the full list (retained for other callers).
     - get_by_run_id does an O(1) dict lookup by run_id (used by get_ancestors).
+    - get_best_run_id_for_collection returns the highest-scoring run_id for the
+      collection (used by get_best_ancestor, Issue #4788).
     """
     by_id = {e["run_id"]: e for e in entries if e.get("run_id")}
 
@@ -91,9 +93,22 @@ def _make_provenance_log(entries: List[Dict[str, Any]]) -> MagicMock:
         result.setdefault("collection_name", "")
         return result
 
+    async def _get_best_run_id_for_collection(collection_name: str):
+        candidates = [
+            e for e in entries
+            if e.get("collection_name") == collection_name and e.get("run_id")
+        ]
+        if not candidates:
+            return None
+        best = max(candidates, key=lambda e: float(e.get("score", 0.0)))
+        return best["run_id"]
+
     log = MagicMock()
     log.get_recent = AsyncMock(return_value=entries)
     log.get_by_run_id = AsyncMock(side_effect=_get_by_run_id)
+    log.get_best_run_id_for_collection = AsyncMock(
+        side_effect=_get_best_run_id_for_collection
+    )
     return log
 
 

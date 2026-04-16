@@ -373,3 +373,100 @@ class TestSynthesisLogEndpoint:
             client = TestClient(app)
             client.get("/knowledge/synthesis/log?limit=25")
             mock_get_recent.assert_called_once_with(limit=25)
+
+
+# ---------------------------------------------------------------------------
+# get_best_run_id_for_collection tests (Issue #4788)
+# ---------------------------------------------------------------------------
+
+
+class TestGetBestRunIdForCollection:
+    """Tests for SynthesisProvenanceLog.get_best_run_id_for_collection()."""
+
+    @pytest.mark.asyncio
+    async def test_returns_none_when_no_entries(self):
+        """Returns None when the sorted set is empty."""
+        mock_redis = AsyncMock()
+        mock_redis.zrevrange = AsyncMock(return_value=[])
+        with patch(
+            "services.knowledge.synthesis_provenance.get_async_redis_client",
+            new=AsyncMock(return_value=mock_redis),
+        ):
+            svc = SynthesisProvenanceLog()
+            result = await svc.get_best_run_id_for_collection("kb_synthesis")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_returns_top_run_id(self):
+        """Returns the decoded run_id at rank 0 of the sorted set."""
+        mock_redis = AsyncMock()
+        mock_redis.zrevrange = AsyncMock(return_value=[b"run-best"])
+        with patch(
+            "services.knowledge.synthesis_provenance.get_async_redis_client",
+            new=AsyncMock(return_value=mock_redis),
+        ):
+            svc = SynthesisProvenanceLog()
+            result = await svc.get_best_run_id_for_collection("kb_synthesis")
+        assert result == "run-best"
+        mock_redis.zrevrange.assert_called_once_with(
+            "kb:synthesis:best:kb_synthesis", 0, 0
+        )
+
+    @pytest.mark.asyncio
+    async def test_returns_none_on_redis_error(self):
+        """Returns None when Redis raises an exception."""
+        mock_redis = AsyncMock()
+        mock_redis.zrevrange = AsyncMock(side_effect=ConnectionError("Redis down"))
+        with patch(
+            "services.knowledge.synthesis_provenance.get_async_redis_client",
+            new=AsyncMock(return_value=mock_redis),
+        ):
+            svc = SynthesisProvenanceLog()
+            result = await svc.get_best_run_id_for_collection("kb_synthesis")
+        assert result is None
+
+
+class TestLogRunCollectionIndex:
+    """Tests that log_run maintains the kb:synthesis:best: sorted set."""
+
+    @pytest.mark.asyncio
+    async def test_zadd_called_when_collection_name_provided(self):
+        """log_run writes to the sorted set when collection_name is set."""
+        mock_redis = _make_redis_mock()
+        with patch(
+            "services.knowledge.synthesis_provenance.get_async_redis_client",
+            new=AsyncMock(return_value=mock_redis),
+        ):
+            svc = SynthesisProvenanceLog()
+            await svc.log_run(
+                run_id="run-1",
+                source_docs=[],
+                synthesis_ids=[],
+                llm_model="m",
+                prompt_template="t",
+                duration_ms=0,
+                collection_name="kb_synthesis",
+                score=0.75,
+            )
+        mock_redis._pipe.zadd.assert_called_once_with(
+            "kb:synthesis:best:kb_synthesis", {"run-1": 0.75}
+        )
+
+    @pytest.mark.asyncio
+    async def test_zadd_not_called_when_no_collection_name(self):
+        """log_run skips sorted set write when collection_name is empty."""
+        mock_redis = _make_redis_mock()
+        with patch(
+            "services.knowledge.synthesis_provenance.get_async_redis_client",
+            new=AsyncMock(return_value=mock_redis),
+        ):
+            svc = SynthesisProvenanceLog()
+            await svc.log_run(
+                run_id="run-1",
+                source_docs=[],
+                synthesis_ids=[],
+                llm_model="m",
+                prompt_template="t",
+                duration_ms=0,
+            )
+        mock_redis._pipe.zadd.assert_not_called()
