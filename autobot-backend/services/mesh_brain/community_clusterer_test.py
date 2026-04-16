@@ -5,7 +5,7 @@
 
 import sys
 from types import ModuleType
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -190,3 +190,64 @@ async def test_periodic_caller_promotes_two_anchors_for_two_components():
 
     assert len(promoted) == 2
     assert db.promote_to_anchor.call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# ImportError path (#4896)
+# Verify that missing graspologic raises ImportError (not silently returns [])
+# and that a loop caller can catch it specifically to log CRITICAL and exit.
+# ---------------------------------------------------------------------------
+
+
+def test_cluster_graph_raises_import_error_when_graspologic_missing():
+    """cluster_graph raises ImportError when graspologic is unavailable (#4896).
+
+    Ensures callers can distinguish a missing dependency from an empty-graph result.
+    """
+    edges = _make_edges([("n1", "n2", 1.0)])
+    with patch.dict(sys.modules, {"graspologic": None, "graspologic.partition": None}):
+        with pytest.raises(ImportError):
+            cluster_graph(edges)
+
+
+@pytest.mark.asyncio
+async def test_loop_body_logs_critical_and_exits_on_import_error(caplog):
+    """Loop body catches ImportError, logs CRITICAL, and returns without sleeping (#4896).
+
+    Mirrors the _loop() coroutine in _start_community_clustering_loop but inlined
+    here to avoid importing lifespan (heavy deps). Verifies that the production
+    pattern — catch ImportError → log critical → return — works end-to-end.
+    """
+    import logging
+
+    db = AsyncMock()
+    db.fetch_edges = AsyncMock(return_value=_make_edges([("n1", "n2", 1.0)]))
+    db.promote_to_anchor = AsyncMock()
+
+    loop_exited = False
+
+    async def _loop_once(mesh_db) -> None:
+        nonlocal loop_exited
+        try:
+            await CommunityClusterer(mesh_db).run()
+        except ImportError as exc:
+            import logging as _logging
+            _logging.getLogger(__name__).critical(
+                "graspologic not installed — community clustering disabled. "
+                "Install with: pip install graspologic. Error: %s",
+                exc,
+            )
+            loop_exited = True
+            return
+
+    with patch.dict(sys.modules, {"graspologic": None, "graspologic.partition": None}):
+        with caplog.at_level(logging.CRITICAL):
+            await _loop_once(db)
+
+    assert loop_exited, "Loop should have exited after ImportError"
+    assert any(
+        "graspologic not installed" in record.message
+        for record in caplog.records
+        if record.levelno == logging.CRITICAL
+    ), "Expected CRITICAL log message about missing graspologic"
+    db.promote_to_anchor.assert_not_called()
