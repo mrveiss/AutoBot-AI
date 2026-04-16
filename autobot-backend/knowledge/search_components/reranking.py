@@ -122,7 +122,7 @@ def apply_mmr_reorder(
         result lacks an embedding the function degrades gracefully and returns
         the original order.
     """
-    if not results or mmr_lambda >= 1.0:
+    if not results or mmr_lambda == 0.0 or mmr_lambda >= 1.0:
         return results
 
     selected: List[Dict[str, Any]] = []
