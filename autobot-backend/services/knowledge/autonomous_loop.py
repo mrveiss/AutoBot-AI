@@ -619,11 +619,17 @@ class AutonomousLoopOrchestrator:
                 f"Variant {r.variant_id}: score={r.composite_score:.4f} params={r.params}"
                 for r in results
             )
+            score_delta = max((r.composite_score for r in results), default=0.0) - baseline_score
+            if score_delta < 0:
+                # All variants regressed — prefix summary so the LLM distils avoidance lessons.
+                summary = f"[REGRESSION] All variants underperformed baseline. {summary}"
             lessons = await svc.analyze_synthesis_run(
                 run_id=f"loop:{run_id}",
                 input_docs=[f"params: {json.dumps(r.params)}" for r in results],
                 output_summary=summary,
-                score=max((r.composite_score for r in results), default=0.0) - baseline_score,
+                # Floor at 0.0 so a negative delta still clears the _MIN_SCORE_DELTA guard
+                # and the LLM can produce "what to avoid" lessons from failed experiments.
+                score=max(0.0, score_delta),
             )
             if lessons:
                 await svc.store_lessons(lessons)

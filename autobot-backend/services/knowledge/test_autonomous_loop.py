@@ -249,6 +249,44 @@ async def test_analyze_graceful_on_failure():
     assert count == 0
 
 
+@pytest.mark.asyncio
+async def test_analyze_generates_lessons_when_all_variants_regress():
+    """ANALYZE must produce lessons even when every variant scores below baseline.
+
+    Regression path: score_delta < 0 → floored to 0.0 so _MIN_SCORE_DELTA guard
+    is cleared; output_summary prefixed with [REGRESSION] so LLM knows to distil
+    avoidance lessons.
+    """
+    from services.knowledge.autonomous_loop import VariantResult
+
+    orch = _make_orchestrator()
+    # All variants score below the baseline of 0.8
+    results = [
+        VariantResult("v00", {"hybrid_weight_semantic": 0.3}, 0.5, 0.5, 0.5),
+        VariantResult("v01", {"hybrid_weight_semantic": 0.2}, 0.4, 0.4, 0.4),
+    ]
+
+    mock_svc = MagicMock()
+    mock_svc.analyze_synthesis_run = AsyncMock(return_value=[MagicMock()])
+    mock_svc.store_lessons = AsyncMock()
+
+    with patch(
+        "services.knowledge.autonomous_loop.get_analyzer_service",
+        return_value=mock_svc,
+    ):
+        count = await orch._phase_analyze(results, baseline_score=0.8, run_id="run-regress")
+
+    assert count == 1
+    mock_svc.store_lessons.assert_awaited_once()
+
+    # Verify the score passed was floored at 0.0 (not the negative delta -0.3)
+    call_kwargs = mock_svc.analyze_synthesis_run.call_args.kwargs
+    assert call_kwargs["score"] == pytest.approx(0.0)
+
+    # Verify the regression context is prepended to the summary
+    assert call_kwargs["output_summary"].startswith("[REGRESSION]")
+
+
 # ---------------------------------------------------------------------------
 # Phase: PROMOTE
 # ---------------------------------------------------------------------------
