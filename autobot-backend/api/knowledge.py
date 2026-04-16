@@ -492,6 +492,26 @@ async def get_knowledge_categories(
         for cat in categories_list
     ]
 
+    # Also expose the doc_indexer's autobot_docs collection so AutoBot's own
+    # indexed documentation always appears as a category, even before any user
+    # facts are added to the main KB.
+    existing_names = {c["name"] for c in categories}
+    try:
+        from services.knowledge.doc_indexer import get_doc_indexer_service
+
+        doc_indexer = get_doc_indexer_service()
+        if await doc_indexer.initialize():
+            doc_stats = await doc_indexer.get_stats()
+            doc_count = doc_stats.get("count", 0)
+            if doc_count > 0 and "autobot_docs" not in existing_names:
+                categories.append(
+                    {"name": "autobot_docs", "count": doc_count, "id": "autobot_docs"}
+                )
+    except Exception as doc_idx_err:
+        logger.debug(
+            "Could not fetch doc_indexer stats (non-critical): %s", doc_idx_err
+        )
+
     return {"categories": categories, "total": len(categories)}
 
 
@@ -1256,9 +1276,7 @@ async def _ingest_audio_source(
     source_info = sources[0]
     content_result = await connector.fetch_content(source_info.source_id)
     if content_result is None or not content_result.content.strip():
-        raise HTTPException(
-            status_code=422, detail="Transcription produced no content"
-        )
+        raise HTTPException(status_code=422, detail="Transcription produced no content")
 
     transcript = content_result.content
     effective_title = title or content_result.metadata.get("title", "") or source
@@ -1310,7 +1328,11 @@ async def ingest_audio_url(
     if kb_to_use is None:
         raise InternalError("Knowledge base not initialized")
 
-    logger.info("Audio URL ingest requested: url=%s model=%s", request.url, request.whisper_model)
+    logger.info(
+        "Audio URL ingest requested: url=%s model=%s",
+        request.url,
+        request.whisper_model,
+    )
 
     return await _ingest_audio_source(
         kb_to_use=kb_to_use,

@@ -387,7 +387,9 @@ class AgentLoop:
         if first_turn_note and self.config.first_turn_priming_enabled:
             task_content = events_context.get("task_description", "")
             events_context["task_description"] = (
-                task_content + "\n\n" + first_turn_note if task_content else first_turn_note
+                task_content + "\n\n" + first_turn_note
+                if task_content
+                else first_turn_note
             )
 
         # Phase 2: Select Tools
@@ -508,10 +510,7 @@ class AgentLoop:
         # Issue #4481: inject a first-turn context hint so the LLM knows no
         # prior tool results exist yet.  Only added on iteration 1 (the very
         # first call) when the feature is enabled.
-        if (
-            self.config.first_turn_priming_enabled
-            and self._iteration_count == 1
-        ):
+        if self.config.first_turn_priming_enabled and self._iteration_count == 1:
             context["first_turn_note"] = (
                 "Note: This is the first iteration — no tool results exist yet."
             )
@@ -792,15 +791,15 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
             args = {"_raw": str(args), "_type": type(args).__name__}
         try:
             # Issue #3868: default=str handles datetime, bytes, custom objects
-            canonical = json.dumps({"n": tool_name, "a": args}, sort_keys=True, default=str)
+            canonical = json.dumps(
+                {"n": tool_name, "a": args}, sort_keys=True, default=str
+            )
         except Exception:
             # Absolute fallback — should never be reached with default=str
             canonical = repr({"n": tool_name, "a": args})
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
-    def _check_tool_call_repetition(
-        self, tools: list[dict[str, Any]]
-    ) -> Optional[str]:
+    def _check_tool_call_repetition(self, tools: list[dict[str, Any]]) -> Optional[str]:
         """Check whether any pending tool call has been issued too many times.
 
         Returns the offending tool name if repetition is detected, else None.
@@ -891,8 +890,9 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
         """Emit APPROVAL_REQUIRED and wait for APPROVAL_RESPONSE.
 
         Returns True if the user approved, False if denied or timed out.
-        Polls the event stream every second for up to
-        ``config.approval_timeout_seconds`` seconds.
+        Uses pub/sub subscribe() so the response is received instantly when
+        the user approves — no 1-second polling window that could miss fast
+        approvals or race against the event store.
         """
         tool_name = tool.get("tool_name", "unknown")
         args = tool.get("args", tool.get("arguments", tool.get("parameters", {})))
@@ -927,31 +927,36 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
             requested_by="AgentLoop",
         )
 
-        deadline = asyncio.get_running_loop().time() + self.config.approval_timeout_seconds
-        while asyncio.get_running_loop().time() < deadline:
-            await asyncio.sleep(1)
-            # Fetch recent events and look for a matching APPROVAL_RESPONSE
-            recent = await self.event_stream.get_latest(
-                count=20,
+        # Use pub/sub subscribe() instead of polling get_latest().
+        # subscribe() blocks on pubsub.listen() and yields the event the moment
+        # it is published — no 1-second window that could miss the signal.
+        async def _await_response() -> bool:
+            async for resp_event in self.event_stream.subscribe(
                 event_types=[EventType.APPROVAL_RESPONSE],
                 task_id=task_id,
-            )
-            for resp_event in recent:
+            ):
                 if resp_event.content.get("approval_id") == approval_id:
-                    approved: bool = resp_event.content.get("approved", False)
+                    decision: bool = resp_event.content.get("approved", False)
                     logger.info(
                         "AgentLoop: approval_id=%s decision=%s",
                         approval_id,
-                        "approved" if approved else "denied",
+                        "approved" if decision else "denied",
                     )
-                    return approved
+                    return decision
+            return False  # iterator exhausted without a match
 
-        logger.warning(
-            "AgentLoop: approval timed out for tool '%s' (approval_id=%s)",
-            tool_name,
-            approval_id,
-        )
-        return False
+        try:
+            return await asyncio.wait_for(
+                _await_response(),
+                timeout=self.config.approval_timeout_seconds,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "AgentLoop: approval timed out for tool '%s' (approval_id=%s)",
+                tool_name,
+                approval_id,
+            )
+            return False
 
     def _should_continue(self) -> bool:
         """Check if the loop should continue.

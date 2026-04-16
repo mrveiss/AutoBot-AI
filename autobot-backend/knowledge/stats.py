@@ -295,6 +295,17 @@ class StatsMixin:
                 vector_count,
                 self.chromadb_collection,
             )
+
+            # When ChromaDB has content but no Redis facts have been ingested yet,
+            # surface the collection name as a category so the KB UI isn't empty.
+            if vector_count > 0 and not stats.get("categories"):
+                collection_name = self.chromadb_collection or "knowledge_base"
+                stats["categories"] = [collection_name]
+                logger.debug(
+                    "No Redis facts yet — using ChromaDB collection '%s' as default category",
+                    collection_name,
+                )
+
         except Exception as e:
             logger.warning("Could not get ChromaDB stats: %s", e)
             stats["index_available"] = False

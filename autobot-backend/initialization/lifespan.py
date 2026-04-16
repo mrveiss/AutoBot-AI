@@ -754,7 +754,6 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
             )
             await rag_service.initialize()
 
-
             # Wire NeuralMeshRetriever now that RAGService and the DB engine are ready.
             # Issue #4724: was never wired despite the full mesh_brain/ implementation.
             try:
@@ -773,10 +772,13 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
                 _edge_learner = EdgeLearner(db=_mesh_db, redis=_redis)
 
                 async def _chroma_search(query: str, k: int) -> list:
-                    return await rag_service.optimizer._perform_semantic_search(query, limit=k)
+                    return await rag_service.optimizer._perform_semantic_search(
+                        query, limit=k
+                    )
 
                 async def _hybrid_search(query: str, top_k: int = 5) -> list:
                     from advanced_rag_optimizer import RAGMetrics
+
                     results = await rag_service.optimizer._retrieve_hybrid_results(
                         query, RAGMetrics()
                     )
@@ -797,6 +799,7 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
                 # Register as shared singleton so ALL future RAGService.initialize() calls
                 # auto-wire without changes at each call site (#4757).
                 import services.rag_service as _rag_mod
+
                 register_shared_mesh_retriever(rag_service._mesh_retriever)
 
                 # Back-patch chat_workflow_manager's RAGService — it was created by
@@ -807,20 +810,30 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
                     if _ks is not None and hasattr(_ks, "rag_service"):
                         _ks.rag_service._mesh_retriever = rag_service._mesh_retriever
                         _ks.rag_service.config.mesh_retriever_enabled = True
-                        logger.info("Re-wired NeuralMeshRetriever into chat_workflow_manager RAGService (#4757)")
+                        logger.info(
+                            "Re-wired NeuralMeshRetriever into chat_workflow_manager RAGService (#4757)"
+                        )
 
                 # Back-patch get_rag_service() singleton if already created.
                 if _rag_mod._rag_service_instance is not None:
-                    _rag_mod._rag_service_instance._mesh_retriever = rag_service._mesh_retriever
+                    _rag_mod._rag_service_instance._mesh_retriever = (
+                        rag_service._mesh_retriever
+                    )
                     _rag_mod._rag_service_instance.config.mesh_retriever_enabled = True
-                    logger.info("Re-wired NeuralMeshRetriever into get_rag_service() singleton (#4757)")
+                    logger.info(
+                        "Re-wired NeuralMeshRetriever into get_rag_service() singleton (#4757)"
+                    )
 
                 # Expose mesh_db on app.state so _start_community_clustering_loop can use it (#4834).
                 app.state.mesh_db = _mesh_db
 
-                logger.info("✅ [ 87%] Neural Mesh RAG: NeuralMeshRetriever wired into RAGService (#4724)")
+                logger.info(
+                    "✅ [ 87%] Neural Mesh RAG: NeuralMeshRetriever wired into RAGService (#4724)"
+                )
             except Exception as _mesh_wire_err:
-                logger.warning("Neural Mesh RAG wiring skipped (non-fatal): %s", _mesh_wire_err)
+                logger.warning(
+                    "Neural Mesh RAG wiring skipped (non-fatal): %s", _mesh_wire_err
+                )
 
             graph_rag_service = GraphRAGService(
                 rag_service=rag_service,
@@ -1175,12 +1188,12 @@ async def _init_backup_scheduler(app: FastAPI) -> None:
         scheduler = BackupScheduler()
         await scheduler.start()
         app.state.backup_scheduler = scheduler
-        logger.info("[100%%] Backup Scheduler: Started (daily at %02d:00 UTC)",
-                    scheduler._schedule_hour)
-    except Exception as e:
-        logger.warning(
-            "Backup scheduler initialization failed (non-critical): %s", e
+        logger.info(
+            "[100%%] Backup Scheduler: Started (daily at %02d:00 UTC)",
+            scheduler._schedule_hour,
         )
+    except Exception as e:
+        logger.warning("Backup scheduler initialization failed (non-critical): %s", e)
         app.state.backup_scheduler = None
 
 
@@ -1275,21 +1288,56 @@ async def _start_community_clustering_loop(app: FastAPI) -> None:
         while True:
             try:
                 promoted = await CommunityClusterer(mesh_db).run()
-                logger.info("CommunityClusterer periodic run: %d anchors promoted", len(promoted))
+                logger.info(
+                    "CommunityClusterer periodic run: %d anchors promoted",
+                    len(promoted),
+                )
             except ImportError as exc:
                 logger.warning(
                     "graspologic not installed — community clustering disabled. "
                     "Install graspologic and restart to enable. Retrying in 24h. Error: %s",
                     exc,
                 )
-                await asyncio.sleep(86400)  # 24 hours — re-check after potential install
+                await asyncio.sleep(
+                    86400
+                )  # 24 hours — re-check after potential install
                 continue
             except Exception as exc:
-                logger.warning("CommunityClusterer periodic run failed (non-fatal): %s", exc)
+                logger.warning(
+                    "CommunityClusterer periodic run failed (non-fatal): %s", exc
+                )
             await asyncio.sleep(_CLUSTER_INTERVAL_SECONDS)
 
     asyncio.create_task(_loop())
-    logger.info("CommunityClusterer: periodic loop started (interval=%dh)", _CLUSTER_INTERVAL_SECONDS // 3600)
+    logger.info(
+        "CommunityClusterer: periodic loop started (interval=%dh)",
+        _CLUSTER_INTERVAL_SECONDS // 3600,
+    )
+
+
+async def _init_web_researcher(app: FastAPI) -> None:
+    """Initialize the WebResearcher singleton so web browsing is available in chat.
+
+    WebResearcher.enabled defaults to False and initialize() is never called
+    lazily — without this Phase 2 step, every web research request silently fails.
+    NON-CRITICAL: browser unavailability does not block other features.
+    """
+    logger.info("[ 99%%] WebResearcher: Initializing browser automation...")
+    try:
+        from agents.web_researcher import get_web_researcher
+
+        # Merge stored config with enabled=True so the singleton is armed.
+        researcher = get_web_researcher(config={"enabled": True})
+        await researcher.initialize()
+        app.state.web_researcher = researcher
+        logger.info("[ 99%%] WebResearcher: Browser automation ready")
+    except Exception as e:
+        logger.warning(
+            "WebResearcher initialization failed (non-critical): %s — "
+            "web browsing will be unavailable until the next restart",
+            e,
+        )
+        app.state.web_researcher = None
 
 
 async def _init_plugin_manager(app: FastAPI) -> None:
@@ -1365,6 +1413,7 @@ async def initialize_background_services(app: FastAPI):
         await _wire_npu_task_queue()
         await _wire_scheduler_executor()
         await _init_voice_interface(app)
+        await _init_web_researcher(app)
         await _init_plugin_manager(app)
         await _init_backup_scheduler(app)
         await _start_autonomous_loop(app)
