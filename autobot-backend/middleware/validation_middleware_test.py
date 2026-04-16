@@ -296,3 +296,22 @@ def test_non_save_path_still_blocks_injection(client: TestClient) -> None:
         json={"content": "foo; rm -rf /"},
     )
     assert resp.status_code == 400
+
+
+def test_save_path_oversized_body_rejected() -> None:
+    """/save is scan-exempt but must still be rejected when the body exceeds the limit."""
+    app = _make_app(max_body_bytes=10)
+
+    @app.post("/api/chats/{chat_id}/save")
+    async def save_endpoint(chat_id: str):
+        return {"ok": True}
+
+    tc = TestClient(app, raise_server_exceptions=False)
+    chat_id = str(_uuid.uuid4())
+    resp = tc.post(
+        f"/api/chats/{chat_id}/save",
+        content=b"A" * 11,
+        headers={"Content-Type": "application/json"},
+    )
+    assert resp.status_code == 413
+    assert resp.json()["error"] == "PAYLOAD_TOO_LARGE"

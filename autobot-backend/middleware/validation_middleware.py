@@ -116,11 +116,14 @@ _INJECTION_PATTERNS: Final[Sequence[tuple[str, re.Pattern[str]]]] = (
 # ---------------------------------------------------------------------------
 
 
-def _is_exempt(path: str) -> bool:
-    """Return True when *path* should bypass validation."""
-    return any(path.startswith(prefix) for prefix in _EXEMPT_PREFIXES) or bool(
-        _BODY_SCAN_EXEMPT_RE.match(path)
-    )
+def _is_fully_exempt(path: str) -> bool:
+    """Return True when *path* should bypass ALL validation (health probes, docs, static)."""
+    return any(path.startswith(prefix) for prefix in _EXEMPT_PREFIXES)
+
+
+def _is_scan_exempt(path: str) -> bool:
+    """Return True when *path* should skip injection scanning but NOT the size guard."""
+    return bool(_BODY_SCAN_EXEMPT_RE.match(path))
 
 
 def _scan_value(value: str) -> str | None:
@@ -188,24 +191,30 @@ class ValidationMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
         path = request.url.path
 
-        if _is_exempt(path):
+        # Health probes, docs, and static assets bypass all checks.
+        if _is_fully_exempt(path):
             return await call_next(request)
 
-        # ── Query-parameter scan ─────────────────────────────────────────
-        label = _scan_query_params(request)
-        if label:
-            logger.warning(
-                "validation_middleware: %s detected in query params path=%s ip=%s",
-                label,
-                path,
-                request.client.host if request.client else "unknown",
-            )
-            return _rejection_response(
-                "VALIDATION_ERROR",
-                f"Request rejected: {label} pattern detected in query parameters.",
-            )
+        # Storage-only paths skip injection scanning but still enforce the size
+        # guard — a crafted oversized payload must be rejected regardless of path.
+        scan_exempt = _is_scan_exempt(path)
 
-        # ── Body scan (POST / PUT / PATCH only) ──────────────────────────
+        if not scan_exempt:
+            # ── Query-parameter scan ─────────────────────────────────────
+            label = _scan_query_params(request)
+            if label:
+                logger.warning(
+                    "validation_middleware: %s detected in query params path=%s ip=%s",
+                    label,
+                    path,
+                    request.client.host if request.client else "unknown",
+                )
+                return _rejection_response(
+                    "VALIDATION_ERROR",
+                    f"Request rejected: {label} pattern detected in query parameters.",
+                )
+
+        # ── Body size guard + optional injection scan (POST / PUT / PATCH) ──
         if request.method in _BODY_METHODS:
             body_bytes = await request.body()
 
@@ -225,25 +234,26 @@ class ValidationMiddleware(BaseHTTPMiddleware):
                     },
                 )
 
-            content_type = request.headers.get("content-type", "")
-            if "application/json" in content_type and body_bytes:
-                try:
-                    payload = json.loads(body_bytes.decode("utf-8"))
-                except (json.JSONDecodeError, UnicodeDecodeError):
-                    # Malformed JSON — let FastAPI/Pydantic handle it.
-                    pass
-                else:
-                    label = _scan_body_strings(payload)
-                    if label:
-                        logger.warning(
-                            "validation_middleware: %s detected in body path=%s ip=%s",
-                            label,
-                            path,
-                            request.client.host if request.client else "unknown",
-                        )
-                        return _rejection_response(
-                            "VALIDATION_ERROR",
-                            f"Request rejected: {label} pattern detected in request body.",
-                        )
+            if not scan_exempt:
+                content_type = request.headers.get("content-type", "")
+                if "application/json" in content_type and body_bytes:
+                    try:
+                        payload = json.loads(body_bytes.decode("utf-8"))
+                    except (json.JSONDecodeError, UnicodeDecodeError):
+                        # Malformed JSON — let FastAPI/Pydantic handle it.
+                        pass
+                    else:
+                        label = _scan_body_strings(payload)
+                        if label:
+                            logger.warning(
+                                "validation_middleware: %s detected in body path=%s ip=%s",
+                                label,
+                                path,
+                                request.client.host if request.client else "unknown",
+                            )
+                            return _rejection_response(
+                                "VALIDATION_ERROR",
+                                f"Request rejected: {label} pattern detected in request body.",
+                            )
 
         return await call_next(request)
