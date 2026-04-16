@@ -13,6 +13,7 @@ SHA-256 content-hash cache + upsert pattern as DocIndexer.
 Supported languages: Python, JavaScript/TypeScript.
 """
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -20,6 +21,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
+
+from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
@@ -32,10 +35,13 @@ class CodeIndexResult:
     errors: list[str] = field(default_factory=list)
 
 
-def _make_node_id(name: str, source_path: str) -> str:
-    """Stable lowercase ID: '<stem>::<safe_name>'."""
+def _make_node_id(name: str, source_path: str, parent: Optional[str] = None) -> str:
+    """Stable lowercase ID: '<stem>::<safe_name>' or '<stem>::<parent_safe>__<safe_name>'."""
     stem = Path(source_path).stem
     safe = re.sub(r"[^a-z0-9_]", "", name.lower().replace(".", "_"))
+    if parent:
+        parent_safe = re.sub(r"[^a-z0-9_]", "", parent.split("::")[-1].lower())
+        return f"{stem}::{parent_safe}__{safe}"
     return f"{stem}::{safe}"
 
 
@@ -70,7 +76,7 @@ def _py_structural(node: Any, source_path: str, nodes: dict, parent_scope: Optio
         name_node = node.child_by_field_name("name")
         if name_node:
             name = name_node.text.decode("utf-8")
-            nid = _make_node_id(name, source_path)
+            nid = _make_node_id(name, source_path, parent=parent_scope)
             nodes[nid] = {
                 "id": nid,
                 "name": name,
@@ -87,7 +93,7 @@ def _py_structural(node: Any, source_path: str, nodes: dict, parent_scope: Optio
         name_node = node.child_by_field_name("name")
         if name_node:
             name = name_node.text.decode("utf-8")
-            nid = _make_node_id(name, source_path)
+            nid = _make_node_id(name, source_path, parent=parent_scope)
             nodes[nid] = {
                 "id": nid,
                 "name": name,
@@ -148,7 +154,7 @@ def _js_structural(node: Any, source_path: str, nodes: dict, parent_scope: Optio
     if node.type in ("function_declaration", "arrow_function", "function_expression"):
         name_node = node.child_by_field_name("name")
         name = name_node.text.decode("utf-8") if name_node else f"anon_{node.start_point[0]}"
-        nid = _make_node_id(name, source_path)
+        nid = _make_node_id(name, source_path, parent=parent_scope)
         nodes[nid] = {
             "id": nid, "name": name, "kind": "function",
             "source_path": source_path, "line": node.start_point[0] + 1, "parent": parent_scope,
@@ -160,7 +166,7 @@ def _js_structural(node: Any, source_path: str, nodes: dict, parent_scope: Optio
         name_node = node.child_by_field_name("name")
         if name_node:
             name = name_node.text.decode("utf-8")
-            nid = _make_node_id(name, source_path)
+            nid = _make_node_id(name, source_path, parent=parent_scope)
             nodes[nid] = {
                 "id": nid, "name": name, "kind": "class",
                 "source_path": source_path, "line": node.start_point[0] + 1, "parent": parent_scope,
@@ -226,7 +232,7 @@ _EXTRACTORS: dict[str, Any] = {
 }
 
 
-_DEFAULT_CACHE = Path(__file__).parent / ".code_index_hashes.json"
+_DEFAULT_CACHE = PATH.DATA_DIR / ".code_index_hashes.json"
 
 
 class CodeIndexer:
@@ -247,7 +253,7 @@ class CodeIndexer:
         self._cache_file = cache_file
         self._hash_cache: dict[str, str] = self._load_cache()
 
-    def index_file(
+    async def index_file(
         self,
         file_path: str,
         root_dir: str,
@@ -284,7 +290,7 @@ class CodeIndexer:
             calls_by_source.setdefault(e["source"], []).append(e["target_name"])
 
         for node in nodes:
-            ok = self._upsert_node(node, rel_path, calls_by_source)
+            ok = await self._upsert_node(node, rel_path, calls_by_source)
             if ok:
                 result.success += 1
             else:
@@ -297,7 +303,7 @@ class CodeIndexer:
 
         return result
 
-    def _upsert_node(self, node: dict, rel_path: str, calls_by_source: dict[str, list[str]]) -> bool:
+    async def _upsert_node(self, node: dict, rel_path: str, calls_by_source: dict[str, list[str]]) -> bool:
         content = (
             f"{node['kind'].upper()} {node['name']}\n"
             f"File: {rel_path} line {node.get('line', 0)}"
@@ -313,7 +319,7 @@ class CodeIndexer:
             "origin": "extracted",
         }
         try:
-            embedding = self._embed_model.get_text_embedding(content)
+            embedding = await asyncio.to_thread(self._embed_model.get_text_embedding, content)
             self._collection.upsert(
                 ids=[node["id"]],
                 embeddings=[embedding],
