@@ -38,3 +38,10 @@ ai_classification_endpoint: "http://{{ ollama_host }}:{{ ollama_port }}"
 ai_redis_host: "{{ redis_host | default(ansible_host) }}"
 ai_redis_port: "{{ redis_port | default(6379) }}"
 ai_redis_password: "{{ vault_redis_password | default('') }}"
+
+# Agent LLM model names — required by get_agent_model_explicit() in ssot_config.py.
+# Defaults mirror the constants in autobot-backend/autobot_shared/ssot_config.py.
+# Override per-host in inventory when running non-default models.
+ai_chat_model: "qwen3.5:9b"
+ai_rag_model: "mistral:7b-instruct"
+ai_classification_model: "gemma2:2b"

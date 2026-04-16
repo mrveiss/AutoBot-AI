@@ -137,12 +137,6 @@
   timeout: 300  # Issue #2835: prevent indefinite hang on dependency resolution
   tags: ['browser', 'packages']
 
-- name: "Browser | Install Playwright browsers"
-  command: playwright install chromium firefox
-  become: yes
-  changed_when: false
-  tags: ['browser', 'packages']
-
 - name: "Browser | Check if browser worker directory exists"
   ansible.builtin.stat:
     path: /opt/autobot/autobot-browser-worker/package.json
@@ -155,6 +149,41 @@
   npm:
     path: /opt/autobot/autobot-browser-worker
     state: present
+  become: yes
+  when: _browser_worker_dir.stat.exists | default(false)
+  tags: ['browser', 'packages']
+
+# Install Chromium via the Node.js playwright package (not Python pip playwright).
+# Browsers go to a shared path so the autobot service user can find them regardless
+# of which user ran the install. (#provisioning-gaps)
+- name: "Browser | Create Playwright browsers directory"
+  ansible.builtin.file:
+    path: /opt/autobot/autobot-browser-worker/browsers
+    state: directory
+    owner: autobot
+    group: autobot
+    mode: "0755"
+  become: yes
+  tags: ['browser', 'packages']
+
+- name: "Browser | Install Playwright chromium browser via Node.js"
+  ansible.builtin.command:
+    cmd: node_modules/.bin/playwright install chromium
+    chdir: /opt/autobot/autobot-browser-worker
+  become: yes
+  environment:
+    PLAYWRIGHT_BROWSERS_PATH: /opt/autobot/autobot-browser-worker/browsers
+  changed_when: false
+  when: _browser_worker_dir.stat.exists | default(false)
+  tags: ['browser', 'packages']
+
+- name: "Browser | Fix Playwright browsers directory ownership"
+  ansible.builtin.file:
+    path: /opt/autobot/autobot-browser-worker/browsers
+    state: directory
+    owner: autobot
+    group: autobot
+    recurse: true
   become: yes
   when: _browser_worker_dir.stat.exists | default(false)
   tags: ['browser', 'packages']

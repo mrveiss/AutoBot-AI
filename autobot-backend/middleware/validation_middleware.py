@@ -65,6 +65,12 @@ _EXEMPT_PREFIXES: Final[tuple[str, ...]] = (
     "/static/",
 )
 
+# Storage-only paths whose bodies contain already-processed content (AI responses,
+# web search results) that legitimately includes shell command patterns.  These paths
+# store data — they never execute it — so injection scanning produces false positives
+# and blocks saves.  The user-input entry point (/chats/{id}/message) is NOT matched.
+_BODY_SCAN_EXEMPT_RE: Final[re.Pattern[str]] = re.compile(r"^/api/chats/[^/]+/save$")
+
 # ---------------------------------------------------------------------------
 # Injection-pattern catalog
 # ---------------------------------------------------------------------------
@@ -112,7 +118,9 @@ _INJECTION_PATTERNS: Final[Sequence[tuple[str, re.Pattern[str]]]] = (
 
 def _is_exempt(path: str) -> bool:
     """Return True when *path* should bypass validation."""
-    return any(path.startswith(prefix) for prefix in _EXEMPT_PREFIXES)
+    return any(path.startswith(prefix) for prefix in _EXEMPT_PREFIXES) or bool(
+        _BODY_SCAN_EXEMPT_RE.match(path)
+    )
 
 
 def _scan_value(value: str) -> str | None:
