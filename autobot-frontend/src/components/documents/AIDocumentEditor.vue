@@ -272,7 +272,7 @@ const formattedUpdatedAt = computed(() => {
   justify-content: space-between;
   padding: 12px 16px;
   border-bottom: 1px solid var(--color-border, #333);
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .title-row {
@@ -281,7 +281,7 @@ const formattedUpdatedAt = computed(() => {
 }
 
 .document-title {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: 1.1rem;
   font-weight: 600;
   cursor: pointer;
@@ -320,7 +320,7 @@ const formattedUpdatedAt = computed(() => {
 
 .header-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
   flex-shrink: 0;
 }
 
@@ -338,7 +338,7 @@ const formattedUpdatedAt = computed(() => {
   background: var(--color-background-secondary, #252525);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .refine-textarea {
@@ -348,7 +348,7 @@ const formattedUpdatedAt = computed(() => {
   color: inherit;
   border: 1px solid var(--color-border, #444);
   border-radius: var(--radius-default);
-  padding: 8px;
+  padding: var(--spacing-2);
   font-size: 0.9rem;
   font-family: inherit;
   outline: none;
@@ -365,7 +365,7 @@ const formattedUpdatedAt = computed(() => {
 
 .refine-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .editor-body {
@@ -380,7 +380,7 @@ const formattedUpdatedAt = computed(() => {
   background: transparent;
   color: inherit;
   border: none;
-  padding: 16px;
+  padding: var(--spacing-4);
   font-size: 0.95rem;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   line-height: 1.6;
@@ -396,7 +396,7 @@ const formattedUpdatedAt = computed(() => {
 .editor-footer {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--spacing-4);
   padding: 6px 16px;
   font-size: var(--text-xs);
   color: var(--color-text-muted, #888);

@@ -206,7 +206,7 @@ function canResumeOperation(operation: Operation): boolean {
 .empty-text {
   font-size: var(--text-sm);
   color: var(--text-tertiary);
-  margin: 0;
+  margin: var(--spacing-0);
   max-width: 400px;
 }
 
@@ -268,7 +268,7 @@ function canResumeOperation(operation: Operation): boolean {
 .name-cell {
   display: flex;
   flex-direction: column;
-  gap: 0.125rem;
+  gap: var(--spacing-0-5);
 }
 
 .operation-name {
@@ -288,7 +288,7 @@ function canResumeOperation(operation: Operation): boolean {
 .progress-cell {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   min-width: 120px;
 }
 
@@ -301,7 +301,7 @@ function canResumeOperation(operation: Operation): boolean {
 .type-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--spacing-1-5);
   font-size: var(--text-xs);
   color: var(--text-secondary);
 }
@@ -313,7 +313,7 @@ function canResumeOperation(operation: Operation): boolean {
 
 .action-buttons {
   display: flex;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 
 .action-btn {

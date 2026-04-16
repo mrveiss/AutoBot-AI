@@ -275,14 +275,14 @@ const closeModal = () => {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
-  padding: 24px;
+  padding: var(--spacing-6);
 }
 
 .section-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-5);
 }
 
 .header-info h3 {
@@ -292,7 +292,7 @@ const closeModal = () => {
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .header-info h3 i {
@@ -300,7 +300,7 @@ const closeModal = () => {
 }
 
 .header-info .description {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
   color: var(--text-tertiary);
   max-width: 500px;
@@ -317,7 +317,7 @@ const closeModal = () => {
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   transition: all var(--duration-200);
 }
 
@@ -361,19 +361,19 @@ const closeModal = () => {
 .overrides-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .global-mode-banner {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
   padding: 12px 16px;
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
   color: var(--text-secondary);
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
 }
 
 .global-mode-banner i {
@@ -384,7 +384,7 @@ const closeModal = () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px;
+  padding: var(--spacing-4);
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
@@ -398,7 +398,7 @@ const closeModal = () => {
 .override-info {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .endpoint-path code {
@@ -413,13 +413,13 @@ const closeModal = () => {
 .override-mode {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .mode-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
   padding: 4px 10px;
   border-radius: var(--radius-default);
   font-size: var(--text-xs);
@@ -448,7 +448,7 @@ const closeModal = () => {
 
 .override-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .action-btn {
@@ -479,13 +479,13 @@ const closeModal = () => {
 .override-form {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--spacing-5);
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .form-group label {
@@ -499,7 +499,7 @@ const closeModal = () => {
 }
 
 .form-input {
-  padding: 12px;
+  padding: var(--spacing-3);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
@@ -531,7 +531,7 @@ const closeModal = () => {
 
 .mode-selector {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .mode-selector .mode-option {
@@ -539,8 +539,8 @@ const closeModal = () => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 16px;
+  gap: var(--spacing-2-5);
+  padding: var(--spacing-4);
   border: 2px solid var(--border-default);
   border-radius: var(--radius-xl);
   cursor: pointer;
@@ -600,7 +600,7 @@ const closeModal = () => {
   display: block;
   font-size: var(--text-xs);
   color: var(--text-tertiary);
-  margin-top: 4px;
+  margin-top: var(--spacing-1);
 }
 
 /* Remove Modal */
@@ -630,7 +630,7 @@ const closeModal = () => {
 }
 
 .remove-content p {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-secondary);
 }
 
@@ -654,7 +654,7 @@ const closeModal = () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   transition: all var(--duration-200);
 }
 
@@ -687,7 +687,7 @@ const closeModal = () => {
 @media (max-width: 600px) {
   .section-header {
     flex-direction: column;
-    gap: 16px;
+    gap: var(--spacing-4);
   }
 
   .mode-selector {

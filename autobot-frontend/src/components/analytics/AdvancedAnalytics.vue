@@ -527,7 +527,7 @@ onMounted(() => {
 
 <style scoped>
 .advanced-analytics {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   position: relative;
 }
 
@@ -535,25 +535,25 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
 }
 
 .analytics-header h2 {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-primary);
 }
 
 .header-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .analytics-tabs {
   display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-6);
   border-bottom: 1px solid var(--border-default);
-  padding-bottom: 0.5rem;
+  padding-bottom: var(--spacing-2);
 }
 
 .tab-btn {
@@ -576,13 +576,13 @@ onMounted(() => {
 }
 
 .tab-btn i {
-  margin-right: 0.5rem;
+  margin-right: var(--spacing-2);
 }
 
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .metric-value {
@@ -600,7 +600,7 @@ onMounted(() => {
 }
 
 .metric-trend {
-  margin-top: 0.5rem;
+  margin-top: var(--spacing-2);
   font-size: var(--text-sm);
 }
 
@@ -623,7 +623,7 @@ onMounted(() => {
 
 .data-table th,
 .data-table td {
-  padding: 0.75rem;
+  padding: var(--spacing-3);
   text-align: left;
   border-bottom: 1px solid var(--border-default);
 }
@@ -659,18 +659,18 @@ onMounted(() => {
 }
 
 .mt-4 {
-  margin-top: 1rem;
+  margin-top: var(--spacing-4);
 }
 
 .recommendations-list {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .recommendation-item ul {
   margin: 0.5rem 0 0 1.5rem;
-  padding: 0;
+  padding: var(--spacing-0);
 }
 
 .recommendation-item li {
@@ -692,7 +692,7 @@ onMounted(() => {
 .export-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .export-card p {
@@ -703,7 +703,7 @@ onMounted(() => {
 .export-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 /* Issue #704: Migrated to CSS design tokens */
@@ -733,7 +733,7 @@ onMounted(() => {
   border-radius: 50%;
   font-size: var(--text-xs);
   font-weight: 600;
-  margin-right: 0.5rem;
+  margin-right: var(--spacing-2);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
 }
@@ -771,14 +771,14 @@ onMounted(() => {
 .peak-hours-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .peak-hour-item {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.75rem;
+  gap: var(--spacing-4);
+  padding: var(--spacing-3);
   background: var(--bg-secondary);
   border-radius: var(--radius-md);
 }

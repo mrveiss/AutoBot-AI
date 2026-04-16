@@ -751,7 +751,7 @@ const handleTakeManualControl = async () => {
 }
 
 .option-info ul {
-  margin: 0;
+  margin: var(--spacing-0);
   padding-left: var(--spacing-5);
   color: var(--text-secondary);
 }

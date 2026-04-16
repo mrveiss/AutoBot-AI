@@ -173,7 +173,7 @@ const fileIcon = computed(() => {
   font-size: var(--text-base);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .file-meta {
@@ -194,7 +194,7 @@ const fileIcon = computed(() => {
 .file-content {
   flex: 1;
   overflow: auto;
-  padding: 1.5rem;
+  padding: var(--spacing-6);
 }
 
 .loading-content,
@@ -218,7 +218,7 @@ const fileIcon = computed(() => {
 }
 
 .content-display {
-  margin: 0;
+  margin: var(--spacing-0);
   padding: var(--spacing-4);
   background: var(--bg-secondary);
   border-radius: var(--radius-lg);

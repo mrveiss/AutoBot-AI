@@ -229,7 +229,7 @@ watch(() => props.summaryId, (newId) => loadDrillDown(newId))
   color: var(--color-primary);
   font-size: var(--text-sm);
   cursor: pointer;
-  padding: 0;
+  padding: var(--spacing-0);
 }
 
 .breadcrumb-link:hover {
@@ -331,7 +331,7 @@ watch(() => props.summaryId, (newId) => loadDrillDown(newId))
   font-size: var(--text-sm);
   color: var(--text-primary);
   line-height: 1.7;
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 /* Sections */
@@ -342,7 +342,7 @@ h5 {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 h5 i {

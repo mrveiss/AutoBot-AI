@@ -610,7 +610,7 @@ onMounted(() => {
 .header-subtitle {
   font-size: var(--text-sm);
   color: var(--text-secondary);
-  margin: 0;
+  margin: var(--spacing-0);
   line-height: var(--leading-normal);
 }
 
@@ -644,7 +644,7 @@ onMounted(() => {
   border: none;
   cursor: pointer;
   color: inherit;
-  padding: 0;
+  padding: var(--spacing-0);
   display: flex;
   align-items: center;
 }
@@ -705,7 +705,7 @@ onMounted(() => {
 .status-card-body {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--spacing-0-5);
   min-width: 0;
 }
 
@@ -749,7 +749,7 @@ onMounted(() => {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-tertiary);
-  margin: 0;
+  margin: var(--spacing-0);
   padding: var(--spacing-md) var(--spacing-lg);
   background: var(--bg-tertiary);
   border-bottom: 1px solid var(--border-default);
@@ -778,14 +778,14 @@ onMounted(() => {
   font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
-  margin-bottom: 2px;
+  margin-bottom: var(--spacing-0-5);
   cursor: pointer;
 }
 
 .field-hint {
   font-size: var(--text-xs, 12px);
   color: var(--text-tertiary);
-  margin: 0;
+  margin: var(--spacing-0);
   line-height: var(--leading-normal);
 }
 
@@ -876,7 +876,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
   padding: var(--spacing-sm) var(--spacing-md);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
@@ -1041,7 +1041,7 @@ onMounted(() => {
   }
 
   .form-actions-right {
-    margin-left: 0;
+    margin-left: var(--spacing-0);
     flex-direction: column;
   }
 }

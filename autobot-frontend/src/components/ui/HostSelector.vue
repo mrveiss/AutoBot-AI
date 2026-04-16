@@ -323,7 +323,7 @@ defineExpose({
 .host-selector-collapsed {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   padding: 8px 12px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
@@ -340,7 +340,7 @@ defineExpose({
 .selected-host {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   flex: 1;
 }
 
@@ -377,7 +377,7 @@ defineExpose({
 .no-host-selected {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   flex: 1;
   color: var(--text-muted);
 }
@@ -414,7 +414,7 @@ defineExpose({
 }
 
 .selector-header h4 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
@@ -423,7 +423,7 @@ defineExpose({
 .btn-close {
   background: none;
   border: none;
-  padding: 4px;
+  padding: var(--spacing-1);
   cursor: pointer;
   color: var(--text-muted);
 }
@@ -434,7 +434,7 @@ defineExpose({
 
 .capability-filter {
   display: flex;
-  gap: 4px;
+  gap: var(--spacing-1);
   padding: 8px 16px;
   border-bottom: 1px solid var(--border-default);
 }
@@ -464,13 +464,13 @@ defineExpose({
 .host-list {
   min-height: 200px; max-height: 50vh;
   overflow-y: auto;
-  padding: 8px;
+  padding: var(--spacing-2);
 }
 
 .host-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-3);
   padding: 10px 12px;
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -521,7 +521,7 @@ defineExpose({
 
 .host-capabilities {
   display: flex;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .capability-badge {
@@ -556,18 +556,18 @@ defineExpose({
 .empty-state i,
 .loading-state i {
   font-size: 32px;
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
   opacity: 0.5;
 }
 
 .empty-state p {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
 }
 
 .selector-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
   padding: 12px 16px;
   border-top: 1px solid var(--border-default);
 }
@@ -584,7 +584,7 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
   transition: all var(--duration-150);
 }
 

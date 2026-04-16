@@ -781,8 +781,8 @@ const loadAnalytics = () => analytics.execute(async () => {
 .example-card {
   background: var(--bg-card);
   border-radius: var(--radius-lg);
-  padding: 24px;
-  margin-bottom: 24px;
+  padding: var(--spacing-6);
+  margin-bottom: var(--spacing-6);
   box-shadow: var(--shadow-sm);
 }
 
@@ -790,8 +790,8 @@ const loadAnalytics = () => analytics.execute(async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 16px;
+  margin-bottom: var(--spacing-4);
+  padding-bottom: var(--spacing-4);
   border-bottom: 2px solid var(--border-default);
 }
 
@@ -812,11 +812,11 @@ const loadAnalytics = () => analytics.execute(async () => {
 
 .example-description {
   color: var(--text-tertiary);
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-5);
 }
 
 .example-content {
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-5);
 }
 
 /* Buttons */
@@ -829,7 +829,7 @@ const loadAnalytics = () => analytics.execute(async () => {
   border: none;
   cursor: pointer;
   transition: all var(--duration-200);
-  margin-right: 8px;
+  margin-right: var(--spacing-2);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -860,12 +860,12 @@ const loadAnalytics = () => analytics.execute(async () => {
 .loading-indicator {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4);
   background: var(--color-info-bg);
   border: 1px solid var(--color-info-light);
   border-radius: var(--radius-md);
-  margin-top: 12px;
+  margin-top: var(--spacing-3);
   color: var(--color-info-dark);
 }
 
@@ -884,30 +884,30 @@ const loadAnalytics = () => analytics.execute(async () => {
 
 /* Error Messages */
 .error-message {
-  padding: 16px;
+  padding: var(--spacing-4);
   background: var(--color-error-bg);
   border: 1px solid var(--color-error-light);
   border-radius: var(--radius-md);
-  margin-top: 12px;
+  margin-top: var(--spacing-3);
   color: var(--color-error-dark);
 }
 
 /* Success Messages */
 .success-message {
-  padding: 16px;
+  padding: var(--spacing-4);
   background: var(--color-success-bg);
   border: 1px solid var(--color-success-light);
   border-radius: var(--radius-md);
-  margin-top: 12px;
+  margin-top: var(--spacing-3);
   color: var(--color-success-dark);
 }
 
 .success-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   font-weight: 500;
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
 }
 
 .success-icon {
@@ -920,27 +920,27 @@ const loadAnalytics = () => analytics.execute(async () => {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  padding: 12px;
-  margin-top: 12px;
+  padding: var(--spacing-3);
+  margin-top: var(--spacing-3);
   overflow-x: auto;
 }
 
 .data-display pre {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
 /* Form Elements */
 .form-group {
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-4);
 }
 
 .form-group label {
   display: block;
   font-weight: 500;
   color: var(--text-secondary);
-  margin-bottom: 6px;
+  margin-bottom: var(--spacing-1-5);
 }
 
 .form-input {
@@ -994,8 +994,8 @@ const loadAnalytics = () => analytics.execute(async () => {
 
 /* Error Log */
 .error-log {
-  margin-top: 16px;
-  padding: 16px;
+  margin-top: var(--spacing-4);
+  padding: var(--spacing-4);
   background: var(--color-error-bg);
   border: 1px solid var(--color-error-light);
   border-radius: var(--radius-md);
@@ -1008,12 +1008,12 @@ const loadAnalytics = () => analytics.execute(async () => {
 
 .error-log ul {
   list-style: none;
-  padding: 0;
-  margin: 0;
+  padding: var(--spacing-0);
+  margin: var(--spacing-0);
 }
 
 .error-log li {
-  padding: 8px;
+  padding: var(--spacing-2);
   border-bottom: 1px solid var(--color-error-light);
 }
 
@@ -1024,7 +1024,7 @@ const loadAnalytics = () => analytics.execute(async () => {
 .log-timestamp {
   font-size: var(--text-xs);
   color: var(--color-error-dark);
-  margin-right: 12px;
+  margin-right: var(--spacing-3);
 }
 
 .log-message {
@@ -1035,15 +1035,15 @@ const loadAnalytics = () => analytics.execute(async () => {
 .data-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 20px;
-  margin-top: 20px;
+  gap: var(--spacing-5);
+  margin-top: var(--spacing-5);
 }
 
 .data-section {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  padding: 16px;
+  padding: var(--spacing-4);
 }
 
 .data-section h3 {
@@ -1056,14 +1056,14 @@ const loadAnalytics = () => analytics.execute(async () => {
 .analytics-display {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-  margin-top: 16px;
+  gap: var(--spacing-4);
+  margin-top: var(--spacing-4);
 }
 
 .analytics-card {
   background: var(--chart-purple);
   color: white;
-  padding: 20px;
+  padding: var(--spacing-5);
   border-radius: var(--radius-lg);
   text-align: center;
 }
@@ -1082,13 +1082,13 @@ const loadAnalytics = () => analytics.execute(async () => {
 
 /* Code Comparison */
 .code-comparison {
-  margin-top: 20px;
+  margin-top: var(--spacing-5);
 }
 
 .code-comparison details {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  padding: 12px;
+  padding: var(--spacing-3);
   background: var(--bg-secondary);
 }
 
@@ -1106,8 +1106,8 @@ const loadAnalytics = () => analytics.execute(async () => {
 .code-blocks {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  margin-top: 16px;
+  gap: var(--spacing-5);
+  margin-top: var(--spacing-4);
 }
 
 @media (max-width: 1024px) {
@@ -1124,7 +1124,7 @@ const loadAnalytics = () => analytics.execute(async () => {
 }
 
 .code-block h4 {
-  margin: 0;
+  margin: var(--spacing-0);
   padding: 12px 16px;
   background: var(--bg-tertiary);
   border-bottom: 1px solid var(--border-default);
@@ -1132,8 +1132,8 @@ const loadAnalytics = () => analytics.execute(async () => {
 }
 
 .code-block pre {
-  margin: 0;
-  padding: 16px;
+  margin: var(--spacing-0);
+  padding: var(--spacing-4);
   overflow-x: auto;
 }
 
@@ -1148,8 +1148,8 @@ const loadAnalytics = () => analytics.execute(async () => {
   background: var(--chart-purple);
   color: white;
   border-radius: var(--radius-lg);
-  padding: 32px;
-  margin-top: 32px;
+  padding: var(--spacing-8);
+  margin-top: var(--spacing-8);
 }
 
 .summary-title {
@@ -1162,16 +1162,16 @@ const loadAnalytics = () => analytics.execute(async () => {
 .benefits-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
+  gap: var(--spacing-5);
 }
 
 .benefit-item {
   background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
   border-radius: var(--radius-lg);
-  padding: 20px;
+  padding: var(--spacing-5);
   display: flex;
-  gap: 16px;
+  gap: var(--spacing-4);
   transition: transform var(--duration-200);
 }
 
@@ -1190,7 +1190,7 @@ const loadAnalytics = () => analytics.execute(async () => {
 }
 
 .benefit-content p {
-  margin: 0;
+  margin: var(--spacing-0);
   opacity: 0.9;
   font-size: var(--text-sm);
 }

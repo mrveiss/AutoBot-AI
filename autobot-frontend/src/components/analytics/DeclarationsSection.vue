@@ -354,7 +354,7 @@ const getDeclarationTypeClass = (type: string): string => {
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
   transition: all var(--duration-150) var(--ease-out);
 }
 

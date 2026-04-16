@@ -1705,8 +1705,8 @@ watch(() => currentView.value, () => {
 
 .connections-list {
   list-style: none;
-  padding: 0;
-  margin: 0;
+  padding: var(--spacing-0);
+  margin: var(--spacing-0);
 }
 
 .connections-list li {

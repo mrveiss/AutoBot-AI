@@ -178,7 +178,7 @@ function formatDuration(seconds: number): string {
 .agent-observability-panel {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .panel-header {
@@ -188,12 +188,12 @@ function formatDuration(seconds: number): string {
 }
 
 .panel-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: 15px;
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .panel-header h3 i {
@@ -238,7 +238,7 @@ function formatDuration(seconds: number): string {
 .empty-state i,
 .loading-state i {
   font-size: var(--text-4xl);
-  margin-bottom: 10px;
+  margin-bottom: var(--spacing-2-5);
 }
 
 .empty-state h4 {
@@ -248,7 +248,7 @@ function formatDuration(seconds: number): string {
 }
 
 .empty-state p {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-xs);
 }
 
@@ -256,7 +256,7 @@ function formatDuration(seconds: number): string {
 .agents-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 14px;
+  gap: var(--spacing-3-5);
 }
 
 /* Agent Card */
@@ -264,10 +264,10 @@ function formatDuration(seconds: number): string {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
-  padding: 16px;
+  padding: var(--spacing-4);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-3);
   transition: border-color var(--duration-200);
 }
 
@@ -279,13 +279,13 @@ function formatDuration(seconds: number): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .agent-identity {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
   flex: 1;
   min-width: 0;
 }
@@ -362,7 +362,7 @@ function formatDuration(seconds: number): string {
 /* Metrics */
 .metrics-row {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .metric {
@@ -389,7 +389,7 @@ function formatDuration(seconds: number): string {
   color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-top: 2px;
+  margin-top: var(--spacing-0-5);
 }
 
 /* Reliability Bar */
@@ -418,7 +418,7 @@ function formatDuration(seconds: number): string {
 .capabilities-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .capability-tag {

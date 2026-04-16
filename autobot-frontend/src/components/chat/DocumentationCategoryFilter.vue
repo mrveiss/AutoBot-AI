@@ -242,7 +242,7 @@ const selectDocumentation = () => {
   color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: var(--tracking-wider);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .clear-btn {

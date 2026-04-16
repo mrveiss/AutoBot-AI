@@ -206,25 +206,25 @@ function formatResult(result: Record<string, unknown>): string {
 </script>
 
 <style scoped>
-.workflow-runner { display: flex; height: 100%; gap: 0; background: var(--bg-primary); border-radius: var(--radius-lg); overflow: hidden; }
+.workflow-runner { display: flex; height: 100%; gap: var(--spacing-0); background: var(--bg-primary); border-radius: var(--radius-lg); overflow: hidden; }
 
 .runner-sidebar { width: 300px; min-width: 300px; background: var(--bg-secondary); border-right: 1px solid var(--border-default); display: flex; flex-direction: column; }
-.sidebar-header { display: flex; justify-content: space-between; align-items: center; padding: 16px; border-bottom: 1px solid var(--border-default); }
-.sidebar-header h4 { margin: 0; font-size: var(--text-sm); color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
+.sidebar-header { display: flex; justify-content: space-between; align-items: center; padding: var(--spacing-4); border-bottom: 1px solid var(--border-default); }
+.sidebar-header h4 { margin: var(--spacing-0); font-size: var(--text-sm); color: var(--text-primary); display: flex; align-items: center; gap: var(--spacing-2); }
 .sidebar-header h4 i { color: var(--color-primary); }
-.btn-refresh { padding: 6px; background: transparent; border: none; color: var(--text-tertiary); cursor: pointer; border-radius: var(--radius-default); }
+.btn-refresh { padding: var(--spacing-1-5); background: transparent; border: none; color: var(--text-tertiary); cursor: pointer; border-radius: var(--radius-default); }
 .btn-refresh:hover:not(:disabled) { background: var(--bg-hover); }
 .btn-refresh:disabled { opacity: 0.5; }
 
-.empty-list { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted); padding: 20px; }
-.empty-list i { font-size: 32px; margin-bottom: 12px; }
+.empty-list { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted); padding: var(--spacing-5); }
+.empty-list i { font-size: 32px; margin-bottom: var(--spacing-3); }
 
-.workflow-list { flex: 1; overflow-y: auto; padding: 8px; }
-.workflow-item { padding: 12px; background: var(--bg-tertiary); border-radius: var(--radius-lg); margin-bottom: 8px; cursor: pointer; transition: all 0.15s; }
+.workflow-list { flex: 1; overflow-y: auto; padding: var(--spacing-2); }
+.workflow-item { padding: var(--spacing-3); background: var(--bg-tertiary); border-radius: var(--radius-lg); margin-bottom: var(--spacing-2); cursor: pointer; transition: all 0.15s; }
 .workflow-item:hover { background: var(--bg-hover); }
 .workflow-item.active { background: var(--color-primary-bg); border: 1px solid var(--color-primary); }
 .workflow-item.paused { opacity: 0.7; }
-.workflow-item { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.workflow-item { display: flex; flex-wrap: wrap; align-items: center; gap: var(--spacing-2-5); }
 .wf-status { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); }
 .wf-status.running { background: var(--color-success-bg); color: var(--color-success); }
 .wf-status.paused { background: var(--color-warning-bg); color: var(--color-warning); }
@@ -237,15 +237,15 @@ function formatResult(result: Record<string, unknown>): string {
 .wf-progress-bar .progress-fill { height: 100%; background: var(--color-primary); transition: width 0.3s; }
 
 .runner-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-.no-selection { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-tertiary); padding: 40px; }
-.no-selection i { font-size: var(--text-5xl); margin-bottom: 16px; }
+.no-selection { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-tertiary); padding: var(--spacing-10); }
+.no-selection i { font-size: var(--text-5xl); margin-bottom: var(--spacing-4); }
 .no-selection h3 { margin: 0 0 8px; color: var(--text-primary); }
 
-.workflow-header { display: flex; justify-content: space-between; align-items: flex-start; padding: 20px; background: var(--bg-secondary); border-bottom: 1px solid var(--border-default); }
+.workflow-header { display: flex; justify-content: space-between; align-items: flex-start; padding: var(--spacing-5); background: var(--bg-secondary); border-bottom: 1px solid var(--border-default); }
 .header-info h2 { margin: 0 0 4px; font-size: var(--text-lg); color: var(--text-primary); }
 .header-info p { margin: 0 0 10px; font-size: var(--text-sm); color: var(--text-secondary); }
-.header-meta { display: flex; gap: 16px; font-size: var(--text-xs); color: var(--text-tertiary); flex-wrap: wrap; }
-.header-meta span { display: flex; align-items: center; gap: 6px; }
+.header-meta { display: flex; gap: var(--spacing-4); font-size: var(--text-xs); color: var(--text-tertiary); flex-wrap: wrap; }
+.header-meta span { display: flex; align-items: center; gap: var(--spacing-1-5); }
 .phase-badge { padding: 2px 8px; border-radius: var(--radius-xl); font-weight: 500; background: var(--bg-tertiary); }
 .phase-badge.planning { background: var(--color-info-bg); color: var(--color-info); }
 .phase-badge.executing { background: var(--color-primary-bg); color: var(--color-primary); }
@@ -253,7 +253,7 @@ function formatResult(result: Record<string, unknown>): string {
 .phase-badge.complete { background: var(--color-success-bg); color: var(--color-success); }
 .phase-badge.failed { background: var(--color-error-bg); color: var(--color-error); }
 .service-badge { padding: 2px 8px; border-radius: var(--radius-xl); background: var(--bg-tertiary); color: var(--text-secondary); font-family: monospace; }
-.header-actions { display: flex; gap: 10px; align-items: center; }
+.header-actions { display: flex; gap: var(--spacing-2-5); align-items: center; }
 
 .btn-notif {
   padding: 8px 10px;
@@ -269,20 +269,20 @@ function formatResult(result: Record<string, unknown>): string {
 }
 .btn-notif:hover { background: var(--bg-hover); color: var(--color-primary); }
 
-.progress-overview { padding: 20px; background: var(--bg-secondary); }
-.progress-bar-large { height: 8px; background: var(--bg-tertiary); border-radius: var(--radius-default); overflow: hidden; margin-bottom: 16px; }
+.progress-overview { padding: var(--spacing-5); background: var(--bg-secondary); }
+.progress-bar-large { height: 8px; background: var(--bg-tertiary); border-radius: var(--radius-default); overflow: hidden; margin-bottom: var(--spacing-4); }
 .progress-bar-large .progress-fill { height: 100%; background: var(--color-primary); transition: width 0.3s; }
 .progress-stats { display: flex; justify-content: space-around; }
 .progress-stats .stat { text-align: center; }
 .progress-stats .value { display: block; font-size: var(--text-2xl); font-weight: 600; color: var(--text-primary); }
 .progress-stats .label { font-size: var(--text-xs); color: var(--text-tertiary); }
 
-.steps-container { flex: 1; overflow-y: auto; padding: 20px; }
-.steps-container h4 { margin: 0 0 16px; font-size: var(--text-sm); color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
+.steps-container { flex: 1; overflow-y: auto; padding: var(--spacing-5); }
+.steps-container h4 { margin: 0 0 16px; font-size: var(--text-sm); color: var(--text-primary); display: flex; align-items: center; gap: var(--spacing-2); }
 .steps-container h4 i { color: var(--color-primary); }
 
 .steps-list { display: flex; flex-direction: column; }
-.step-item { display: flex; gap: 16px; padding-bottom: 16px; }
+.step-item { display: flex; gap: var(--spacing-4); padding-bottom: var(--spacing-4); }
 .step-indicator { display: flex; flex-direction: column; align-items: center; }
 .step-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); font-weight: 600; background: var(--bg-tertiary); color: var(--text-tertiary); }
 .step-icon.completed { background: var(--color-success); color: white; }
@@ -290,7 +290,7 @@ function formatResult(result: Record<string, unknown>): string {
 .step-icon.executing { background: var(--color-primary); color: white; }
 .step-icon.waiting_approval { background: var(--color-warning); color: white; }
 .step-icon.skipped { background: var(--bg-tertiary); color: var(--text-muted); }
-.step-line { width: 2px; flex: 1; min-height: 20px; background: var(--border-default); margin-top: 4px; }
+.step-line { width: 2px; flex: 1; min-height: 20px; background: var(--border-default); margin-top: var(--spacing-1); }
 .step-line.completed { background: var(--color-success); }
 
 .step-content { flex: 1; padding: 8px 16px; background: var(--bg-secondary); border-radius: var(--radius-lg); border-left: 3px solid var(--border-default); }
@@ -299,7 +299,7 @@ function formatResult(result: Record<string, unknown>): string {
 .step-item.executing .step-content { border-left-color: var(--color-primary); }
 .step-item.waiting_approval .step-content { border-left-color: var(--color-warning); }
 
-.step-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.step-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-2); }
 .step-desc { font-size: var(--text-sm); font-weight: 500; color: var(--text-primary); }
 .step-status { font-size: var(--text-xs); padding: 2px 8px; border-radius: var(--radius-xl); background: var(--bg-tertiary); color: var(--text-tertiary); }
 .step-status.completed { background: var(--color-success-bg); color: var(--color-success); }
@@ -307,26 +307,26 @@ function formatResult(result: Record<string, unknown>): string {
 .step-status.executing { background: var(--color-primary-bg); color: var(--color-primary); }
 .step-status.waiting_approval { background: var(--color-warning-bg); color: var(--color-warning); }
 
-.step-command { display: block; padding: 8px 10px; background: var(--bg-tertiary); border-radius: var(--radius-default); font-size: var(--text-xs); color: var(--text-secondary); margin-bottom: 8px; overflow-x: auto; }
-.step-meta { display: flex; gap: 12px; font-size: var(--text-xs); color: var(--text-tertiary); }
-.step-meta span { display: flex; align-items: center; gap: 4px; }
+.step-command { display: block; padding: 8px 10px; background: var(--bg-tertiary); border-radius: var(--radius-default); font-size: var(--text-xs); color: var(--text-secondary); margin-bottom: var(--spacing-2); overflow-x: auto; }
+.step-meta { display: flex; gap: var(--spacing-3); font-size: var(--text-xs); color: var(--text-tertiary); }
+.step-meta span { display: flex; align-items: center; gap: var(--spacing-1); }
 .step-meta .risk { padding: 2px 6px; border-radius: var(--radius-lg); }
 .step-meta .risk.low { background: var(--color-success-bg); color: var(--color-success); }
 .step-meta .risk.medium { background: var(--color-warning-bg); color: var(--color-warning); }
 .step-meta .risk.high { background: var(--color-error-bg); color: var(--color-error); }
 
-.step-actions { display: flex; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-default); }
-.step-result { margin-top: 12px; padding: 10px; background: var(--bg-tertiary); border-radius: var(--radius-default); }
+.step-actions { display: flex; gap: var(--spacing-2); margin-top: var(--spacing-3); padding-top: var(--spacing-3); border-top: 1px solid var(--border-default); }
+.step-result { margin-top: var(--spacing-3); padding: var(--spacing-2-5); background: var(--bg-tertiary); border-radius: var(--radius-default); }
 .step-result.error { background: var(--color-error-bg); }
-.step-result pre { margin: 0; font-size: var(--text-xs); color: var(--text-secondary); white-space: pre-wrap; word-break: break-all; max-height: 150px; overflow-y: auto; }
+.step-result pre { margin: var(--spacing-0); font-size: var(--text-xs); color: var(--text-secondary); white-space: pre-wrap; word-break: break-all; max-height: 150px; overflow-y: auto; }
 
-.btn-success { padding: 8px 16px; background: var(--color-success); color: white; border: none; border-radius: var(--radius-md); font-size: var(--text-sm); font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.btn-success { padding: 8px 16px; background: var(--color-success); color: white; border: none; border-radius: var(--radius-md); font-size: var(--text-sm); font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: var(--spacing-1-5); }
 .btn-success:hover { filter: brightness(1.1); }
-.btn-warning { padding: 8px 16px; background: var(--color-warning); color: white; border: none; border-radius: var(--radius-md); font-size: var(--text-sm); font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.btn-warning { padding: 8px 16px; background: var(--color-warning); color: white; border: none; border-radius: var(--radius-md); font-size: var(--text-sm); font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: var(--spacing-1-5); }
 .btn-warning:hover { filter: brightness(1.1); }
-.btn-danger { padding: 8px 16px; background: var(--color-error); color: white; border: none; border-radius: var(--radius-md); font-size: var(--text-sm); font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.btn-danger { padding: 8px 16px; background: var(--color-error); color: white; border: none; border-radius: var(--radius-md); font-size: var(--text-sm); font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: var(--spacing-1-5); }
 .btn-danger:hover { filter: brightness(1.1); }
-.btn-secondary { padding: 8px 16px; background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-md); font-size: var(--text-sm); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.btn-secondary { padding: 8px 16px; background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-md); font-size: var(--text-sm); cursor: pointer; display: inline-flex; align-items: center; gap: var(--spacing-1-5); }
 .btn-secondary:hover { background: var(--bg-hover); }
 .btn-sm { padding: 6px 12px; font-size: var(--text-xs); }
 </style>

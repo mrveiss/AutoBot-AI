@@ -162,7 +162,7 @@ onUnmounted(() => document.removeEventListener('click', handleOutsideClick))
   z-index: var(--z-popover);
   padding: var(--spacing-xs) 0;
   list-style: none;
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .lang-option {

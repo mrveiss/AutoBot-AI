@@ -160,7 +160,7 @@ defineExpose({
 .base-input-wrapper {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 /* Label */
@@ -169,13 +169,13 @@ defineExpose({
   font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
-  margin-bottom: 4px;
+  margin-bottom: var(--spacing-1);
   font-family: var(--font-sans);
 }
 
 .label-asterisk {
   color: var(--color-error);
-  margin-left: 2px;
+  margin-left: var(--spacing-0-5);
 }
 
 /* Input Container */
@@ -272,19 +272,19 @@ defineExpose({
 }
 
 .input-prefix {
-  margin-right: 8px;
+  margin-right: var(--spacing-2);
 }
 
 .input-suffix {
-  margin-left: 8px;
-  gap: 4px;
+  margin-left: var(--spacing-2);
+  gap: var(--spacing-1);
 }
 
 .clear-button {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 4px;
+  padding: var(--spacing-1);
   background: transparent;
   border: none;
   color: var(--text-muted);
@@ -306,14 +306,14 @@ defineExpose({
 .helper-text {
   font-size: var(--text-xs);
   color: var(--text-muted);
-  margin: 0;
+  margin: var(--spacing-0);
   font-family: var(--font-sans);
 }
 
 .error-text {
   font-size: var(--text-xs);
   color: var(--color-error);
-  margin: 0;
+  margin: var(--spacing-0);
   font-family: var(--font-sans);
   font-weight: 500;
 }
@@ -322,7 +322,7 @@ defineExpose({
 .base-input[type="number"]::-webkit-inner-spin-button,
 .base-input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .base-input[type="number"] {

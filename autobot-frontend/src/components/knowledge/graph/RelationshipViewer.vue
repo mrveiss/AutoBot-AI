@@ -162,7 +162,7 @@ watch(() => props.entityId, fetchRelationships)
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .viewer-header h4 i {
@@ -283,7 +283,7 @@ watch(() => props.entityId, fetchRelationships)
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: var(--spacing-0-5);
   min-width: 80px;
 }
 
@@ -330,7 +330,7 @@ watch(() => props.entityId, fetchRelationships)
 .rel-confidence {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .viewer-summary {

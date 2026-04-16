@@ -308,8 +308,8 @@ const createRipple = (event: TouchEvent) => {
   background-color: transparent;
   color: var(--color-primary);
   text-decoration: none;
-  padding-left: 0;
-  padding-right: 0;
+  padding-left: var(--spacing-0);
+  padding-right: var(--spacing-0);
   border: none;
 }
 
@@ -342,7 +342,7 @@ const createRipple = (event: TouchEvent) => {
   display: inline-block;
   width: 1rem;
   height: 1rem;
-  margin-right: 0.5rem;
+  margin-right: var(--spacing-2);
   border: 2px solid currentColor;
   border-top-color: transparent;
   border-radius: 50%;
@@ -357,7 +357,7 @@ const createRipple = (event: TouchEvent) => {
 .button-content {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 /* Icon spacing */

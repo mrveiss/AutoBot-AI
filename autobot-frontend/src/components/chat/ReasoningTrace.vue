@@ -112,7 +112,7 @@ function formatDuration(ms: number): string {
 .reasoning-trace {
   border: 1px solid var(--color-border, #334155);
   border-radius: var(--radius-lg);
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
   background: var(--color-bg-subtle, #0f172a);
   overflow: hidden;
   font-size: var(--text-xs);
@@ -126,7 +126,7 @@ function formatDuration(ms: number): string {
 .reasoning-trace__header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   width: 100%;
   padding: 0.4rem 0.75rem;
   background: none;
@@ -183,7 +183,7 @@ function formatDuration(ms: number): string {
 .reasoning-trace__entry {
   display: flex;
   align-items: flex-start;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   padding: 0.2rem 0.75rem;
   line-height: 1.5;
   border-left: 2px solid transparent;
@@ -246,13 +246,13 @@ function formatDuration(ms: number): string {
   flex-shrink: 0;
   font-size: 0.7rem;
   margin-left: auto;
-  padding-left: 0.25rem;
+  padding-left: var(--spacing-1);
 }
 
 .reasoning-trace__entry-status {
   flex-shrink: 0;
   font-size: 0.7rem;
-  padding-left: 0.25rem;
+  padding-left: var(--spacing-1);
 }
 
 .reasoning-trace__entry-status--ok {

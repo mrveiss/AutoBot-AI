@@ -976,7 +976,7 @@ onUnmounted(() => {
 <style scoped>
 /* Issue #704: Uses CSS design tokens via getCssVar() helper */
 .codebase-analytics {
-  padding: 20px;
+  padding: var(--spacing-5);
   background: var(--bg-primary);
   color: var(--text-primary);
   min-height: 100vh;
@@ -1031,7 +1031,7 @@ onUnmounted(() => {
   transition: var(--transition-all);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   background: var(--chart-green);
   color: var(--text-on-success);
 }
@@ -1061,8 +1061,8 @@ onUnmounted(() => {
 
 /* Traditional Analytics Section */
 .analytics-section {
-  margin-top: 24px;
-  padding: 20px;
+  margin-top: var(--spacing-6);
+  padding: var(--spacing-5);
   background: var(--bg-secondary);
   border-radius: var(--radius-xl);
   border: 1px solid var(--bg-tertiary);
@@ -1072,15 +1072,15 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
-  padding-bottom: 16px;
+  margin-bottom: var(--spacing-6);
+  padding-bottom: var(--spacing-4);
   border-bottom: 1px solid var(--bg-tertiary);
 }
 
 .toggle-switch {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
   cursor: pointer;
   color: var(--text-secondary);
 }
@@ -1128,7 +1128,7 @@ onUnmounted(() => {
   transition: all var(--duration-200);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .refresh-all-btn:hover {
@@ -1172,7 +1172,7 @@ onUnmounted(() => {
 .kb-optin-text strong {
   display: block;
   color: var(--text-primary);
-  margin-bottom: 2px;
+  margin-bottom: var(--spacing-0-5);
 }
 
 .kb-optin-btn {
@@ -1186,7 +1186,7 @@ onUnmounted(() => {
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
   white-space: nowrap;
   flex-shrink: 0;
   transition: opacity var(--duration-200);
@@ -1206,7 +1206,7 @@ onUnmounted(() => {
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 4px;
+  padding: var(--spacing-1);
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
@@ -1221,13 +1221,13 @@ onUnmounted(() => {
 
 /* Issue #3436: Per-project sub-tab bar */
 .project-sub-tabs-container {
-  margin-top: 24px;
+  margin-top: var(--spacing-6);
   border-top: 1px solid var(--border-default);
 }
 
 .project-sub-tabs {
   display: flex;
-  gap: 2px;
+  gap: var(--spacing-0-5);
   padding: 0 0 0 0;
   overflow-x: auto;
   border-bottom: 1px solid var(--border-default);
@@ -1237,7 +1237,7 @@ onUnmounted(() => {
 .project-sub-tab {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
   padding: 10px 16px;
   font-size: var(--text-sm);
   font-weight: 500;
@@ -1273,6 +1273,6 @@ onUnmounted(() => {
 }
 
 .project-sub-tab-view {
-  margin-top: 16px;
+  margin-top: var(--spacing-4);
 }
 </style>

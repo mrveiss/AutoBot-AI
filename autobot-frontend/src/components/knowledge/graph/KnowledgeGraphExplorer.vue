@@ -199,7 +199,7 @@ function handleViewTimeline(entityName: string): void {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .explorer-header h4 i {
@@ -278,7 +278,7 @@ function handleViewTimeline(entityName: string): void {
 .type-checkbox {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
   cursor: pointer;
 }
 
@@ -398,7 +398,7 @@ function handleViewTimeline(entityName: string): void {
 }
 
 .entity-meta i {
-  margin-right: 4px;
+  margin-right: var(--spacing-1);
 }
 
 .confidence-score,

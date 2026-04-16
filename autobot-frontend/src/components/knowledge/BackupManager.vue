@@ -347,7 +347,7 @@ onMounted(() => {
 
 .header-description {
   color: var(--text-secondary);
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
 }
 
@@ -437,7 +437,7 @@ onMounted(() => {
   font-size: var(--text-sm);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .list-header {
@@ -506,7 +506,7 @@ onMounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 0.125rem;
+  gap: var(--spacing-0-5);
 }
 
 .backup-name {

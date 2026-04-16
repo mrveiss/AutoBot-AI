@@ -362,12 +362,12 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 24px;
+  padding: var(--spacing-6);
   border-bottom: 1px solid var(--border-default);
 }
 
 .modal-header h2 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-2xl);
   font-weight: 600;
   color: var(--text-primary);
@@ -379,7 +379,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   font-size: 32px;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 0;
+  padding: var(--spacing-0);
   width: 32px;
   height: 32px;
   display: flex;
@@ -395,7 +395,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 
 .tab-bar {
   display: flex;
-  gap: 0;
+  gap: var(--spacing-0);
   border-bottom: 1px solid var(--border-default);
   padding: 0 24px;
 }
@@ -403,7 +403,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 .tab-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
   padding: 12px 16px;
   border: none;
   background: none;
@@ -430,35 +430,35 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 }
 
 .modal-body {
-  padding: 24px;
+  padding: var(--spacing-6);
 }
 
 .profile-section {
-  margin-bottom: 32px;
+  margin-bottom: var(--spacing-8);
 }
 
 .profile-section:last-child {
-  margin-bottom: 0;
+  margin-bottom: var(--spacing-0);
 }
 
 .profile-section h3 {
   font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-4);
 }
 
 .info-grid {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .info-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px;
+  padding: var(--spacing-3);
   background: var(--bg-secondary);
   border-radius: var(--radius-md);
 }
@@ -485,7 +485,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 .role-viewer { background: var(--bg-tertiary); color: var(--text-secondary); }
 
 .pref-group {
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-5);
 }
 
 .pref-label {
@@ -495,12 +495,12 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   font-size: var(--text-sm);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
 }
 
 .option-row {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .option-btn {
@@ -527,13 +527,13 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 .toggle-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .toggle-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   font-size: var(--text-sm);
   color: var(--text-primary);
   cursor: pointer;
@@ -547,7 +547,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 }
 
 .save-btn {
-  margin-top: 16px;
+  margin-top: var(--spacing-4);
   padding: 8px 20px;
   background: var(--color-primary, #6366f1);
   color: white;
@@ -571,7 +571,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 .pw-form {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .pw-input {

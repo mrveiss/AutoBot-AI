@@ -589,7 +589,7 @@ onMounted(() => {
 }
 
 .modal-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-lg);
   color: var(--text-primary);
   word-break: break-all;
@@ -601,7 +601,7 @@ onMounted(() => {
   font-size: var(--text-2xl);
   color: var(--text-muted);
   cursor: pointer;
-  padding: 0;
+  padding: var(--spacing-0);
   width: 30px;
   height: 30px;
   display: flex;
@@ -641,7 +641,7 @@ onMounted(() => {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 20px;
+  padding: var(--spacing-5);
   background-color: var(--bg-secondary);
 }
 
@@ -657,11 +657,11 @@ onMounted(() => {
 .text-preview, .json-preview {
   flex: 1;
   overflow: auto;
-  padding: 20px;
+  padding: var(--spacing-5);
 }
 
 .text-preview pre, .json-preview pre {
-  margin: 0;
+  margin: var(--spacing-0);
   font-family: 'Courier New', Courier, monospace;
   font-size: var(--text-sm);
   line-height: 1.5;
@@ -669,7 +669,7 @@ onMounted(() => {
   word-break: break-word;
   background-color: var(--bg-secondary);
   color: var(--text-primary);
-  padding: 16px;
+  padding: var(--spacing-4);
   border-radius: var(--radius-default);
   border: 1px solid var(--border-default);
 }
@@ -694,7 +694,7 @@ onMounted(() => {
 /* File Info */
 .file-info {
   flex: 1;
-  padding: 40px;
+  padding: var(--spacing-10);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -714,7 +714,7 @@ onMounted(() => {
 }
 
 .download-btn {
-  margin-top: 20px;
+  margin-top: var(--spacing-5);
   padding: 10px 20px;
   background-color: var(--color-electric-600, #2563eb);
   color: white;
@@ -745,12 +745,12 @@ onMounted(() => {
   }
 
   .text-preview, .json-preview {
-    padding: 16px;
+    padding: var(--spacing-4);
   }
 
   .text-preview pre, .json-preview pre {
     font-size: var(--text-xs);
-    padding: 12px;
+    padding: var(--spacing-3);
   }
 }
 </style>

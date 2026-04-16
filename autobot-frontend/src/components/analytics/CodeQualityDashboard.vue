@@ -1079,7 +1079,7 @@ watch(selectedPeriod, () => {
   font-size: var(--text-2xl);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .realtime-status {
@@ -1291,7 +1291,7 @@ watch(selectedPeriod, () => {
 }
 
 .recommendations ul {
-  margin: 0;
+  margin: var(--spacing-0);
   padding-left: var(--spacing-5);
 }
 
@@ -1418,7 +1418,7 @@ watch(selectedPeriod, () => {
 }
 
 .panel-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-base);
   color: var(--text-primary);
 }
@@ -1820,7 +1820,7 @@ watch(selectedPeriod, () => {
 }
 
 .modal-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-lg);
   color: var(--text-primary);
 }

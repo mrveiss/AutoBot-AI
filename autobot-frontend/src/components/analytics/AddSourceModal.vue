@@ -477,7 +477,7 @@ onMounted(() => {
   font-size: var(--text-lg);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
   display: flex;
   align-items: center;
   gap: var(--spacing-2-5);
@@ -664,7 +664,7 @@ onMounted(() => {
   position: absolute;
   width: 1px;
   height: 1px;
-  padding: 0;
+  padding: var(--spacing-0);
   margin: -1px;
   overflow: hidden;
   clip: rect(0, 0, 0, 0);

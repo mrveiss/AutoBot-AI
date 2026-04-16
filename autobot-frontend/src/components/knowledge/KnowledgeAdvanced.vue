@@ -498,21 +498,21 @@ onMounted(() => {
 <style scoped>
 /* Issue #704: Migrated to CSS design tokens */
 .knowledge-advanced {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   max-width: 1200px;
   margin: 0 auto;
 }
 
 .advanced-header {
   text-align: center;
-  margin-bottom: 2rem;
+  margin-bottom: var(--spacing-8);
 }
 
 .advanced-header h3 {
   font-size: var(--text-2xl);
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
 }
 
 .header-description {
@@ -523,7 +523,7 @@ onMounted(() => {
 .advanced-sections {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: var(--spacing-8);
 }
 
 .section-card {
@@ -534,7 +534,7 @@ onMounted(() => {
 }
 
 .section-header {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   border-bottom: 1px solid var(--border-default);
   background: var(--bg-secondary);
 }
@@ -543,32 +543,32 @@ onMounted(() => {
   font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .section-header p {
   color: var(--text-secondary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .action-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.5rem;
-  padding: 1.5rem;
+  gap: var(--spacing-6);
+  padding: var(--spacing-6);
 }
 
 .management-actions {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
 }
 
 .action-card {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  padding: 1.25rem;
+  padding: var(--spacing-5);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -602,7 +602,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   font-size: var(--text-xl);
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .action-icon.system-commands {
@@ -629,12 +629,12 @@ onMounted(() => {
   font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
 }
 
 .action-card p {
   color: var(--text-secondary);
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
   line-height: 1.5;
 }
 
@@ -642,7 +642,7 @@ onMounted(() => {
   color: var(--text-tertiary);
   font-size: var(--text-xs);
   display: block;
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 /* Action button layout */
@@ -652,20 +652,20 @@ onMounted(() => {
 
 /* Progress Styles */
 .progress-container {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
 }
 
 .progress-info {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .progress-text {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 
 .progress-operation {
@@ -690,7 +690,7 @@ onMounted(() => {
   background: var(--bg-tertiary);
   border-radius: var(--radius-full);
   overflow: hidden;
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .progress-fill {
@@ -714,7 +714,7 @@ onMounted(() => {
   z-index: var(--z-modal);
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   max-width: 400px;
 }
 
@@ -722,11 +722,11 @@ onMounted(() => {
   background: var(--bg-card);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  padding: 1rem;
+  padding: var(--spacing-4);
   box-shadow: var(--shadow-md);
   display: flex;
   align-items: flex-start;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   position: relative;
 }
 
@@ -752,7 +752,7 @@ onMounted(() => {
 
 .status-message i {
   flex-shrink: 0;
-  margin-top: 0.125rem;
+  margin-top: var(--spacing-0-5);
 }
 
 .status-message.success i {
@@ -778,7 +778,7 @@ onMounted(() => {
 .message-title {
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--spacing-1);
 }
 
 .message-details {
@@ -796,13 +796,13 @@ onMounted(() => {
 /* Responsive */
 @media (max-width: 768px) {
   .knowledge-advanced {
-    padding: 1rem;
+    padding: var(--spacing-4);
   }
 
   .action-grid {
     grid-template-columns: 1fr;
-    gap: 1rem;
-    padding: 1rem;
+    gap: var(--spacing-4);
+    padding: var(--spacing-4);
   }
 
   .action-card {
@@ -817,12 +817,12 @@ onMounted(() => {
 
   .progress-info {
     flex-direction: column;
-    gap: 0.5rem;
+    gap: var(--spacing-2);
   }
 
   .progress-stats {
     flex-direction: column;
-    gap: 0.25rem;
+    gap: var(--spacing-1);
   }
 }
 </style>

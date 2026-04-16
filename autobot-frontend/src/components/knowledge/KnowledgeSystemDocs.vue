@@ -524,7 +524,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   border-bottom: 1px solid var(--border-default);
   background: var(--bg-card);
 }
@@ -533,7 +533,7 @@ onMounted(() => {
   font-size: var(--text-2xl);
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--spacing-1);
 }
 
 .header-left .subtitle {
@@ -543,7 +543,7 @@ onMounted(() => {
 
 .header-actions {
   display: flex;
-  gap: 1rem;
+  gap: var(--spacing-4);
   align-items: center;
 }
 
@@ -588,7 +588,7 @@ onMounted(() => {
   position: absolute;
   top: 100%;
   right: 0;
-  margin-top: 0.25rem;
+  margin-top: var(--spacing-1);
   background: var(--bg-card);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -605,7 +605,7 @@ onMounted(() => {
 .dropdown-menu button {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   width: 100%;
   padding: 0.625rem 1rem;
   border: none;
@@ -624,7 +624,7 @@ onMounted(() => {
 .error-banner {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   padding: 0.75rem 1rem;
   background: var(--color-error-bg);
   color: var(--color-error-dark);
@@ -633,7 +633,7 @@ onMounted(() => {
 
 .error-banner .close-btn {
   margin-left: auto;
-  padding: 0.25rem;
+  padding: var(--spacing-1);
   background: none;
   border: none;
   color: inherit;
@@ -660,13 +660,13 @@ onMounted(() => {
 }
 
 .category-item {
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--spacing-1);
 }
 
 .category-header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   padding: 0.5rem 0.75rem;
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -683,7 +683,7 @@ onMounted(() => {
 }
 
 .category-header.child {
-  padding-left: 2rem;
+  padding-left: var(--spacing-8);
 }
 
 .expand-btn {
@@ -692,7 +692,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
+  padding: var(--spacing-0);
   border: none;
   background: none;
   color: var(--text-muted);
@@ -720,27 +720,27 @@ onMounted(() => {
 }
 
 .category-children {
-  margin-top: 0.25rem;
+  margin-top: var(--spacing-1);
 }
 
 /* Document List */
 .docs-list {
   border-right: 1px solid var(--border-default);
   overflow-y: auto;
-  padding: 1rem;
+  padding: var(--spacing-4);
 }
 
 .doc-items {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .doc-item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -777,7 +777,7 @@ onMounted(() => {
   display: block;
   font-weight: 500;
   color: var(--text-primary);
-  margin-bottom: 0.125rem;
+  margin-bottom: var(--spacing-0-5);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -805,7 +805,7 @@ onMounted(() => {
   justify-content: center;
   height: 100%;
   color: var(--text-muted);
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .preview-empty i {
@@ -836,7 +836,7 @@ onMounted(() => {
 
 .preview-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .preview-actions .success {
@@ -845,7 +845,7 @@ onMounted(() => {
 
 .preview-meta {
   display: flex;
-  gap: 1.5rem;
+  gap: var(--spacing-6);
   padding: 0.75rem 1.5rem;
   border-bottom: 1px solid var(--border-default);
   background: var(--bg-card);
@@ -854,14 +854,14 @@ onMounted(() => {
 .meta-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
 .preview-body {
   flex: 1;
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   overflow-y: auto;
 }
 
@@ -871,7 +871,7 @@ onMounted(() => {
   line-height: 1.6;
   white-space: pre-wrap;
   word-wrap: break-word;
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-primary);
 }
 
@@ -880,8 +880,8 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.75rem;
-  padding: 2rem;
+  gap: var(--spacing-3);
+  padding: var(--spacing-8);
   color: var(--text-secondary);
 }
 

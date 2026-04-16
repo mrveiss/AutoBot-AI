@@ -237,7 +237,7 @@ const handleClick = () => {
   justify-content: center;
   width: var(--spacing-4);
   height: var(--spacing-4);
-  padding: 0;
+  padding: var(--spacing-0);
   background: none;
   border: none;
   border-radius: var(--radius-full);

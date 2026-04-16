@@ -161,10 +161,10 @@ const lineClass = computed(() => ({
   height: 1rem;
 }
 
-.skeleton-line.mb-1 { margin-bottom: 0.25rem; }
-.skeleton-line.mb-2 { margin-bottom: 0.5rem; }
-.skeleton-line.mb-3 { margin-bottom: 0.75rem; }
-.skeleton-line.mb-4 { margin-bottom: 1rem; }
+.skeleton-line.mb-1 { margin-bottom: var(--spacing-1); }
+.skeleton-line.mb-2 { margin-bottom: var(--spacing-2); }
+.skeleton-line.mb-3 { margin-bottom: var(--spacing-3); }
+.skeleton-line.mb-4 { margin-bottom: var(--spacing-4); }
 
 .skeleton-line.w-full { width: 100%; }
 .skeleton-line.w-3\/4 { width: 75%; }
@@ -211,7 +211,7 @@ const lineClass = computed(() => ({
 .skeleton-file-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .skeleton-file-item {
@@ -244,7 +244,7 @@ const lineClass = computed(() => ({
 .skeleton-stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .skeleton-stat-card {
@@ -268,7 +268,7 @@ const lineClass = computed(() => ({
 
 /* Custom skeleton */
 .skeleton-custom {
-  padding: 1rem;
+  padding: var(--spacing-4);
 }
 
 /* Dark theme adjustments */
@@ -287,7 +287,7 @@ const lineClass = computed(() => ({
   }
 
   .skeleton-chat-message {
-    padding: 0.75rem;
+    padding: var(--spacing-3);
   }
 
   .skeleton-avatar {
@@ -296,7 +296,7 @@ const lineClass = computed(() => ({
   }
 
   .skeleton-stat-card {
-    padding: 1rem;
+    padding: var(--spacing-4);
   }
 
   .skeleton-stat-icon {

@@ -423,7 +423,7 @@ const getHealthCheckCardClass = (status) => {
 .detail-item {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 
 .health-check-card {

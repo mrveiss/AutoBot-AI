@@ -253,7 +253,7 @@ defineExpose({ fetchAgentCosts })
 }
 
 .section-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-primary);
   font-size: var(--text-lg);
   font-weight: var(--font-semibold);

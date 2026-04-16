@@ -521,7 +521,7 @@ watch([selectedGranularity, selectedDays], () => {
 <style scoped>
 /* Issue #704: Migrated to CSS design tokens */
 .code-evolution-timeline {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   background: var(--bg-secondary);
   border-radius: var(--radius-lg);
 }
@@ -530,7 +530,7 @@ watch([selectedGranularity, selectedDays], () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
 }
 
 .timeline-header h2 {
@@ -538,12 +538,12 @@ watch([selectedGranularity, selectedDays], () => {
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .timeline-controls {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   align-items: center;
 }
 
@@ -562,22 +562,22 @@ watch([selectedGranularity, selectedDays], () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 3rem;
-  gap: 1rem;
+  padding: var(--spacing-12);
+  gap: var(--spacing-4);
   color: var(--text-secondary);
 }
 
 .trends-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
 }
 
 .trend-card {
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
-  padding: 1rem;
+  padding: var(--spacing-4);
   border: 1px solid var(--border-default);
 }
 
@@ -593,7 +593,7 @@ watch([selectedGranularity, selectedDays], () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
 }
 
 .metric-name {
@@ -610,7 +610,7 @@ watch([selectedGranularity, selectedDays], () => {
 
 .trend-change {
   font-size: var(--text-sm);
-  margin-top: 0.25rem;
+  margin-top: var(--spacing-1);
 }
 
 .trend-change .improving {
@@ -623,7 +623,7 @@ watch([selectedGranularity, selectedDays], () => {
 
 .trend-change .percent {
   color: var(--text-secondary);
-  margin-left: 0.25rem;
+  margin-left: var(--spacing-1);
 }
 
 .trend-up {
@@ -637,15 +637,15 @@ watch([selectedGranularity, selectedDays], () => {
 .chart-container {
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
+  padding: var(--spacing-6);
+  margin-bottom: var(--spacing-6);
 }
 
 .chart-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .chart-header h3 {
@@ -655,14 +655,14 @@ watch([selectedGranularity, selectedDays], () => {
 
 .metric-toggles {
   display: flex;
-  gap: 1rem;
+  gap: var(--spacing-4);
   flex-wrap: wrap;
 }
 
 .metric-toggle {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
   font-size: var(--text-xs);
   cursor: pointer;
   opacity: 0.6;
@@ -725,7 +725,7 @@ watch([selectedGranularity, selectedDays], () => {
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  padding: 0.75rem;
+  padding: var(--spacing-3);
   z-index: var(--z-tooltip);
   pointer-events: none;
 }
@@ -733,12 +733,12 @@ watch([selectedGranularity, selectedDays], () => {
 .tooltip-date {
   font-size: var(--text-xs);
   color: var(--text-secondary);
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--spacing-1);
 }
 
 .tooltip-metric {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .tooltip-metric .metric-value {
@@ -749,22 +749,22 @@ watch([selectedGranularity, selectedDays], () => {
 .patterns-section h3 {
   font-size: var(--text-lg);
   color: var(--text-primary);
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .patterns-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .pattern-card {
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
-  padding: 1rem;
+  padding: var(--spacing-4);
   border: 1px solid var(--border-default);
 }
 
@@ -772,7 +772,7 @@ watch([selectedGranularity, selectedDays], () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--spacing-3);
 }
 
 .pattern-name {
@@ -797,8 +797,8 @@ watch([selectedGranularity, selectedDays], () => {
   display: flex;
   align-items: flex-end;
   height: 40px;
-  gap: 2px;
-  margin-bottom: 0.5rem;
+  gap: var(--spacing-0-5);
+  margin-bottom: var(--spacing-2);
 }
 
 .sparkline-bar {
@@ -813,6 +813,6 @@ watch([selectedGranularity, selectedDays], () => {
   color: var(--text-secondary);
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 </style>

@@ -349,14 +349,14 @@ onMounted(() => {
 }
 
 .header-title {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-sans);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .header-icon {
@@ -487,7 +487,7 @@ onMounted(() => {
   margin-top: var(--spacing-2);
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--spacing-0-5);
 }
 
 .history-error {

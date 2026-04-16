@@ -837,7 +837,7 @@ onMounted(async () => {
 
 @media (max-width: 768px) {
   .filter-row { flex-direction: column; }
-  .filter-actions { margin-left: 0; width: 100%; }
+  .filter-actions { margin-left: var(--spacing-0); width: 100%; }
   .form-row { grid-template-columns: 1fr; }
   .analysis-summary { grid-template-columns: 1fr 1fr; }
 }

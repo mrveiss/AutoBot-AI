@@ -198,7 +198,7 @@ function handleSourceChange(event: Event) {
 
 .header-content h2 {
   color: var(--color-info);
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-xl);
   display: flex;
   align-items: center;

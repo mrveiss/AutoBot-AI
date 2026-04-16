@@ -317,7 +317,7 @@ defineExpose({
 .connection-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   padding: 6px 12px;
   font-size: var(--text-xs);
   border-bottom: 1px solid #333;
@@ -380,7 +380,7 @@ defineExpose({
 
 .terminal-viewport {
   flex: 1;
-  padding: 4px;
+  padding: var(--spacing-1);
   overflow: hidden;
 }
 

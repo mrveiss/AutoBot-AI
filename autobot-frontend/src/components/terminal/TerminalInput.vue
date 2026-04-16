@@ -283,7 +283,7 @@ defineExpose({
 .cursor {
   color: var(--terminal-green);
   font-weight: var(--font-bold);
-  margin-left: 2px;
+  margin-left: var(--spacing-0-5);
 }
 
 .cursor.blink {

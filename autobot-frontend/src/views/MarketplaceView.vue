@@ -355,7 +355,7 @@ onMounted(async () => {
 .page-subtitle {
   font-size: var(--text-sm);
   color: var(--text-secondary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .btn-refresh {
@@ -554,14 +554,14 @@ onMounted(async () => {
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .empty-subtitle {
   font-size: var(--text-sm);
   text-align: center;
   max-width: 380px;
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 /* ---- Grid ---- */
@@ -641,13 +641,13 @@ onMounted(async () => {
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .plugin-desc {
   font-size: var(--text-sm);
   color: var(--text-secondary);
-  margin: 0;
+  margin: var(--spacing-0);
   line-height: var(--leading-relaxed);
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -658,7 +658,7 @@ onMounted(async () => {
 .plugin-meta {
   font-size: var(--text-xs);
   color: var(--text-tertiary, var(--text-secondary));
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .plugin-stats {
@@ -697,7 +697,7 @@ onMounted(async () => {
 .tags-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .tag-chip {
@@ -723,7 +723,7 @@ onMounted(async () => {
 .action-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
   padding: 4px 12px;
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);

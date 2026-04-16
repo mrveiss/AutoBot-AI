@@ -120,7 +120,7 @@ function announceChange(message: string): void {
   position: absolute;
   width: 1px;
   height: 1px;
-  padding: 0;
+  padding: var(--spacing-0);
   margin: -1px;
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
@@ -144,7 +144,7 @@ function announceChange(message: string): void {
   font-size: var(--font-size-lg);
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .panel-title i {
@@ -163,8 +163,8 @@ function announceChange(message: string): void {
   flex-direction: column;
   gap: var(--spacing-md);
   border: none;
-  padding: 0;
-  margin: 0;
+  padding: var(--spacing-0);
+  margin: var(--spacing-0);
 }
 
 .preference-label {
@@ -186,7 +186,7 @@ function announceChange(message: string): void {
 .preference-hint {
   font-size: var(--font-size-sm);
   color: var(--text-secondary);
-  margin: 0;
+  margin: var(--spacing-0);
   line-height: var(--leading-normal);
 }
 

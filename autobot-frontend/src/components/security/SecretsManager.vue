@@ -1623,18 +1623,18 @@ watch(selectedScope, () => {
 }
 
 .sidebar-header {
-  padding: 20px;
+  padding: var(--spacing-5);
   border-bottom: 1px solid var(--border-default);
 }
 
 .sidebar-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .sidebar-header i {
@@ -1685,7 +1685,7 @@ watch(selectedScope, () => {
   right: 8px;
   background: none;
   border: none;
-  padding: 4px;
+  padding: var(--spacing-1);
   cursor: pointer;
   color: var(--text-muted);
 }
@@ -1708,7 +1708,7 @@ watch(selectedScope, () => {
 .category-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-3);
   padding: 10px 20px;
   cursor: pointer;
   transition: all var(--duration-150);
@@ -1764,7 +1764,7 @@ watch(selectedScope, () => {
 
 .btn-create {
   width: 100%;
-  padding: 12px;
+  padding: var(--spacing-3);
   background: var(--color-primary);
   color: var(--text-on-primary);
   border: none;
@@ -1775,7 +1775,7 @@ watch(selectedScope, () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   transition: all var(--duration-200);
 }
 
@@ -1802,7 +1802,7 @@ watch(selectedScope, () => {
 }
 
 .header-left h2 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
@@ -1815,7 +1815,7 @@ watch(selectedScope, () => {
 
 .header-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .btn-icon {
@@ -1844,7 +1844,7 @@ watch(selectedScope, () => {
 /* Stats Bar */
 .stats-bar {
   display: flex;
-  gap: 24px;
+  gap: var(--spacing-6);
   padding: 16px 24px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-default);
@@ -1853,7 +1853,7 @@ watch(selectedScope, () => {
 .stat-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .stat-item i {
@@ -1887,7 +1887,7 @@ watch(selectedScope, () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: var(--spacing-4);
   color: var(--text-tertiary);
 }
 
@@ -1895,27 +1895,27 @@ watch(selectedScope, () => {
 .credentials-container {
   flex: 1;
   overflow-y: auto;
-  padding: 24px;
+  padding: var(--spacing-6);
 }
 
 .credentials-container.grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 16px;
+  gap: var(--spacing-4);
   align-content: start;
 }
 
 .credentials-container.list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 /* Credential Card */
 .credential-card {
   display: flex;
-  gap: 16px;
-  padding: 16px;
+  gap: var(--spacing-4);
+  padding: var(--spacing-4);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
@@ -1958,12 +1958,12 @@ watch(selectedScope, () => {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 8px;
-  margin-bottom: 6px;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-1-5);
 }
 
 .card-header h4 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
@@ -1974,7 +1974,7 @@ watch(selectedScope, () => {
 
 .card-badges {
   display: flex;
-  gap: 6px;
+  gap: var(--spacing-1-5);
   flex-shrink: 0;
 }
 
@@ -2001,14 +2001,14 @@ watch(selectedScope, () => {
   color: var(--color-error);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 /* Issue #685: Visibility badge styles */
 .badge.visibility {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .badge.visibility-private {
@@ -2045,7 +2045,7 @@ watch(selectedScope, () => {
 
 .card-meta {
   display: flex;
-  gap: 16px;
+  gap: var(--spacing-4);
   font-size: var(--text-xs);
   color: var(--text-muted);
 }
@@ -2053,7 +2053,7 @@ watch(selectedScope, () => {
 .meta-item {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .meta-item.text-warning {
@@ -2062,8 +2062,8 @@ watch(selectedScope, () => {
 
 .card-tags {
   display: flex;
-  gap: 6px;
-  margin-top: 8px;
+  gap: var(--spacing-1-5);
+  margin-top: var(--spacing-2);
   flex-wrap: wrap;
 }
 
@@ -2082,9 +2082,9 @@ watch(selectedScope, () => {
 .card-workflow-usage {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
   flex-wrap: wrap;
-  margin-top: 6px;
+  margin-top: var(--spacing-1-5);
 }
 
 .usage-label {
@@ -2092,7 +2092,7 @@ watch(selectedScope, () => {
   color: var(--text-tertiary);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .usage-tag {
@@ -2106,7 +2106,7 @@ watch(selectedScope, () => {
 .card-actions {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
   opacity: 0;
   transition: opacity var(--duration-150);
 }
@@ -2141,7 +2141,7 @@ watch(selectedScope, () => {
 
 /* Templates Section */
 .templates-section {
-  padding: 24px;
+  padding: var(--spacing-6);
 }
 
 .templates-section h3 {
@@ -2151,7 +2151,7 @@ watch(selectedScope, () => {
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .templates-section h3 i {
@@ -2167,14 +2167,14 @@ watch(selectedScope, () => {
 .templates-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .template-card {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3-5);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
@@ -2199,7 +2199,7 @@ watch(selectedScope, () => {
 }
 
 .template-info h4 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
@@ -2215,7 +2215,7 @@ watch(selectedScope, () => {
 .credential-form {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--spacing-5);
 }
 
 .template-selection h4 {
@@ -2228,15 +2228,15 @@ watch(selectedScope, () => {
 .type-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .type-option {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 16px;
+  gap: var(--spacing-2-5);
+  padding: var(--spacing-4);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
   cursor: pointer;
@@ -2269,11 +2269,11 @@ watch(selectedScope, () => {
 .selected-type {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3);
   background: var(--bg-tertiary);
   border-radius: var(--radius-xl);
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
 }
 
 .selected-type .type-icon {
@@ -2300,7 +2300,7 @@ watch(selectedScope, () => {
 .selected-type .change-type {
   background: none;
   border: none;
-  padding: 0;
+  padding: var(--spacing-0);
   font-size: var(--text-xs);
   color: var(--color-primary);
   cursor: pointer;
@@ -2309,12 +2309,12 @@ watch(selectedScope, () => {
 .form-fields {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .form-row {
   display: flex;
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .form-row.two-col > .form-group {
@@ -2324,7 +2324,7 @@ watch(selectedScope, () => {
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--spacing-1-5);
   flex: 1;
 }
 
@@ -2393,15 +2393,15 @@ watch(selectedScope, () => {
 
 .scope-selector {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .scope-option {
   flex: 1;
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 14px;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3-5);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
   cursor: pointer;
@@ -2424,7 +2424,7 @@ watch(selectedScope, () => {
 .scope-option i {
   font-size: var(--text-xl);
   color: var(--text-muted);
-  margin-top: 2px;
+  margin-top: var(--spacing-0-5);
 }
 
 .scope-option.active i {
@@ -2444,21 +2444,21 @@ watch(selectedScope, () => {
 .scope-option small {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
-  margin-top: 2px;
+  margin-top: var(--spacing-0-5);
 }
 
 /* View Modal */
 .view-credential {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--spacing-5);
 }
 
 .view-header {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding-bottom: 16px;
+  gap: var(--spacing-4);
+  padding-bottom: var(--spacing-4);
   border-bottom: 1px solid var(--border-default);
 }
 
@@ -2474,7 +2474,7 @@ watch(selectedScope, () => {
 }
 
 .view-title h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
@@ -2488,7 +2488,7 @@ watch(selectedScope, () => {
 .view-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .view-section label {
@@ -2500,15 +2500,15 @@ watch(selectedScope, () => {
 }
 
 .view-section p {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-primary);
 }
 
 .secret-display {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3);
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
 }
@@ -2523,19 +2523,19 @@ watch(selectedScope, () => {
 
 .secret-actions {
   display: flex;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .view-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .view-item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .view-item label {
@@ -2554,7 +2554,7 @@ watch(selectedScope, () => {
 .tags-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .text-danger {
@@ -2612,7 +2612,7 @@ watch(selectedScope, () => {
 .delete-warning {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   padding: 10px 16px;
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
@@ -2641,7 +2641,7 @@ watch(selectedScope, () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   transition: all var(--duration-200);
 }
 
@@ -2682,7 +2682,7 @@ watch(selectedScope, () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   transition: all var(--duration-200);
 }
 
@@ -2698,14 +2698,14 @@ watch(selectedScope, () => {
 /* Infrastructure Host Form Styles */
 .capability-checkboxes {
   display: flex;
-  gap: 16px;
+  gap: var(--spacing-4);
   flex-wrap: wrap;
 }
 
 .checkbox-option {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   padding: 10px 16px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);

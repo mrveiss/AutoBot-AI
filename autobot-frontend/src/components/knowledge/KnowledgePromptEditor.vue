@@ -535,7 +535,7 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   border-bottom: 1px solid var(--border-default);
   background: var(--bg-card);
 }
@@ -544,7 +544,7 @@ onBeforeUnmount(() => {
   font-size: var(--text-2xl);
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--spacing-1);
 }
 
 .header-left .subtitle {
@@ -554,7 +554,7 @@ onBeforeUnmount(() => {
 
 .header-actions {
   display: flex;
-  gap: 1rem;
+  gap: var(--spacing-4);
   align-items: center;
 }
 
@@ -594,7 +594,7 @@ onBeforeUnmount(() => {
 .alert {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   padding: 0.75rem 1rem;
   font-size: var(--text-sm);
 }
@@ -613,7 +613,7 @@ onBeforeUnmount(() => {
 
 .alert .close-btn {
   margin-left: auto;
-  padding: 0.25rem;
+  padding: var(--spacing-1);
   background: none;
   border: none;
   color: inherit;
@@ -636,17 +636,17 @@ onBeforeUnmount(() => {
 }
 
 .prompt-list {
-  padding: 1rem;
+  padding: var(--spacing-4);
 }
 
 .prompt-category {
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
 }
 
 .category-header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   padding: 0.5rem 0;
   font-size: var(--text-xs);
   font-weight: 600;
@@ -666,7 +666,7 @@ onBeforeUnmount(() => {
 .category-prompts {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 
 .prompt-item {
@@ -695,7 +695,7 @@ onBeforeUnmount(() => {
   display: block;
   font-size: var(--text-xs);
   color: var(--text-muted);
-  margin-top: 0.125rem;
+  margin-top: var(--spacing-0-5);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -715,7 +715,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .editor-empty i {
@@ -736,7 +736,7 @@ onBeforeUnmount(() => {
 .toolbar-left {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .toolbar-left h3 {
@@ -764,20 +764,20 @@ onBeforeUnmount(() => {
 
 .toolbar-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 /* Editor Wrapper */
 .editor-wrapper {
   flex: 1;
-  padding: 1rem;
+  padding: var(--spacing-4);
   overflow: hidden;
 }
 
 .prompt-textarea {
   width: 100%;
   height: 100%;
-  padding: 1rem;
+  padding: var(--spacing-4);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   font-family: var(--font-mono);
@@ -807,18 +807,18 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .footer-stats {
   display: flex;
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .footer-stats .stat {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--spacing-1-5);
   font-size: var(--text-xs);
   color: var(--text-secondary);
 }
@@ -830,7 +830,7 @@ onBeforeUnmount(() => {
 .variable-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.375rem;
+  gap: var(--spacing-1-5);
 }
 
 .variable-tag {
@@ -847,8 +847,8 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.75rem;
-  padding: 2rem;
+  gap: var(--spacing-3);
+  padding: var(--spacing-8);
   color: var(--text-secondary);
 }
 
@@ -860,8 +860,8 @@ onBeforeUnmount(() => {
 .history-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-6);
 }
 
 .history-item {
@@ -887,7 +887,7 @@ onBeforeUnmount(() => {
 .version-info {
   display: flex;
   flex-direction: column;
-  gap: 0.125rem;
+  gap: var(--spacing-0-5);
 }
 
 .version-number {
@@ -902,20 +902,20 @@ onBeforeUnmount(() => {
 
 .version-preview {
   border-top: 1px solid var(--border-default);
-  padding-top: 1rem;
+  padding-top: var(--spacing-4);
 }
 
 .version-preview h4 {
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--spacing-3);
 }
 
 .version-content {
   max-height: 200px;
   overflow-y: auto;
-  padding: 1rem;
+  padding: var(--spacing-4);
   background: var(--bg-secondary);
   border-radius: var(--radius-md);
   font-family: var(--font-mono);

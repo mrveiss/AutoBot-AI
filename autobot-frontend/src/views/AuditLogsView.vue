@@ -520,7 +520,7 @@ async function performCleanup() {
 }
 
 .modal-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-lg);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
