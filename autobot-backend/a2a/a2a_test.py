@@ -501,6 +501,63 @@ class TestGetTaskTTLSliding:
 
 
 # ---------------------------------------------------------------------------
+# Issue #4649: _save() must call expire() on _KEY_TASKS with correct TTL
+# ---------------------------------------------------------------------------
+
+
+class TestSaveTTL:
+    """Assert that _save() (called by create_task()) sets the TTL on _KEY_TASKS.
+
+    Issue #4649: The _save() mock silently ignored the expire() call on
+    _KEY_TASKS, meaning removing it would still pass the full test suite.
+    These tests make the EXPIRE call on the tracking set explicit and mandatory.
+    """
+
+    def setup_method(self):
+        self._redis_mock = _make_redis_mock()
+        with patch(
+            "a2a.task_manager.get_redis_client", return_value=self._redis_mock
+        ):
+            self.mgr = TaskManager()
+
+    def test_create_task_calls_expire_on_key_tasks(self):
+        """create_task() → _save() must call expire(_KEY_TASKS, ttl)."""
+        from a2a.task_manager import _KEY_TASKS
+
+        self._redis_mock.expire.reset_mock()
+
+        self.mgr.create_task("Test save TTL")
+
+        expired_keys = [call.args[0] for call in self._redis_mock.expire.call_args_list]
+        assert _KEY_TASKS in expired_keys, (
+            f"expire() not called for tracking set {_KEY_TASKS!r}; "
+            f"keys seen: {expired_keys}"
+        )
+
+    def test_create_task_expire_uses_configured_ttl(self):
+        """expire(_KEY_TASKS, ttl) must use the value returned by _ttl()."""
+        from a2a.task_manager import _KEY_TASKS
+
+        expected_ttl = self.mgr._ttl()
+        self._redis_mock.expire.reset_mock()
+
+        self.mgr.create_task("TTL value test")
+
+        # Find the expire() call for _KEY_TASKS and verify the TTL argument
+        matching = [
+            call
+            for call in self._redis_mock.expire.call_args_list
+            if call.args[0] == _KEY_TASKS
+        ]
+        assert matching, f"expire() never called with key {_KEY_TASKS!r}"
+        actual_ttl = matching[0].args[1]
+        assert actual_ttl == expected_ttl, (
+            f"expire({_KEY_TASKS!r}, ...) used ttl={actual_ttl}, "
+            f"expected {expected_ttl}"
+        )
+
+
+# ---------------------------------------------------------------------------
 # Issue #4687: Self-Evaluator unit tests
 # ---------------------------------------------------------------------------
 
