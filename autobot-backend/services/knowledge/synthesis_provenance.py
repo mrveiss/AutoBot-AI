@@ -21,6 +21,7 @@ from autobot_shared.redis_client import get_async_redis_client
 logger = logging.getLogger(__name__)
 
 _STREAM_KEY = "kb:synthesis:log"
+_RUN_KEY_PREFIX = "kb:synthesis:run:"
 
 
 class SynthesisProvenanceLog:
@@ -72,10 +73,58 @@ class SynthesisProvenanceLog:
         try:
             redis = await get_async_redis_client(database="main")
             await redis.xadd(_STREAM_KEY, entry)
+            await redis.hset(f"{_RUN_KEY_PREFIX}{run_id}", mapping=entry)
             logger.debug("Provenance logged for run %s (%d insights)", run_id, len(synthesis_ids))
         except Exception:
             logger.exception("Failed to write provenance log for run %s", run_id)
 
+
+    async def get_by_run_id(self, run_id: str) -> Optional[Dict[str, Any]]:
+        """Return the provenance entry for a single run by its ID.
+
+        Uses a Redis hash key (O(1)) instead of scanning the full stream.
+        Returns None when the run does not exist.
+
+        Issue #4788: replaces O(total_runs) stream scan in get_ancestors().
+        """
+        try:
+            redis = await get_async_redis_client(database="main")
+            raw = await redis.hgetall(f"{_RUN_KEY_PREFIX}{run_id}")
+        except Exception:
+            logger.exception("get_by_run_id: Redis error for run_id '%s'", run_id)
+            return None
+
+        if not raw:
+            return None
+
+        entry = {
+            k.decode("utf-8") if isinstance(k, bytes) else k: (
+                v.decode("utf-8") if isinstance(v, bytes) else v
+            )
+            for k, v in raw.items()
+        }
+        for list_field in ("source_docs", "synthesis_ids", "source_doc_ids"):
+            if list_field in entry:
+                try:
+                    entry[list_field] = json.loads(entry[list_field])
+                except (json.JSONDecodeError, TypeError):
+                    entry[list_field] = []
+        if "duration_ms" in entry:
+            try:
+                entry["duration_ms"] = int(entry["duration_ms"])
+            except (ValueError, TypeError):
+                pass
+        if "score" in entry:
+            try:
+                entry["score"] = float(entry["score"])
+            except (ValueError, TypeError):
+                entry["score"] = 0.0
+        entry.setdefault("parent_run_id", None)
+        if entry["parent_run_id"] == "":
+            entry["parent_run_id"] = None
+        entry.setdefault("prompt_variant", entry.get("prompt_template", ""))
+        entry.setdefault("collection_name", "")
+        return entry
 
     async def get_best_prompt_variant(
         self,
