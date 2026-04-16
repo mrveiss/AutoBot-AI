@@ -1088,24 +1088,57 @@ export class ChatController {
     )
   }
 
-  submitApprovalDecision(
+  /**
+   * Submit a user approval decision for an agent-loop sensitive operation (#4092 #4952).
+   *
+   * Calls POST /api/agent-terminal/tools/approve/{approvalId} so the backend
+   * _request_approval() pub/sub loop receives an APPROVAL_RESPONSE event.
+   *
+   * Prefer the useToolApproval() composable for Vue components — this method
+   * exists for non-component callers (e.g. Slack webhook relay).
+   *
+   * Returns a Promise that resolves to true on success, false on HTTP error.
+   */
+  async submitApprovalDecision(
     approvalId: string,
     approved: boolean,
-    comment?: string
-  ): boolean {
-    // Lazy import to avoid circular dependency at module load time
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const liveEventService = (require('@/services/LiveEventService') as { default: import('@/services/LiveEventService').LiveEventService }).default
-    const taskId = this.chatStore.currentSessionId ?? undefined
-    const sent = liveEventService.sendApprovalDecision({
-      approval_id: approvalId,
-      approved,
-      comment,
-      task_id: taskId,
-    })
-    if (!sent) {
-      logger.error('submitApprovalDecision: LiveEventService WebSocket unavailable')
+    comment?: string,
+    taskId?: string
+  ): Promise<boolean> {
+    try {
+      // Lazy import to avoid circular dependency at module load time
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // @ts-ignore
+      const { fetchWithAuth } = require('@/utils/fetchWithAuth') as { fetchWithAuth: typeof import('@/utils/fetchWithAuth').fetchWithAuth }
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // @ts-ignore
+      const appConfig = (require('@/config/AppConfig.js') as { default: { getApiUrl: (p: string) => Promise<string> } }).default
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // @ts-ignore
+      const { getApiBase } = require('@/config/ssot-config') as { getApiBase: () => string }
+
+      const resolvedTaskId = taskId ?? this.chatStore.currentSessionId ?? null
+      const url = await appConfig.getApiUrl(
+        `${getApiBase()}/agent-terminal/tools/approve/${encodeURIComponent(approvalId)}`
+      )
+      const response = await fetchWithAuth(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approved, comment: comment ?? null, task_id: resolvedTaskId }),
+      })
+      if (!response.ok) {
+        logger.error(
+          'submitApprovalDecision: server returned %d for approval_id=%s',
+          response.status,
+          approvalId,
+        )
+        return false
+      }
+      logger.debug('submitApprovalDecision: approval_id=%s approved=%s', approvalId, approved)
+      return true
+    } catch (err) {
+      logger.error('submitApprovalDecision: unexpected error:', err)
+      return false
     }
-    return sent
   }
 }
