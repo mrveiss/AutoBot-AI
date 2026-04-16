@@ -182,6 +182,57 @@ async def test_index_directory_unsupported_extension_skipped(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# Concurrent index_directory — hash cache write-race regression (#4895)
+# ---------------------------------------------------------------------------
+
+
+@requires_tree_sitter
+@pytest.mark.asyncio
+async def test_concurrent_index_directory_preserves_all_cache_entries(tmp_path):
+    """Two concurrent index_directory() calls on disjoint file sets must both
+    have their cache entries persisted — neither must overwrite the other."""
+    import asyncio
+    import json as _json
+
+    # Two source directories, each with one .py file
+    dir_a = tmp_path / "dir_a"
+    dir_b = tmp_path / "dir_b"
+    dir_a.mkdir()
+    dir_b.mkdir()
+    (dir_a / "alpha.py").write_bytes(b"def alpha(): pass\n")
+    (dir_b / "beta.py").write_bytes(b"def beta(): pass\n")
+
+    # Both indexers share the same cache file (mirrors production behaviour).
+    cache_file = tmp_path / ".code_index_hashes.json"
+
+    # Clear any stale process-level lock for this cache path before the test.
+    import services.knowledge.code_indexer as _ci_mod
+    _ci_mod._CACHE_FILE_LOCKS.pop(str(cache_file), None)
+
+    indexer_a = CodeIndexer(
+        collection=MagicMock(upsert=MagicMock()),
+        embed_model=MagicMock(get_text_embedding=MagicMock(return_value=[0.1] * 384)),
+        cache_file=cache_file,
+    )
+    indexer_b = CodeIndexer(
+        collection=MagicMock(upsert=MagicMock()),
+        embed_model=MagicMock(get_text_embedding=MagicMock(return_value=[0.1] * 384)),
+        cache_file=cache_file,
+    )
+
+    # Run both concurrently — the lock must serialise the load+index+save cycle.
+    await asyncio.gather(
+        indexer_a.index_directory(str(dir_a)),
+        indexer_b.index_directory(str(dir_b)),
+    )
+
+    cache = _json.loads(cache_file.read_text(encoding="utf-8"))
+    # Both files must appear in the final cache.
+    assert any("alpha" in k for k in cache), f"alpha.py missing from cache: {cache}"
+    assert any("beta" in k for k in cache), f"beta.py missing from cache: {cache}"
+
+
+# ---------------------------------------------------------------------------
 # index_code endpoint — path traversal validation (#4894)
 # ---------------------------------------------------------------------------
 
