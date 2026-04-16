@@ -652,6 +652,9 @@ class GraphRAGService:
             1.0 - self.graph_weight
         ) * base_score + self.graph_weight * proximity_score
 
+        _origin = relation.get("metadata", {}).get("origin", "inferred")
+        _provenance: str = _origin if _origin in ("extracted", "inferred", "ambiguous") else "inferred"
+
         return SearchResult(
             content=content,
             metadata={
@@ -662,6 +665,7 @@ class GraphRAGService:
                 "relation_type": relation.get("type"),
                 "direction": direction,
                 "graph_distance": max_depth,
+                "source_provenance": _provenance,
             },
             semantic_score=0.0,
             keyword_score=0.0,
