@@ -46,7 +46,7 @@
       </Transition>
 
       <!-- Main Chat Area -->
-      <div class="flex-1 flex flex-col min-w-0 relative">
+      <div class="flex-1 flex flex-col min-w-0 min-h-0 relative overflow-hidden">
 
         <!-- Chat Header (Sticky at top) -->
         <ChatHeader
