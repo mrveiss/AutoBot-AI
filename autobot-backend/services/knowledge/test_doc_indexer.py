@@ -1282,3 +1282,132 @@ class TestRunKbSynthesis:
         mock_synthesizer.synthesize_docs.assert_awaited_once()
         called_paths = mock_synthesizer.synthesize_docs.call_args[0][0]
         assert called_paths == ["/docs/readme.md"]
+
+    @pytest.mark.asyncio
+    async def test_calls_synthesizer_with_correct_args(self):
+        """_run_kb_synthesis passes indexed_paths and collection_config to synthesize_docs (#4658)."""
+        from services.knowledge.synthesis_schema_loader import CollectionConfig
+
+        col_cfg = CollectionConfig(name="docs", paths=["docs/"], synthesis_target="", prompt_template="")
+        mock_llm = MagicMock()
+        svc = DocIndexerService.__new__(DocIndexerService)
+        svc._llm_service = mock_llm
+        svc.synthesis_schema = MagicMock()
+        svc.synthesis_schema.collections = [col_cfg]
+
+        mock_synthesizer = MagicMock()
+        mock_synthesizer.synthesize_docs = AsyncMock()
+
+        with patch.dict(
+            "sys.modules",
+            {
+                "services.knowledge.kb_synthesizer": MagicMock(
+                    get_kb_synthesizer=MagicMock(return_value=mock_synthesizer)
+                )
+            },
+        ):
+            await svc._run_kb_synthesis(["docs/README.md"])
+
+        mock_synthesizer.synthesize_docs.assert_awaited_once_with(
+            ["docs/README.md"], collection_config=col_cfg
+        )
+
+    @pytest.mark.asyncio
+    async def test_swallows_exception_silently(self):
+        """_run_kb_synthesis catches and logs exceptions without propagating (#4658)."""
+        mock_llm = MagicMock()
+        svc = DocIndexerService.__new__(DocIndexerService)
+        svc._llm_service = mock_llm
+        svc.synthesis_schema = MagicMock()
+        svc.synthesis_schema.collections = []
+
+        mock_synthesizer = MagicMock()
+        mock_synthesizer.synthesize_docs = AsyncMock(side_effect=Exception("synthesis boom"))
+
+        with patch.dict(
+            "sys.modules",
+            {
+                "services.knowledge.kb_synthesizer": MagicMock(
+                    get_kb_synthesizer=MagicMock(return_value=mock_synthesizer)
+                )
+            },
+        ):
+            result = await svc._run_kb_synthesis(["/docs/foo.md"])
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_passes_none_config_when_no_match(self):
+        """_run_kb_synthesis passes collection_config=None when no collection matches (#4658)."""
+        from services.knowledge.synthesis_schema_loader import CollectionConfig
+
+        col_cfg = CollectionConfig(name="api", paths=["api/"], synthesis_target="", prompt_template="")
+        mock_llm = MagicMock()
+        svc = DocIndexerService.__new__(DocIndexerService)
+        svc._llm_service = mock_llm
+        svc.synthesis_schema = MagicMock()
+        svc.synthesis_schema.collections = [col_cfg]
+
+        mock_synthesizer = MagicMock()
+        mock_synthesizer.synthesize_docs = AsyncMock()
+
+        with patch.dict(
+            "sys.modules",
+            {
+                "services.knowledge.kb_synthesizer": MagicMock(
+                    get_kb_synthesizer=MagicMock(return_value=mock_synthesizer)
+                )
+            },
+        ):
+            await svc._run_kb_synthesis(["docs/README.md"])
+
+        mock_synthesizer.synthesize_docs.assert_awaited_once_with(
+            ["docs/README.md"], collection_config=None
+        )
+
+
+class TestFindCollectionConfig:
+    """Tests for DocIndexerService._find_collection_config (#4658)."""
+
+    def _make_svc(self, collections):
+        from services.knowledge.synthesis_schema_loader import SynthesisSchema
+
+        svc = DocIndexerService.__new__(DocIndexerService)
+        schema = MagicMock(spec=SynthesisSchema)
+        schema.collections = collections
+        svc.synthesis_schema = schema
+        return svc
+
+    def test_returns_matching_config_when_path_prefix_found(self):
+        """Returns the collection whose path prefix is a substring of an indexed path (#4658)."""
+        from services.knowledge.synthesis_schema_loader import CollectionConfig
+
+        col_cfg = CollectionConfig(name="docs", paths=["docs/"], synthesis_target="", prompt_template="")
+        svc = self._make_svc([col_cfg])
+        result = svc._find_collection_config(["docs/README.md"])
+        assert result is col_cfg
+
+    def test_returns_none_when_no_path_matches(self):
+        """Returns None when no collection path is a substring of indexed_paths (#4658)."""
+        from services.knowledge.synthesis_schema_loader import CollectionConfig
+
+        col_cfg = CollectionConfig(name="src", paths=["src/"], synthesis_target="", prompt_template="")
+        svc = self._make_svc([col_cfg])
+        result = svc._find_collection_config(["tests/foo.py"])
+        assert result is None
+
+    def test_returns_none_on_empty_schema(self):
+        """Returns None when synthesis_schema has no collections (#4658)."""
+        svc = self._make_svc([])
+        result = svc._find_collection_config(["docs/README.md"])
+        assert result is None
+
+    def test_returns_first_match_when_multiple_collections(self):
+        """Returns the first matching collection when multiple collections match (#4658)."""
+        from services.knowledge.synthesis_schema_loader import CollectionConfig
+
+        col1 = CollectionConfig(name="docs", paths=["docs/"], synthesis_target="", prompt_template="")
+        col2 = CollectionConfig(name="api", paths=["api/"], synthesis_target="", prompt_template="")
+        svc = self._make_svc([col1, col2])
+        result = svc._find_collection_config(["docs/guide.md", "api/ref.md"])
+        assert result is col1
