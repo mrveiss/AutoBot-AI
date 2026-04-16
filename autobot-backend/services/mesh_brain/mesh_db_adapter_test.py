@@ -149,6 +149,47 @@ class TestUpdateAccessCount:
 
 
 # =============================================================================
+# CommunityClusterer protocol surface — fetch_edges + promote_to_anchor
+# =============================================================================
+
+
+class TestFetchEdges:
+    """MeshDBAdapter.fetch_edges delegates to inner MeshDB and returns list[dict]."""
+
+    @pytest.mark.asyncio
+    async def test_forwards_min_weight_and_returns_rows(self):
+        edge_rows = [
+            {"id": _EDGE_ID, "from_node": _NODE_A, "to_node": _NODE_B, "weight": 0.8},
+        ]
+        adapter, mock_db = _make_adapter(fetch_edges=edge_rows)
+
+        result = await adapter.fetch_edges(min_weight=0.7)
+
+        assert result == edge_rows
+        mock_db.fetch_edges.assert_awaited_once_with(min_weight=0.7)
+
+    @pytest.mark.asyncio
+    async def test_default_min_weight_is_forwarded(self):
+        adapter, mock_db = _make_adapter(fetch_edges=[])
+
+        await adapter.fetch_edges()
+
+        mock_db.fetch_edges.assert_awaited_once_with(min_weight=0.5)
+
+
+class TestPromoteToAnchor:
+    """MeshDBAdapter.promote_to_anchor delegates to inner MeshDB."""
+
+    @pytest.mark.asyncio
+    async def test_forwards_node_id(self):
+        adapter, mock_db = _make_adapter(promote_to_anchor=None)
+
+        await adapter.promote_to_anchor(_NODE_A)
+
+        mock_db.promote_to_anchor.assert_awaited_once_with(_NODE_A)
+
+
+# =============================================================================
 # MeshGraph protocol surface
 # =============================================================================
 
