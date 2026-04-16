@@ -216,6 +216,7 @@
       "helpText": "Press Enter to send, Shift+Enter for new line",
       "useKnowledge": "Use Knowledge",
       "overseerMode": "Overseer Mode",
+      "overseerLabel": "Overseer",
       "explain": "Explain",
       "attachFile": "Attach file",
       "analyzeImage": "Analyze image",

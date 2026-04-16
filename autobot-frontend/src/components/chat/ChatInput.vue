@@ -131,7 +131,7 @@
               @click.prevent="toggleOverseer"
             >
               <i class="fas fa-sitemap" aria-hidden="true"></i>
-              <span class="toggle-label">{{ $t('chat.input.explain') }}</span>
+              <span class="toggle-label">{{ $t('chat.input.overseerLabel') }}</span>
             </label>
 
             <!-- Vertical Divider after toggles -->
@@ -920,13 +920,10 @@ onUnmounted(() => {
 
 <style scoped>
 @reference "../../assets/tailwind.css";
-/* CRITICAL FIX: Enforce sticky positioning with !important and solid background */
+/* Pinned as a shrink-0 flex sibling of the messages scroll container */
 .chat-input-container {
   @apply relative bg-autobot-bg-card border-t border-autobot-border p-4;
-  position: sticky !important;
-  bottom: 0 !important;
-  z-index: 10 !important;
-  background-color: var(--autobot-bg-card, white) !important;
+  background-color: var(--autobot-bg-card, white);
   box-shadow: var(--shadow-sm);
 }
 
