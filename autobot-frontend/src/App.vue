@@ -17,7 +17,7 @@
               @click="toggleSystemStatus"
               class="flex items-center space-x-3 hover:bg-autobot-bg-tertiary rounded-md px-2 py-1 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-autobot-primary"
               :title="getSystemStatusTooltip()"
-              :aria-label="getSystemStatusTooltip()"
+              :aria-label="getSystemStatusAriaLabel()"
             >
               <div class="relative w-8 h-8 bg-white rounded flex items-center justify-center">
                 <span class="text-slate-800 font-bold text-sm font-mono">AB</span>
@@ -30,6 +30,7 @@
                     'animate-pulse': systemStatus.hasIssues
                   }"
                   class="absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-white"
+                  aria-hidden="true"
                 ></div>
               </div>
               <span class="text-autobot-text-primary font-bold text-lg hidden sm:block">AutoBot</span>
@@ -476,6 +477,7 @@ export default {
       systemServices,
       showSystemStatus,
       getSystemStatusTooltip,
+      getSystemStatusAriaLabel,
       getSystemStatusText,
       getSystemStatusDescription,
       toggleSystemStatus,

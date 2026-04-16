@@ -10,7 +10,7 @@
           :aria-atomic="true"
         >
           <div class="toast-icon">
-            <i :class="getIcon(toast.type)"></i>
+            <i :class="getIcon(toast.type)" aria-hidden="true"></i>
           </div>
           <div class="toast-content">
             <span class="toast-message">{{ toast.message }}</span>
