@@ -174,6 +174,25 @@ class TestValidateCronExpression:
         # "0,7" should be normalised to "0,0" (both Sunday) and accepted
         assert validate_cron_expression("0 0 * * 0,7") is True
 
+    def test_dow_range_step_1_to_7_accepted(self) -> None:
+        # "1-7/2" — range-step spanning Sunday; must be normalised and accepted
+        assert validate_cron_expression("0 0 * * 1-7/2") is True
+
+    def test_dow_range_step_5_to_7_accepted(self) -> None:
+        # "5-7/2" — range-step ending on 7; must be normalised and accepted
+        assert validate_cron_expression("0 0 * * 5-7/2") is True
+
+    def test_dow_range_step_1_to_7_fires_on_sunday(self) -> None:
+        # "0 0 * * 1-7/2" fires Mon(1), Wed(3), Fri(5), Sun(0/7)
+        # Saturday base → next fire should be Sunday
+        base = datetime(2025, 6, 7, 23, 0, 0, tzinfo=timezone.utc)  # Saturday
+        nxt = next_cron_run("0 0 * * 1-7/2", after=base)
+        assert nxt.weekday() == 6, f"Expected Sunday (weekday=6), got weekday={nxt.weekday()}"
+
+    def test_dow_range_step_0_to_7_accepted(self) -> None:
+        # "0-7/2" — range-step from 0 to 7 with step; must be normalised and accepted
+        assert validate_cron_expression("0 0 * * 0-7/2") is True
+
 
 class TestNextCronRun:
     def test_every_minute_advances_by_one(self) -> None:

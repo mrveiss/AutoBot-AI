@@ -258,11 +258,20 @@ def _normalize_dow_field(field: str) -> str:
     """Normalize day-of-week: replace 7 with 0 (both mean Sunday).
 
     Handles scalars (7->0), lists (0,7->0,0), ranges (1-7->1-6,0),
-    and steps (*/7 left unchanged -- step-of-7 is unusual but valid).
+    range-steps (1-7/2->1-6/2,0), and steps (*/7 left unchanged).
     """
     import re
 
     def _replace_token(token: str) -> str:
+        # Range-step like "1-7/2" or "5-7/2"
+        m = re.fullmatch(r"(\d+)-(\d+)/(\d+)", token)
+        if m:
+            lo, hi, step = int(m.group(1)), int(m.group(2)), m.group(3)
+            if hi == 7:
+                if lo == 0:
+                    return f"0-6/{step}"
+                return f"{lo}-6/{step},0"  # wrap: range excludes 7, add Sunday(0)
+            return token
         # Range like "1-7" or "0-7"
         m = re.fullmatch(r"(\d+)-(\d+)", token)
         if m:
