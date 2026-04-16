@@ -9,7 +9,7 @@ Issue #4567: Synthesis provenance log.
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -23,10 +23,21 @@ _STREAM_KEY = "kb:synthesis:log"
 
 
 def _make_redis_mock(xadd_result=b"1-1", xrevrange_result=None):
-    """Return an async Redis mock with xadd / xrevrange stubbed."""
+    """Return an async Redis mock with xadd / xrevrange stubbed.
+
+    pipeline() returns a synchronous MagicMock whose xadd/hset are tracked
+    and whose execute() is an AsyncMock (pipeline.execute is awaited).
+    """
     mock = AsyncMock()
-    mock.xadd = AsyncMock(return_value=xadd_result)
+    # xrevrange is still called directly on the redis client
     mock.xrevrange = AsyncMock(return_value=xrevrange_result or [])
+    # pipeline() is a sync call — return a MagicMock with async execute
+    pipe_mock = MagicMock()
+    pipe_mock.xadd = MagicMock(return_value=None)
+    pipe_mock.hset = MagicMock(return_value=None)
+    pipe_mock.execute = AsyncMock(return_value=[xadd_result, 1])
+    mock.pipeline = MagicMock(return_value=pipe_mock)
+    mock._pipe = pipe_mock  # expose for assertions
     return mock
 
 
@@ -60,8 +71,8 @@ class TestLogRun:
                 prompt_template="v1",
                 duration_ms=120,
             )
-        mock_redis.xadd.assert_called_once()
-        key_used = mock_redis.xadd.call_args[0][0]
+        mock_redis._pipe.xadd.assert_called_once()
+        key_used = mock_redis._pipe.xadd.call_args[0][0]
         assert key_used == _STREAM_KEY
 
     @pytest.mark.asyncio
@@ -81,7 +92,7 @@ class TestLogRun:
                 prompt_template="v1",
                 duration_ms=0,
             )
-        fields = mock_redis.xadd.call_args[0][1]
+        fields = mock_redis._pipe.xadd.call_args[0][1]
         assert fields["run_id"] == "run-42"
 
     @pytest.mark.asyncio
@@ -101,7 +112,7 @@ class TestLogRun:
                 prompt_template="t",
                 duration_ms=1,
             )
-        fields = mock_redis.xadd.call_args[0][1]
+        fields = mock_redis._pipe.xadd.call_args[0][1]
         assert json.loads(fields["source_docs"]) == ["doc-1", "doc-2"]
 
     @pytest.mark.asyncio
@@ -121,7 +132,7 @@ class TestLogRun:
                 prompt_template="t",
                 duration_ms=1,
             )
-        fields = mock_redis.xadd.call_args[0][1]
+        fields = mock_redis._pipe.xadd.call_args[0][1]
         assert json.loads(fields["synthesis_ids"]) == ["ins-a", "ins-b"]
 
     @pytest.mark.asyncio
@@ -141,14 +152,18 @@ class TestLogRun:
                 prompt_template="t",
                 duration_ms=250,
             )
-        fields = mock_redis.xadd.call_args[0][1]
+        fields = mock_redis._pipe.xadd.call_args[0][1]
         assert fields["duration_ms"] == "250"
 
     @pytest.mark.asyncio
     async def test_log_run_swallows_redis_exception(self):
         """log_run does not propagate Redis exceptions."""
         mock_redis = AsyncMock()
-        mock_redis.xadd = AsyncMock(side_effect=ConnectionError("Redis down"))
+        pipe_mock = MagicMock()
+        pipe_mock.xadd = MagicMock(return_value=None)
+        pipe_mock.hset = MagicMock(return_value=None)
+        pipe_mock.execute = AsyncMock(side_effect=ConnectionError("Redis down"))
+        mock_redis.pipeline = MagicMock(return_value=pipe_mock)
         with patch(
             "services.knowledge.synthesis_provenance.get_async_redis_client",
             new=AsyncMock(return_value=mock_redis),

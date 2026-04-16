@@ -72,12 +72,13 @@ class SynthesisProvenanceLog:
         }
         try:
             redis = await get_async_redis_client(database="main")
-            await redis.xadd(_STREAM_KEY, entry)
-            await redis.hset(f"{_RUN_KEY_PREFIX}{run_id}", mapping=entry)
+            pipe = redis.pipeline()
+            pipe.xadd(_STREAM_KEY, entry)
+            pipe.hset(f"{_RUN_KEY_PREFIX}{run_id}", mapping=entry)
+            await pipe.execute()
             logger.debug("Provenance logged for run %s (%d insights)", run_id, len(synthesis_ids))
         except Exception:
             logger.exception("Failed to write provenance log for run %s", run_id)
-
 
     async def get_by_run_id(self, run_id: str) -> Optional[Dict[str, Any]]:
         """Return the provenance entry for a single run by its ID.
