@@ -192,6 +192,7 @@ def test_loop_stops_after_repetition_halt():
         think_on_completion=False,
         mandatory_think_enabled=False,
         log_iterations=False,
+        require_approval_for_sensitive=False,  # disable approval gate — test focuses on repetition
     )
     loop = AgentLoop(event_stream=event_stream, config=config)
 
