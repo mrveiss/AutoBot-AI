@@ -14,6 +14,7 @@ import math
 import pytest
 
 from knowledge.search_components.reranking import (
+    RerankWeights,
     ResultReranker,
     provenance_adjustment,
 )
@@ -130,3 +131,140 @@ class TestApplyRerankScoresProvenance:
         # After sort, extracted (higher score) must be first
         assert results[0]["rerank_score"] >= results[1]["rerank_score"]
         assert results[0] is extracted
+
+
+# =============================================================================
+# Interaction tests — staleness penalty × provenance boost (#4897)
+# =============================================================================
+
+
+class TestStalenessProvenanceInteraction:
+    """Verify that the combined staleness penalty × provenance boost produces correct ordering.
+
+    Issue #4897: _apply_rerank_scores() applies staleness penalty (multiplicative
+    inside the blended score) then provenance adjustment (additive ±0.05).  The two
+    effects must compose correctly so that a heavily-stale "extracted" result still
+    ranks below a fresh "inferred" result.
+    """
+
+    def _reranker(self) -> ResultReranker:
+        return ResultReranker()
+
+    def test_stale_extracted_ranks_below_fresh_inferred(self):
+        """Staleness penalty must outweigh the +0.05 extracted provenance boost.
+
+        Setup (staleness weight = 0.5, reranker weight = 0.5, vector weight = 0):
+          - stale_extracted:  staleness_score=0.8 → penalty_factor=0.2 → blended low;
+                              provenance "extracted" adds +0.05
+          - fresh_inferred:   staleness_score=0.0 → penalty_factor=1.0 → blended high;
+                              provenance "inferred" adds 0.0
+
+        Both results share the same cross-encoder logit (0.0 → sigmoid=0.5) and the
+        same vector score (0.5) so provenance is the only non-staleness differentiator.
+        """
+        reranker = self._reranker()
+        weights = RerankWeights(reranker=0.5, vector=0.0, staleness=0.5)
+
+        stale_extracted = {
+            "chunk_id": "stale-extracted",
+            "score": 0.5,
+            "content": "stale extracted doc",
+            "metadata": {"source_provenance": "extracted"},
+        }
+        fresh_inferred = {
+            "chunk_id": "fresh-inferred",
+            "score": 0.5,
+            "content": "fresh inferred doc",
+            "metadata": {"source_provenance": "inferred"},
+        }
+
+        staleness_map = {
+            "stale-extracted": 0.8,  # penalty_factor = 0.2
+            "fresh-inferred": 0.0,   # penalty_factor = 1.0
+        }
+
+        reranker._apply_rerank_scores(
+            [stale_extracted, fresh_inferred],
+            scores=[0.0, 0.0],
+            weights=weights,
+            staleness_map=staleness_map,
+        )
+
+        assert stale_extracted["rerank_score"] < fresh_inferred["rerank_score"], (
+            f"Expected stale-extracted ({stale_extracted['rerank_score']:.4f}) < "
+            f"fresh-inferred ({fresh_inferred['rerank_score']:.4f})"
+        )
+
+    def test_stale_extracted_exact_scores(self):
+        """Verify the exact combined score for a stale-extracted result.
+
+        staleness_score=0.8 → penalty_factor=0.2
+        weights: reranker=0.5, vector=0.0, staleness=0.5; total_weight=1.0
+        logit=0.0 → normalized=0.5
+        blended = (0.5*0.5 + 0.5*0.2) / 1.0 = 0.35
+        rerank_score = clamp(0.35 + 0.05, 0, 1) = 0.40
+        """
+        reranker = self._reranker()
+        weights = RerankWeights(reranker=0.5, vector=0.0, staleness=0.5)
+
+        result = {
+            "chunk_id": "doc-A",
+            "score": 0.0,
+            "content": "text",
+            "metadata": {"source_provenance": "extracted"},
+        }
+        staleness_map = {"doc-A": 0.8}
+
+        reranker._apply_rerank_scores([result], scores=[0.0], weights=weights, staleness_map=staleness_map)
+
+        assert result["rerank_score"] == pytest.approx(0.40, abs=1e-6)
+
+    def test_fresh_inferred_exact_scores(self):
+        """Verify the exact combined score for a fresh-inferred result.
+
+        staleness_score=0.0 → penalty_factor=1.0
+        weights: reranker=0.5, vector=0.0, staleness=0.5; total_weight=1.0
+        logit=0.0 → normalized=0.5
+        blended = (0.5*0.5 + 0.5*1.0) / 1.0 = 0.75
+        rerank_score = clamp(0.75 + 0.0, 0, 1) = 0.75
+        """
+        reranker = self._reranker()
+        weights = RerankWeights(reranker=0.5, vector=0.0, staleness=0.5)
+
+        result = {
+            "chunk_id": "doc-B",
+            "score": 0.0,
+            "content": "text",
+            "metadata": {"source_provenance": "inferred"},
+        }
+        staleness_map = {"doc-B": 0.0}
+
+        reranker._apply_rerank_scores([result], scores=[0.0], weights=weights, staleness_map=staleness_map)
+
+        assert result["rerank_score"] == pytest.approx(0.75, abs=1e-6)
+
+    def test_sort_order_stale_extracted_below_fresh_inferred(self):
+        """After _apply_rerank_scores the list is sorted: fresh-inferred must be first."""
+        reranker = self._reranker()
+        weights = RerankWeights(reranker=0.5, vector=0.0, staleness=0.5)
+
+        stale_extracted = {
+            "chunk_id": "stale-extracted",
+            "score": 0.5,
+            "content": "stale extracted doc",
+            "metadata": {"source_provenance": "extracted"},
+        }
+        fresh_inferred = {
+            "chunk_id": "fresh-inferred",
+            "score": 0.5,
+            "content": "fresh inferred doc",
+            "metadata": {"source_provenance": "inferred"},
+        }
+        staleness_map = {"stale-extracted": 0.8, "fresh-inferred": 0.0}
+
+        results = [stale_extracted, fresh_inferred]
+        reranker._apply_rerank_scores(results, scores=[0.0, 0.0], weights=weights, staleness_map=staleness_map)
+
+        assert results[0] is fresh_inferred, (
+            "fresh-inferred should be first (highest rerank_score) after sorting"
+        )
