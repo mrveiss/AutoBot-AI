@@ -36,9 +36,8 @@ def cluster_graph(edges: list[dict]) -> list[str]:
 
     try:
         from graspologic.partition import leiden
-    except ImportError as exc:
-        logger.error("graspologic not installed — cannot run Leiden: %s", exc)
-        return []
+    except ImportError:
+        raise  # let caller handle missing dependency distinctly from empty-graph result
 
     G = nx.Graph()
     for e in edges:
