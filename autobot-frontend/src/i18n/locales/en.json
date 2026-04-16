@@ -5084,7 +5084,21 @@
   },
   "views": {
     "about": {
-      "title": "This is an about page"
+      "title": "About AutoBot",
+      "tagline": "AI-powered automation platform for intelligent workflows",
+      "descriptionHeading": "What is AutoBot?",
+      "description": "AutoBot is an open-source AI orchestration platform that routes user requests to specialized agents, integrates with your infrastructure, and learns from every interaction through a vector knowledge base.",
+      "capabilitiesHeading": "Key Capabilities",
+      "capability1": "Multi-agent chat workflows with A2A task routing",
+      "capability2": "RAG-powered knowledge retrieval with ChromaDB",
+      "capability3": "Browser automation, voice I/O, and code execution",
+      "capability4": "Secure secrets management and host-based SSH execution",
+      "capability5": "Pluggable LLM backends — Ollama, OpenAI-compatible, SLM",
+      "versionLabel": "Version",
+      "authorLabel": "Author",
+      "authorName": "mrveiss",
+      "licenseLabel": "License",
+      "licenseValue": "Proprietary — © 2026 mrveiss"
     },
     "notFound": {
       "title": "404",

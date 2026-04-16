@@ -9,6 +9,7 @@ import { defineConfig, loadEnv } from 'vite'
 import type { Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
+import pkg from './package.json'
 
 /**
  * Copy VAD static assets (ONNX runtime WASM + Silero model + worklet bundle)
@@ -53,6 +54,7 @@ export default defineConfig(({ mode }) => {
       __FEATURE_VOICE__: JSON.stringify(env.VITE_FEATURE_VOICE !== 'false'),
       __FEATURE_VNC__: JSON.stringify(env.VITE_FEATURE_VNC !== 'false'),
       __FEATURE_BROWSER__: JSON.stringify(env.VITE_FEATURE_BROWSER !== 'false'),
+      'import.meta.env.VITE_APP_VERSION': JSON.stringify(pkg.version),
     },
     plugins: [vue(), vueDevTools(), vadAssetsPlugin()],
     optimizeDeps: {
