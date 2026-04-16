@@ -767,6 +767,65 @@ class DocIndexerService:
             metadatas=[metadata],
         )
 
+    def _split_and_embed(
+        self,
+        content: str,
+        chunk_id: str,
+        metadata: Dict[str, Any],
+        rel_path: str,
+        depth: int = 0,
+        max_depth: int = 4,
+    ) -> bool:
+        """Recursively split oversized content and embed each piece (#4702).
+
+        Attempts to embed *content* directly.  If the model rejects it as
+        oversized and *depth* < *max_depth*, the content is split in half and
+        each half is retried recursively (up to 1/16th of the original at
+        depth 4).  Returns True when at least one sub-chunk is stored.
+        """
+        try:
+            self._embed_and_upsert(content, chunk_id, metadata)
+            return True
+        except Exception as e:
+            if not self._is_oversized_error(e) or depth >= max_depth:
+                logger.warning(
+                    "Dropping chunk %s (depth=%d, chars=%d): %s",
+                    chunk_id,
+                    depth,
+                    len(content),
+                    e,
+                )
+                return False
+
+        logger.warning(
+            "Oversized chunk — splitting at depth %d "
+            "(doc=%s, chunk_id=%s, chars=%d)",
+            depth,
+            rel_path,
+            chunk_id,
+            len(content),
+        )
+        mid = len(content) // 2
+        left = content[:mid].strip()
+        right = content[mid:].strip()
+        left_ok = self._split_and_embed(
+            left,
+            f"{chunk_id}_L{depth}",
+            {**metadata, "chunk_id_parent": chunk_id, "split_depth": depth},
+            rel_path,
+            depth + 1,
+            max_depth,
+        )
+        right_ok = self._split_and_embed(
+            right,
+            f"{chunk_id}_R{depth}",
+            {**metadata, "chunk_id_parent": chunk_id, "split_depth": depth},
+            rel_path,
+            depth + 1,
+            max_depth,
+        )
+        return left_ok or right_ok
+
     def _index_chunk(
         self,
         chunk: Dict[str, Any],
@@ -779,9 +838,10 @@ class DocIndexerService:
         """Index a single chunk into ChromaDB.
 
         If the embedding model rejects the chunk as oversized, the content is
-        split in half and each half is retried once.  A WARNING is logged when
-        splitting occurs so the failure is always visible (fixes #4665 — chunks
-        were previously dropped silently with no diagnostic).
+        split recursively up to max_depth=4 (at most 1/16th of original size).
+        A WARNING is logged when splitting occurs so the failure is always
+        visible (fixes #4665 — chunks were previously dropped silently with no
+        diagnostic; #4702 — single-level split could still drop large halves).
 
         Returns True when at least one (sub-)chunk was stored successfully.
         """
@@ -813,50 +873,7 @@ class DocIndexerService:
             "lineage_source_run_id": "",
         }
 
-        content = chunk["content"]
-        _oversized_exc: Optional[Exception] = None
-        try:
-            self._embed_and_upsert(content, chunk_id, metadata)
-            return True
-        except Exception as e:
-            if not self._is_oversized_error(e):
-                logger.error("Failed to index chunk %s: %s", chunk_id, e)
-                return False
-            # Capture before Python deletes the name at except-block exit.
-            _oversized_exc = e
-
-        # Oversized chunk: split in half and retry each part once (#4665).
-        char_count = len(content)
-        logger.warning(
-            "Oversized chunk detected — splitting and retrying "
-            "(doc=%s, chunk_id=%s, chars=%d): %s",
-            rel_path,
-            chunk_id,
-            char_count,
-            _oversized_exc,
-        )
-        mid = char_count // 2
-        halves = [content[:mid].strip(), content[mid:].strip()]
-        any_ok = False
-        for part_idx, half in enumerate(halves):
-            if not half:
-                continue
-            half_id = f"{chunk_id}_{part_idx}"
-            half_meta = {**metadata, "chunk_id_parent": chunk_id, "split_part": part_idx}
-            try:
-                self._embed_and_upsert(half, half_id, half_meta)
-                any_ok = True
-            except Exception as split_err:
-                logger.warning(
-                    "Oversized chunk half still too large — dropping "
-                    "(doc=%s, chunk_id=%s, part=%d, chars=%d): %s",
-                    rel_path,
-                    half_id,
-                    part_idx,
-                    len(half),
-                    split_err,
-                )
-        return any_ok
+        return self._split_and_embed(chunk["content"], chunk_id, metadata, rel_path)
 
     def _check_hash_and_update_cache(self, file_str: str, force: bool) -> bool:
         """Check incremental hash cache; update cache entry if changed. Issue #2735.
