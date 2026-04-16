@@ -408,6 +408,37 @@ async def approve_loop_variant(
 
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
+    operation="reject_loop_variant",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.post("/loop/reject")
+async def reject_loop_variant(
+    current_user: dict = Depends(get_current_user),
+):
+    """Discard the pending staging variant without applying it to production RAGConfig.
+
+    The autonomous loop stores a "pending approval" variant when the improvement
+    margin is below the auto-promotion threshold.  This endpoint clears it.
+
+    Returns 409 if no variant is pending.
+
+    Issue #4916.
+    """
+    from services.rag_config import get_rag_config
+    from services.knowledge.autonomous_loop import get_loop_orchestrator
+
+    cfg = get_rag_config()
+    orchestrator = await get_loop_orchestrator(None, dry_run=cfg.autonomous_loop_dry_run)
+    cleared = await orchestrator.reject_pending()
+
+    if not cleared:
+        raise HTTPException(status_code=409, detail="No variant pending approval")
+
+    return {"message": "Pending variant rejected and cleared"}
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
     operation="get_rag_stats",
     error_code_prefix="KNOWLEDGE",
 )

@@ -306,6 +306,7 @@ class AutonomousLoopOrchestrator:
 
         Called once by get_loop_orchestrator() immediately after construction.
         Silently skips if Redis is unavailable.
+        Discards entries older than 7 days (matches TTL on the Redis key).
         """
         try:
             redis = await get_async_redis_client(database="knowledge")
@@ -313,7 +314,17 @@ class AutonomousLoopOrchestrator:
                 return
             raw = await redis.get(_PENDING_APPROVAL_REDIS_KEY)
             if raw:
-                self._pending_approval = json.loads(raw)
+                data = json.loads(raw)
+                staged_at_str = data.pop("staged_at", None)
+                if staged_at_str:
+                    staged_at = datetime.fromisoformat(staged_at_str)
+                    if staged_at.tzinfo is None:
+                        staged_at = staged_at.replace(tzinfo=timezone.utc)
+                    if (datetime.now(timezone.utc) - staged_at).days > 7:
+                        logger.info("restore_state: discarding stale pending_approval (>7 days old)")
+                        await redis.delete(_PENDING_APPROVAL_REDIS_KEY)
+                        return
+                self._pending_approval = data
                 logger.info(
                     "AutonomousLoop: restored pending_approval from Redis: %s",
                     self._pending_approval,
@@ -322,12 +333,18 @@ class AutonomousLoopOrchestrator:
             logger.debug("AutonomousLoop: could not restore pending_approval from Redis (non-fatal)")
 
     async def _save_pending_approval(self, params: Dict[str, Any]) -> None:
-        """Persist _pending_approval to Redis so it survives restarts."""
+        """Persist _pending_approval to Redis so it survives restarts.
+
+        A 7-day TTL is set so stale entries are automatically evicted.
+        A ``staged_at`` timestamp is embedded so restore_state() can
+        skip entries that survived the TTL via a Redis replica lag.
+        """
         try:
             redis = await get_async_redis_client(database="knowledge")
             if redis is None:
                 return
-            await redis.set(_PENDING_APPROVAL_REDIS_KEY, json.dumps(params))
+            params_with_ts = {**params, "staged_at": datetime.now(timezone.utc).isoformat()}
+            await redis.set(_PENDING_APPROVAL_REDIS_KEY, json.dumps(params_with_ts), ex=7 * 24 * 3600)
         except Exception:
             logger.debug("AutonomousLoop: could not persist pending_approval to Redis (non-fatal)")
 
@@ -751,6 +768,9 @@ async def get_loop_orchestrator(
     """
     global _loop_orchestrator
     async with _loop_lock:
+        # Never replace a running instance — it would orphan in-flight experiments.
+        if _loop_orchestrator is not None and getattr(_loop_orchestrator, "_running", False):
+            return _loop_orchestrator
         if _loop_orchestrator is None or (
             _loop_orchestrator._llm is None and llm_service is not None
         ):
