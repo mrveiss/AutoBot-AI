@@ -1160,13 +1160,15 @@ async def index_code(request: dict = None):
       ``root_dir`` — directory to scan (default: project root)
       ``force``    — skip hash cache and re-index everything (default: false)
 
-    Returns a summary of success/failed/skipped node counts.
+    Returns immediately with a task_id. Use /populate_autobot_docs/status/{task_id}
+    (the shared task status endpoint) to poll progress.
+
+    Issue #4912: Made non-blocking via asyncio.create_task background pattern.
     """
-    import asyncio
+    import uuid
 
     from constants.path_constants import PATH
-    from services.knowledge.code_indexer import CodeIndexer
-    from services.knowledge.doc_indexer import get_doc_indexer_service
+    from services.knowledge.task_status_manager import TaskStatusManager
 
     params = request or {}
     root_dir = str(params.get("root_dir") or PATH.PROJECT_ROOT)
@@ -1180,31 +1182,94 @@ async def index_code(request: dict = None):
     ):
         raise HTTPException(status_code=400, detail="root_dir must be within the project root")
 
-    doc_svc = get_doc_indexer_service()
-    if not await doc_svc.initialize():
-        return {"status": "error", "message": "Failed to initialize ChromaDB / embed model"}
+    task_id = str(uuid.uuid4())
 
-    # Reuse the same ChromaDB collection and embed model as DocIndexerService
-    # so code nodes live alongside doc chunks in the same vector store.
-    code_indexer = CodeIndexer(
-        collection=doc_svc._collection,
-        embed_model=doc_svc._embed_model,
+    await TaskStatusManager.create_task(
+        task_id=task_id,
+        message="Code indexing started",
+        total_items=0,
     )
 
-    result = await code_indexer.index_directory(root_dir, force)
+    asyncio.create_task(_index_code_background(task_id, root_dir, force))
 
-    logger.info(
-        "CodeIndexer scan complete: root=%s success=%d failed=%d skipped=%d",
-        root_dir, result.success, result.failed, result.skipped,
-    )
+    logger.info("Queued code indexing task: %s (root=%s force=%s)", task_id, root_dir, force)
+
     return {
-        "status": "ok",
-        "root_dir": root_dir,
-        "success": result.success,
-        "failed": result.failed,
-        "skipped": result.skipped,
-        "errors": result.errors[:20],  # cap to avoid huge response
+        "status": "started",
+        "task_id": task_id,
+        "message": "Code indexing started in background",
+        "status_url": f"/api/knowledge_base/populate_autobot_docs/status/{task_id}",
     }
+
+
+async def _index_code_background(task_id: str, root_dir: str, force: bool):
+    """Background task: index source files via AST-based CodeIndexer (#4912)."""
+    import time
+
+    from services.knowledge.code_indexer import CodeIndexer
+    from services.knowledge.doc_indexer import get_doc_indexer_service
+    from services.knowledge.task_status_manager import TaskStatusManager
+
+    start_time = time.time()
+
+    try:
+        logger.info("[%s] Starting background code indexing (root=%s force=%s)...", task_id, root_dir, force)
+
+        await TaskStatusManager.update_task(
+            task_id=task_id,
+            status="running",
+            message="Initializing indexer...",
+            progress_percent=5,
+        )
+
+        doc_svc = get_doc_indexer_service()
+        if not await doc_svc.initialize():
+            logger.error("[%s] Indexer initialization failed", task_id)
+            await TaskStatusManager.fail_task(
+                task_id=task_id,
+                error_message="Failed to initialize ChromaDB / embed model",
+            )
+            return
+
+        await TaskStatusManager.update_task(
+            task_id=task_id,
+            status="running",
+            message="Scanning and indexing source files...",
+            progress_percent=10,
+        )
+
+        # Reuse the same ChromaDB collection and embed model as DocIndexerService
+        # so code nodes live alongside doc chunks in the same vector store.
+        code_indexer = CodeIndexer(
+            collection=doc_svc._collection,
+            embed_model=doc_svc._embed_model,
+        )
+
+        result = await code_indexer.index_directory(root_dir, force)
+
+        elapsed = time.time() - start_time
+
+        await TaskStatusManager.complete_task(
+            task_id=task_id,
+            message=(
+                f"Successfully indexed {result.success} code nodes "
+                f"({result.skipped} skipped, {result.failed} failed)"
+            ),
+            items_processed=result.success,
+            elapsed_seconds=elapsed,
+        )
+
+        logger.info(
+            "[%s] Code indexing completed: root=%s success=%d failed=%d skipped=%d (%.1fs)",
+            task_id, root_dir, result.success, result.failed, result.skipped, elapsed,
+        )
+    except Exception as e:
+        elapsed = time.time() - start_time
+        logger.error("[%s] Background code indexing failed: %s", task_id, e)
+        await TaskStatusManager.fail_task(
+            task_id=task_id,
+            error_message=str(e),
+        )
 
 
 # =========================================================================
