@@ -88,6 +88,7 @@ async def test_index_python_file_upserts_nodes(tmp_path):
     assert indexer._collection.upsert.called
 
 
+@requires_tree_sitter
 async def test_index_unchanged_file_skips(tmp_path):
     src = tmp_path / "module.py"
     src.write_bytes(SIMPLE_PYTHON)
@@ -279,3 +280,56 @@ async def test_index_code_accepts_subdir_of_project_root(tmp_path):
         response = await index_code({"root_dir": str(subdir)})
 
     assert response["status"] == "ok"
+
+
+# ---------------------------------------------------------------------------
+# dep_error surfacing — tree-sitter missing (#4898)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_index_file_surfaces_dep_error_when_tree_sitter_missing(tmp_path, monkeypatch):
+    """When tree-sitter is unavailable the dep_error must appear in result.errors."""
+    from services.knowledge import code_indexer as ci
+
+    src = tmp_path / "module.py"
+    src.write_bytes(b"def foo(): pass\n")
+
+    # Patch extract_python to simulate ImportError (dep missing)
+    def _fake_extract(source_path, content):
+        return {"nodes": [], "edges": [], "dep_error": "tree-sitter-python not installed: No module named 'tree_sitter_python'"}
+
+    monkeypatch.setattr(ci, "extract_python", _fake_extract)
+    # Rebuild _EXTRACTORS so index_file picks up the patched extractor
+    monkeypatch.setitem(ci._EXTRACTORS, ".py", _fake_extract)
+
+    indexer = _make_indexer(tmp_path)
+    result = await indexer.index_file(str(src), root_dir=str(tmp_path))
+
+    assert result.failed == 1
+    assert result.success == 0
+    assert len(result.errors) == 1
+    assert "tree-sitter-python not installed" in result.errors[0]
+    assert not indexer._collection.upsert.called
+
+
+@pytest.mark.asyncio
+async def test_index_directory_surfaces_dep_errors_in_aggregate(tmp_path, monkeypatch):
+    """dep_errors from individual files are aggregated into the directory result."""
+    from services.knowledge import code_indexer as ci
+
+    (tmp_path / "a.py").write_bytes(b"def foo(): pass\n")
+    (tmp_path / "b.py").write_bytes(b"def bar(): pass\n")
+
+    def _fake_extract(source_path, content):
+        return {"nodes": [], "edges": [], "dep_error": "tree-sitter-python not installed: No module named 'tree_sitter_python'"}
+
+    monkeypatch.setitem(ci._EXTRACTORS, ".py", _fake_extract)
+
+    indexer = _make_indexer(tmp_path)
+    result = await indexer.index_directory(str(tmp_path))
+
+    assert result.failed == 2
+    assert result.success == 0
+    assert len(result.errors) == 2
+    assert all("tree-sitter-python not installed" in e for e in result.errors)

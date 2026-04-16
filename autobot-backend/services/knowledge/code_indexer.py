@@ -55,7 +55,7 @@ def extract_python(source_path: str, content: bytes) -> dict:
         from tree_sitter import Language, Parser
     except ImportError as exc:
         logger.error("tree-sitter-python not installed: %s", exc)
-        return {"nodes": [], "edges": []}
+        return {"nodes": [], "edges": [], "dep_error": f"tree-sitter-python not installed: {exc}"}
 
     lang = Language(tspython.language())
     parser = Parser(lang)
@@ -208,7 +208,8 @@ def extract_javascript(source_path: str, content: bytes) -> dict:
         from tree_sitter import Language, Parser
     except ImportError as exc:
         logger.error("tree-sitter-javascript not installed: %s", exc)
-        return {"nodes": [], "edges": []}
+        msg = f"tree-sitter-javascript not installed: {exc}"
+        return {"nodes": [], "edges": [], "dep_error": msg}
 
     lang = Language(tsjs.language())
     parser = Parser(lang)
@@ -282,6 +283,11 @@ class CodeIndexer:
             return result
 
         extracted = extractor(file_path, content)
+        dep_error = extracted.get("dep_error")
+        if dep_error:
+            result.failed += 1
+            result.errors.append(dep_error)
+            return result
         nodes = extracted["nodes"]
         edges = extracted["edges"]
 
