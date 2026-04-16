@@ -118,7 +118,7 @@ onMounted(() => {
 .base-alert {
   display: flex;
   align-items: flex-start;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   padding: 0.75rem 1rem;
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
@@ -128,7 +128,7 @@ onMounted(() => {
 
 .alert-icon {
   flex-shrink: 0;
-  margin-top: 0.125rem;
+  margin-top: var(--spacing-0-5);
 }
 
 .alert-content {
@@ -138,7 +138,7 @@ onMounted(() => {
 
 .alert-title {
   font-weight: 600;
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--spacing-1);
 }
 
 .alert-message {
@@ -148,13 +148,13 @@ onMounted(() => {
 .alert-actions {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   flex-shrink: 0;
   margin-left: auto;
 }
 
 .alert-dismiss {
-  padding: 0.25rem;
+  padding: var(--spacing-1);
   border-radius: var(--radius-default);
   transition: background-color var(--duration-200) var(--ease-out);
   background: transparent;

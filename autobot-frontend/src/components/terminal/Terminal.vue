@@ -666,7 +666,7 @@ onUnmounted(() => {
 }
 
 .terminal-line {
-  margin-bottom: 4px;
+  margin-bottom: var(--spacing-1);
   word-wrap: break-word;
 }
 
@@ -705,13 +705,13 @@ onUnmounted(() => {
 .terminal-prompt {
   display: flex;
   align-items: center;
-  margin-top: 8px;
+  margin-top: var(--spacing-2);
   flex-shrink: 0; /* Prevent prompt from shrinking */
 }
 
 .prompt {
   color: #6c757d;
-  margin-right: 8px;
+  margin-right: var(--spacing-2);
   user-select: none;
 }
 
@@ -723,7 +723,7 @@ onUnmounted(() => {
   font-family: inherit;
   font-size: inherit;
   outline: none;
-  padding: 0;
+  padding: var(--spacing-0);
 }
 
 .terminal-input:focus-visible {
@@ -804,7 +804,7 @@ onUnmounted(() => {
   }
 
   .terminal-output {
-    padding: 12px;
+    padding: var(--spacing-3);
     font-size: var(--text-xs);
   }
 }

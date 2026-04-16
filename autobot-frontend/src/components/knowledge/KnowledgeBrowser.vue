@@ -1105,11 +1105,11 @@ watch(() => props.mode, () => {
 /* Header */
 .browser-header {
   background: var(--bg-card);
-  padding: 1rem;
+  padding: var(--spacing-4);
   border-bottom: 2px solid var(--border-default);
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--spacing-4);
   flex-wrap: wrap;
 }
 
@@ -1117,7 +1117,7 @@ watch(() => props.mode, () => {
 .category-tabs-container {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   flex: 1;
   min-width: 0;
 }
@@ -1125,10 +1125,10 @@ watch(() => props.mode, () => {
 /* Category Tabs */
 .category-tabs {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   overflow-x: auto;
   flex: 0 0 auto;
-  padding-bottom: 0.25rem;
+  padding-bottom: var(--spacing-1);
   scrollbar-width: thin;
   scrollbar-color: var(--color-primary-alpha-30) transparent;
 }
@@ -1157,7 +1157,7 @@ watch(() => props.mode, () => {
 }
 
 .category-tab-icon {
-  margin-right: 0.25rem;
+  margin-right: var(--spacing-1);
   transition: transform var(--duration-200) var(--ease-out);
 }
 
@@ -1180,7 +1180,7 @@ watch(() => props.mode, () => {
   border-radius: var(--radius-xl);
   font-size: var(--text-xs);
   font-weight: 600;
-  margin-left: 0.375rem;
+  margin-left: var(--spacing-1-5);
   transition: all var(--duration-200) var(--ease-out);
 }
 
@@ -1192,7 +1192,7 @@ watch(() => props.mode, () => {
 .active-filter-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   padding: 0.375rem 0.75rem;
   background: var(--color-primary-bg);
   border: 1px solid var(--color-primary-light);
@@ -1214,7 +1214,7 @@ watch(() => props.mode, () => {
   justify-content: center;
   width: 1.25rem;
   height: 1.25rem;
-  padding: 0;
+  padding: var(--spacing-0);
   background: transparent;
   border: none;
   border-radius: 50%;
@@ -1264,7 +1264,7 @@ watch(() => props.mode, () => {
 .refresh-status-btn {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--spacing-1-5);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -1295,7 +1295,7 @@ watch(() => props.mode, () => {
 .toolbar-info {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   color: var(--bg-card);
   font-weight: 500;
 }
@@ -1306,7 +1306,7 @@ watch(() => props.mode, () => {
 
 .toolbar-actions {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 /* Toolbar button custom styling */
@@ -1376,7 +1376,7 @@ watch(() => props.mode, () => {
 .breadcrumb {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   padding: 0.75rem 1.5rem;
   background: var(--bg-card);
   border-bottom: 1px solid var(--border-default);
@@ -1399,7 +1399,7 @@ watch(() => props.mode, () => {
   grid-template-columns: 30% 70%;
   flex: 1;
   overflow: hidden;
-  gap: 0;
+  gap: var(--spacing-0);
 }
 
 .tree-pane {
@@ -1416,23 +1416,23 @@ watch(() => props.mode, () => {
 
 /* Tree container */
 .tree-container {
-  padding: 0.5rem;
+  padding: var(--spacing-2);
 }
 
 /* Load More button container */
 .load-more-container {
   display: flex;
   justify-content: center;
-  padding: 1rem;
-  margin-top: 0.5rem;
+  padding: var(--spacing-4);
+  margin-top: var(--spacing-2);
 }
 
 .loading-more {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  padding: 1rem;
+  gap: var(--spacing-2);
+  padding: var(--spacing-4);
   color: var(--text-tertiary);
   font-size: var(--text-sm);
 }
@@ -1458,7 +1458,7 @@ watch(() => props.mode, () => {
 .error-state i,
 .placeholder-state i {
   font-size: var(--text-5xl);
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
   opacity: 0.5;
 }
 
@@ -1467,7 +1467,7 @@ watch(() => props.mode, () => {
 }
 
 .retry-btn {
-  margin-top: 1rem;
+  margin-top: var(--spacing-4);
 }
 
 /* File viewer */
@@ -1481,7 +1481,7 @@ watch(() => props.mode, () => {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   background: var(--bg-card);
   border-bottom: 2px solid var(--border-default);
 }
@@ -1489,21 +1489,21 @@ watch(() => props.mode, () => {
 .file-info {
   display: flex;
   align-items: flex-start;
-  gap: 1rem;
+  gap: var(--spacing-4);
   flex: 1;
 }
 
 .file-info > i {
   font-size: 2rem;
   color: var(--color-primary);
-  margin-top: 0.25rem;
+  margin-top: var(--spacing-1);
 }
 
 .file-info h4 {
   font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--spacing-1);
 }
 
 .file-meta {
@@ -1523,7 +1523,7 @@ watch(() => props.mode, () => {
   flex: 1;
   overflow-y: auto;
   background: var(--bg-card);
-  margin: 1rem;
+  margin: var(--spacing-4);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
 }
@@ -1534,7 +1534,7 @@ watch(() => props.mode, () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 3rem;
+  padding: var(--spacing-12);
   color: var(--text-tertiary);
 }
 
@@ -1543,14 +1543,14 @@ watch(() => props.mode, () => {
 }
 
 .content-display {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
   font-size: var(--text-sm);
   line-height: 1.6;
   color: var(--text-primary);
   white-space: pre-wrap;
   word-wrap: break-word;
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 /* Scrollbar styling */

@@ -524,7 +524,7 @@ onMounted(async () => {
 .page-subtitle {
   font-size: var(--text-sm);
   color: var(--text-secondary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .btn-refresh {
@@ -660,14 +660,14 @@ onMounted(async () => {
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .empty-subtitle {
   font-size: var(--text-sm);
   text-align: center;
   max-width: 380px;
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 /* ---- Plugin Grid ---- */
@@ -779,13 +779,13 @@ onMounted(async () => {
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .plugin-desc {
   font-size: var(--text-sm);
   color: var(--text-secondary);
-  margin: 0;
+  margin: var(--spacing-0);
   line-height: var(--leading-relaxed);
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -796,14 +796,14 @@ onMounted(async () => {
 .plugin-meta {
   font-size: var(--text-xs);
   color: var(--text-tertiary, var(--text-secondary));
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .hooks-list,
 .deps-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--spacing-1);
   align-items: center;
 }
 
@@ -835,7 +835,7 @@ onMounted(async () => {
 .action-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
   padding: 4px 12px;
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
@@ -944,7 +944,7 @@ onMounted(async () => {
   font-size: var(--text-lg);
   font-weight: 700;
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .modal-close {
@@ -981,7 +981,7 @@ onMounted(async () => {
   grid-template-columns: max-content 1fr;
   gap: var(--spacing-xs) var(--spacing-md);
   font-size: var(--text-sm);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .info-grid dt {
@@ -991,10 +991,10 @@ onMounted(async () => {
 
 .info-grid dd {
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--spacing-1);
   align-items: center;
 }
 
@@ -1002,7 +1002,7 @@ onMounted(async () => {
   font-size: var(--text-sm);
   color: var(--text-secondary);
   line-height: var(--leading-relaxed);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 /* ---- Config Editor ---- */
@@ -1022,7 +1022,7 @@ onMounted(async () => {
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .config-edit-btn {
@@ -1057,7 +1057,7 @@ onMounted(async () => {
   color: var(--text-primary);
   overflow-x: auto;
   white-space: pre-wrap;
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .config-editor {
@@ -1096,7 +1096,7 @@ onMounted(async () => {
 .config-empty {
   font-size: var(--text-sm);
   color: var(--text-secondary);
-  margin: 0;
+  margin: var(--spacing-0);
   font-style: italic;
 }
 

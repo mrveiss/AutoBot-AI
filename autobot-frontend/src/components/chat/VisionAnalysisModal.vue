@@ -379,7 +379,7 @@ onUnmounted(() => {
 .header-title {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .header-title i {
@@ -388,14 +388,14 @@ onUnmounted(() => {
 }
 
 .header-title h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .btn-close {
-  padding: 8px;
+  padding: var(--spacing-2);
   background: none;
   border: none;
   color: var(--text-tertiary);
@@ -413,17 +413,17 @@ onUnmounted(() => {
 .modal-body {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
+  padding: var(--spacing-5);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 /* Drop zone */
 .drop-zone {
   border: 2px dashed var(--border-default);
   border-radius: var(--radius-xl);
-  padding: 32px;
+  padding: var(--spacing-8);
   text-align: center;
   cursor: pointer;
   transition: all var(--duration-200);
@@ -440,14 +440,14 @@ onUnmounted(() => {
 
 .drop-zone.has-file {
   border-style: solid;
-  padding: 16px;
+  padding: var(--spacing-4);
 }
 
 .drop-placeholder {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   color: var(--text-tertiary);
 }
 
@@ -457,7 +457,7 @@ onUnmounted(() => {
 }
 
 .drop-placeholder p {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
   color: var(--text-secondary);
 }
@@ -470,7 +470,7 @@ onUnmounted(() => {
 .file-preview {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: var(--spacing-3-5);
   width: 100%;
 }
 
@@ -486,7 +486,7 @@ onUnmounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--spacing-0-5);
   text-align: left;
 }
 
@@ -503,7 +503,7 @@ onUnmounted(() => {
 }
 
 .btn-clear {
-  padding: 8px;
+  padding: var(--spacing-2);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: none;
@@ -519,14 +519,14 @@ onUnmounted(() => {
 /* Options */
 .options-row {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
   flex-wrap: wrap;
 }
 
 .option-group {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--spacing-1-5);
   min-width: 160px;
 }
 
@@ -570,7 +570,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   align-self: center;
 }
 
@@ -587,7 +587,7 @@ onUnmounted(() => {
 .error-banner {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   padding: 10px 14px;
   background: var(--color-error-bg);
   border: 1px solid var(--color-error-border, var(--color-error));
@@ -620,18 +620,18 @@ onUnmounted(() => {
 }
 
 .results-header h4 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-success);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 .results-meta {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .meta-badge {
@@ -643,16 +643,16 @@ onUnmounted(() => {
 }
 
 .results-content {
-  padding: 16px;
+  padding: var(--spacing-4);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .result-item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .result-label {
@@ -663,7 +663,7 @@ onUnmounted(() => {
 }
 
 .result-value {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
   color: var(--text-primary);
   line-height: 1.5;
@@ -672,7 +672,7 @@ onUnmounted(() => {
 .tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .tag {
@@ -686,7 +686,7 @@ onUnmounted(() => {
 .objects-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .object-row {
@@ -713,7 +713,7 @@ onUnmounted(() => {
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 .btn-toggle-json:hover {
@@ -721,14 +721,14 @@ onUnmounted(() => {
 }
 
 .json-display {
-  padding: 12px;
+  padding: var(--spacing-3);
   background: var(--bg-secondary);
   border-radius: var(--radius-md);
   font-size: var(--text-xs);
   color: var(--text-secondary);
   overflow-x: auto;
   max-height: 200px;
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 /* Footer */
@@ -742,7 +742,7 @@ onUnmounted(() => {
 
 .footer-right {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .btn-primary {
@@ -756,7 +756,7 @@ onUnmounted(() => {
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -779,7 +779,7 @@ onUnmounted(() => {
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 .btn-secondary:hover:not(:disabled) {

@@ -162,7 +162,7 @@ watch(() => props.eventId, loadChain)
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .chain-header h4 i {
@@ -288,7 +288,7 @@ watch(() => props.eventId, loadChain)
 .event-desc {
   font-size: var(--text-sm);
   color: var(--text-secondary);
-  margin: 0;
+  margin: var(--spacing-0);
   line-height: 1.5;
 }
 

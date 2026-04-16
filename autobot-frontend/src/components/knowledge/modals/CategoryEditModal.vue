@@ -444,17 +444,17 @@ function selectIcon(icon: string): void {
 
 <style scoped>
 .category-edit-modal {
-  padding: 1rem;
+  padding: var(--spacing-4);
 }
 
 /* Alerts */
 .alert {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   padding: 0.875rem 1rem;
   border-radius: var(--radius-lg);
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
   font-size: var(--text-sm);
 }
 
@@ -475,7 +475,7 @@ function selectIcon(icon: string): void {
   background: var(--bg-secondary);
   padding: 0.75rem 1rem;
   border-radius: var(--radius-lg);
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
 }
 
 .category-path label {
@@ -484,7 +484,7 @@ function selectIcon(icon: string): void {
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--spacing-1);
 }
 
 .path-value {
@@ -495,12 +495,12 @@ function selectIcon(icon: string): void {
 
 /* Form Groups */
 .form-group {
-  margin-bottom: 1.25rem;
+  margin-bottom: var(--spacing-5);
 }
 
 .form-group label {
   display: block;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
   font-weight: 500;
   color: var(--text-primary);
   font-size: var(--text-sm);
@@ -545,7 +545,7 @@ function selectIcon(icon: string): void {
 .icon-picker {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .icon-option {
@@ -583,7 +583,7 @@ function selectIcon(icon: string): void {
 .color-picker {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .color-option {
@@ -626,8 +626,8 @@ function selectIcon(icon: string): void {
 .category-preview {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 1rem;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4);
   background: var(--bg-secondary);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-default);
@@ -654,22 +654,22 @@ function selectIcon(icon: string): void {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 1.5rem;
-  padding-top: 1.5rem;
+  margin-top: var(--spacing-6);
+  padding-top: var(--spacing-6);
   border-top: 1px solid var(--border-default);
 }
 
 .left-actions,
 .right-actions {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   align-items: center;
 }
 
 .delete-disabled-hint {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   font-size: var(--text-xs);
   color: var(--text-muted);
 }
@@ -677,57 +677,57 @@ function selectIcon(icon: string): void {
 /* Delete Confirmation */
 .delete-confirm {
   text-align: center;
-  padding: 1rem;
+  padding: var(--spacing-4);
 }
 
 .delete-warning {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   background: var(--color-warning-bg);
   border: 1px solid var(--color-warning-border);
   border-radius: var(--radius-xl);
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
 }
 
 .delete-warning i.fa-exclamation-triangle {
   font-size: 2.5rem;
   color: var(--color-warning);
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .delete-warning h3 {
   font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--spacing-3);
 }
 
 .delete-warning p {
   color: var(--text-secondary);
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
 }
 
 .fact-warning {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  padding: 0.75rem;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3);
   background: var(--color-error-bg);
   border-radius: var(--radius-md);
   color: var(--color-error-dark);
-  margin-top: 1rem;
+  margin-top: var(--spacing-4);
 }
 
 .delete-note {
   font-size: var(--text-xs);
   color: var(--text-muted);
   font-style: italic;
-  margin-top: 0.75rem;
+  margin-top: var(--spacing-3);
 }
 
 .delete-actions {
   display: flex;
   justify-content: center;
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 </style>

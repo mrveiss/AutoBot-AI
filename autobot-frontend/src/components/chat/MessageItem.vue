@@ -590,20 +590,20 @@ const formattedContent = computed(() => {
 
 /* RTL layout support (#1337) */
 :global([dir="rtl"]) .message-wrapper.user-message {
-  margin-left: 0;
+  margin-left: var(--spacing-0);
   margin-right: auto;
   border-radius: 18px 18px 18px 4px;
 }
 
 :global([dir="rtl"]) .message-wrapper.assistant-message {
-  margin-right: 0;
+  margin-right: var(--spacing-0);
   margin-left: auto;
   border-radius: 18px 18px 4px 18px;
 }
 
 :global([dir="rtl"]) .message-info {
-  margin-left: 0;
-  margin-right: 0.375rem;
+  margin-left: var(--spacing-0);
+  margin-right: var(--spacing-1-5);
 }
 
 :global([dir="rtl"]) .message-status-container {
@@ -620,13 +620,13 @@ const formattedContent = computed(() => {
 
 @media (max-width: 768px) {
   :global([dir="rtl"]) .message-wrapper.user-message {
-    margin-left: 0;
-    margin-right: 0.125rem;
+    margin-left: var(--spacing-0);
+    margin-right: var(--spacing-0-5);
   }
 
   :global([dir="rtl"]) .message-wrapper.assistant-message {
-    margin-right: 0;
-    margin-left: 0.125rem;
+    margin-right: var(--spacing-0);
+    margin-left: var(--spacing-0-5);
   }
 }
 </style>

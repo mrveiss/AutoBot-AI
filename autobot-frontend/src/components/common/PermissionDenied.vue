@@ -207,7 +207,7 @@ function goHome(): void {
 }
 
 .permission-denied__contact {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
   color: var(--text-tertiary);
 }

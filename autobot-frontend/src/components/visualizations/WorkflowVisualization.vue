@@ -588,7 +588,7 @@ defineExpose({
 .workflow-visualization {
   background: var(--bg-secondary-alpha);
   border-radius: var(--radius-xl);
-  padding: 20px;
+  padding: var(--spacing-5);
   border: 1px solid var(--border-subtle);
   position: relative;
 }
@@ -597,8 +597,8 @@ defineExpose({
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
+  margin-bottom: var(--spacing-4);
+  padding-bottom: var(--spacing-3);
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -606,7 +606,7 @@ defineExpose({
   font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .workflow-id {
@@ -616,14 +616,14 @@ defineExpose({
 
 .header-actions {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
   align-items: center;
 }
 
 .status-badge {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
   padding: 6px 12px;
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
@@ -806,9 +806,9 @@ defineExpose({
   right: 16px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   background: rgba(30, 41, 59, 0.9);
-  padding: 8px;
+  padding: var(--spacing-2);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-subtle);
 }
@@ -885,8 +885,8 @@ defineExpose({
 .details-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4);
   background: var(--bg-tertiary-alpha);
   border-bottom: 1px solid var(--border-subtle);
 }
@@ -919,7 +919,7 @@ defineExpose({
 }
 
 .details-title h4 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
@@ -931,7 +931,7 @@ defineExpose({
 }
 
 .close-btn {
-  padding: 6px;
+  padding: var(--spacing-1-5);
   background: transparent;
   border: none;
   color: var(--text-tertiary);
@@ -946,7 +946,7 @@ defineExpose({
 }
 
 .details-content {
-  padding: 16px;
+  padding: var(--spacing-4);
 }
 
 .detail-row {
@@ -979,9 +979,9 @@ defineExpose({
 .detail-row .output {
   font-size: var(--text-xs);
   background: rgba(15, 23, 42, 0.5);
-  padding: 8px;
+  padding: var(--spacing-2);
   border-radius: var(--radius-default);
-  margin-top: 4px;
+  margin-top: var(--spacing-1);
   overflow-x: auto;
   max-width: 200px;
 }
@@ -1002,7 +1002,7 @@ defineExpose({
 @media (max-width: 768px) {
   .workflow-header {
     flex-direction: column;
-    gap: 12px;
+    gap: var(--spacing-3);
     align-items: stretch;
   }
 

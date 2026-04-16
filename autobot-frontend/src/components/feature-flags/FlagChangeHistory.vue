@@ -161,11 +161,11 @@ const formatRelativeTime = (timestamp: string) => {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
-  padding: 24px;
+  padding: var(--spacing-6);
 }
 
 .section-header {
-  margin-bottom: 24px;
+  margin-bottom: var(--spacing-6);
 }
 
 .section-header h3 {
@@ -175,7 +175,7 @@ const formatRelativeTime = (timestamp: string) => {
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .section-header h3 i {
@@ -183,7 +183,7 @@ const formatRelativeTime = (timestamp: string) => {
 }
 
 .section-header .description {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
@@ -195,7 +195,7 @@ const formatRelativeTime = (timestamp: string) => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px;
+  padding: var(--spacing-10);
   color: var(--text-tertiary);
 }
 
@@ -209,7 +209,7 @@ const formatRelativeTime = (timestamp: string) => {
   align-items: center;
   justify-content: center;
   font-size: var(--text-2xl);
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-4);
 }
 
 .empty-state h4 {
@@ -220,7 +220,7 @@ const formatRelativeTime = (timestamp: string) => {
 }
 
 .empty-state p {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
   color: var(--text-secondary);
 }
@@ -233,7 +233,7 @@ const formatRelativeTime = (timestamp: string) => {
 
 .timeline-entry {
   display: flex;
-  gap: 20px;
+  gap: var(--spacing-5);
 }
 
 .timeline-marker {
@@ -278,18 +278,18 @@ const formatRelativeTime = (timestamp: string) => {
 
 .timeline-content {
   flex: 1;
-  padding-bottom: 32px;
+  padding-bottom: var(--spacing-8);
 }
 
 .timeline-entry:last-child .timeline-content {
-  padding-bottom: 0;
+  padding-bottom: var(--spacing-0);
 }
 
 .entry-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 8px;
+  gap: var(--spacing-3);
+  margin-bottom: var(--spacing-2);
 }
 
 .mode-badge {
@@ -322,7 +322,7 @@ const formatRelativeTime = (timestamp: string) => {
 }
 
 .entry-details {
-  padding: 14px;
+  padding: var(--spacing-3-5);
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
@@ -336,7 +336,7 @@ const formatRelativeTime = (timestamp: string) => {
 
 .meta-info {
   display: flex;
-  gap: 20px;
+  gap: var(--spacing-5);
   font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
@@ -344,7 +344,7 @@ const formatRelativeTime = (timestamp: string) => {
 .changed-by {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 .relative-time {
@@ -353,12 +353,12 @@ const formatRelativeTime = (timestamp: string) => {
 
 /* Legend */
 .legend {
-  margin-top: 24px;
-  padding-top: 20px;
+  margin-top: var(--spacing-6);
+  padding-top: var(--spacing-5);
   border-top: 1px solid var(--border-default);
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: var(--spacing-5);
 }
 
 .legend-title {
@@ -368,13 +368,13 @@ const formatRelativeTime = (timestamp: string) => {
 
 .legend-items {
   display: flex;
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   font-size: var(--text-xs);
   color: var(--text-secondary);
 }
@@ -404,13 +404,13 @@ const formatRelativeTime = (timestamp: string) => {
   }
 
   .timeline-entry {
-    gap: 0;
+    gap: var(--spacing-0);
   }
 
   .legend {
     flex-direction: column;
     align-items: flex-start;
-    gap: 12px;
+    gap: var(--spacing-3);
   }
 }
 </style>

@@ -285,7 +285,7 @@ function showError(msg: string) {
 }
 
 .sidebar-title {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-base);
   font-weight: 600;
 }
@@ -298,8 +298,8 @@ function showError(msg: string) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 24px;
+  gap: var(--spacing-2);
+  padding: var(--spacing-6);
   text-align: center;
   color: var(--color-text-muted, #888);
   font-size: 0.9rem;
@@ -307,7 +307,7 @@ function showError(msg: string) {
 
 .empty-icon {
   font-size: 2rem;
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
   color: var(--color-text-muted, #555);
 }
 
@@ -328,8 +328,8 @@ function showError(msg: string) {
 /* Document list */
 .document-list {
   list-style: none;
-  margin: 0;
-  padding: 0;
+  margin: var(--spacing-0);
+  padding: var(--spacing-0);
   overflow-y: auto;
   flex: 1;
 }
@@ -340,7 +340,7 @@ function showError(msg: string) {
   padding: 10px 16px;
   cursor: pointer;
   border-bottom: 1px solid var(--color-border, #2a2a2a);
-  gap: 2px;
+  gap: var(--spacing-0-5);
   position: relative;
   transition: background 0.12s;
 }
@@ -360,7 +360,7 @@ function showError(msg: string) {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding-right: 28px;
+  padding-right: var(--spacing-7);
 }
 
 .doc-meta {
@@ -411,7 +411,7 @@ function showError(msg: string) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: var(--spacing-3);
   color: var(--color-text-muted, #888);
   font-size: 0.95rem;
 }
@@ -441,7 +441,7 @@ function showError(msg: string) {
   background: var(--color-background-secondary, #252525);
   border: 1px solid var(--color-border, #444);
   border-radius: var(--radius-lg);
-  padding: 24px;
+  padding: var(--spacing-6);
   width: 360px;
   max-width: 90vw;
 }
@@ -462,7 +462,7 @@ function showError(msg: string) {
 .modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 /* Error toast */

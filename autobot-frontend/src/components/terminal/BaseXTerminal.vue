@@ -812,7 +812,7 @@ onUnmounted(() => {
 /* Ensure xterm.js styles are properly scoped */
 :deep(.xterm) {
   height: 100%;
-  padding: 0;
+  padding: var(--spacing-0);
 }
 
 :deep(.xterm-viewport) {

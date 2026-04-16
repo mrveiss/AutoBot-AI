@@ -145,8 +145,8 @@ function clearFilters() {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 1rem;
-  padding: 1rem;
+  gap: var(--spacing-4);
+  padding: var(--spacing-4);
   background-color: var(--bg-secondary);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-default);
@@ -155,7 +155,7 @@ function clearFilters() {
 .filter-group {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 
 .filter-label {
@@ -196,7 +196,7 @@ function clearFilters() {
 .clear-filters-btn {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--spacing-1-5);
   padding: 0.5rem 0.75rem;
   font-size: var(--text-sm);
   font-weight: 500;

@@ -228,7 +228,7 @@ async function handleSubmit(): Promise<void> {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .runner-header h4 i {
@@ -327,7 +327,7 @@ async function handleSubmit(): Promise<void> {
 .field-error {
   color: var(--color-error);
   font-size: var(--text-xs);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .submit-btn {
@@ -403,7 +403,7 @@ async function handleSubmit(): Promise<void> {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .result-duration {

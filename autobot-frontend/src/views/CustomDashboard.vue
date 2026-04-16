@@ -642,7 +642,7 @@ onMounted(() => {
 .header-content h1 {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   font-size: var(--text-2xl);
   font-weight: 700;
   color: var(--text-primary);
@@ -655,19 +655,19 @@ onMounted(() => {
 .header-description {
   color: var(--text-secondary);
   font-size: var(--text-sm);
-  margin-top: 0.25rem;
+  margin-top: var(--spacing-1);
 }
 
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .action-btn {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   padding: 0.625rem 1rem;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
@@ -702,7 +702,7 @@ onMounted(() => {
 .dashboard-selector {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .dashboard-selector select {
@@ -745,19 +745,19 @@ onMounted(() => {
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-secondary);
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--spacing-3);
 }
 
 .palette-widgets {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .palette-widget {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   padding: 0.5rem 1rem;
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
@@ -782,7 +782,7 @@ onMounted(() => {
   flex: 1;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 1.5rem;
+  gap: var(--spacing-6);
   padding: 1.5rem 2rem;
   overflow-y: auto;
 }
@@ -845,7 +845,7 @@ onMounted(() => {
 .widget-header h3 {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   font-size: 0.9375rem;
   font-weight: 600;
   color: var(--text-primary);
@@ -857,7 +857,7 @@ onMounted(() => {
 
 .widget-actions {
   display: flex;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 
 .widget-actions button {
@@ -896,7 +896,7 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 4rem;
+  padding: var(--spacing-16);
   text-align: center;
 }
 
@@ -910,19 +910,19 @@ onMounted(() => {
   justify-content: center;
   font-size: 2rem;
   color: var(--color-primary);
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
 }
 
 .empty-dashboard h3 {
   font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
 }
 
 .empty-dashboard p {
   color: var(--text-secondary);
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
 }
 
 /* Modals */
@@ -964,7 +964,7 @@ onMounted(() => {
 .modal-header h4 {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
@@ -979,7 +979,7 @@ onMounted(() => {
   border: none;
   color: var(--text-secondary);
   cursor: pointer;
-  padding: 0.25rem;
+  padding: var(--spacing-1);
 }
 
 .close-btn:hover {
@@ -987,13 +987,13 @@ onMounted(() => {
 }
 
 .modal-body {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   overflow-y: auto;
   flex: 1;
 }
 
 .form-group {
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .form-group label {
@@ -1001,7 +1001,7 @@ onMounted(() => {
   font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
-  margin-bottom: 0.375rem;
+  margin-bottom: var(--spacing-1-5);
 }
 
 .form-group input,
@@ -1029,7 +1029,7 @@ onMounted(() => {
 .modal-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   padding: 1rem 1.5rem;
   background: var(--bg-primary);
   border-top: 1px solid var(--border-default);
@@ -1039,14 +1039,14 @@ onMounted(() => {
 .widget-gallery {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .widget-option {
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   text-align: center;
   cursor: pointer;
   transition: all var(--duration-200);
@@ -1074,7 +1074,7 @@ onMounted(() => {
   font-size: 0.9375rem;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--spacing-1);
 }
 
 .widget-option p {
@@ -1105,8 +1105,8 @@ onMounted(() => {
 @media (max-width: 768px) {
   .dashboard-header {
     flex-direction: column;
-    gap: 1rem;
-    padding: 1rem;
+    gap: var(--spacing-4);
+    padding: var(--spacing-4);
   }
 
   .header-actions {
@@ -1116,7 +1116,7 @@ onMounted(() => {
 
   .dashboard-grid {
     grid-template-columns: 1fr;
-    padding: 1rem;
+    padding: var(--spacing-4);
   }
 
   .widget-container {

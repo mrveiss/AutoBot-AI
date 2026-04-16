@@ -242,8 +242,8 @@ const getQualityClass = (score: number): string => {
 .enhanced-analytics-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 20px;
-  margin-bottom: 32px;
+  gap: var(--spacing-5);
+  margin-bottom: var(--spacing-8);
 }
 
 .card-header-content {
@@ -254,7 +254,7 @@ const getQualityClass = (score: number): string => {
 }
 
 .card-header-content h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-primary);
   font-size: 1.1em;
   font-weight: 600;
@@ -263,7 +263,7 @@ const getQualityClass = (score: number): string => {
 .refresh-indicator {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
   font-size: 0.8em;
   color: var(--text-muted);
 }
@@ -294,8 +294,8 @@ const getQualityClass = (score: number): string => {
 /* Issue #609: Section Export Buttons */
 .section-export-buttons {
   display: inline-flex;
-  gap: 4px;
-  margin-left: 10px;
+  gap: var(--spacing-1);
+  margin-left: var(--spacing-2-5);
 }
 
 .export-btn {
@@ -309,7 +309,7 @@ const getQualityClass = (score: number): string => {
   transition: all var(--duration-200);
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .export-btn:hover {
@@ -325,7 +325,7 @@ const getQualityClass = (score: number): string => {
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .metric-item {
@@ -335,7 +335,7 @@ const getQualityClass = (score: number): string => {
 .metric-label {
   font-size: 0.8em;
   color: var(--text-muted);
-  margin-bottom: 4px;
+  margin-bottom: var(--spacing-1);
 }
 
 .metric-value {
@@ -354,7 +354,7 @@ const getQualityClass = (score: number): string => {
 .quality-details {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .pattern-item,
@@ -390,8 +390,8 @@ const getQualityClass = (score: number): string => {
 .quality-score,
 .performance-gauge {
   text-align: center;
-  margin-bottom: 16px;
-  padding: 16px;
+  margin-bottom: var(--spacing-4);
+  padding: var(--spacing-4);
   border-radius: var(--radius-lg);
 }
 
@@ -399,7 +399,7 @@ const getQualityClass = (score: number): string => {
 .gauge-value {
   font-size: 2.5em;
   font-weight: 700;
-  margin-bottom: 4px;
+  margin-bottom: var(--spacing-1);
 }
 
 .score-label,
@@ -443,7 +443,7 @@ const getQualityClass = (score: number): string => {
 .analytics-section {
   background: var(--bg-secondary);
   border-radius: var(--radius-xl);
-  padding: 24px;
+  padding: var(--spacing-6);
   border: 1px solid var(--bg-tertiary);
 }
 
@@ -451,15 +451,15 @@ const getQualityClass = (score: number): string => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
-  padding-bottom: 16px;
+  margin-bottom: var(--spacing-6);
+  padding-bottom: var(--spacing-4);
   border-bottom: 1px solid var(--bg-tertiary);
 }
 
 .toggle-switch {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
   cursor: pointer;
   color: var(--text-secondary);
 }
@@ -507,7 +507,7 @@ const getQualityClass = (score: number): string => {
   transition: all var(--duration-200);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .refresh-all-btn:hover {
@@ -515,12 +515,12 @@ const getQualityClass = (score: number): string => {
 }
 
 .stats-section {
-  margin-bottom: 32px;
+  margin-bottom: var(--spacing-8);
 }
 
 .stats-section h3 {
   color: var(--text-primary);
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-4);
   font-size: 1.2em;
   font-weight: 600;
 }
@@ -528,14 +528,14 @@ const getQualityClass = (score: number): string => {
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .stat-value {
   font-size: 2em;
   font-weight: 700;
   color: var(--chart-green);
-  margin-bottom: 4px;
+  margin-bottom: var(--spacing-1);
   text-align: center;
 }
 
@@ -561,7 +561,7 @@ const getQualityClass = (score: number): string => {
 
   .real-time-controls {
     flex-direction: column;
-    gap: 12px;
+    gap: var(--spacing-3);
     align-items: stretch;
   }
 

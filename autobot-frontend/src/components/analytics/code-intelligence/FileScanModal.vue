@@ -136,7 +136,7 @@ async function handleScan() {
 }
 
 .modal-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-lg);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
@@ -205,7 +205,7 @@ async function handleScan() {
 .note {
   color: var(--text-tertiary);
   font-size: var(--text-sm);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .modal-footer {

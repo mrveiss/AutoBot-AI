@@ -1877,7 +1877,7 @@ watch(viewMode, async (newMode) => {
 }
 
 .detail-row:last-child {
-  margin-bottom: 0;
+  margin-bottom: var(--spacing-0);
 }
 
 .detail-label {

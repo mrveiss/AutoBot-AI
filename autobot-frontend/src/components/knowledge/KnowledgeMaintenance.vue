@@ -322,7 +322,7 @@ onMounted(() => {
 <style scoped>
 /* Issue #704: Migrated to CSS design tokens */
 .knowledge-maintenance {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   max-width: 1400px;
   margin: 0 auto;
 }
@@ -332,8 +332,8 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 2rem;
-  padding-bottom: 1rem;
+  margin-bottom: var(--spacing-8);
+  padding-bottom: var(--spacing-4);
   border-bottom: 2px solid var(--border-default);
 }
 
@@ -344,7 +344,7 @@ onMounted(() => {
   margin: 0 0 0.5rem 0;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .header-content h2 i {
@@ -353,7 +353,7 @@ onMounted(() => {
 
 .header-subtitle {
   color: var(--text-tertiary);
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: 0.95rem;
 }
 
@@ -361,8 +361,8 @@ onMounted(() => {
 .health-dashboard {
   background: var(--bg-card);
   border-radius: var(--radius-xl);
-  padding: 1.5rem;
-  margin-bottom: 2rem;
+  padding: var(--spacing-6);
+  margin-bottom: var(--spacing-8);
   box-shadow: var(--shadow-sm);
 }
 
@@ -370,17 +370,17 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
 }
 
 .section-title h3 {
   font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .health-status-badge {
@@ -414,14 +414,14 @@ onMounted(() => {
 .loading-state,
 .empty-state {
   text-align: center;
-  padding: 3rem;
+  padding: var(--spacing-12);
   color: var(--text-tertiary);
 }
 
 .loading-state i,
 .empty-state i {
   font-size: 2.5rem;
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
   display: block;
 }
 
@@ -429,14 +429,14 @@ onMounted(() => {
 .health-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 1.5rem;
+  gap: var(--spacing-6);
 }
 
 .health-card {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 1rem;
+  gap: var(--spacing-4);
+  padding: var(--spacing-4);
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-default);
@@ -502,7 +502,7 @@ onMounted(() => {
   grid-column: span 2;
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
-  padding: 1rem;
+  padding: var(--spacing-4);
   border: 1px solid var(--border-default);
 }
 
@@ -516,13 +516,13 @@ onMounted(() => {
 .dimension-bars {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .dimension-item {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 
 .dimension-header {
@@ -569,7 +569,7 @@ onMounted(() => {
 .issues-summary {
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
-  padding: 1rem;
+  padding: var(--spacing-4);
   border: 1px solid var(--border-default);
 }
 
@@ -582,13 +582,13 @@ onMounted(() => {
 
 .issues-counts {
   display: flex;
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .issue-count {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   font-size: var(--text-sm);
   font-weight: 500;
 }
@@ -606,7 +606,7 @@ onMounted(() => {
   grid-column: span 4;
   background: var(--color-info-bg);
   border-radius: var(--radius-lg);
-  padding: 1rem;
+  padding: var(--spacing-4);
   border: 1px solid var(--color-info-light);
 }
 
@@ -618,33 +618,33 @@ onMounted(() => {
 }
 
 .recommendation-list {
-  margin: 0;
-  padding: 0;
+  margin: var(--spacing-0);
+  padding: var(--spacing-0);
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .recommendation-list li {
   display: flex;
   align-items: flex-start;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   font-size: var(--text-sm);
   color: var(--color-info-dark);
 }
 
 .recommendation-list li i {
   color: var(--color-primary);
-  margin-top: 0.125rem;
+  margin-top: var(--spacing-0-5);
 }
 
 /* Maintenance Sections */
 .maintenance-sections {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 1.5rem;
-  margin-bottom: 2rem;
+  gap: var(--spacing-6);
+  margin-bottom: var(--spacing-8);
 }
 
 .maintenance-section {
@@ -658,40 +658,40 @@ onMounted(() => {
 .maintenance-history {
   background: var(--bg-card);
   border-radius: var(--radius-xl);
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   box-shadow: var(--shadow-sm);
 }
 
 .history-content {
-  margin-top: 1rem;
+  margin-top: var(--spacing-4);
 }
 
 .empty-history {
   text-align: center;
-  padding: 2rem;
+  padding: var(--spacing-8);
   color: var(--text-muted);
 }
 
 .empty-history i {
   font-size: 2rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--spacing-3);
   display: block;
 }
 
 .empty-history p {
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .history-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .history-item {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--spacing-4);
   padding: 0.75rem 1rem;
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
@@ -763,7 +763,7 @@ onMounted(() => {
 @media (max-width: 768px) {
   .maintenance-header {
     flex-direction: column;
-    gap: 1rem;
+    gap: var(--spacing-4);
   }
 
   .header-actions {

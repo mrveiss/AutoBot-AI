@@ -317,7 +317,7 @@ onMounted(() => {
 .gui-automation-controls {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--spacing-5);
 }
 
 /* Header Section */
@@ -325,7 +325,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px;
+  padding: var(--spacing-5);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
@@ -339,7 +339,7 @@ onMounted(() => {
 }
 
 .header-info p {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
@@ -355,7 +355,7 @@ onMounted(() => {
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   transition: all var(--duration-200);
 }
 
@@ -373,7 +373,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: var(--spacing-3);
   padding: 60px 20px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
@@ -386,20 +386,20 @@ onMounted(() => {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
-  padding: 20px;
+  padding: var(--spacing-5);
 }
 
 .opportunities-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .opportunity-card {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
-  padding: 16px;
+  padding: var(--spacing-4);
   cursor: pointer;
   transition: all var(--duration-200);
 }
@@ -412,8 +412,8 @@ onMounted(() => {
 .card-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: var(--spacing-3);
+  margin-bottom: var(--spacing-3);
 }
 
 .element-type-badge {
@@ -431,7 +431,7 @@ onMounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--spacing-0-5);
 }
 
 .action-name {
@@ -470,13 +470,13 @@ onMounted(() => {
 .card-description {
   font-size: var(--text-sm);
   color: var(--text-secondary);
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
   line-height: 1.4;
 }
 
 .card-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .btn-execute,
@@ -490,7 +490,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
   transition: all var(--duration-200);
 }
 
@@ -520,7 +520,7 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: var(--spacing-4);
   padding: 60px 20px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
@@ -540,13 +540,13 @@ onMounted(() => {
 }
 
 .empty-state h4 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-base);
   color: var(--text-primary);
 }
 
 .empty-state p {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
@@ -573,13 +573,13 @@ onMounted(() => {
 }
 
 .reference-header h4 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-secondary);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .reference-header i:last-child {
@@ -593,13 +593,13 @@ onMounted(() => {
 .types-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .type-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-3);
   padding: 10px 12px;
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
@@ -620,7 +620,7 @@ onMounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--spacing-0-5);
 }
 
 .type-name {
@@ -637,13 +637,13 @@ onMounted(() => {
 .interactions-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .interaction-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
   padding: 10px 12px;
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
@@ -689,14 +689,14 @@ onMounted(() => {
 }
 
 .modal-header h4 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .btn-close {
-  padding: 8px;
+  padding: var(--spacing-2);
   background: none;
   border: none;
   color: var(--text-tertiary);
@@ -708,16 +708,16 @@ onMounted(() => {
 }
 
 .modal-content {
-  padding: 20px;
+  padding: var(--spacing-5);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .detail-section {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .detail-section label {
@@ -734,14 +734,14 @@ onMounted(() => {
 
 .modal-actions {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
   padding: 16px 20px;
   border-top: 1px solid var(--border-default);
 }
 
 .btn-primary {
   flex: 1;
-  padding: 12px;
+  padding: var(--spacing-3);
   background: var(--color-primary);
   color: var(--text-on-primary);
   border: none;
@@ -752,7 +752,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .btn-primary:hover {

@@ -133,11 +133,11 @@ const selectMode = (mode: EnforcementMode) => {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
-  padding: 24px;
+  padding: var(--spacing-6);
 }
 
 .selector-header {
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-5);
 }
 
 .selector-header h3 {
@@ -147,7 +147,7 @@ const selectMode = (mode: EnforcementMode) => {
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .selector-header h3 i {
@@ -155,7 +155,7 @@ const selectMode = (mode: EnforcementMode) => {
 }
 
 .selector-header .description {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
@@ -163,14 +163,14 @@ const selectMode = (mode: EnforcementMode) => {
 .mode-options {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .mode-option {
   display: flex;
   align-items: flex-start;
-  gap: 16px;
-  padding: 16px;
+  gap: var(--spacing-4);
+  padding: var(--spacing-4);
   background: var(--bg-primary);
   border: 2px solid var(--border-default);
   border-radius: var(--radius-xl);
@@ -225,8 +225,8 @@ const selectMode = (mode: EnforcementMode) => {
 .option-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 4px;
+  gap: var(--spacing-2-5);
+  margin-bottom: var(--spacing-1);
 }
 
 .option-title {
@@ -253,14 +253,14 @@ const selectMode = (mode: EnforcementMode) => {
 
 .option-details {
   display: flex;
-  gap: 16px;
+  gap: var(--spacing-4);
   flex-wrap: wrap;
 }
 
 .detail-item {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
   font-size: var(--text-xs);
 }
 
@@ -283,7 +283,7 @@ const selectMode = (mode: EnforcementMode) => {
 .option-radio {
   display: flex;
   align-items: center;
-  padding-top: 12px;
+  padding-top: var(--spacing-3);
 }
 
 .radio-outer {
@@ -311,9 +311,9 @@ const selectMode = (mode: EnforcementMode) => {
 .mode-warning,
 .mode-info {
   display: flex;
-  gap: 12px;
-  margin-top: 16px;
-  padding: 14px;
+  gap: var(--spacing-3);
+  margin-top: var(--spacing-4);
+  padding: var(--spacing-3-5);
   border-radius: var(--radius-lg);
 }
 
@@ -331,18 +331,18 @@ const selectMode = (mode: EnforcementMode) => {
 .mode-info i {
   font-size: var(--text-lg);
   flex-shrink: 0;
-  margin-top: 2px;
+  margin-top: var(--spacing-0-5);
 }
 
 .warning-content strong,
 .info-content strong {
   display: block;
-  margin-bottom: 4px;
+  margin-bottom: var(--spacing-1);
 }
 
 .warning-content p,
 .info-content p {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
   opacity: 0.9;
 }

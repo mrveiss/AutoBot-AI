@@ -524,7 +524,7 @@ onUnmounted(() => {
 .video-processor {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--spacing-6);
 }
 
 /* Upload Section */
@@ -532,13 +532,13 @@ onUnmounted(() => {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
-  padding: 24px;
+  padding: var(--spacing-6);
 }
 
 .drop-zone {
   border: 2px dashed var(--border-default);
   border-radius: var(--radius-xl);
-  padding: 40px;
+  padding: var(--spacing-10);
   text-align: center;
   cursor: pointer;
   transition: all var(--duration-200);
@@ -556,14 +556,14 @@ onUnmounted(() => {
 
 .drop-zone.has-file {
   border-style: solid;
-  padding: 20px;
+  padding: var(--spacing-5);
 }
 
 .drop-placeholder {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-3);
   color: var(--text-tertiary);
 }
 
@@ -573,7 +573,7 @@ onUnmounted(() => {
 }
 
 .drop-placeholder p {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-base);
   color: var(--text-secondary);
 }
@@ -581,13 +581,13 @@ onUnmounted(() => {
 .supported-formats {
   font-size: var(--text-xs);
   color: var(--text-muted);
-  margin-top: 8px;
+  margin-top: var(--spacing-2);
 }
 
 .file-preview {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--spacing-4);
   width: 100%;
 }
 
@@ -603,7 +603,7 @@ onUnmounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
   text-align: left;
 }
 
@@ -620,7 +620,7 @@ onUnmounted(() => {
 }
 
 .btn-clear {
-  padding: 8px;
+  padding: var(--spacing-2);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: none;
@@ -637,17 +637,17 @@ onUnmounted(() => {
 .options-section {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
+  gap: var(--spacing-4);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
-  padding: 20px;
+  padding: var(--spacing-5);
 }
 
 .option-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .option-group label {
@@ -683,7 +683,7 @@ onUnmounted(() => {
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .btn-process:hover:not(:disabled) {
@@ -700,7 +700,7 @@ onUnmounted(() => {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
-  padding: 20px;
+  padding: var(--spacing-5);
 }
 
 .progress-bar {
@@ -708,7 +708,7 @@ onUnmounted(() => {
   background: var(--bg-tertiary);
   border-radius: var(--radius-default);
   overflow: hidden;
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
 }
 
 .progress-fill {
@@ -742,13 +742,13 @@ onUnmounted(() => {
 }
 
 .results-header h4 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-success);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .frame-count {
@@ -759,15 +759,15 @@ onUnmounted(() => {
 .frames-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  gap: 12px;
-  padding: 20px;
+  gap: var(--spacing-3);
+  padding: var(--spacing-5);
 }
 
 .frame-card {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  padding: 12px;
+  padding: var(--spacing-3);
   cursor: pointer;
   transition: all var(--duration-150);
 }
@@ -780,13 +780,13 @@ onUnmounted(() => {
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
 }
 
 .frame-info {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .frame-info .confidence,
@@ -796,7 +796,7 @@ onUnmounted(() => {
 }
 
 .selected-frame {
-  padding: 20px;
+  padding: var(--spacing-5);
   border-top: 1px solid var(--border-default);
 }
 
@@ -810,14 +810,14 @@ onUnmounted(() => {
 .frame-details {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: var(--spacing-3);
+  margin-bottom: var(--spacing-4);
 }
 
 .detail-item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .detail-item .label {
@@ -840,12 +840,12 @@ onUnmounted(() => {
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .json-display {
-  margin-top: 12px;
-  padding: 12px;
+  margin-top: var(--spacing-3);
+  padding: var(--spacing-3);
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
   font-size: var(--text-xs);
@@ -856,7 +856,7 @@ onUnmounted(() => {
 
 .results-actions {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
   padding: 16px 20px;
   border-top: 1px solid var(--border-default);
 }
@@ -872,7 +872,7 @@ onUnmounted(() => {
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .btn-secondary:hover {
@@ -893,7 +893,7 @@ onUnmounted(() => {
 .error-content {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
   color: var(--color-error);
 }
 

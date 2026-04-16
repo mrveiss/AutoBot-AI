@@ -306,7 +306,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 .accordion-groups {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .accordion-group {
@@ -333,7 +333,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 .header-info {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .header-info i {
@@ -354,7 +354,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 
 .header-badges {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
   flex-wrap: wrap;
 }
 
@@ -375,11 +375,11 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 
 /* Accordion Items Container */
 .accordion-items {
-  padding: 12px;
+  padding: var(--spacing-3);
   background: var(--bg-primary);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 /* Accordion Transition */
@@ -425,10 +425,10 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 /* Show More / Muted Utilities */
 .show-more {
   text-align: center;
-  padding: 12px;
+  padding: var(--spacing-3);
   background: var(--bg-secondary);
   border-radius: var(--radius-md);
-  margin-top: 8px;
+  margin-top: var(--spacing-2);
 }
 
 .muted {
@@ -441,7 +441,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
 }
 
 .item-name {
@@ -468,23 +468,23 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 .item-description {
   color: var(--text-secondary);
   font-size: 0.9em;
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
 }
 
 .item-location {
   color: var(--text-muted);
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.8em;
-  margin-bottom: 4px;
+  margin-bottom: var(--spacing-1);
 }
 
 .item-suggestion {
   color: var(--chart-green);
   font-size: 0.85em;
-  padding: 8px;
+  padding: var(--spacing-2);
   background: rgba(34, 197, 94, 0.1);
   border-radius: var(--radius-default);
-  margin-top: 8px;
+  margin-top: var(--spacing-2);
 }
 
 /* Duplicate-specific Styles */
@@ -507,7 +507,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 .item-files {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .item-file {
@@ -519,7 +519,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 /* Responsive Design */
 @media (max-width: 768px) {
   .codebase-analytics {
-    padding: 12px;
+    padding: var(--spacing-3);
   }
 
   .header-controls {
@@ -534,7 +534,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 
   .debug-controls {
     flex-direction: column;
-    gap: 8px;
+    gap: var(--spacing-2);
   }
 
   .btn-debug {
@@ -552,7 +552,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 
   .real-time-controls {
     flex-direction: column;
-    gap: 12px;
+    gap: var(--spacing-3);
     align-items: stretch;
   }
 
@@ -569,15 +569,15 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
   .problem-header, .duplicate-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 4px;
+    gap: var(--spacing-1);
   }
 }
 
 /* Charts Section Styles */
 
 .api-endpoints-section {
-  margin-top: 32px;
-  padding: 24px;
+  margin-top: var(--spacing-8);
+  padding: var(--spacing-6);
   background: rgba(30, 41, 59, 0.5);
   border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
@@ -586,7 +586,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 .api-endpoints-section h3 {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
   margin: 0 0 20px 0;
   color: var(--text-secondary);
   font-size: 1.1rem;
@@ -601,8 +601,8 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 .api-endpoints-section .error-state {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 16px;
+  gap: var(--spacing-2-5);
+  padding: var(--spacing-4);
   border-radius: var(--radius-lg);
 }
 
@@ -621,7 +621,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 /* Coverage Bar */
 .coverage-bar-container {
   margin: 20px 0;
-  padding: 16px;
+  padding: var(--spacing-4);
   background: rgba(30, 41, 59, 0.8);
   border-radius: var(--radius-lg);
 }
@@ -630,7 +630,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
   color: var(--text-muted);
   font-size: 0.9rem;
 }
@@ -671,7 +671,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
   font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
-  margin-right: 8px;
+  margin-right: var(--spacing-2);
 }
 
 .method-badge.get { background: var(--chart-green)20; color: var(--chart-green); border: 1px solid var(--chart-green)40; }
@@ -702,7 +702,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 
 /* Item Details */
 .item-details {
-  margin-top: 4px;
+  margin-top: var(--spacing-1);
   padding: 6px 10px;
   background: rgba(0, 0, 0, 0.2);
   border-radius: var(--radius-default);
@@ -770,7 +770,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 
 /* Scan Timestamp */
 .scan-timestamp {
-  margin-top: 16px;
+  margin-top: var(--spacing-4);
   padding: 8px 12px;
   background: rgba(30, 41, 59, 0.8);
   border-radius: var(--radius-md);
@@ -778,7 +778,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
   font-size: 0.8rem;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .scan-timestamp i {

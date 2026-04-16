@@ -443,7 +443,7 @@ onUnmounted(() => {
 }
 
 .header-content h2 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-2xl);
   color: var(--text-primary);
 }
@@ -580,7 +580,7 @@ onUnmounted(() => {
 }
 
 .panel-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-base);
   color: var(--text-primary);
 }
@@ -802,7 +802,7 @@ onUnmounted(() => {
 }
 
 .anomaly-description {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
   color: var(--text-secondary);
 }
@@ -893,7 +893,7 @@ onUnmounted(() => {
 }
 
 .empty-state p {
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 /* Modal */
@@ -926,7 +926,7 @@ onUnmounted(() => {
 }
 
 .modal-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-primary);
 }
 

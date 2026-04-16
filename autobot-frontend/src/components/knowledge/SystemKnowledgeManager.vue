@@ -757,7 +757,7 @@ export default {
 }
 
 .subtitle {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-secondary);
   font-size: var(--text-sm);
 }
@@ -825,7 +825,7 @@ export default {
 }
 
 .status-content p {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-secondary);
   font-size: var(--text-xs);
 }

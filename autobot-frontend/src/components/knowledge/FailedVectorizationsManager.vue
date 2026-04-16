@@ -235,7 +235,7 @@ onMounted(() => {
 }
 
 .manager-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-xl);
   color: var(--color-error);
   display: flex;

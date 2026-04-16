@@ -374,7 +374,7 @@ onMounted(() => {
   font-size: var(--text-2xl);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .dashboard-subtitle {
@@ -493,7 +493,7 @@ onMounted(() => {
   font-size: var(--text-lg);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .section-header p {

@@ -370,7 +370,7 @@ const cleanupOrphans = async () => {
 }
 
 .manager-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-xl);
   color: var(--text-primary);
   display: flex;
@@ -422,7 +422,7 @@ const cleanupOrphans = async () => {
 }
 
 .section-header h4 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-lg);
   color: var(--text-primary);
   display: flex;

@@ -396,25 +396,25 @@ function statusClass(status: string): string {
 .heartbeat-panel {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--spacing-4);
   font-size: var(--text-sm);
   color: var(--text-primary, #e2e8f0);
 }
 .panel-header {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--spacing-4);
   flex-wrap: wrap;
 }
 .panel-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-base);
   font-weight: 600;
 }
 .agent-selector {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 .agent-selector label {
   color: var(--text-secondary, #94a3b8);
@@ -438,25 +438,25 @@ function statusClass(status: string): string {
   background: var(--bg-card, #1e293b);
   border: 1px solid var(--border, #334155);
   border-radius: var(--radius-lg);
-  padding: 1rem;
+  padding: var(--spacing-4);
 }
 .card-title {
   font-weight: 600;
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--spacing-3);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 .config-grid {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 .config-row {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 .config-row .label {
   width: 130px;
@@ -469,10 +469,10 @@ function statusClass(status: string): string {
 .config-actions {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   flex-wrap: wrap;
   border-top: 1px solid var(--border, #334155);
-  padding-top: 0.75rem;
+  padding-top: var(--spacing-3);
 }
 .toggle-label {
   display: flex;
@@ -524,21 +524,21 @@ function statusClass(status: string): string {
 }
 .events-row td {
   background: var(--bg-input, #0f172a);
-  padding: 0;
+  padding: var(--spacing-0);
 }
 .events-container {
   padding: 0.5rem 0.75rem;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 .error-message {
   color: #fca5a5;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
 }
 .event-row {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   align-items: baseline;
 }
 .event-time {

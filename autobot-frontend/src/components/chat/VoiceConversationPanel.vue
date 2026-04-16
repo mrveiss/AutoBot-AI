@@ -404,7 +404,7 @@ onBeforeUnmount(() => {
   font-size: var(--text-xs);
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 
 /* Hands-free controls */
@@ -412,7 +412,7 @@ onBeforeUnmount(() => {
   padding: 0.5rem 0.75rem 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .voice-panel__amplitude {

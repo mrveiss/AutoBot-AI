@@ -481,14 +481,14 @@ onMounted(() => {
 }
 
 .header-title {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-sans);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .header-icon {
@@ -556,7 +556,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: var(--spacing-0-5);
   min-width: 80px;
 }
 
@@ -683,7 +683,7 @@ onMounted(() => {
   align-items: center;
   gap: var(--spacing-3);
   margin-bottom: var(--spacing-3);
-  margin-left: 28px;
+  margin-left: var(--spacing-7);
   flex-wrap: wrap;
 }
 
@@ -756,7 +756,7 @@ onMounted(() => {
 .card-actions {
   display: flex;
   gap: var(--spacing-2);
-  margin-left: 28px;
+  margin-left: var(--spacing-7);
 }
 
 /* Pagination */
@@ -794,19 +794,19 @@ onMounted(() => {
   }
 
   .card-meta {
-    margin-left: 0;
+    margin-left: var(--spacing-0);
   }
 
   .card-content {
-    margin-left: 0;
+    margin-left: var(--spacing-0);
   }
 
   .card-url {
-    margin-left: 0;
+    margin-left: var(--spacing-0);
   }
 
   .card-actions {
-    margin-left: 0;
+    margin-left: var(--spacing-0);
   }
 }
 </style>

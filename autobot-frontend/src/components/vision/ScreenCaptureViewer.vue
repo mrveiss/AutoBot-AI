@@ -389,7 +389,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 /* Controls Bar */
@@ -402,14 +402,14 @@ onUnmounted(() => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
   flex-wrap: wrap;
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .controls-left,
 .controls-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .btn-capture {
@@ -423,7 +423,7 @@ onUnmounted(() => {
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   transition: all var(--duration-200);
 }
 
@@ -439,13 +439,13 @@ onUnmounted(() => {
 .auto-refresh-toggle {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .toggle-label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   cursor: pointer;
   font-size: var(--text-sm);
   color: var(--text-secondary);
@@ -497,7 +497,7 @@ onUnmounted(() => {
 .filter-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .filter-group label {
@@ -548,11 +548,11 @@ onUnmounted(() => {
   padding: 16px 20px;
   border-bottom: 1px solid var(--border-default);
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .panel-header h4 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
@@ -560,7 +560,7 @@ onUnmounted(() => {
 
 .analysis-meta {
   display: flex;
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .analysis-meta span {
@@ -568,7 +568,7 @@ onUnmounted(() => {
   color: var(--text-tertiary);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 /* Elements Section */
@@ -591,7 +591,7 @@ onUnmounted(() => {
 .elements-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
   max-height: 300px;
   overflow-y: auto;
 }
@@ -599,7 +599,7 @@ onUnmounted(() => {
 .element-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-3);
   padding: 10px 12px;
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
@@ -631,7 +631,7 @@ onUnmounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--spacing-0-5);
   min-width: 0;
 }
 
@@ -659,12 +659,12 @@ onUnmounted(() => {
 
 .no-elements {
   text-align: center;
-  padding: 24px;
+  padding: var(--spacing-6);
   color: var(--text-tertiary);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .no-elements i {
@@ -675,7 +675,7 @@ onUnmounted(() => {
 .text-regions {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .text-region {
@@ -691,8 +691,8 @@ onUnmounted(() => {
 
 /* Layout Section */
 .layout-info pre {
-  margin: 0;
-  padding: 12px;
+  margin: var(--spacing-0);
+  padding: var(--spacing-3);
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
   font-size: var(--text-xs);
@@ -708,7 +708,7 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: var(--spacing-4);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
@@ -727,13 +727,13 @@ onUnmounted(() => {
 }
 
 .empty-state h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-lg);
   color: var(--text-primary);
 }
 
 .empty-state p {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
@@ -772,14 +772,14 @@ onUnmounted(() => {
 }
 
 .modal-header h4 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .btn-close {
-  padding: 8px;
+  padding: var(--spacing-2);
   background: none;
   border: none;
   color: var(--text-tertiary);
@@ -791,17 +791,17 @@ onUnmounted(() => {
 }
 
 .modal-content {
-  padding: 20px;
+  padding: var(--spacing-5);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .detail-row {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .detail-row .label {
@@ -819,7 +819,7 @@ onUnmounted(() => {
 .interactions-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 .interaction-tag {

@@ -1736,8 +1736,8 @@ watch(layoutMode, () => {
 
 .observations-list {
   list-style: none;
-  padding: 0;
-  margin: 0;
+  padding: var(--spacing-0);
+  margin: var(--spacing-0);
 }
 
 .observations-list li {
@@ -1751,8 +1751,8 @@ watch(layoutMode, () => {
 
 .relations-list {
   list-style: none;
-  padding: 0;
-  margin: 0;
+  padding: var(--spacing-0);
+  margin: var(--spacing-0);
 }
 
 .relations-list li {
@@ -1986,7 +1986,7 @@ watch(layoutMode, () => {
   }
 
   .stats-summary {
-    margin-left: 0;
+    margin-left: var(--spacing-0);
     justify-content: center;
   }
 

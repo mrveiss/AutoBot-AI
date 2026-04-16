@@ -145,7 +145,7 @@ function handleDrillDown(summaryId: string): void {
 
 .doc-id-input {
   padding: var(--spacing-lg);
-  padding-bottom: 0;
+  padding-bottom: var(--spacing-0);
 }
 
 .doc-id-input label {

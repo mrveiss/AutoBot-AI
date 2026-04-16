@@ -615,10 +615,10 @@ onMounted(() => {
 <style scoped>
 /* Issue #704: Migrated to CSS design tokens */
 .precommit-dashboard {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: var(--spacing-6);
 }
 
 /* Header */
@@ -627,14 +627,14 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .header-content h2 {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin: 0;
+  gap: var(--spacing-2);
+  margin: var(--spacing-0);
   font-size: var(--text-2xl);
   color: var(--text-primary);
 }
@@ -651,14 +651,14 @@ onMounted(() => {
 
 .header-actions {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 /* Buttons */
 .action-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   padding: 0.5rem 1rem;
   border: none;
   border-radius: var(--radius-md);
@@ -724,7 +724,7 @@ onMounted(() => {
 .status-banner {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--spacing-4);
   padding: 1rem 1.25rem;
   border-radius: var(--radius-lg);
   border: 1px solid;
@@ -763,14 +763,14 @@ onMounted(() => {
 .summary-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .summary-card {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 1rem;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4);
   background: var(--bg-secondary);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-color);
@@ -812,7 +812,7 @@ onMounted(() => {
 .content-grid {
   display: grid;
   grid-template-columns: 1.5fr 1fr;
-  gap: 1.5rem;
+  gap: var(--spacing-6);
 }
 
 /* Panels */
@@ -827,18 +827,18 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem;
+  padding: var(--spacing-4);
   border-bottom: 1px solid var(--border-color);
 }
 
 .panel-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-base);
   color: var(--text-primary);
 }
 
 .panel-content {
-  padding: 1rem;
+  padding: var(--spacing-4);
   max-height: 400px;
   overflow-y: auto;
 }
@@ -846,7 +846,7 @@ onMounted(() => {
 /* Severity Filters */
 .severity-filters {
   display: flex;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 
 .filter-btn {
@@ -868,11 +868,11 @@ onMounted(() => {
 .results-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .result-card {
-  padding: 0.875rem;
+  padding: var(--spacing-3-5);
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
   border-left: 3px solid;
@@ -893,8 +893,8 @@ onMounted(() => {
 .result-header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-2);
 }
 
 .severity-badge {
@@ -919,7 +919,7 @@ onMounted(() => {
   font-size: var(--text-xs);
   font-family: monospace;
   color: var(--text-secondary);
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
 }
 
 .result-message {
@@ -931,12 +931,12 @@ onMounted(() => {
 .result-snippet {
   background: var(--bg-quaternary);
   border-radius: var(--radius-default);
-  padding: 0.5rem;
-  margin-bottom: 0.5rem;
+  padding: var(--spacing-2);
+  margin-bottom: var(--spacing-2);
 }
 
 .result-snippet pre {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-xs);
   color: var(--text-primary);
   overflow-x: auto;
@@ -945,7 +945,7 @@ onMounted(() => {
 .result-suggestion {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   font-size: var(--text-xs);
   color: var(--color-success);
 }
@@ -957,14 +957,14 @@ onMounted(() => {
 }
 
 .category-section {
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .category-header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2);
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -997,7 +997,7 @@ onMounted(() => {
 .check-item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   padding: 0.5rem 0;
   opacity: 0.6;
 }
@@ -1094,13 +1094,13 @@ onMounted(() => {
 .history-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .history-item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   padding: 0.625rem 0.875rem;
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
@@ -1142,7 +1142,7 @@ onMounted(() => {
 
 .history-stats {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .stat {
@@ -1170,8 +1170,8 @@ onMounted(() => {
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
 }
 
 .stat-item {
@@ -1199,13 +1199,13 @@ onMounted(() => {
 .issue-bar-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .issue-bar-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .issue-label {
@@ -1254,11 +1254,11 @@ onMounted(() => {
 
 .empty-icon {
   font-size: 2.5rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--spacing-3);
 }
 
 .empty-state p {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
 }
 

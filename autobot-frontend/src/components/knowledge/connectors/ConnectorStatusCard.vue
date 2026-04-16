@@ -293,13 +293,13 @@ defineExpose({ resetSyncing })
   height: 20px;
   color: var(--color-info);
   flex-shrink: 0;
-  margin-top: 2px;
+  margin-top: var(--spacing-0-5);
 }
 
 .header-info {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .name-row {
@@ -357,7 +357,7 @@ defineExpose({ resetSyncing })
 .stat {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--spacing-0-5);
 }
 
 .stat-label {
@@ -398,7 +398,7 @@ defineExpose({ resetSyncing })
   height: 14px;
   color: var(--color-error);
   flex-shrink: 0;
-  margin-top: 1px;
+  margin-top: var(--spacing-px);
 }
 
 .error-text {

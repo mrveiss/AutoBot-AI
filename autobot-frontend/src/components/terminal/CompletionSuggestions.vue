@@ -74,7 +74,7 @@ const typeIcon = (type: string): string => {
   align-items: center;
   padding: 4px 12px;
   cursor: pointer;
-  gap: 8px;
+  gap: var(--spacing-2);
   transition: background-color var(--duration-100);
 }
 

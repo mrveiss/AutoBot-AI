@@ -212,19 +212,19 @@
 }
 
 .sidebar-header {
-  padding: 20px;
+  padding: var(--spacing-5);
   border-bottom: 1px solid var(--border-default);
 }
 
 .sidebar-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-sans);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
   line-height: 1.5;
 }
 
@@ -258,7 +258,7 @@
 .category-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-3);
   padding: 10px 20px;
   cursor: pointer;
   transition: all var(--duration-150) var(--ease-in-out);

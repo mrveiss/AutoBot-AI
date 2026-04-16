@@ -265,12 +265,12 @@ const cleanupSessionOrphans = async () => {
 .session-orphan-manager {
   background: var(--bg-card);
   border-radius: var(--radius-lg);
-  margin: 1rem;
+  margin: var(--spacing-4);
   box-shadow: var(--shadow-sm);
 }
 
 .section-header {
-  padding: 1.25rem;
+  padding: var(--spacing-5);
   border-bottom: 1px solid var(--border-default);
   background: var(--bg-secondary);
 }
@@ -282,33 +282,33 @@ const cleanupSessionOrphans = async () => {
   margin: 0 0 0.25rem 0;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .header-description {
   color: var(--text-tertiary);
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
 }
 
 .orphan-content {
-  padding: 1.25rem;
+  padding: var(--spacing-5);
 }
 
 .orphan-summary {
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
 }
 
 .summary-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
 }
 
 .stat-item {
   text-align: center;
-  padding: 1rem;
+  padding: var(--spacing-4);
   background: var(--bg-secondary);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-default);
@@ -334,14 +334,14 @@ const cleanupSessionOrphans = async () => {
   display: block;
   font-size: var(--text-xs);
   color: var(--text-tertiary);
-  margin-top: 0.25rem;
+  margin-top: var(--spacing-1);
 }
 
 .orphan-preview {
   background: var(--color-warning-bg-light);
   border: 1px solid var(--color-warning-light);
   border-radius: var(--radius-lg);
-  padding: 1rem;
+  padding: var(--spacing-4);
 }
 
 .orphan-preview h5 {
@@ -354,7 +354,7 @@ const cleanupSessionOrphans = async () => {
 .orphan-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   max-height: 300px;
   overflow-y: auto;
 }
@@ -363,13 +363,13 @@ const cleanupSessionOrphans = async () => {
   background: var(--bg-card);
   border: 1px solid var(--color-warning-light);
   border-radius: var(--radius-md);
-  padding: 0.75rem;
+  padding: var(--spacing-3);
 }
 
 .orphan-meta {
   display: flex;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-2);
 }
 
 .orphan-category {
@@ -414,13 +414,13 @@ const cleanupSessionOrphans = async () => {
 .orphan-actions {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1.5rem;
+  gap: var(--spacing-6);
 }
 
 .action-card {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  padding: 1.25rem;
+  padding: var(--spacing-5);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -454,7 +454,7 @@ const cleanupSessionOrphans = async () => {
   align-items: center;
   justify-content: center;
   font-size: var(--text-xl);
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .action-icon.scan {
@@ -484,7 +484,7 @@ const cleanupSessionOrphans = async () => {
   color: var(--text-muted);
   font-size: var(--text-xs);
   display: block;
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .action-btn {
@@ -495,10 +495,10 @@ const cleanupSessionOrphans = async () => {
 .status-message {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 1rem;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4);
   border-radius: var(--radius-lg);
-  margin-top: 1.5rem;
+  margin-top: var(--spacing-6);
 }
 
 .status-message.success {
@@ -533,7 +533,7 @@ const cleanupSessionOrphans = async () => {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0.25rem;
+  padding: var(--spacing-1);
   color: inherit;
   opacity: 0.7;
 }

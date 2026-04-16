@@ -529,7 +529,7 @@ onUnmounted(() => {
   border-top: 1px solid var(--border-default);
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .actions-label {
@@ -539,7 +539,7 @@ onUnmounted(() => {
 .actions-buttons {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   flex-wrap: wrap;
 }
 
@@ -560,7 +560,7 @@ onUnmounted(() => {
 
 /* Touch-friendly button variant for desktop actions */
 .touch-action-btn {
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 /* Screenshot Modal (Issue #74) */
@@ -593,7 +593,7 @@ onUnmounted(() => {
 }
 
 .screenshot-body {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   overflow: auto;
   flex: 1;
 }
@@ -611,7 +611,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .download-btn {
@@ -683,7 +683,7 @@ onUnmounted(() => {
 }
 
 .type-dialog-body {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
 }
 
 .type-textarea {
@@ -713,7 +713,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .type-btn {
@@ -744,7 +744,7 @@ onUnmounted(() => {
   height: 100%;
   overflow-y: auto;
   z-index: 10;
-  padding: 1rem;
+  padding: var(--spacing-4);
   background-color: var(--bg-card);
   border-left: 1px solid var(--border-default);
   box-shadow: var(--shadow-lg, -2px 0 8px rgba(0, 0, 0, 0.15));

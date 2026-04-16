@@ -535,7 +535,7 @@ onMounted(() => {
   font-size: var(--text-sm);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .close-btn {
@@ -544,7 +544,7 @@ onMounted(() => {
   justify-content: center;
   width: 1.5rem;
   height: 1.5rem;
-  padding: 0;
+  padding: var(--spacing-0);
   background: none;
   border: none;
   border-radius: var(--radius-default);
@@ -610,7 +610,7 @@ onMounted(() => {
   justify-content: center;
   width: 1.25rem;
   height: 1.25rem;
-  padding: 0;
+  padding: var(--spacing-0);
   background: none;
   border: none;
   border-radius: var(--radius-full);

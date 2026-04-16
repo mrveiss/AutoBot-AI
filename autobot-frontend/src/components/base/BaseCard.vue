@@ -131,13 +131,13 @@ const footerClasses = computed(() => ({
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 16px;
+  padding: var(--spacing-4);
   border-bottom: 1px solid var(--border-default);
   background-color: var(--bg-card);
 }
 
 .header-no-padding {
-  padding: 0;
+  padding: var(--spacing-0);
   border-bottom: none;
 }
 
@@ -147,7 +147,7 @@ const footerClasses = computed(() => ({
 }
 
 .card-title {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
@@ -165,18 +165,18 @@ const footerClasses = computed(() => ({
 .card-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-left: 12px;
+  gap: var(--spacing-2);
+  margin-left: var(--spacing-3);
 }
 
 /* Card Body */
 .card-body {
-  padding: 16px;
+  padding: var(--spacing-4);
   color: var(--text-primary);
 }
 
 .body-no-padding {
-  padding: 0;
+  padding: var(--spacing-0);
 }
 
 /* Card Footer */
@@ -187,11 +187,11 @@ const footerClasses = computed(() => ({
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .footer-no-padding {
-  padding: 0;
+  padding: var(--spacing-0);
   border-top: none;
   background-color: transparent;
 }
@@ -225,16 +225,16 @@ const footerClasses = computed(() => ({
   .card-header {
     flex-direction: column;
     align-items: stretch;
-    gap: 12px;
+    gap: var(--spacing-3);
   }
 
   .card-actions {
-    margin-left: 0;
-    margin-top: 8px;
+    margin-left: var(--spacing-0);
+    margin-top: var(--spacing-2);
   }
 
   .card-body {
-    padding: 12px;
+    padding: var(--spacing-3);
   }
 
   .card-footer {
