@@ -1148,6 +1148,73 @@ async def get_populate_status(task_id: str):
 # =========================================================================
 
 
+async def _index_code_background(task_id: str, root_dir: str, force: bool) -> None:
+    """Background task: index source files via AST-based CodeIndexer (#4912)."""
+    import time
+
+    from services.knowledge.code_indexer import CodeIndexer
+    from services.knowledge.doc_indexer import get_doc_indexer_service
+    from services.knowledge.task_status_manager import TaskStatusManager
+
+    start_time = time.time()
+
+    try:
+        logger.info("[%s] Starting background code indexing: root=%s force=%s", task_id, root_dir, force)
+
+        await TaskStatusManager.update_task(
+            task_id=task_id,
+            status="running",
+            message="Initializing indexer...",
+            progress_percent=5,
+        )
+
+        doc_svc = get_doc_indexer_service()
+        if not await doc_svc.initialize():
+            logger.error("[%s] Indexer initialization failed", task_id)
+            await TaskStatusManager.fail_task(
+                task_id=task_id,
+                error_message="Failed to initialize ChromaDB / embed model",
+            )
+            return
+
+        await TaskStatusManager.update_task(
+            task_id=task_id,
+            status="running",
+            message="Scanning and indexing source files...",
+            progress_percent=10,
+        )
+
+        code_indexer = CodeIndexer(
+            collection=doc_svc._collection,
+            embed_model=doc_svc._embed_model,
+        )
+
+        result = await code_indexer.index_directory(root_dir, force)
+        elapsed = time.time() - start_time
+
+        await TaskStatusManager.complete_task(
+            task_id=task_id,
+            message=(
+                f"Successfully indexed {result.success} files "
+                f"({result.skipped} skipped, {result.failed} failed)"
+            ),
+            items_processed=result.success,
+            elapsed_seconds=elapsed,
+        )
+
+        logger.info(
+            "[%s] Code indexing completed: success=%d skipped=%d failed=%d (%.1fs)",
+            task_id, result.success, result.skipped, result.failed, elapsed,
+        )
+    except Exception as e:
+        elapsed = time.time() - start_time
+        logger.error("[%s] Background code indexing failed: %s", task_id, e)
+        await TaskStatusManager.fail_task(
+            task_id=task_id,
+            error_message=str(e),
+        )
+
+
 @with_error_handling(
     operation="index_code",
     error_code_prefix="KNOWLEDGE",
@@ -1160,10 +1227,7 @@ async def index_code(request: dict = None):
       ``root_dir`` — directory to scan (default: project root)
       ``force``    — skip hash cache and re-index everything (default: false)
 
-    Returns immediately with a task_id. Use /populate_autobot_docs/status/{task_id}
-    (the shared task status endpoint) to poll progress.
-
-    Issue #4912: Made non-blocking via asyncio.create_task background pattern.
+    Returns immediately with task_id. Use /index/code/status/{task_id} to poll (#4912).
     """
     import uuid
 
@@ -1193,10 +1257,41 @@ async def index_code(request: dict = None):
     logger.info("Queued code indexing task: %s (root=%s force=%s)", task_id, root_dir, force)
 
     return {
-        "status": "started",
+        "status": "queued",
         "task_id": task_id,
         "message": "Code indexing started in background",
-        "status_url": f"/api/knowledge_base/populate_autobot_docs/status/{task_id}",
+        "status_url": f"/api/knowledge_base/index/code/status/{task_id}",
+    }
+
+
+@router.get("/index/code/status/{task_id}")
+async def get_index_code_status(task_id: str):
+    """Poll the status of a background code indexing task (#4912).
+
+    Returns persistent task status stored in Redis.
+    """
+    from services.knowledge.task_status_manager import TaskStatusManager
+
+    task_status = await TaskStatusManager.get_task(task_id)
+
+    if not task_status:
+        return {
+            "status": "not_found",
+            "message": f"Task {task_id} not found",
+            "task_id": task_id,
+        }
+
+    return {
+        "task_id": task_status.task_id,
+        "status": task_status.status,
+        "message": task_status.message,
+        "progress_percent": task_status.progress_percent,
+        "items_processed": task_status.items_processed,
+        "items_total": task_status.items_total,
+        "error": task_status.error,
+        "elapsed_seconds": task_status.elapsed_seconds,
+        "created_at": task_status.created_at,
+        "updated_at": task_status.updated_at,
     }
 
 
