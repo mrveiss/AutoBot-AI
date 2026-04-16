@@ -40,8 +40,25 @@ ai_redis_port: "{{ redis_port | default(6379) }}"
 ai_redis_password: "{{ vault_redis_password | default('') }}"
 
 # Agent LLM model names — required by get_agent_model_explicit() in ssot_config.py.
-# Defaults mirror the constants in autobot-backend/autobot_shared/ssot_config.py.
+# Defaults mirror the 6-tier constants in autobot-backend/autobot_shared/ssot_config.py.
 # Override per-host in inventory when running non-default models.
+# Quality tier (qwen3.5:9b)
 ai_chat_model: "qwen3.5:9b"
+ai_code_generation_model: "qwen3.5:9b"
+ai_data_analysis_model: "qwen3.5:9b"
+ai_image_analysis_model: "qwen3.5:9b"
+# Instruction tier (mistral:7b-instruct)
 ai_rag_model: "mistral:7b-instruct"
+ai_audio_processing_model: "mistral:7b-instruct"
+ai_kb_librarian_model: "mistral:7b-instruct"
+ai_knowledge_extraction_model: "mistral:7b-instruct"
+ai_knowledge_retrieval_model: "mistral:7b-instruct"
+ai_summarization_model: "mistral:7b-instruct"
+ai_translation_model: "mistral:7b-instruct"
+# Classification tier (gemma2:2b)
 ai_classification_model: "gemma2:2b"
+ai_sentiment_analysis_model: "gemma2:2b"
+# Light tier (phi3:mini)
+ai_llm_failsafe_model: "phi3:mini"
+# System tier (dolphin-llama3:8b)
+ai_system_commands_model: "dolphin-llama3:8b"

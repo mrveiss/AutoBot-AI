@@ -338,7 +338,7 @@
     msg:
       - "=== Browser Configuration Complete ==="
       - "Playwright Port: {{ playwright_port }}"
-      - "Browsers: Chromium, Firefox"
+      - "Browsers: Chromium"
       - "VNC Installed: {{ install_vnc | default(false) }}"
       - "Services: autobot-playwright{{ ' + autobot-vnc' if (install_vnc | default(false)) else '' }}"
       - "Note: Services will start when code is synced"
