@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 _STREAM_KEY = "kb:synthesis:log"
 _RUN_KEY_PREFIX = "kb:synthesis:run:"
+_COLLECTION_BEST_KEY_PREFIX = "kb:synthesis:best:"
 
 
 class SynthesisProvenanceLog:
@@ -75,6 +76,11 @@ class SynthesisProvenanceLog:
             pipe = redis.pipeline()
             pipe.xadd(_STREAM_KEY, entry)
             pipe.hset(f"{_RUN_KEY_PREFIX}{run_id}", mapping=entry)
+            if collection_name:
+                pipe.zadd(
+                    f"{_COLLECTION_BEST_KEY_PREFIX}{collection_name}",
+                    {run_id: score},
+                )
             await pipe.execute()
             logger.debug("Provenance logged for run %s (%d insights)", run_id, len(synthesis_ids))
         except Exception:
@@ -126,6 +132,34 @@ class SynthesisProvenanceLog:
         entry.setdefault("prompt_variant", entry.get("prompt_template", ""))
         entry.setdefault("collection_name", "")
         return entry
+
+    async def get_best_run_id_for_collection(
+        self, collection_name: str
+    ) -> Optional[str]:
+        """Return the run_id with the highest score for *collection_name*.
+
+        Uses the ``kb:synthesis:best:{collection_name}`` sorted set for an O(1)
+        lookup instead of scanning the full stream.  Returns None when no runs
+        exist for the collection.
+
+        Issue #4788: O(1) replacement for the 500-entry scan in get_best_ancestor.
+        """
+        try:
+            redis = await get_async_redis_client(database="main")
+            results = await redis.zrevrange(
+                f"{_COLLECTION_BEST_KEY_PREFIX}{collection_name}", 0, 0
+            )
+        except Exception:
+            logger.exception(
+                "get_best_run_id_for_collection: Redis error for collection '%s'",
+                collection_name,
+            )
+            return None
+
+        if not results:
+            return None
+        raw = results[0]
+        return raw.decode("utf-8") if isinstance(raw, bytes) else raw
 
     async def get_best_prompt_variant(
         self,

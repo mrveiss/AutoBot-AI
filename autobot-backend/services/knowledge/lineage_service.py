@@ -128,6 +128,12 @@ class LineageService:
     ) -> Optional[SynthesisRun]:
         """Return the highest-scoring run in the lineage tree for *collection*.
 
+        Uses ``get_best_run_id_for_collection()`` for O(1) sorted-set lookup
+        followed by a single ``get_by_run_id()`` hash fetch — replacing the
+        O(total_runs) full-stream scan.  Falls back to None when no runs exist.
+
+        Issue #4788: O(1) ancestor lookup via Redis sorted set index.
+
         Args:
             collection: ChromaDB collection name to filter by.
             metric: Field to maximise (currently only "score" supported).
@@ -136,15 +142,15 @@ class LineageService:
             The SynthesisRun with the highest metric value, or None when no
             runs exist for the collection.
         """
-        all_entries = await self._provenance_log.get_recent(limit=500)
-        runs = [
-            SynthesisRun.from_provenance_entry(e)
-            for e in all_entries
-            if e.get("collection_name") == collection and e.get("run_id")
-        ]
-        if not runs:
+        best_run_id = await self._provenance_log.get_best_run_id_for_collection(
+            collection
+        )
+        if not best_run_id:
             return None
-        return max(runs, key=lambda r: float(getattr(r, metric, 0.0)))
+        entry = await self._provenance_log.get_by_run_id(best_run_id)
+        if entry is None:
+            return None
+        return SynthesisRun.from_provenance_entry(entry)
 
     # ------------------------------------------------------------------
     # Entity version history (ChromaDB)
