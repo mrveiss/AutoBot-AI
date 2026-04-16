@@ -1108,10 +1108,13 @@ export class ChatController {
     try {
       // Lazy import to avoid circular dependency at module load time
       // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // @ts-ignore
       const { fetchWithAuth } = require('@/utils/fetchWithAuth') as { fetchWithAuth: typeof import('@/utils/fetchWithAuth').fetchWithAuth }
       // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // @ts-ignore
       const appConfig = (require('@/config/AppConfig.js') as { default: { getApiUrl: (p: string) => Promise<string> } }).default
       // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // @ts-ignore
       const { getApiBase } = require('@/config/ssot-config') as { getApiBase: () => string }
 
       const resolvedTaskId = taskId ?? this.chatStore.currentSessionId ?? null
