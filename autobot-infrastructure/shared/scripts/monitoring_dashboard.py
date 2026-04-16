@@ -19,6 +19,8 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from autobot_shared.network_constants import ServiceURLs
+
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -220,7 +222,7 @@ class AutoBotMonitor:
         try:
             # Check if backend is running
             result = subprocess.run(
-                ["curl", "-s", "ServiceURLs.BACKEND_LOCAL/api/system/health"],
+                ["curl", "-s", f"{ServiceURLs.BACKEND_LOCAL}/api/system/health"],
                 capture_output=True,
                 timeout=5,
             )

@@ -15,6 +15,10 @@ import time
 from datetime import datetime
 from typing import Any, Dict
 
+import requests
+
+from autobot_shared.network_constants import NetworkConstants, ServiceURLs
+
 logger = logging.getLogger(__name__)
 
 
@@ -217,7 +221,7 @@ class AutoBotMonitor:
     def get_ollama_models(self) -> Dict[str, Any]:
         """Get available Ollama models with accessibility testing (Issue #315 - refactored)."""
         try:
-            response = requests.get("ServiceURLs.OLLAMA_LOCAL/api/tags", timeout=10)
+            response = requests.get(f"{ServiceURLs.OLLAMA_LOCAL}/api/tags", timeout=10)
             if response.status_code != 200:
                 return {"available": False, "error": f"HTTP {response.status_code}"}
 
@@ -242,7 +246,7 @@ class AutoBotMonitor:
         """Test if model is accessible (Issue #315 - extracted)."""
         try:
             test_response = requests.post(
-                "ServiceURLs.OLLAMA_LOCAL/api/generate",
+                f"{ServiceURLs.OLLAMA_LOCAL}/api/generate",
                 json={
                     "model": model_name,
                     "prompt": "test",
