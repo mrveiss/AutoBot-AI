@@ -577,6 +577,7 @@ class AgentLoop:
             for tool in tools:
                 t_name = tool.get("tool_name", "unknown")
                 halt_results[t_name] = {"error": halt_msg}
+            self._halted_on_repetition = True
             return halt_results
 
         # Issue #4092: Gate sensitive operations behind user approval.
