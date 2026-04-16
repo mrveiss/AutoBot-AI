@@ -1,7 +1,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""Unit tests for CommunityClusterer (#4819)."""
+"""Unit tests for CommunityClusterer (#4819, #4834)."""
 
 import sys
 from types import ModuleType
@@ -120,3 +120,73 @@ async def test_run_empty_graph_promotes_nothing():
 
     assert promoted == []
     db.promote_to_anchor.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Periodic scheduler integration (#4834)
+# Tests that CommunityClusterer can be driven from a periodic caller,
+# exercising the same pattern used by _start_community_clustering_loop in lifespan.py.
+# We test the logic inline rather than importing lifespan (which has heavy deps).
+# ---------------------------------------------------------------------------
+
+
+async def _run_clustering_loop_once(mesh_db) -> list[str]:
+    """Minimal replica of the loop body inside _start_community_clustering_loop.
+
+    Runs one iteration: create clusterer, run it, return promoted IDs.
+    This mirrors the production path in initialization/lifespan.py (#4834).
+    """
+    promoted = await CommunityClusterer(mesh_db).run()
+    return promoted
+
+
+@pytest.mark.asyncio
+async def test_periodic_caller_promotes_anchors_on_connected_graph():
+    """A scheduler-style caller creates CommunityClusterer per run and promotes centroids."""
+    _ensure_graspologic_stub()
+    db = AsyncMock()
+    db.fetch_edges = AsyncMock(
+        return_value=_make_edges([
+            ("p1", "p2", 0.9),
+            ("p2", "p3", 0.8),
+            ("p1", "p3", 0.7),
+        ])
+    )
+    db.promote_to_anchor = AsyncMock()
+
+    promoted = await _run_clustering_loop_once(db)
+
+    assert len(promoted) == 1
+    db.promote_to_anchor.assert_called_once_with(promoted[0])
+
+
+@pytest.mark.asyncio
+async def test_periodic_caller_noop_on_empty_graph():
+    """A scheduler-style caller handles an empty graph gracefully — no promotions."""
+    db = AsyncMock()
+    db.fetch_edges = AsyncMock(return_value=[])
+    db.promote_to_anchor = AsyncMock()
+
+    promoted = await _run_clustering_loop_once(db)
+
+    assert promoted == []
+    db.promote_to_anchor.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_periodic_caller_promotes_two_anchors_for_two_components():
+    """Two disconnected components produce two anchor promotions per run."""
+    _ensure_graspologic_stub()
+    db = AsyncMock()
+    db.fetch_edges = AsyncMock(
+        return_value=_make_edges([
+            ("a1", "a2", 1.0), ("a2", "a3", 1.0), ("a1", "a3", 1.0),
+            ("b1", "b2", 1.0), ("b2", "b3", 1.0), ("b1", "b3", 1.0),
+        ])
+    )
+    db.promote_to_anchor = AsyncMock()
+
+    promoted = await _run_clustering_loop_once(db)
+
+    assert len(promoted) == 2
+    assert db.promote_to_anchor.call_count == 2
