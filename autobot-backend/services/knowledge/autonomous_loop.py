@@ -42,9 +42,10 @@ from autobot_shared.redis_client import get_async_redis_client
 # Module-level imports for patchability in tests.
 # Deferred via try/except to survive environments where these aren't installed yet.
 try:
-    from services.knowledge.analyzer_service import get_analyzer_service
+    from services.knowledge.analyzer_service import _MIN_SCORE_DELTA, get_analyzer_service
 except Exception:  # pragma: no cover
     get_analyzer_service = None  # type: ignore[assignment]
+    _MIN_SCORE_DELTA = 0.1  # fallback matches analyzer_service default
 
 try:
     from services.knowledge.synthesis_provenance import SynthesisProvenanceLog
@@ -627,9 +628,10 @@ class AutonomousLoopOrchestrator:
                 run_id=f"loop:{run_id}",
                 input_docs=[f"params: {json.dumps(r.params)}" for r in results],
                 output_summary=summary,
-                # Floor at 0.0 so a negative delta still clears the _MIN_SCORE_DELTA guard
-                # and the LLM can produce "what to avoid" lessons from failed experiments.
-                score=max(0.0, score_delta),
+                # For regression runs (delta < 0), floor at _MIN_SCORE_DELTA so the
+                # analyzer's guard passes and the LLM can distil "what to avoid" lessons.
+                # Positive deltas are passed as-is to preserve their magnitude.
+                score=max(_MIN_SCORE_DELTA, score_delta),
             )
             if lessons:
                 await svc.store_lessons(lessons)

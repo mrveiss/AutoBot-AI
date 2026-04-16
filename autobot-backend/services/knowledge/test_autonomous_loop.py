@@ -253,14 +253,16 @@ async def test_analyze_graceful_on_failure():
 async def test_analyze_generates_lessons_when_all_variants_regress():
     """ANALYZE must produce lessons even when every variant scores below baseline.
 
-    Regression path: score_delta < 0 → floored to 0.0 so _MIN_SCORE_DELTA guard
-    is cleared; output_summary prefixed with [REGRESSION] so LLM knows to distil
-    avoidance lessons.
+    Regression path: score_delta < 0 → floored at _MIN_SCORE_DELTA so the
+    analyzer's guard (score < _MIN_SCORE_DELTA → return []) is cleared and the
+    LLM can distil "what to avoid" lessons from failed experiments.
+    output_summary is also prefixed with [REGRESSION].
     """
+    from services.knowledge.analyzer_service import _MIN_SCORE_DELTA
     from services.knowledge.autonomous_loop import VariantResult
 
     orch = _make_orchestrator()
-    # All variants score below the baseline of 0.8
+    # All variants score below the baseline of 0.8 (delta = -0.3)
     results = [
         VariantResult("v00", {"hybrid_weight_semantic": 0.3}, 0.5, 0.5, 0.5),
         VariantResult("v01", {"hybrid_weight_semantic": 0.2}, 0.4, 0.4, 0.4),
@@ -279,9 +281,10 @@ async def test_analyze_generates_lessons_when_all_variants_regress():
     assert count == 1
     mock_svc.store_lessons.assert_awaited_once()
 
-    # Verify the score passed was floored at 0.0 (not the negative delta -0.3)
+    # Score must be >= _MIN_SCORE_DELTA so the analyzer guard passes.
     call_kwargs = mock_svc.analyze_synthesis_run.call_args.kwargs
-    assert call_kwargs["score"] == pytest.approx(0.0)
+    assert call_kwargs["score"] >= _MIN_SCORE_DELTA
+    assert call_kwargs["score"] == pytest.approx(_MIN_SCORE_DELTA)
 
     # Verify the regression context is prepended to the summary
     assert call_kwargs["output_summary"].startswith("[REGRESSION]")
