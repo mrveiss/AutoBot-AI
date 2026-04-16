@@ -20,6 +20,7 @@ Design constraints:
 
 import logging
 import threading
+import time
 from dataclasses import dataclass, field
 from typing import Dict, Optional
 
@@ -32,6 +33,9 @@ _MAX_WEIGHT = 0.9
 # Learning rate: fraction of gap between current weight and target shifted per
 # positive signal.  Low value (0.1) keeps adaptation gradual.
 _LEARNING_RATE = 0.1
+
+# Evict sessions that have not been accessed for this many seconds (1 hour).
+SESSION_TTL_SECONDS = 3600
 
 
 @dataclass
@@ -47,6 +51,9 @@ class _SessionState:
     # Adapted weights (initialised from RAGConfig defaults at session creation).
     hybrid_weight_semantic: float = 0.75
     hybrid_weight_keyword: float = 0.25
+
+    # Monotonic timestamp of the last access; used for TTL-based eviction.
+    last_updated: float = field(default_factory=time.monotonic)
 
     # Lock guards mutations from concurrent async calls on the same session.
     lock: threading.Lock = field(default_factory=threading.Lock)
@@ -93,13 +100,16 @@ class SessionAdaptiveReranker:
     def get_weights(self, session_id: str) -> tuple:
         """Return (semantic_weight, keyword_weight) for this session.
 
-        Creates default state for new sessions.  Thread-safe.
+        Creates default state for new sessions.  Evicts stale sessions before
+        returning.  Thread-safe.
 
         Returns:
             Tuple[float, float] — normalised to sum ≤ 1.0, each in [0.1, 0.9].
         """
+        self._evict_stale_sessions()
         state = self._get_or_create(session_id)
         with state.lock:
+            state.last_updated = time.monotonic()
             return state.hybrid_weight_semantic, state.hybrid_weight_keyword
 
     def record_signal(
@@ -132,6 +142,7 @@ class SessionAdaptiveReranker:
             else:
                 state.keyword_misses += 1
 
+            state.last_updated = time.monotonic()
             self._recompute_weights(state)
 
         logger.debug(
@@ -163,6 +174,16 @@ class SessionAdaptiveReranker:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    def _evict_stale_sessions(self) -> None:
+        """Remove sessions that have not been accessed within SESSION_TTL_SECONDS."""
+        cutoff = time.monotonic() - SESSION_TTL_SECONDS
+        with self._registry_lock:
+            stale = [sid for sid, sw in self._sessions.items() if sw.last_updated < cutoff]
+            for sid in stale:
+                del self._sessions[sid]
+        if stale:
+            logger.debug("SessionAdaptiveReranker: evicted %d stale session(s)", len(stale))
 
     def _get_or_create(self, session_id: str) -> _SessionState:
         with self._registry_lock:
