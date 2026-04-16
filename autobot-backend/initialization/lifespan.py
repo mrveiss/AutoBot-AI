@@ -1270,6 +1270,8 @@ async def _start_community_clustering_loop(app: FastAPI) -> None:
     _CLUSTER_INTERVAL_SECONDS = 6 * 3600  # 6 hours
 
     async def _loop() -> None:
+        # Allow startup to complete before first expensive Leiden pass
+        await asyncio.sleep(300)  # 5 minutes
         while True:
             try:
                 promoted = await CommunityClusterer(mesh_db).run()
