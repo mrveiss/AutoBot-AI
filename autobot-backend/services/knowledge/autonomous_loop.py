@@ -37,6 +37,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Deque, Dict, List, Optional
 
+from autobot_shared.redis_client import get_async_redis_client
+
 # Module-level imports for patchability in tests.
 # Deferred via try/except to survive environments where these aren't installed yet.
 try:
@@ -56,6 +58,9 @@ except Exception:  # pragma: no cover
     update_rag_config = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
+
+# Redis key for persisting _pending_approval across server restarts (Issue #4792).
+_PENDING_APPROVAL_REDIS_KEY = "autobot:loop:pending_approval"
 
 # How many config variants to generate per loop iteration.
 _DEFAULT_VARIANTS = 5
@@ -292,6 +297,50 @@ class AutonomousLoopOrchestrator:
         self._running = False
 
     # ------------------------------------------------------------------
+    # Redis persistence helpers (Issue #4792)
+    # ------------------------------------------------------------------
+
+    async def restore_state(self) -> None:
+        """Restore _pending_approval from Redis after a server restart.
+
+        Called once by get_loop_orchestrator() immediately after construction.
+        Silently skips if Redis is unavailable.
+        """
+        try:
+            redis = await get_async_redis_client(database="knowledge")
+            if redis is None:
+                return
+            raw = await redis.get(_PENDING_APPROVAL_REDIS_KEY)
+            if raw:
+                self._pending_approval = json.loads(raw)
+                logger.info(
+                    "AutonomousLoop: restored pending_approval from Redis: %s",
+                    self._pending_approval,
+                )
+        except Exception:
+            logger.debug("AutonomousLoop: could not restore pending_approval from Redis (non-fatal)")
+
+    async def _save_pending_approval(self, params: Dict[str, Any]) -> None:
+        """Persist _pending_approval to Redis so it survives restarts."""
+        try:
+            redis = await get_async_redis_client(database="knowledge")
+            if redis is None:
+                return
+            await redis.set(_PENDING_APPROVAL_REDIS_KEY, json.dumps(params))
+        except Exception:
+            logger.debug("AutonomousLoop: could not persist pending_approval to Redis (non-fatal)")
+
+    async def _clear_pending_approval(self) -> None:
+        """Remove the persisted pending_approval from Redis."""
+        try:
+            redis = await get_async_redis_client(database="knowledge")
+            if redis is None:
+                return
+            await redis.delete(_PENDING_APPROVAL_REDIS_KEY)
+        except Exception:
+            logger.debug("AutonomousLoop: could not clear pending_approval from Redis (non-fatal)")
+
+    # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
@@ -400,8 +449,23 @@ class AutonomousLoopOrchestrator:
 
         params = self._pending_approval
         self._pending_approval = None
+        await self._clear_pending_approval()
         await self._apply_params(params, run_id="manual-approve")
         logger.info("AutonomousLoop: pending variant approved and applied: %s", params)
+        return True
+
+    async def reject_pending(self) -> bool:
+        """Discard the staging variant that is awaiting human approval.
+
+        Returns True if a pending variant was cleared, False if none existed.
+        """
+        if self._pending_approval is None:
+            logger.info("AutonomousLoop: no pending variant to reject")
+            return False
+
+        self._pending_approval = None
+        await self._clear_pending_approval()
+        logger.info("AutonomousLoop: pending variant rejected and cleared")
         return True
 
     # ------------------------------------------------------------------
@@ -599,8 +663,9 @@ class AutonomousLoopOrchestrator:
                 relative_improvement * 100,
                 self.promotion_threshold * 100,
             )
-            # Store as pending for human review gate
+            # Store as pending for human review gate; persist to Redis (Issue #4792).
             self._pending_approval = best.params
+            await self._save_pending_approval(best.params)
             return False
 
         if self.dry_run:
@@ -681,13 +746,16 @@ async def get_loop_orchestrator(
         if _loop_orchestrator is None or (
             _loop_orchestrator._llm is None and llm_service is not None
         ):
-            _loop_orchestrator = AutonomousLoopOrchestrator(
+            orchestrator = AutonomousLoopOrchestrator(
                 llm_service,
                 dry_run=dry_run,
                 max_variants=max_variants,
                 promotion_threshold=promotion_threshold,
                 max_no_improvement_rounds=max_no_improvement_rounds,
             )
+            # Restore any pending_approval that survived a server restart (Issue #4792).
+            await orchestrator.restore_state()
+            _loop_orchestrator = orchestrator
     return _loop_orchestrator
 
 
