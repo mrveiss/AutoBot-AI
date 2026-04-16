@@ -783,6 +783,8 @@ class DocIndexerService:
         each half is retried recursively (up to 1/16th of the original at
         depth 4).  Returns True when at least one sub-chunk is stored.
         """
+        if not content:
+            return False
         try:
             self._embed_and_upsert(content, chunk_id, metadata)
             return True

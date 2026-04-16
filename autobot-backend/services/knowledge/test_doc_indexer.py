@@ -979,6 +979,42 @@ class TestIndexChunkOversized4665:
     # Warning is logged (not silently dropped) — #4665 regression guard
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # _split_and_embed: empty-string guard (#4921)
+    # ------------------------------------------------------------------
+
+    def test_split_and_embed_returns_false_on_empty_string(self):
+        """_split_and_embed returns False immediately for empty content (#4921)."""
+        svc = _make_service()
+        ok = svc._split_and_embed("", "chunk_id", {}, "docs/test.md")
+        assert ok is False
+        # No embed call should happen — guard fires before any I/O
+        svc._embed_model.get_text_embedding.assert_not_called()
+
+    def test_split_and_embed_empty_half_after_bisect_does_not_embed(self):
+        """Bisect of whitespace-only content produces empty halves that are skipped (#4921).
+
+        A string like '   ' strips to '' on both sides — both recursive calls
+        must return False without calling the embedding model.
+        """
+        svc = _make_service()
+
+        # Force the initial call to fail with an oversized error so bisect runs
+        call_count = [0]
+
+        def _fake_embed(text):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise ValueError("input too large for model context length")
+            return [0.1] * 128
+
+        svc._embed_model.get_text_embedding.side_effect = _fake_embed
+        # Content that strips to empty on both bisected halves
+        ok = svc._split_and_embed("   ", "chunk_id", {}, "docs/test.md")
+        assert ok is False
+        # Only one embed attempt (the initial oversized call) — halves are empty, skipped
+        assert call_count[0] == 1
+
     def test_index_chunk_logs_warning_on_oversized(self, caplog):
         """Oversized chunk must emit a WARNING with doc path and char count (#4665)."""
         import logging
