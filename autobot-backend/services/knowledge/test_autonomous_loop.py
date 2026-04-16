@@ -519,7 +519,12 @@ async def test_promote_stores_pending_in_redis():
     mock_redis.set.assert_awaited_once()
     call_args = mock_redis.set.call_args
     assert call_args[0][0] == "autobot:loop:pending_approval"
-    assert json.loads(call_args[0][1]) == best.params
+    stored = json.loads(call_args[0][1])
+    # staged_at timestamp is injected; strip it before comparing params
+    stored.pop("staged_at", None)
+    assert stored == best.params
+    # 7-day TTL must be set
+    assert call_args[1].get("ex") == 7 * 24 * 3600
 
 
 @pytest.mark.asyncio
