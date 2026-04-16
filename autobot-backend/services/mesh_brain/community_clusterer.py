@@ -86,8 +86,6 @@ def _pick_centroid(subgraph, nodes: list[str]) -> str:
 
 def _split_community(subgraph) -> list[str]:
     """Apply a second Leiden pass to an oversized community subgraph."""
-    import networkx as nx  # lazy import
-
     if subgraph.number_of_nodes() < 2:
         return list(subgraph.nodes)[:1]
 
