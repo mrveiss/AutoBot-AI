@@ -94,11 +94,12 @@ def test_hash_different_non_serializable_types_differ():
 # ---------------------------------------------------------------------------
 
 
-def test_hash_none_vs_empty_string_differ():
-    """None args and empty-string args must produce distinct hashes."""
-    h_none = AgentLoop._compute_tool_call_hash(_make_tool("t", None))
+def test_hash_no_args_vs_empty_string_differ():
+    """A tool with no args key and one with args='' must produce distinct hashes."""
+    # _make_tool("t", None) drops None args key → produces {"tool_name": "t"} (no args key)
+    h_no_args = AgentLoop._compute_tool_call_hash(_make_tool("t", None))
     h_str = AgentLoop._compute_tool_call_hash(_make_tool("t", ""))
-    assert h_none != h_str
+    assert h_no_args != h_str
 
 
 def test_hash_string_args_preserved():
