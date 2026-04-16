@@ -931,9 +931,13 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
         # subscribe() blocks on pubsub.listen() and yields the event the moment
         # it is published — no 1-second window that could miss the signal.
         async def _await_response() -> bool:
+            # Do NOT filter by task_id here: if the frontend omits task_id in
+            # the approval request the published event has task_id=None, which
+            # the subscriber's task_id filter would skip even when approval_id
+            # matches.  approval_id is a UUID — globally unique — so filtering
+            # by it is sufficient and safe.
             async for resp_event in self.event_stream.subscribe(
                 event_types=[EventType.APPROVAL_RESPONSE],
-                task_id=task_id,
             ):
                 if resp_event.content.get("approval_id") == approval_id:
                     decision: bool = resp_event.content.get("approved", False)

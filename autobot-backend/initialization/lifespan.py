@@ -1324,10 +1324,13 @@ async def _init_web_researcher(app: FastAPI) -> None:
     """
     logger.info("[ 99%%] WebResearcher: Initializing browser automation...")
     try:
-        from agents.web_researcher import get_web_researcher
+        from agents.web_researcher import _load_web_research_config, get_web_researcher
 
-        # Merge stored config with enabled=True so the singleton is armed.
-        researcher = get_web_researcher(config={"enabled": True})
+        # Load stored config then enable — passing only {"enabled": True} would
+        # discard all other settings (rate limits, timeouts, circuit breaker).
+        config = _load_web_research_config()
+        config["enabled"] = True
+        researcher = get_web_researcher(config=config)
         await researcher.initialize()
         app.state.web_researcher = researcher
         logger.info("[ 99%%] WebResearcher: Browser automation ready")
