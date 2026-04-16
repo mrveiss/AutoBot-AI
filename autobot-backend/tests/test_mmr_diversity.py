@@ -11,7 +11,7 @@ RAGConfig.mmr_lambda, and ResultReranker MMR integration.
 Acceptance criteria tested:
 - Disabled (lambda=0): results unchanged, backward-compatible.
 - Moderate diversity (lambda=0.5): diverse results preferred over redundant ones.
-- High diversity (lambda=0.9): most diverse ordering selected.
+- High diversity (lambda=0.1): most diverse ordering selected.
 - No embedding fallback: graceful degradation when embeddings absent.
 - RAGConfig mmr_lambda propagates to rerank_weights.
 """
@@ -153,7 +153,7 @@ class TestMMRModerateDiversity(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# apply_mmr_reorder — high diversity (lambda=0.9)
+# apply_mmr_reorder — high diversity (lambda=0.1)
 # ---------------------------------------------------------------------------
 
 
@@ -166,7 +166,7 @@ class TestMMRHighDiversity(unittest.TestCase):
     causing near-duplicate documents to be ranked below diverse ones.
     """
 
-    def test_high_lambda_strongly_penalises_duplicates(self):
+    def test_low_lambda_strongly_penalises_duplicates(self):
         """
         Two near-identical high-scorers + one very different low-scorer.
         At lambda=0.1 (high diversity weight) the diverse low-scorer should
