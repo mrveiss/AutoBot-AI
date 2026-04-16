@@ -310,6 +310,15 @@ export function useSystemStatus(): UseSystemStatusReturn {
     return 'Click to view system status - all services operational'
   }
 
+  const getSystemStatusAriaLabel = (): string => {
+    if (systemStatus.value.hasIssues) {
+      return 'System status: issues detected'
+    } else if (!systemStatus.value.isHealthy) {
+      return 'System status: warnings present'
+    }
+    return 'System status: all services operational'
+  }
+
   const getSystemStatusText = (): string => {
     if (systemStatus.value.hasIssues) {
       return 'System Issues Detected'
@@ -435,6 +444,7 @@ export function useSystemStatus(): UseSystemStatusReturn {
 
     // Computed-like getters
     getSystemStatusTooltip,
+    getSystemStatusAriaLabel,
     getSystemStatusText,
     getSystemStatusDescription,
 
