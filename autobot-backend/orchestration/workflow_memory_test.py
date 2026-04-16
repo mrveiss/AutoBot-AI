@@ -357,7 +357,7 @@ class TestWorkflowMemoryAutoInjection:
         import asyncio
 
         with pytest.raises(NotImplementedError):
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 executor._execute_coordinated_step(step, execution_context, context)
             )
 
@@ -391,7 +391,7 @@ class TestWorkflowMemoryAutoInjection:
         import asyncio
 
         with pytest.raises(NotImplementedError):
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 executor._execute_coordinated_step(step, execution_context, context)
             )
 

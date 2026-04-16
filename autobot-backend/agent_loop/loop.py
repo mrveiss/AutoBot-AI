@@ -926,8 +926,8 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
             requested_by="AgentLoop",
         )
 
-        deadline = asyncio.get_event_loop().time() + self.config.approval_timeout_seconds
-        while asyncio.get_event_loop().time() < deadline:
+        deadline = asyncio.get_running_loop().time() + self.config.approval_timeout_seconds
+        while asyncio.get_running_loop().time() < deadline:
             await asyncio.sleep(1)
             # Fetch recent events and look for a matching APPROVAL_RESPONSE
             recent = await self.event_stream.get_latest(

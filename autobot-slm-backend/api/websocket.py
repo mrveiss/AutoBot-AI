@@ -146,7 +146,7 @@ class ConnectionManager:
                 "disk_percent": disk,
                 "last_heartbeat": last_heartbeat or datetime.utcnow().isoformat(),
             },
-            "timestamp": asyncio.get_event_loop().time(),
+            "timestamp": asyncio.get_running_loop().time(),
         }
         # Broadcast to global channel
         await self.broadcast("events:global", message)
@@ -162,7 +162,7 @@ class ConnectionManager:
                 "status": status,
                 "hostname": hostname,
             },
-            "timestamp": asyncio.get_event_loop().time(),
+            "timestamp": asyncio.get_running_loop().time(),
         }
         # Broadcast to global channel
         await self.broadcast("events:global", message)
@@ -181,7 +181,7 @@ class ConnectionManager:
                 "success": success,
                 "message": message,
             },
-            "timestamp": asyncio.get_event_loop().time(),
+            "timestamp": asyncio.get_running_loop().time(),
         }
         # Broadcast to global channel
         await self.broadcast("events:global", event_message)
@@ -208,7 +208,7 @@ class ConnectionManager:
                 "success": success,
                 "message": message,
             },
-            "timestamp": asyncio.get_event_loop().time(),
+            "timestamp": asyncio.get_running_loop().time(),
         }
         # Broadcast to global channel
         await self.broadcast("events:global", event_message)
@@ -224,7 +224,7 @@ class ConnectionManager:
                 "event_type": event_type,
                 "details": details or {},
             },
-            "timestamp": asyncio.get_event_loop().time(),
+            "timestamp": asyncio.get_running_loop().time(),
         }
         # Broadcast to global channel
         await self.broadcast("events:global", event_message)

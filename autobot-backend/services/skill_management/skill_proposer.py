@@ -98,7 +98,7 @@ class SkillProposer:
             "metadata": {
                 "session_id": session_id,
                 "conversation_id": conversation_id,
-                "extracted_at": asyncio.get_event_loop().time(),
+                "extracted_at": asyncio.get_running_loop().time(),
                 "auto_validate": True,  # No manual approval needed
             },
         }

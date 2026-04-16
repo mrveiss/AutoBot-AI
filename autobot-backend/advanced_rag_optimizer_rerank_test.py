@@ -84,7 +84,7 @@ class TestAdvancedRAGOptimizerRerankWeights(unittest.TestCase):
         mock_ce = MagicMock()
         mock_ce.predict.return_value = [ce_score]
         optimizer._cross_encoder = mock_ce
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             optimizer._apply_cross_encoder_scores("query", [result])
         )
 
@@ -104,7 +104,7 @@ class TestAdvancedRAGOptimizerRerankWeights(unittest.TestCase):
         mock_ce = MagicMock()
         mock_ce.predict.return_value = [ce_score]
         optimizer._cross_encoder = mock_ce
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             optimizer._apply_cross_encoder_scores("query", [result])
         )
 
@@ -126,7 +126,7 @@ class TestAdvancedRAGOptimizerRerankWeights(unittest.TestCase):
         mock_ce = MagicMock()
         mock_ce.predict.return_value = [ce_score]
         optimizer._cross_encoder = mock_ce
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             optimizer._apply_cross_encoder_scores("query", [result])
         )
 
@@ -157,7 +157,7 @@ class TestRAGServiceForwardsWeights(unittest.TestCase):
             "services.rag_service.AdvancedRAGOptimizer",
             side_effect=lambda **kw: _capture_and_create(kw, captured_weights),
         ):
-            asyncio.get_event_loop().run_until_complete(service.initialize())
+            asyncio.run(service.initialize())
 
         if captured_weights:
             self.assertIs(captured_weights[0], custom_weights)

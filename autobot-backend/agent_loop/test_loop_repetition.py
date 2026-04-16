@@ -149,7 +149,7 @@ def test_halted_on_repetition_flag_set():
     h = AgentLoop._compute_tool_call_hash(tool)
     loop._current_context.tool_call_hashes[h] = 2  # already at threshold
 
-    result = asyncio.get_event_loop().run_until_complete(loop._execute_tools([tool]))
+    result = asyncio.run(loop._execute_tools([tool]))
 
     assert loop._halted_on_repetition is True
     assert "bash" in result
@@ -212,7 +212,7 @@ def test_loop_stops_after_repetition_halt():
         loop._think_before_tools = AsyncMock()  # type: ignore[method-assign]
         return await loop._execute_main_loop()
 
-    results = asyncio.get_event_loop().run_until_complete(run())
+    results = asyncio.run(run())
 
     # Halt fires on iteration 2; the loop breaks inside _execute_main_loop
     # because result.should_continue is False (error in tool_results) OR

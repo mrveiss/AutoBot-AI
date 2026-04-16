@@ -205,13 +205,13 @@ class TestGraphRunnerLinear:
 
     def test_executes_all_nodes(self, simple_graph):
         runner = GraphRunner(simple_graph, graph_id="test", enable_checkpoints=False)
-        state = asyncio.get_event_loop().run_until_complete(runner.run({}))
+        state = asyncio.run(runner.run({}))
         assert state["a_done"] is True
         assert state["b_done"] is True
 
     def test_state_accumulates(self, simple_graph):
         runner = GraphRunner(simple_graph, graph_id="test", enable_checkpoints=False)
-        state = asyncio.get_event_loop().run_until_complete(
+        state = asyncio.run(
             runner.run({"initial": 42})
         )
         assert state["initial"] == 42
@@ -237,7 +237,7 @@ class TestGraphRunnerLinear:
             enable_checkpoints=False,
             configurable={"manager": "mock_manager"},
         )
-        asyncio.get_event_loop().run_until_complete(runner.run({}))
+        asyncio.run(runner.run({}))
         assert received_config["manager"] == "mock_manager"
 
 
@@ -274,13 +274,13 @@ class TestGraphRunnerConditional:
     def test_routes_to_true_branch(self):
         graph = self._build_graph("true_branch")
         runner = GraphRunner(graph, graph_id="t", enable_checkpoints=False)
-        state = asyncio.get_event_loop().run_until_complete(runner.run({}))
+        state = asyncio.run(runner.run({}))
         assert state["branch"] == "true"
 
     def test_routes_to_false_branch(self):
         graph = self._build_graph("false_branch")
         runner = GraphRunner(graph, graph_id="t", enable_checkpoints=False)
-        state = asyncio.get_event_loop().run_until_complete(runner.run({}))
+        state = asyncio.run(runner.run({}))
         assert state["branch"] == "false"
 
     def test_async_router(self):
@@ -303,7 +303,7 @@ class TestGraphRunnerConditional:
         graph = builder.compile()
 
         runner = GraphRunner(graph, graph_id="t", enable_checkpoints=False)
-        state = asyncio.get_event_loop().run_until_complete(runner.run({}))
+        state = asyncio.run(runner.run({}))
         assert state["from_async"] is True
 
     def test_router_returns_end(self):
@@ -318,7 +318,7 @@ class TestGraphRunnerConditional:
         graph = builder.compile()
 
         runner = GraphRunner(graph, graph_id="t", enable_checkpoints=False)
-        state = asyncio.get_event_loop().run_until_complete(runner.run({}))
+        state = asyncio.run(runner.run({}))
         assert state["a"] == 1  # graph terminated cleanly at END
 
 
@@ -348,7 +348,7 @@ class TestGraphRunnerRetry:
         graph = builder.compile()
 
         runner = GraphRunner(graph, graph_id="t", enable_checkpoints=False)
-        state = asyncio.get_event_loop().run_until_complete(runner.run({}))
+        state = asyncio.run(runner.run({}))
         assert state["result"] == "ok"
         assert len(calls) == 3
 
@@ -368,7 +368,7 @@ class TestGraphRunnerRetry:
 
         runner = GraphRunner(graph, graph_id="t", enable_checkpoints=False)
         with pytest.raises(RuntimeError, match="always fails"):
-            asyncio.get_event_loop().run_until_complete(runner.run({}))
+            asyncio.run(runner.run({}))
 
     def test_non_retryable_exception_not_retried(self):
         calls: List[int] = []
@@ -393,7 +393,7 @@ class TestGraphRunnerRetry:
 
         runner = GraphRunner(graph, graph_id="t", enable_checkpoints=False)
         with pytest.raises(ValueError):
-            asyncio.get_event_loop().run_until_complete(runner.run({}))
+            asyncio.run(runner.run({}))
         assert len(calls) == 1  # No retry attempted
 
 
@@ -417,7 +417,7 @@ class TestStepEventEmitter:
             node_name="test",
             graph_id="g1",
         )
-        asyncio.get_event_loop().run_until_complete(emitter.emit(event))
+        asyncio.run(emitter.emit(event))
         assert len(received) == 1
         assert received[0].node_name == "test"
 
@@ -434,7 +434,7 @@ class TestStepEventEmitter:
             graph_id="g",
         )
         # Must not raise.
-        asyncio.get_event_loop().run_until_complete(emitter.emit(event))
+        asyncio.run(emitter.emit(event))
 
     def test_multiple_sinks(self):
         counter: List[int] = []
@@ -452,7 +452,7 @@ class TestStepEventEmitter:
         event = GraphStepEvent(
             event_type=StepEventType.NODE_START, node_name="n", graph_id="g"
         )
-        asyncio.get_event_loop().run_until_complete(emitter.emit(event))
+        asyncio.run(emitter.emit(event))
         assert sorted(counter) == [1, 2]
 
     def test_events_emitted_during_execution(self):
@@ -476,7 +476,7 @@ class TestStepEventEmitter:
         runner = GraphRunner(
             graph, graph_id="t", emitter=emitter, enable_checkpoints=False
         )
-        asyncio.get_event_loop().run_until_complete(runner.run({}))
+        asyncio.run(runner.run({}))
 
         assert StepEventType.NODE_START in emitted
         assert StepEventType.NODE_END in emitted
@@ -540,7 +540,7 @@ class TestDAGGraphExecutor:
         step_executor, executed = self._make_step_executor()
 
         executor = DAGGraphExecutor(step_executor_callback=step_executor, enable_checkpoints=False)
-        ctx = asyncio.get_event_loop().run_until_complete(
+        ctx = asyncio.run(
             executor.execute(dag, "wf-linear")
         )
 
@@ -557,7 +557,7 @@ class TestDAGGraphExecutor:
         step_executor, _ = self._make_step_executor()
 
         executor = DAGGraphExecutor(step_executor_callback=step_executor, enable_checkpoints=False)
-        ctx = asyncio.get_event_loop().run_until_complete(
+        ctx = asyncio.run(
             executor.execute(dag, "wf-empty")
         )
 
@@ -580,7 +580,7 @@ class TestDAGGraphExecutor:
         step_executor, _ = self._make_step_executor()
 
         executor = DAGGraphExecutor(step_executor_callback=step_executor, enable_checkpoints=False)
-        ctx = asyncio.get_event_loop().run_until_complete(
+        ctx = asyncio.run(
             executor.execute(dag, "wf-cycle")
         )
 
@@ -594,7 +594,7 @@ class TestDAGGraphExecutor:
         step_executor, executed = self._make_step_executor()
 
         executor = DAGGraphExecutor(step_executor_callback=step_executor, enable_checkpoints=False)
-        ctx = asyncio.get_event_loop().run_until_complete(
+        ctx = asyncio.run(
             executor.execute(dag, "wf-cond-true")
         )
 
@@ -615,7 +615,7 @@ class TestDAGGraphExecutor:
         )
 
         executor = DAGGraphExecutor(step_executor_callback=step_executor, enable_checkpoints=False)
-        ctx = asyncio.get_event_loop().run_until_complete(
+        ctx = asyncio.run(
             executor.execute(dag, "wf-results")
         )
 

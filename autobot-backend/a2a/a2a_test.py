@@ -515,7 +515,7 @@ class TestSelfEvaluator:
     def _run(self, coro):
         import asyncio
 
-        return asyncio.get_event_loop().run_until_complete(coro)
+        return asyncio.run(coro)
 
     def test_high_confidence_response_passes(self):
         from a2a.self_evaluator import evaluate_task_output
@@ -612,7 +612,7 @@ class TestExecuteA2aTaskEvalGate:
     def _run(self, coro):
         import asyncio
 
-        return asyncio.get_event_loop().run_until_complete(coro)
+        return asyncio.run(coro)
 
     def test_pass_threshold_transitions_to_completed(self):
         """When eval passes, task must reach COMPLETED."""

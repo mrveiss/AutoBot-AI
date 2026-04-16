@@ -286,7 +286,7 @@ class _CheckpointAdapter:
 
     ``WorkflowCheckpointManager`` uses sync Redis calls via the shared
     ``autobot_shared.redis_client``.  This adapter wraps each call in
-    ``asyncio.get_event_loop().run_in_executor`` so graph execution
+    ``asyncio.get_running_loop().run_in_executor`` so graph execution
     remains non-blocking.
 
     When ``WorkflowCheckpointManager`` is unavailable (test environments)
@@ -315,7 +315,7 @@ class _CheckpointAdapter:
                 status="completed",
                 output=output,
             )
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             await loop.run_in_executor(
                 None, self._manager.save, self._graph_id, checkpoint
             )
@@ -332,7 +332,7 @@ class _CheckpointAdapter:
         if self._manager is None:
             return {}
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             checkpoints = await loop.run_in_executor(
                 None, self._manager.load_all, self._graph_id
             )
@@ -352,7 +352,7 @@ class _CheckpointAdapter:
         if self._manager is None:
             return
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             await loop.run_in_executor(
                 None, self._manager.clear, self._graph_id
             )

@@ -214,7 +214,7 @@ class TestRAGServiceSessionAdaptation(unittest.TestCase):
                 new=AsyncMock(side_effect=lambda coro, timeout: coro),
             ),
         ):
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 service.advanced_search("test query", session_id="sess-z")
             )
 
