@@ -381,6 +381,64 @@ class TestCrossEncoderReranking:
         assert reranked[0].rerank_score > reranked[1].rerank_score
 
 
+class TestKBSynthesisSchemaCache:
+    """Tests for module-level synthesis schema caching in RAGService (#4654)."""
+
+    def setup_method(self):
+        """Reset the module-level cache before each test."""
+        import services.rag_service as rag_module
+
+        rag_module._SYNTHESIS_SCHEMA_CACHE = None
+
+    def teardown_method(self):
+        """Reset the module-level cache after each test."""
+        import services.rag_service as rag_module
+
+        rag_module._SYNTHESIS_SCHEMA_CACHE = None
+
+    @pytest.mark.asyncio
+    async def test_load_synthesis_schema_called_only_once_across_multiple_calls(self):
+        """load_synthesis_schema is called exactly once even when _get_kb_synthesis_context
+        is invoked multiple times — schema is cached after the first load (#4654)."""
+        mock_schema = Mock()
+        mock_schema.collections = []
+
+        chromadb_client = AsyncMock()
+        chromadb_client.get_or_create_collection = AsyncMock(side_effect=Exception("no db"))
+
+        with patch(
+            "services.rag_service.load_synthesis_schema", create=True
+        ) as _unused, patch(
+            "services.knowledge.synthesis_schema_loader.load_synthesis_schema",
+            return_value=mock_schema,
+        ) as mock_loader, patch(
+            "utils.chromadb_client.get_async_chromadb_client",
+            AsyncMock(return_value=chromadb_client),
+        ):
+            service = RAGService.__new__(RAGService)
+            await service._get_kb_synthesis_context("query one")
+            await service._get_kb_synthesis_context("query two")
+
+        mock_loader.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_synthesis_schema_returns_same_object_on_repeated_calls(self):
+        """_get_synthesis_schema() returns identical object instance on every call (#4654)."""
+        import services.rag_service as rag_module
+
+        mock_schema = Mock()
+
+        with patch(
+            "services.knowledge.synthesis_schema_loader.load_synthesis_schema",
+            return_value=mock_schema,
+        ):
+            result1 = rag_module._get_synthesis_schema()
+            result2 = rag_module._get_synthesis_schema()
+
+        assert result1 is result2
+        assert result1 is mock_schema
+
+
 class TestAPIEndpoints:
     """Tests for advanced RAG API endpoints."""
 
