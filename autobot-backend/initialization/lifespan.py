@@ -1279,10 +1279,11 @@ async def _start_community_clustering_loop(app: FastAPI) -> None:
             except ImportError as exc:
                 logger.warning(
                     "graspologic not installed — community clustering disabled. "
-                    "Install with: pip install graspologic. Error: %s",
+                    "Install graspologic and restart to enable. Retrying in 24h. Error: %s",
                     exc,
                 )
-                return  # exit loop permanently; no point retrying every 6h
+                await asyncio.sleep(86400)  # 24 hours — re-check after potential install
+                continue
             except Exception as exc:
                 logger.warning("CommunityClusterer periodic run failed (non-fatal): %s", exc)
             await asyncio.sleep(_CLUSTER_INTERVAL_SECONDS)

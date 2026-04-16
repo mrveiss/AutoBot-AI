@@ -211,43 +211,48 @@ def test_cluster_graph_raises_import_error_when_graspologic_missing():
 
 
 @pytest.mark.asyncio
-async def test_loop_body_logs_critical_and_exits_on_import_error(caplog):
-    """Loop body catches ImportError, logs CRITICAL, and returns without sleeping (#4896).
+async def test_loop_body_logs_warning_and_sleeps_on_import_error(caplog):
+    """Loop body catches ImportError, logs WARNING, sleeps 24h, and continues (#4924).
 
     Mirrors the _loop() coroutine in _start_community_clustering_loop but inlined
     here to avoid importing lifespan (heavy deps). Verifies that the production
-    pattern — catch ImportError → log critical → return — works end-to-end.
+    pattern — catch ImportError → log warning → sleep 24h → continue — works end-to-end.
+    Prior behaviour was CRITICAL + permanent exit; now it retries after 24h (#4924).
     """
+    import asyncio
     import logging
 
     db = AsyncMock()
     db.fetch_edges = AsyncMock(return_value=_make_edges([("n1", "n2", 1.0)]))
     db.promote_to_anchor = AsyncMock()
 
-    loop_exited = False
+    slept_seconds: list[float] = []
+    continued = False
 
     async def _loop_once(mesh_db) -> None:
-        nonlocal loop_exited
+        nonlocal continued
         try:
             await CommunityClusterer(mesh_db).run()
         except ImportError as exc:
             import logging as _logging
-            _logging.getLogger(__name__).critical(
+            _logging.getLogger(__name__).warning(
                 "graspologic not installed — community clustering disabled. "
-                "Install with: pip install graspologic. Error: %s",
+                "Install graspologic and restart to enable. Retrying in 24h. Error: %s",
                 exc,
             )
-            loop_exited = True
-            return
+            slept_seconds.append(86400)
+            continued = True
+            return  # simulate continue in the real loop
 
     with patch.dict(sys.modules, {"graspologic": None, "graspologic.partition": None}):
-        with caplog.at_level(logging.CRITICAL):
+        with caplog.at_level(logging.WARNING):
             await _loop_once(db)
 
-    assert loop_exited, "Loop should have exited after ImportError"
+    assert continued, "Loop should have continued (not exited) after ImportError"
+    assert slept_seconds == [86400], "Loop should sleep 86400s (24h) on ImportError"
     assert any(
         "graspologic not installed" in record.message
         for record in caplog.records
-        if record.levelno == logging.CRITICAL
-    ), "Expected CRITICAL log message about missing graspologic"
+        if record.levelno == logging.WARNING
+    ), "Expected WARNING log message about missing graspologic"
     db.promote_to_anchor.assert_not_called()
