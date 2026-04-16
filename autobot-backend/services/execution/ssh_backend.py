@@ -224,7 +224,7 @@ class SSHBackend(ExecutionBackend):
             Tuple of (stdin, stdout, stderr)
         """
         # Run in executor to avoid blocking
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None, client.exec_command, cmd
         )

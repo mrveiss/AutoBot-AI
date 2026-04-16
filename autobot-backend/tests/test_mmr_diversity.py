@@ -312,7 +312,7 @@ class TestResultRerankerMMRIntegration(unittest.TestCase):
         self._st_patcher.stop()
 
     def _run(self, coro):
-        return asyncio.get_event_loop().run_until_complete(coro)
+        return asyncio.run(coro)
 
     def _make_results(self) -> List[Dict[str, Any]]:
         emb_a = _unit([1.0, 0.0])

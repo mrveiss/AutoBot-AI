@@ -245,7 +245,7 @@ async def run_migrations_async(db_url: str = None) -> List[Tuple[str, bool, str]
     """Async wrapper for run_all_migrations (#786)."""
     import asyncio
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, run_all_migrations, db_url)
 
 

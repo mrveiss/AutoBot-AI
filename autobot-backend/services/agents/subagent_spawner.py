@@ -190,11 +190,11 @@ class SubagentSpawner:
 
     async def _wait_for_task(self, task_id: str, timeout_seconds: int) -> TaskResult:
         """Wait for a single task to complete."""
-        start_time = asyncio.get_event_loop().time()
+        start_time = asyncio.get_running_loop().time()
         poll_interval = 0.5  # Check every 500ms
 
         while True:
-            elapsed = asyncio.get_event_loop().time() - start_time
+            elapsed = asyncio.get_running_loop().time() - start_time
             if elapsed > timeout_seconds:
                 logger.warning("Task %s timed out after %.1f seconds", task_id, elapsed)
                 return TaskResult(

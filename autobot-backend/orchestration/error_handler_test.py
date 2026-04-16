@@ -228,7 +228,7 @@ class TestWorkflowCheckpointManager:
 
 class TestStepErrorHandler:
     def _run(self, coro: Any) -> Any:
-        return asyncio.get_event_loop().run_until_complete(coro)
+        return asyncio.run(coro)
 
     def _step(self, error_config: Dict[str, Any]) -> Dict[str, Any]:
         return {"id": "step_x", "action": "run", "error_config": error_config}

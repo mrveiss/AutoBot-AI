@@ -97,7 +97,7 @@ async def _broadcast_job_update(job_id: str, status: str, progress: int, message
                     "progress": progress,
                     "message": message,
                 },
-                "timestamp": asyncio.get_event_loop().time(),
+                "timestamp": asyncio.get_running_loop().time(),
             },
         )
     except Exception as e:

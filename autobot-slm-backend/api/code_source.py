@@ -640,7 +640,7 @@ def _extract_tarball_to_cache(data: bytes, role_name: str, commit_hash: str) -> 
 async def _extract_package_to_cache(data: bytes, role_name: str, commit_hash: str) -> str:
     """Helper for upload_package. Run tarball extraction in executor. Ref: #1088."""
     try:
-        return await asyncio.get_event_loop().run_in_executor(
+        return await asyncio.get_running_loop().run_in_executor(
             None, _extract_tarball_to_cache, data, role_name, commit_hash
         )
     except ValueError as exc:
