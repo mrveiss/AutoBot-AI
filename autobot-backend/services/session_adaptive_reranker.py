@@ -104,8 +104,8 @@ class SessionAdaptiveReranker:
     def get_weights(self, session_id: str) -> tuple:
         """Return (semantic_weight, keyword_weight) for this session.
 
-        Creates default state for new sessions.  Evicts stale sessions before
-        returning.  Thread-safe.
+        Creates default state for new sessions.  Evicts stale sessions at most
+        once per 60 seconds (_EVICTION_INTERVAL).  Thread-safe.
 
         Returns:
             Tuple[float, float] — normalised to sum ≤ 1.0, each in [0.1, 0.9].
