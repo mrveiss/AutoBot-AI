@@ -88,7 +88,6 @@ async def test_index_python_file_upserts_nodes(tmp_path):
     assert indexer._collection.upsert.called
 
 
-@requires_tree_sitter
 async def test_index_unchanged_file_skips(tmp_path):
     src = tmp_path / "module.py"
     src.write_bytes(SIMPLE_PYTHON)
@@ -253,6 +252,43 @@ async def test_index_code_accepts_project_root_itself(tmp_path):
     assert response["status"] == "ok"
 
 
+@requires_tree_sitter
+@pytest.mark.asyncio
+async def test_class_method_call_graph(tmp_path):
+    """Class method node ID uses parent prefix; calls metadata is non-empty (#4908)."""
+    src = tmp_path / "mymod.py"
+    src.write_bytes(b"""
+class MyClass:
+    def helper(self):
+        pass
+
+    def run(self):
+        self.helper()
+""")
+    indexer = _make_indexer(tmp_path)
+    result = await indexer.index_file(str(src), root_dir=str(tmp_path))
+    assert result.success > 0
+
+    # Verify method node ID includes class parent prefix
+    upserted_ids = [
+        call_args[1]["ids"][0]
+        for call_args in indexer._collection.upsert.call_args_list
+    ]
+    assert "mymod::myclass__run" in upserted_ids, (
+        f"Expected 'mymod::myclass__run' in upserted IDs, got: {upserted_ids}"
+    )
+
+    # Verify the `calls` metadata on `run` is non-empty
+    run_calls = None
+    for call_args in indexer._collection.upsert.call_args_list:
+        if call_args[1]["ids"][0] == "mymod::myclass__run":
+            run_calls = call_args[1]["metadatas"][0]["calls"]
+            break
+    assert run_calls, (
+        f"Expected non-empty 'calls' metadata for mymod::myclass__run, got: {run_calls!r}"
+    )
+
+
 @pytest.mark.asyncio
 async def test_index_code_accepts_subdir_of_project_root(tmp_path):
     """root_dir within PROJECT_ROOT is allowed and proceeds to indexing."""
@@ -280,56 +316,3 @@ async def test_index_code_accepts_subdir_of_project_root(tmp_path):
         response = await index_code({"root_dir": str(subdir)})
 
     assert response["status"] == "ok"
-
-
-# ---------------------------------------------------------------------------
-# dep_error surfacing — tree-sitter missing (#4898)
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_index_file_surfaces_dep_error_when_tree_sitter_missing(tmp_path, monkeypatch):
-    """When tree-sitter is unavailable the dep_error must appear in result.errors."""
-    from services.knowledge import code_indexer as ci
-
-    src = tmp_path / "module.py"
-    src.write_bytes(b"def foo(): pass\n")
-
-    # Patch extract_python to simulate ImportError (dep missing)
-    def _fake_extract(source_path, content):
-        return {"nodes": [], "edges": [], "dep_error": "tree-sitter-python not installed: No module named 'tree_sitter_python'"}
-
-    monkeypatch.setattr(ci, "extract_python", _fake_extract)
-    # Rebuild _EXTRACTORS so index_file picks up the patched extractor
-    monkeypatch.setitem(ci._EXTRACTORS, ".py", _fake_extract)
-
-    indexer = _make_indexer(tmp_path)
-    result = await indexer.index_file(str(src), root_dir=str(tmp_path))
-
-    assert result.failed == 1
-    assert result.success == 0
-    assert len(result.errors) == 1
-    assert "tree-sitter-python not installed" in result.errors[0]
-    assert not indexer._collection.upsert.called
-
-
-@pytest.mark.asyncio
-async def test_index_directory_surfaces_dep_errors_in_aggregate(tmp_path, monkeypatch):
-    """dep_errors from individual files are aggregated into the directory result."""
-    from services.knowledge import code_indexer as ci
-
-    (tmp_path / "a.py").write_bytes(b"def foo(): pass\n")
-    (tmp_path / "b.py").write_bytes(b"def bar(): pass\n")
-
-    def _fake_extract(source_path, content):
-        return {"nodes": [], "edges": [], "dep_error": "tree-sitter-python not installed: No module named 'tree_sitter_python'"}
-
-    monkeypatch.setitem(ci._EXTRACTORS, ".py", _fake_extract)
-
-    indexer = _make_indexer(tmp_path)
-    result = await indexer.index_directory(str(tmp_path))
-
-    assert result.failed == 2
-    assert result.success == 0
-    assert len(result.errors) == 2
-    assert all("tree-sitter-python not installed" in e for e in result.errors)

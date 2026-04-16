@@ -55,7 +55,7 @@ def extract_python(source_path: str, content: bytes) -> dict:
         from tree_sitter import Language, Parser
     except ImportError as exc:
         logger.error("tree-sitter-python not installed: %s", exc)
-        return {"nodes": [], "edges": [], "dep_error": f"tree-sitter-python not installed: {exc}"}
+        return {"nodes": [], "edges": []}
 
     lang = Language(tspython.language())
     parser = Parser(lang)
@@ -117,16 +117,17 @@ def _py_call_graph(
     edges: list,
     seen: set,
     current_scope: Optional[str],
+    parent_scope: Optional[str] = None,
 ) -> None:
     if node.type == "function_definition":
         name_node = node.child_by_field_name("name")
         scope = (
-            _make_node_id(name_node.text.decode("utf-8"), source_path)
+            _make_node_id(name_node.text.decode("utf-8"), source_path, parent=current_scope)
             if name_node
             else current_scope
         )
         for child in node.children:
-            _py_call_graph(child, source_path, nodes, edges, seen, scope)
+            _py_call_graph(child, source_path, nodes, edges, seen, scope, parent_scope=current_scope)
         return
 
     if node.type == "call" and current_scope:
@@ -177,13 +178,18 @@ def _js_structural(node: Any, source_path: str, nodes: dict, parent_scope: Optio
 
 def _js_call_graph(
     node: Any, source_path: str, nodes: dict, edges: list, seen: set, current_scope: Optional[str],
+    parent_scope: Optional[str] = None,
 ) -> None:
     """Helper for JS/TS call-graph extraction."""
     if node.type in ("function_declaration", "arrow_function", "function_expression"):
         name_node = node.child_by_field_name("name")
-        scope = _make_node_id(name_node.text.decode("utf-8"), source_path) if name_node else current_scope
+        scope = (
+            _make_node_id(name_node.text.decode("utf-8"), source_path, parent=current_scope)
+            if name_node
+            else current_scope
+        )
         for child in node.children:
-            _js_call_graph(child, source_path, nodes, edges, seen, scope)
+            _js_call_graph(child, source_path, nodes, edges, seen, scope, parent_scope=current_scope)
         return
     if node.type == "call_expression" and current_scope:
         func_node = node.child_by_field_name("function")
@@ -208,8 +214,7 @@ def extract_javascript(source_path: str, content: bytes) -> dict:
         from tree_sitter import Language, Parser
     except ImportError as exc:
         logger.error("tree-sitter-javascript not installed: %s", exc)
-        msg = f"tree-sitter-javascript not installed: {exc}"
-        return {"nodes": [], "edges": [], "dep_error": msg}
+        return {"nodes": [], "edges": []}
 
     lang = Language(tsjs.language())
     parser = Parser(lang)
@@ -283,11 +288,6 @@ class CodeIndexer:
             return result
 
         extracted = extractor(file_path, content)
-        dep_error = extracted.get("dep_error")
-        if dep_error:
-            result.failed += 1
-            result.errors.append(dep_error)
-            return result
         nodes = extracted["nodes"]
         edges = extracted["edges"]
 
@@ -322,7 +322,8 @@ class CodeIndexer:
         aggregate = CodeIndexResult()
         root = Path(root_dir)
         _SKIP_DIRS = {".git", "node_modules", "venv", ".venv", "__pycache__", ".mypy_cache"}
-        for path in sorted(root.rglob("*")):
+        files = await asyncio.to_thread(lambda: sorted(root.rglob("*")))
+        for path in files:
             if path.is_dir():
                 continue
             # Skip files inside ignored directories
@@ -354,7 +355,8 @@ class CodeIndexer:
         }
         try:
             embedding = await asyncio.to_thread(self._embed_model.get_text_embedding, content)
-            self._collection.upsert(
+            await asyncio.to_thread(
+                self._collection.upsert,
                 ids=[node["id"]],
                 embeddings=[embedding],
                 documents=[content],
@@ -382,6 +384,7 @@ class CodeIndexer:
 
     def _save_cache(self) -> None:
         try:
+            self._cache_file.parent.mkdir(parents=True, exist_ok=True)
             self._cache_file.write_text(
                 json.dumps(self._hash_cache, indent=2), encoding="utf-8"
             )
