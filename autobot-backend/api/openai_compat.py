@@ -46,6 +46,10 @@ class OAIMessage(BaseModel):
     name: Optional[str] = None
 
 
+class OAIStreamOptions(BaseModel):
+    include_usage: bool = False
+
+
 class ChatCompletionRequest(BaseModel):
     model: str = "autobot-default"
     messages: List[OAIMessage]
@@ -56,6 +60,7 @@ class ChatCompletionRequest(BaseModel):
     presence_penalty: float = 0.0
     stop: Optional[List[str]] = None
     stream: bool = False
+    stream_options: Optional[OAIStreamOptions] = None
     n: int = Field(default=1, ge=1)
     user: Optional[str] = None
 
@@ -103,6 +108,7 @@ class ChatCompletionChunk(BaseModel):
     created: int
     model: str
     choices: List[OAIStreamChoice]
+    usage: Optional[OAIUsage] = None
 
 
 class OAIModelCard(BaseModel):
@@ -161,14 +167,31 @@ def _make_completion_id() -> str:
     return f"chatcmpl-{uuid4().hex[:24]}"
 
 
+def _estimate_tokens(text: str) -> int:
+    """Approximate token count (OpenAI convention: 1 token ≈ 0.75 words).
+
+    Used for streaming usage when the provider does not return native token
+    counts per chunk. Slight overestimate so downstream budgeting is safe.
+    """
+    if not text:
+        return 0
+    import math
+
+    return math.ceil(len(text.split()) * 1.3)
+
+
 async def _stream_generator(
     provider,
     llm_request: LLMRequest,
     completion_id: str,
     model_name: str,
+    *,
+    include_usage: bool = False,
+    prompt_text: str = "",
 ) -> AsyncIterator[str]:
     """Yield SSE lines for a streaming completion."""
     created = int(time.time())
+    completion_text_parts: List[str] = []
 
     # Opening chunk — role delta
     role_chunk = ChatCompletionChunk(
@@ -188,6 +211,7 @@ async def _stream_generator(
     async for text_chunk in provider.stream_completion(llm_request):
         if not text_chunk:
             continue
+        completion_text_parts.append(text_chunk)
         chunk = ChatCompletionChunk(
             id=completion_id,
             created=created,
@@ -216,6 +240,24 @@ async def _stream_generator(
         ],
     )
     yield f"data: {final_chunk.model_dump_json()}\n\n"
+
+    # Usage chunk (OpenAI spec: emit only when stream_options.include_usage=true)
+    if include_usage:
+        prompt_tokens = _estimate_tokens(prompt_text)
+        completion_tokens = _estimate_tokens("".join(completion_text_parts))
+        usage_chunk = ChatCompletionChunk(
+            id=completion_id,
+            created=created,
+            model=model_name,
+            choices=[],
+            usage=OAIUsage(
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=prompt_tokens + completion_tokens,
+            ),
+        )
+        yield f"data: {usage_chunk.model_dump_json()}\n\n"
+
     yield "data: [DONE]\n\n"
 
 
@@ -248,8 +290,17 @@ async def chat_completions(
     resolved_model = body.model if body.model != "autobot-default" else provider.provider_name
 
     if body.stream:
+        include_usage = bool(body.stream_options and body.stream_options.include_usage)
+        prompt_text = "\n".join(m.content for m in body.messages)
         return StreamingResponse(
-            _stream_generator(provider, llm_request, completion_id, resolved_model),
+            _stream_generator(
+                provider,
+                llm_request,
+                completion_id,
+                resolved_model,
+                include_usage=include_usage,
+                prompt_text=prompt_text,
+            ),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",

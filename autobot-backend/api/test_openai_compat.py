@@ -170,3 +170,84 @@ async def test_chat_completions_streaming_returns_sse_done():
         chunk = json.loads(raw_json)
         assert chunk["object"] == "chat.completion.chunk"
         assert "choices" in chunk
+
+
+def _stream_post(payload):
+    """Helper that issues the streaming POST and returns decoded SSE text."""
+    mock_registry = _make_mock_registry()
+
+    async def _run():
+        with patch(
+            "api.openai_compat.get_provider_registry", return_value=mock_registry
+        ), patch("api.openai_compat._get_user", return_value=_SYNTHETIC_USER):
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                async with client.stream(
+                    "POST", "/v1/chat/completions", json=payload
+                ) as response:
+                    assert response.status_code == 200
+                    return (await response.aread()).decode("utf-8")
+
+    return _run
+
+
+def _parse_sse_chunks(text: str):
+    """Return the list of parsed JSON chunks (excluding [DONE])."""
+    return [
+        json.loads(line[len("data: "):])
+        for line in text.splitlines()
+        if line.startswith("data: ") and line.strip() != "data: [DONE]"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_streaming_emits_usage_when_include_usage_true():
+    """When stream_options.include_usage=true, the final chunk before [DONE] must carry usage (#5019)."""
+    text = await _stream_post(
+        {
+            "model": "autobot-model-1",
+            "messages": [{"role": "user", "content": "Hello world"}],
+            "stream": True,
+            "stream_options": {"include_usage": True},
+        }
+    )()
+    assert "data: [DONE]" in text
+    chunks = _parse_sse_chunks(text)
+    usage_chunks = [c for c in chunks if c.get("usage") is not None]
+    assert len(usage_chunks) == 1, "Expected exactly one chunk with usage"
+    usage = usage_chunks[0]["usage"]
+    assert usage["prompt_tokens"] >= 1
+    assert usage["completion_tokens"] >= 1
+    assert usage["total_tokens"] == usage["prompt_tokens"] + usage["completion_tokens"]
+    # Usage chunk must be the last chunk before [DONE]
+    assert chunks[-1] is usage_chunks[0]
+
+
+@pytest.mark.asyncio
+async def test_streaming_omits_usage_when_include_usage_false():
+    """stream_options.include_usage=false → no usage chunk (#5019)."""
+    text = await _stream_post(
+        {
+            "model": "autobot-model-1",
+            "messages": [{"role": "user", "content": "Hi"}],
+            "stream": True,
+            "stream_options": {"include_usage": False},
+        }
+    )()
+    chunks = _parse_sse_chunks(text)
+    assert all(c.get("usage") is None for c in chunks)
+
+
+@pytest.mark.asyncio
+async def test_streaming_omits_usage_when_stream_options_absent():
+    """stream_options absent entirely → backwards compat: no usage chunk (#5019)."""
+    text = await _stream_post(
+        {
+            "model": "autobot-model-1",
+            "messages": [{"role": "user", "content": "Hi"}],
+            "stream": True,
+        }
+    )()
+    chunks = _parse_sse_chunks(text)
+    assert all(c.get("usage") is None for c in chunks)
