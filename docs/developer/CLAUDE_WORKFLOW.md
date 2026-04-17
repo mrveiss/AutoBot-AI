@@ -58,7 +58,7 @@ Bulk: `scripts/cleanup-worktrees.sh --dry-run` then `scripts/cleanup-worktrees.s
 
 **Pre-Flight Checks (before ANY code changes):**
 1. `git branch --show-current`
-2. `git status`
+2. `git status` — **if any files are dirty, commit or stash them NOW before spawning subagents or starting batch work.** Uncommitted edits are silently discarded when a subagent commits and upstream is merged. (See #4969.)
 3. `git stash list` — if present, ask user
 4. `git fetch origin Dev_new_gui && git log --oneline origin/Dev_new_gui -3`
 
