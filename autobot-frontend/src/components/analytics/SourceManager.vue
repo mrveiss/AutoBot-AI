@@ -121,7 +121,7 @@
               <button
                 class="btn-action btn-action--share"
                 @click="$emit('share-source', source)"
-                :title="$t('analytics.sources.share')"
+                :title="$t('common.share')"
               >
                 <i class="fas fa-share-alt"></i>
               </button>
