@@ -11,6 +11,7 @@
  * Issue #184: Split oversized Vue components
  */
 
+export { default as ManPageManager } from './ManPageManager.vue'
 export { default as MachineProfilePanel } from './MachineProfilePanel.vue'
 export { default as IntegrationStatusPanel } from './IntegrationStatusPanel.vue'
 export { default as IntegrationActionsPanel } from './IntegrationActionsPanel.vue'
