@@ -1777,15 +1777,9 @@ def get_orchestrator_sync() -> Orchestrator:
 # Module Exports
 # ============================================================================
 
-# Issue #5040: Backward-compat alias so any import of ConsolidatedOrchestrator still works
-# during the transition. Remove when all call-sites are updated.
-ConsolidatedOrchestrator = Orchestrator
-
 __all__ = [
     # Main orchestrator class
     "Orchestrator",
-    # Backward-compat alias (Issue #5040 — remove after all call-sites updated)
-    "ConsolidatedOrchestrator",
     "OrchestratorConfig",
     # Enums
     "TaskPriority",

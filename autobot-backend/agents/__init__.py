@@ -14,7 +14,6 @@ __all__ = [
     "get_chat_agent",
     "get_rag_agent",
     "get_distributed_agent_coordinator",
-    "get_agent_orchestrator",
     "AgentType",
     "ClassificationAgent",
     "get_enhanced_system_commands_agent",

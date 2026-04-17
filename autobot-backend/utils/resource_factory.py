@@ -91,15 +91,6 @@ class ResourceFactory:
         return get_orchestrator_sync()
 
     @staticmethod
-    async def get_enhanced_orchestrator(request: Request = None):
-        """Backward-compat alias for get_orchestrator.
-
-        Issue #5038: Renamed to get_orchestrator; this alias prevents breakage
-        during the transition period.
-        """
-        return await ResourceFactory.get_orchestrator(request)
-
-    @staticmethod
     async def get_chat_history_manager(request: Request = None):
         """Get or create ChatHistoryManager instance with app.state caching"""
         try:

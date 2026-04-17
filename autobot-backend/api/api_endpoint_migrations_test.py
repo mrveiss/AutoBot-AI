@@ -20398,7 +20398,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         source = inspect.getsource(orchestration.create_workflow_plan)
 
         # Check plan creation operations preserved
-        self.assertIn("enhanced_orchestrator.create_workflow_plan", source)
+        self.assertIn("orchestrator.create_workflow_plan", source)
         self.assertIn("plan_id", source)
         self.assertIn("strategy", source)
         self.assertIn("estimated_duration", source)

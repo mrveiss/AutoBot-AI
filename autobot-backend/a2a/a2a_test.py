@@ -657,7 +657,7 @@ class TestExecuteA2aTaskEvalGate:
 
     Mocks:
       - get_task_manager() → in-process TaskManager with mock Redis
-      - get_agent_orchestrator() → mock that returns a controllable result
+      - get_distributed_agent_coordinator() → mock that returns a controllable result
       - evaluate_task_output() → tested separately; here we mock to control pass/fail
     """
 
@@ -689,7 +689,7 @@ class TestExecuteA2aTaskEvalGate:
         )
         # Stub heavy modules so the late import in task_executor succeeds
         mock_ao_module = MagicMock()
-        mock_ao_module.get_agent_orchestrator = MagicMock(return_value=mock_orchestrator)
+        mock_ao_module.get_distributed_agent_coordinator = MagicMock(return_value=mock_orchestrator)
 
         passed_eval = EvalResult(passed=True, confidence=0.9, eval_reason="")
 
@@ -723,7 +723,7 @@ class TestExecuteA2aTaskEvalGate:
             return_value={"response": "I'm not sure about this."}
         )
         mock_ao_module = MagicMock()
-        mock_ao_module.get_agent_orchestrator = MagicMock(return_value=mock_orchestrator)
+        mock_ao_module.get_distributed_agent_coordinator = MagicMock(return_value=mock_orchestrator)
 
         failed_eval = EvalResult(
             passed=False,

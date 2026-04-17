@@ -19,16 +19,15 @@ from auth_middleware import check_admin_permission, get_current_user
 try:
     from orchestrator import create_and_execute_workflow, get_orchestrator_sync
 
-    # Issue #5040: Use the single Orchestrator conductor instead of the removed
-    # EnhancedMultiAgentOrchestrator singleton. The shared singleton provides
-    # all multi-agent workflow methods (create_workflow_plan, execute_workflow,
+    # Issue #5040: Single Orchestrator conductor; provides all multi-agent
+    # workflow methods (create_workflow_plan, execute_workflow,
     # get_performance_report, get_agent_recommendations, etc.).
-    enhanced_orchestrator = get_orchestrator_sync()
+    orchestrator = get_orchestrator_sync()
     _ORCHESTRATOR_AVAILABLE = True
 except ImportError:
     _ORCHESTRATOR_AVAILABLE = False
     create_and_execute_workflow = None
-    enhanced_orchestrator = None
+    orchestrator = None
     logging.getLogger(__name__).warning(
         "orchestrator module not available"
     )
@@ -131,7 +130,7 @@ async def execute_workflow(
 
         # Update max parallel tasks if specified
         if request.max_parallel_tasks:
-            enhanced_orchestrator.max_parallel_tasks = request.max_parallel_tasks
+            orchestrator.max_parallel_tasks = request.max_parallel_tasks
 
         # Create and execute workflow
         result = await create_and_execute_workflow(request.goal, request.context)
@@ -172,7 +171,7 @@ async def create_workflow_plan(
         logger.info("Creating workflow plan for: %s", request.goal)
 
         # Create plan
-        plan = await enhanced_orchestrator.create_workflow_plan(
+        plan = await orchestrator.create_workflow_plan(
             request.goal, request.context
         )
 
@@ -236,7 +235,7 @@ async def get_agent_performance(
             content={"status": "success", "performance_data": {}},
         )
     try:
-        report = enhanced_orchestrator.get_performance_report()
+        report = orchestrator.get_performance_report()
 
         return JSONResponse(
             status_code=200, content={"status": "success", "performance_data": report}
@@ -283,7 +282,7 @@ async def recommend_agents(
             )
 
         # Get recommendations
-        recommendations = await enhanced_orchestrator.get_agent_recommendations(
+        recommendations = await orchestrator.get_agent_recommendations(
             request.task_type, capabilities_needed
         )
 
@@ -329,7 +328,7 @@ async def get_active_workflows(
     try:
         active_workflows = []
 
-        for workflow_id, plan in enhanced_orchestrator.active_workflows.items():
+        for workflow_id, plan in orchestrator.active_workflows.items():
             active_workflows.append(
                 {
                     "workflow_id": workflow_id,
@@ -426,19 +425,19 @@ async def get_agent_capabilities(
         )
     try:
         # Get capability coverage
-        coverage = enhanced_orchestrator._calculate_capability_coverage()
+        coverage = orchestrator._calculate_capability_coverage()
 
         # Get detailed agent capabilities
         agent_details = {}
-        for agent, caps in enhanced_orchestrator.agent_capabilities.items():
+        for agent, caps in orchestrator.agent_capabilities.items():
             agent_details[agent] = {
                 "capabilities": [cap.value for cap in caps],
                 "performance": {
                     "reliability": (
-                        enhanced_orchestrator.agent_performance[agent].reliability_score
+                        orchestrator.agent_performance[agent].reliability_score
                     ),
                     "total_tasks": (
-                        enhanced_orchestrator.agent_performance[agent].total_tasks
+                        orchestrator.agent_performance[agent].total_tasks
                     ),
                 },
             }
@@ -482,15 +481,15 @@ async def get_orchestration_status(
             },
         )
     try:
-        performance_report = enhanced_orchestrator.get_performance_report()
+        performance_report = orchestrator.get_performance_report()
 
         return JSONResponse(
             status_code=200,
             content={
                 "status": "operational",
                 "active_workflows": performance_report.get("active_workflows", 0),
-                "max_parallel_tasks": enhanced_orchestrator.max_parallel_tasks,
-                "total_agents": len(enhanced_orchestrator.agent_capabilities),
+                "max_parallel_tasks": orchestrator.max_parallel_tasks,
+                "total_agents": len(orchestrator.agent_capabilities),
                 "capabilities": {
                     "execution_strategies": [
                         "sequential",

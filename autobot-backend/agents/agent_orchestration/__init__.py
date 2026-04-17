@@ -16,9 +16,7 @@ Provides modular agent orchestration with distributed and legacy support.
 from .agent_execution import AgentExecutor
 from .coordinator import (
     DistributedAgentCoordinator,
-    DistributedAgentCoordinator as AgentOrchestrator,
     get_distributed_agent_coordinator,
-    get_distributed_agent_coordinator as get_agent_orchestrator,
 )
 from .distributed_management import DistributedAgentManager
 from .routing import AgentRouter
@@ -71,7 +69,4 @@ __all__ = [
     # Issue #5040: renamed to DistributedAgentCoordinator
     "DistributedAgentCoordinator",
     "get_distributed_agent_coordinator",
-    # Backward-compat aliases
-    "AgentOrchestrator",
-    "get_agent_orchestrator",
 ]
