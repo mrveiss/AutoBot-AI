@@ -320,7 +320,7 @@ jobs:
         cat DEPLOYMENT_SUMMARY.md
 
     - name: Upload deployment artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: deployment-summary
         path: DEPLOYMENT_SUMMARY.md
