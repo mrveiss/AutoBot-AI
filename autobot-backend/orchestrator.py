@@ -40,6 +40,7 @@ from orchestration import (
     WorkflowExecutor,
     WorkflowPlanner,
 )
+from orchestration.primitives import bounded_gather
 from task_execution_tracker import Priority, TaskType, task_tracker
 
 # Import shared agent selection utilities (Issue #292 - Eliminate duplicate code)
@@ -849,8 +850,8 @@ class Orchestrator:
             for agent_name in agent_names
         ]
 
-        results = await asyncio.gather(
-            *[task for _, task in tasks], return_exceptions=True
+        results = await bounded_gather(
+            [coro for _, coro in tasks], self.max_parallel_tasks
         )
 
         agent_results = {}

@@ -8,6 +8,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
+from orchestration.primitives import bounded_gather
+
 logger = logging.getLogger(__name__)
 
 
@@ -90,9 +92,9 @@ class SubagentDispatcher:
             Dictionary with results keyed by task_id.
         """
         results: Dict[str, Any] = {}
-        pending = []
+        pending: List[tuple[str, Any]] = []
 
-        for task in tasks[: self.max_parallel]:
+        for task in tasks:
             try:
                 coro = asyncio.wait_for(
                     self._execute_task(task),
@@ -105,7 +107,7 @@ class SubagentDispatcher:
 
         if pending:
             task_ids, coros = zip(*pending)
-            task_results = await asyncio.gather(*coros, return_exceptions=True)
+            task_results = await bounded_gather(list(coros), self.max_parallel)
             for task_id, result in zip(task_ids, task_results):
                 results[task_id] = result
 
