@@ -136,11 +136,11 @@ describe('useKnowledgeBase', () => {
     })
 
     it('should throw error when stats fetch fails', async () => {
-      vi.mocked(apiClient.get).mockResolvedValue(null)
+      vi.mocked(apiClient.get).mockRejectedValue(new Error('HTTP 500: Server error'))
 
       const { fetchStats } = useKnowledgeBase()
 
-      await expect(fetchStats()).rejects.toThrow('Failed to fetch stats')
+      await expect(fetchStats()).rejects.toThrow('HTTP 500')
     })
   })
 
@@ -199,11 +199,11 @@ describe('useKnowledgeBase', () => {
     })
 
     it('should throw error for invalid category', async () => {
-      vi.mocked(apiClient.get).mockResolvedValue(null)
+      vi.mocked(apiClient.get).mockRejectedValue(new Error('HTTP 404: Category not found'))
 
       const { fetchCategory } = useKnowledgeBase()
 
-      await expect(fetchCategory('nonexistent')).rejects.toThrow('Failed to fetch category')
+      await expect(fetchCategory('nonexistent')).rejects.toThrow('HTTP 404')
     })
   })
 
@@ -350,11 +350,11 @@ describe('useKnowledgeBase', () => {
     })
 
     it('should throw error when search fails', async () => {
-      vi.mocked(apiClient.post).mockResolvedValue(null)
+      vi.mocked(apiClient.post).mockRejectedValue(new Error('HTTP 500: Search backend error'))
 
       const { searchKnowledge } = useKnowledgeBase()
 
-      await expect(searchKnowledge('test')).rejects.toThrow('Search failed')
+      await expect(searchKnowledge('test')).rejects.toThrow('HTTP 500')
     })
   })
 
