@@ -178,7 +178,9 @@ class TestLinkPipelineHttp:
             "media.link.pipeline._BS4_AVAILABLE", True
         ), patch(
             "media.link.pipeline.aiohttp.ClientSession", return_value=mock_session
-        ), patch.object(pipe, "_parse_html", return_value=_parsed):
+        ), patch.object(pipe, "_parse_html", return_value=_parsed), patch.object(
+            pipe, "_try_jina", new=AsyncMock(return_value=None)
+        ):
             result = await pipe._fetch_and_parse("https://example.com", {})
 
         assert result["type"] == "link_fetch"
@@ -199,7 +201,9 @@ class TestLinkPipelineHttp:
             "media.link.pipeline._BS4_AVAILABLE", True
         ), patch(
             "media.link.pipeline.aiohttp.ClientSession", return_value=mock_session
-        ), patch.object(pipe, "_parse_html", return_value=_parsed):
+        ), patch.object(pipe, "_parse_html", return_value=_parsed), patch.object(
+            pipe, "_try_jina", new=AsyncMock(return_value=None)
+        ):
             await pipe._fetch_and_parse("https://example.com", {})
 
         _call_kwargs = mock_session.get.call_args.kwargs
@@ -216,7 +220,9 @@ class TestLinkPipelineHttp:
             "media.link.pipeline._BS4_AVAILABLE", True
         ), patch(
             "media.link.pipeline.aiohttp.ClientSession", return_value=mock_session
-        ), patch.object(pipe, "_parse_html", return_value=_parsed):
+        ), patch.object(pipe, "_parse_html", return_value=_parsed), patch.object(
+            pipe, "_try_jina", new=AsyncMock(return_value=None)
+        ):
             await pipe._fetch_and_parse(
                 "https://internal.example.com", {"allow_self_signed": True}
             )
@@ -245,8 +251,140 @@ class TestLinkPipelineHttp:
             "media.link.pipeline._BS4_AVAILABLE", True
         ), patch(
             "media.link.pipeline.aiohttp.ClientSession", return_value=mock_session
-        ):
+        ), patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)):
             result = await pipe._fetch_and_parse("https://example.com/404", {})
 
         assert result["processing_status"] == "error"
         assert "404" in result["error"]
+
+
+class TestLinkPipelineJina:
+    """Tests for Jina Reader fast-path."""
+
+    def _make_jina_mock_session(self, status=200, content="Page title\n\nBody text here."):
+        """Build a mock aiohttp ClientSession for Jina fetch tests."""
+        mock_response = AsyncMock()
+        mock_response.status = status
+        mock_response.text = AsyncMock(return_value=content)
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = AsyncMock()
+        mock_session.get = MagicMock(return_value=mock_response)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+        return mock_session
+
+    @pytest.mark.asyncio
+    async def test_jina_200_returns_jina_result(self):
+        """Jina 200 response is returned directly without BS4 fallback."""
+        pipe = LinkPipeline()
+        mock_session = self._make_jina_mock_session(status=200, content="Title\n\nSome content text here.")
+
+        with patch("media.link.pipeline.aiohttp.ClientSession", return_value=mock_session):
+            result = await pipe._try_jina("https://example.com")
+
+        assert result == "Title\n\nSome content text here."
+
+    @pytest.mark.asyncio
+    async def test_jina_result_structure(self):
+        """_jina_result produces the correct structure."""
+        pipe = LinkPipeline()
+        content = "My Title\n\nBody paragraph with many words here."
+        result = pipe._jina_result("https://example.com", content, {"key": "val"})
+        assert result["type"] == "link_fetch"
+        assert result["url"] == "https://example.com"
+        assert result["title"] == "My Title"
+        assert result["content"] == content
+        assert result["source"] == "jina"
+        assert result["confidence"] == 0.9
+        assert result["word_count"] > 0
+
+    @pytest.mark.asyncio
+    async def test_fetch_uses_jina_fast_path_for_public_url(self):
+        """_fetch_and_parse uses Jina fast-path for public HTTPS URL and skips BS4."""
+        pipe = LinkPipeline()
+        jina_content = "Article title\n\nArticle body text."
+
+        with patch.object(pipe, "_try_jina", new=AsyncMock(return_value=jina_content)):
+            result = await pipe._fetch_and_parse("https://example.com/article", {})
+
+        assert result["source"] == "jina"
+        assert result["content"] == jina_content
+
+    @pytest.mark.asyncio
+    async def test_jina_non200_falls_back_to_beautifulsoup(self):
+        """Non-200 Jina response triggers BeautifulSoup fallback."""
+        pipe = LinkPipeline()
+        mock_session = self._make_jina_mock_session(status=429)
+
+        bs4_result = {"type": "link_fetch", "confidence": 0.9, "url": "https://example.com"}
+
+        with patch("media.link.pipeline.aiohttp.ClientSession", return_value=mock_session), \
+             patch.object(pipe, "_parse_html", return_value=bs4_result):
+            # _try_jina returns None on non-200, triggering BS4 fallback
+            jina_result = await pipe._try_jina("https://example.com")
+            assert jina_result is None
+
+        with patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)), \
+             patch("media.link.pipeline.aiohttp.ClientSession", return_value=self._make_mock_bs4_session()), \
+             patch.object(pipe, "_parse_html", return_value=bs4_result):
+            result = await pipe._fetch_and_parse("https://example.com", {})
+
+        assert result["type"] == "link_fetch"
+        assert result.get("source") != "jina"
+
+    @pytest.mark.asyncio
+    async def test_jina_timeout_falls_back_to_beautifulsoup(self):
+        """Jina timeout triggers BeautifulSoup fallback."""
+        import aiohttp as _aiohttp
+
+        pipe = LinkPipeline()
+        bs4_result = {"type": "link_fetch", "confidence": 0.9, "url": "https://example.com"}
+
+        async def _raise_timeout(*args, **kwargs):
+            raise _aiohttp.ServerTimeoutError()
+
+        with patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)), \
+             patch("media.link.pipeline.aiohttp.ClientSession", return_value=self._make_mock_bs4_session()), \
+             patch.object(pipe, "_parse_html", return_value=bs4_result):
+            result = await pipe._fetch_and_parse("https://example.com", {})
+
+        assert result["type"] == "link_fetch"
+        assert result.get("source") != "jina"
+
+    @pytest.mark.asyncio
+    async def test_jina_skipped_for_localhost(self):
+        """Jina fast-path is not attempted for localhost URLs."""
+        pipe = LinkPipeline()
+        assert not pipe._is_public_url("http://localhost:8080/page")
+        assert not pipe._is_public_url("http://127.0.0.1/api")
+
+    @pytest.mark.asyncio
+    async def test_jina_skipped_for_private_ip(self):
+        """Jina fast-path is not attempted for private IP URLs."""
+        pipe = LinkPipeline()
+        assert not pipe._is_public_url("http://192.168.1.1/page")
+        assert not pipe._is_public_url("http://10.0.0.5/admin")
+        assert not pipe._is_public_url("http://172.16.0.1/internal")
+
+    def test_is_public_url_accepts_public_https(self):
+        pipe = LinkPipeline()
+        assert pipe._is_public_url("https://example.com/article")
+        assert pipe._is_public_url("http://news.ycombinator.com/")
+
+    def _make_mock_bs4_session(self, status=200):
+        """Helper: mock ClientSession for the BS4 fallback path."""
+        mock_response = AsyncMock()
+        mock_response.url = "https://example.com"
+        mock_response.headers = {"Content-Type": "text/html"}
+        mock_response.text = AsyncMock(return_value=SAMPLE_HTML)
+        mock_response.status = status
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = AsyncMock()
+        mock_session.get = MagicMock(return_value=mock_response)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+        return mock_session
