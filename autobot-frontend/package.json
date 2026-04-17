@@ -29,6 +29,7 @@
     "test:all": "run-s test:unit test:integration test:playwright",
     "build-only": "vite build",
     "type-check": "vue-tsc --noEmit -p tsconfig.app.json",
+    "check:i18n": "node scripts/check-i18n-keys.mjs",
     "lint:oxlint": "oxlint . --fix -D correctness --ignore-path .gitignore",
     "lint:eslint": "eslint . --fix",
     "lint": "run-s lint:*",
