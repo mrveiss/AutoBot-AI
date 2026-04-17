@@ -16,6 +16,7 @@ import urllib.parse
 from pathlib import Path
 
 from celery import Celery
+from celery.schedules import crontab
 
 from autobot_shared.redis_management.types import DATABASE_MAPPING
 from autobot_shared.ssot_config import config as ssot_config
@@ -139,3 +140,52 @@ celery_app.conf.update(
 
 # Auto-discover tasks from tasks module
 celery_app.autodiscover_tasks(["tasks"])
+
+
+# =========================================================================
+# Issue #4455: Periodic knowledge-base cleanup schedule
+# =========================================================================
+
+
+def _crontab_from_string(cron_expr: str) -> crontab:
+    """Parse a 5-field cron string ('m h dom mon dow') into a Celery crontab.
+
+    Falls back to a daily 03:00 UTC schedule if the expression is malformed,
+    logging a warning so misconfiguration does not prevent Beat from starting.
+    """
+    import logging as _logging
+
+    _log = _logging.getLogger(__name__)
+    parts = cron_expr.strip().split()
+    if len(parts) != 5:
+        _log.warning(
+            "Invalid cron expression %r (expected 5 fields); falling back to '0 3 * * *'",
+            cron_expr,
+        )
+        parts = ["0", "3", "*", "*", "*"]
+    minute, hour, day_of_month, month_of_year, day_of_week = parts
+    return crontab(
+        minute=minute,
+        hour=hour,
+        day_of_month=day_of_month,
+        month_of_year=month_of_year,
+        day_of_week=day_of_week,
+    )
+
+
+celery_app.conf.beat_schedule = {
+    "knowledge-cleanup-orphan-documents": {
+        "task": "tasks.cleanup_orphan_documents",
+        "schedule": _crontab_from_string(
+            ssot_config.knowledge_orphan_cleanup_schedule
+        ),
+        "kwargs": {"dry_run": False},
+    },
+    "knowledge-cleanup-generated-files": {
+        "task": "tasks.cleanup_generated_files",
+        "schedule": _crontab_from_string(
+            ssot_config.knowledge_generated_files_cleanup_schedule
+        ),
+        "kwargs": {"dry_run": False},
+    },
+}

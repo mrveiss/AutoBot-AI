@@ -11,8 +11,10 @@ Issue #424: Added periodic task for incremental man page updates.
 
 import asyncio
 import logging
+import os
 import subprocess  # nosec B404 - used for internal script execution only
 import sys
+import time
 
 from celery_app import celery_app
 from type_defs.common import Metadata
@@ -470,6 +472,300 @@ def full_man_page_index(
             "status": "failed",
             "error": "Full man page index failed",
             "message": "Index failed",
+        }
+
+
+# =========================================================================
+# Issue #4455: Knowledge cleanup tasks (orphan documents + generated files)
+# =========================================================================
+
+
+def _collect_orphan_doc_ids(collection) -> tuple[list[str], list[str], int]:
+    """Scan ChromaDB collection and return IDs whose file paths no longer exist.
+
+    Args:
+        collection: ChromaDB collection object.
+
+    Returns:
+        Tuple of (orphan_ids, orphan_paths, scanned_count).
+    """
+    from utils.chromadb_client import get_all_paginated
+
+    page = get_all_paginated(collection, include=["metadatas"])
+    ids = page.get("ids") or []
+    metadatas = page.get("metadatas") or []
+    scanned = len(ids)
+
+    orphan_ids: list[str] = []
+    orphan_paths: list[str] = []
+
+    for doc_id, meta in zip(ids, metadatas):
+        if not meta:
+            continue
+        # Accept either "file_path" (DocIndexerService) or legacy "path" keys
+        path = meta.get("file_path") or meta.get("path")
+        if not path:
+            continue
+        try:
+            if not os.path.exists(path):
+                orphan_ids.append(doc_id)
+                orphan_paths.append(path)
+        except (OSError, ValueError) as e:
+            logger.warning("Path check failed for %s: %s", path, e)
+
+    return orphan_ids, orphan_paths, scanned
+
+
+async def _cleanup_orphan_documents_async(dry_run: bool) -> dict:
+    """Async core for cleanup_orphan_documents Celery task."""
+    from services.knowledge.doc_indexer import get_doc_indexer_service
+
+    service = get_doc_indexer_service()
+    if not getattr(service, "_initialized", False):
+        await service.initialize()
+
+    collection = getattr(service, "_collection", None)
+    if collection is None:
+        logger.warning("DocIndexerService collection unavailable; skipping orphan cleanup")
+        return {
+            "status": "skipped",
+            "reason": "collection_unavailable",
+            "scanned": 0,
+            "removed": 0,
+            "dry_run": dry_run,
+            "sample_removed_paths": [],
+        }
+
+    orphan_ids, orphan_paths, scanned = _collect_orphan_doc_ids(collection)
+
+    if dry_run:
+        for path in orphan_paths:
+            logger.info("[dry_run] Would remove orphan document: %s", path)
+        return {
+            "status": "success",
+            "scanned": scanned,
+            "removed": 0,
+            "dry_run": True,
+            "sample_removed_paths": orphan_paths[:10],
+        }
+
+    removed = 0
+    batch_size = 500
+    for i in range(0, len(orphan_ids), batch_size):
+        batch = orphan_ids[i : i + batch_size]
+        try:
+            collection.delete(ids=batch)
+            removed += len(batch)
+        except Exception as e:
+            logger.error("Failed to delete orphan batch (size=%d): %s", len(batch), e)
+
+    logger.info(
+        "cleanup_orphan_documents: scanned=%d removed=%d",
+        scanned,
+        removed,
+    )
+    return {
+        "status": "success",
+        "scanned": scanned,
+        "removed": removed,
+        "dry_run": False,
+        "sample_removed_paths": orphan_paths[:10],
+    }
+
+
+@celery_app.task(bind=True, name="tasks.cleanup_orphan_documents")
+def cleanup_orphan_documents(self, dry_run: bool = False) -> Metadata:
+    """
+    Remove ChromaDB document entries whose source file no longer exists.
+
+    Issue #4455: Scheduled nightly cleanup of dangling vectors left behind by
+    deleted or moved source files. Metadata field ``file_path`` (or legacy
+    ``path``) is used to resolve the on-disk location.
+
+    Args:
+        self: Celery task instance.
+        dry_run: If True, log orphan entries without deleting them.
+
+    Returns:
+        Dict with cleanup statistics:
+            - status: 'success' | 'skipped' | 'failed'
+            - scanned: Number of documents inspected
+            - removed: Number of documents deleted
+            - dry_run: Whether this was a preview run
+            - sample_removed_paths: Up to 10 sample orphan paths
+    """
+    try:
+        self.update_state(
+            state="PROGRESS",
+            meta={
+                "current": 0,
+                "total": 100,
+                "status": "Scanning ChromaDB for orphan documents...",
+            },
+        )
+        logger.info("Starting orphan document cleanup (dry_run=%s)...", dry_run)
+        return _run_async_in_loop(_cleanup_orphan_documents_async(dry_run))
+    except Exception as e:
+        logger.exception("cleanup_orphan_documents failed: %s", e)
+        return {
+            "status": "failed",
+            "error": str(e),
+            "scanned": 0,
+            "removed": 0,
+            "dry_run": dry_run,
+            "sample_removed_paths": [],
+        }
+
+
+def _resolve_cache_directories() -> list:
+    """Return list of cache/temp directory Paths that cleanup_generated_files manages.
+
+    Only directories that actually exist are returned; the task silently skips
+    missing paths to avoid errors in fresh installs.
+    """
+    from pathlib import Path
+
+    from constants.path_constants import PATH
+
+    candidates = [
+        PATH.DATA_DIR / "cache",
+        PATH.DATA_DIR / "embeddings_cache",
+        PATH.DATA_DIR / "chunks_temp",
+        PATH.DATA_DIR / "exports",
+        PATH.TEMP_DIR,
+    ]
+    # Include legacy hash-cache json file's parent only if explicit dir exists.
+    return [p for p in candidates if isinstance(p, Path) and p.exists()]
+
+
+def _cleanup_files_older_than(
+    directories: list,
+    cutoff_ts: float,
+    dry_run: bool,
+) -> tuple[int, int, int]:
+    """Walk directories, delete files older than cutoff_ts (mtime).
+
+    Args:
+        directories: List of Path objects to walk.
+        cutoff_ts: Unix timestamp; files with mtime < cutoff_ts are stale.
+        dry_run: If True, log what would be deleted without removing.
+
+    Returns:
+        Tuple of (scanned_count, removed_count, bytes_freed).
+    """
+    scanned = 0
+    removed = 0
+    bytes_freed = 0
+
+    for directory in directories:
+        if not directory.exists():
+            continue
+        for file_path in directory.rglob("*"):
+            if not file_path.is_file():
+                continue
+            scanned += 1
+            try:
+                stat = file_path.stat()
+            except OSError as e:
+                logger.warning("Stat failed for %s: %s", file_path, e)
+                continue
+            if stat.st_mtime >= cutoff_ts:
+                continue
+            if dry_run:
+                logger.info(
+                    "[dry_run] Would remove stale cache file: %s (%d bytes)",
+                    file_path,
+                    stat.st_size,
+                )
+                continue
+            try:
+                file_path.unlink()
+                removed += 1
+                bytes_freed += stat.st_size
+            except OSError as e:
+                logger.warning("Failed to delete %s: %s", file_path, e)
+
+    return scanned, removed, bytes_freed
+
+
+@celery_app.task(bind=True, name="tasks.cleanup_generated_files")
+def cleanup_generated_files(
+    self,
+    dry_run: bool = False,
+    ttl_days: int | None = None,
+) -> Metadata:
+    """
+    Delete stale generated cache/temp files older than the configured TTL.
+
+    Issue #4455: Scheduled nightly cleanup of cached embeddings, chunk
+    intermediates, export artefacts, and other generated files that accumulate
+    indefinitely under ``PATH.DATA_DIR`` and ``PATH.TEMP_DIR``.
+
+    Args:
+        self: Celery task instance.
+        dry_run: If True, log removal candidates without deleting them.
+        ttl_days: Override for ``KNOWLEDGE_CACHE_TTL_DAYS`` from ssot_config.
+
+    Returns:
+        Dict with cleanup statistics:
+            - status: 'success' | 'failed'
+            - scanned: Number of files inspected
+            - removed: Number of files deleted
+            - bytes_freed: Total bytes reclaimed
+            - dry_run: Whether this was a preview run
+            - ttl_days: Effective TTL applied
+    """
+    from autobot_shared.ssot_config import config as ssot_config
+
+    effective_ttl = ttl_days if ttl_days is not None else ssot_config.knowledge_cache_ttl_days
+    try:
+        self.update_state(
+            state="PROGRESS",
+            meta={
+                "current": 0,
+                "total": 100,
+                "status": f"Scanning generated files older than {effective_ttl} days...",
+            },
+        )
+        logger.info(
+            "Starting generated-file cleanup (dry_run=%s, ttl_days=%d)...",
+            dry_run,
+            effective_ttl,
+        )
+
+        directories = _resolve_cache_directories()
+        cutoff_ts = time.time() - (effective_ttl * 86400)
+
+        scanned, removed, bytes_freed = _cleanup_files_older_than(
+            directories,
+            cutoff_ts,
+            dry_run,
+        )
+
+        logger.info(
+            "cleanup_generated_files: scanned=%d removed=%d bytes_freed=%d",
+            scanned,
+            removed,
+            bytes_freed,
+        )
+        return {
+            "status": "success",
+            "scanned": scanned,
+            "removed": removed,
+            "bytes_freed": bytes_freed,
+            "dry_run": dry_run,
+            "ttl_days": effective_ttl,
+        }
+    except Exception as e:
+        logger.exception("cleanup_generated_files failed: %s", e)
+        return {
+            "status": "failed",
+            "error": str(e),
+            "scanned": 0,
+            "removed": 0,
+            "bytes_freed": 0,
+            "dry_run": dry_run,
+            "ttl_days": effective_ttl,
         }
 
 
