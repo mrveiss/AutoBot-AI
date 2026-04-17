@@ -372,6 +372,22 @@ function onApiKeysSaved(): void {
   .section-content {
     padding: var(--spacing-md);
   }
+
+  /* Prevent tab bar overflow on narrow screens */
+  .settings-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    gap: 0;
+  }
+
+  .settings-tab {
+    white-space: nowrap;
+    flex-shrink: 0;
+    /* Ensure min 44px touch target height */
+    min-height: 44px;
+    padding: var(--spacing-2) var(--spacing-3);
+  }
 }
 .open-wizard-btn {
   display: inline-flex;

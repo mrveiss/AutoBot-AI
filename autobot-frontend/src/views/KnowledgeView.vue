@@ -313,7 +313,6 @@
 
 @media (max-width: 768px) {
   .knowledge-view {
-  contain: layout style paint;
     flex-direction: column;
   }
 
@@ -336,7 +335,8 @@
   }
 
   .category-item {
-    padding: 8px 16px;
+    padding: 12px 16px;
+    min-height: 44px;
   }
 
   .category-item span {
