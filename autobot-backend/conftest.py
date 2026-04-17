@@ -161,27 +161,17 @@ if "models" not in sys.modules:
         setattr(_models_pkg, "infrastructure", _infra_mod)
 
 
-# -- Requirements.txt enforcement (Issue #5032) ----------------------------
+# -- Requirements.txt enforcement (Issue #5032 / #5044) --------------------
 # Tests that use optional parsers like bs4 declare `pytest.importorskip(...)`
 # so they skip gracefully. But a silent skip of ~10% of the suite looks like
 # a passing run to an inattentive reviewer. This session hook reads
-# requirements.txt and reports which declared deps are not importable, so the
+# requirements.txt and reports which declared deps are not installed, so the
 # developer sees a clear "run pip install -r requirements.txt" hint at the
 # top of every test run instead of silent skip messages buried further down.
-
-# Map PyPI distribution names to their importable module name when they differ.
-_DIST_TO_MODULE = {
-    "beautifulsoup4": "bs4",
-    "PyYAML": "yaml",
-    "pyyaml": "yaml",
-    "pillow": "PIL",
-    "opencv-python": "cv2",
-    "scikit-learn": "sklearn",
-    "python-dotenv": "dotenv",
-    "python-multipart": "multipart",
-    "python-dateutil": "dateutil",
-    "python-jose": "jose",
-}
+#
+# Uses importlib.metadata.distribution() to check installed-ness by dist name
+# (the exact name from requirements.txt) — no module-name translation needed,
+# and no __init__.py side-effects like find_spec() would cause.
 
 
 def _parse_requirements(path: Path) -> list[str]:
@@ -209,7 +199,7 @@ def pytest_report_header(config) -> list[str]:
     calls in test files still handle graceful degradation. Purpose is to
     surface the root cause when tests silently skip due to missing deps.
     """
-    import importlib.util
+    from importlib import metadata as _im
 
     req_file = backend_root / "requirements.txt"
     declared = _parse_requirements(req_file)
@@ -218,15 +208,13 @@ def pytest_report_header(config) -> list[str]:
 
     missing: list[str] = []
     for dist in declared:
-        module = _DIST_TO_MODULE.get(dist.lower(), dist.replace("-", "_"))
         try:
-            if importlib.util.find_spec(module) is None:
-                missing.append(dist)
-        except (ImportError, ValueError):
+            _im.distribution(dist)
+        except _im.PackageNotFoundError:
             missing.append(dist)
 
     if not missing:
-        return [f"requirements.txt: all {len(declared)} deps importable"]
+        return [f"requirements.txt: all {len(declared)} deps installed"]
 
     preview = ", ".join(missing[:8]) + ("..." if len(missing) > 8 else "")
     return [
