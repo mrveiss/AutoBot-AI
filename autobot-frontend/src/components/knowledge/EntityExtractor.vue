@@ -292,7 +292,7 @@ async function extractEntities(): Promise<void> {
       messages
     })
 
-    const parsedResponse = await parseApiResponse(response)
+    const parsedResponse = await parseApiResponse<Record<string, any>>(response)
     const result = parsedResponse?.data || parsedResponse
 
     extractionResult.value = { ...result, timestamp: Date.now() }

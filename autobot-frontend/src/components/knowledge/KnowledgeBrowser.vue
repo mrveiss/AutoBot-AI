@@ -308,7 +308,7 @@ const fetchEntries = async (cursor: string) => {
     cursor: cursor || '0'
   })
   const response = await apiClient.get(`${getApiBase()}/knowledge_base/entries?${params}`)
-  const data = await parseApiResponse(response)
+  const data = await parseApiResponse<Record<string, any>>(response)
 
   // Handle both cursor-based and offset-based formats
   if (data.next_cursor !== undefined) {
@@ -570,7 +570,7 @@ const selectMainCategory = (mainCatId: string) => {
 const loadMainCategories = async () => {
   try {
     const response = await apiClient.get(`${getApiBase()}/knowledge_base/categories/main`)
-    const data = await parseApiResponse(response)
+    const data = await parseApiResponse<Record<string, any>>(response)
 
     if (data && data.categories) {
       mainCategories.value = data.categories
@@ -655,7 +655,7 @@ const refreshVectorizationStatus = async () => {
 const loadKnowledgeTreeFn = async () => {
   // Load facts from knowledge base by category
   const response = await apiClient.get(`${getApiBase()}/knowledge_base/facts/by_category`)
-  const data = await parseApiResponse(response)
+  const data = await parseApiResponse<Record<string, any>>(response)
 
   if (data && data.categories) {
     // Build tree structure from categories
@@ -939,7 +939,7 @@ const loadFolderContents = async (folder: TreeNode) => {
       category: folder.category,
       n_results: 100
     })
-    const data = await parseApiResponse(response)
+    const data = await parseApiResponse<Record<string, any>>(response)
 
     if (data.results && Array.isArray(data.results)) {
       folder.children = data.results.map((item: any, idx: number) => ({
@@ -974,7 +974,7 @@ const loadFileContent = async (file: TreeNode) => {
       if (factKey) {
         // Fetch full fact data from backend
         const apiResponse = await apiClient.get(`${getApiBase()}/knowledge_base/fact/${factKey}`)
-        const response = await parseApiResponse(apiResponse)
+        const response = await parseApiResponse<Record<string, any>>(apiResponse)
 
         if (response && response.content) {
           fileContent.value = response.content

@@ -134,7 +134,7 @@ export function useKnowledgeVectorization() {
         fact_ids: [documentId],
         use_cache: true
       })
-      const data = await parseApiResponse(response)
+      const data = await parseApiResponse<Record<string, any>>(response)
 
       if (data?.statuses?.[documentId]) {
         const status: VectorizationStatus = data.statuses[documentId].vectorized ? 'vectorized' : 'pending'
@@ -195,7 +195,7 @@ export function useKnowledgeVectorization() {
             fact_ids: batch,
             use_cache: true
           })
-          const data = await parseApiResponse(response)
+          const data = await parseApiResponse<Record<string, any>>(response)
 
           if (data?.statuses) {
             // Update cache with all statuses, including document names if provided (Issue #165)
@@ -360,7 +360,7 @@ export function useKnowledgeVectorization() {
       })
 
       // Parse JSON response (handles both ApiClient parsed JSON)
-      const data = await parseApiResponse(response)
+      const data = await parseApiResponse<Record<string, any>>(response)
 
       // Check if backend returned success status
       if (data.status !== 'success') {
@@ -383,7 +383,7 @@ export function useKnowledgeVectorization() {
         const jobResponse = await apiClient.get(`${getApiBase()}/knowledge_base/vectorize_job/${jobId}`, {
           timeout: knowledgeTimeout
         })
-        const jobData = await parseApiResponse(jobResponse)
+        const jobData = await parseApiResponse<Record<string, any>>(jobResponse)
 
         // Backend returns: { status: "success", job: { status: "completed", error: null, ... } }
         const job = jobData.job
@@ -433,7 +433,7 @@ export function useKnowledgeVectorization() {
     }, {
       timeout: batchTimeout
     })
-    const data = await parseApiResponse(response)
+    const data = await parseApiResponse<Record<string, any>>(response)
 
     const succeeded: string[] = []
     const failed: string[] = []

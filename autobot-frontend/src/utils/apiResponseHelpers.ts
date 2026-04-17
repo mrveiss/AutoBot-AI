@@ -6,11 +6,9 @@
  * response inconsistencies.
  *
  * Background:
- * ApiClient has dual behavior:
- * - Base methods (get, post, put, delete) return Response objects
- * - Helper methods return parsed JSON directly
- *
- * These utilities provide defensive handling for both cases.
+ * ApiClient base methods (get, post, put, delete) return already-parsed JSON
+ * (Promise<T>), NOT Response objects. This module handles legacy call sites that
+ * pass either parsed data or a Response object defensively.
  */
 
 /**
@@ -18,25 +16,25 @@
  *
  * Handles both Response objects and pre-parsed JSON data from ApiClient.
  * Uses defensive programming to check if .json() method exists before calling.
+ * ApiClient.get<T>()/post<T>() return already-parsed Promise<T> — callers should
+ * prefer typed ApiClient calls directly and pass T here for type safety.
  *
  * @param response - API response (either Response object or parsed JSON)
- * @returns Parsed JSON data
+ * @returns Parsed JSON data as T (defaults to unknown)
  *
  * @example
  * ```typescript
- * const response = await apiClient.get('/api/endpoint')
- * const data = await parseApiResponse(response)
+ * const data = await parseApiResponse<MyType>(await apiClient.get('/api/endpoint'))
  * ```
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function parseApiResponse(response: unknown): Promise<any> {
+export async function parseApiResponse<T = unknown>(response: unknown): Promise<T> {
   // Check if response has .json() method (it's a Response object)
   if (response !== null && typeof response === 'object' && typeof (response as Response).json === 'function') {
     return await (response as Response).json()
   }
 
   // Already parsed or direct data
-  return response
+  return response as T
 }
 
 /**

@@ -131,7 +131,7 @@ const { execute: fetchFailedJobs, loading, error } = useAsyncOperation()
 // Fetch failed jobs
 const fetchFailedJobsFn = async () => {
   const response = await apiClient.get(`${getApiBase()}/knowledge_base/vectorize_jobs/failed`)
-  const data = await parseApiResponse(response)
+  const data = await parseApiResponse<Record<string, any>>(response)
 
   if (data.status === 'success') {
     failedJobs.value = data.failed_jobs
@@ -151,7 +151,7 @@ const retryJob = async (jobId: string) => {
 
   try {
     const response = await apiClient.post(`${getApiBase()}/knowledge_base/vectorize_jobs/${jobId}/retry`)
-    const data = await parseApiResponse(response)
+    const data = await parseApiResponse<Record<string, any>>(response)
 
     if (data.status === 'success') {
       // Remove from failed list
@@ -177,7 +177,7 @@ const deleteJob = async (jobId: string) => {
 
   await fetchFailedJobs(async () => {
     const response = await apiClient.delete(`${getApiBase()}/knowledge_base/vectorize_jobs/${jobId}`)
-    const data = await parseApiResponse(response)
+    const data = await parseApiResponse<Record<string, any>>(response)
 
     if (data.status === 'success') {
       // Remove from list
@@ -196,7 +196,7 @@ const clearAllFailed = async () => {
 
   await fetchFailedJobs(async () => {
     const response = await apiClient.delete(`${getApiBase()}/knowledge_base/vectorize_jobs/failed/clear`)
-    const data = await parseApiResponse(response)
+    const data = await parseApiResponse<Record<string, any>>(response)
 
     if (data.status === 'success') {
       failedJobs.value = []

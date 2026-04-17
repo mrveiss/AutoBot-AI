@@ -163,7 +163,7 @@ async function loadFactCount(categoryId: string): Promise<void> {
     const response = await apiClient.get(
       `${getApiBase()}/knowledge_base/categories/${encodeURIComponent(categoryId)}/facts?limit=1`
     )
-    const data = await parseApiResponse(response)
+    const data = await parseApiResponse<Record<string, any>>(response)
     factCount.value = data?.total_count ?? 0
   } catch (err) {
     logger.error('Failed to load fact count:', err)
@@ -185,7 +185,7 @@ async function saveChanges(): Promise<void> {
       `${getApiBase()}/knowledge_base/categories/${encodeURIComponent(props.category.id)}`,
       formData.value
     )
-    const data = await parseApiResponse(response)
+    const data = await parseApiResponse<Record<string, any>>(response)
 
     if (data?.status === 'success') {
       successMessage.value = t('knowledge.modals.categoryEdit.updateSuccess')
@@ -216,7 +216,7 @@ async function deleteCategory(): Promise<void> {
     const response = await apiClient.delete(
       `${getApiBase()}/knowledge_base/categories/${encodeURIComponent(props.category.id)}`
     )
-    const data = await parseApiResponse(response)
+    const data = await parseApiResponse<Record<string, any>>(response)
 
     if (data?.status === 'success') {
       emit('deleted', props.category.id)

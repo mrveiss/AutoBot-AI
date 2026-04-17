@@ -107,7 +107,7 @@ async function loadDocCategories(): Promise<void> {
 
   try {
     const response = await apiClient.get(`${getApiBase()}/knowledge_base/system-docs/categories`)
-    const data = await parseApiResponse(response)
+    const data = await parseApiResponse<Record<string, any>>(response)
 
     if (data?.categories) {
       categories.value = data.categories
@@ -132,7 +132,7 @@ async function loadCategoryDocs(category: DocCategory): Promise<void> {
     const response = await apiClient.get(
       `${getApiBase()}/knowledge_base/system-docs/category/${encodeURIComponent(category.path)}`
     )
-    const data = await parseApiResponse(response)
+    const data = await parseApiResponse<Record<string, any>>(response)
 
     if (data?.docs) {
       category.docs = data.docs
@@ -158,7 +158,7 @@ async function loadDocContent(doc: SystemDoc): Promise<void> {
     const response = await apiClient.get(
       `${getApiBase()}/knowledge_base/system-docs/${encodeURIComponent(doc.id)}`
     )
-    const data = await parseApiResponse(response)
+    const data = await parseApiResponse<Record<string, any>>(response)
 
     if (data?.doc) {
       doc.content = data.doc.content

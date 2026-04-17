@@ -296,7 +296,7 @@ async function refreshStats(): Promise<void> {
 async function fetchGraphStats(): Promise<void> {
   try {
     const response = await apiClient.get(`${getApiBase()}/knowledge_base/unified/graph?max_facts=0`)
-    const data = await parseApiResponse(response)
+    const data = await parseApiResponse<Record<string, any>>(response)
     const graphData = data?.data || data
 
     if (graphData?.entities) {
@@ -318,7 +318,7 @@ async function fetchGraphStats(): Promise<void> {
 async function fetchExtractionHealth(): Promise<void> {
   try {
     const response = await apiClient.get(`${getApiBase()}/entities/extract/health`)
-    const data = await parseApiResponse(response)
+    const data = await parseApiResponse<Record<string, any>>(response)
     const healthData = data?.data || data
 
     extractionHealth.status = healthData?.status || 'unknown'
@@ -333,7 +333,7 @@ async function fetchExtractionHealth(): Promise<void> {
 async function fetchGraphRagHealth(): Promise<void> {
   try {
     const response = await apiClient.get(`${getApiBase()}/graph-rag/health`)
-    const data = await parseApiResponse(response)
+    const data = await parseApiResponse<Record<string, any>>(response)
     const healthData = data?.data || data
 
     graphRagHealth.status = healthData?.status || 'unknown'

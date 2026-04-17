@@ -149,7 +149,7 @@ async function loadPrompts(): Promise<void> {
 
   try {
     const response = await apiClient.get(`${getApiBase()}/prompts`)
-    const data = await parseApiResponse(response)
+    const data = await parseApiResponse<Record<string, any>>(response)
 
     if (data?.prompts) {
       prompts.value = data.prompts
@@ -187,7 +187,7 @@ async function savePrompt(): Promise<void> {
       `${getApiBase()}/prompts/${encodeURIComponent(selectedPrompt.value.id)}`,
       { content: editedContent.value }
     )
-    const data = await parseApiResponse(response)
+    const data = await parseApiResponse<Record<string, any>>(response)
 
     if (data?.status === 'success') {
       // Update local state
@@ -225,7 +225,7 @@ async function loadHistory(): Promise<void> {
     const response = await apiClient.get(
       `${getApiBase()}/prompts/${encodeURIComponent(selectedPrompt.value.id)}/history`
     )
-    const data = await parseApiResponse(response)
+    const data = await parseApiResponse<Record<string, any>>(response)
 
     if (data?.versions) {
       promptHistory.value = data.versions
@@ -252,7 +252,7 @@ async function revertToVersion(version: PromptVersion): Promise<void> {
       `${getApiBase()}/prompts/${encodeURIComponent(selectedPrompt.value.id)}/revert`,
       { version: version.version }
     )
-    const data = await parseApiResponse(response)
+    const data = await parseApiResponse<Record<string, any>>(response)
 
     if (data?.status === 'success') {
       selectedPrompt.value.content = version.content

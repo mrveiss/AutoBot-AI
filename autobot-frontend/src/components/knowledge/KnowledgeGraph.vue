@@ -868,11 +868,11 @@ async function refreshGraph(): Promise<void> {
   try {
     // Fetch from unified knowledge graph endpoint (includes categories + facts)
     const unifiedResponse = await apiClient.get(`${getApiBase()}/knowledge_base/unified/graph?max_facts=100&include_categories=true`)
-    const unifiedData = await parseApiResponse(unifiedResponse)
+    const unifiedData = await parseApiResponse<Record<string, any>>(unifiedResponse)
 
     // Also fetch memory entities for backward compatibility
     const memoryResponse = await apiClient.get(`${getApiBase()}/memory/entities/all`)
-    const memoryData = await parseApiResponse(memoryResponse)
+    const memoryData = await parseApiResponse<Record<string, any>>(memoryResponse)
 
     // Merge entities from both sources
     const unifiedEntities = unifiedData?.data?.entities || []
@@ -933,7 +933,7 @@ async function fetchMemoryRelations(memoryEntities: Entity[]): Promise<void> {
   const relationResults = await Promise.allSettled(
     memoryEntities.map(async (entity) => {
       const response = await apiClient.get(`${getApiBase()}/memory/entities/${entity.id}/relations`)
-      const parsedResponse = await parseApiResponse(response)
+      const parsedResponse = await parseApiResponse<Record<string, any>>(response)
       return { entity, parsedResponse }
     })
   )
@@ -995,7 +995,7 @@ async function createEntity(): Promise<void> {
       observations
     })
 
-    const parsedResponse = await parseApiResponse(response)
+    const parsedResponse = await parseApiResponse<Record<string, any>>(response)
     const responseData = parsedResponse?.data || parsedResponse
 
     let createdEntity: Entity | null = null

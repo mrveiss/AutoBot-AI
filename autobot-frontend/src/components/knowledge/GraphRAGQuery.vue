@@ -292,7 +292,7 @@ async function executeSearch(): Promise<void> {
       enable_reranking: enableReranking.value
     })
 
-    const parsedResponse = await parseApiResponse(response)
+    const parsedResponse = await parseApiResponse<Record<string, any>>(response)
     searchResults.value = parsedResponse?.data || parsedResponse
 
     logger.info(`Search complete: ${searchResults.value?.results?.length || 0} results`)
@@ -309,7 +309,7 @@ async function checkHealth(): Promise<void> {
 
   try {
     const response = await apiClient.get(`${getApiBase()}/graph-rag/health`)
-    const parsedResponse = await parseApiResponse(response)
+    const parsedResponse = await parseApiResponse<Record<string, any>>(response)
     healthStatus.value = parsedResponse?.data || parsedResponse
     logger.info(`Health check: ${healthStatus.value?.status}`)
   } catch (error) {

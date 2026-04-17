@@ -204,7 +204,7 @@ const runDryScan = async () => {
       dry_run: true
     })
 
-    const data = await parseApiResponse(response)
+    const data = await parseApiResponse<Record<string, any>>(response)
 
     if (data.success !== false) {
       scanResult.value = {
@@ -249,7 +249,7 @@ const runCleanup = async () => {
       dry_run: false
     })
 
-    const data = await parseApiResponse(response)
+    const data = await parseApiResponse<Record<string, any>>(response)
 
     if (data.success !== false) {
       const total =
