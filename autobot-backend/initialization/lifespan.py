@@ -1295,7 +1295,7 @@ async def _start_community_clustering_loop(app: FastAPI) -> None:
                 )
             await asyncio.sleep(_CLUSTER_INTERVAL_SECONDS)
 
-    asyncio.create_task(_loop())
+    app.state.community_cluster_task = asyncio.create_task(_loop())
     logger.info(
         "CommunityClusterer: periodic loop started (interval=%dh)",
         _CLUSTER_INTERVAL_SECONDS // 3600,
@@ -1471,6 +1471,13 @@ async def cleanup_services(app: FastAPI):
         if hasattr(app.state, "backup_scheduler") and app.state.backup_scheduler:
             await app.state.backup_scheduler.stop()
             logger.info("✅ Backup scheduler stopped")
+
+        # Issue #4946: Cancel community clustering background task
+        task = getattr(app.state, "community_cluster_task", None)
+        if task and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            logger.info("✅ Community cluster task cancelled")
 
         # Issue #1748: Stop process adapter dispatcher
         if (
