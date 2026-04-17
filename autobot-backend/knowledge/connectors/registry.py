@@ -19,8 +19,10 @@ Usage:
     running = ConnectorRegistry.get("my-connector-id")
 """
 
+import asyncio
 import logging
-from typing import Dict, List, Optional, Type
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Type
 
 from knowledge.connectors.models import ConnectorConfig
 
@@ -102,3 +104,74 @@ class ConnectorRegistry:
     def list_instances(cls) -> List[str]:
         """Return IDs of all currently registered instances."""
         return list(cls._instances.keys())
+
+    @classmethod
+    async def health_check_all(cls) -> Dict[str, Any]:
+        """Aggregate ``test_connection()`` results across all live instances (Issue #4420).
+
+        Runs every connector's ``test_connection()`` concurrently so one slow
+        or failing connector never blocks the rest.  Exceptions are caught
+        per-connector and surfaced in the ``errors`` map.
+
+        Returns:
+            Dict with keys:
+                healthy: sorted list of instance labels whose test_connection() returned truthy
+                unavailable: sorted list of labels that returned falsy or raised
+                errors: map of label -> error string (only for those that raised)
+                checked_at: UTC ISO-8601 timestamp of the check
+        """
+        instances = list(cls._instances.values())
+        if not instances:
+            return {
+                "healthy": [],
+                "unavailable": [],
+                "errors": {},
+                "checked_at": datetime.now(timezone.utc).isoformat(),
+            }
+
+        results = await asyncio.gather(
+            *[cls._check_one(instance) for instance in instances],
+            return_exceptions=False,
+        )
+
+        healthy: List[str] = []
+        unavailable: List[str] = []
+        errors: Dict[str, str] = {}
+        for label, ok, err in results:
+            if ok:
+                healthy.append(label)
+            else:
+                unavailable.append(label)
+                if err is not None:
+                    errors[label] = err
+
+        return {
+            "healthy": sorted(healthy),
+            "unavailable": sorted(unavailable),
+            "errors": errors,
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    @classmethod
+    async def _check_one(cls, instance: Any) -> tuple:
+        """Run test_connection() on a single instance, never raising (Issue #4420)."""
+        label = cls._label_for(instance)
+        try:
+            ok = await instance.test_connection()
+            return label, bool(ok), None
+        except Exception as exc:
+            logger.warning("Connector %s health check raised: %s", label, exc)
+            return label, False, str(exc)
+
+    @staticmethod
+    def _label_for(instance: Any) -> str:
+        """Build a human-readable label ``{connector_type}:{name}`` (Issue #4420).
+
+        Falls back to connector_id if type or name is missing.
+        """
+        cfg = getattr(instance, "config", None)
+        if cfg is None:
+            return "unknown"
+        connector_type = getattr(cfg, "connector_type", "") or "unknown"
+        name = getattr(cfg, "name", "") or getattr(cfg, "connector_id", "unknown")
+        return "%s:%s" % (connector_type, name)

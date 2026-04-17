@@ -308,6 +308,37 @@ async def create_connector(request: CreateConnectorRequest):
     return {"connector_id": connector_id, "config": _cfg_to_dict(cfg)}
 
 
+@router.get("/knowledge_base/connectors/health")
+async def connectors_health():
+    """Aggregate test_connection() across all live connectors (Issue #4420).
+
+    Ensures every live instance is hydrated from Redis first so the registry
+    reflects every configured connector, then runs all ``test_connection()``
+    calls concurrently via ``ConnectorRegistry.health_check_all``.
+
+    Returns:
+        Dict with keys ``healthy``, ``unavailable``, ``errors``, ``checked_at``.
+    """
+    await _hydrate_all_instances()
+    return await ConnectorRegistry.health_check_all()
+
+
+async def _hydrate_all_instances() -> None:
+    """Load every persisted connector config into the live registry (Issue #4420).
+
+    The registry only holds instances created via API calls; on cold start or
+    after a restart, the instance map may be empty even though configs exist
+    in Redis.  The health endpoint needs every configured connector to appear
+    in the report, so we hydrate from Redis before aggregating.
+    """
+    ids = await _list_connector_ids()
+    for cid in ids:
+        cfg = await _load_connector(cid)
+        if cfg is None:
+            continue
+        _load_or_create_instance(cfg)
+
+
 @router.get("/knowledge_base/connectors/{connector_id}")
 async def get_connector(connector_id: str):
     """Return config and status for a single connector."""
