@@ -40,10 +40,9 @@
           <!-- Desktop Navigation -->
           <nav id="navigation" class="hidden lg:block" role="navigation" :aria-label="$t('nav.mainNavigation')">
             <div class="hidden lg:flex items-center space-x-8">
-              <div ref="navContainerRef" class="flex items-center space-x-4 overflow-hidden">
+              <div ref="navContainerRef" class="flex items-center space-x-4">
                 <template v-for="item in visibleNavItems" :key="item.to">
                 <router-link
-                  v-if="!item.adminOnly || userStore.isAdmin"
                   :to="item.to"
                   data-nav-item
                   :class="{
