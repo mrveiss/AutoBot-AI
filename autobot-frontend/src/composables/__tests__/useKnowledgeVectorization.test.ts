@@ -425,7 +425,7 @@ describe('useKnowledgeVectorization', () => {
 
       vi.mocked(useKnowledgeBase).mockReturnValue({
         getVectorizationStatus: mockGetStatus
-      } as any)
+      } as unknown as ReturnType<typeof useKnowledgeBase>)
 
       const freshComposable = useKnowledgeVectorization()
       await freshComposable.pollStatus()
@@ -448,7 +448,7 @@ describe('useKnowledgeVectorization', () => {
 
       vi.mocked(useKnowledgeBase).mockReturnValue({
         getVectorizationStatus: mockGetStatus
-      } as any)
+      } as unknown as ReturnType<typeof useKnowledgeBase>)
 
       const freshComposable = useKnowledgeVectorization()
       freshComposable.startPolling(100)
@@ -465,7 +465,7 @@ describe('useKnowledgeVectorization', () => {
 
       vi.mocked(useKnowledgeBase).mockReturnValue({
         getVectorizationStatus: mockGetStatus
-      } as any)
+      } as unknown as ReturnType<typeof useKnowledgeBase>)
 
       const freshComposable = useKnowledgeVectorization()
 
