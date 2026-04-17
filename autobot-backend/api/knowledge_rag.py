@@ -466,6 +466,24 @@ async def get_rag_stats(
     }
 
 
+class RunBenchmarkRequest(BaseModel):
+    """Request body for POST /rag/benchmark/run.
+
+    Issue #5074: callers must declare which split they are benchmarking
+    against so held-out scores are auditable.
+    """
+
+    split: str = Field(
+        ...,
+        description=(
+            "Which portion of the dataset to run: 'dev' (tuning), 'test' "
+            "(held-out final score), or 'all' (combined — not a held-out score)."
+        ),
+        pattern="^(dev|test|all)$",
+    )
+    k: int = Field(default=5, ge=1, le=50, description="Top-k results per query.")
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="run_rag_benchmark",
@@ -473,6 +491,7 @@ async def get_rag_stats(
 )
 @router.post("/benchmark/run")
 async def run_rag_benchmark(
+    request: RunBenchmarkRequest,
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Run the RAG precision@k benchmark suite and publish results to RetrievalLearner.
@@ -486,10 +505,23 @@ async def run_rag_benchmark(
     Issue #5018: Admin-gated to prevent unauthenticated users from poisoning
     the ``__global__`` RetrievalLearner feedback stream.
 
+    Issue #5074: Requires an explicit ``split`` body param (``dev`` | ``test``
+    | ``all``).  Only ``split=test`` produces a ``held_out_score=true`` result.
+
+    **Body:**
+    - **split**: ``dev`` (tune) | ``test`` (held-out) | ``all`` (combined).
+    - **k**: top-k retrieval size (default 5).
+
     **Returns:**
     - **published**: Number of feedback events written to Redis.
     - **total**: Total benchmark queries run.
     - **stream_key**: Redis stream key where events were written.
+    - **split_used**: The split that was actually run.
+    - **dev_size**: Total dev-set queries in the dataset.
+    - **test_size**: Total test-set queries in the dataset.
+    - **tuned_on_dev**: Whether the harness has ever run a tune() pass.
+    - **held_out_score**: True iff split==test AND no dev leakage occurred.
+    - **mean_precision_at_k**: Mean precision@k across the run.
     """
     import asyncio
     from datetime import datetime, timezone
@@ -500,7 +532,10 @@ async def run_rag_benchmark(
     from knowledge.rag_benchmarks import (
         _BENCHMARK_USER,
         _TOPIC_DOCS,
+        BenchmarkHarness,
+        BenchmarkSplit,
         _deterministic_embed,
+        get_default_dataset,
         publish_feedback_events,
         run_benchmark_suite,
     )
@@ -519,9 +554,15 @@ async def run_rag_benchmark(
         metadatas=[{"topic": topic} for _, _, topic in _TOPIC_DOCS],
     )
 
-    # run_benchmark_suite is synchronous (ChromaDB EphemeralClient is sync).
+    split = BenchmarkSplit(request.split)
+    dataset = get_default_dataset()
+    harness = BenchmarkHarness(dataset=dataset)
+
+    def _runner(ds):
+        return run_benchmark_suite(collection, k=request.k, dataset=ds, split=split)
+
     loop = asyncio.get_running_loop()
-    results = await loop.run_in_executor(None, run_benchmark_suite, collection, 5)
+    report = await loop.run_in_executor(None, harness.run, _runner, split)
 
     try:
         client.delete_collection("benchmark_run")
@@ -533,24 +574,39 @@ async def run_rag_benchmark(
         logger.warning("run_rag_benchmark: Redis unavailable; benchmark events dropped")
         return {
             "published": 0,
-            "total": len(results),
+            "total": len(report.results),
             "stream_key": None,
             "reason": "redis_unavailable",
+            "split_used": report.split_used,
+            "dev_size": report.dev_size,
+            "test_size": report.test_size,
+            "tuned_on_dev": report.tuned_on_dev,
+            "held_out_score": report.held_out_score,
+            "mean_precision_at_k": report.mean_precision_at_k,
         }
 
     date_key = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
     stream_key = f"rag:feedback:{_BENCHMARK_USER}:{date_key}"
 
-    published = await publish_feedback_events(redis, results)
+    published = await publish_feedback_events(redis, report.results)
     logger.info(
-        "run_rag_benchmark: published %d/%d benchmark feedback events",
+        "run_rag_benchmark: split=%s published %d/%d feedback events "
+        "(held_out_score=%s)",
+        report.split_used,
         published,
-        len(results),
+        len(report.results),
+        report.held_out_score,
     )
     return {
         "published": published,
-        "total": len(results),
+        "total": len(report.results),
         "stream_key": stream_key,
+        "split_used": report.split_used,
+        "dev_size": report.dev_size,
+        "test_size": report.test_size,
+        "tuned_on_dev": report.tuned_on_dev,
+        "held_out_score": report.held_out_score,
+        "mean_precision_at_k": report.mean_precision_at_k,
     }
 
 
