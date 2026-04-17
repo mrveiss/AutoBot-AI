@@ -208,6 +208,7 @@
       "toolApprovalApprovedMsg": "Tool execution approved",
       "toolApprovalDeniedMsg": "Tool execution denied",
       "toolApprovalErrorMsg": "Failed to submit approval decision",
+      "toolApprovalCountdown": "Auto-denying in {seconds}s",
       "initFailed": "Initialization failed",
       "failedToExport": "Failed to export conversation",
       "failedToClear": "Failed to clear conversation",
