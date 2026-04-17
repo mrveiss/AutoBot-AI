@@ -613,3 +613,167 @@ class TestGetMatchingPatternUCB1:
         # Equal usage → exploration bonuses cancel → highest success_rate wins.
         assert result is not None
         assert result.pattern_hash == "hash_high_rate"
+
+
+# ---------------------------------------------------------------------------
+# Issue #4676 — benchmark → feedback → pattern round-trip
+# ---------------------------------------------------------------------------
+
+
+class TestBenchmarkFeedbackRoundTrip:
+    """Verify that benchmark results flow through publish_feedback_events into
+    the RetrievalLearner feedback stream and ultimately update global patterns.
+
+    The test is fully in-memory: no Redis, no ChromaDB service required.
+    """
+
+    @pytest.mark.asyncio
+    async def test_publish_feedback_events_writes_xadd_per_positive_result(self):
+        """publish_feedback_events() calls xadd once per result with precision_at_k > 0."""
+        from unittest.mock import AsyncMock
+
+        from knowledge.rag_benchmarks import BenchmarkResult, publish_feedback_events
+
+        redis = AsyncMock()
+        redis.xadd = AsyncMock()
+        redis.expire = AsyncMock()
+
+        results = [
+            BenchmarkResult(
+                query="Python list comprehensions",
+                retrieved_ids=["python_02", "python_04", "python_01"],
+                ranked_ids=["python_02", "python_04", "python_01"],
+                precision_at_k=0.4,
+                complexity="moderate",
+            ),
+            BenchmarkResult(
+                query="unknown topic query",
+                retrieved_ids=["net_01"],
+                ranked_ids=["net_01"],
+                precision_at_k=0.0,  # zero precision — should NOT be published
+                complexity="moderate",
+            ),
+        ]
+
+        published = await publish_feedback_events(redis, results)
+
+        # Only the positive-precision result should be published.
+        assert published == 1
+        assert redis.xadd.call_count == 1
+        # expire should be called once to set TTL on the stream key.
+        assert redis.expire.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_publish_feedback_events_writes_correct_schema(self):
+        """Each published entry must include all fields expected by RetrievalLearner."""
+        import json
+        from unittest.mock import AsyncMock, call
+
+        from knowledge.rag_benchmarks import BenchmarkResult, publish_feedback_events
+
+        redis = AsyncMock()
+        redis.xadd = AsyncMock()
+        redis.expire = AsyncMock()
+
+        result = BenchmarkResult(
+            query="RAG retrieval augmented generation",
+            retrieved_ids=["ml_02", "ml_09", "ml_01"],
+            ranked_ids=["ml_02", "ml_09", "ml_01"],
+            precision_at_k=0.4,
+            complexity="moderate",
+        )
+
+        await publish_feedback_events(redis, [result])
+
+        assert redis.xadd.call_count == 1
+        _stream_key, entry = redis.xadd.call_args[0]
+        assert "retrieved_chunk_ids" in entry
+        assert "final_ranked_ids" in entry
+        assert "complexity" in entry
+        assert "timestamp" in entry
+        # Verify JSON round-trip of retrieved_chunk_ids
+        assert json.loads(entry["retrieved_chunk_ids"]) == result.retrieved_ids
+
+    @pytest.mark.asyncio
+    async def test_publish_feedback_events_uses_global_user_namespace(self):
+        """Stream key must use '__global__' sentinel so all users benefit."""
+        from unittest.mock import AsyncMock
+
+        from knowledge.rag_benchmarks import BenchmarkResult, publish_feedback_events
+
+        redis = AsyncMock()
+        redis.xadd = AsyncMock()
+        redis.expire = AsyncMock()
+
+        result = BenchmarkResult(
+            query="cosine similarity evaluation",
+            retrieved_ids=["ml_04", "ml_05"],
+            ranked_ids=["ml_04", "ml_05"],
+            precision_at_k=0.4,
+        )
+
+        await publish_feedback_events(redis, [result])
+
+        stream_key = redis.xadd.call_args[0][0]
+        assert stream_key.startswith("rag:feedback:__global__:")
+
+    @pytest.mark.asyncio
+    async def test_learner_processes_benchmark_generated_events(self):
+        """RetrievalLearner.consume_feedback_stream() processes benchmark events and writes pattern."""
+        import json
+
+        from knowledge.rag_benchmarks import _BENCHMARK_USER
+
+        redis = _make_redis_mock()
+
+        # Simulate a benchmark event where reranking promoted 3 of 5 chunks.
+        # retrieved=[a,b,c,d,e], ranked=[x,y,z,a,b] → promoted={x,y,z} → 3/5=0.6 → success.
+        fields = _make_feedback_fields(
+            retrieved=["a", "b", "c", "d", "e"],
+            ranked=["x", "y", "z", "a", "b"],
+            complexity="moderate",
+        )
+        # Benchmark events may include extra fields — learner must tolerate them.
+        fields["annotation"] = "benchmark"
+        fields["precision_at_k"] = "0.4"
+
+        redis.xrange = AsyncMock(side_effect=[[("5000-0", fields)], []])
+        redis.hgetall = AsyncMock(return_value={})
+
+        learner = _make_learner(redis)
+        count = await learner.consume_feedback_stream(
+            date_key="2026-01-01",
+            user_id=_BENCHMARK_USER,
+        )
+
+        assert count == 1
+        # Pattern must be distilled for the global namespace.
+        # redis.hset is called twice: once for the pattern key, once for the cursor.
+        # The pattern key contains '__global__'; cursor key is 'rag:rl:cursors'.
+        assert redis.hset.called
+        all_hset_keys = [call[0][0] for call in redis.hset.call_args_list]
+        assert any("__global__" in k for k in all_hset_keys), (
+            f"Expected a pattern key containing '__global__' in hset calls; got {all_hset_keys}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_publish_feedback_events_no_publish_when_all_zero_precision(self):
+        """When all results have precision_at_k == 0, nothing is written to Redis."""
+        from unittest.mock import AsyncMock
+
+        from knowledge.rag_benchmarks import BenchmarkResult, publish_feedback_events
+
+        redis = AsyncMock()
+        redis.xadd = AsyncMock()
+        redis.expire = AsyncMock()
+
+        results = [
+            BenchmarkResult("q1", ["doc1"], ["doc1"], precision_at_k=0.0),
+            BenchmarkResult("q2", ["doc2"], ["doc2"], precision_at_k=0.0),
+        ]
+
+        published = await publish_feedback_events(redis, results)
+
+        assert published == 0
+        assert not redis.xadd.called
+        assert not redis.expire.called
