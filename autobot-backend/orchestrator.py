@@ -850,9 +850,8 @@ class Orchestrator:
             for agent_name in agent_names
         ]
 
-        results = await bounded_gather(
-            [coro for _, coro in tasks], self.max_parallel_tasks
-        )
+        coros = [coro for _, coro in tasks]
+        results = await bounded_gather(coros, max(len(coros), 1))
 
         agent_results = {}
         execution_order = []
