@@ -236,8 +236,8 @@ async def test_loop_body_logs_warning_and_sleeps_on_import_error(caplog):
         except ImportError as exc:
             import logging as _logging
             _logging.getLogger(__name__).warning(
-                "graspologic not installed — community clustering disabled. "
-                "Install graspologic and restart to enable. Retrying in 24h. Error: %s",
+                "graspologic not installed — community clustering paused. "
+                "Install with: pip install graspologic. Retrying in 24h. Error: %s",
                 exc,
             )
             slept_seconds.append(86400)
