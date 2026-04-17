@@ -22,7 +22,8 @@ Usage:
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Type
+from types import MappingProxyType
+from typing import Any, Dict, List, Mapping, Optional, Type
 
 from knowledge.connectors.models import ConnectorConfig
 
@@ -99,6 +100,27 @@ class ConnectorRegistry:
     def list_types(cls) -> List[str]:
         """Return all registered connector type strings."""
         return list(cls._connectors.keys())
+
+    @classmethod
+    def registered_types(cls) -> Mapping[str, Type["AbstractConnector"]]:
+        """Immutable view of all registered connector classes by type name (Issue #5057).
+
+        Callers iterating over the type→class mapping should use this method
+        instead of reading the private ``_connectors`` dict so internal storage
+        can be refactored without breaking them.
+        """
+        return MappingProxyType(cls._connectors)
+
+    @classmethod
+    def get_registered_class(
+        cls, type_name: str
+    ) -> Optional[Type["AbstractConnector"]]:
+        """Return the registered connector class for *type_name*, or None (Issue #5057).
+
+        Public accessor that replaces ``ConnectorRegistry._connectors.get(...)``
+        at call sites outside the registry module.
+        """
+        return cls._connectors.get(type_name)
 
     @classmethod
     def list_instances(cls) -> List[str]:
