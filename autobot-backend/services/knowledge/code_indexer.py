@@ -67,8 +67,8 @@ def extract_python(source_path: str, content: bytes) -> dict:
         import tree_sitter_python as tspython
         from tree_sitter import Language, Parser
     except ImportError as exc:
-        logger.error("tree-sitter-python not installed: %s", exc)
-        return {"nodes": [], "edges": []}
+        logger.error("tree-sitter-python not installed — AST indexing disabled: %s", exc)
+        return {"nodes": [], "edges": [], "dep_error": str(exc)}
 
     lang = Language(tspython.language())
     parser = Parser(lang)
@@ -226,8 +226,8 @@ def extract_javascript(source_path: str, content: bytes) -> dict:
         import tree_sitter_javascript as tsjs
         from tree_sitter import Language, Parser
     except ImportError as exc:
-        logger.error("tree-sitter-javascript not installed: %s", exc)
-        return {"nodes": [], "edges": []}
+        logger.error("tree-sitter-javascript not installed — AST indexing disabled: %s", exc)
+        return {"nodes": [], "edges": [], "dep_error": str(exc)}
 
     lang = Language(tsjs.language())
     parser = Parser(lang)
@@ -301,6 +301,10 @@ class CodeIndexer:
             return result
 
         extracted = extractor(file_path, content)
+        if extracted.get("dep_error"):
+            result.failed += 1
+            result.errors.append(f"{rel_path}: missing dependency — {extracted['dep_error']}")
+            return result
         nodes = extracted["nodes"]
         edges = extracted["edges"]
 

@@ -88,6 +88,7 @@ async def test_index_python_file_upserts_nodes(tmp_path):
     assert indexer._collection.upsert.called
 
 
+@requires_tree_sitter
 async def test_index_unchanged_file_skips(tmp_path):
     src = tmp_path / "module.py"
     src.write_bytes(SIMPLE_PYTHON)
@@ -367,3 +368,32 @@ async def test_index_code_accepts_subdir_of_project_root(tmp_path):
         response = await index_code({"root_dir": str(subdir)})
 
     assert response["status"] == "ok"
+
+
+# ---------------------------------------------------------------------------
+# dep_error propagation — missing tree-sitter counted as failed (#4938)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_index_file_dep_error_counts_as_failed(tmp_path):
+    """When an extractor returns dep_error, index_file must record failed=1 not skipped=1."""
+    import services.knowledge.code_indexer as _ci_mod
+
+    src = tmp_path / "module.py"
+    src.write_bytes(SIMPLE_PYTHON)
+    indexer = _make_indexer(tmp_path)
+
+    dep_error_result = {"nodes": [], "edges": [], "dep_error": "tree-sitter-python not installed"}
+    original = _ci_mod._EXTRACTORS[".py"]
+    try:
+        _ci_mod._EXTRACTORS[".py"] = lambda path, content: dep_error_result
+        result = await indexer.index_file(str(src), root_dir=str(tmp_path))
+    finally:
+        _ci_mod._EXTRACTORS[".py"] = original
+
+    assert result.failed == 1
+    assert result.skipped == 0
+    assert result.success == 0
+    assert any("missing dependency" in e for e in result.errors)
+    assert any("tree-sitter-python" in e for e in result.errors)
