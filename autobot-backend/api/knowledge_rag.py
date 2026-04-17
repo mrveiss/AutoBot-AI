@@ -17,7 +17,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from auth_middleware import get_current_user
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.threshold_constants import QueryDefaults
 from knowledge_factory import get_or_create_knowledge_base
@@ -473,7 +473,7 @@ async def get_rag_stats(
 )
 @router.post("/benchmark/run")
 async def run_rag_benchmark(
-    current_user: dict = Depends(get_current_user),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """Run the RAG precision@k benchmark suite and publish results to RetrievalLearner.
 
@@ -482,6 +482,9 @@ async def run_rag_benchmark(
     the results as synthetic ``rag:feedback:__global__:{date}`` stream entries.
     RetrievalLearner will pick up these events on its next scheduled consume
     run and update global retrieval patterns accordingly.
+
+    Issue #5018: Admin-gated to prevent unauthenticated users from poisoning
+    the ``__global__`` RetrievalLearner feedback stream.
 
     **Returns:**
     - **published**: Number of feedback events written to Redis.
@@ -517,13 +520,13 @@ async def run_rag_benchmark(
     )
 
     # run_benchmark_suite is synchronous (ChromaDB EphemeralClient is sync).
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     results = await loop.run_in_executor(None, run_benchmark_suite, collection, 5)
 
     try:
         client.delete_collection("benchmark_run")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("benchmark cleanup failed: %s", exc)
 
     redis = await get_async_redis_client(database="analytics")
     if redis is None:
