@@ -38,6 +38,7 @@ from agent_loop.types import (
 )
 from events import EventStreamManager, EventType
 from events.types import create_approval_required_event, create_message_event
+from live_event_manager import publish_live_event
 from planner import PlannerModule
 from tools.parallel import ParallelToolExecutor
 
@@ -908,6 +909,23 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
             task_id=task_id,
         )
         await self.event_stream.publish(event)
+        # Bridge to LiveEventManager so the WebSocket frontend receives the
+        # approval dialog trigger (#4959).  RedisEventStreamManager and
+        # LiveEventManager are two disconnected buses — events published to one
+        # never reach the other without an explicit bridge call.
+        await publish_live_event(
+            "global",
+            "tool_approval_required",
+            {
+                "approval_id": approval_id,
+                "tool_name": tool_name,
+                "arguments": args if isinstance(args, dict) else {"value": repr(args)},
+                "reason": f"Tool '{tool_name}' performs a sensitive operation and requires authorization.",
+                "risk_level": "high",
+                "timeout_seconds": self.config.approval_timeout_seconds,
+                "task_id": task_id,
+            },
+        )
         logger.info(
             "AgentLoop: approval required for tool '%s' (approval_id=%s)",
             tool_name,
