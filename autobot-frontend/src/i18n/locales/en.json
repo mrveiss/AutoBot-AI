@@ -218,6 +218,18 @@
       "sessionNoMessages": "Session {sessionId} - No messages yet",
       "sessionInfo": "Session {sessionId} - {count} messages, last at {time}"
     },
+    "compare": {
+      "toggleTitle": "Compare models",
+      "panelLabel": "Multi-model comparison",
+      "selectModels": "Models:",
+      "promptPlaceholder": "Enter a prompt to compare across models…",
+      "promptLabel": "Comparison prompt",
+      "sendLabel": "Send comparison prompt",
+      "send": "Compare",
+      "streaming": "Streaming…",
+      "done": "Done",
+      "error": "Error"
+    },
     "input": {
       "retryUpload": "Retry upload",
       "filesAttached": "{count} files attached",
