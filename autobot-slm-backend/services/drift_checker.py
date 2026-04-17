@@ -46,6 +46,41 @@ _SKIP_DIRS = {
     "build",
 }
 
+# Paths that are deployment-generated and never present in the git source tree.
+# Exact-match paths and prefix patterns are checked against the POSIX relative
+# path of each file before it is added to the drift report (Issue #4610).
+#
+#   ansible/enroll.yml          — written by install.sh during fleet enrollment
+#   ansible/inventory/localhost.yml — node-specific IP/hostname; not in git
+#   autobot_shared/             — embedded copy rsync'd from a separate source
+#                                  dir by Ansible; intentionally absent from
+#                                  code_source/<component>/
+_EXPECTED_DRIFT_EXACT: frozenset[str] = frozenset(
+    {
+        "ansible/enroll.yml",
+        "ansible/inventory/localhost.yml",
+    }
+)
+
+_EXPECTED_DRIFT_PREFIXES: tuple[str, ...] = ("autobot_shared/",)
+
+
+def _is_expected_drift(rel_path: str) -> bool:
+    """Return True if *rel_path* is a deployment-generated file to exclude.
+
+    Checks against the exact-match set and prefix list defined in
+    ``_EXPECTED_DRIFT_EXACT`` and ``_EXPECTED_DRIFT_PREFIXES`` (Issue #4610).
+
+    Args:
+        rel_path: POSIX-style relative path of the file being evaluated.
+
+    Returns:
+        True when the path represents expected (non-actionable) drift.
+    """
+    if rel_path in _EXPECTED_DRIFT_EXACT:
+        return True
+    return any(rel_path.startswith(prefix) for prefix in _EXPECTED_DRIFT_PREFIXES)
+
 
 def _file_checksum(path: Path, block_size: int = 65536) -> str:
     """Return the SHA-256 hex digest of a file.
@@ -102,7 +137,7 @@ def compute_drift(
 ) -> Tuple[List[dict], int]:
     """Compare file checksums between *source_dir* and *deployed_dir*.
 
-    Returns a tuple of (drifted_file_dicts, total_compared_count).
+    Returns a tuple of (drifted_file_dicts, total_compared).
 
     Each drifted file dict has keys:
         path            – POSIX relative path
@@ -135,10 +170,15 @@ def compute_drift(
     dep_checksums = _collect_checksums(dep_path)
 
     all_paths = set(src_checksums) | set(dep_checksums)
-    total_compared = len(all_paths)
+    compared = 0
     drifted: List[dict] = []
 
     for rel_path in sorted(all_paths):
+        if _is_expected_drift(rel_path):
+            logger.debug("drift_checker: skipping expected-drift path: %s", rel_path)
+            continue
+
+        compared += 1
         src_cs = src_checksums.get(rel_path)
         dep_cs = dep_checksums.get(rel_path)
 
@@ -162,7 +202,7 @@ def compute_drift(
             }
         )
 
-    return drifted, total_compared
+    return drifted, compared
 
 
 def build_drift_report(

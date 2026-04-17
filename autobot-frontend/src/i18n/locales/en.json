@@ -197,6 +197,18 @@
       "executionCompleted": "Execution completed",
       "feedbackSent": "Feedback sent",
       "feedbackFailed": "Failed to send feedback",
+      "toolApprovalTitle": "Agent Tool Approval Required",
+      "toolApprovalTool": "Tool",
+      "toolApprovalRisk": "Risk",
+      "toolApprovalReason": "Reason",
+      "toolApprovalArgs": "Arguments",
+      "toolApprovalApprove": "Approve",
+      "toolApprovalDeny": "Deny",
+      "toolApprovalSubmitting": "Submitting…",
+      "toolApprovalApprovedMsg": "Tool execution approved",
+      "toolApprovalDeniedMsg": "Tool execution denied",
+      "toolApprovalErrorMsg": "Failed to submit approval decision",
+      "toolApprovalCountdown": "Auto-denying in {seconds}s",
       "initFailed": "Initialization failed",
       "failedToExport": "Failed to export conversation",
       "failedToClear": "Failed to clear conversation",
@@ -216,6 +228,7 @@
       "helpText": "Press Enter to send, Shift+Enter for new line",
       "useKnowledge": "Use Knowledge",
       "overseerMode": "Overseer Mode",
+      "overseerLabel": "Overseer",
       "explain": "Explain",
       "attachFile": "Attach file",
       "analyzeImage": "Analyze image",
@@ -4955,7 +4968,12 @@
       "actions": "Actions",
       "noDataAvailable": "No data available",
       "noItemsToDisplay": "No items to display",
-      "pageOf": "Page {current} of {total}"
+      "pageOf": "Page {current} of {total}",
+      "pagination": "Table pagination",
+      "previousPage": "Previous page",
+      "nextPage": "Next page",
+      "dataTable": "Data table",
+      "loading": "Loading data..."
     },
     "hostSelection": {
       "title": "Select Host",
@@ -5083,7 +5101,21 @@
   },
   "views": {
     "about": {
-      "title": "This is an about page"
+      "title": "About AutoBot",
+      "tagline": "AI-powered automation platform for intelligent workflows",
+      "descriptionHeading": "What is AutoBot?",
+      "description": "AutoBot is an open-source AI orchestration platform that routes user requests to specialized agents, integrates with your infrastructure, and learns from every interaction through a vector knowledge base.",
+      "capabilitiesHeading": "Key Capabilities",
+      "capability1": "Multi-agent chat workflows with A2A task routing",
+      "capability2": "RAG-powered knowledge retrieval with ChromaDB",
+      "capability3": "Browser automation, voice I/O, and code execution",
+      "capability4": "Secure secrets management and host-based SSH execution",
+      "capability5": "Pluggable LLM backends — Ollama, OpenAI-compatible, SLM",
+      "versionLabel": "Version",
+      "authorLabel": "Author",
+      "authorName": "mrveiss",
+      "licenseLabel": "License",
+      "licenseValue": "Proprietary — © 2026 mrveiss"
     },
     "notFound": {
       "title": "404",
@@ -5617,6 +5649,12 @@
     }
   },
   "operations": {
+    "view": {
+      "title": "Long-Running Operations",
+      "subtitle": "Monitor and manage background tasks",
+      "refresh": "Refresh",
+      "loadError": "Failed to load operations"
+    },
     "detail": {
       "close": "Close",
       "priorityLabel": "{priority} Priority",
@@ -5662,6 +5700,9 @@
       "resume": "Resume",
       "viewDetails": "View Details",
       "showingCount": "Showing {shown} of {total} operations"
+    },
+    "panel": {
+      "selectOperation": "Select an operation to view details"
     }
   },
   "secrets": {
@@ -6805,7 +6846,12 @@
     "skipToNavigation": "Skip to navigation",
     "systemStatus": "System Status",
     "marketplace": "Marketplace",
-    "usage": "Usage & Costs"
+    "usage": "Usage & Costs",
+    "operations": "Operations",
+    "applicationError": "Application Error",
+    "unexpectedError": "An unexpected error occurred",
+    "loadingTimeout": "Loading Timed Out",
+    "loadingTimeoutMessage": "Some content took too long to load. Try refreshing."
   },
   "reasoningTrace": {
     "title": "Reasoning trace",

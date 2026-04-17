@@ -206,7 +206,7 @@ function canResumeOperation(operation: Operation): boolean {
 .empty-text {
   font-size: var(--text-sm);
   color: var(--text-tertiary);
-  margin: 0;
+  margin: var(--spacing-0);
   max-width: 400px;
 }
 
@@ -262,13 +262,13 @@ function canResumeOperation(operation: Operation): boolean {
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
 }
 
 .name-cell {
   display: flex;
   flex-direction: column;
-  gap: 0.125rem;
+  gap: var(--spacing-0-5);
 }
 
 .operation-name {
@@ -277,7 +277,7 @@ function canResumeOperation(operation: Operation): boolean {
 }
 
 .operation-step {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   max-width: 250px;
   overflow: hidden;
@@ -288,12 +288,12 @@ function canResumeOperation(operation: Operation): boolean {
 .progress-cell {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   min-width: 120px;
 }
 
 .progress-text {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -301,19 +301,19 @@ function canResumeOperation(operation: Operation): boolean {
 .type-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  font-size: 0.75rem;
+  gap: var(--spacing-1-5);
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
 .time-text {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
 .action-buttons {
   display: flex;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 
 .action-btn {
@@ -322,7 +322,7 @@ function canResumeOperation(operation: Operation): boolean {
   justify-content: center;
   width: 28px;
   height: 28px;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-default);
   border: none;
   cursor: pointer;
 }
@@ -349,7 +349,7 @@ function canResumeOperation(operation: Operation): boolean {
 }
 
 .footer-text {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 </style>

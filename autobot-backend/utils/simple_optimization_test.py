@@ -5,10 +5,11 @@ Simple test to verify GPU optimization is working
 
 import asyncio
 import sys
+import os
 import time
 
 # Add AutoBot to path
-sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
+sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
 
 
 async def test_direct_optimization():

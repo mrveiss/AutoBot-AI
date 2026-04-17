@@ -345,30 +345,30 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
 }
 
 .modal-content {
   background: var(--bg-card);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   width: 90%;
   max-width: 600px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-xl);
 }
 
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 24px;
+  padding: var(--spacing-6);
   border-bottom: 1px solid var(--border-default);
 }
 
 .modal-header h2 {
-  margin: 0;
-  font-size: 24px;
+  margin: var(--spacing-0);
+  font-size: var(--text-2xl);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -379,14 +379,14 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   font-size: 32px;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 0;
+  padding: var(--spacing-0);
   width: 32px;
   height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
-  transition: background-color 0.2s;
+  border-radius: var(--radius-default);
+  transition: background-color var(--duration-200);
 }
 
 .close-button:hover {
@@ -395,7 +395,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 
 .tab-bar {
   display: flex;
-  gap: 0;
+  gap: var(--spacing-0);
   border-bottom: 1px solid var(--border-default);
   padding: 0 24px;
 }
@@ -403,17 +403,17 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 .tab-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
   padding: 12px 16px;
   border: none;
   background: none;
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color var(--duration-150), border-color var(--duration-150);
 }
 
 .tab-btn:hover {
@@ -426,41 +426,41 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 }
 
 .tab-btn i {
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .modal-body {
-  padding: 24px;
+  padding: var(--spacing-6);
 }
 
 .profile-section {
-  margin-bottom: 32px;
+  margin-bottom: var(--spacing-8);
 }
 
 .profile-section:last-child {
-  margin-bottom: 0;
+  margin-bottom: var(--spacing-0);
 }
 
 .profile-section h3 {
-  font-size: 18px;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-4);
 }
 
 .info-grid {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .info-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px;
+  padding: var(--spacing-3);
   background: var(--bg-secondary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 .info-row label {
@@ -474,44 +474,44 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 
 .role-badge {
   padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 12px;
+  border-radius: var(--radius-xl);
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
 }
 
-.role-admin { background: #fbbf24; color: #78350f; }
-.role-user { background: #60a5fa; color: #1e3a8a; }
-.role-viewer { background: #94a3b8; color: #1e293b; }
+.role-admin { background: var(--color-warning-bg); color: var(--color-warning); }
+.role-user { background: var(--color-info-bg); color: var(--color-info); }
+.role-viewer { background: var(--bg-tertiary); color: var(--text-secondary); }
 
 .pref-group {
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-5);
 }
 
 .pref-label {
   display: block;
   font-weight: 500;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--text-sm);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
 }
 
 .option-row {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .option-btn {
   padding: 6px 16px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-default);
   background: var(--bg-secondary);
   color: var(--text-primary);
   cursor: pointer;
-  font-size: 14px;
-  transition: all 0.15s;
+  font-size: var(--text-sm);
+  transition: all var(--duration-150);
 }
 
 .option-btn:hover {
@@ -527,14 +527,14 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 .toggle-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .toggle-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
+  gap: var(--spacing-2);
+  font-size: var(--text-sm);
   color: var(--text-primary);
   cursor: pointer;
 }
@@ -542,21 +542,21 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 .toggle-item input[type="checkbox"] {
   width: 16px;
   height: 16px;
-  border-radius: 3px;
+  border-radius: var(--radius-default);
   cursor: pointer;
 }
 
 .save-btn {
-  margin-top: 16px;
+  margin-top: var(--spacing-4);
   padding: 8px 20px;
   background: var(--color-primary, #6366f1);
   color: white;
   border: none;
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: opacity var(--duration-150);
 }
 
 .save-btn:hover {
@@ -571,16 +571,16 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 .pw-form {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .pw-input {
   padding: 8px 12px;
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--bg-secondary);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: var(--text-sm);
   width: 100%;
   box-sizing: border-box;
 }
@@ -590,27 +590,31 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   border-color: var(--color-primary, #6366f1);
   box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
 }
+.pw-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .toast {
   position: fixed;
   bottom: 24px;
   right: 24px;
   padding: 16px 20px;
-  border-radius: 8px;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
   font-weight: 500;
   animation: slideIn 0.3s ease-out;
-  z-index: 1100;
+  z-index: var(--z-popover);
 }
 
 .toast.success {
-  background: #10b981;
-  color: white;
+  background: var(--color-success);
+  color: var(--text-inverse);
 }
 
 .toast.error {
-  background: #ef4444;
-  color: white;
+  background: var(--color-error);
+  color: var(--text-inverse);
 }
 
 @keyframes slideIn {

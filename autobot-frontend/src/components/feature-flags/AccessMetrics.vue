@@ -308,29 +308,29 @@ const formatTime = (timestamp: number) => {
 .access-metrics {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
-  padding: 24px;
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-6);
 }
 
 .access-metrics.compact {
-  padding: 20px;
+  padding: var(--spacing-5);
 }
 
 .section-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-5);
 }
 
 .header-info h3 {
   margin: 0 0 8px;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .header-info h3 i {
@@ -338,24 +338,24 @@ const formatTime = (timestamp: number) => {
 }
 
 .header-info .description {
-  margin: 0;
-  font-size: 14px;
+  margin: var(--spacing-0);
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
 .header-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
   align-items: center;
 }
 
 .days-selector {
   padding: 8px 12px;
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--bg-input);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
@@ -367,10 +367,10 @@ const formatTime = (timestamp: number) => {
   justify-content: center;
   background: var(--bg-tertiary);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
   color: var(--text-secondary);
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .btn-refresh:hover:not(:disabled) {
@@ -389,7 +389,7 @@ const formatTime = (timestamp: number) => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px;
+  padding: var(--spacing-10);
   color: var(--text-tertiary);
 }
 
@@ -403,19 +403,19 @@ const formatTime = (timestamp: number) => {
   align-items: center;
   justify-content: center;
   font-size: 28px;
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-4);
 }
 
 .no-data-state h4 {
   margin: 0 0 8px;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .no-data-state p {
-  margin: 0;
-  font-size: 14px;
+  margin: var(--spacing-0);
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -423,22 +423,22 @@ const formatTime = (timestamp: number) => {
 .summary-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
 }
 
 .compact .summary-stats {
-  margin-bottom: 0;
+  margin-bottom: var(--spacing-0);
 }
 
 .summary-card {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 16px;
+  gap: var(--spacing-3-5);
+  padding: var(--spacing-4);
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
 }
 
 .summary-card.alert {
@@ -448,12 +448,12 @@ const formatTime = (timestamp: number) => {
 .summary-icon {
   width: 44px;
   height: 44px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   background: var(--bg-tertiary);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: var(--text-lg);
   color: var(--text-secondary);
 }
 
@@ -468,14 +468,14 @@ const formatTime = (timestamp: number) => {
 
 .summary-value {
   display: block;
-  font-size: 24px;
+  font-size: var(--text-2xl);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .summary-label {
   display: block;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -486,11 +486,11 @@ const formatTime = (timestamp: number) => {
 }
 
 .trend span:first-child {
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .trend-up {
@@ -506,7 +506,7 @@ const formatTime = (timestamp: number) => {
 }
 
 .trend-label {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
@@ -514,14 +514,14 @@ const formatTime = (timestamp: number) => {
 .breakdowns {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 24px;
+  gap: var(--spacing-6);
 }
 
 .breakdown-section {
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: 10px;
-  padding: 16px;
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-4);
 }
 
 .breakdown-section.full-width {
@@ -530,25 +530,25 @@ const formatTime = (timestamp: number) => {
 
 .breakdown-section h4 {
   margin: 0 0 16px;
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-secondary);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .empty-breakdown {
   text-align: center;
-  padding: 20px;
+  padding: var(--spacing-5);
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .breakdown-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--spacing-2-5);
   max-height: 250px;
   overflow-y: auto;
 }
@@ -556,15 +556,15 @@ const formatTime = (timestamp: number) => {
 .breakdown-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .breakdown-item.clickable {
   cursor: pointer;
-  padding: 8px;
+  padding: var(--spacing-2);
   margin: -8px;
-  border-radius: 6px;
-  transition: background 0.15s;
+  border-radius: var(--radius-md);
+  transition: background var(--duration-150);
 }
 
 .breakdown-item.clickable:hover {
@@ -578,35 +578,35 @@ const formatTime = (timestamp: number) => {
 
 .item-label {
   display: block;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-bottom: 4px;
+  margin-bottom: var(--spacing-1);
 }
 
 code.item-label {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .item-bar {
   height: 6px;
   background: var(--bg-tertiary);
-  border-radius: 3px;
+  border-radius: var(--radius-default);
   overflow: hidden;
 }
 
 .bar-fill {
   height: 100%;
   background: var(--color-error);
-  border-radius: 3px;
-  transition: width 0.3s ease;
+  border-radius: var(--radius-default);
+  transition: width var(--duration-300) var(--ease-out);
 }
 
 .item-count {
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
   min-width: 40px;
@@ -616,10 +616,10 @@ code.item-label {
 /* Daily Chart */
 .daily-chart {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
   align-items: flex-end;
   height: 150px;
-  padding-top: 20px;
+  padding-top: var(--spacing-5);
 }
 
 .day-bar {
@@ -627,7 +627,7 @@ code.item-label {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   min-width: 40px;
 }
 
@@ -642,43 +642,43 @@ code.item-label {
 .day-bar .bar {
   width: 100%;
   background: var(--color-error);
-  border-radius: 4px 4px 0 0;
+  border-radius: var(--radius-default) 4px 0 0;
   min-height: 4px;
-  transition: height 0.3s ease;
+  transition: height var(--duration-300) var(--ease-out);
 }
 
 .day-label {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
 .day-count {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 /* Violations Table */
 .violations-table {
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .table-header {
   display: grid;
   grid-template-columns: 120px 100px 1fr 100px;
-  gap: 16px;
+  gap: var(--spacing-4);
   padding: 10px 12px;
   background: var(--bg-tertiary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-weight: 600;
   color: var(--text-secondary);
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
 }
 
 .table-row {
   display: grid;
   grid-template-columns: 120px 100px 1fr 100px;
-  gap: 16px;
+  gap: var(--spacing-4);
   padding: 10px 12px;
   border-bottom: 1px solid var(--border-subtle);
 }
@@ -689,10 +689,10 @@ code.item-label {
 
 .col-endpoint code {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-xs);
   background: var(--bg-tertiary);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 /* Responsive */

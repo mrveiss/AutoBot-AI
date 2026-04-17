@@ -58,6 +58,17 @@ updates:
       - dependency-name: "vite"
         update-types: ["version-update:semver-major"]
 
+  - package-ecosystem: "npm"
+    directory: "/autobot-slm-frontend"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "frontend"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     target-branch: "Dev_new_gui"

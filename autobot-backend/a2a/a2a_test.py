@@ -394,3 +394,367 @@ class TestTaskManagerEviction:
         fetched = self.mgr.get_task(task.id)
         assert fetched is not None
         assert fetched.status.state == TaskState.COMPLETED
+
+
+# ---------------------------------------------------------------------------
+# Issue #4606: publish_event() tests
+# ---------------------------------------------------------------------------
+
+
+class TestPublishEvent:
+    """Unit tests for TaskManager.publish_event() — Issue #4606.
+
+    publish_event() wraps redis.publish() with a best-effort guard: any
+    exception must be swallowed so pub/sub failures never abort task execution.
+    """
+
+    def setup_method(self):
+        self._redis_mock = _make_redis_mock()
+        with patch(
+            "a2a.task_manager.get_redis_client", return_value=self._redis_mock
+        ):
+            self.mgr = TaskManager()
+
+    def test_publish_event_happy_path(self):
+        """redis.publish() is called with the correct channel and JSON payload."""
+        task = self.mgr.create_task("Publish test")
+        payload = {"event": "state_change", "state": "working"}
+
+        self.mgr.publish_event(task.id, payload)
+
+        expected_channel = f"a2a:events:{task.id}"
+        self._redis_mock.publish.assert_called_once_with(
+            expected_channel,
+            '{"event": "state_change", "state": "working"}',
+        )
+
+    def test_publish_event_redis_failure_does_not_propagate(self):
+        """An exception from redis.publish() must not escape publish_event().
+
+        publish_event() is best-effort — a Redis failure must never crash
+        the task executor that calls it.
+        """
+        self._redis_mock.publish.side_effect = Exception("Redis connection refused")
+
+        # Must not raise, regardless of the underlying Redis failure
+        self.mgr.publish_event("any-task-id", {"event": "state_change", "state": "working"})
+
+
+# ---------------------------------------------------------------------------
+# Issue #4626: get_task() must slide TTL on all three Redis keys
+# ---------------------------------------------------------------------------
+
+
+class TestGetTaskTTLSliding:
+    """Assert that get_task() calls expire() on every key it touches.
+
+    Issue #4626: The existing mock treated expire() as a silent no-op, meaning
+    a regression removing any EXPIRE call would still pass all tests. These
+    tests make each of the three EXPIRE calls explicit and mandatory.
+    """
+
+    def setup_method(self):
+        self._redis_mock = _make_redis_mock()
+        with patch(
+            "a2a.task_manager.get_redis_client", return_value=self._redis_mock
+        ):
+            self.mgr = TaskManager()
+
+    def test_get_task_slides_ttl_on_all_three_keys(self):
+        """get_task() must call expire() for task key, audit key, and tracking set."""
+        from a2a.task_manager import _KEY_AUDIT, _KEY_TASK, _KEY_TASKS
+
+        task = self.mgr.create_task("TTL sliding test")
+
+        # Reset call history so only get_task() calls are counted
+        self._redis_mock.expire.reset_mock()
+
+        self.mgr.get_task(task.id)
+
+        # Collect every key that was passed to expire()
+        expired_keys = [call.args[0] for call in self._redis_mock.expire.call_args_list]
+
+        assert self._redis_mock.expire.call_count >= 3, (
+            f"Expected at least 3 expire() calls, got {self._redis_mock.expire.call_count}"
+        )
+        assert _KEY_TASK.format(task.id) in expired_keys, (
+            f"expire() not called for task key {_KEY_TASK.format(task.id)!r}"
+        )
+        assert _KEY_AUDIT.format(task.id) in expired_keys, (
+            f"expire() not called for audit key {_KEY_AUDIT.format(task.id)!r}"
+        )
+        assert _KEY_TASKS in expired_keys, (
+            f"expire() not called for tracking set {_KEY_TASKS!r}"
+        )
+
+    def test_get_task_missing_does_not_call_expire(self):
+        """expire() must NOT be called when task_id is not found in Redis.
+
+        Avoids unnecessary Redis round-trips on cache misses.
+        """
+        self._redis_mock.expire.reset_mock()
+
+        result = self.mgr.get_task("nonexistent-task-id")
+
+        assert result is None
+        self._redis_mock.expire.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Issue #4649: _save() must call expire() on _KEY_TASKS with correct TTL
+# ---------------------------------------------------------------------------
+
+
+class TestSaveTTL:
+    """Assert that _save() (called by create_task()) sets the TTL on _KEY_TASKS.
+
+    Issue #4649: The _save() mock silently ignored the expire() call on
+    _KEY_TASKS, meaning removing it would still pass the full test suite.
+    These tests make the EXPIRE call on the tracking set explicit and mandatory.
+    """
+
+    def setup_method(self):
+        self._redis_mock = _make_redis_mock()
+        with patch(
+            "a2a.task_manager.get_redis_client", return_value=self._redis_mock
+        ):
+            self.mgr = TaskManager()
+
+    def test_create_task_calls_expire_on_key_tasks(self):
+        """create_task() → _save() must call expire(_KEY_TASKS, ttl)."""
+        from a2a.task_manager import _KEY_TASKS
+
+        self._redis_mock.expire.reset_mock()
+
+        self.mgr.create_task("Test save TTL")
+
+        expired_keys = [call.args[0] for call in self._redis_mock.expire.call_args_list]
+        assert _KEY_TASKS in expired_keys, (
+            f"expire() not called for tracking set {_KEY_TASKS!r}; "
+            f"keys seen: {expired_keys}"
+        )
+
+    def test_create_task_expire_uses_configured_ttl(self):
+        """expire(_KEY_TASKS, ttl) must use the value returned by _ttl()."""
+        from a2a.task_manager import _KEY_TASKS
+
+        expected_ttl = self.mgr._ttl()
+        self._redis_mock.expire.reset_mock()
+
+        self.mgr.create_task("TTL value test")
+
+        # Find the expire() call for _KEY_TASKS and verify the TTL argument
+        matching = [
+            call
+            for call in self._redis_mock.expire.call_args_list
+            if call.args[0] == _KEY_TASKS
+        ]
+        assert matching, f"expire() never called with key {_KEY_TASKS!r}"
+        actual_ttl = matching[0].args[1]
+        assert actual_ttl == expected_ttl, (
+            f"expire({_KEY_TASKS!r}, ...) used ttl={actual_ttl}, "
+            f"expected {expected_ttl}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Issue #4687: Self-Evaluator unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestSelfEvaluator:
+    """Unit tests for a2a.self_evaluator — Issue #4687.
+
+    All tests are pure-Python (no I/O, no network) and verify the heuristic
+    scoring logic and EvalResult dataclass directly.
+    """
+
+    def _run(self, coro):
+        import asyncio
+
+        return asyncio.run(coro)
+
+    def test_high_confidence_response_passes(self):
+        from a2a.self_evaluator import evaluate_task_output
+
+        result = self._run(
+            evaluate_task_output(
+                input_text="What is 2 + 2?",
+                response_text="The answer is 4. Addition of 2 and 2 yields 4.",
+                metadata={},
+                threshold=0.6,
+            )
+        )
+        assert result.passed is True
+        assert result.confidence >= 0.6
+        assert result.eval_reason == ""
+
+    def test_uncertain_response_fails(self):
+        from a2a.self_evaluator import evaluate_task_output
+
+        # Response with 4+ uncertainty phrases drives confidence below 0.6
+        result = self._run(
+            evaluate_task_output(
+                input_text="What is the capital of France?",
+                response_text=(
+                    "I don't know. I am not sure. I cannot answer this. "
+                    "Unable to provide information here. I have no data on this."
+                ),
+                metadata={},
+                threshold=0.6,
+            )
+        )
+        assert result.passed is False
+        assert result.confidence < 0.6
+        assert result.eval_reason != ""
+
+    def test_empty_response_fails(self):
+        from a2a.self_evaluator import evaluate_task_output
+
+        result = self._run(
+            evaluate_task_output(
+                input_text="Summarise this document.",
+                response_text="   ",
+                metadata={},
+                threshold=0.6,
+            )
+        )
+        assert result.passed is False
+        assert result.confidence == 0.0
+
+    def test_custom_threshold_respected(self):
+        """A response that passes default threshold can fail a stricter one."""
+        from a2a.self_evaluator import evaluate_task_output
+
+        good_response = "Python is a high-level programming language used widely."
+        # Should pass at default 0.6
+        result_default = self._run(
+            evaluate_task_output("Describe Python", good_response, {}, threshold=0.6)
+        )
+        assert result_default.passed is True
+
+        # Force failure with threshold above 1.0 (impossible to pass)
+        result_strict = self._run(
+            evaluate_task_output("Describe Python", good_response, {}, threshold=1.1)
+        )
+        assert result_strict.passed is False
+
+    def test_confidence_is_bounded(self):
+        from a2a.self_evaluator import _score_response
+
+        assert _score_response("x" * 100, "short") <= 1.0
+        assert _score_response("x" * 100, "short") >= 0.0
+        assert _score_response("", "question") == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Issue #4687: execute_a2a_task quality-gate integration tests
+# ---------------------------------------------------------------------------
+
+
+class TestExecuteA2aTaskEvalGate:
+    """Verify that execute_a2a_task respects the self-eval quality gate.
+
+    Mocks:
+      - get_task_manager() → in-process TaskManager with mock Redis
+      - get_agent_orchestrator() → mock that returns a controllable result
+      - evaluate_task_output() → tested separately; here we mock to control pass/fail
+    """
+
+    def _make_manager(self):
+        with patch("a2a.task_manager.get_redis_client", return_value=_make_redis_mock()):
+            mgr = TaskManager()
+        return mgr
+
+    def _run(self, coro):
+        import asyncio
+
+        return asyncio.run(coro)
+
+    def test_pass_threshold_transitions_to_completed(self):
+        """When eval passes, task must reach COMPLETED."""
+        import sys
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from a2a.self_evaluator import EvalResult
+        from a2a.task_executor import execute_a2a_task
+        from a2a.types import TaskState
+
+        mgr = self._make_manager()
+        task = mgr.create_task("Describe Python")
+
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.process_request = AsyncMock(
+            return_value={"response": "Python is a popular programming language."}
+        )
+        # Stub heavy modules so the late import in task_executor succeeds
+        mock_ao_module = MagicMock()
+        mock_ao_module.get_agent_orchestrator = MagicMock(return_value=mock_orchestrator)
+
+        passed_eval = EvalResult(passed=True, confidence=0.9, eval_reason="")
+
+        with (
+            patch("a2a.task_executor.get_task_manager", return_value=mgr),
+            patch(
+                "a2a.task_executor.evaluate_task_output",
+                new=AsyncMock(return_value=passed_eval),
+            ),
+            patch.dict(sys.modules, {"agents.agent_orchestration": mock_ao_module}),
+        ):
+            self._run(execute_a2a_task(task.id, "Describe Python"))
+
+        final = mgr.get_task(task.id)
+        assert final.status.state == TaskState.COMPLETED
+
+    def test_fail_threshold_transitions_to_failed_with_eval_reason(self):
+        """When eval fails, task must reach FAILED with eval_reason artifact."""
+        import sys
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from a2a.self_evaluator import EvalResult
+        from a2a.task_executor import execute_a2a_task
+        from a2a.types import TaskState
+
+        mgr = self._make_manager()
+        task = mgr.create_task("Explain quantum entanglement")
+
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.process_request = AsyncMock(
+            return_value={"response": "I'm not sure about this."}
+        )
+        mock_ao_module = MagicMock()
+        mock_ao_module.get_agent_orchestrator = MagicMock(return_value=mock_orchestrator)
+
+        failed_eval = EvalResult(
+            passed=False,
+            confidence=0.3,
+            eval_reason="Self-evaluation failed: confidence 0.3000 below threshold 0.6000.",
+        )
+
+        with (
+            patch("a2a.task_executor.get_task_manager", return_value=mgr),
+            patch(
+                "a2a.task_executor.evaluate_task_output",
+                new=AsyncMock(return_value=failed_eval),
+            ),
+            patch.dict(sys.modules, {"agents.agent_orchestration": mock_ao_module}),
+        ):
+            self._run(execute_a2a_task(task.id, "Explain quantum entanglement"))
+
+        final = mgr.get_task(task.id)
+        assert final.status.state == TaskState.FAILED
+        assert final.status.message is not None
+        assert (
+            "eval" in final.status.message.lower()
+            or "confidence" in final.status.message.lower()
+        )
+
+        # eval_reason artifact must be present
+        eval_artifacts = [
+            a
+            for a in final.artifacts
+            if a.artifact_type == "json"
+            and isinstance(a.content, dict)
+            and "eval_reason" in a.content
+        ]
+        assert len(eval_artifacts) == 1, "Expected exactly one eval_reason artifact"

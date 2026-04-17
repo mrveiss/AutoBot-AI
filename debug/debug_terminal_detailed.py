@@ -10,6 +10,7 @@ import asyncio
 import json
 import logging
 import sys
+import os
 import time
 from datetime import datetime
 
@@ -19,7 +20,7 @@ import websockets
 logger = logging.getLogger(__name__)
 
 # Import centralized network configuration
-sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
+sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
 from constants.network_constants import NetworkConstants
 
 # Build URLs from centralized configuration
@@ -197,7 +198,7 @@ def test_system_command_agent_direct():
         # Try to import and test directly
         import sys
 
-        sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
+        sys.path.append(os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
 
         from agents.system_command_agent import SystemCommandAgent
 

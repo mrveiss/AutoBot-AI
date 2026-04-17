@@ -71,11 +71,13 @@ class TestHookInvokerInitialization:
         assert invoker.manager is manager
 
     def test_default_configs_registered(self):
-        """Should register default configs for all 25 hooks."""
+        """Should register default configs for all HookPoint members."""
         manager = ExtensionManager()
         invoker = HookInvoker(manager)
-        hooks = invoker.list_hooks()
-        assert len(hooks) == 25
+        for hp in HookPoint:
+            assert invoker.get_config(hp) is not None, (
+                f"HookPoint.{hp.name} missing explicit config in HookInvoker"
+            )
 
     def test_message_preparation_hooks_configured(self):
         """Should configure message preparation hooks."""
@@ -253,10 +255,13 @@ class TestHookInvokerInvocation:
         invoker = HookInvoker(manager)
 
         hooks = invoker.list_hooks()
-        assert len(hooks) == 25
-
-        # Verify hook names and modes are present
         hook_names = {h[0] for h in hooks}
+        for hp in HookPoint:
+            assert hp.name in hook_names, (
+                f"HookPoint.{hp.name} missing from list_hooks() output"
+            )
+
+        # Verify specific hook names and modes are present
         assert "BEFORE_MESSAGE_PROCESS" in hook_names
         assert "BEFORE_PROMPT_BUILD" in hook_names
         assert "AFTER_PROMPT_BUILD" in hook_names

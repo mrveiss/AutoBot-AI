@@ -264,53 +264,53 @@ const cleanupSessionOrphans = async () => {
 /* Issue #704: Migrated to CSS design tokens */
 .session-orphan-manager {
   background: var(--bg-card);
-  border-radius: 0.5rem;
-  margin: 1rem;
+  border-radius: var(--radius-lg);
+  margin: var(--spacing-4);
   box-shadow: var(--shadow-sm);
 }
 
 .section-header {
-  padding: 1.25rem;
+  padding: var(--spacing-5);
   border-bottom: 1px solid var(--border-default);
   background: var(--bg-secondary);
 }
 
 .section-header h4 {
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0 0 0.25rem 0;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .header-description {
   color: var(--text-tertiary);
-  margin: 0;
-  font-size: 0.875rem;
+  margin: var(--spacing-0);
+  font-size: var(--text-sm);
 }
 
 .orphan-content {
-  padding: 1.25rem;
+  padding: var(--spacing-5);
 }
 
 .orphan-summary {
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
 }
 
 .summary-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
 }
 
 .stat-item {
   text-align: center;
-  padding: 1rem;
+  padding: var(--spacing-4);
   background: var(--bg-secondary);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-default);
 }
 
@@ -321,7 +321,7 @@ const cleanupSessionOrphans = async () => {
 
 .stat-value {
   display: block;
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -332,20 +332,20 @@ const cleanupSessionOrphans = async () => {
 
 .stat-label {
   display: block;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
-  margin-top: 0.25rem;
+  margin-top: var(--spacing-1);
 }
 
 .orphan-preview {
   background: var(--color-warning-bg-light);
   border: 1px solid var(--color-warning-light);
-  border-radius: 0.5rem;
-  padding: 1rem;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
 }
 
 .orphan-preview h5 {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-warning-darker);
   margin: 0 0 0.75rem 0;
@@ -354,7 +354,7 @@ const cleanupSessionOrphans = async () => {
 .orphan-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   max-height: 300px;
   overflow-y: auto;
 }
@@ -362,34 +362,34 @@ const cleanupSessionOrphans = async () => {
 .orphan-item {
   background: var(--bg-card);
   border: 1px solid var(--color-warning-light);
-  border-radius: 0.375rem;
-  padding: 0.75rem;
+  border-radius: var(--radius-md);
+  padding: var(--spacing-3);
 }
 
 .orphan-meta {
   display: flex;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-2);
 }
 
 .orphan-category {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   padding: 0.125rem 0.5rem;
   background: var(--color-primary-bg);
   color: var(--color-primary-dark);
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
 }
 
 .orphan-important {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   padding: 0.125rem 0.5rem;
   background: var(--color-warning-bg);
   color: var(--color-warning-dark);
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
 }
 
 .orphan-content-text {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   margin: 0 0 0.25rem 0;
   line-height: 1.4;
@@ -399,12 +399,12 @@ const cleanupSessionOrphans = async () => {
 }
 
 .orphan-session {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
 .orphan-more {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
   font-style: italic;
   margin: 0.75rem 0 0 0;
@@ -414,18 +414,18 @@ const cleanupSessionOrphans = async () => {
 .orphan-actions {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1.5rem;
+  gap: var(--spacing-6);
 }
 
 .action-card {
   border: 1px solid var(--border-default);
-  border-radius: 0.5rem;
-  padding: 1.25rem;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-5);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   min-height: 200px;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .action-card:hover {
@@ -453,8 +453,8 @@ const cleanupSessionOrphans = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.25rem;
-  margin-bottom: 1rem;
+  font-size: var(--text-xl);
+  margin-bottom: var(--spacing-4);
 }
 
 .action-icon.scan {
@@ -468,7 +468,7 @@ const cleanupSessionOrphans = async () => {
 }
 
 .action-card h5 {
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0 0 0.5rem 0;
@@ -482,9 +482,9 @@ const cleanupSessionOrphans = async () => {
 
 .action-meta {
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   display: block;
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .action-btn {
@@ -495,10 +495,10 @@ const cleanupSessionOrphans = async () => {
 .status-message {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 1rem;
-  border-radius: 0.5rem;
-  margin-top: 1.5rem;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4);
+  border-radius: var(--radius-lg);
+  margin-top: var(--spacing-6);
 }
 
 .status-message.success {
@@ -533,7 +533,7 @@ const cleanupSessionOrphans = async () => {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0.25rem;
+  padding: var(--spacing-1);
   color: inherit;
   opacity: 0.7;
 }

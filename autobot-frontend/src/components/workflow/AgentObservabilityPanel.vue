@@ -178,7 +178,7 @@ function formatDuration(seconds: number): string {
 .agent-observability-panel {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .panel-header {
@@ -188,12 +188,12 @@ function formatDuration(seconds: number): string {
 }
 
 .panel-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: 15px;
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .panel-header h3 i {
@@ -205,7 +205,7 @@ function formatDuration(seconds: number): string {
   height: 32px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-secondary);
   cursor: pointer;
   display: flex;
@@ -237,38 +237,38 @@ function formatDuration(seconds: number): string {
 
 .empty-state i,
 .loading-state i {
-  font-size: 36px;
-  margin-bottom: 10px;
+  font-size: var(--text-4xl);
+  margin-bottom: var(--spacing-2-5);
 }
 
 .empty-state h4 {
   margin: 0 0 4px;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .empty-state p {
-  margin: 0;
-  font-size: 12px;
+  margin: var(--spacing-0);
+  font-size: var(--text-xs);
 }
 
 /* Agents Grid */
 .agents-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 14px;
+  gap: var(--spacing-3-5);
 }
 
 /* Agent Card */
 .agent-card {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 10px;
-  padding: 16px;
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-4);
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  transition: border-color 0.2s;
+  gap: var(--spacing-3);
+  transition: border-color var(--duration-200);
 }
 
 .agent-card:hover {
@@ -279,13 +279,13 @@ function formatDuration(seconds: number): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .agent-identity {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
   flex: 1;
   min-width: 0;
 }
@@ -293,11 +293,11 @@ function formatDuration(seconds: number): string {
 .agent-avatar {
   width: 36px;
   height: 36px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: var(--text-base);
   flex-shrink: 0;
 }
 
@@ -323,7 +323,7 @@ function formatDuration(seconds: number): string {
 }
 
 .agent-name {
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
   overflow: hidden;
@@ -332,14 +332,14 @@ function formatDuration(seconds: number): string {
 }
 
 .agent-tasks-summary {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
 .reliability-badge {
   padding: 3px 10px;
-  border-radius: 12px;
-  font-size: 12px;
+  border-radius: var(--radius-xl);
+  font-size: var(--text-xs);
   font-weight: 600;
   flex-shrink: 0;
 }
@@ -362,7 +362,7 @@ function formatDuration(seconds: number): string {
 /* Metrics */
 .metrics-row {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .metric {
@@ -372,11 +372,11 @@ function formatDuration(seconds: number): string {
   flex: 1;
   padding: 8px 0;
   background: var(--bg-tertiary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .metric-value {
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -385,11 +385,11 @@ function formatDuration(seconds: number): string {
 .metric-value.failed { color: var(--color-error); }
 
 .metric-label {
-  font-size: 10px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-top: 2px;
+  margin-top: var(--spacing-0-5);
 }
 
 /* Reliability Bar */
@@ -400,14 +400,14 @@ function formatDuration(seconds: number): string {
 .reliability-bar {
   height: 4px;
   background: var(--bg-tertiary);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   overflow: hidden;
 }
 
 .reliability-fill {
   height: 100%;
-  border-radius: 2px;
-  transition: width 0.4s ease;
+  border-radius: var(--radius-xs);
+  transition: width 0.4s var(--ease-out);
 }
 
 .reliability-fill.reliability-high { background: var(--color-success); }
@@ -418,20 +418,20 @@ function formatDuration(seconds: number): string {
 .capabilities-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .capability-tag {
   padding: 2px 8px;
   background: var(--bg-tertiary);
-  border-radius: 4px;
-  font-size: 10px;
+  border-radius: var(--radius-default);
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
 .capability-overflow {
   padding: 2px 6px;
-  font-size: 10px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 </style>

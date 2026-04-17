@@ -206,21 +206,21 @@ const formatDuration = (seconds: number): string => {
 @reference "../../assets/tailwind.css";
 .overseer-step {
   @apply bg-autobot-bg-secondary border border-autobot-border rounded-lg p-4 mb-4;
-  transition: all 0.3s ease;
+  transition: all var(--duration-300) var(--ease-out);
 }
 
 .overseer-step.running,
 .overseer-step.streaming {
-  @apply border-blue-500;
+  border-color: var(--color-primary);
   box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
 }
 
 .overseer-step.completed {
-  @apply border-green-600;
+  border-color: var(--color-success);
 }
 
 .overseer-step.failed {
-  @apply border-red-600;
+  border-color: var(--color-error);
 }
 
 /* Step Header */
@@ -233,7 +233,9 @@ const formatDuration = (seconds: number): string => {
 }
 
 .step-badge {
-  @apply bg-indigo-600 text-white text-xs font-semibold px-2 py-1 rounded;
+  @apply text-xs font-semibold px-2 py-1 rounded;
+  background: var(--color-primary);
+  color: var(--text-inverse);
 }
 
 .step-status {
@@ -241,11 +243,11 @@ const formatDuration = (seconds: number): string => {
 }
 
 .step-status.pending { @apply text-autobot-text-muted; }
-.step-status.running { @apply text-blue-400; }
-.step-status.streaming { @apply text-cyan-400; }
-.step-status.explaining { @apply text-purple-400; }
-.step-status.completed { @apply text-green-400; }
-.step-status.failed { @apply text-red-400; }
+.step-status.running { color: var(--color-info); }
+.step-status.streaming { color: var(--color-info); }
+.step-status.explaining { color: var(--color-info); }
+.step-status.completed { color: var(--color-success); }
+.step-status.failed { color: var(--color-error); }
 
 .step-time {
   @apply text-autobot-text-muted text-xs flex items-center gap-1;
@@ -353,11 +355,13 @@ const formatDuration = (seconds: number): string => {
 
 .return-code {
   @apply ml-auto text-xs px-2 py-0.5 rounded;
-  @apply bg-green-900/50 text-green-400;
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .return-code.error {
-  @apply bg-red-900/50 text-red-400;
+  background: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 .output-text {

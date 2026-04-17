@@ -183,6 +183,11 @@ jobs:
         cd autobot-frontend
         npm run lint
 
+    - name: Check i18n keys
+      run: |
+        cd autobot-frontend
+        npm run check:i18n
+
     - name: Run frontend type checking
       run: |
         cd autobot-frontend

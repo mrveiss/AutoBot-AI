@@ -283,19 +283,19 @@ function formatFactorName(factor: string): string {
 
 <style scoped>
 .environment-analysis-section {
-  margin-top: 32px;
-  padding: 24px;
+  margin-top: var(--spacing-8);
+  padding: var(--spacing-6);
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
   contain: layout style;}
 
 .environment-analysis-section h3 {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
   color: var(--text-primary);
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-4);
   font-size: 1.2em;
   font-weight: 600;
 }
@@ -309,9 +309,9 @@ function formatFactorName(factor: string): string {
 .environment-analysis-section .success-state {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 16px;
-  border-radius: 8px;
+  gap: var(--spacing-2-5);
+  padding: var(--spacing-4);
+  border-radius: var(--radius-lg);
 }
 
 .environment-analysis-section .loading-state {
@@ -338,45 +338,45 @@ function formatFactorName(factor: string): string {
 
 /* Categories Breakdown */
 .environment-analysis-section .categories-breakdown {
-  margin-top: 20px;
+  margin-top: var(--spacing-5);
 }
 
 .environment-analysis-section .categories-breakdown h4 {
   color: var(--text-secondary);
   font-size: 1em;
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
 }
 
 .environment-analysis-section .category-badges {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .environment-analysis-section .category-badge {
   padding: 4px 10px;
   background: rgba(71, 85, 105, 0.4);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.85em;
   color: var(--text-muted);
 }
 
 /* Recommendations List */
 .environment-analysis-section .recommendations-list {
-  margin-top: 20px;
+  margin-top: var(--spacing-5);
 }
 
 .environment-analysis-section .recommendations-list h4 {
   color: var(--text-secondary);
   font-size: 1em;
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
 }
 
 .environment-analysis-section .recommendation-item {
-  padding: 14px;
+  padding: var(--spacing-3-5);
   background: rgba(17, 24, 39, 0.5);
-  border-radius: 8px;
-  margin-bottom: 10px;
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-2-5);
   border-left: 4px solid var(--text-tertiary);
 }
 
@@ -395,21 +395,21 @@ function formatFactorName(factor: string): string {
 .environment-analysis-section .rec-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: var(--spacing-2-5);
+  margin-bottom: var(--spacing-2);
 }
 
 .environment-analysis-section .env-var-name {
   background: rgba(34, 197, 94, 0.2);
   color: var(--color-success-light);
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.9em;
 }
 
 .environment-analysis-section .priority-badge {
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.7em;
   text-transform: uppercase;
   font-weight: 600;
@@ -433,7 +433,7 @@ function formatFactorName(factor: string): string {
 .environment-analysis-section .rec-description {
   color: var(--text-secondary);
   font-size: 0.9em;
-  margin-bottom: 6px;
+  margin-bottom: var(--spacing-1-5);
 }
 
 .environment-analysis-section .rec-default {
@@ -444,18 +444,18 @@ function formatFactorName(factor: string): string {
 .environment-analysis-section .rec-default code {
   background: rgba(30, 41, 59, 0.8);
   padding: 1px 5px;
-  border-radius: 3px;
+  border-radius: var(--radius-default);
 }
 
 /* Hardcoded Values Preview */
 .environment-analysis-section .hardcoded-preview {
-  margin-top: 20px;
+  margin-top: var(--spacing-5);
 }
 
 .environment-analysis-section .hardcoded-preview h4 {
   color: var(--text-secondary);
   font-size: 1em;
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
 }
 
 /* Issue #631: Truncation warning style */
@@ -463,14 +463,14 @@ function formatFactorName(factor: string): string {
   font-size: 0.85em;
   color: var(--color-warning);
   font-weight: normal;
-  margin-left: 8px;
+  margin-left: var(--spacing-2);
 }
 
 .environment-analysis-section .hardcoded-item {
-  padding: 12px;
+  padding: var(--spacing-3);
   background: rgba(17, 24, 39, 0.5);
-  border-radius: 6px;
-  margin-bottom: 8px;
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-2);
   border-left: 3px solid var(--text-tertiary);
 }
 
@@ -487,7 +487,7 @@ function formatFactorName(factor: string): string {
 }
 
 .environment-analysis-section .hv-location {
-  margin-bottom: 6px;
+  margin-bottom: var(--spacing-1-5);
 }
 
 .environment-analysis-section .file-path {
@@ -504,15 +504,15 @@ function formatFactorName(factor: string): string {
 .environment-analysis-section .hv-value {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-1-5);
 }
 
 .environment-analysis-section .hv-value code {
   background: rgba(245, 158, 11, 0.1);
   color: var(--color-warning-light);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.85em;
 }
 
@@ -525,10 +525,10 @@ function formatFactorName(factor: string): string {
 .environment-analysis-section .hv-suggestion {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
   padding: 6px 10px;
   background: rgba(59, 130, 246, 0.1);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.85em;
 }
 

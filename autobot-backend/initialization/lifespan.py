@@ -745,7 +745,7 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
     try:
         from services.graph_rag_service import GraphRAGService
         from services.rag_config import RAGConfig
-        from services.rag_service import RAGService
+        from services.rag_service import RAGService, register_shared_mesh_components
 
         if app.state.knowledge_base:
             rag_config = RAGConfig(enable_advanced_rag=True, timeout_seconds=10.0)
@@ -753,6 +753,74 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
                 knowledge_base=app.state.knowledge_base, config=rag_config
             )
             await rag_service.initialize()
+
+            # Build mesh brain components and register them so every RAGService.initialize()
+            # can construct its OWN NeuralMeshRetriever with closures bound to its own
+            # optimizer — eliminating the shared-singleton coupling (#4765).
+            try:
+                from autobot_shared.redis_client import get_async_redis_client
+                from knowledge.search_components.query_classifier import QueryClassifier
+                from knowledge.search_components.reranking import ResultReranker
+                from services.mesh_brain.edge_learner import EdgeLearner
+                from services.mesh_brain.mesh_db_adapter import create_mesh_db_adapter
+                from services.mesh_brain.ppr import PersonalizedPageRank
+                from user_management.database import get_async_engine
+
+                _mesh_db = create_mesh_db_adapter(get_async_engine())
+                _redis = get_async_redis_client()
+                _ppr = PersonalizedPageRank(db=_mesh_db)
+                _edge_learner = EdgeLearner(db=_mesh_db, redis=_redis)
+
+                _mesh_components = {
+                    "mesh_db": _mesh_db,
+                    "ppr": _ppr,
+                    "edge_learner": _edge_learner,
+                    "reranker": ResultReranker(),
+                    "classifier": QueryClassifier(),
+                    "llm": None,
+                }
+
+                # Store on app.state for introspection / health checks.
+                app.state.mesh_components = _mesh_components
+
+                # Expose mesh_db on app.state so _start_community_clustering_loop can use it (#4834).
+                app.state.mesh_db = _mesh_db
+
+                # Register components; each future RAGService.initialize() builds its own
+                # retriever from these, binding closures to its own optimizer (#4765).
+                register_shared_mesh_components(_mesh_components)
+
+                # Trigger re-initialization for already-created RAGService instances so they
+                # also build per-instance retrievers (covers chat_workflow_manager and the
+                # get_rag_service() singleton that were created before this point).
+                import services.rag_service as _rag_mod
+
+                for _existing in [
+                    _rag_mod._rag_service_instance,
+                    getattr(
+                        getattr(
+                            getattr(app.state, "chat_workflow_manager", None),
+                            "knowledge_service",
+                            None,
+                        ),
+                        "rag_service",
+                        None,
+                    ),
+                ]:
+                    if _existing is not None and _existing._mesh_retriever is None:
+                        _existing._initialized = False  # force re-init on next call
+                        logger.info(
+                            "Queued per-instance NeuralMeshRetriever build for existing RAGService (#4765)"
+                        )
+
+                logger.info(
+                    "✅ [ 87%] Neural Mesh RAG: mesh components registered; "
+                    "per-instance NeuralMeshRetriever will build on next initialize() (#4765)"
+                )
+            except Exception as _mesh_wire_err:
+                logger.warning(
+                    "Neural Mesh RAG wiring skipped (non-fatal): %s", _mesh_wire_err
+                )
 
             graph_rag_service = GraphRAGService(
                 rag_service=rag_service,
@@ -1107,13 +1175,30 @@ async def _init_backup_scheduler(app: FastAPI) -> None:
         scheduler = BackupScheduler()
         await scheduler.start()
         app.state.backup_scheduler = scheduler
-        logger.info("[100%%] Backup Scheduler: Started (daily at %02d:00 UTC)",
-                    scheduler._schedule_hour)
-    except Exception as e:
-        logger.warning(
-            "Backup scheduler initialization failed (non-critical): %s", e
+        logger.info(
+            "[100%%] Backup Scheduler: Started (daily at %02d:00 UTC)",
+            scheduler._schedule_hour,
         )
+    except Exception as e:
+        logger.warning("Backup scheduler initialization failed (non-critical): %s", e)
         app.state.backup_scheduler = None
+
+
+async def _start_autonomous_loop(app: FastAPI) -> None:
+    """Start the autonomous RAG/synthesis improvement loop background task (Issue #4680).
+
+    NON-CRITICAL: loop failures do not affect request handling.
+    Only fires a background task when ``autonomous_loop_enabled`` is True.
+    """
+    logger.info("[100%%] AutonomousLoop: Initializing...")
+    try:
+        from workflow_scheduler import start_autonomous_loop
+
+        llm_service = getattr(app.state, "llm_service", None)
+        start_autonomous_loop(llm_service)
+        logger.info("[100%%] AutonomousLoop: background task started")
+    except Exception as exc:
+        logger.warning("AutonomousLoop initialization failed (non-critical): %s", exc)
 
 
 async def _wire_scheduler_executor() -> None:
@@ -1167,6 +1252,82 @@ async def _wire_scheduler_executor() -> None:
         logger.warning(
             "Scheduler executor wiring failed (template-only fallback active): %s", e
         )
+
+
+async def _start_community_clustering_loop(app: FastAPI) -> None:
+    """Start a periodic CommunityClusterer background loop every 6 hours (#4834).
+
+    Uses the MeshDB adapter stored on app.state.mesh_db by _init_graph_rag_service.
+    NON-CRITICAL: clustering failures do not affect request handling.
+    """
+    mesh_db = getattr(app.state, "mesh_db", None)
+    if mesh_db is None:
+        logger.info("CommunityClusterer: mesh_db not available, skipping periodic loop")
+        return
+
+    from services.mesh_brain.community_clusterer import CommunityClusterer
+
+    _CLUSTER_INTERVAL_SECONDS = 6 * 3600  # 6 hours
+
+    async def _loop() -> None:
+        # Allow startup to complete before first expensive Leiden pass
+        await asyncio.sleep(300)  # 5 minutes
+        while True:
+            try:
+                promoted = await CommunityClusterer(mesh_db).run()
+                logger.info(
+                    "CommunityClusterer periodic run: %d anchors promoted",
+                    len(promoted),
+                )
+            except ImportError as exc:
+                logger.warning(
+                    "graspologic not installed — community clustering paused. "
+                    "Install with: pip install graspologic. Retrying in 24h. Error: %s",
+                    exc,
+                )
+                await asyncio.sleep(
+                    86400
+                )  # 24 hours — re-check after potential install
+                continue
+            except Exception as exc:
+                logger.warning(
+                    "CommunityClusterer periodic run failed (non-fatal): %s", exc
+                )
+            await asyncio.sleep(_CLUSTER_INTERVAL_SECONDS)
+
+    app.state.community_cluster_task = asyncio.create_task(_loop())
+    logger.info(
+        "CommunityClusterer: periodic loop started (interval=%dh)",
+        _CLUSTER_INTERVAL_SECONDS // 3600,
+    )
+
+
+async def _init_web_researcher(app: FastAPI) -> None:
+    """Initialize the WebResearcher singleton so web browsing is available in chat.
+
+    WebResearcher.enabled defaults to False and initialize() is never called
+    lazily — without this Phase 2 step, every web research request silently fails.
+    NON-CRITICAL: browser unavailability does not block other features.
+    """
+    logger.info("[ 99%%] WebResearcher: Initializing browser automation...")
+    try:
+        from agents.web_researcher import _load_web_research_config, get_web_researcher
+
+        # Load stored config then enable — passing only {"enabled": True} would
+        # discard all other settings (rate limits, timeouts, circuit breaker).
+        config = _load_web_research_config()
+        config["enabled"] = True
+        researcher = get_web_researcher(config=config)
+        await researcher.initialize()
+        app.state.web_researcher = researcher
+        logger.info("[ 99%%] WebResearcher: Browser automation ready")
+    except Exception as e:
+        logger.warning(
+            "WebResearcher initialization failed (non-critical): %s — "
+            "web browsing will be unavailable until the next restart",
+            e,
+        )
+        app.state.web_researcher = None
 
 
 async def _init_plugin_manager(app: FastAPI) -> None:
@@ -1242,8 +1403,11 @@ async def initialize_background_services(app: FastAPI):
         await _wire_npu_task_queue()
         await _wire_scheduler_executor()
         await _init_voice_interface(app)
+        await _init_web_researcher(app)
         await _init_plugin_manager(app)
         await _init_backup_scheduler(app)
+        await _start_autonomous_loop(app)
+        await _start_community_clustering_loop(app)
 
         await update_app_state_multi(
             initialization_status="ready",
@@ -1307,6 +1471,13 @@ async def cleanup_services(app: FastAPI):
         if hasattr(app.state, "backup_scheduler") and app.state.backup_scheduler:
             await app.state.backup_scheduler.stop()
             logger.info("✅ Backup scheduler stopped")
+
+        # Issue #4946: Cancel community clustering background task
+        task = getattr(app.state, "community_cluster_task", None)
+        if task and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            logger.info("✅ Community cluster task cancelled")
 
         # Issue #1748: Stop process adapter dispatcher
         if (

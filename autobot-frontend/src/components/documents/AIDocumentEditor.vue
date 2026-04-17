@@ -262,7 +262,7 @@ const formattedUpdatedAt = computed(() => {
   height: 100%;
   background: var(--color-background, #1e1e1e);
   color: var(--color-text, #e0e0e0);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
@@ -272,7 +272,7 @@ const formattedUpdatedAt = computed(() => {
   justify-content: space-between;
   padding: 12px 16px;
   border-bottom: 1px solid var(--color-border, #333);
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .title-row {
@@ -281,7 +281,7 @@ const formattedUpdatedAt = computed(() => {
 }
 
 .document-title {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: 1.1rem;
   font-weight: 600;
   cursor: pointer;
@@ -290,8 +290,12 @@ const formattedUpdatedAt = computed(() => {
   text-overflow: ellipsis;
   outline: none;
   padding: 2px 4px;
-  border-radius: 4px;
-  transition: background 0.15s;
+  border-radius: var(--radius-default);
+  transition: background var(--duration-150);
+}
+.document-title:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .document-title:hover {
@@ -303,16 +307,20 @@ const formattedUpdatedAt = computed(() => {
   background: var(--color-background-input, #2a2a2a);
   color: inherit;
   border: 1px solid var(--color-primary, #4caf50);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 1.1rem;
   font-weight: 600;
   padding: 2px 8px;
   outline: none;
 }
+.title-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .header-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
   flex-shrink: 0;
 }
 
@@ -330,7 +338,7 @@ const formattedUpdatedAt = computed(() => {
   background: var(--color-background-secondary, #252525);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .refine-textarea {
@@ -339,8 +347,8 @@ const formattedUpdatedAt = computed(() => {
   background: var(--color-background-input, #2a2a2a);
   color: inherit;
   border: 1px solid var(--color-border, #444);
-  border-radius: 4px;
-  padding: 8px;
+  border-radius: var(--radius-default);
+  padding: var(--spacing-2);
   font-size: 0.9rem;
   font-family: inherit;
   outline: none;
@@ -350,10 +358,14 @@ const formattedUpdatedAt = computed(() => {
 .refine-textarea:focus {
   border-color: var(--color-primary, #4caf50);
 }
+.refine-textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .refine-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .editor-body {
@@ -368,7 +380,7 @@ const formattedUpdatedAt = computed(() => {
   background: transparent;
   color: inherit;
   border: none;
-  padding: 16px;
+  padding: var(--spacing-4);
   font-size: 0.95rem;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   line-height: 1.6;
@@ -376,13 +388,17 @@ const formattedUpdatedAt = computed(() => {
   width: 100%;
   box-sizing: border-box;
 }
+.content-editor:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .editor-footer {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--spacing-4);
   padding: 6px 16px;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--color-text-muted, #888);
   border-top: 1px solid var(--color-border, #333);
 }

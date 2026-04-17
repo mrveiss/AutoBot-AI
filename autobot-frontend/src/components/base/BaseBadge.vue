@@ -68,10 +68,10 @@ const handleRemove = (event: MouseEvent) => {
 .base-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
   font-weight: 500;
   white-space: nowrap;
-  transition: all 150ms ease;
+  transition: all var(--duration-150) var(--ease-out);
   line-height: 1;
   font-family: var(--font-sans);
 }
@@ -86,43 +86,43 @@ const handleRemove = (event: MouseEvent) => {
 .badge-xs {
   height: 16px;
   padding: 0 6px;
-  font-size: 10px;
-  border-radius: 8px;
+  font-size: var(--text-xs);
+  border-radius: var(--radius-lg);
 }
 
 .badge-sm {
   height: 20px;
   padding: 0 8px;
-  font-size: 11px;
-  border-radius: 10px;
+  font-size: var(--text-xs);
+  border-radius: var(--radius-xl);
 }
 
 .badge-md {
   height: 24px;
   padding: 0 10px;
-  font-size: 12px;
-  border-radius: 12px;
+  font-size: var(--text-xs);
+  border-radius: var(--radius-xl);
 }
 
 .badge-lg {
   height: 28px;
   padding: 0 12px;
-  font-size: 13px;
-  border-radius: 14px;
+  font-size: var(--text-sm);
+  border-radius: var(--radius-2xl);
 }
 
 /* Rounded Variants */
 .badge-rounded.badge-xs {
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 
 .badge-rounded.badge-sm,
 .badge-rounded.badge-md {
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 
 .badge-rounded.badge-lg {
-  border-radius: 3px;
+  border-radius: var(--radius-default);
 }
 
 /* Color Variants - Solid */
@@ -212,20 +212,20 @@ const handleRemove = (event: MouseEvent) => {
 
 /* Removable Badge */
 .badge-removable {
-  padding-right: 4px;
+  padding-right: var(--spacing-1);
 }
 
 .badge-remove {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2px;
+  padding: var(--spacing-0-5);
   background: transparent;
   border: none;
   color: currentColor;
   cursor: pointer;
   border-radius: 50%;
-  transition: all 150ms ease;
+  transition: all var(--duration-150) var(--ease-out);
   opacity: 0.6;
 }
 

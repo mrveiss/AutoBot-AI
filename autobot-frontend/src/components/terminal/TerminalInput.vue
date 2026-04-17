@@ -253,6 +253,11 @@ defineExpose({
   min-width: 0;
 }
 
+.terminal-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 .send-button {
   background: var(--terminal-green-bg);
   border: 1px solid var(--terminal-green-border);
@@ -278,7 +283,7 @@ defineExpose({
 .cursor {
   color: var(--terminal-green);
   font-weight: var(--font-bold);
-  margin-left: 2px;
+  margin-left: var(--spacing-0-5);
 }
 
 .cursor.blink {
@@ -311,7 +316,7 @@ defineExpose({
   padding: 3px var(--spacing-2);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 10px;
+  font-size: var(--text-xs);
   transition: background-color var(--duration-200) var(--ease-in-out);
 }
 

@@ -322,7 +322,7 @@ onMounted(() => {
 <style scoped>
 /* Issue #704: Migrated to CSS design tokens */
 .knowledge-maintenance {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   max-width: 1400px;
   margin: 0 auto;
 }
@@ -332,8 +332,8 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 2rem;
-  padding-bottom: 1rem;
+  margin-bottom: var(--spacing-8);
+  padding-bottom: var(--spacing-4);
   border-bottom: 2px solid var(--border-default);
 }
 
@@ -344,7 +344,7 @@ onMounted(() => {
   margin: 0 0 0.5rem 0;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .header-content h2 i {
@@ -353,16 +353,16 @@ onMounted(() => {
 
 .header-subtitle {
   color: var(--text-tertiary);
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: 0.95rem;
 }
 
 /* Health Dashboard */
 .health-dashboard {
   background: var(--bg-card);
-  border-radius: 0.75rem;
-  padding: 1.5rem;
-  margin-bottom: 2rem;
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-6);
+  margin-bottom: var(--spacing-8);
   box-shadow: var(--shadow-sm);
 }
 
@@ -370,23 +370,23 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
 }
 
 .section-title h3 {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .health-status-badge {
   padding: 0.375rem 0.75rem;
-  border-radius: 9999px;
-  font-size: 0.75rem;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
 }
@@ -414,14 +414,14 @@ onMounted(() => {
 .loading-state,
 .empty-state {
   text-align: center;
-  padding: 3rem;
+  padding: var(--spacing-12);
   color: var(--text-tertiary);
 }
 
 .loading-state i,
 .empty-state i {
   font-size: 2.5rem;
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
   display: block;
 }
 
@@ -429,27 +429,27 @@ onMounted(() => {
 .health-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 1.5rem;
+  gap: var(--spacing-6);
 }
 
 .health-card {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 1rem;
+  gap: var(--spacing-4);
+  padding: var(--spacing-4);
   background: var(--bg-tertiary);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-default);
 }
 
 .card-icon {
   width: 3rem;
   height: 3rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   color: var(--bg-card);
 }
 
@@ -487,13 +487,13 @@ onMounted(() => {
 }
 
 .card-value {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .card-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -501,13 +501,13 @@ onMounted(() => {
 .quality-dimensions {
   grid-column: span 2;
   background: var(--bg-tertiary);
-  border-radius: 0.5rem;
-  padding: 1rem;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
   border: 1px solid var(--border-default);
 }
 
 .quality-dimensions h4 {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-secondary);
   margin: 0 0 1rem 0;
@@ -516,19 +516,19 @@ onMounted(() => {
 .dimension-bars {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .dimension-item {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 
 .dimension-header {
   display: flex;
   justify-content: space-between;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .dimension-name {
@@ -543,14 +543,14 @@ onMounted(() => {
 .dimension-bar {
   height: 0.5rem;
   background: var(--border-default);
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   overflow: hidden;
 }
 
 .dimension-fill {
   height: 100%;
-  border-radius: 9999px;
-  transition: width 0.5s ease;
+  border-radius: var(--radius-full);
+  transition: width var(--duration-500) var(--ease-out);
 }
 
 .dimension-fill.good {
@@ -568,13 +568,13 @@ onMounted(() => {
 /* Issues Summary */
 .issues-summary {
   background: var(--bg-tertiary);
-  border-radius: 0.5rem;
-  padding: 1rem;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
   border: 1px solid var(--border-default);
 }
 
 .issues-summary h4 {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-secondary);
   margin: 0 0 0.75rem 0;
@@ -582,14 +582,14 @@ onMounted(() => {
 
 .issues-counts {
   display: flex;
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .issue-count {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
+  gap: var(--spacing-2);
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
@@ -605,51 +605,51 @@ onMounted(() => {
 .recommendations {
   grid-column: span 4;
   background: var(--color-info-bg);
-  border-radius: 0.5rem;
-  padding: 1rem;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
   border: 1px solid var(--color-info-light);
 }
 
 .recommendations h4 {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-info-dark);
   margin: 0 0 0.75rem 0;
 }
 
 .recommendation-list {
-  margin: 0;
-  padding: 0;
+  margin: var(--spacing-0);
+  padding: var(--spacing-0);
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .recommendation-list li {
   display: flex;
   align-items: flex-start;
-  gap: 0.5rem;
-  font-size: 0.875rem;
+  gap: var(--spacing-2);
+  font-size: var(--text-sm);
   color: var(--color-info-dark);
 }
 
 .recommendation-list li i {
   color: var(--color-primary);
-  margin-top: 0.125rem;
+  margin-top: var(--spacing-0-5);
 }
 
 /* Maintenance Sections */
 .maintenance-sections {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 1.5rem;
-  margin-bottom: 2rem;
+  gap: var(--spacing-6);
+  margin-bottom: var(--spacing-8);
 }
 
 .maintenance-section {
   background: var(--bg-card);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   overflow: hidden;
   box-shadow: var(--shadow-sm);
 }
@@ -657,44 +657,44 @@ onMounted(() => {
 /* Maintenance History */
 .maintenance-history {
   background: var(--bg-card);
-  border-radius: 0.75rem;
-  padding: 1.5rem;
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-6);
   box-shadow: var(--shadow-sm);
 }
 
 .history-content {
-  margin-top: 1rem;
+  margin-top: var(--spacing-4);
 }
 
 .empty-history {
   text-align: center;
-  padding: 2rem;
+  padding: var(--spacing-8);
   color: var(--text-muted);
 }
 
 .empty-history i {
   font-size: 2rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--spacing-3);
   display: block;
 }
 
 .empty-history p {
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .history-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .history-item {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--spacing-4);
   padding: 0.75rem 1rem;
   background: var(--bg-tertiary);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   border-left: 3px solid var(--border-light);
 }
 
@@ -723,7 +723,7 @@ onMounted(() => {
   background: var(--border-default);
   border-radius: 50%;
   color: var(--border-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .history-content {
@@ -735,16 +735,16 @@ onMounted(() => {
 .history-action {
   font-weight: 500;
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .history-details {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
 .history-time {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   white-space: nowrap;
 }
@@ -763,7 +763,7 @@ onMounted(() => {
 @media (max-width: 768px) {
   .maintenance-header {
     flex-direction: column;
-    gap: 1rem;
+    gap: var(--spacing-4);
   }
 
   .header-actions {

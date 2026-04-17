@@ -314,7 +314,7 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
   align-items: center;
   gap: var(--spacing-xs, 4px);
   opacity: 0.5;
-  transition: opacity 0.2s;
+  transition: opacity var(--duration-200);
 }
 
 .step-dot.active,
@@ -345,7 +345,7 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 }
 
 .step-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--color-text-secondary, #999);
 }
 
@@ -372,7 +372,7 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
   border: 1px solid var(--color-border, #333);
   border-radius: var(--radius-md, 8px);
   cursor: pointer;
-  transition: border-color 0.2s;
+  transition: border-color var(--duration-200);
 }
 
 .role-card:hover {
@@ -389,7 +389,7 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 }
 
 .role-card i {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   color: var(--color-primary, #3b82f6);
   width: 32px;
   text-align: center;
@@ -455,7 +455,7 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 .key-badge {
   font-size: 0.7rem;
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   text-transform: uppercase;
 }
 

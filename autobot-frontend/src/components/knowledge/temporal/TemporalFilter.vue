@@ -143,7 +143,7 @@ h5 {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 h5 i {
@@ -174,6 +174,10 @@ h5 i {
 .filter-input:focus {
   outline: none;
   border-color: var(--color-primary);
+}
+.filter-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* Checkboxes */

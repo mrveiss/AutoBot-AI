@@ -415,12 +415,12 @@ function formatTimestamp(timestamp: string | undefined): string {
 .accordion-groups {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .accordion-group {
   background: var(--bg-card);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--bg-tertiary);
   overflow: hidden;
 }
@@ -432,7 +432,7 @@ function formatTimestamp(timestamp: string | undefined): string {
   padding: 14px 16px;
   cursor: pointer;
   background: var(--bg-secondary);
-  transition: background 0.2s ease;
+  transition: background var(--duration-200) var(--ease-out);
 }
 
 .accordion-header:hover {
@@ -442,13 +442,13 @@ function formatTimestamp(timestamp: string | undefined): string {
 .header-info {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .header-info i {
   color: var(--text-muted);
   font-size: 0.75em;
-  transition: transform 0.2s ease;
+  transition: transform var(--duration-200) var(--ease-out);
 }
 
 .header-name {
@@ -463,7 +463,7 @@ function formatTimestamp(timestamp: string | undefined): string {
 
 .header-badges {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
   flex-wrap: wrap;
 }
 
@@ -471,7 +471,7 @@ function formatTimestamp(timestamp: string | undefined): string {
 .severity-badge {
   font-size: 0.7em;
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   font-weight: 500;
 }
 
@@ -484,17 +484,17 @@ function formatTimestamp(timestamp: string | undefined): string {
 
 /* Accordion Items Container */
 .accordion-items {
-  padding: 12px;
+  padding: var(--spacing-3);
   background: var(--bg-primary);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 /* Accordion Transition */
 .accordion-enter-active,
 .accordion-leave-active {
-  transition: all 0.3s ease;
+  transition: all var(--duration-300) var(--ease-out);
   overflow: hidden;
 }
 
@@ -513,10 +513,10 @@ function formatTimestamp(timestamp: string | undefined): string {
 /* Unified List Items */
 .list-item {
   background: var(--bg-card);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 14px 16px;
   border-left: 4px solid var(--text-tertiary);
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .list-item:hover {
@@ -534,10 +534,10 @@ function formatTimestamp(timestamp: string | undefined): string {
 /* Show More / Muted Utilities */
 .show-more {
   text-align: center;
-  padding: 12px;
+  padding: var(--spacing-3);
   background: var(--bg-secondary);
-  border-radius: 6px;
-  margin-top: 8px;
+  border-radius: var(--radius-md);
+  margin-top: var(--spacing-2);
 }
 
 .muted {
@@ -550,7 +550,7 @@ function formatTimestamp(timestamp: string | undefined): string {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
 }
 
 .item-name {
@@ -562,7 +562,7 @@ function formatTimestamp(timestamp: string | undefined): string {
 .item-severity {
   font-size: 0.75em;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-weight: 600;
   text-transform: uppercase;
 }
@@ -577,30 +577,30 @@ function formatTimestamp(timestamp: string | undefined): string {
 .item-description {
   color: var(--text-secondary);
   font-size: 0.9em;
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
 }
 
 .item-location {
   color: var(--text-muted);
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.8em;
-  margin-bottom: 4px;
+  margin-bottom: var(--spacing-1);
 }
 
 .item-suggestion {
   color: var(--chart-green);
   font-size: 0.85em;
-  padding: 8px;
+  padding: var(--spacing-2);
   background: rgba(34, 197, 94, 0.1);
-  border-radius: 4px;
-  margin-top: 8px;
+  border-radius: var(--radius-default);
+  margin-top: var(--spacing-2);
 }
 
 /* Duplicate-specific Styles */
 .item-similarity {
   font-size: 0.75em;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-weight: 600;
 }
 
@@ -616,7 +616,7 @@ function formatTimestamp(timestamp: string | undefined): string {
 .item-files {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .item-file {
@@ -628,7 +628,7 @@ function formatTimestamp(timestamp: string | undefined): string {
 /* Responsive Design */
 @media (max-width: 768px) {
   .codebase-analytics {
-    padding: 12px;
+    padding: var(--spacing-3);
   }
 
   .header-controls {
@@ -643,7 +643,7 @@ function formatTimestamp(timestamp: string | undefined): string {
 
   .debug-controls {
     flex-direction: column;
-    gap: 8px;
+    gap: var(--spacing-2);
   }
 
   .btn-debug {
@@ -661,7 +661,7 @@ function formatTimestamp(timestamp: string | undefined): string {
 
   .real-time-controls {
     flex-direction: column;
-    gap: 12px;
+    gap: var(--spacing-3);
     align-items: stretch;
   }
 
@@ -678,24 +678,24 @@ function formatTimestamp(timestamp: string | undefined): string {
   .problem-header, .duplicate-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 4px;
+    gap: var(--spacing-1);
   }
 }
 
 /* Charts Section Styles */
 
 .cross-language-section {
-  margin-top: 32px;
-  padding: 24px;
+  margin-top: var(--spacing-8);
+  padding: var(--spacing-6);
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
   contain: layout style;}
 
 .cross-language-section h3 {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
   margin: 0 0 20px 0;
   color: var(--text-secondary);
   font-size: 1.1rem;
@@ -710,9 +710,9 @@ function formatTimestamp(timestamp: string | undefined): string {
 .cross-language-section .error-state {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 16px;
-  border-radius: 8px;
+  gap: var(--spacing-2-5);
+  padding: var(--spacing-4);
+  border-radius: var(--radius-lg);
 }
 
 .cross-language-section .loading-state {
@@ -731,19 +731,19 @@ function formatTimestamp(timestamp: string | undefined): string {
 .language-breakdown {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--spacing-3);
   margin: 16px 0;
-  padding: 12px;
+  padding: var(--spacing-3);
   background: rgba(30, 41, 59, 0.8);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .language-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
   padding: 6px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: 0.85rem;
   font-weight: 500;
 }
@@ -770,11 +770,11 @@ function formatTimestamp(timestamp: string | undefined): string {
 .type-badge {
   display: inline-block;
   padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 0.75rem;
+  border-radius: var(--radius-default);
+  font-size: var(--text-xs);
   font-weight: 500;
   text-transform: uppercase;
-  margin-right: 8px;
+  margin-right: var(--spacing-2);
   background: rgba(139, 92, 246, 0.2);
   color: var(--chart-purple-light);
   border: 1px solid rgba(139, 92, 246, 0.3);
@@ -796,10 +796,10 @@ function formatTimestamp(timestamp: string | undefined): string {
 .validation-type-badge {
   display: inline-block;
   padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 0.75rem;
+  border-radius: var(--radius-default);
+  font-size: var(--text-xs);
   font-weight: 500;
-  margin-right: 8px;
+  margin-right: var(--spacing-2);
   background: rgba(59, 130, 246, 0.2);
   color: var(--color-info-light);
   border: 1px solid rgba(59, 130, 246, 0.3);
@@ -809,8 +809,8 @@ function formatTimestamp(timestamp: string | undefined): string {
 .similarity-score {
   display: inline-block;
   padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 0.75rem;
+  border-radius: var(--radius-default);
+  font-size: var(--text-xs);
   font-weight: 600;
   background: rgba(34, 197, 94, 0.2);
   color: var(--color-success-light);
@@ -827,9 +827,9 @@ function formatTimestamp(timestamp: string | undefined): string {
 .match-type {
   display: inline-block;
   padding: 2px 8px;
-  margin-left: 8px;
-  border-radius: 4px;
-  font-size: 0.75rem;
+  margin-left: var(--spacing-2);
+  border-radius: var(--radius-default);
+  font-size: var(--text-xs);
   font-weight: 500;
   background: rgba(100, 116, 139, 0.2);
   color: var(--text-muted);
@@ -840,8 +840,8 @@ function formatTimestamp(timestamp: string | undefined): string {
 .item-locations {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 6px;
+  gap: var(--spacing-2);
+  margin-top: var(--spacing-1-5);
   align-items: center;
 }
 
@@ -866,7 +866,7 @@ function formatTimestamp(timestamp: string | undefined): string {
 
 /* Item Field */
 .item-field {
-  margin-top: 4px;
+  margin-top: var(--spacing-1);
   font-size: 0.85rem;
   color: var(--text-muted);
 }
@@ -874,7 +874,7 @@ function formatTimestamp(timestamp: string | undefined): string {
 .item-field code {
   padding: 2px 6px;
   background: rgba(0, 0, 0, 0.3);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   color: var(--text-secondary);
   font-family: 'JetBrains Mono', monospace;
 }
@@ -887,10 +887,10 @@ function formatTimestamp(timestamp: string | undefined): string {
 
 /* Item Recommendation */
 .item-recommendation {
-  margin-top: 6px;
+  margin-top: var(--spacing-1-5);
   padding: 8px 12px;
   background: rgba(59, 130, 246, 0.1);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--color-info-light);
   font-size: 0.8rem;
   border-left: 2px solid var(--chart-blue);
@@ -899,8 +899,8 @@ function formatTimestamp(timestamp: string | undefined): string {
 /* Analysis Time */
 .analysis-time {
   color: var(--text-tertiary);
-  font-size: 0.75rem;
-  margin-left: 4px;
+  font-size: var(--text-xs);
+  margin-left: var(--spacing-1);
 }
 
 /* Scan Button */
@@ -909,13 +909,13 @@ function formatTimestamp(timestamp: string | undefined): string {
   background: var(--chart-purple);
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.8rem;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  transition: background 0.2s;
+  gap: var(--spacing-1-5);
+  transition: background var(--duration-200);
 }
 
 .btn-scan:hover:not(:disabled) {

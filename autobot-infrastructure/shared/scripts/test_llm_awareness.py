@@ -10,10 +10,13 @@ Demonstrates the functionality of the awareness injection system
 import asyncio
 import logging
 import sys
+import os
 
 logger = logging.getLogger(__name__)
 
-sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
+sys.path.append(os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+
+from autobot_shared.network_constants import ServiceURLs
 
 from llm_self_awareness import get_llm_self_awareness
 from middleware.llm_awareness_middleware import get_awareness_injector
@@ -124,9 +127,9 @@ async def test_api_integration():
 
         # Test awareness endpoints
         endpoints_to_test = [
-            "ServiceURLs.BACKEND_LOCAL/api/llm-awareness/status",
-            "ServiceURLs.BACKEND_LOCAL/api/llm-awareness/context",
-            "ServiceURLs.BACKEND_LOCAL/api/llm-awareness/capabilities",
+            f"{ServiceURLs.BACKEND_LOCAL}/api/llm-awareness/status",
+            f"{ServiceURLs.BACKEND_LOCAL}/api/llm-awareness/context",
+            f"{ServiceURLs.BACKEND_LOCAL}/api/llm-awareness/capabilities",
         ]
 
         async with aiohttp.ClientSession() as session:

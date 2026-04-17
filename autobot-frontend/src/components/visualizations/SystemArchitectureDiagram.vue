@@ -1400,7 +1400,7 @@ watch(() => currentView.value, () => {
 
 /* Connections */
 .connection path {
-  transition: stroke-width 0.2s, opacity 0.2s;
+  transition: stroke-width var(--duration-200), opacity var(--duration-200);
 }
 
 .connection.highlighted path {
@@ -1408,13 +1408,13 @@ watch(() => currentView.value, () => {
 }
 
 .connection-label {
-  font-size: 10px;
+  font-size: var(--text-xs);
   fill: var(--text-secondary);
 }
 
 /* Component Groups */
 .group-label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: var(--font-semibold);
   text-transform: uppercase;
   letter-spacing: var(--tracking-wide);
@@ -1423,7 +1423,7 @@ watch(() => currentView.value, () => {
 /* Components */
 .component {
   cursor: pointer;
-  transition: transform 0.2s, opacity 0.2s;
+  transition: transform var(--duration-200), opacity var(--duration-200);
 }
 
 .component:hover {
@@ -1444,12 +1444,12 @@ watch(() => currentView.value, () => {
 }
 
 .component-icon {
-  font-size: 24px;
+  font-size: var(--text-2xl);
   fill: var(--text-on-primary);
 }
 
 .component-label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: var(--font-medium);
   fill: var(--text-on-primary);
 }
@@ -1460,7 +1460,7 @@ watch(() => currentView.value, () => {
 }
 
 .metrics-text {
-  font-size: 10px;
+  font-size: var(--text-xs);
   fill: var(--text-secondary);
 }
 
@@ -1573,7 +1573,7 @@ watch(() => currentView.value, () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: var(--text-base);
 }
 
 .close-btn {
@@ -1705,8 +1705,8 @@ watch(() => currentView.value, () => {
 
 .connections-list {
   list-style: none;
-  padding: 0;
-  margin: 0;
+  padding: var(--spacing-0);
+  margin: var(--spacing-0);
 }
 
 .connections-list li {
@@ -1718,7 +1718,7 @@ watch(() => currentView.value, () => {
   border-radius: var(--radius-md);
   margin-bottom: var(--spacing-2);
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background var(--duration-200);
 }
 
 .connections-list li:hover {

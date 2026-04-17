@@ -1070,6 +1070,13 @@ onMounted(() => {
   border-color: var(--color-primary);
   box-shadow: var(--ring-primary);
 }
+.form-input:focus-visible,
+.form-textarea:focus-visible,
+.form-select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.form-input:focus-visible,
 
 .char-count {
   text-align: right;
@@ -1173,11 +1180,11 @@ onMounted(() => {
 }
 
 .drop-zone-content.compact .drop-icon-wrapper {
-  margin-bottom: 0;
+  margin-bottom: var(--spacing-0);
 }
 
 .drop-zone-content.compact .drop-text {
-  margin-bottom: 0;
+  margin-bottom: var(--spacing-0);
 }
 
 .drop-zone-content.compact .drop-hint {
@@ -1246,7 +1253,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .files-header h5 i {
@@ -1494,7 +1501,7 @@ onMounted(() => {
   word-wrap: break-word;
   max-height: 200px;
   overflow-y: auto;
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .preview-truncated {
@@ -1563,7 +1570,7 @@ onMounted(() => {
 .progress-fill {
   height: 100%;
   background: var(--color-primary);
-  transition: width var(--duration-300) ease;
+  transition: width var(--duration-300) var(--ease-out);
 }
 
 .progress-status {
@@ -1574,15 +1581,15 @@ onMounted(() => {
 /* Transitions */
 .slide-enter-active,
 .slide-leave-active {
-  transition: all var(--duration-200) ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .slide-enter-from,
 .slide-leave-to {
   opacity: 0;
   max-height: 0;
-  padding-top: 0;
-  padding-bottom: 0;
+  padding-top: var(--spacing-0);
+  padding-bottom: var(--spacing-0);
 }
 
 .slide-enter-to,

@@ -54,6 +54,7 @@ router = APIRouter(
 # ---------------------------------------------------------------------------
 
 _RATE_LIMIT = int(os.environ.get("AUTOBOT_A2A_RATE_LIMIT", "30"))  # per minute
+_RATE_BUCKET_MAX_KEYS = 10_000  # evict stale entries when dict exceeds this size
 _rate_buckets: Dict[str, list] = {}  # ip → [timestamps]
 
 
@@ -63,11 +64,13 @@ def _check_rate_limit(remote_addr: str) -> None:
 
     Raises HTTP 429 if the caller has exceeded _RATE_LIMIT requests/minute.
     Uses a sliding window stored in _rate_buckets (in-process, per worker).
+
+    Stale entries (IPs whose entire window has expired) are evicted when the
+    dict exceeds _RATE_BUCKET_MAX_KEYS to prevent unbounded memory growth.
     """
     now = time.time()
     window_start = now - 60
-    bucket = _rate_buckets.get(remote_addr, [])
-    bucket = [t for t in bucket if t > window_start]
+    bucket = [t for t in _rate_buckets.get(remote_addr, []) if t > window_start]
     if len(bucket) >= _RATE_LIMIT:
         raise HTTPException(
             status_code=429,
@@ -75,6 +78,11 @@ def _check_rate_limit(remote_addr: str) -> None:
         )
     bucket.append(now)
     _rate_buckets[remote_addr] = bucket
+    if len(_rate_buckets) > _RATE_BUCKET_MAX_KEYS:
+        cutoff = now - 60
+        stale = [ip for ip, ts in _rate_buckets.items() if not any(t > cutoff for t in ts)]
+        for ip in stale:
+            del _rate_buckets[ip]
 
 
 # ---------------------------------------------------------------------------
@@ -438,7 +446,12 @@ async def cancel_task(task_id: str) -> Dict[str, str]:
 async def task_stats() -> Dict[str, Any]:
     """Return task counts broken down by state."""
     manager = get_task_manager()
-    return {"counts": manager.stats(), "total": len(manager.list_tasks())}
+    tasks = manager.list_tasks()
+    counts: Dict[str, int] = {}
+    for t in tasks:
+        k = t.status.state.value
+        counts[k] = counts.get(k, 0) + 1
+    return {"counts": counts, "total": len(tasks)}
 
 
 # ---------------------------------------------------------------------------
@@ -511,5 +524,6 @@ def _decode_jwt_sub(token: str) -> Optional[str]:
         payload = base64.urlsafe_b64decode(payload_b64)
         claims = _json.loads(payload)
         return claims.get("sub")
-    except Exception:
+    except Exception as exc:
+        logger.debug("JWT sub decode failed: %s", exc)
         return None

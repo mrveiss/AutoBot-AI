@@ -790,7 +790,7 @@ defineExpose({
 }
 
 .code-block pre {
-  margin: 0;
+  margin: var(--spacing-0);
   white-space: pre-wrap;
   word-break: break-all;
 }

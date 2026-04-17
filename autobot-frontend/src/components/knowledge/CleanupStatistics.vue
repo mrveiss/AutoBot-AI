@@ -300,7 +300,7 @@ const runCleanup = async () => {
 
 .header-description {
   color: var(--text-secondary);
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
 }
 
@@ -412,7 +412,7 @@ const runCleanup = async () => {
 }
 
 .result-icon {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   color: var(--text-secondary);
 }
 

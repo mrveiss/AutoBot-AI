@@ -371,22 +371,22 @@ const closeDialog = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
 }
 
 .modal-dialog {
   background: var(--bg-card);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   width: 90%;
   max-width: 600px;
   max-height: 80vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-xl);
 }
 
 .modal-header {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   border-bottom: 1px solid var(--border-default);
   display: flex;
   justify-content: space-between;
@@ -394,8 +394,8 @@ const closeDialog = () => {
 }
 
 .modal-title {
-  margin: 0;
-  font-size: 1.25rem;
+  margin: var(--spacing-0);
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -403,17 +403,17 @@ const closeDialog = () => {
 .close-button {
   background: none;
   border: none;
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   cursor: pointer;
   color: var(--text-muted);
-  padding: 0;
+  padding: var(--spacing-0);
   width: 2rem;
   height: 2rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.25rem;
-  transition: background-color 0.2s;
+  border-radius: var(--radius-default);
+  transition: background-color var(--duration-200);
 }
 
 .close-button:hover {
@@ -422,18 +422,18 @@ const closeDialog = () => {
 }
 
 .modal-body {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   overflow-y: auto;
   flex: 1;
 }
 
 .search-section {
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
 }
 
 .search-section label {
   display: block;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -454,8 +454,8 @@ const closeDialog = () => {
   width: 100%;
   padding: 0.5rem 0.75rem 0.5rem 2.5rem;
   border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   background-color: var(--bg-secondary);
   color: var(--text-primary);
 }
@@ -465,24 +465,28 @@ const closeDialog = () => {
   border-color: var(--color-electric-500, #3b82f6);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
+.search-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .search-results {
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
   border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   max-height: 200px;
   overflow-y: auto;
 }
 
 .search-status {
-  padding: 0.75rem;
+  padding: var(--spacing-3);
   text-align: center;
   color: var(--text-muted);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .search-status--error {
@@ -490,12 +494,12 @@ const closeDialog = () => {
 }
 
 .search-result-item {
-  padding: 0.75rem;
+  padding: var(--spacing-3);
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: background-color var(--duration-200);
 }
 
 .search-result-item:hover {
@@ -513,20 +517,20 @@ const closeDialog = () => {
 }
 
 .result-type {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   text-transform: uppercase;
 }
 
 .current-access h4 {
   margin: 0 0 1rem 0;
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .empty-state {
-  padding: 2rem;
+  padding: var(--spacing-8);
   text-align: center;
   color: var(--text-muted);
   font-style: italic;
@@ -534,11 +538,11 @@ const closeDialog = () => {
 
 .access-list {
   border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
 }
 
 .access-item {
-  padding: 0.75rem;
+  padding: var(--spacing-3);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -552,7 +556,7 @@ const closeDialog = () => {
 .access-info {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   flex: 1;
 }
 
@@ -566,7 +570,7 @@ const closeDialog = () => {
 }
 
 .access-type {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   text-transform: uppercase;
 }
@@ -574,14 +578,14 @@ const closeDialog = () => {
 .access-controls {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .permission-select {
   padding: 0.25rem 0.5rem;
   border: 1px solid var(--border-default);
-  border-radius: 0.25rem;
-  font-size: 0.875rem;
+  border-radius: var(--radius-default);
+  font-size: var(--text-sm);
   cursor: pointer;
   background-color: var(--bg-secondary);
   color: var(--text-primary);
@@ -590,11 +594,11 @@ const closeDialog = () => {
 .remove-button {
   background: none;
   border: none;
-  padding: 0.5rem;
+  padding: var(--spacing-2);
   cursor: pointer;
   color: #ef4444;
-  border-radius: 0.25rem;
-  transition: background-color 0.2s;
+  border-radius: var(--radius-default);
+  transition: background-color var(--duration-200);
 }
 
 .remove-button:hover {
@@ -602,22 +606,22 @@ const closeDialog = () => {
 }
 
 .modal-footer {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   border-top: 1px solid var(--border-default);
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .btn {
   padding: 0.5rem 1rem;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .btn-secondary {

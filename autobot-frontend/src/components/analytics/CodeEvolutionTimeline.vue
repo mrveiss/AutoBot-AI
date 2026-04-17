@@ -521,29 +521,29 @@ watch([selectedGranularity, selectedDays], () => {
 <style scoped>
 /* Issue #704: Migrated to CSS design tokens */
 .code-evolution-timeline {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   background: var(--bg-secondary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .timeline-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
 }
 
 .timeline-header h2 {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .timeline-controls {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   align-items: center;
 }
 
@@ -551,9 +551,9 @@ watch([selectedGranularity, selectedDays], () => {
   padding: 0.5rem 0.75rem;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .loading-state,
@@ -562,22 +562,22 @@ watch([selectedGranularity, selectedDays], () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 3rem;
-  gap: 1rem;
+  padding: var(--spacing-12);
+  gap: var(--spacing-4);
   color: var(--text-secondary);
 }
 
 .trends-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
 }
 
 .trend-card {
   background: var(--bg-tertiary);
-  border-radius: 8px;
-  padding: 1rem;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
   border: 1px solid var(--border-default);
 }
 
@@ -593,11 +593,11 @@ watch([selectedGranularity, selectedDays], () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
 }
 
 .metric-name {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   text-transform: uppercase;
 }
@@ -609,8 +609,8 @@ watch([selectedGranularity, selectedDays], () => {
 }
 
 .trend-change {
-  font-size: 0.875rem;
-  margin-top: 0.25rem;
+  font-size: var(--text-sm);
+  margin-top: var(--spacing-1);
 }
 
 .trend-change .improving {
@@ -623,7 +623,7 @@ watch([selectedGranularity, selectedDays], () => {
 
 .trend-change .percent {
   color: var(--text-secondary);
-  margin-left: 0.25rem;
+  margin-left: var(--spacing-1);
 }
 
 .trend-up {
@@ -636,37 +636,37 @@ watch([selectedGranularity, selectedDays], () => {
 
 .chart-container {
   background: var(--bg-tertiary);
-  border-radius: 8px;
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-6);
+  margin-bottom: var(--spacing-6);
 }
 
 .chart-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .chart-header h3 {
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   color: var(--text-primary);
 }
 
 .metric-toggles {
   display: flex;
-  gap: 1rem;
+  gap: var(--spacing-4);
   flex-wrap: wrap;
 }
 
 .metric-toggle {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
-  font-size: 0.75rem;
+  gap: var(--spacing-1);
+  font-size: var(--text-xs);
   cursor: pointer;
   opacity: 0.6;
-  transition: opacity 0.2s;
+  transition: opacity var(--duration-200);
 }
 
 .metric-toggle.active {
@@ -695,7 +695,7 @@ watch([selectedGranularity, selectedDays], () => {
 
 .axis-label {
   fill: var(--text-secondary);
-  font-size: 10px;
+  font-size: var(--text-xs);
   text-anchor: end;
 }
 
@@ -704,7 +704,7 @@ watch([selectedGranularity, selectedDays], () => {
 }
 
 .data-line {
-  transition: stroke-width 0.2s;
+  transition: stroke-width var(--duration-200);
 }
 
 .data-line:hover {
@@ -713,7 +713,7 @@ watch([selectedGranularity, selectedDays], () => {
 
 .data-point {
   cursor: pointer;
-  transition: r 0.2s;
+  transition: r var(--duration-200);
 }
 
 .data-point:hover {
@@ -724,21 +724,21 @@ watch([selectedGranularity, selectedDays], () => {
   position: fixed;
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
-  padding: 0.75rem;
-  z-index: 1000;
+  border-radius: var(--radius-md);
+  padding: var(--spacing-3);
+  z-index: var(--z-tooltip);
   pointer-events: none;
 }
 
 .tooltip-date {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--spacing-1);
 }
 
 .tooltip-metric {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .tooltip-metric .metric-value {
@@ -747,24 +747,24 @@ watch([selectedGranularity, selectedDays], () => {
 }
 
 .patterns-section h3 {
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   color: var(--text-primary);
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .patterns-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .pattern-card {
   background: var(--bg-tertiary);
-  border-radius: 8px;
-  padding: 1rem;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
   border: 1px solid var(--border-default);
 }
 
@@ -772,16 +772,16 @@ watch([selectedGranularity, selectedDays], () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--spacing-3);
 }
 
 .pattern-name {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
 .pattern-count {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
 }
 
@@ -797,22 +797,22 @@ watch([selectedGranularity, selectedDays], () => {
   display: flex;
   align-items: flex-end;
   height: 40px;
-  gap: 2px;
-  margin-bottom: 0.5rem;
+  gap: var(--spacing-0-5);
+  margin-bottom: var(--spacing-2);
 }
 
 .sparkline-bar {
   flex: 1;
   background: var(--color-primary);
-  border-radius: 2px 2px 0 0;
+  border-radius: var(--radius-xs) 2px 0 0;
   min-height: 2px;
 }
 
 .pattern-trend {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 </style>

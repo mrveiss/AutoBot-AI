@@ -563,12 +563,12 @@ onMounted(() => {
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 9999;
+  z-index: var(--z-toast);
 }
 
 .modal-content {
   background: var(--bg-card);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   max-width: 90vw;
   max-height: 90vh;
   width: 800px;
@@ -576,7 +576,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-lg);
 }
 
 .modal-header {
@@ -589,8 +589,8 @@ onMounted(() => {
 }
 
 .modal-header h3 {
-  margin: 0;
-  font-size: 18px;
+  margin: var(--spacing-0);
+  font-size: var(--text-lg);
   color: var(--text-primary);
   word-break: break-all;
 }
@@ -598,17 +598,17 @@ onMounted(() => {
 .close-btn {
   background: none;
   border: none;
-  font-size: 24px;
+  font-size: var(--text-2xl);
   color: var(--text-muted);
   cursor: pointer;
-  padding: 0;
+  padding: var(--spacing-0);
   width: 30px;
   height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
-  transition: background-color 0.2s;
+  border-radius: var(--radius-default);
+  transition: background-color var(--duration-200);
 }
 
 .close-btn:hover {
@@ -641,7 +641,7 @@ onMounted(() => {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 20px;
+  padding: var(--spacing-5);
   background-color: var(--bg-secondary);
 }
 
@@ -649,28 +649,28 @@ onMounted(() => {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-radius: var(--radius-default);
+  box-shadow: var(--shadow-sm);
 }
 
 /* Text/Code Preview */
 .text-preview, .json-preview {
   flex: 1;
   overflow: auto;
-  padding: 20px;
+  padding: var(--spacing-5);
 }
 
 .text-preview pre, .json-preview pre {
-  margin: 0;
+  margin: var(--spacing-0);
   font-family: 'Courier New', Courier, monospace;
-  font-size: 14px;
+  font-size: var(--text-sm);
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
   background-color: var(--bg-secondary);
   color: var(--text-primary);
-  padding: 16px;
-  border-radius: 4px;
+  padding: var(--spacing-4);
+  border-radius: var(--radius-default);
   border: 1px solid var(--border-default);
 }
 
@@ -694,7 +694,7 @@ onMounted(() => {
 /* File Info */
 .file-info {
   flex: 1;
-  padding: 40px;
+  padding: var(--spacing-10);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -705,7 +705,7 @@ onMounted(() => {
 
 .file-info p {
   margin: 8px 0;
-  font-size: 16px;
+  font-size: var(--text-base);
   color: var(--text-primary);
 }
 
@@ -714,15 +714,15 @@ onMounted(() => {
 }
 
 .download-btn {
-  margin-top: 20px;
+  margin-top: var(--spacing-5);
   padding: 10px 20px;
   background-color: var(--color-electric-600, #2563eb);
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   cursor: pointer;
-  font-size: 16px;
-  transition: background-color 0.2s;
+  font-size: var(--text-base);
+  transition: background-color var(--duration-200);
 }
 
 .download-btn:hover {
@@ -741,16 +741,16 @@ onMounted(() => {
   }
 
   .modal-header h3 {
-    font-size: 16px;
+    font-size: var(--text-base);
   }
 
   .text-preview, .json-preview {
-    padding: 16px;
+    padding: var(--spacing-4);
   }
 
   .text-preview pre, .json-preview pre {
-    font-size: 12px;
-    padding: 12px;
+    font-size: var(--text-xs);
+    padding: var(--spacing-3);
   }
 }
 </style>

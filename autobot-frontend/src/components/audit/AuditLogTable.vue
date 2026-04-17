@@ -360,7 +360,7 @@ function exportLogs(format: 'json' | 'csv') {
   position: relative;
   background: var(--bg-card);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   overflow: hidden;
 }
 
@@ -398,7 +398,7 @@ function exportLogs(format: 'json' | 'csv') {
   margin-top: var(--spacing-1);
   background: var(--bg-card);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   box-shadow: var(--shadow-lg);
   z-index: 10;
   min-width: 150px;
@@ -489,7 +489,7 @@ th span {
 /* Issue #901: Monospace font for timestamps */
 .mono-timestamp {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-xs);
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
@@ -519,8 +519,8 @@ th span {
   align-items: center;
   gap: var(--spacing-1);
   padding: var(--spacing-1) var(--spacing-2);
-  border-radius: 2px;
-  font-size: 11px;
+  border-radius: var(--radius-xs);
+  font-size: var(--text-xs);
   font-weight: 500;
   font-family: var(--font-sans);
   text-transform: uppercase;
@@ -557,7 +557,7 @@ th span {
   color: var(--color-info);
   font-size: inherit;
   cursor: pointer;
-  padding: 0;
+  padding: var(--spacing-0);
   text-decoration: underline;
   font-family: var(--font-sans);
 }
@@ -569,7 +569,7 @@ th span {
 /* Issue #901: Monospace font for IDs */
 .mono-id {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-xs);
   letter-spacing: -0.02em;
 }
 
@@ -664,13 +664,13 @@ th span {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: var(--z-modal-backdrop);
   padding: var(--spacing-4);
 }
 
 .modal-content {
   background: var(--bg-card);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   max-width: 700px;
   width: 100%;
   max-height: 90vh;
@@ -689,7 +689,7 @@ th span {
 }
 
 .modal-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-lg);
   font-weight: var(--font-semibold);
 }
@@ -730,7 +730,7 @@ th span {
 /* Issue #901: Monospace for technical data in modal */
 .mono {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-xs);
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
@@ -739,19 +739,19 @@ th span {
   color: var(--color-error);
   background: var(--color-error-bg);
   padding: var(--spacing-2);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .details-json {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-xs);
   background: var(--bg-secondary);
   padding: var(--spacing-3);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   overflow-x: auto;
-  margin: 0;
+  margin: var(--spacing-0);
   white-space: pre-wrap;
   word-break: break-word;
   letter-spacing: -0.02em;

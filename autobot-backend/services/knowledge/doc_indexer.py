@@ -11,6 +11,7 @@ for service use (SSOT config, proper path constants, thread-safe singleton).
 Replaces the dual Redis KB + ChromaDB CLI approach with a single ChromaDB-based system.
 """
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -25,6 +26,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from autobot_shared.ssot_config import get_ollama_url
 from constants.path_constants import PATH
+from services.knowledge.synthesis_schema_loader import SynthesisSchema, load_synthesis_schema
 
 logger = logging.getLogger(__name__)
 
@@ -624,12 +626,29 @@ class DocIndexerService:
 
     COLLECTION_NAME = "autobot_docs"
 
-    def __init__(self):
+    def __init__(self, llm_service: Optional[Any] = None):
         self._client = None
         self._collection = None
         self._embed_model = None
         self._initialized = False
         self._root_dir = PATH.PROJECT_ROOT
+        # Issue #4564: optional LLM service for KB synthesis
+        self._llm_service = llm_service
+        self.synthesis_schema: SynthesisSchema = self._load_schema()
+
+    def _load_schema(self) -> SynthesisSchema:
+        """Load synthesis schema from YAML; warn and return empty schema if absent."""
+        schema = load_synthesis_schema()
+        if not schema.collections:
+            logger.warning(
+                "Synthesis schema is absent or empty — schema-driven synthesis disabled"
+            )
+        else:
+            logger.debug(
+                "Loaded synthesis schema: %d collection(s)",
+                len(schema.collections),
+            )
+        return schema
 
     async def initialize(self) -> bool:
         """Initialize ChromaDB client and embedding model.
@@ -711,6 +730,104 @@ class DocIndexerService:
 
         return result
 
+    @staticmethod
+    def _is_oversized_error(exc: Exception) -> bool:
+        """Return True if *exc* indicates the embedding model rejected an oversized input.
+
+        Covers error messages from Ollama, OpenAI, and similar providers that surface
+        token/context-length violations as plain-text exceptions.
+        """
+        msg = str(exc).lower()
+        _OVERSIZED_KEYWORDS = (
+            "too large",
+            "too long",
+            "token",
+            "sequence length",
+            "context length",
+            "input length",
+            "max_length",
+            "exceeds",
+            "truncat",
+            "overflow",
+        )
+        return any(kw in msg for kw in _OVERSIZED_KEYWORDS)
+
+    def _embed_and_upsert(
+        self,
+        content: str,
+        chunk_id: str,
+        metadata: Dict[str, Any],
+    ) -> None:
+        """Embed *content* and upsert into ChromaDB. Raises on failure."""
+        embedding = self._embed_model.get_text_embedding(content)
+        self._collection.upsert(
+            ids=[chunk_id],
+            embeddings=[embedding],
+            documents=[content],
+            metadatas=[metadata],
+        )
+
+    def _split_and_embed(
+        self,
+        content: str,
+        chunk_id: str,
+        metadata: Dict[str, Any],
+        rel_path: str,
+        depth: int = 0,
+        max_depth: int = 4,
+    ) -> bool:
+        """Recursively split oversized content and embed each piece (#4702).
+
+        Attempts to embed *content* directly.  If the model rejects it as
+        oversized and *depth* < *max_depth*, the content is split in half and
+        each half is retried recursively (up to 1/16th of the original at
+        depth 4).  Returns True when at least one sub-chunk is stored.
+        """
+        if not content:
+            return False
+        try:
+            self._embed_and_upsert(content, chunk_id, metadata)
+            return True
+        except Exception as e:
+            if not self._is_oversized_error(e) or depth >= max_depth:
+                logger.warning(
+                    "Dropping chunk %s (depth=%d, chars=%d): %s",
+                    chunk_id,
+                    depth,
+                    len(content),
+                    e,
+                )
+                return False
+
+        logger.warning(
+            "Oversized chunk — splitting at depth %d "
+            "(doc=%s, chunk_id=%s, chars=%d)",
+            depth,
+            rel_path,
+            chunk_id,
+            len(content),
+        )
+        mid = len(content) // 2
+        left = content[:mid].strip()
+        right = content[mid:].strip()
+        left_ok = self._split_and_embed(
+            left,
+            f"{chunk_id}_L{depth}",
+            {**metadata, "chunk_id_parent": chunk_id, "split_depth": depth},
+            rel_path,
+            depth + 1,
+            max_depth,
+        )
+        right_ok = self._split_and_embed(
+            right,
+            f"{chunk_id}_R{depth}",
+            {**metadata, "chunk_id_parent": chunk_id, "split_depth": depth},
+            rel_path,
+            depth + 1,
+            max_depth,
+        )
+        return left_ok or right_ok
+
     def _index_chunk(
         self,
         chunk: Dict[str, Any],
@@ -720,7 +837,16 @@ class DocIndexerService:
         file_tags: List[str],
         tier: int,
     ) -> bool:
-        """Index a single chunk into ChromaDB. Returns True on success."""
+        """Index a single chunk into ChromaDB.
+
+        If the embedding model rejects the chunk as oversized, the content is
+        split recursively up to max_depth=4 (at most 1/16th of original size).
+        A WARNING is logged when splitting occurs so the failure is always
+        visible (fixes #4665 — chunks were previously dropped silently with no
+        diagnostic; #4702 — single-level split could still drop large halves).
+
+        Returns True when at least one (sub-)chunk was stored successfully.
+        """
         priority_map = {1: "critical", 2: "high", 3: "medium"}
         chunk_id = hashlib.md5(
             f"{rel_path}:{chunk['section']}:{chunk_index}".encode()
@@ -740,20 +866,16 @@ class DocIndexerService:
             "indexed_at": datetime.now(tz=timezone.utc).isoformat(),
             "chunk_index": chunk_index,
             "total_chunks": total_chunks,
+            # Issue #4681: evolutionary lineage fields.
+            # lineage_parent_id and lineage_source_run_id are populated by
+            # LineageService.stamp_upsert() after synthesis runs; seeded with
+            # defaults on initial index so callers can always read them.
+            "lineage_parent_id": "",
+            "lineage_version": 1,
+            "lineage_source_run_id": "",
         }
 
-        try:
-            embedding = self._embed_model.get_text_embedding(chunk["content"])
-            self._collection.upsert(
-                ids=[chunk_id],
-                embeddings=[embedding],
-                documents=[chunk["content"]],
-                metadatas=[metadata],
-            )
-            return True
-        except Exception as e:
-            logger.error("Failed to index chunk %s: %s", chunk_id, e)
-            return False
+        return self._split_and_embed(chunk["content"], chunk_id, metadata, rel_path)
 
     def _check_hash_and_update_cache(self, file_str: str, force: bool) -> bool:
         """Check incremental hash cache; update cache entry if changed. Issue #2735.
@@ -927,6 +1049,41 @@ class DocIndexerService:
             return files, new_hashes, True
         return files, new_hashes, False
 
+    def _find_collection_config(self, indexed_paths: List[str]):
+        """Return the first CollectionConfig whose paths overlap with indexed_paths.
+
+        Matches when any indexed path contains one of the collection's path prefixes
+        as a substring (e.g. ``docs/architecture`` found in an absolute path).
+        Returns None if no collection matches or the schema is empty.
+        """
+        for col_cfg in self.synthesis_schema.collections:
+            for cfg_path in col_cfg.paths:
+                if any(cfg_path in p for p in indexed_paths):
+                    return col_cfg
+        return None
+
+    async def _run_kb_synthesis(self, indexed_paths: List[str]) -> None:
+        """Run KBSynthesizer after tier ingest (best-effort, Issue #4564/#4614).
+
+        Looks up the matching CollectionConfig from synthesis_schema and passes it
+        to synthesize_docs() so the schema-driven prompt_template is used.
+        Errors are logged and swallowed so indexing is never interrupted.
+        KBSynthesizer is imported lazily to avoid circular imports.
+        """
+        try:
+            from services.knowledge.kb_synthesizer import get_kb_synthesizer
+
+            synthesizer = get_kb_synthesizer(self._llm_service)
+            collection_config = self._find_collection_config(indexed_paths)
+            if collection_config:
+                logger.debug(
+                    "DocIndexerService: synthesis using collection config '%s'",
+                    collection_config.name,
+                )
+            await synthesizer.synthesize_docs(indexed_paths, collection_config=collection_config)
+        except Exception:
+            logger.exception("DocIndexerService: KB synthesis failed (non-fatal)")
+
     async def index_all(self, force: bool = False) -> IndexResult:
         """Index all documentation files.
 
@@ -971,8 +1128,18 @@ class DocIndexerService:
             files, new_hashes = _filter_changed_files(files, hash_cache, self._root_dir)
 
         logger.info("Indexing %d documentation files...", len(files))
+        indexed_paths: List[str] = []
         for file_path, tier in files:
+            before = total_result.success
             await self._index_single_file_content(file_path, tier, total_result)
+            if total_result.success > before:
+                indexed_paths.append(file_path)
+
+        # Issue #4564: trigger KBSynthesizer after ingest (best-effort, non-blocking)
+        if indexed_paths:
+            asyncio.ensure_future(
+                self._run_kb_synthesis(indexed_paths)
+            )
 
         if new_hashes:
             existing_cache = _load_hash_cache()
@@ -993,6 +1160,64 @@ class DocIndexerService:
 
         return total_result
 
+    async def search(self, query: str, n_results: int = 5) -> List[Any]:
+        """Query the autobot_docs ChromaDB collection.
+
+        Issue #4953: expose doc search so RAGService can merge results with
+        the main KB, giving the agent access to AutoBot's own documentation.
+
+        Returns SearchResult objects (from advanced_rag_optimizer).
+        Returns an empty list if not initialised, collection is empty, or on
+        any error — callers always receive a safe (possibly empty) list.
+        """
+        import asyncio
+
+        from advanced_rag_optimizer import SearchResult
+
+        if not self._initialized or self._collection is None or self._embed_model is None:
+            return []
+
+        doc_count = self._collection.count()
+        if doc_count == 0:
+            return []
+
+        k = min(n_results, doc_count)
+        try:
+            embedding: list = await asyncio.to_thread(
+                self._embed_model.get_text_embedding, query
+            )
+            raw = await asyncio.to_thread(
+                self._collection.query,
+                query_embeddings=[embedding],
+                n_results=k,
+                include=["documents", "metadatas", "distances"],
+            )
+        except Exception as exc:
+            logger.warning("autobot_docs search failed: %s", exc)
+            return []
+
+        documents = raw.get("documents", [[]])[0]
+        metadatas = raw.get("metadatas", [[]])[0]
+        distances = raw.get("distances", [[]])[0]
+
+        results = []
+        for i, (doc, meta, dist) in enumerate(zip(documents, metadatas, distances)):
+            # ChromaDB cosine distance → similarity score
+            score = max(0.0, 1.0 - dist)
+            results.append(
+                SearchResult(
+                    content=doc or "",
+                    metadata={**meta, "source": "autobot_docs"},
+                    semantic_score=score,
+                    keyword_score=0.0,
+                    hybrid_score=score,
+                    relevance_rank=i,
+                    source_path=meta.get("file_path", ""),
+                    chunk_index=int(meta.get("chunk_index", i)),
+                )
+            )
+        return results
+
 
 # ============================================================================
 # SINGLETON
@@ -1002,11 +1227,27 @@ _doc_indexer: Optional[DocIndexerService] = None
 _doc_indexer_lock = threading.Lock()
 
 
-def get_doc_indexer_service() -> DocIndexerService:
-    """Get or create the global DocIndexerService instance (thread-safe)."""
+def get_doc_indexer_service(llm_service: Optional[Any] = None) -> DocIndexerService:
+    """Get or create the global DocIndexerService instance (thread-safe).
+
+    Args:
+        llm_service: LLM service for KB synthesis.  When omitted the factory
+            resolves the process-level singleton from ``services.llm_service``
+            so DocIndexerService is never created with ``llm_service=None``.
+    """
     global _doc_indexer
     if _doc_indexer is None:
         with _doc_indexer_lock:
             if _doc_indexer is None:
-                _doc_indexer = DocIndexerService()
+                if llm_service is None:
+                    try:
+                        from services.llm_service import get_llm_service
+
+                        llm_service = get_llm_service()
+                    except Exception:
+                        logger.warning(
+                            "get_doc_indexer_service: could not resolve LLM service "
+                            "— KB synthesis will be disabled"
+                        )
+                _doc_indexer = DocIndexerService(llm_service=llm_service)
     return _doc_indexer

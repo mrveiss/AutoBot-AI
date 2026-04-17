@@ -74,7 +74,7 @@ const toggleCollapse = () => {
 /** Issue #704: Migrated to design tokens */
 .base-panel {
   background-color: var(--bg-primary);
-  transition: all var(--duration-200) ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .panel-default {
@@ -140,7 +140,7 @@ const toggleCollapse = () => {
   font-size: var(--text-lg);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .panel-actions {

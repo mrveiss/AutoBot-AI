@@ -156,6 +156,7 @@ class TaskManager:
         key = _KEY_TASK.format(task.id)
         self._redis.set(key, _task_to_json(task), ex=ttl)
         self._redis.sadd(_KEY_TASKS, task.id)
+        self._redis.expire(_KEY_TASKS, ttl)
 
     def _load(self, task_id: str) -> Optional[Task]:
         raw = self._redis.get(_KEY_TASK.format(task_id))
@@ -221,6 +222,7 @@ class TaskManager:
         ttl = self._ttl()
         self._redis.expire(key, ttl)
         self._redis.expire(_KEY_AUDIT.format(task_id), ttl)
+        self._redis.expire(_KEY_TASKS, ttl)
         return _task_from_json(raw if isinstance(raw, str) else raw.decode("utf-8"))
 
     def list_tasks(self) -> List[Task]:

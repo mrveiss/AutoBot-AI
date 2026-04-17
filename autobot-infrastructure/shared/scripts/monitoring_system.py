@@ -465,17 +465,17 @@ class SystemMonitor:
             {
                 "service": "backend",
                 "endpoint": "/api/system/health",
-                "url": "ServiceURLs.BACKEND_LOCAL/api/system/health",
+                "url": f"{ServiceURLs.BACKEND_LOCAL}/api/system/health",
             },
             {
                 "service": "backend",
                 "endpoint": "/api/system/status",
-                "url": "ServiceURLs.BACKEND_LOCAL/api/system/status",
+                "url": f"{ServiceURLs.BACKEND_LOCAL}/api/system/status",
             },
             {
                 "service": "backend",
                 "endpoint": "/api/chat_knowledge/health",
-                "url": "ServiceURLs.BACKEND_LOCAL/api/chat_knowledge/health",
+                "url": f"{ServiceURLs.BACKEND_LOCAL}/api/chat_knowledge/health",
             },
             {"service": "redis", "endpoint": "ping", "url": None},
         ]

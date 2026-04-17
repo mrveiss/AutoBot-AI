@@ -600,10 +600,10 @@ onMounted(() => {
 <style scoped>
 /* Issue #704: Migrated to CSS design tokens */
 .performance-dashboard {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: var(--spacing-6);
 }
 
 /* Header */
@@ -612,41 +612,41 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .header-content h2 {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin: 0;
-  font-size: 1.5rem;
+  gap: var(--spacing-2);
+  margin: var(--spacing-0);
+  font-size: var(--text-2xl);
   color: var(--text-primary);
 }
 
 .subtitle {
   color: var(--text-secondary);
   margin: 0.25rem 0 0 0;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .header-actions {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 /* Buttons */
 .action-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   padding: 0.5rem 1rem;
   border: none;
-  border-radius: 6px;
-  font-size: 0.875rem;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .action-btn.primary {
@@ -684,21 +684,21 @@ onMounted(() => {
 
 /* Path Selection */
 .path-selection {
-  padding: 1rem;
+  padding: var(--spacing-4);
   background: var(--bg-secondary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-color);
 }
 
 .input-group {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-3);
 }
 
 .input-group label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -708,28 +708,32 @@ onMounted(() => {
   padding: 0.625rem 0.875rem;
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .input-group input:focus {
   outline: none;
   border-color: var(--accent-color);
 }
+.input-group input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .quick-paths {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .quick-path-btn {
   padding: 0.375rem 0.75rem;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
-  border-radius: 4px;
-  font-size: 0.75rem;
+  border-radius: var(--radius-default);
+  font-size: var(--text-xs);
   font-family: monospace;
   color: var(--text-secondary);
   cursor: pointer;
@@ -745,10 +749,10 @@ onMounted(() => {
 .score-section {
   display: flex;
   align-items: center;
-  gap: 2rem;
-  padding: 1.5rem;
+  gap: var(--spacing-8);
+  padding: var(--spacing-6);
   background: var(--bg-secondary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-color);
 }
 
@@ -764,7 +768,7 @@ onMounted(() => {
 .score-progress {
   transform: rotate(-90deg);
   transform-origin: center;
-  transition: stroke-dasharray 0.5s ease;
+  transition: stroke-dasharray var(--duration-500) var(--ease-out);
 }
 
 .score-value {
@@ -782,22 +786,22 @@ onMounted(() => {
 .summary-stats {
   display: flex;
   flex-wrap: wrap;
-  gap: 1.5rem;
+  gap: var(--spacing-6);
 }
 
 .stat-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 
 .stat-icon {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
 }
 
 .stat-value {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -812,13 +816,13 @@ onMounted(() => {
 .content-grid {
   display: grid;
   grid-template-columns: 1.5fr 1fr;
-  gap: 1.5rem;
+  gap: var(--spacing-6);
 }
 
 /* Panels */
 .panel {
   background: var(--bg-secondary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-color);
   overflow: hidden;
 }
@@ -827,18 +831,18 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem;
+  padding: var(--spacing-4);
   border-bottom: 1px solid var(--border-color);
 }
 
 .panel-header h3 {
-  margin: 0;
-  font-size: 1rem;
+  margin: var(--spacing-0);
+  font-size: var(--text-base);
   color: var(--text-primary);
 }
 
 .panel-content {
-  padding: 1rem;
+  padding: var(--spacing-4);
   max-height: 400px;
   overflow-y: auto;
 }
@@ -846,7 +850,7 @@ onMounted(() => {
 .close-btn {
   background: none;
   border: none;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   color: var(--text-secondary);
   cursor: pointer;
 }
@@ -854,18 +858,18 @@ onMounted(() => {
 /* Category Tabs */
 .category-tabs {
   display: flex;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
   flex-wrap: wrap;
 }
 
 .cat-tab {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
   padding: 0.25rem 0.5rem;
   background: transparent;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.6875rem;
   color: var(--text-secondary);
   cursor: pointer;
@@ -879,23 +883,23 @@ onMounted(() => {
 .cat-tab .count {
   background: rgba(0,0,0,0.2);
   padding: 0.125rem 0.25rem;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 /* Issues List */
 .issues-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .issue-card {
-  padding: 0.875rem;
+  padding: var(--spacing-3-5);
   background: var(--bg-tertiary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border-left: 3px solid;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .issue-card:hover {
@@ -910,22 +914,22 @@ onMounted(() => {
 .issue-header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-2);
 }
 
 .impact-badge {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .impact-badge.large {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
 }
 
 .impact-badge.small {
   font-size: 0.625rem;
   padding: 0.125rem 0.375rem;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   background: var(--bg-quaternary);
 }
 
@@ -936,20 +940,20 @@ onMounted(() => {
   color: var(--accent-color);
   background: var(--bg-quaternary);
   padding: 0.125rem 0.375rem;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 .issue-name {
   font-weight: 500;
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .issue-location {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-family: monospace;
   color: var(--text-secondary);
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
 }
 
 .issue-desc {
@@ -960,8 +964,8 @@ onMounted(() => {
 
 .issue-impact {
   display: flex;
-  gap: 0.5rem;
-  font-size: 0.75rem;
+  gap: var(--spacing-2);
+  font-size: var(--text-xs);
 }
 
 .impact-label {
@@ -977,18 +981,18 @@ onMounted(() => {
 .detail-header {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1.25rem;
+  gap: var(--spacing-3);
+  margin-bottom: var(--spacing-5);
 }
 
 .detail-title h4 {
-  margin: 0;
-  font-size: 1rem;
+  margin: var(--spacing-0);
+  font-size: var(--text-base);
   color: var(--text-primary);
 }
 
 .detail-section {
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .detail-section label {
@@ -997,50 +1001,50 @@ onMounted(() => {
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
 }
 
 .location-info {
   font-family: monospace;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .line-info {
   color: var(--text-secondary);
-  margin-left: 0.5rem;
+  margin-left: var(--spacing-2);
 }
 
 .description {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-secondary);
   line-height: 1.5;
 }
 
 .code-snippet {
   background: var(--bg-tertiary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
 .code-snippet pre {
-  margin: 0;
-  padding: 0.875rem;
-  font-size: 0.75rem;
+  margin: var(--spacing-0);
+  padding: var(--spacing-3-5);
+  font-size: var(--text-xs);
   overflow-x: auto;
 }
 
 .impact-box {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3);
   background: rgba(245, 158, 11, 0.1);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
 .impact-icon {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
 }
 
 .impact-text {
@@ -1050,19 +1054,19 @@ onMounted(() => {
 
 .suggestion-box {
   display: flex;
-  gap: 0.75rem;
-  padding: 0.875rem;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3-5);
   background: rgba(16, 185, 129, 0.1);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
 .suggestion-icon {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
 }
 
 .suggestion-box p {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-primary);
   line-height: 1.4;
 }
@@ -1071,20 +1075,20 @@ onMounted(() => {
 .hotspots-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .hotspot-item {
-  padding: 0.75rem;
+  padding: var(--spacing-3);
   background: var(--bg-tertiary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 .hotspot-info {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  margin-bottom: 0.5rem;
+  gap: var(--spacing-1);
+  margin-bottom: var(--spacing-2);
 }
 
 .hotspot-file {
@@ -1100,12 +1104,12 @@ onMounted(() => {
 
 .hotspot-stats {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .hotspot-stats .stat {
   padding: 0.125rem 0.375rem;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.625rem;
   font-weight: 600;
 }
@@ -1133,24 +1137,24 @@ onMounted(() => {
 .category-bars {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .category-bar-item {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .bar-label {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   width: 100px;
 }
 
 .bar-icon {
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 
 .bar-name {
@@ -1162,14 +1166,14 @@ onMounted(() => {
   flex: 1;
   height: 24px;
   background: var(--bg-tertiary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   overflow: hidden;
   display: flex;
 }
 
 .bar-fill {
   height: 100%;
-  transition: width 0.3s;
+  transition: width var(--duration-300);
 }
 
 .bar-fill.critical { background: var(--color-error); }
@@ -1195,12 +1199,12 @@ onMounted(() => {
 }
 
 .empty-state.small {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
 }
 
 .empty-icon {
   font-size: 2.5rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--spacing-3);
 }
 
 /* Modal */
@@ -1211,12 +1215,12 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: var(--z-modal-backdrop);
 }
 
 .modal {
   background: var(--bg-secondary);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   width: 90%;
   max-width: 600px;
   max-height: 80vh;
@@ -1234,33 +1238,33 @@ onMounted(() => {
 }
 
 .modal-content {
-  padding: 1.25rem;
+  padding: var(--spacing-5);
   overflow-y: auto;
 }
 
 .pattern-category {
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
 }
 
 .pattern-category h4 {
   margin: 0 0 0.75rem 0;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
 .pattern-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .pattern-item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   padding: 0.5rem 0.75rem;
   background: var(--bg-tertiary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   opacity: 0.6;
 }
 

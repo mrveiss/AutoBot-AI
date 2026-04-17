@@ -244,9 +244,9 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(feature, idx) in engagementMetrics.feature_popularity" :key="feature.feature">
+            <tr v-for="(feature, idx) in (engagementMetrics.feature_popularity as any[])" :key="feature.feature">
               <td>
-                <span class="rank-badge" :class="'rank-' + (idx + 1)">{{ idx + 1 }}</span>
+                <span class="rank-badge" :class="'rank-' + ((idx as number) + 1)">{{ (idx as number) + 1 }}</span>
                 {{ feature.feature }}
               </td>
               <td class="text-right">{{ formatNumber(feature.views) }}</td>
@@ -271,11 +271,11 @@
         </template>
         <div class="peak-hours-list">
           <div
-            v-for="(peak, idx) in usageHeatmap.peak_hours"
+            v-for="(peak, idx) in (usageHeatmap.peak_hours as any[])"
             :key="peak.hour"
             class="peak-hour-item"
           >
-            <span class="peak-rank">{{ idx + 1 }}</span>
+            <span class="peak-rank">{{ (idx as number) + 1 }}</span>
             <span class="peak-time">{{ peak.hour }}:00</span>
             <span class="peak-events">{{ formatNumber(peak.total_events) }} {{ $t('analytics.advanced.events') }}</span>
           </div>
@@ -527,7 +527,7 @@ onMounted(() => {
 
 <style scoped>
 .advanced-analytics {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   position: relative;
 }
 
@@ -535,25 +535,25 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
 }
 
 .analytics-header h2 {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-primary);
 }
 
 .header-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .analytics-tabs {
   display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-6);
   border-bottom: 1px solid var(--border-default);
-  padding-bottom: 0.5rem;
+  padding-bottom: var(--spacing-2);
 }
 
 .tab-btn {
@@ -562,8 +562,8 @@ onMounted(() => {
   background: none;
   color: var(--text-secondary);
   cursor: pointer;
-  border-radius: 4px;
-  transition: all 0.2s;
+  border-radius: var(--radius-default);
+  transition: all var(--duration-200);
 }
 
 .tab-btn:hover {
@@ -576,17 +576,17 @@ onMounted(() => {
 }
 
 .tab-btn i {
-  margin-right: 0.5rem;
+  margin-right: var(--spacing-2);
 }
 
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .metric-value {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -600,8 +600,8 @@ onMounted(() => {
 }
 
 .metric-trend {
-  margin-top: 0.5rem;
-  font-size: 0.875rem;
+  margin-top: var(--spacing-2);
+  font-size: var(--text-sm);
 }
 
 .trend-up {
@@ -623,7 +623,7 @@ onMounted(() => {
 
 .data-table th,
 .data-table td {
-  padding: 0.75rem;
+  padding: var(--spacing-3);
   text-align: left;
   border-bottom: 1px solid var(--border-default);
 }
@@ -631,7 +631,7 @@ onMounted(() => {
 .data-table th {
   font-weight: 600;
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .text-right {
@@ -642,8 +642,8 @@ onMounted(() => {
   display: inline-block;
   padding: 0.25rem 0.5rem;
   background: var(--bg-tertiary);
-  border-radius: 4px;
-  font-size: 0.75rem;
+  border-radius: var(--radius-default);
+  font-size: var(--text-xs);
 }
 
 .success {
@@ -659,18 +659,18 @@ onMounted(() => {
 }
 
 .mt-4 {
-  margin-top: 1rem;
+  margin-top: var(--spacing-4);
 }
 
 .recommendations-list {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .recommendation-item ul {
   margin: 0.5rem 0 0 1.5rem;
-  padding: 0;
+  padding: var(--spacing-0);
 }
 
 .recommendation-item li {
@@ -692,7 +692,7 @@ onMounted(() => {
 .export-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .export-card p {
@@ -703,7 +703,7 @@ onMounted(() => {
 .export-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 /* Issue #704: Migrated to CSS design tokens */
@@ -731,9 +731,9 @@ onMounted(() => {
   width: 1.5rem;
   height: 1.5rem;
   border-radius: 50%;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
-  margin-right: 0.5rem;
+  margin-right: var(--spacing-2);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
 }
@@ -757,30 +757,30 @@ onMounted(() => {
   width: 100px;
   height: 8px;
   background: var(--bg-tertiary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   overflow: hidden;
 }
 
 .popularity-fill {
   height: 100%;
   background: var(--color-primary);
-  border-radius: 4px;
-  transition: width 0.3s ease;
+  border-radius: var(--radius-default);
+  transition: width var(--duration-300) var(--ease-out);
 }
 
 .peak-hours-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .peak-hour-item {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.75rem;
+  gap: var(--spacing-4);
+  padding: var(--spacing-3);
   background: var(--bg-secondary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 .peak-rank {
@@ -792,7 +792,7 @@ onMounted(() => {
   background: var(--color-primary);
   color: var(--text-on-primary);
   border-radius: 50%;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
 }
 
@@ -804,6 +804,6 @@ onMounted(() => {
 
 .peak-events {
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 </style>

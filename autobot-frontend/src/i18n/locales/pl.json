@@ -5221,6 +5221,12 @@
     }
   },
   "operations": {
+    "view": {
+      "title": "Długotrwałe operacje",
+      "subtitle": "Monitoruj i zarządzaj zadaniami w tle",
+      "refresh": "Odśwież",
+      "loadError": "Nie udało się załadować operacji"
+    },
     "detail": {
       "close": "Zamknij",
       "priorityLabel": "Priorytet: {priority}",
@@ -5265,6 +5271,9 @@
       "resume": "Wznów",
       "viewDetails": "Zobacz szczegóły",
       "showingCount": "Wyświetlanie {shown} z {total} operacji"
+    },
+    "panel": {
+      "selectOperation": "Select an operation to view details"
     }
   },
   "secrets": {
@@ -6403,7 +6412,8 @@
     "services": "Services",
     "skipToNavigation": "Skip to navigation",
     "profile": "Profile",
-    "systemStatus": "System Status"
+    "systemStatus": "System Status",
+    "operations": "Operacje"
   },
   "reasoningTrace": {
     "title": "Slad rozumowania",

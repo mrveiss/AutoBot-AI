@@ -396,25 +396,25 @@ function statusClass(status: string): string {
 .heartbeat-panel {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  font-size: 0.875rem;
+  gap: var(--spacing-4);
+  font-size: var(--text-sm);
   color: var(--text-primary, #e2e8f0);
 }
 .panel-header {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--spacing-4);
   flex-wrap: wrap;
 }
 .panel-header h3 {
-  margin: 0;
-  font-size: 1rem;
+  margin: var(--spacing-0);
+  font-size: var(--text-base);
   font-weight: 600;
 }
 .agent-selector {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 .agent-selector label {
   color: var(--text-secondary, #94a3b8);
@@ -422,7 +422,7 @@ function statusClass(status: string): string {
 .agent-selector input {
   background: var(--bg-input, #1e293b);
   border: 1px solid var(--border, #334155);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   color: inherit;
   padding: 0.25rem 0.5rem;
   width: 200px;
@@ -430,33 +430,33 @@ function statusClass(status: string): string {
 .error-banner {
   background: rgba(239, 68, 68, 0.15);
   border: 1px solid rgba(239, 68, 68, 0.4);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: #fca5a5;
   padding: 0.5rem 0.75rem;
 }
 .card {
   background: var(--bg-card, #1e293b);
   border: 1px solid var(--border, #334155);
-  border-radius: 8px;
-  padding: 1rem;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
 }
 .card-title {
   font-weight: 600;
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--spacing-3);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 .config-grid {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 .config-row {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 .config-row .label {
   width: 130px;
@@ -469,10 +469,10 @@ function statusClass(status: string): string {
 .config-actions {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   flex-wrap: wrap;
   border-top: 1px solid var(--border, #334155);
-  padding-top: 0.75rem;
+  padding-top: var(--spacing-3);
 }
 .toggle-label {
   display: flex;
@@ -493,7 +493,7 @@ function statusClass(status: string): string {
   width: 70px;
   background: var(--bg-input, #0f172a);
   border: 1px solid var(--border, #334155);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   color: inherit;
   padding: 0.2rem 0.4rem;
 }
@@ -524,21 +524,21 @@ function statusClass(status: string): string {
 }
 .events-row td {
   background: var(--bg-input, #0f172a);
-  padding: 0;
+  padding: var(--spacing-0);
 }
 .events-container {
   padding: 0.5rem 0.75rem;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 .error-message {
   color: #fca5a5;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
 }
 .event-row {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   align-items: baseline;
 }
 .event-time {
@@ -547,7 +547,7 @@ function statusClass(status: string): string {
 }
 .event-type {
   font-weight: 600;
-  color: #60a5fa;
+  color: var(--color-info);
   flex-shrink: 0;
 }
 .event-msg {
@@ -560,19 +560,19 @@ function statusClass(status: string): string {
 }
 .count-badge {
   background: var(--bg-input, #0f172a);
-  border-radius: 10px;
-  font-size: 0.75rem;
+  border-radius: var(--radius-xl);
+  font-size: var(--text-xs);
   padding: 0.1rem 0.4rem;
 }
 button {
   background: var(--bg-btn, #334155);
   border: 1px solid var(--border, #475569);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   color: inherit;
   cursor: pointer;
   font-size: 0.8rem;
   padding: 0.3rem 0.6rem;
-  transition: background 0.15s;
+  transition: background var(--duration-150);
 }
 button:disabled {
   cursor: not-allowed;
@@ -583,30 +583,30 @@ button:not(:disabled):hover {
 }
 .btn-load,
 .btn-save {
-  background: #3b82f6;
-  border-color: #2563eb;
+  background: var(--color-primary);
+  border-color: var(--color-primary);
 }
 .btn-load:not(:disabled):hover,
 .btn-save:not(:disabled):hover {
-  background: #2563eb;
+  filter: brightness(0.9);
 }
 .btn-trigger {
-  background: #10b981;
-  border-color: #059669;
+  background: var(--color-success);
+  border-color: var(--color-success);
 }
 .btn-trigger:not(:disabled):hover {
-  background: #059669;
+  filter: brightness(0.9);
 }
 .btn-queue {
-  background: #8b5cf6;
-  border-color: #7c3aed;
+  background: var(--color-info);
+  border-color: var(--color-info);
 }
 .btn-sm {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   padding: 0.15rem 0.45rem;
 }
 .badge {
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.72rem;
   font-weight: 600;
   padding: 0.1rem 0.45rem;

@@ -5222,6 +5222,12 @@
     }
   },
   "operations": {
+    "view": {
+      "title": "العمليات طويلة الأمد",
+      "subtitle": "مراقبة المهام الخلفية وإدارتها",
+      "refresh": "تحديث",
+      "loadError": "فشل تحميل العمليات"
+    },
     "detail": {
       "close": "إغلاق",
       "priorityLabel": "{priority} Priority",
@@ -5267,6 +5273,9 @@
       "resume": "Resume",
       "viewDetails": "View Details",
       "showingCount": "Showing {shown} of {total} operations"
+    },
+    "panel": {
+      "selectOperation": "Select an operation to view details"
     }
   },
   "secrets": {
@@ -6405,7 +6414,8 @@
     "services": "Services",
     "skipToNavigation": "Skip to navigation",
     "profile": "Profile",
-    "systemStatus": "System Status"
+    "systemStatus": "System Status",
+    "operations": "العمليات"
   },
   "reasoningTrace": {
     "title": "Reasoning trace",

@@ -21,6 +21,9 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
+# MAP-Elites minimum category coverage required to activate grid-based selection.
+_MAP_ELITES_MIN_CATEGORIES = 2
+
 from autobot_shared.logging_manager import get_llm_logger
 from constants.model_constants import model_config
 from constants.ttl_constants import TTL_5_MINUTES
@@ -72,6 +75,14 @@ class RAGMetrics:
     final_results_count: int = 0
     gpu_acceleration_used: bool = False
     hybrid_search_enabled: bool = False
+
+
+@dataclass
+class _MapElitesCell:
+    """One occupied cell in the MAP-Elites coverage grid. Issue #4677."""
+
+    result: "SearchResult"
+    score: float
 
 
 class AdvancedRAGOptimizer:
@@ -170,19 +181,13 @@ class AdvancedRAGOptimizer:
         if len(self.query_cache) < self.MAX_CACHE_ENTRIES:
             return
         now = time.time()
-        expired = [
-            k
-            for k, v in self.query_cache.items()
-            if now - v["timestamp"] > self.cache_ttl_seconds
-        ]
+        expired = [k for k, v in self.query_cache.items() if now - v["timestamp"] > self.cache_ttl_seconds]
         for k in expired:
             del self.query_cache[k]
         if len(self.query_cache) < self.MAX_CACHE_ENTRIES:
             return
         overage = len(self.query_cache) - self.MAX_CACHE_ENTRIES + 1
-        oldest = sorted(
-            self.query_cache, key=lambda k: self.query_cache[k]["timestamp"]
-        )
+        oldest = sorted(self.query_cache, key=lambda k: self.query_cache[k]["timestamp"])
         for k in oldest[:overage]:
             del self.query_cache[k]
         logger.debug(
@@ -191,15 +196,11 @@ class AdvancedRAGOptimizer:
             overage,
         )
 
-    def _make_cache_key(
-        self, query: str, max_results: int, enable_reranking: bool
-    ) -> str:
+    def _make_cache_key(self, query: str, max_results: int, enable_reranking: bool) -> str:
         """Build a deterministic cache key from search parameters. Issue #1548."""
         return f"{query}|{max_results}|{enable_reranking}"
 
-    def _get_cached_result(
-        self, key: str
-    ) -> Optional[Tuple[List[SearchResult], RAGMetrics]]:
+    def _get_cached_result(self, key: str) -> Optional[Tuple[List[SearchResult], RAGMetrics]]:
         """Return cached result if present and within TTL, else None. Issue #1548."""
         entry = self.query_cache.get(key)
         if entry is None:
@@ -280,9 +281,7 @@ class AdvancedRAGOptimizer:
             suggested_chunk_count=suggested_chunk_count,
         )
 
-        logger.debug(
-            f"Query analysis: type={query_type}, complexity={complexity_score:.2f}"
-        )
+        logger.debug(f"Query analysis: type={query_type}, complexity={complexity_score:.2f}")
         return context
 
     def _expand_query(self, query: str, query_type: str) -> List[str]:
@@ -316,9 +315,7 @@ class AdvancedRAGOptimizer:
         logger.debug("Query expansion: %s variants generated", len(unique_expanded))
         return unique_expanded
 
-    async def _perform_semantic_search(
-        self, query: str, limit: int = 20
-    ) -> List[SearchResult]:
+    async def _perform_semantic_search(self, query: str, limit: int = 20) -> List[SearchResult]:
         """Perform semantic similarity search using embeddings."""
         try:
             # Use knowledge base's search method for semantic search
@@ -354,9 +351,7 @@ class AdvancedRAGOptimizer:
             logger.error("Semantic search failed: %s", e)
             return []
 
-    def _calculate_keyword_score(
-        self, query_lower: str, query_terms: set, combined_text: str
-    ) -> float:
+    def _calculate_keyword_score(self, query_lower: str, query_terms: set, combined_text: str) -> float:
         """Calculate keyword score for a fact. Issue #620."""
         matches = sum(1 for term in query_terms if term in combined_text)
         if matches == 0:
@@ -381,9 +376,7 @@ class AdvancedRAGOptimizer:
             chunk_index=metadata.get("chunk_index", 0),
         )
 
-    def _perform_keyword_search(
-        self, query: str, all_facts: List[Dict]
-    ) -> List[SearchResult]:
+    def _perform_keyword_search(self, query: str, all_facts: List[Dict]) -> List[SearchResult]:
         """Perform keyword-based search with TF-IDF-like scoring. Issue #620."""
         try:
             query_lower = query.lower()
@@ -395,9 +388,7 @@ class AdvancedRAGOptimizer:
                 metadata_str = json.dumps(fact.get("metadata", {})).lower()
                 combined_text = f"{content} {metadata_str}"
 
-                score = self._calculate_keyword_score(
-                    query_lower, query_terms, combined_text
-                )
+                score = self._calculate_keyword_score(query_lower, query_terms, combined_text)
                 if score > 0:
                     keyword_results.append(self._create_keyword_result(fact, score))
 
@@ -432,9 +423,7 @@ class AdvancedRAGOptimizer:
             if key in result_map:
                 # Combine scores
                 existing = result_map[key]
-                existing.keyword_score = max(
-                    existing.keyword_score, result.keyword_score
-                )
+                existing.keyword_score = max(existing.keyword_score, result.keyword_score)
             else:
                 # New result from keyword search
                 result_map[key] = result
@@ -443,8 +432,7 @@ class AdvancedRAGOptimizer:
         combined_results = []
         for result in result_map.values():
             result.hybrid_score = (
-                self.hybrid_weight_semantic * result.semantic_score
-                + self.hybrid_weight_keyword * result.keyword_score
+                self.hybrid_weight_semantic * result.semantic_score + self.hybrid_weight_keyword * result.keyword_score
             )
             combined_results.append(result)
 
@@ -458,9 +446,7 @@ class AdvancedRAGOptimizer:
         logger.debug("Hybrid combination produced %s results", len(combined_results))
         return combined_results
 
-    def _diversify_results(
-        self, results: List[SearchResult], max_results: int = 10
-    ) -> List[SearchResult]:
+    def _diversify_results(self, results: List[SearchResult], max_results: int = 10) -> List[SearchResult]:
         """Remove redundant results to improve diversity (#2200)."""
         if len(results) <= 1:
             return results
@@ -496,6 +482,81 @@ class AdvancedRAGOptimizer:
         logger.debug("Diversification: %s → %s results", len(results), len(diversified))
         return diversified
 
+    def _map_elites_select(self, results: List[SearchResult], max_results: int = 10) -> List[SearchResult]:
+        """Select results using a MAP-Elites coverage grid. Issue #4677.
+
+        Axes:
+          - chunk_category: metadata key ``category`` (fallback ``"unknown"``)
+          - source_domain: top-level path component of ``source_path``
+
+        Selection rule: prefer results that fill an empty (category, source)
+        cell over those that would double-fill an already-occupied cell.
+        Tie-breaking within the same cell uses the hybrid_score.
+
+        Fallback: when fewer than ``_MAP_ELITES_MIN_CATEGORIES`` distinct
+        categories are represented in *results*, the standard cosine-distance
+        diversification is used instead.
+        """
+        if len(results) <= 1:
+            return results
+
+        # Compute grid keys for all results
+        def _cell_key(r: SearchResult) -> tuple:
+            category = r.metadata.get("category") or r.metadata.get("chunk_category") or "unknown"
+            source_parts = r.source_path.replace("\\", "/").split("/")
+            domain = source_parts[0] if source_parts else "unknown"
+            return (str(category), str(domain))
+
+        # Fallback when too few categories
+        categories = {_cell_key(r)[0] for r in results}
+        if len(categories) < _MAP_ELITES_MIN_CATEGORIES:
+            logger.debug(
+                "MAP-Elites fallback: only %d category/categories — using cosine dedup",
+                len(categories),
+            )
+            return self._diversify_results(results, max_results)
+
+        # Build grid: cell_key → best result already selected
+        grid: Dict[tuple, _MapElitesCell] = {}
+        selected: List[SearchResult] = []
+
+        for candidate in results:
+            if len(selected) >= max_results:
+                break
+            key = _cell_key(candidate)
+            score = candidate.hybrid_score
+            if key not in grid:
+                # Empty cell — always take it
+                grid[key] = _MapElitesCell(result=candidate, score=score)
+                selected.append(candidate)
+            else:
+                # Cell occupied — only replace if score is strictly better
+                # (this is a tie-break within a cell, no new slot consumed)
+                if score > grid[key].score:
+                    grid[key] = _MapElitesCell(result=candidate, score=score)
+
+        # If we still have capacity, fill remaining slots from candidates that
+        # double-fill cells (sorted by score descending)
+        if len(selected) < max_results:
+            selected_set = {id(r) for r in selected}
+            remaining = sorted(
+                (r for r in results if id(r) not in selected_set),
+                key=lambda r: r.hybrid_score,
+                reverse=True,
+            )
+            for r in remaining:
+                if len(selected) >= max_results:
+                    break
+                selected.append(r)
+
+        logger.debug(
+            "MAP-Elites selection: %d candidates → %d results (%d cells occupied)",
+            len(results),
+            len(selected),
+            len(grid),
+        )
+        return selected
+
     def _ensure_cross_encoder_loaded(self) -> None:
         """Load cross-encoder model via process-wide singleton (Issue #398: extracted).
 
@@ -509,9 +570,7 @@ class AdvancedRAGOptimizer:
 
         self._cross_encoder = get_cross_encoder()
 
-    async def _apply_cross_encoder_scores(
-        self, query: str, results: List[SearchResult]
-    ) -> None:
+    async def _apply_cross_encoder_scores(self, query: str, results: List[SearchResult]) -> None:
         """Apply cross-encoder scores to results (Issue #398: extracted).
 
         Issue #1526: Normalize cross-encoder logits with sigmoid before
@@ -522,9 +581,7 @@ class AdvancedRAGOptimizer:
         import math
 
         pairs = [(query, result.content) for result in results]
-        cross_encoder_scores = await asyncio.to_thread(
-            self._cross_encoder.predict, pairs
-        )
+        cross_encoder_scores = await asyncio.to_thread(self._cross_encoder.predict, pairs)
 
         for result, ce_score in zip(results, cross_encoder_scores):
             # Sigmoid normalization: raw logits → 0-1 probability
@@ -537,9 +594,7 @@ class AdvancedRAGOptimizer:
 
         logger.debug("Cross-encoder reranking completed for %s results", len(results))
 
-    def _apply_fallback_reranking(
-        self, query: str, results: List[SearchResult]
-    ) -> None:
+    def _apply_fallback_reranking(self, query: str, results: List[SearchResult]) -> None:
         """Apply term-based fallback reranking (Issue #398: extracted)."""
         logger.debug("Using fallback term-based reranking")
         query_lower = query.lower()
@@ -552,14 +607,10 @@ class AdvancedRAGOptimizer:
             # Issue #1526: Use semantic_score (real similarity) as base,
             # not hybrid_score which is already weighted down
             result.rerank_score = (
-                result.semantic_score * 0.7
-                + (term_matches / len(query_terms)) * 0.2
-                + exact_match_bonus * 0.1
+                result.semantic_score * 0.7 + (term_matches / len(query_terms)) * 0.2 + exact_match_bonus * 0.1
             )
 
-    def _finalize_rerank_results(
-        self, results: List[SearchResult]
-    ) -> List[SearchResult]:
+    def _finalize_rerank_results(self, results: List[SearchResult]) -> List[SearchResult]:
         """Sort and rank results after reranking (Issue #398: extracted)."""
         results.sort(key=lambda x: x.rerank_score or 0, reverse=True)
         for i, result in enumerate(results):
@@ -567,9 +618,7 @@ class AdvancedRAGOptimizer:
         logger.debug("Reranking completed: top score = %.3f", results[0].rerank_score)
         return results
 
-    async def _rerank_with_cross_encoder(
-        self, query: str, results: List[SearchResult]
-    ) -> List[SearchResult]:
+    async def _rerank_with_cross_encoder(self, query: str, results: List[SearchResult]) -> List[SearchResult]:
         """Rerank results using cross-encoder model (Issue #398: refactored)."""
         try:
             self._ensure_cross_encoder_loaded()
@@ -586,10 +635,21 @@ class AdvancedRAGOptimizer:
             return results
 
     async def advanced_search(
-        self, query: str, max_results: int = 5, enable_reranking: bool = True
+        self,
+        query: str,
+        max_results: int = 5,
+        enable_reranking: bool = True,
+        diversity_strategy: str = "cosine",
     ) -> Tuple[List[SearchResult], RAGMetrics]:
         """
         Perform advanced RAG search with all optimizations (Issue #665: refactored).
+
+        Args:
+            query: Search query string.
+            max_results: Maximum number of results to return.
+            enable_reranking: Whether to apply cross-encoder reranking.
+            diversity_strategy: ``"cosine"`` (default word-overlap dedup) or
+                ``"map_elites"`` (structured coverage grid, Issue #4677).
 
         Returns:
             (search_results, performance_metrics)
@@ -611,18 +671,21 @@ class AdvancedRAGOptimizer:
             context = self._analyze_query_context(query)
             metrics.query_processing_time = time.time() - query_start
 
-            # Step 2: Multi-strategy retrieval
-            hybrid_results = await self._retrieve_hybrid_results(query, metrics)
+            # Step 2: Multi-strategy retrieval (Issue #4685: pass context for expanded queries)
+            hybrid_results = await self._retrieve_hybrid_results(query, metrics, context)
 
-            # Step 3: Result diversification and reranking
+            # Step 3: Result diversification and reranking (Issue #4677: strategy-aware)
             final_results = await self._diversify_and_rerank(
-                query, hybrid_results, enable_reranking, metrics, max_results
+                query,
+                hybrid_results,
+                enable_reranking,
+                metrics,
+                max_results,
+                diversity_strategy=diversity_strategy,
             )
 
             # Step 4: Apply context optimization and limit results
-            optimized_results = self._optimize_result_count(
-                final_results, max_results, context
-            )
+            optimized_results = self._optimize_result_count(final_results, max_results, context)
 
             metrics.final_results_count = len(optimized_results)
             metrics.total_time = time.time() - start_time
@@ -641,9 +704,19 @@ class AdvancedRAGOptimizer:
             return [], metrics
 
     async def _retrieve_hybrid_results(
-        self, query: str, metrics: RAGMetrics
+        self,
+        query: str,
+        metrics: RAGMetrics,
+        context: Optional["QueryContext"] = None,
     ) -> List[SearchResult]:
-        """Perform hybrid retrieval (Issue #665: extracted helper)."""
+        """Perform hybrid retrieval (Issue #665: extracted helper).
+
+        If *context* contains expanded queries (Issue #4685), supplemental
+        searches are run for each expanded term and their results are merged
+        into the primary result set (deduplication by content hash).  The
+        primary query remains the authoritative search — expanded results are
+        supplemental and do not displace primary hits.
+        """
         retrieval_start = time.time()
 
         # Issue #619: Parallelize semantic search and facts retrieval
@@ -658,6 +731,32 @@ class AdvancedRAGOptimizer:
         # Combine with hybrid scoring
         hybrid_results = self._combine_hybrid_results(semantic_results, keyword_results)
 
+        # Issue #4685: wire expanded queries into retrieval
+        expanded_queries = context.expanded_queries if context is not None and context.expanded_queries else []
+        if expanded_queries:
+            logger.debug(
+                "Running %d supplemental searches for expanded queries: %s",
+                len(expanded_queries),
+                expanded_queries,
+            )
+            # Build a dedup set from primary results (content hash → already present)
+            seen_keys = {hash(r.content[:100]) for r in hybrid_results}
+
+            # Fan-out supplemental semantic searches in parallel
+            expanded_semantic_lists = await asyncio.gather(
+                *[self._perform_semantic_search(eq, limit=self.max_results_per_stage) for eq in expanded_queries]
+            )
+            for eq, eq_semantic in zip(expanded_queries, expanded_semantic_lists):
+                eq_keyword = self._perform_keyword_search(eq, all_facts)
+                eq_combined = self._combine_hybrid_results(eq_semantic, eq_keyword)
+                for result in eq_combined:
+                    key = hash(result.content[:100])
+                    if key not in seen_keys:
+                        hybrid_results.append(result)
+                        seen_keys.add(key)
+
+            logger.debug("After expanded-query merge: %d total candidates", len(hybrid_results))
+
         metrics.retrieval_time = time.time() - retrieval_start
         metrics.documents_considered = len(hybrid_results)
         metrics.hybrid_search_enabled = True
@@ -671,21 +770,29 @@ class AdvancedRAGOptimizer:
         enable_reranking: bool,
         metrics: RAGMetrics,
         max_results: int = 10,
+        diversity_strategy: str = "cosine",
     ) -> List[SearchResult]:
-        """Diversify and optionally rerank results (Issue #665: extracted helper)."""
+        """Diversify and optionally rerank results (Issue #665: extracted helper).
+
+        Issue #4677: ``diversity_strategy`` selects the diversification algorithm:
+          - ``"cosine"`` (default) — existing word-overlap dedup behaviour
+          - ``"map_elites"`` — structured coverage grid across (category, source)
+        """
         # #2103: Skip crude word-overlap diversity when reranking is enabled
         # — the reranker's blend weights (RerankWeights) handle scoring,
         # and _diversify_results would drop results before they can be scored.
-        if enable_reranking:
+        # Issue #4677: MAP-Elites runs regardless of reranking because it's a
+        # selection step, not a scoring step.
+        if diversity_strategy == "map_elites":
+            diversified_results = self._map_elites_select(results, max_results)
+        elif enable_reranking:
             diversified_results = results
         else:
             diversified_results = self._diversify_results(results, max_results)
 
         if enable_reranking and len(diversified_results) > 1:
             rerank_start = time.time()
-            final_results = await self._rerank_with_cross_encoder(
-                query, diversified_results
-            )
+            final_results = await self._rerank_with_cross_encoder(query, diversified_results)
             metrics.reranking_time = time.time() - rerank_start
             return final_results
 
@@ -701,10 +808,7 @@ class AdvancedRAGOptimizer:
         optimized_results = results[:max_results]
 
         # Adjust chunk count based on query context
-        if (
-            len(optimized_results) < context.suggested_chunk_count
-            and len(results) > max_results
-        ):
+        if len(optimized_results) < context.suggested_chunk_count and len(results) > max_results:
             optimized_results = results[: context.suggested_chunk_count]
 
         return optimized_results
@@ -757,9 +861,7 @@ class AdvancedRAGOptimizer:
 
         return context_parts
 
-    def _build_context_header(
-        self, query: str, context_parts: List[str], query_context: QueryContext
-    ) -> str:
+    def _build_context_header(self, query: str, context_parts: List[str], query_context: QueryContext) -> str:
         """Build the header for optimized context output.
 
         Args:
@@ -777,9 +879,7 @@ class AdvancedRAGOptimizer:
         header += f"Query type: {query_context.query_type}\n\n"
         return header
 
-    async def get_optimized_context(
-        self, query: str, max_context_length: int = 2000
-    ) -> Tuple[str, RAGMetrics]:
+    async def get_optimized_context(self, query: str, max_context_length: int = 2000) -> Tuple[str, RAGMetrics]:
         """Get optimized context for RAG-based response generation."""
         try:
             results, metrics = await self.advanced_search(query, max_results=8)
@@ -788,9 +888,7 @@ class AdvancedRAGOptimizer:
                 return "No relevant information found.", metrics
 
             query_context = self._analyze_query_context(query)
-            context_parts = self._build_context_parts(
-                results, max_context_length, query_context
-            )
+            context_parts = self._build_context_parts(results, max_context_length, query_context)
             header = self._build_context_header(query, context_parts, query_context)
             final_context = header + "\n---\n".join(context_parts)
 
@@ -836,9 +934,7 @@ class AdvancedRAGOptimizer:
         try:
             from rlm.rag_refiner import AdaptiveRAGRefiner
         except ImportError:
-            results, metrics = await self.advanced_search(
-                query, max_results, enable_reranking
-            )
+            results, metrics = await self.advanced_search(query, max_results, enable_reranking)
             return results, metrics, []
 
         refiner = AdaptiveRAGRefiner()
@@ -851,9 +947,7 @@ class AdvancedRAGOptimizer:
 
         # Re-run with metrics for the final query
         final_query = history[-1]["query"] if history else query
-        final_results, metrics = await self.advanced_search(
-            final_query, max_results, enable_reranking
-        )
+        final_results, metrics = await self.advanced_search(final_query, max_results, enable_reranking)
 
         return final_results, metrics, history
 
@@ -880,9 +974,7 @@ async def get_rag_optimizer() -> AdvancedRAGOptimizer:
 
 
 # Convenience functions for integration
-async def advanced_knowledge_search(
-    query: str, max_results: int = 5
-) -> List[SearchResult]:
+async def advanced_knowledge_search(query: str, max_results: int = 5) -> List[SearchResult]:
     """Perform advanced knowledge search with all optimizations."""
     optimizer = await get_rag_optimizer()
     results, _ = await optimizer.advanced_search(query, max_results)

@@ -122,6 +122,9 @@ class HookInvoker:
         self._configs[HookPoint.BEFORE_MESSAGE_PROCESS] = HookInvocationConfig(
             mode=InvocationMode.COLLECT
         )
+        self._configs[HookPoint.BEFORE_PROMPT_BUILD] = HookInvocationConfig(
+            mode=InvocationMode.COLLECT
+        )
         self._configs[HookPoint.AFTER_PROMPT_BUILD] = HookInvocationConfig(
             mode=InvocationMode.TRANSFORM,
             transform_key="prompt",

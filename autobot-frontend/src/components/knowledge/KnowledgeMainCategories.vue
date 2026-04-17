@@ -125,7 +125,7 @@ defineEmits<Emits>()
   justify-content: center;
   border-radius: var(--radius-lg);
   color: var(--text-on-primary);
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   flex-shrink: 0;
 }
 

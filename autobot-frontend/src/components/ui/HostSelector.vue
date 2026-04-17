@@ -323,13 +323,13 @@ defineExpose({
 .host-selector-collapsed {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   padding: 8px 12px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .host-selector-collapsed:hover {
@@ -340,7 +340,7 @@ defineExpose({
 .selected-host {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   flex: 1;
 }
 
@@ -354,7 +354,7 @@ defineExpose({
 }
 
 .selected-host .host-address {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -377,15 +377,15 @@ defineExpose({
 .no-host-selected {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   flex: 1;
   color: var(--text-muted);
 }
 
 .expand-icon {
   color: var(--text-muted);
-  font-size: 12px;
-  transition: transform 0.2s;
+  font-size: var(--text-xs);
+  transition: transform var(--duration-200);
 }
 
 .host-selector-collapsed:hover .expand-icon {
@@ -400,9 +400,9 @@ defineExpose({
   min-width: 320px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
-  z-index: 100;
+  z-index: var(--z-popover);
 }
 
 .selector-header {
@@ -414,8 +414,8 @@ defineExpose({
 }
 
 .selector-header h4 {
-  margin: 0;
-  font-size: 14px;
+  margin: var(--spacing-0);
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -423,7 +423,7 @@ defineExpose({
 .btn-close {
   background: none;
   border: none;
-  padding: 4px;
+  padding: var(--spacing-1);
   cursor: pointer;
   color: var(--text-muted);
 }
@@ -434,7 +434,7 @@ defineExpose({
 
 .capability-filter {
   display: flex;
-  gap: 4px;
+  gap: var(--spacing-1);
   padding: 8px 16px;
   border-bottom: 1px solid var(--border-default);
 }
@@ -444,11 +444,11 @@ defineExpose({
   padding: 6px 12px;
   background: var(--bg-tertiary);
   border: 1px solid transparent;
-  border-radius: 6px;
-  font-size: 12px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .filter-btn:hover {
@@ -464,17 +464,17 @@ defineExpose({
 .host-list {
   min-height: 200px; max-height: 50vh;
   overflow-y: auto;
-  padding: 8px;
+  padding: var(--spacing-2);
 }
 
 .host-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-3);
   padding: 10px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .host-item:hover {
@@ -488,7 +488,7 @@ defineExpose({
 .host-icon {
   width: 36px;
   height: 36px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -511,7 +511,7 @@ defineExpose({
 }
 
 .host-details {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -521,14 +521,14 @@ defineExpose({
 
 .host-capabilities {
   display: flex;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .capability-badge {
   padding: 2px 6px;
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-weight: 600;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   text-transform: uppercase;
 }
 
@@ -556,18 +556,18 @@ defineExpose({
 .empty-state i,
 .loading-state i {
   font-size: 32px;
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
   opacity: 0.5;
 }
 
 .empty-state p {
-  margin: 0;
-  font-size: 13px;
+  margin: var(--spacing-0);
+  font-size: var(--text-sm);
 }
 
 .selector-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
   padding: 12px 16px;
   border-top: 1px solid var(--border-default);
 }
@@ -577,15 +577,15 @@ defineExpose({
   flex: 1;
   padding: 8px 12px;
   border: none;
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  transition: all 0.15s;
+  gap: var(--spacing-1-5);
+  transition: all var(--duration-150);
 }
 
 .btn-secondary {

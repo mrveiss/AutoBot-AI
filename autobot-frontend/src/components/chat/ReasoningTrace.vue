@@ -111,11 +111,11 @@ function formatDuration(ms: number): string {
 <style scoped>
 .reasoning-trace {
   border: 1px solid var(--color-border, #334155);
-  border-radius: 0.5rem;
-  margin-bottom: 0.5rem;
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-2);
   background: var(--color-bg-subtle, #0f172a);
   overflow: hidden;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .reasoning-trace--active {
@@ -126,7 +126,7 @@ function formatDuration(ms: number): string {
 .reasoning-trace__header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   width: 100%;
   padding: 0.4rem 0.75rem;
   background: none;
@@ -161,7 +161,7 @@ function formatDuration(ms: number): string {
 .reasoning-trace__count {
   font-size: 0.7rem;
   background: var(--color-border, #334155);
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   padding: 0 0.4rem;
   line-height: 1.4rem;
 }
@@ -183,7 +183,7 @@ function formatDuration(ms: number): string {
 .reasoning-trace__entry {
   display: flex;
   align-items: flex-start;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   padding: 0.2rem 0.75rem;
   line-height: 1.5;
   border-left: 2px solid transparent;
@@ -246,13 +246,13 @@ function formatDuration(ms: number): string {
   flex-shrink: 0;
   font-size: 0.7rem;
   margin-left: auto;
-  padding-left: 0.25rem;
+  padding-left: var(--spacing-1);
 }
 
 .reasoning-trace__entry-status {
   flex-shrink: 0;
   font-size: 0.7rem;
-  padding-left: 0.25rem;
+  padding-left: var(--spacing-1);
 }
 
 .reasoning-trace__entry-status--ok {
@@ -266,7 +266,7 @@ function formatDuration(ms: number): string {
 /* Collapse transition */
 .trace-collapse-enter-active,
 .trace-collapse-leave-active {
-  transition: max-height 0.2s ease, opacity 0.2s ease;
+  transition: max-height var(--duration-200) var(--ease-out), opacity var(--duration-200) var(--ease-out);
   max-height: 18rem;
   overflow: hidden;
 }

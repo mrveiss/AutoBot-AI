@@ -189,7 +189,7 @@ onMounted(() => {
   @apply bg-autobot-bg-card text-autobot-text-primary;
   @apply transition-colors duration-200;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .host-select:disabled {

@@ -349,14 +349,14 @@ onMounted(() => {
 }
 
 .header-title {
-  margin: 0;
-  font-size: 18px;
+  margin: var(--spacing-0);
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-sans);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .header-icon {
@@ -383,7 +383,7 @@ onMounted(() => {
 }
 
 .loading-state i {
-  font-size: 24px;
+  font-size: var(--text-2xl);
   margin-bottom: var(--spacing-3);
 }
 
@@ -399,7 +399,7 @@ onMounted(() => {
   text-align: center;
   padding: var(--spacing-8);
   color: var(--text-tertiary);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-family: var(--font-sans);
 }
 
@@ -413,7 +413,7 @@ onMounted(() => {
   padding: var(--spacing-3);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 .history-header {
@@ -424,12 +424,12 @@ onMounted(() => {
 }
 
 .history-status {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 2px var(--spacing-2);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   font-family: var(--font-sans);
 }
 
@@ -449,7 +449,7 @@ onMounted(() => {
 }
 
 .history-time {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
@@ -461,7 +461,7 @@ onMounted(() => {
 }
 
 .history-stat {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   font-family: var(--font-sans);
 }
@@ -487,18 +487,18 @@ onMounted(() => {
   margin-top: var(--spacing-2);
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--spacing-0-5);
 }
 
 .history-error {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-error-dark);
   font-family: var(--font-mono);
   line-height: 1.4;
 }
 
 .history-more-errors {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   font-style: italic;
   font-family: var(--font-sans);

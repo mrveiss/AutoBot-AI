@@ -118,17 +118,17 @@ onMounted(() => {
 .base-alert {
   display: flex;
   align-items: flex-start;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   padding: 0.75rem 1rem;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   line-height: 1.25rem;
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .alert-icon {
   flex-shrink: 0;
-  margin-top: 0.125rem;
+  margin-top: var(--spacing-0-5);
 }
 
 .alert-content {
@@ -138,7 +138,7 @@ onMounted(() => {
 
 .alert-title {
   font-weight: 600;
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--spacing-1);
 }
 
 .alert-message {
@@ -148,15 +148,15 @@ onMounted(() => {
 .alert-actions {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   flex-shrink: 0;
   margin-left: auto;
 }
 
 .alert-dismiss {
-  padding: 0.25rem;
-  border-radius: 0.25rem;
-  transition: background-color 0.2s ease;
+  padding: var(--spacing-1);
+  border-radius: var(--radius-default);
+  transition: background-color var(--duration-200) var(--ease-out);
   background: transparent;
   border: none;
   cursor: pointer;
@@ -171,8 +171,10 @@ onMounted(() => {
 
 .alert-dismiss:focus {
   outline: none;
-  ring: 2px;
-  ring-offset: 2px;
+}
+.alert-dismiss:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* Success variant */

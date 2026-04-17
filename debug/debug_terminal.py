@@ -10,13 +10,14 @@ import asyncio
 import json
 import logging
 import sys
+import os
 from datetime import datetime
 
 import httpx
 import websockets
 
 # Import centralized network configuration
-sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
+sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
 from constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)

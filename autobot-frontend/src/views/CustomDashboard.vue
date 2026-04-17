@@ -642,8 +642,8 @@ onMounted(() => {
 .header-content h1 {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  font-size: 1.5rem;
+  gap: var(--spacing-3);
+  font-size: var(--text-2xl);
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -654,28 +654,28 @@ onMounted(() => {
 
 .header-description {
   color: var(--text-secondary);
-  font-size: 0.875rem;
-  margin-top: 0.25rem;
+  font-size: var(--text-sm);
+  margin-top: var(--spacing-1);
 }
 
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .action-btn {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   padding: 0.625rem 1rem;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   color: var(--text-primary);
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .action-btn:hover {
@@ -702,16 +702,16 @@ onMounted(() => {
 .dashboard-selector {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .dashboard-selector select {
   padding: 0.625rem 1rem;
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   min-width: 150px;
 }
 
@@ -720,13 +720,13 @@ onMounted(() => {
   height: 36px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   color: var(--text-secondary);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .icon-btn:hover {
@@ -742,30 +742,30 @@ onMounted(() => {
 }
 
 .widget-palette h4 {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-secondary);
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--spacing-3);
 }
 
 .palette-widgets {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .palette-widget {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   padding: 0.5rem 1rem;
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   cursor: grab;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .palette-widget:hover {
@@ -782,7 +782,7 @@ onMounted(() => {
   flex: 1;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 1.5rem;
+  gap: var(--spacing-6);
   padding: 1.5rem 2rem;
   overflow-y: auto;
 }
@@ -808,12 +808,12 @@ onMounted(() => {
 /* Widget Container */
 .widget-container {
   background: var(--bg-secondary);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   border: 1px solid var(--border-default);
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .widget-container:hover {
@@ -845,7 +845,7 @@ onMounted(() => {
 .widget-header h3 {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   font-size: 0.9375rem;
   font-weight: 600;
   color: var(--text-primary);
@@ -857,7 +857,7 @@ onMounted(() => {
 
 .widget-actions {
   display: flex;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 
 .widget-actions button {
@@ -867,11 +867,11 @@ onMounted(() => {
   border: none;
   color: var(--text-tertiary);
   cursor: pointer;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .widget-actions button:hover {
@@ -896,7 +896,7 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 4rem;
+  padding: var(--spacing-16);
   text-align: center;
 }
 
@@ -910,19 +910,19 @@ onMounted(() => {
   justify-content: center;
   font-size: 2rem;
   color: var(--color-primary);
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
 }
 
 .empty-dashboard h3 {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
 }
 
 .empty-dashboard p {
   color: var(--text-secondary);
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
 }
 
 /* Modals */
@@ -933,12 +933,12 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
 }
 
 .modal-content {
   background: var(--bg-secondary);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   border: 1px solid var(--border-default);
   width: 90%;
   max-width: 480px;
@@ -964,8 +964,8 @@ onMounted(() => {
 .modal-header h4 {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  font-size: 1.125rem;
+  gap: var(--spacing-3);
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -979,7 +979,7 @@ onMounted(() => {
   border: none;
   color: var(--text-secondary);
   cursor: pointer;
-  padding: 0.25rem;
+  padding: var(--spacing-1);
 }
 
 .close-btn:hover {
@@ -987,21 +987,21 @@ onMounted(() => {
 }
 
 .modal-body {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   overflow-y: auto;
   flex: 1;
 }
 
 .form-group {
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .form-group label {
   display: block;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
-  margin-bottom: 0.375rem;
+  margin-bottom: var(--spacing-1-5);
 }
 
 .form-group input,
@@ -1010,9 +1010,9 @@ onMounted(() => {
   padding: 0.625rem 0.75rem;
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .form-group input:focus,
@@ -1020,11 +1020,16 @@ onMounted(() => {
   outline: none;
   border-color: var(--color-primary);
 }
+.form-group input:focus-visible,
+.form-group select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .modal-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   padding: 1rem 1.5rem;
   background: var(--bg-primary);
   border-top: 1px solid var(--border-default);
@@ -1034,17 +1039,17 @@ onMounted(() => {
 .widget-gallery {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .widget-option {
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: 0.75rem;
-  padding: 1.5rem;
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-6);
   text-align: center;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .widget-option:hover {
@@ -1056,12 +1061,12 @@ onMounted(() => {
   width: 60px;
   height: 60px;
   background: var(--color-primary-bg);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 auto 1rem;
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   color: var(--color-primary);
 }
 
@@ -1069,11 +1074,11 @@ onMounted(() => {
   font-size: 0.9375rem;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--spacing-1);
 }
 
 .widget-option p {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   line-height: 1.4;
 }
@@ -1081,7 +1086,7 @@ onMounted(() => {
 /* Transitions */
 .slide-down-enter-active,
 .slide-down-leave-active {
-  transition: all 0.3s ease;
+  transition: all var(--duration-300) var(--ease-out);
 }
 
 .slide-down-enter-from,
@@ -1100,8 +1105,8 @@ onMounted(() => {
 @media (max-width: 768px) {
   .dashboard-header {
     flex-direction: column;
-    gap: 1rem;
-    padding: 1rem;
+    gap: var(--spacing-4);
+    padding: var(--spacing-4);
   }
 
   .header-actions {
@@ -1111,7 +1116,7 @@ onMounted(() => {
 
   .dashboard-grid {
     grid-template-columns: 1fr;
-    padding: 1rem;
+    padding: var(--spacing-4);
   }
 
   .widget-container {

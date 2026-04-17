@@ -60,7 +60,7 @@ const { t } = useI18n()
   font-size: var(--text-lg);
   color: var(--color-warning);
   flex-shrink: 0;
-  margin-top: 2px;
+  margin-top: var(--spacing-0-5);
 }
 
 .notice-content {
@@ -77,7 +77,7 @@ const { t } = useI18n()
 .notice-text {
   font-size: var(--text-sm);
   color: var(--color-warning);
-  margin: 0;
+  margin: var(--spacing-0);
   line-height: var(--leading-relaxed);
 }
 

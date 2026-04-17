@@ -481,14 +481,14 @@ onMounted(() => {
 }
 
 .header-title {
-  margin: 0;
-  font-size: 18px;
+  margin: var(--spacing-0);
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-sans);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .header-icon {
@@ -506,7 +506,7 @@ onMounted(() => {
 }
 
 .mode-label {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
   font-family: var(--font-sans);
@@ -515,14 +515,14 @@ onMounted(() => {
 .mode-btn {
   padding: var(--spacing-1-5) var(--spacing-3);
   border: 1px solid var(--border-default);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   background: var(--bg-secondary);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   font-family: var(--font-sans);
   cursor: pointer;
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-150) var(--ease-in-out);
 }
 
 .mode-btn:hover:not(:disabled) {
@@ -547,7 +547,7 @@ onMounted(() => {
   gap: var(--spacing-4);
   padding: var(--spacing-4);
   background: var(--bg-secondary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   margin-bottom: var(--spacing-5);
   flex-wrap: wrap;
 }
@@ -556,12 +556,12 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: var(--spacing-0-5);
   min-width: 80px;
 }
 
 .stat-value {
-  font-size: 20px;
+  font-size: var(--text-xl);
   font-weight: 600;
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
@@ -581,7 +581,7 @@ onMounted(() => {
 }
 
 .stat-label {
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--text-tertiary);
   text-transform: uppercase;
@@ -597,12 +597,12 @@ onMounted(() => {
   padding: var(--spacing-3) var(--spacing-4);
   background: var(--color-info-bg);
   border: 1px solid var(--color-info);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   margin-bottom: var(--spacing-4);
 }
 
 .bulk-count {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--color-info);
   font-family: var(--font-sans);
@@ -616,7 +616,7 @@ onMounted(() => {
 }
 
 .loading-state i {
-  font-size: 24px;
+  font-size: var(--text-2xl);
   margin-bottom: var(--spacing-3);
 }
 
@@ -631,8 +631,8 @@ onMounted(() => {
   padding: var(--spacing-4);
   background: var(--bg-card);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: var(--radius-default);
+  transition: all var(--duration-150) var(--ease-in-out);
 }
 
 .source-card:hover {
@@ -683,15 +683,15 @@ onMounted(() => {
   align-items: center;
   gap: var(--spacing-3);
   margin-bottom: var(--spacing-3);
-  margin-left: 28px;
+  margin-left: var(--spacing-7);
   flex-wrap: wrap;
 }
 
 .source-type-badge {
   display: inline-block;
   padding: 2px var(--spacing-2);
-  border-radius: 2px;
-  font-size: 11px;
+  border-radius: var(--radius-xs);
+  font-size: var(--text-xs);
   font-weight: 500;
   font-family: var(--font-sans);
   text-transform: uppercase;
@@ -701,13 +701,13 @@ onMounted(() => {
 }
 
 .card-domain {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   font-family: var(--font-mono);
 }
 
 .card-timestamp {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
@@ -716,7 +716,7 @@ onMounted(() => {
 /* Card Content */
 .card-content {
   margin: 0 0 var(--spacing-3) 28px;
-  font-size: 13px;
+  font-size: var(--text-sm);
   line-height: 1.6;
   color: var(--text-secondary);
   font-family: var(--font-sans);
@@ -738,7 +738,7 @@ onMounted(() => {
 }
 
 .url-link {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-info);
   text-decoration: none;
   font-family: var(--font-mono);
@@ -756,7 +756,7 @@ onMounted(() => {
 .card-actions {
   display: flex;
   gap: var(--spacing-2);
-  margin-left: 28px;
+  margin-left: var(--spacing-7);
 }
 
 /* Pagination */
@@ -794,19 +794,19 @@ onMounted(() => {
   }
 
   .card-meta {
-    margin-left: 0;
+    margin-left: var(--spacing-0);
   }
 
   .card-content {
-    margin-left: 0;
+    margin-left: var(--spacing-0);
   }
 
   .card-url {
-    margin-left: 0;
+    margin-left: var(--spacing-0);
   }
 
   .card-actions {
-    margin-left: 0;
+    margin-left: var(--spacing-0);
   }
 }
 </style>

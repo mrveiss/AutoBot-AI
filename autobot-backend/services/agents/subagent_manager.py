@@ -222,7 +222,7 @@ class SubagentManager:
         """
         task_id = task.task_id
         logger.info("Distributing task %s to executor", task_id)
-        start_time = asyncio.get_event_loop().time()
+        start_time = asyncio.get_running_loop().time()
 
         try:
             # Update status to RUNNING
@@ -234,7 +234,7 @@ class SubagentManager:
                     executor_func(task),
                     timeout=task.timeout_seconds,
                 )
-                duration = asyncio.get_event_loop().time() - start_time
+                duration = asyncio.get_running_loop().time() - start_time
 
                 # Record success
                 result = TaskResult(
@@ -247,7 +247,7 @@ class SubagentManager:
                 return result
 
             except asyncio.TimeoutError:
-                duration = asyncio.get_event_loop().time() - start_time
+                duration = asyncio.get_running_loop().time() - start_time
                 logger.warning(
                     "Task %s timed out after %.1f seconds", task_id, duration
                 )
@@ -261,7 +261,7 @@ class SubagentManager:
                 return result
 
         except Exception as e:
-            duration = asyncio.get_event_loop().time() - start_time
+            duration = asyncio.get_running_loop().time() - start_time
             logger.error("Task %s failed with error: %s", task_id, str(e))
             result = TaskResult(
                 task_id=task_id,
@@ -283,7 +283,7 @@ class SubagentManager:
 
         Returns dict mapping task_id to TaskResult or None if not completed.
         """
-        start_time = asyncio.get_event_loop().time()
+        start_time = asyncio.get_running_loop().time()
 
         while True:
             results = {}
@@ -298,7 +298,7 @@ class SubagentManager:
             if all_complete:
                 return results
 
-            elapsed = asyncio.get_event_loop().time() - start_time
+            elapsed = asyncio.get_running_loop().time() - start_time
             if elapsed > timeout_seconds:
                 logger.warning(
                     "Timed out waiting for results after %.1f seconds", elapsed

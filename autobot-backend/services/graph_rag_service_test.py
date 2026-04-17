@@ -505,3 +505,228 @@ async def test_get_metrics(graph_rag_service):
     assert "graph_weight" in metrics
     assert "entity_extraction_enabled" in metrics
     assert "graph_initialized" in metrics
+
+
+# ============================================================================
+# Source Provenance Tests
+# ============================================================================
+
+
+def test_create_search_result_includes_source_extracted():
+    """source='extracted' propagates into metadata when relation has origin='extracted'."""
+    rag = AsyncMock()
+    graph = AsyncMock()
+    graph.initialized = True
+    svc = GraphRAGService(rag, graph)
+
+    entity = {"id": "e1", "type": "module", "name": "auth", "observations": ["handles login"]}
+    relation = {"type": "imports", "metadata": {"strength": 0.9, "origin": "extracted"}}
+
+    result = svc._create_search_result_from_entity(entity, relation, "outgoing", 1.0, 2)
+
+    assert result is not None
+    assert result.metadata["source_provenance"] == "extracted"
+
+
+def test_create_search_result_includes_source_inferred():
+    """source='inferred' propagates when origin is absent (defaults to inferred)."""
+    rag = AsyncMock()
+    graph = AsyncMock()
+    graph.initialized = True
+    svc = GraphRAGService(rag, graph)
+
+    entity = {"id": "e2", "type": "function", "name": "login", "observations": ["validates token"]}
+    relation = {"type": "calls", "metadata": {"strength": 0.5}}
+
+    result = svc._create_search_result_from_entity(entity, relation, "incoming", 0.8, 2)
+
+    assert result is not None
+    assert result.metadata["source_provenance"] == "inferred"
+
+
+def test_create_search_result_includes_source_ambiguous():
+    """source='ambiguous' passes through when origin='ambiguous'."""
+    rag = AsyncMock()
+    graph = AsyncMock()
+    graph.initialized = True
+    svc = GraphRAGService(rag, graph)
+
+    entity = {"id": "e3", "type": "module", "name": "utils", "observations": ["helpers"]}
+    relation = {"type": "related", "metadata": {"strength": 0.4, "origin": "ambiguous"}}
+
+    result = svc._create_search_result_from_entity(entity, relation, "outgoing", 0.6, 2)
+
+    assert result is not None
+    assert result.metadata["source_provenance"] == "ambiguous"
+
+
+def test_create_search_result_unknown_origin_defaults_to_inferred():
+    """Unknown origin value falls back to 'inferred' via whitelist guard."""
+    rag = AsyncMock()
+    graph = AsyncMock()
+    graph.initialized = True
+    svc = GraphRAGService(rag, graph)
+
+    entity = {"id": "e4", "type": "class", "name": "Config", "observations": ["settings"]}
+    relation = {"type": "uses", "metadata": {"strength": 0.7, "origin": "garbage_value"}}
+
+    result = svc._create_search_result_from_entity(entity, relation, "incoming", 0.9, 2)
+
+    assert result is not None
+    assert result.metadata["source_provenance"] == "inferred"
+
+
+# ============================================================================
+# Provenance Adjustment in _deduplicate_and_rank Tests (#4914)
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_deduplicate_and_rank_applies_provenance_boost(graph_rag_service):
+    """extracted > inferred after deduplication when base hybrid_score is equal."""
+    base_score = 0.5
+    extracted = SearchResult(
+        content="Graph entity A",
+        metadata={"source_provenance": "extracted"},
+        semantic_score=0.0,
+        keyword_score=0.0,
+        hybrid_score=base_score,
+        relevance_rank=0,
+        source_path="graph:A",
+        chunk_index=0,
+    )
+    inferred = SearchResult(
+        content="Graph entity B",
+        metadata={"source_provenance": "inferred"},
+        semantic_score=0.0,
+        keyword_score=0.0,
+        hybrid_score=base_score,
+        relevance_rank=0,
+        source_path="graph:B",
+        chunk_index=0,
+    )
+
+    ranked = await graph_rag_service._deduplicate_and_rank(
+        [extracted, inferred], max_results=10
+    )
+
+    # extracted receives +0.05 boost; inferred receives 0.0 adjustment
+    assert ranked[0] is extracted
+    assert ranked[0].hybrid_score > ranked[1].hybrid_score
+
+
+@pytest.mark.asyncio
+async def test_deduplicate_and_rank_applies_provenance_penalty(graph_rag_service):
+    """inferred > ambiguous after deduplication when base hybrid_score is equal."""
+    base_score = 0.5
+    inferred = SearchResult(
+        content="Graph entity C",
+        metadata={"source_provenance": "inferred"},
+        semantic_score=0.0,
+        keyword_score=0.0,
+        hybrid_score=base_score,
+        relevance_rank=0,
+        source_path="graph:C",
+        chunk_index=0,
+    )
+    ambiguous = SearchResult(
+        content="Graph entity D",
+        metadata={"source_provenance": "ambiguous"},
+        semantic_score=0.0,
+        keyword_score=0.0,
+        hybrid_score=base_score,
+        relevance_rank=0,
+        source_path="graph:D",
+        chunk_index=0,
+    )
+
+    ranked = await graph_rag_service._deduplicate_and_rank(
+        [ambiguous, inferred], max_results=10
+    )
+
+    # inferred receives 0.0; ambiguous receives -0.05 penalty
+    assert ranked[0] is inferred
+    assert ranked[0].hybrid_score > ranked[1].hybrid_score
+
+
+@pytest.mark.asyncio
+async def test_deduplicate_and_rank_no_provenance_unchanged(graph_rag_service):
+    """Results without source_provenance are not adjusted (0.0 delta, no mutation)."""
+    result = SearchResult(
+        content="Graph entity E",
+        metadata={},
+        semantic_score=0.0,
+        keyword_score=0.0,
+        hybrid_score=0.7,
+        relevance_rank=0,
+        source_path="graph:E",
+        chunk_index=0,
+    )
+
+    ranked = await graph_rag_service._deduplicate_and_rank([result], max_results=10)
+
+    assert len(ranked) == 1
+    # No adjustment for missing provenance (0.0 delta skipped)
+    assert ranked[0].hybrid_score == 0.7
+
+
+@pytest.mark.asyncio
+async def test_metadata_none_does_not_raise(graph_rag_service):
+    """Result with metadata=None passes through _deduplicate_and_rank without AttributeError (#4939)."""
+    result = SearchResult(
+        content="Graph entity F",
+        metadata=None,
+        semantic_score=0.0,
+        keyword_score=0.0,
+        hybrid_score=0.5,
+        relevance_rank=0,
+        source_path="graph:F",
+        chunk_index=0,
+    )
+
+    # Must not raise AttributeError
+    ranked = await graph_rag_service._deduplicate_and_rank([result], max_results=10)
+
+    assert len(ranked) == 1
+    # No provenance adjustment applied when metadata is None
+    assert ranked[0].hybrid_score == 0.5
+
+
+@pytest.mark.asyncio
+async def test_hybrid_score_clamped_at_1_0(graph_rag_service):
+    """hybrid_score + provenance boost is clamped at 1.0 (#4943)."""
+    result = SearchResult(
+        content="Graph entity G",
+        metadata={"source_provenance": "extracted"},
+        semantic_score=0.0,
+        keyword_score=0.0,
+        hybrid_score=0.98,
+        relevance_rank=0,
+        source_path="graph:G",
+        chunk_index=0,
+    )
+
+    ranked = await graph_rag_service._deduplicate_and_rank([result], max_results=10)
+
+    assert len(ranked) == 1
+    assert ranked[0].hybrid_score <= 1.0
+
+
+@pytest.mark.asyncio
+async def test_hybrid_score_clamped_at_0_0(graph_rag_service):
+    """hybrid_score + provenance penalty is clamped at 0.0 (#4943)."""
+    result = SearchResult(
+        content="Graph entity H",
+        metadata={"source_provenance": "ambiguous"},
+        semantic_score=0.0,
+        keyword_score=0.0,
+        hybrid_score=0.02,
+        relevance_rank=0,
+        source_path="graph:H",
+        chunk_index=0,
+    )
+
+    ranked = await graph_rag_service._deduplicate_and_rank([result], max_results=10)
+
+    assert len(ranked) == 1
+    assert ranked[0].hybrid_score >= 0.0

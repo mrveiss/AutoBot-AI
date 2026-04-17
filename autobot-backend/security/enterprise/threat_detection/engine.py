@@ -373,7 +373,7 @@ class ThreatDetectionEngine:
                     TimingConstants.HOURLY_INTERVAL
                 )  # Cleanup every hour
                 await self._cleanup_old_data()
-                await asyncio.get_event_loop().run_in_executor(
+                await asyncio.get_running_loop().run_in_executor(
                     None, self._run_learner_consolidation
                 )
             except Exception as e:

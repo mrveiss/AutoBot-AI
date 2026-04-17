@@ -10,7 +10,7 @@
           :aria-atomic="true"
         >
           <div class="toast-icon">
-            <i :class="getIcon(toast.type)"></i>
+            <i :class="getIcon(toast.type)" aria-hidden="true"></i>
           </div>
           <div class="toast-content">
             <span class="toast-message">{{ toast.message }}</span>
@@ -20,7 +20,7 @@
             @click="removeToast(toast.id)"
             :aria-label="t('ui.toastContainer.dismissNotification')"
           >
-            <i class="fas fa-times"></i>
+            <i class="fas fa-times" aria-hidden="true"></i>
           </button>
         </div>
       </TransitionGroup>
@@ -65,7 +65,7 @@ const getIcon = (type: string): string => {
   position: fixed;
   top: 80px;
   right: 20px;
-  z-index: 9999;
+  z-index: var(--z-toast);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-3);
@@ -133,17 +133,18 @@ const getIcon = (type: string): string => {
 
 .toast-close {
   flex-shrink: 0;
-  background: var(--bg-hover);
+  background: transparent;
   border: none;
   color: var(--text-secondary);
-  width: 24px;
-  height: 24px;
+  /* 44×44 minimum touch target (WCAG 2.5.5, Apple HIG, Material Design) */
+  min-width: 44px;
+  min-height: 44px;
   border-radius: var(--radius-full);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background var(--duration-200) var(--ease-in-out);
+  transition: background var(--duration-200) var(--ease-in-out), color var(--duration-200) var(--ease-in-out);
 }
 
 .toast-close:hover {
@@ -151,8 +152,8 @@ const getIcon = (type: string): string => {
   color: var(--text-primary);
 }
 
-.toast-close:focus {
-  outline: 2px solid var(--color-primary-bg);
+.toast-close:focus-visible {
+  outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
 

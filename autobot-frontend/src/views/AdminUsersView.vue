@@ -373,7 +373,7 @@ onMounted(loadUsers)
 
 <style scoped>
 .admin-users-view {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   max-width: 1200px;
   margin: 0 auto;
 }
@@ -382,37 +382,37 @@ onMounted(loadUsers)
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 1.5rem;
-  gap: 1rem;
+  margin-bottom: var(--spacing-6);
+  gap: var(--spacing-4);
   flex-wrap: wrap;
 }
 
 .page-title {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 600;
   margin: 0 0 0.25rem;
 }
 
 .page-subtitle {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--color-text-secondary, #6b7280);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .header-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .error-banner {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   padding: 0.75rem 1rem;
   background: var(--color-error-bg, #fef2f2);
   border: 1px solid var(--color-error-border, #fca5a5);
-  border-radius: 0.5rem;
-  margin-bottom: 1rem;
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-4);
   color: var(--color-error, #dc2626);
 }
 
@@ -426,7 +426,7 @@ onMounted(loadUsers)
 
 .search-bar {
   position: relative;
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .search-icon {
@@ -441,20 +441,20 @@ onMounted(loadUsers)
   width: 100%;
   padding: 0.5rem 0.75rem 0.5rem 2.25rem;
   border: 1px solid var(--color-border, #d1d5db);
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   box-sizing: border-box;
 }
 
 .table-section {
   background: var(--color-surface, #fff);
   border: 1px solid var(--color-border, #e5e7eb);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   overflow: hidden;
 }
 
 .loading-state {
-  padding: 2rem;
+  padding: var(--spacing-8);
   text-align: center;
   color: var(--color-text-secondary, #6b7280);
 }
@@ -467,7 +467,7 @@ onMounted(loadUsers)
 .data-table th {
   text-align: left;
   padding: 0.75rem 1rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -479,7 +479,7 @@ onMounted(loadUsers)
 .data-table td {
   padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--color-border, #f3f4f6);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .data-table tr:last-child td {
@@ -489,7 +489,7 @@ onMounted(loadUsers)
 .username-cell {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .username {
@@ -499,7 +499,7 @@ onMounted(loadUsers)
 .badge {
   display: inline-block;
   padding: 0.125rem 0.5rem;
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   font-size: 0.7rem;
   font-weight: 600;
 }
@@ -522,26 +522,26 @@ onMounted(loadUsers)
 .role-select {
   padding: 0.25rem 0.5rem;
   border: 1px solid var(--color-border, #d1d5db);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   font-size: 0.8125rem;
   background: transparent;
 }
 
 .actions-cell {
   display: flex;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 
 .btn-icon {
   width: 2rem;
   height: 2rem;
   border: none;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .btn-warning {
@@ -569,15 +569,15 @@ onMounted(loadUsers)
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
-  padding: 0.75rem;
+  gap: var(--spacing-4);
+  padding: var(--spacing-3);
   border-top: 1px solid var(--color-border, #e5e7eb);
 }
 
 .btn-page {
   padding: 0.375rem 0.75rem;
   border: 1px solid var(--color-border, #d1d5db);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background: transparent;
   cursor: pointer;
 }
@@ -588,7 +588,7 @@ onMounted(loadUsers)
 }
 
 .page-info {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--color-text-secondary, #6b7280);
 }
 
@@ -597,10 +597,10 @@ onMounted(loadUsers)
 .btn-action-danger {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--spacing-1-5);
   padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   font-weight: 500;
   border: 1px solid transparent;
   cursor: pointer;
@@ -635,15 +635,15 @@ onMounted(loadUsers)
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
 }
 
 .modal {
   background: var(--color-surface, #fff);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   width: 100%;
   max-width: 480px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-2xl);
 }
 
 .modal-sm {
@@ -659,8 +659,8 @@ onMounted(loadUsers)
 }
 
 .modal-header h3 {
-  margin: 0;
-  font-size: 1rem;
+  margin: var(--spacing-0);
+  font-size: var(--text-base);
   font-weight: 600;
 }
 
@@ -669,21 +669,21 @@ onMounted(loadUsers)
   border: none;
   cursor: pointer;
   color: var(--color-text-secondary, #6b7280);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .modal-body {
-  padding: 1.25rem;
+  padding: var(--spacing-5);
 }
 
 .form-group {
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .form-group label {
   display: block;
-  margin-bottom: 0.375rem;
-  font-size: 0.875rem;
+  margin-bottom: var(--spacing-1-5);
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
@@ -691,21 +691,21 @@ onMounted(loadUsers)
   width: 100%;
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--color-border, #d1d5db);
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   box-sizing: border-box;
 }
 
 .error-inline {
   color: var(--color-error, #dc2626);
   font-size: 0.8125rem;
-  margin-top: 0.5rem;
+  margin-top: var(--spacing-2);
 }
 
 .modal-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 0.5rem;
-  padding-top: 1rem;
+  gap: var(--spacing-2);
+  padding-top: var(--spacing-4);
 }
 </style>

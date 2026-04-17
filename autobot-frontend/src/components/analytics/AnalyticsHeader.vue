@@ -198,7 +198,7 @@ function handleSourceChange(event: Event) {
 
 .header-content h2 {
   color: var(--color-info);
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-xl);
   display: flex;
   align-items: center;
@@ -242,6 +242,10 @@ function handleSourceChange(event: Event) {
   outline: none;
   border-color: var(--color-info);
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+.source-select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .select-chevron {

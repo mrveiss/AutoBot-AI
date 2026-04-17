@@ -973,7 +973,7 @@ class ReconcilerService:
                         "success": success,
                         "message": message,
                     },
-                    "timestamp": asyncio.get_event_loop().time(),
+                    "timestamp": asyncio.get_running_loop().time(),
                 },
             )
         except Exception as e:

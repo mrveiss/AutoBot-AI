@@ -145,30 +145,30 @@ function clearFilters() {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 1rem;
-  padding: 1rem;
+  gap: var(--spacing-4);
+  padding: var(--spacing-4);
   background-color: var(--bg-secondary);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-default);
 }
 
 .filter-group {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 
 .filter-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--text-secondary);
 }
 
 .filter-select {
   padding: 0.5rem 2rem 0.5rem 0.75rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background-color: var(--bg-input);
   color: var(--text-primary);
   cursor: pointer;
@@ -188,20 +188,24 @@ function clearFilters() {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
+.filter-select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .clear-filters-btn {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--spacing-1-5);
   padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .clear-filters-btn:hover:not(:disabled) {

@@ -147,19 +147,19 @@ function truncateValue(value: string, maxLength = 50): string {
 
 <style scoped>
 .config-duplicates-section {
-  margin-top: 32px;
-  padding: 24px;
+  margin-top: var(--spacing-8);
+  padding: var(--spacing-6);
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
   contain: layout style;}
 
 .config-duplicates-section h3 {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
   color: var(--text-primary);
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-4);
   font-size: 1.2em;
   font-weight: 600;
 }
@@ -173,9 +173,9 @@ function truncateValue(value: string, maxLength = 50): string {
 .config-duplicates-section .success-state {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 16px;
-  border-radius: 8px;
+  gap: var(--spacing-2-5);
+  padding: var(--spacing-4);
+  border-radius: var(--radius-lg);
 }
 
 .config-duplicates-section .loading-state {
@@ -203,22 +203,22 @@ function truncateValue(value: string, maxLength = 50): string {
 .config-duplicates-section .duplicates-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-top: 16px;
+  gap: var(--spacing-3);
+  margin-top: var(--spacing-4);
 }
 
 .config-duplicates-section .item-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 8px;
+  gap: var(--spacing-3);
+  margin-bottom: var(--spacing-2);
 }
 
 .config-duplicates-section .config-value-badge {
   background: rgba(245, 158, 11, 0.2);
   color: var(--color-warning-light);
   padding: 4px 10px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 0.85em;
 }
@@ -229,7 +229,7 @@ function truncateValue(value: string, maxLength = 50): string {
 }
 
 .config-duplicates-section .item-locations {
-  padding-left: 12px;
+  padding-left: var(--spacing-3);
   border-left: 2px solid rgba(245, 158, 11, 0.3);
 }
 
@@ -243,19 +243,19 @@ function truncateValue(value: string, maxLength = 50): string {
   color: var(--text-tertiary);
   font-size: 0.8em;
   font-style: italic;
-  padding-top: 4px;
+  padding-top: var(--spacing-1);
 }
 
 .config-duplicates-section .recommendation-box {
-  margin-top: 20px;
+  margin-top: var(--spacing-5);
   padding: 12px 16px;
   background: rgba(59, 130, 246, 0.1);
   border: 1px solid rgba(59, 130, 246, 0.3);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   color: var(--color-info-light);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .config-duplicates-section .recommendation-box i {
@@ -265,7 +265,7 @@ function truncateValue(value: string, maxLength = 50): string {
 .config-duplicates-section .recommendation-box code {
   background: rgba(30, 41, 59, 0.8);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.9em;
 }
 

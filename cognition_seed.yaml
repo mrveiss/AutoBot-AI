@@ -1,0 +1,55 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Cognition Store seed manifest — Issue #4679
+#
+# Declares curated foundational documents that are pre-loaded into ChromaDB
+# before the synthesis/RAG loop runs, preventing cold-start degradation.
+#
+# Fields:
+#   path      — relative path from project root (file or directory)
+#   priority  — high | medium | low  (controls retrieval score boost)
+#   refresh   — never | daily | on_change  (controls re-seed schedule)
+#
+# CognitionSeeder.seed_from_manifest() reads this file and upserts each
+# source into the "cognition_store" ChromaDB collection with metadata:
+#   seeded: "true", seed_priority: <priority>
+
+collections:
+  - name: cognition_store
+    sources:
+      # Tier 1 — highest priority: project rules and core architecture
+      - path: CLAUDE.md
+        priority: high
+        refresh: on_change
+
+      - path: docs/developer/
+        priority: high
+        refresh: on_change
+
+      - path: docs/architecture/
+        priority: high
+        refresh: on_change
+
+      # Tier 2 — medium priority: API and feature documentation
+      - path: docs/api/
+        priority: medium
+        refresh: on_change
+
+      - path: docs/features/
+        priority: medium
+        refresh: on_change
+
+      - path: docs/workflow/
+        priority: medium
+        refresh: on_change
+
+      # Tier 3 — lower priority: operations and troubleshooting
+      - path: docs/operations/
+        priority: low
+        refresh: never
+
+      - path: docs/troubleshooting/
+        priority: low
+        refresh: never

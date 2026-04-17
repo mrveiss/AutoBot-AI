@@ -956,7 +956,7 @@ watch(selectedPeriod, () => {
   font-size: var(--text-2xl);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .dashboard-subtitle {
@@ -1096,7 +1096,7 @@ watch(selectedPeriod, () => {
 
 .health-fill {
   height: 100%;
-  transition: width var(--duration-300) ease;
+  transition: width var(--duration-300) var(--ease-out);
 }
 
 .health-fill.healthy {
@@ -1146,7 +1146,7 @@ watch(selectedPeriod, () => {
 }
 
 .panel-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-base);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
@@ -1388,7 +1388,7 @@ watch(selectedPeriod, () => {
 .bar-fill {
   height: 100%;
   border-radius: var(--radius-xs);
-  transition: width var(--duration-200) ease;
+  transition: width var(--duration-200) var(--ease-out);
 }
 
 /* Priority List */
@@ -1636,6 +1636,11 @@ watch(selectedPeriod, () => {
   outline: none;
   border-color: var(--color-primary);
 }
+.table-filters select:focus-visible,
+.table-filters input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .debt-table-container {
   overflow-x: auto;
@@ -1848,7 +1853,7 @@ watch(selectedPeriod, () => {
 }
 
 .modal-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-lg);
   color: var(--text-primary);
 }

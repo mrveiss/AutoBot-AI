@@ -206,14 +206,14 @@ const { formatDate } = useKnowledgeBase()
 .command-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .command-tag {
   background: var(--color-primary);
   color: var(--text-inverse);
   padding: 4px 10px;
-  border-radius: 15px;
+  border-radius: var(--radius-2xl);
   font-size: 0.8rem;
   font-family: 'Courier New', monospace;
 }
@@ -223,7 +223,7 @@ const { formatDate } = useKnowledgeBase()
   align-items: center;
   justify-content: center;
   gap: 15px;
-  padding: 40px;
+  padding: var(--spacing-10);
   color: var(--text-muted);
   font-style: italic;
 }

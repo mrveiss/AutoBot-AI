@@ -132,22 +132,22 @@ const selectMode = (mode: EnforcementMode) => {
 .enforcement-mode-selector {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
-  padding: 24px;
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-6);
 }
 
 .selector-header {
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-5);
 }
 
 .selector-header h3 {
   margin: 0 0 8px;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .selector-header h3 i {
@@ -155,27 +155,27 @@ const selectMode = (mode: EnforcementMode) => {
 }
 
 .selector-header .description {
-  margin: 0;
-  font-size: 14px;
+  margin: var(--spacing-0);
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
 .mode-options {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .mode-option {
   display: flex;
   align-items: flex-start;
-  gap: 16px;
-  padding: 16px;
+  gap: var(--spacing-4);
+  padding: var(--spacing-4);
   background: var(--bg-primary);
   border: 2px solid var(--border-default);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .mode-option:hover:not(.updating) {
@@ -195,11 +195,11 @@ const selectMode = (mode: EnforcementMode) => {
 .option-icon {
   width: 44px;
   height: 44px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: var(--text-lg);
   flex-shrink: 0;
 }
 
@@ -225,8 +225,8 @@ const selectMode = (mode: EnforcementMode) => {
 .option-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 4px;
+  gap: var(--spacing-2-5);
+  margin-bottom: var(--spacing-1);
 }
 
 .option-title {
@@ -236,32 +236,32 @@ const selectMode = (mode: EnforcementMode) => {
 }
 
 .current-badge {
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 2px 8px;
   background: var(--color-primary);
   color: var(--text-on-primary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-weight: 500;
 }
 
 .option-description {
   margin: 0 0 10px;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   line-height: 1.4;
 }
 
 .option-details {
   display: flex;
-  gap: 16px;
+  gap: var(--spacing-4);
   flex-wrap: wrap;
 }
 
 .detail-item {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: var(--spacing-1-5);
+  font-size: var(--text-xs);
 }
 
 .detail-item.neutral {
@@ -283,7 +283,7 @@ const selectMode = (mode: EnforcementMode) => {
 .option-radio {
   display: flex;
   align-items: center;
-  padding-top: 12px;
+  padding-top: var(--spacing-3);
 }
 
 .radio-outer {
@@ -294,7 +294,7 @@ const selectMode = (mode: EnforcementMode) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .mode-option.active .radio-outer {
@@ -311,10 +311,10 @@ const selectMode = (mode: EnforcementMode) => {
 .mode-warning,
 .mode-info {
   display: flex;
-  gap: 12px;
-  margin-top: 16px;
-  padding: 14px;
-  border-radius: 8px;
+  gap: var(--spacing-3);
+  margin-top: var(--spacing-4);
+  padding: var(--spacing-3-5);
+  border-radius: var(--radius-lg);
 }
 
 .mode-warning {
@@ -329,21 +329,21 @@ const selectMode = (mode: EnforcementMode) => {
 
 .mode-warning i,
 .mode-info i {
-  font-size: 18px;
+  font-size: var(--text-lg);
   flex-shrink: 0;
-  margin-top: 2px;
+  margin-top: var(--spacing-0-5);
 }
 
 .warning-content strong,
 .info-content strong {
   display: block;
-  margin-bottom: 4px;
+  margin-bottom: var(--spacing-1);
 }
 
 .warning-content p,
 .info-content p {
-  margin: 0;
-  font-size: 13px;
+  margin: var(--spacing-0);
+  font-size: var(--text-sm);
   opacity: 0.9;
 }
 </style>

@@ -429,7 +429,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
+  z-index: var(--z-maximum);
   backdrop-filter: blur(4px);
 }
 
@@ -476,7 +476,7 @@ export default {
 }
 
 .command-subtitle {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--font-size-sm);
   opacity: 0.9;
 }
@@ -512,7 +512,7 @@ export default {
 }
 
 .info-item:last-child {
-  margin-bottom: 0;
+  margin-bottom: var(--spacing-0);
 }
 
 .label {
@@ -662,6 +662,10 @@ export default {
   outline: none;
   border-color: var(--color-success);
   box-shadow: var(--shadow-focus-success);
+}
+.comment-textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .comment-textarea:disabled {

@@ -514,7 +514,7 @@ watch(() => props.visible, (newVal) => {
 }
 
 .dialog-title {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-xl);
   font-weight: var(--font-semibold);
 }
@@ -670,7 +670,7 @@ watch(() => props.visible, (newVal) => {
 }
 
 .content-preview pre {
-  margin: 0;
+  margin: var(--spacing-0);
   white-space: pre-wrap;
   word-wrap: break-word;
   font-family: var(--font-mono);
@@ -719,7 +719,7 @@ watch(() => props.visible, (newVal) => {
 .option-description {
   font-size: var(--text-sm);
   color: var(--text-secondary);
-  margin-left: 28px;
+  margin-left: var(--spacing-7);
 }
 
 .item-metadata {
@@ -794,6 +794,10 @@ watch(() => props.visible, (newVal) => {
 .title-input:focus {
   outline: none;
   border-color: var(--color-info);
+}
+.title-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* Button styling handled by BaseButton component */

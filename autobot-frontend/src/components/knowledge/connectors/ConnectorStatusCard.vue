@@ -261,8 +261,8 @@ defineExpose({ resetSyncing })
   padding: var(--spacing-4);
   background: var(--bg-card);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: var(--radius-default);
+  transition: all var(--duration-150) var(--ease-in-out);
   contain: layout style;}
 
 .connector-card:hover {
@@ -293,13 +293,13 @@ defineExpose({ resetSyncing })
   height: 20px;
   color: var(--color-info);
   flex-shrink: 0;
-  margin-top: 2px;
+  margin-top: var(--spacing-0-5);
 }
 
 .header-info {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .name-row {
@@ -333,14 +333,14 @@ defineExpose({ resetSyncing })
 }
 
 .disabled-badge {
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 2px var(--spacing-2);
   background: var(--bg-tertiary);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   font-family: var(--font-sans);
 }
 
@@ -357,11 +357,11 @@ defineExpose({ resetSyncing })
 .stat {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--spacing-0-5);
 }
 
 .stat-label {
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--text-tertiary);
   text-transform: uppercase;
@@ -370,7 +370,7 @@ defineExpose({ resetSyncing })
 }
 
 .stat-value {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
   font-family: var(--font-sans);
@@ -390,7 +390,7 @@ defineExpose({ resetSyncing })
   margin-bottom: var(--spacing-3);
   padding: var(--spacing-2) var(--spacing-3);
   background: var(--color-error-bg);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 
 .error-icon {
@@ -398,11 +398,11 @@ defineExpose({ resetSyncing })
   height: 14px;
   color: var(--color-error);
   flex-shrink: 0;
-  margin-top: 1px;
+  margin-top: var(--spacing-px);
 }
 
 .error-text {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-error-dark);
   font-family: var(--font-mono);
   line-height: 1.4;

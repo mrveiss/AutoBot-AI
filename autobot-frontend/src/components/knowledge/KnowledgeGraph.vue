@@ -1372,7 +1372,7 @@ watch(layoutMode, () => {
 /* Slide down transition */
 .slide-down-enter-active,
 .slide-down-leave-active {
-  transition: all var(--duration-300) ease;
+  transition: all var(--duration-300) var(--ease-out);
   overflow: hidden;
 }
 
@@ -1469,6 +1469,10 @@ watch(layoutMode, () => {
   width: 100%;
   background: transparent;
   color: var(--text-primary);
+}
+.search-group input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .search-group input::placeholder {
@@ -1668,7 +1672,7 @@ watch(layoutMode, () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .panel-header .close-btn {
@@ -1732,8 +1736,8 @@ watch(layoutMode, () => {
 
 .observations-list {
   list-style: none;
-  padding: 0;
-  margin: 0;
+  padding: var(--spacing-0);
+  margin: var(--spacing-0);
 }
 
 .observations-list li {
@@ -1747,8 +1751,8 @@ watch(layoutMode, () => {
 
 .relations-list {
   list-style: none;
-  padding: 0;
-  margin: 0;
+  padding: var(--spacing-0);
+  margin: var(--spacing-0);
 }
 
 .relations-list li {
@@ -1785,7 +1789,7 @@ watch(layoutMode, () => {
 }
 
 .relation-target i {
-  font-size: 10px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -1883,6 +1887,13 @@ watch(layoutMode, () => {
   border-color: var(--color-primary);
   box-shadow: var(--shadow-focus);
 }
+.form-group input:focus-visible,
+.form-group select:focus-visible,
+.form-group textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.form-group input:focus-visible,
 
 .form-actions {
   display: flex;
@@ -1948,7 +1959,7 @@ watch(layoutMode, () => {
 /* Transitions */
 .slide-enter-active,
 .slide-leave-active {
-  transition: all var(--duration-300) ease;
+  transition: all var(--duration-300) var(--ease-out);
 }
 
 .slide-enter-from,
@@ -1975,7 +1986,7 @@ watch(layoutMode, () => {
   }
 
   .stats-summary {
-    margin-left: 0;
+    margin-left: var(--spacing-0);
     justify-content: center;
   }
 
@@ -2017,7 +2028,7 @@ watch(layoutMode, () => {
 
 .control-separator {
   color: var(--border-default);
-  font-size: 14px;
+  font-size: var(--text-sm);
   margin: 0 4px;
 }
 

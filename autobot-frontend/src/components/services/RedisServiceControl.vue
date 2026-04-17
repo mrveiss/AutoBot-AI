@@ -423,11 +423,11 @@ const getHealthCheckCardClass = (status) => {
 .detail-item {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 
 .health-check-card {
-  transition: transform 0.2s;
+  transition: transform var(--duration-200);
 }
 
 .health-check-card:hover {

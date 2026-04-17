@@ -336,7 +336,7 @@ const emit = defineEmits<{
   transition: var(--transition-all);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   background: var(--chart-green);
   color: var(--text-on-success);
 }
@@ -371,9 +371,9 @@ const emit = defineEmits<{
   border: 1px solid var(--bg-hover);
   color: var(--text-secondary);
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .refresh-btn:hover {
@@ -389,7 +389,7 @@ const emit = defineEmits<{
   align-items: center;
   justify-content: center;
   min-height: 200px;
-  gap: 12px;
+  gap: var(--spacing-3);
   color: var(--text-muted);
 }
 
@@ -411,17 +411,17 @@ const emit = defineEmits<{
 .chart-summary {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-4);
 }
 
 .summary-stat {
   background: rgba(51, 65, 85, 0.5);
-  border-radius: 8px;
-  padding: 16px;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
   text-align: center;
   border: 1px solid rgba(71, 85, 105, 0.5);
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .summary-stat:hover {
@@ -452,7 +452,7 @@ const emit = defineEmits<{
 .summary-label {
   font-size: 0.85rem;
   color: var(--text-muted);
-  margin-top: 4px;
+  margin-top: var(--spacing-1);
   display: block;
 }
 
@@ -460,7 +460,7 @@ const emit = defineEmits<{
 .charts-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
+  gap: var(--spacing-5);
 }
 
 .chart-item {
@@ -469,8 +469,8 @@ const emit = defineEmits<{
 
 .chart-empty-slot {
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 8px;
-  padding: 16px;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
   border: 1px solid rgba(71, 85, 105, 0.5);
   min-height: 350px;
   display: flex;
@@ -497,16 +497,16 @@ const emit = defineEmits<{
   }
 
   .summary-value {
-    font-size: 1.5rem;
+    font-size: var(--text-2xl);
   }
 }
 
 /* Dependency Section */
 .dependency-section {
-  margin-top: 32px;
-  padding: 24px;
+  margin-top: var(--spacing-8);
+  padding: var(--spacing-6);
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
 }
 
@@ -514,19 +514,19 @@ const emit = defineEmits<{
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 12px;
+  margin-bottom: var(--spacing-5);
+  padding-bottom: var(--spacing-3);
   border-bottom: 1px solid rgba(71, 85, 105, 0.5);
 }
 
 .dependency-section .section-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-secondary);
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .dependency-section .section-header h3 i {
@@ -536,24 +536,24 @@ const emit = defineEmits<{
 .dependency-grid {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--spacing-6);
 }
 
 /* Circular Dependencies Warning */
 .circular-deps-warning {
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 8px;
-  padding: 16px;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
 }
 
 .circular-deps-warning .warning-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   font-weight: 600;
   color: var(--color-error-light);
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
 }
 
 .circular-deps-warning .warning-header i {
@@ -563,16 +563,16 @@ const emit = defineEmits<{
 .circular-deps-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .circular-dep-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   padding: 8px 12px;
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.85rem;
   color: var(--text-secondary);
@@ -584,10 +584,10 @@ const emit = defineEmits<{
 
 .show-more {
   text-align: center;
-  padding: 12px;
+  padding: var(--spacing-3);
   background: var(--bg-secondary);
-  border-radius: 6px;
-  margin-top: 8px;
+  border-radius: var(--radius-md);
+  margin-top: var(--spacing-2);
 }
 
 .muted {
@@ -598,19 +598,19 @@ const emit = defineEmits<{
 /* External Dependencies Table */
 .external-deps-table {
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 8px;
-  padding: 16px;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
   border: 1px solid rgba(71, 85, 105, 0.3);
 }
 
 .external-deps-table h4 {
   margin: 0 0 16px 0;
   color: var(--text-secondary);
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .external-deps-table h4 i {
@@ -620,7 +620,7 @@ const emit = defineEmits<{
 .deps-table-content {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .dep-row {
@@ -629,8 +629,8 @@ const emit = defineEmits<{
   align-items: center;
   padding: 8px 12px;
   background: rgba(51, 65, 85, 0.4);
-  border-radius: 4px;
-  transition: background 0.2s ease;
+  border-radius: var(--radius-default);
+  transition: background var(--duration-200) var(--ease-out);
 }
 
 .dep-row:hover {
@@ -648,15 +648,15 @@ const emit = defineEmits<{
   color: var(--text-muted);
   background: rgba(59, 130, 246, 0.2);
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 /* Import Tree Section */
 .import-tree-section {
-  margin-top: 32px;
-  padding: 24px;
+  margin-top: var(--spacing-8);
+  padding: var(--spacing-6);
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
 }
 
@@ -664,17 +664,17 @@ const emit = defineEmits<{
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-5);
 }
 
 .import-tree-section .section-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-secondary);
   font-size: 1.1rem;
   font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .import-tree-section .section-header h3 i {
@@ -684,11 +684,11 @@ const emit = defineEmits<{
 .import-tree-section .section-error {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px;
+  gap: var(--spacing-2-5);
+  padding: var(--spacing-3);
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   color: var(--color-error-light);
 }
 
@@ -697,15 +697,15 @@ const emit = defineEmits<{
 }
 
 .import-tree-content {
-  margin-top: 16px;
+  margin-top: var(--spacing-4);
 }
 
 /* Call Graph Section */
 .call-graph-section {
-  margin-top: 32px;
-  padding: 24px;
+  margin-top: var(--spacing-8);
+  padding: var(--spacing-6);
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
 }
 
@@ -713,17 +713,17 @@ const emit = defineEmits<{
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-5);
 }
 
 .call-graph-section .section-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-secondary);
   font-size: 1.1rem;
   font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .call-graph-section .section-header h3 i {
@@ -733,11 +733,11 @@ const emit = defineEmits<{
 .call-graph-section .section-error {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px;
+  gap: var(--spacing-2-5);
+  padding: var(--spacing-3);
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   color: var(--color-error-light);
 }
 
@@ -746,7 +746,7 @@ const emit = defineEmits<{
 }
 
 .call-graph-content {
-  margin-top: 16px;
+  margin-top: var(--spacing-4);
 }
 
 /* Loading Skeleton */
@@ -754,10 +754,10 @@ const emit = defineEmits<{
   min-height: 500px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 24px;
+  gap: var(--spacing-4);
+  padding: var(--spacing-6);
   background: rgba(30, 41, 59, 0.3);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid rgba(71, 85, 105, 0.3);
 }
 
@@ -766,7 +766,7 @@ const emit = defineEmits<{
   background: linear-gradient(90deg, rgba(71, 85, 105, 0.3) 0%, rgba(71, 85, 105, 0.5) 50%, rgba(71, 85, 105, 0.3) 100%);
   background-size: 200% 100%;
   animation: loading 1.5s infinite;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   width: 40%;
 }
 
@@ -775,7 +775,7 @@ const emit = defineEmits<{
   background: linear-gradient(90deg, rgba(71, 85, 105, 0.2) 0%, rgba(71, 85, 105, 0.4) 50%, rgba(71, 85, 105, 0.2) 100%);
   background-size: 200% 100%;
   animation: loading 1.5s infinite;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   min-height: 400px;
 }
 
@@ -784,7 +784,7 @@ const emit = defineEmits<{
   background: linear-gradient(90deg, rgba(71, 85, 105, 0.2) 0%, rgba(71, 85, 105, 0.4) 50%, rgba(71, 85, 105, 0.2) 100%);
   background-size: 200% 100%;
   animation: loading 1.5s infinite;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   min-height: 550px;
 }
 

@@ -141,7 +141,7 @@ const createRipple = (event: TouchEvent) => {
   align-items: center;
   justify-content: center;
   font-weight: 500;
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-150) var(--ease-in-out);
   border: 1px solid transparent;
   font-family: var(--font-sans);
   cursor: pointer;
@@ -167,36 +167,36 @@ const createRipple = (event: TouchEvent) => {
 .btn-xs {
   height: 28px;
   padding: 0 8px;
-  font-size: 11px;
-  border-radius: 2px;
+  font-size: var(--text-xs);
+  border-radius: var(--radius-xs);
 }
 
 .btn-sm {
   height: 32px;
   padding: 0 12px;
-  font-size: 13px;
-  border-radius: 2px;
+  font-size: var(--text-sm);
+  border-radius: var(--radius-xs);
 }
 
 .btn-md {
   height: 40px;
   padding: 0 16px;
-  font-size: 14px;
-  border-radius: 2px;
+  font-size: var(--text-sm);
+  border-radius: var(--radius-xs);
 }
 
 .btn-lg {
   height: 48px;
   padding: 0 24px;
-  font-size: 16px;
-  border-radius: 4px;
+  font-size: var(--text-base);
+  border-radius: var(--radius-default);
 }
 
 .btn-xl {
   height: 56px;
   padding: 0 32px;
-  font-size: 18px;
-  border-radius: 4px;
+  font-size: var(--text-lg);
+  border-radius: var(--radius-default);
 }
 
 /* Color variants - Issue #901: Professional electric blue primary */
@@ -308,8 +308,8 @@ const createRipple = (event: TouchEvent) => {
   background-color: transparent;
   color: var(--color-primary);
   text-decoration: none;
-  padding-left: 0;
-  padding-right: 0;
+  padding-left: var(--spacing-0);
+  padding-right: var(--spacing-0);
   border: none;
 }
 
@@ -324,7 +324,7 @@ const createRipple = (event: TouchEvent) => {
 }
 
 .btn-rounded {
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
 }
 
 .btn-disabled {
@@ -342,7 +342,7 @@ const createRipple = (event: TouchEvent) => {
   display: inline-block;
   width: 1rem;
   height: 1rem;
-  margin-right: 0.5rem;
+  margin-right: var(--spacing-2);
   border: 2px solid currentColor;
   border-top-color: transparent;
   border-radius: 50%;
@@ -357,7 +357,7 @@ const createRipple = (event: TouchEvent) => {
 .button-content {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 /* Icon spacing */
@@ -372,12 +372,12 @@ const createRipple = (event: TouchEvent) => {
 @media (max-width: 640px) {
   .btn-lg {
     padding: 0.5rem 1rem;
-    font-size: 1rem;
+    font-size: var(--text-base);
   }
 
   .btn-xl {
     padding: 0.75rem 1.5rem;
-    font-size: 1rem;
+    font-size: var(--text-base);
   }
 }
 

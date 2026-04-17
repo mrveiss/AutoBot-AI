@@ -80,7 +80,7 @@ const placeholderStyle = computed(() => {
 @reference "../../assets/tailwind.css";
 .stable-loading-container {
   @apply relative w-full;
-  transition: all 0.2s ease-in-out;
+  transition: all var(--duration-200) var(--ease-in-out);
 }
 
 /* Preserve minimum height to prevent layout shifts */
@@ -136,7 +136,7 @@ const placeholderStyle = computed(() => {
 /* Content Area - stable positioning */
 .content-area {
   @apply w-full;
-  transition: opacity 0.15s ease-in-out;
+  transition: opacity var(--duration-150) var(--ease-in-out);
 }
 
 .content-loading {
@@ -179,7 +179,7 @@ const placeholderStyle = computed(() => {
 
 /* Instant transitions for better responsiveness */
 .stable-loading-container * {
-  transition: opacity 0.05s ease-in-out;
+  transition: opacity 0.05s var(--ease-in-out);
 }
 
 /* Prevent layout shifts during loading */

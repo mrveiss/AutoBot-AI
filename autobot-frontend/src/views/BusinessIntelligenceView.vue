@@ -598,7 +598,7 @@ onMounted(() => {
 }
 
 .section-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-primary);
   font-size: var(--text-lg);
   font-weight: var(--font-semibold);
@@ -855,7 +855,7 @@ onMounted(() => {
 }
 
 .report-card p {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-secondary);
   font-size: var(--text-sm);
 }
@@ -875,7 +875,7 @@ onMounted(() => {
 }
 
 .report-header h4 {
-  margin: 0;
+  margin: var(--spacing-0);
   text-transform: capitalize;
   color: var(--text-primary);
 }

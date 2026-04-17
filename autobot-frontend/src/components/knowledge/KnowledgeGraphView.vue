@@ -166,7 +166,7 @@ function navigateTo(path: string): void {
 }
 
 .sidebar-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-base);
   font-weight: var(--font-bold);
   color: var(--text-primary);
@@ -228,7 +228,7 @@ function navigateTo(path: string): void {
   text-decoration: none;
   font-size: var(--text-sm);
   font-weight: var(--font-medium);
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .nav-item:hover {
@@ -261,7 +261,7 @@ function navigateTo(path: string): void {
   color: var(--text-tertiary);
   text-decoration: none;
   font-size: var(--text-sm);
-  transition: color 0.15s;
+  transition: color var(--duration-150);
 }
 
 .back-link:hover {
@@ -351,7 +351,7 @@ function navigateTo(path: string): void {
 .feature-card p {
   font-size: var(--text-sm);
   color: var(--text-secondary);
-  margin: 0;
+  margin: var(--spacing-0);
   line-height: 1.5;
 }
 

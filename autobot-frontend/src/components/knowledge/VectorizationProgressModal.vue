@@ -201,13 +201,13 @@ const allCompleted = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
-  padding: 1rem;
+  z-index: var(--z-modal);
+  padding: var(--spacing-4);
 }
 
 .modal-container {
   background: var(--bg-card);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-xl);
   max-width: 700px;
   width: 100%;
@@ -221,26 +221,26 @@ const allCompleted = computed(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   border-bottom: 2px solid var(--border-default);
 }
 
 .header-content {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .header-content i {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   color: var(--color-primary);
 }
 
 .modal-header h3 {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .close-btn {
@@ -251,10 +251,10 @@ const allCompleted = computed(() => {
   justify-content: center;
   background: var(--bg-tertiary);
   border: none;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   color: var(--text-tertiary);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .close-btn:hover {
@@ -264,7 +264,7 @@ const allCompleted = computed(() => {
 
 /* Progress Summary */
 .progress-summary {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-default);
 }
@@ -272,31 +272,31 @@ const allCompleted = computed(() => {
 .summary-stats {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
 }
 
 .stat-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 1rem;
+  padding: var(--spacing-4);
   background: var(--bg-card);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   border: 2px solid var(--border-default);
 }
 
 .stat-value {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .stat-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   font-weight: 500;
-  margin-top: 0.25rem;
+  margin-top: var(--spacing-1);
 }
 
 .stat-completed .stat-value {
@@ -315,26 +315,26 @@ const allCompleted = computed(() => {
 .overall-progress {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .progress-bar {
   flex: 1;
   height: 1.5rem;
   background: var(--border-default);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
   background: var(--color-primary);
-  transition: width 0.3s ease;
-  border-radius: 0.75rem;
+  transition: width var(--duration-300) var(--ease-out);
+  border-radius: var(--radius-xl);
 }
 
 .progress-text {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-secondary);
   min-width: 3rem;
@@ -345,7 +345,7 @@ const allCompleted = computed(() => {
 .document-list {
   flex: 1;
   overflow-y: auto;
-  padding: 1rem;
+  padding: var(--spacing-4);
   max-height: 400px;
 }
 
@@ -353,12 +353,12 @@ const allCompleted = computed(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.75rem;
-  margin-bottom: 0.5rem;
+  padding: var(--spacing-3);
+  margin-bottom: var(--spacing-2);
   background: var(--bg-card);
   border: 1px solid var(--border-default);
-  border-radius: 0.5rem;
-  transition: all 0.2s;
+  border-radius: var(--radius-lg);
+  transition: all var(--duration-200);
 }
 
 .document-item:hover {
@@ -369,7 +369,7 @@ const allCompleted = computed(() => {
 .document-info {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   flex: 1;
   min-width: 0;
 }
@@ -380,7 +380,7 @@ const allCompleted = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   flex-shrink: 0;
 }
 
@@ -405,7 +405,7 @@ const allCompleted = computed(() => {
 }
 
 .status-icon i {
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 
 .document-details {
@@ -413,11 +413,11 @@ const allCompleted = computed(() => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 
 .document-name {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
   overflow: hidden;
@@ -426,7 +426,7 @@ const allCompleted = computed(() => {
 }
 
 .error-message {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--color-error);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -437,27 +437,27 @@ const allCompleted = computed(() => {
 .document-progress {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-right: 0.75rem;
+  gap: var(--spacing-2);
+  margin-right: var(--spacing-3);
 }
 
 .mini-progress-bar {
   width: 80px;
   height: 0.5rem;
   background: var(--border-default);
-  border-radius: 0.25rem;
+  border-radius: var(--radius-default);
   overflow: hidden;
 }
 
 .mini-progress-fill {
   height: 100%;
   background: var(--color-primary);
-  transition: width 0.3s ease;
-  border-radius: 0.25rem;
+  transition: width var(--duration-300) var(--ease-out);
+  border-radius: var(--radius-default);
 }
 
 .progress-percentage {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--text-tertiary);
   min-width: 3rem;
@@ -467,8 +467,8 @@ const allCompleted = computed(() => {
 .modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 1.5rem;
+  gap: var(--spacing-3);
+  padding: var(--spacing-6);
   border-top: 2px solid var(--border-default);
   background: var(--bg-secondary);
 }
@@ -476,14 +476,14 @@ const allCompleted = computed(() => {
 .action-btn {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   padding: 0.625rem 1.25rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
   border: none;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .retry-btn {
@@ -526,12 +526,12 @@ const allCompleted = computed(() => {
 
 .document-list::-webkit-scrollbar-track {
   background: var(--bg-tertiary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 .document-list::-webkit-scrollbar-thumb {
   background: var(--border-light);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 .document-list::-webkit-scrollbar-thumb:hover {
@@ -541,12 +541,12 @@ const allCompleted = computed(() => {
 /* Modal animations */
 .modal-fade-enter-active,
 .modal-fade-leave-active {
-  transition: opacity 0.3s ease;
+  transition: opacity var(--duration-300) var(--ease-out);
 }
 
 .modal-fade-enter-active .modal-container,
 .modal-fade-leave-active .modal-container {
-  transition: transform 0.3s ease, opacity 0.3s ease;
+  transition: transform var(--duration-300) var(--ease-out), opacity var(--duration-300) var(--ease-out);
 }
 
 .modal-fade-enter-from,

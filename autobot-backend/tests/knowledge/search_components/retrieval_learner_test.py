@@ -15,6 +15,7 @@ from knowledge.search_components.retrieval_learner import (
     _compute_pattern_hash,
     _extract_categories,
     _jaccard_similarity,
+    _ucb1_score,
     get_retrieval_learner,
 )
 
@@ -476,3 +477,303 @@ class TestSingleton:
 
     def test_singleton_is_retrieval_learner_instance(self):
         assert isinstance(get_retrieval_learner(), RetrievalLearner)
+
+
+# ---------------------------------------------------------------------------
+# UCB1 score helper (Issue #4674)
+# ---------------------------------------------------------------------------
+
+
+import math as _math
+
+
+class TestUcb1Score:
+    def test_zero_usage_returns_inf(self):
+        """Unexplored patterns always score highest."""
+        score = _ucb1_score(0.5, usage_count=0, total_queries=10, exploration_constant=_math.sqrt(2))
+        assert score == float("inf")
+
+    def test_zero_total_queries_returns_success_rate(self):
+        """When total_queries is 0, fall back to success_rate alone."""
+        score = _ucb1_score(0.7, usage_count=5, total_queries=0, exploration_constant=_math.sqrt(2))
+        assert score == pytest.approx(0.7)
+
+    def test_higher_usage_gives_lower_bonus(self):
+        """The exploration bonus shrinks as usage_count grows."""
+        total = 100
+        score_low = _ucb1_score(0.8, usage_count=5, total_queries=total, exploration_constant=_math.sqrt(2))
+        score_high = _ucb1_score(0.8, usage_count=50, total_queries=total, exploration_constant=_math.sqrt(2))
+        assert score_low > score_high
+
+    def test_equal_success_rates_prefer_low_usage(self):
+        """With equal success_rate, the lower-usage pattern has a higher UCB1 score."""
+        total = 20
+        score_a = _ucb1_score(0.75, usage_count=4, total_queries=total, exploration_constant=_math.sqrt(2))
+        score_b = _ucb1_score(0.75, usage_count=16, total_queries=total, exploration_constant=_math.sqrt(2))
+        assert score_a > score_b
+
+    def test_exploration_constant_scales_bonus(self):
+        """Larger C increases the exploration bonus proportionally."""
+        s_low_c = _ucb1_score(0.5, usage_count=3, total_queries=30, exploration_constant=0.5)
+        s_high_c = _ucb1_score(0.5, usage_count=3, total_queries=30, exploration_constant=2.0)
+        assert s_high_c > s_low_c
+
+
+# ---------------------------------------------------------------------------
+# get_matching_pattern — UCB1 ranking (Issue #4674)
+# ---------------------------------------------------------------------------
+
+
+class TestGetMatchingPatternUCB1:
+    def _make_pattern(self, ph, success_rate, usage_count, query_type="simple"):
+        return RetrievalPattern(
+            pattern_hash=ph,
+            query_type=query_type,
+            chunk_categories=[],
+            strategy_hints={},
+            success_rate=success_rate,
+            usage_count=usage_count,
+        )
+
+    @pytest.mark.asyncio
+    async def test_equal_success_rates_prefer_low_usage(self):
+        """With equal success_rates, UCB1 should prefer the less-used pattern."""
+        redis = _make_redis_mock()
+
+        p_high_usage = self._make_pattern("hash_high", success_rate=0.8, usage_count=50)
+        p_low_usage = self._make_pattern("hash_low", success_rate=0.8, usage_count=3)
+
+        # Both patterns match the same complexity-only key — we wire exact key → high,
+        # complexity-only key → low so both qualify for comparison.
+        exact_hash = _compute_pattern_hash("simple", [])
+        complexity_hash = _compute_pattern_hash("simple", [])
+        # exact_hash == complexity_hash when categories=[] → only one lookup happens
+        # so instead we use categories to split them.
+        exact_hash_with_cat = _compute_pattern_hash("simple", ["cat"])
+        complexity_only_hash = _compute_pattern_hash("simple", [])
+
+        from knowledge.search_components.retrieval_learner import _PATTERN_KEY_PREFIX, GLOBAL_USER
+
+        key_exact = f"{_PATTERN_KEY_PREFIX}{GLOBAL_USER}:{exact_hash_with_cat}"
+        key_complexity = f"{_PATTERN_KEY_PREFIX}{GLOBAL_USER}:{complexity_only_hash}"
+
+        # Assign patterns to keys.
+        async def fake_hgetall(key):
+            if key == key_exact:
+                return p_high_usage.to_redis_mapping()
+            if key == key_complexity:
+                return p_low_usage.to_redis_mapping()
+            return {}
+
+        redis.hgetall = AsyncMock(side_effect=fake_hgetall)
+        learner = _make_learner(redis)
+
+        result = await learner.get_matching_pattern(
+            "",
+            complexity="simple",
+            categories=["cat"],
+            exploration_constant=_math.sqrt(2),
+        )
+        # UCB1 should select the low-usage pattern (higher exploration bonus).
+        assert result is not None
+        assert result.pattern_hash == "hash_low"
+
+    @pytest.mark.asyncio
+    async def test_greedy_fallback_when_all_usage_equal(self):
+        """When all usage counts are equal, UCB1 degrades to selecting highest success_rate."""
+        redis = _make_redis_mock()
+
+        p_low_rate = self._make_pattern("hash_low_rate", success_rate=0.65, usage_count=5)
+        p_high_rate = self._make_pattern("hash_high_rate", success_rate=0.90, usage_count=5)
+
+        exact_hash_with_cat = _compute_pattern_hash("simple", ["cat"])
+        complexity_only_hash = _compute_pattern_hash("simple", [])
+
+        from knowledge.search_components.retrieval_learner import _PATTERN_KEY_PREFIX, GLOBAL_USER
+
+        key_exact = f"{_PATTERN_KEY_PREFIX}{GLOBAL_USER}:{exact_hash_with_cat}"
+        key_complexity = f"{_PATTERN_KEY_PREFIX}{GLOBAL_USER}:{complexity_only_hash}"
+
+        async def fake_hgetall(key):
+            if key == key_exact:
+                return p_low_rate.to_redis_mapping()
+            if key == key_complexity:
+                return p_high_rate.to_redis_mapping()
+            return {}
+
+        redis.hgetall = AsyncMock(side_effect=fake_hgetall)
+        learner = _make_learner(redis)
+
+        result = await learner.get_matching_pattern(
+            "",
+            complexity="simple",
+            categories=["cat"],
+            exploration_constant=_math.sqrt(2),
+        )
+        # Equal usage → exploration bonuses cancel → highest success_rate wins.
+        assert result is not None
+        assert result.pattern_hash == "hash_high_rate"
+
+
+# ---------------------------------------------------------------------------
+# Issue #4676 — benchmark → feedback → pattern round-trip
+# ---------------------------------------------------------------------------
+
+
+class TestBenchmarkFeedbackRoundTrip:
+    """Verify that benchmark results flow through publish_feedback_events into
+    the RetrievalLearner feedback stream and ultimately update global patterns.
+
+    The test is fully in-memory: no Redis, no ChromaDB service required.
+    """
+
+    @pytest.mark.asyncio
+    async def test_publish_feedback_events_writes_xadd_per_positive_result(self):
+        """publish_feedback_events() calls xadd once per result with precision_at_k > 0."""
+        from unittest.mock import AsyncMock
+
+        from knowledge.rag_benchmarks import BenchmarkResult, publish_feedback_events
+
+        redis = AsyncMock()
+        redis.xadd = AsyncMock()
+        redis.expire = AsyncMock()
+
+        results = [
+            BenchmarkResult(
+                query="Python list comprehensions",
+                retrieved_ids=["python_02", "python_04", "python_01"],
+                ranked_ids=["python_02", "python_04", "python_01"],
+                precision_at_k=0.4,
+                complexity="moderate",
+            ),
+            BenchmarkResult(
+                query="unknown topic query",
+                retrieved_ids=["net_01"],
+                ranked_ids=["net_01"],
+                precision_at_k=0.0,  # zero precision — should NOT be published
+                complexity="moderate",
+            ),
+        ]
+
+        published = await publish_feedback_events(redis, results)
+
+        # Only the positive-precision result should be published.
+        assert published == 1
+        assert redis.xadd.call_count == 1
+        # expire should be called once to set TTL on the stream key.
+        assert redis.expire.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_publish_feedback_events_writes_correct_schema(self):
+        """Each published entry must include all fields expected by RetrievalLearner."""
+        import json
+        from unittest.mock import AsyncMock, call
+
+        from knowledge.rag_benchmarks import BenchmarkResult, publish_feedback_events
+
+        redis = AsyncMock()
+        redis.xadd = AsyncMock()
+        redis.expire = AsyncMock()
+
+        result = BenchmarkResult(
+            query="RAG retrieval augmented generation",
+            retrieved_ids=["ml_02", "ml_09", "ml_01"],
+            ranked_ids=["ml_02", "ml_09", "ml_01"],
+            precision_at_k=0.4,
+            complexity="moderate",
+        )
+
+        await publish_feedback_events(redis, [result])
+
+        assert redis.xadd.call_count == 1
+        _stream_key, entry = redis.xadd.call_args[0]
+        assert "retrieved_chunk_ids" in entry
+        assert "final_ranked_ids" in entry
+        assert "complexity" in entry
+        assert "timestamp" in entry
+        # Verify JSON round-trip of retrieved_chunk_ids
+        assert json.loads(entry["retrieved_chunk_ids"]) == result.retrieved_ids
+
+    @pytest.mark.asyncio
+    async def test_publish_feedback_events_uses_global_user_namespace(self):
+        """Stream key must use '__global__' sentinel so all users benefit."""
+        from unittest.mock import AsyncMock
+
+        from knowledge.rag_benchmarks import BenchmarkResult, publish_feedback_events
+
+        redis = AsyncMock()
+        redis.xadd = AsyncMock()
+        redis.expire = AsyncMock()
+
+        result = BenchmarkResult(
+            query="cosine similarity evaluation",
+            retrieved_ids=["ml_04", "ml_05"],
+            ranked_ids=["ml_04", "ml_05"],
+            precision_at_k=0.4,
+        )
+
+        await publish_feedback_events(redis, [result])
+
+        stream_key = redis.xadd.call_args[0][0]
+        assert stream_key.startswith("rag:feedback:__global__:")
+
+    @pytest.mark.asyncio
+    async def test_learner_processes_benchmark_generated_events(self):
+        """RetrievalLearner.consume_feedback_stream() processes benchmark events and writes pattern."""
+        import json
+
+        from knowledge.rag_benchmarks import _BENCHMARK_USER
+
+        redis = _make_redis_mock()
+
+        # Simulate a benchmark event where reranking promoted 3 of 5 chunks.
+        # retrieved=[a,b,c,d,e], ranked=[x,y,z,a,b] → promoted={x,y,z} → 3/5=0.6 → success.
+        fields = _make_feedback_fields(
+            retrieved=["a", "b", "c", "d", "e"],
+            ranked=["x", "y", "z", "a", "b"],
+            complexity="moderate",
+        )
+        # Benchmark events may include extra fields — learner must tolerate them.
+        fields["annotation"] = "benchmark"
+        fields["precision_at_k"] = "0.4"
+
+        redis.xrange = AsyncMock(side_effect=[[("5000-0", fields)], []])
+        redis.hgetall = AsyncMock(return_value={})
+
+        learner = _make_learner(redis)
+        count = await learner.consume_feedback_stream(
+            date_key="2026-01-01",
+            user_id=_BENCHMARK_USER,
+        )
+
+        assert count == 1
+        # Pattern must be distilled for the global namespace.
+        # redis.hset is called twice: once for the pattern key, once for the cursor.
+        # The pattern key contains '__global__'; cursor key is 'rag:rl:cursors'.
+        assert redis.hset.called
+        all_hset_keys = [call[0][0] for call in redis.hset.call_args_list]
+        assert any("__global__" in k for k in all_hset_keys), (
+            f"Expected a pattern key containing '__global__' in hset calls; got {all_hset_keys}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_publish_feedback_events_no_publish_when_all_zero_precision(self):
+        """When all results have precision_at_k == 0, nothing is written to Redis."""
+        from unittest.mock import AsyncMock
+
+        from knowledge.rag_benchmarks import BenchmarkResult, publish_feedback_events
+
+        redis = AsyncMock()
+        redis.xadd = AsyncMock()
+        redis.expire = AsyncMock()
+
+        results = [
+            BenchmarkResult("q1", ["doc1"], ["doc1"], precision_at_k=0.0),
+            BenchmarkResult("q2", ["doc2"], ["doc2"], precision_at_k=0.0),
+        ]
+
+        published = await publish_feedback_events(redis, results)
+
+        assert published == 0
+        assert not redis.xadd.called
+        assert not redis.expire.called

@@ -10,7 +10,7 @@ All reranking parameters are configurable without code changes.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from autobot_shared.logging_manager import get_llm_logger
 from constants.model_constants import model_config
@@ -86,6 +86,31 @@ class RAGConfig:
     enable_agentic_search: bool = True
     rewrite_enabled: bool = True
     max_search_iterations: int = 3
+
+    # Issue #4696: RLM-driven refinement loop via advanced_search_with_refinement()
+    enable_rlm_refinement: bool = False
+
+    # Issue #4674: UCB1 exploration constant for RetrievalLearner pattern selection.
+    # Higher values → more exploration of under-sampled patterns.
+    # sqrt(2) ≈ 1.414 is the classic UCB1 constant.
+    ucb1_exploration_constant: float = 1.414
+
+    # Issue #4677: MAP-Elites structured diversity grid (opt-in, default preserves cosine behaviour)
+    diversity_strategy: Literal["cosine", "map_elites"] = "cosine"
+
+    # Issue #4678: Inject AnalyzerService lessons as supplemental RAG context
+    enable_analyzer_lessons: bool = True
+
+    # Issue #4690: Session-scoped adaptive reranking — feed per-session retrieval
+    # hit/miss signals back into hybrid weights for subsequent queries in the same
+    # session.  Default off for safety; enable via config or runtime update.
+    enable_session_adaptive_reranking: bool = False
+
+    # Issue #4680: Autonomous improvement loop configuration
+    autonomous_loop_enabled: bool = False  # opt-in; false by default for safety
+    autonomous_loop_cron: str = "0 2 * * *"  # 2 am nightly
+    autonomous_loop_dry_run: bool = True  # dry-run until explicitly disabled
+    autonomous_loop_promotion_threshold: float = 0.05  # 5 % improvement required
 
     def __post_init__(self):
         """Validate configuration values and propagate mmr_lambda to rerank_weights.
@@ -223,6 +248,10 @@ class RAGConfig:
             "enable_agentic_search": self.enable_agentic_search,
             "rewrite_enabled": self.rewrite_enabled,
             "max_search_iterations": self.max_search_iterations,
+            # Issue #4696: RLM-driven refinement loop
+            "enable_rlm_refinement": self.enable_rlm_refinement,
+            # Issue #4674: UCB1 exploration constant for RetrievalLearner
+            "ucb1_exploration_constant": self.ucb1_exploration_constant,
             # Neural Mesh RAG feature flags (Issue #2059)
             "mesh_retriever_enabled": self.mesh_retriever_enabled,
             "mesh_seed_edges": self.mesh_seed_edges,
@@ -239,6 +268,17 @@ class RAGConfig:
             "mesh_staleness_decay": self.mesh_staleness_decay,
             "mesh_staleness_threshold": self.mesh_staleness_threshold,
             "mesh_staleness_ttl": self.mesh_staleness_ttl,
+            # Issue #4677: MAP-Elites diversity strategy
+            "diversity_strategy": self.diversity_strategy,
+            # Issue #4678: AnalyzerService lesson injection
+            "enable_analyzer_lessons": self.enable_analyzer_lessons,
+            # Issue #4690: Session-scoped adaptive reranking
+            "enable_session_adaptive_reranking": self.enable_session_adaptive_reranking,
+            # Issue #4680: Autonomous improvement loop
+            "autonomous_loop_enabled": self.autonomous_loop_enabled,
+            "autonomous_loop_cron": self.autonomous_loop_cron,
+            "autonomous_loop_dry_run": self.autonomous_loop_dry_run,
+            "autonomous_loop_promotion_threshold": self.autonomous_loop_promotion_threshold,
         }
 
 

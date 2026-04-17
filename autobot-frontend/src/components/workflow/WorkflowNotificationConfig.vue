@@ -338,18 +338,18 @@ watch(saveSuccess, (val) => {
 .notification-config {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--spacing-4);
   max-width: 48rem;
 }
 
 .config-section {
   display: flex;
   flex-direction: column;
-  gap: 0.375rem;
+  gap: var(--spacing-1-5);
 }
 
 .field-label {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--color-text-primary, #e2e8f0);
 }
@@ -357,20 +357,24 @@ watch(saveSuccess, (val) => {
 .field-input {
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--color-border, #374151);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background: var(--color-bg-secondary, #1e293b);
   color: var(--color-text-primary, #e2e8f0);
-  font-size: 0.875rem;
-  transition: border-color 0.15s;
+  font-size: var(--text-sm);
+  transition: border-color var(--duration-150);
 }
 .field-input:focus {
   outline: none;
   border-color: var(--color-primary, #3b82f6);
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
 }
+.field-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .field-hint {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--color-text-secondary, #94a3b8);
 }
 
@@ -382,7 +386,7 @@ watch(saveSuccess, (val) => {
 .toggle-label {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   cursor: pointer;
   user-select: none;
 }
@@ -394,18 +398,18 @@ watch(saveSuccess, (val) => {
 }
 
 .toggle-text {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--color-text-primary, #e2e8f0);
 }
 
 .config-fieldset {
   border: none;
-  padding: 0;
-  margin: 0;
+  padding: var(--spacing-0);
+  margin: var(--spacing-0);
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 .config-fieldset:disabled {
   opacity: 0.45;
@@ -413,10 +417,10 @@ watch(saveSuccess, (val) => {
 }
 
 .section-heading {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-text-primary, #e2e8f0);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 /* Routing matrix */
@@ -424,9 +428,9 @@ watch(saveSuccess, (val) => {
   display: flex;
   flex-direction: column;
   border: 1px solid var(--color-border, #374151);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   overflow: hidden;
-  margin-top: 0.5rem;
+  margin-top: var(--spacing-2);
 }
 
 .matrix-row {
@@ -441,7 +445,7 @@ watch(saveSuccess, (val) => {
 .matrix-header {
   background: var(--color-bg-tertiary, #0f172a);
   font-weight: 600;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--color-text-secondary, #94a3b8);
@@ -476,23 +480,23 @@ watch(saveSuccess, (val) => {
 .config-actions {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding-top: 0.5rem;
+  gap: var(--spacing-3);
+  padding-top: var(--spacing-2);
 }
 
 .btn-save {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--spacing-1-5);
   padding: 0.5rem 1.25rem;
   border: none;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background: var(--color-primary, #3b82f6);
   color: #fff;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background var(--duration-150);
 }
 .btn-save:hover:not(:disabled) {
   background: var(--color-primary-hover, #2563eb);
@@ -512,8 +516,8 @@ watch(saveSuccess, (val) => {
 .loading-indicator {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
+  gap: var(--spacing-2);
+  font-size: var(--text-sm);
   color: var(--color-text-secondary, #94a3b8);
   padding: 0.75rem 0;
 }
@@ -535,7 +539,7 @@ watch(saveSuccess, (val) => {
 
 .error-banner {
   padding: 0.5rem 0.75rem;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
   color: #fca5a5;

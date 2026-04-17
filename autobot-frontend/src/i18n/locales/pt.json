@@ -5221,6 +5221,12 @@
     }
   },
   "operations": {
+    "view": {
+      "title": "Operações de longa duração",
+      "subtitle": "Monitorar e gerenciar tarefas em segundo plano",
+      "refresh": "Atualizar",
+      "loadError": "Falha ao carregar operações"
+    },
     "detail": {
       "close": "Fechar",
       "priorityLabel": "Prioridade: {priority}",
@@ -5265,6 +5271,9 @@
       "resume": "Retomar",
       "viewDetails": "Ver detalhes",
       "showingCount": "A mostrar {shown} de {total} operações"
+    },
+    "panel": {
+      "selectOperation": "Select an operation to view details"
     }
   },
   "secrets": {
@@ -6403,7 +6412,8 @@
     "services": "Services",
     "skipToNavigation": "Skip to navigation",
     "profile": "Profile",
-    "systemStatus": "System Status"
+    "systemStatus": "System Status",
+    "operations": "Operações"
   },
   "reasoningTrace": {
     "title": "Rastro de raciocinio",

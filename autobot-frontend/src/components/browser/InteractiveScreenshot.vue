@@ -194,7 +194,7 @@ function submitType() {
   height: 100%;
   object-fit: contain;
   display: block;
-  transition: opacity 0.2s ease;
+  transition: opacity var(--duration-200) var(--ease-out);
 }
 
 .screenshot-img--loading {
@@ -237,12 +237,12 @@ function submitType() {
   align-items: center;
   justify-content: center;
   color: var(--color-text-muted, #9ca3af);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .toolbar {
   display: flex;
-  gap: 4px;
+  gap: var(--spacing-1);
   padding: 4px 8px;
   background: var(--color-surface, #1e1e2e);
   border-top: 1px solid var(--color-border, #333);
@@ -255,12 +255,12 @@ function submitType() {
   width: 28px;
   height: 28px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   background: transparent;
   color: var(--color-text-secondary, #a1a1aa);
   cursor: pointer;
-  font-size: 0.75rem;
-  transition: background 0.15s, color 0.15s;
+  font-size: var(--text-xs);
+  transition: background var(--duration-150), color var(--duration-150);
 }
 
 .toolbar-btn:hover:not(:disabled) {
@@ -275,7 +275,7 @@ function submitType() {
 
 .type-overlay {
   display: flex;
-  gap: 4px;
+  gap: var(--spacing-1);
   padding: 4px 8px;
   background: var(--color-surface, #1e1e2e);
   border-top: 1px solid var(--color-border, #333);
@@ -285,7 +285,7 @@ function submitType() {
   flex: 1;
   padding: 4px 8px;
   border: 1px solid var(--color-border, #333);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   background: var(--color-bg, #121212);
   color: var(--color-text, #e4e4e7);
   font-size: 0.8rem;
@@ -295,6 +295,10 @@ function submitType() {
 .type-input:focus {
   border-color: var(--color-primary, #3b82f6);
 }
+.type-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .type-submit {
   display: flex;
@@ -303,10 +307,10 @@ function submitType() {
   width: 28px;
   height: 28px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   background: var(--color-primary, #3b82f6);
   color: white;
   cursor: pointer;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 </style>

@@ -358,8 +358,8 @@ const formatSimilarityGroup = (similarity: string): string => {
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 4px;
-  transition: all 0.15s ease;
+  gap: var(--spacing-1);
+  transition: all var(--duration-150) var(--ease-out);
 }
 
 .export-btn:hover {

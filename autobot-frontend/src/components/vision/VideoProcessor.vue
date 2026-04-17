@@ -524,24 +524,24 @@ onUnmounted(() => {
 .video-processor {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--spacing-6);
 }
 
 /* Upload Section */
 .upload-section {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
-  padding: 24px;
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-6);
 }
 
 .drop-zone {
   border: 2px dashed var(--border-default);
-  border-radius: 12px;
-  padding: 40px;
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-10);
   text-align: center;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
   min-height: 200px;
   display: flex;
   align-items: center;
@@ -556,38 +556,38 @@ onUnmounted(() => {
 
 .drop-zone.has-file {
   border-style: solid;
-  padding: 20px;
+  padding: var(--spacing-5);
 }
 
 .drop-placeholder {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-3);
   color: var(--text-tertiary);
 }
 
 .drop-placeholder i {
-  font-size: 48px;
+  font-size: var(--text-5xl);
   color: var(--text-muted);
 }
 
 .drop-placeholder p {
-  margin: 0;
-  font-size: 16px;
+  margin: var(--spacing-0);
+  font-size: var(--text-base);
   color: var(--text-secondary);
 }
 
 .supported-formats {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
-  margin-top: 8px;
+  margin-top: var(--spacing-2);
 }
 
 .file-preview {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--spacing-4);
   width: 100%;
 }
 
@@ -595,7 +595,7 @@ onUnmounted(() => {
   width: 200px;
   height: 120px;
   object-fit: cover;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--bg-tertiary);
 }
 
@@ -603,28 +603,28 @@ onUnmounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
   text-align: left;
 }
 
 .filename {
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
 }
 
 .filesize,
 .duration {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
 .btn-clear {
-  padding: 8px;
+  padding: var(--spacing-2);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
 }
 
@@ -637,21 +637,21 @@ onUnmounted(() => {
 .options-section {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
+  gap: var(--spacing-4);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
-  padding: 20px;
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-5);
 }
 
 .option-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .option-group label {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -661,8 +661,8 @@ onUnmounted(() => {
   padding: 10px 12px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
@@ -677,13 +677,13 @@ onUnmounted(() => {
   background: var(--color-primary);
   color: var(--text-on-primary);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 15px;
   font-weight: 500;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .btn-process:hover:not(:disabled) {
@@ -699,28 +699,28 @@ onUnmounted(() => {
 .progress-section {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
-  padding: 20px;
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-5);
 }
 
 .progress-bar {
   height: 8px;
   background: var(--bg-tertiary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   overflow: hidden;
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
 }
 
 .progress-fill {
   height: 100%;
   background: var(--color-primary);
-  transition: width 0.3s;
+  transition: width var(--duration-300);
 }
 
 .progress-info {
   display: flex;
   justify-content: space-between;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -728,7 +728,7 @@ onUnmounted(() => {
 .results-section {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   overflow: hidden;
 }
 
@@ -742,34 +742,34 @@ onUnmounted(() => {
 }
 
 .results-header h4 {
-  margin: 0;
-  font-size: 14px;
+  margin: var(--spacing-0);
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-success);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .frame-count {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
 .frames-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  gap: 12px;
-  padding: 20px;
+  gap: var(--spacing-3);
+  padding: var(--spacing-5);
 }
 
 .frame-card {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
-  padding: 12px;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-3);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .frame-card:hover {
@@ -777,32 +777,32 @@ onUnmounted(() => {
 }
 
 .frame-index {
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
 }
 
 .frame-info {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .frame-info .confidence,
 .frame-info .time {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
 .selected-frame {
-  padding: 20px;
+  padding: var(--spacing-5);
   border-top: 1px solid var(--border-default);
 }
 
 .selected-frame h5 {
   margin: 0 0 12px;
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -810,24 +810,24 @@ onUnmounted(() => {
 .frame-details {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: var(--spacing-3);
+  margin-bottom: var(--spacing-4);
 }
 
 .detail-item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .detail-item .label {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   text-transform: uppercase;
 }
 
 .detail-item .value {
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
@@ -836,19 +836,19 @@ onUnmounted(() => {
   background: none;
   border: none;
   color: var(--text-tertiary);
-  font-size: 13px;
+  font-size: var(--text-sm);
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .json-display {
-  margin-top: 12px;
-  padding: 12px;
+  margin-top: var(--spacing-3);
+  padding: var(--spacing-3);
   background: var(--bg-tertiary);
-  border-radius: 8px;
-  font-size: 11px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   overflow-x: auto;
   max-height: 200px;
@@ -856,7 +856,7 @@ onUnmounted(() => {
 
 .results-actions {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
   padding: 16px 20px;
   border-top: 1px solid var(--border-default);
 }
@@ -866,13 +866,13 @@ onUnmounted(() => {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
-  font-size: 13px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .btn-secondary:hover {
@@ -887,13 +887,13 @@ onUnmounted(() => {
   padding: 12px 16px;
   background: var(--color-error-bg);
   border: 1px solid var(--color-error);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .error-content {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
   color: var(--color-error);
 }
 

@@ -19,6 +19,7 @@ import json
 import sys
 import types
 from pathlib import Path
+from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -821,6 +822,378 @@ class TestHashCacheEdgeCases4382:
         assert new_hashes.get("loop_a.md") == "cafebabe"
 
 
+class TestIndexChunkOversized4665:
+    """Tests for oversized-chunk detection and split-retry logic — Issue #4665."""
+
+    def _make_chunk(self, content: str = "x" * 200) -> Dict[str, Any]:
+        return {
+            "content": content,
+            "section": "Section",
+            "subsection": None,
+            "file_path": "docs/test.md",
+            "doc_type": "documentation",
+            "category": "general",
+            "title": "Test Doc",
+        }
+
+    # ------------------------------------------------------------------
+    # _is_oversized_error
+    # ------------------------------------------------------------------
+
+    def test_is_oversized_error_too_large(self):
+        """'too large' in error message → oversized."""
+        assert DocIndexerService._is_oversized_error(ValueError("input too large"))
+
+    def test_is_oversized_error_token(self):
+        """'token' in error message → oversized."""
+        assert DocIndexerService._is_oversized_error(RuntimeError("token limit exceeded"))
+
+    def test_is_oversized_error_sequence_length(self):
+        """'sequence length' in error message → oversized."""
+        assert DocIndexerService._is_oversized_error(Exception("sequence length 600 > 512"))
+
+    def test_is_oversized_error_context_length(self):
+        """'context length' in error message → oversized."""
+        assert DocIndexerService._is_oversized_error(Exception("context length exceeded"))
+
+    def test_is_oversized_error_exceeds(self):
+        """'exceeds' in error message → oversized."""
+        assert DocIndexerService._is_oversized_error(Exception("length exceeds maximum"))
+
+    def test_is_oversized_error_truncat(self):
+        """'truncat' in error message → oversized (truncated/truncation)."""
+        assert DocIndexerService._is_oversized_error(Exception("input truncated"))
+
+    def test_is_oversized_error_generic_error_not_oversized(self):
+        """Generic network error → not oversized."""
+        assert not DocIndexerService._is_oversized_error(ConnectionError("connection refused"))
+
+    def test_is_oversized_error_key_error_not_oversized(self):
+        """KeyError → not oversized."""
+        assert not DocIndexerService._is_oversized_error(KeyError("missing_key"))
+
+    # ------------------------------------------------------------------
+    # _index_chunk: normal success path
+    # ------------------------------------------------------------------
+
+    def test_index_chunk_returns_true_on_success(self):
+        """_index_chunk returns True when embed+upsert succeed."""
+        svc = _make_service()
+        chunk = self._make_chunk("Short content for embedding.")
+        ok = svc._index_chunk(chunk, 0, 1, "docs/test.md", [], 2)
+        assert ok is True
+        svc._embed_model.get_text_embedding.assert_called_once()
+
+    # ------------------------------------------------------------------
+    # _index_chunk: non-oversized error → logged, returns False, no split
+    # ------------------------------------------------------------------
+
+    def test_index_chunk_returns_false_on_non_oversized_error(self):
+        """Non-oversized error → returns False, no split attempted."""
+        svc = _make_service()
+        svc._embed_model.get_text_embedding.side_effect = ConnectionError("connection refused")
+        chunk = self._make_chunk()
+        ok = svc._index_chunk(chunk, 0, 1, "docs/test.md", [], 2)
+        assert ok is False
+        # upsert must NOT be called (error happened before it)
+        svc._collection.upsert.assert_not_called()
+
+    # ------------------------------------------------------------------
+    # _index_chunk: oversized → split, both halves succeed
+    # ------------------------------------------------------------------
+
+    def test_index_chunk_splits_on_oversized_both_halves_succeed(self):
+        """Oversized embed error → content split in half, both halves stored, returns True."""
+        svc = _make_service()
+
+        content = "A" * 400
+        # First call (full chunk) raises oversized; subsequent calls succeed.
+        call_count = [0]
+
+        def _fake_embed(text):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise ValueError("input too large for model context length")
+            return [0.1] * 128
+
+        svc._embed_model.get_text_embedding.side_effect = _fake_embed
+        chunk = self._make_chunk(content)
+        ok = svc._index_chunk(chunk, 0, 1, "docs/test.md", [], 2)
+
+        assert ok is True
+        # 1 failed call + 2 half calls = 3 total embed calls
+        assert call_count[0] == 3
+        # Two successful upserts (one per half)
+        assert svc._collection.upsert.call_count == 2
+
+    # ------------------------------------------------------------------
+    # _index_chunk: oversized → split, one half fails (still non-silent)
+    # ------------------------------------------------------------------
+
+    def test_index_chunk_splits_on_oversized_one_half_still_oversized(self):
+        """Oversized: first half OK, second half oversized → recursion splits second half further.
+
+        With multi-level splitting (#4702), a still-oversized half is split
+        recursively rather than dropped.  This test verifies that the second
+        half is split into quarters (depth 1) which then succeed.
+        """
+        svc = _make_service()
+
+        content = "B" * 400
+        call_count = [0]
+
+        def _fake_embed(text):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                # Full chunk too large
+                raise ValueError("token limit exceeded")
+            if call_count[0] == 3:
+                # Second half at depth 0 also too large → recursion continues
+                raise ValueError("token limit exceeded")
+            return [0.2] * 128
+
+        svc._embed_model.get_text_embedding.side_effect = _fake_embed
+        chunk = self._make_chunk(content)
+        ok = svc._index_chunk(chunk, 0, 1, "docs/test.md", [], 2)
+
+        # Full success: first half (call 2) + two quarters of second half (calls 4+5)
+        assert ok is True
+        assert svc._collection.upsert.call_count == 3
+
+    # ------------------------------------------------------------------
+    # _index_chunk: oversized → split, BOTH halves fail → returns False
+    # ------------------------------------------------------------------
+
+    def test_index_chunk_splits_on_oversized_both_halves_fail(self):
+        """Oversized: both halves fail → returns False (no silent drop — warning logged)."""
+        svc = _make_service()
+
+        svc._embed_model.get_text_embedding.side_effect = ValueError("token limit exceeded")
+        chunk = self._make_chunk("C" * 400)
+        ok = svc._index_chunk(chunk, 0, 1, "docs/test.md", [], 2)
+
+        assert ok is False
+        svc._collection.upsert.assert_not_called()
+
+    # ------------------------------------------------------------------
+    # Warning is logged (not silently dropped) — #4665 regression guard
+    # ------------------------------------------------------------------
+
+    # ------------------------------------------------------------------
+    # _split_and_embed: empty-string guard (#4921)
+    # ------------------------------------------------------------------
+
+    def test_split_and_embed_returns_false_on_empty_string(self):
+        """_split_and_embed returns False immediately for empty content (#4921)."""
+        svc = _make_service()
+        ok = svc._split_and_embed("", "chunk_id", {}, "docs/test.md")
+        assert ok is False
+        # No embed call should happen — guard fires before any I/O
+        svc._embed_model.get_text_embedding.assert_not_called()
+
+    def test_split_and_embed_empty_half_after_bisect_does_not_embed(self):
+        """Bisect of whitespace-only content produces empty halves that are skipped (#4921).
+
+        A string like '   ' strips to '' on both sides — both recursive calls
+        must return False without calling the embedding model.
+        """
+        svc = _make_service()
+
+        # Force the initial call to fail with an oversized error so bisect runs
+        call_count = [0]
+
+        def _fake_embed(text):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise ValueError("input too large for model context length")
+            return [0.1] * 128
+
+        svc._embed_model.get_text_embedding.side_effect = _fake_embed
+        # Content that strips to empty on both bisected halves
+        ok = svc._split_and_embed("   ", "chunk_id", {}, "docs/test.md")
+        assert ok is False
+        # Only one embed attempt (the initial oversized call) — halves are empty, skipped
+        assert call_count[0] == 1
+
+    def test_index_chunk_logs_warning_on_oversized(self, caplog):
+        """Oversized chunk must emit a WARNING with doc path and char count (#4665)."""
+        import logging
+
+        svc = _make_service()
+
+        call_count = [0]
+
+        def _fake_embed(text):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise ValueError("input too large")
+            return [0.3] * 128
+
+        svc._embed_model.get_text_embedding.side_effect = _fake_embed
+
+        with caplog.at_level(logging.WARNING, logger="services.knowledge.doc_indexer"):
+            chunk = self._make_chunk("D" * 400)
+            svc._index_chunk(chunk, 0, 1, "docs/oversized.md", [], 1)
+
+        assert any(
+            "oversized" in r.message.lower() or "oversized" in r.getMessage().lower()
+            for r in caplog.records
+        ), "Expected WARNING with 'oversized' in message"
+        assert any(
+            "docs/oversized.md" in r.getMessage() for r in caplog.records
+        ), "WARNING must include the document path"
+
+
+class TestIndexChunkMultiLevelSplit4702:
+    """Tests for multi-level recursive oversized-chunk split — Issue #4702."""
+
+    def _make_chunk(self, content: str) -> Dict[str, Any]:
+        return {
+            "content": content,
+            "section": "Section",
+            "subsection": None,
+            "file_path": "docs/test.md",
+            "doc_type": "documentation",
+            "category": "general",
+            "title": "Test Doc",
+        }
+
+    # ------------------------------------------------------------------
+    # Two-level split: halves are still too large, quarters succeed
+    # ------------------------------------------------------------------
+
+    def test_two_level_split_all_quarters_succeed(self):
+        """Chunk too large → halves too large → quarters succeed → returns True."""
+        svc = _make_service()
+
+        # Track calls to identify which content sizes fail
+        call_count = [0]
+
+        def _fake_embed(text):
+            call_count[0] += 1
+            # First 3 calls (original + 2 halves) raise oversized;
+            # subsequent calls (4 quarters) succeed.
+            if call_count[0] <= 3:
+                raise ValueError("input too large for model context length")
+            return [0.1] * 128
+
+        svc._embed_model.get_text_embedding.side_effect = _fake_embed
+        chunk = self._make_chunk("A" * 800)
+        ok = svc._index_chunk(chunk, 0, 1, "docs/test.md", [], 2)
+
+        assert ok is True
+        # 3 failed + 4 successful = 7 total embed calls
+        assert call_count[0] == 7
+        assert svc._collection.upsert.call_count == 4
+
+    # ------------------------------------------------------------------
+    # Three-level split: only some leaf nodes succeed
+    # ------------------------------------------------------------------
+
+    def test_three_level_split_partial_success(self):
+        """Three-level split where some deepest pieces succeed → True (partial)."""
+        svc = _make_service()
+
+        call_count = [0]
+
+        def _fake_embed(text):
+            call_count[0] += 1
+            # Calls 1–7 (original + 2 halves + 4 quarters) raise oversized;
+            # 8 of the 8 depth-3 pieces: first 4 succeed, last 4 fail.
+            if call_count[0] <= 7:
+                raise ValueError("token limit exceeded")
+            if call_count[0] <= 11:
+                return [0.1] * 128
+            raise ValueError("token limit exceeded")
+
+        svc._embed_model.get_text_embedding.side_effect = _fake_embed
+        chunk = self._make_chunk("B" * 1600)
+        ok = svc._index_chunk(chunk, 0, 1, "docs/test.md", [], 2)
+
+        assert ok is True
+        # At least one piece stored
+        assert svc._collection.upsert.call_count >= 1
+
+    # ------------------------------------------------------------------
+    # max_depth=4 cap: beyond depth 4, chunk is dropped (returns False
+    # only if no sibling succeeded)
+    # ------------------------------------------------------------------
+
+    def test_always_oversized_drops_at_max_depth(self):
+        """If every embed call raises oversized, chunk is dropped at max_depth → False."""
+        svc = _make_service()
+        svc._embed_model.get_text_embedding.side_effect = ValueError(
+            "input too large for model context length"
+        )
+        chunk = self._make_chunk("C" * 3200)
+        ok = svc._index_chunk(chunk, 0, 1, "docs/test.md", [], 2)
+
+        assert ok is False
+        svc._collection.upsert.assert_not_called()
+
+    # ------------------------------------------------------------------
+    # Chunk IDs at each depth carry the _L/_R suffix chain
+    # ------------------------------------------------------------------
+
+    def test_split_chunk_ids_carry_depth_suffix(self):
+        """Sub-chunk IDs at depth 1 must end with _L0 or _R0."""
+        svc = _make_service()
+
+        call_count = [0]
+        upserted_ids = []
+
+        def _fake_embed(text):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise ValueError("too large")
+            return [0.1] * 128
+
+        def _fake_upsert(ids, embeddings, documents, metadatas):
+            upserted_ids.extend(ids)
+
+        svc._embed_model.get_text_embedding.side_effect = _fake_embed
+        svc._collection.upsert.side_effect = _fake_upsert
+
+        chunk = self._make_chunk("D" * 400)
+        svc._index_chunk(chunk, 0, 1, "docs/test.md", [], 2)
+
+        # Both sub-IDs must end with the depth-0 suffix
+        assert any(uid.endswith("_L0") for uid in upserted_ids), (
+            f"Expected _L0 suffix in {upserted_ids}"
+        )
+        assert any(uid.endswith("_R0") for uid in upserted_ids), (
+            f"Expected _R0 suffix in {upserted_ids}"
+        )
+
+    # ------------------------------------------------------------------
+    # Non-oversized error at any depth stops recursion immediately
+    # ------------------------------------------------------------------
+
+    def test_non_oversized_error_at_depth_1_drops_that_branch(self):
+        """Non-oversized error at depth 1 → that branch is dropped, no deeper recursion."""
+        svc = _make_service()
+
+        call_count = [0]
+
+        def _fake_embed(text):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                # Original chunk: oversized
+                raise ValueError("input too large")
+            if call_count[0] == 2:
+                # Left half: non-oversized error
+                raise ConnectionError("network error")
+            return [0.1] * 128
+
+        svc._embed_model.get_text_embedding.side_effect = _fake_embed
+        chunk = self._make_chunk("E" * 400)
+        ok = svc._index_chunk(chunk, 0, 1, "docs/test.md", [], 2)
+
+        # Right half succeeded → partial success
+        assert ok is True
+        assert svc._collection.upsert.call_count == 1
+
+
 class TestGetDocIndexerService:
     """Tests for the singleton factory."""
 
@@ -849,3 +1222,278 @@ class TestGetDocIndexerService:
             assert isinstance(svc, DocIndexerService)
         finally:
             mod._doc_indexer = original
+
+    def test_factory_resolves_llm_service_lazily(self):
+        """Factory calls get_llm_service() when llm_service arg is omitted (#4655)."""
+        import services.knowledge.doc_indexer as mod
+
+        original = mod._doc_indexer
+        mod._doc_indexer = None
+        mock_llm = MagicMock()
+        try:
+            with patch.dict(
+                "sys.modules",
+                {"services.llm_service": MagicMock(get_llm_service=lambda: mock_llm)},
+            ):
+                svc = get_doc_indexer_service()
+            assert svc._llm_service is mock_llm
+        finally:
+            mod._doc_indexer = original
+
+    def test_factory_accepts_explicit_llm_service(self):
+        """Explicit llm_service arg is forwarded to DocIndexerService (#4655)."""
+        import services.knowledge.doc_indexer as mod
+
+        original = mod._doc_indexer
+        mod._doc_indexer = None
+        mock_llm = MagicMock()
+        try:
+            svc = get_doc_indexer_service(llm_service=mock_llm)
+            assert svc._llm_service is mock_llm
+        finally:
+            mod._doc_indexer = original
+
+
+class TestRunKbSynthesis:
+    """Tests for DocIndexerService._run_kb_synthesis → LLM call path (#4655)."""
+
+    @pytest.mark.asyncio
+    async def test_run_kb_synthesis_calls_synthesize_docs_with_llm_service(self):
+        """_run_kb_synthesis passes self._llm_service to get_kb_synthesizer (#4655)."""
+        mock_llm = MagicMock()
+        svc = DocIndexerService.__new__(DocIndexerService)
+        svc._llm_service = mock_llm
+        svc.synthesis_schema = MagicMock()
+        svc.synthesis_schema.collections = []
+
+        mock_synthesizer = MagicMock()
+        mock_synthesizer.synthesize_docs = AsyncMock()
+
+        with patch.dict(
+            "sys.modules",
+            {
+                "services.knowledge.kb_synthesizer": MagicMock(
+                    get_kb_synthesizer=MagicMock(return_value=mock_synthesizer)
+                )
+            },
+        ):
+            await svc._run_kb_synthesis(["/docs/readme.md"])
+
+        mock_synthesizer.synthesize_docs.assert_awaited_once()
+        called_paths = mock_synthesizer.synthesize_docs.call_args[0][0]
+        assert called_paths == ["/docs/readme.md"]
+
+    @pytest.mark.asyncio
+    async def test_calls_synthesizer_with_correct_args(self):
+        """_run_kb_synthesis passes indexed_paths and collection_config to synthesize_docs (#4658)."""
+        from services.knowledge.synthesis_schema_loader import CollectionConfig
+
+        col_cfg = CollectionConfig(name="docs", paths=["docs/"], synthesis_target="", prompt_template="")
+        mock_llm = MagicMock()
+        svc = DocIndexerService.__new__(DocIndexerService)
+        svc._llm_service = mock_llm
+        svc.synthesis_schema = MagicMock()
+        svc.synthesis_schema.collections = [col_cfg]
+
+        mock_synthesizer = MagicMock()
+        mock_synthesizer.synthesize_docs = AsyncMock()
+
+        with patch.dict(
+            "sys.modules",
+            {
+                "services.knowledge.kb_synthesizer": MagicMock(
+                    get_kb_synthesizer=MagicMock(return_value=mock_synthesizer)
+                )
+            },
+        ):
+            await svc._run_kb_synthesis(["docs/README.md"])
+
+        mock_synthesizer.synthesize_docs.assert_awaited_once_with(
+            ["docs/README.md"], collection_config=col_cfg
+        )
+
+    @pytest.mark.asyncio
+    async def test_swallows_exception_silently(self):
+        """_run_kb_synthesis catches and logs exceptions without propagating (#4658)."""
+        mock_llm = MagicMock()
+        svc = DocIndexerService.__new__(DocIndexerService)
+        svc._llm_service = mock_llm
+        svc.synthesis_schema = MagicMock()
+        svc.synthesis_schema.collections = []
+
+        mock_synthesizer = MagicMock()
+        mock_synthesizer.synthesize_docs = AsyncMock(side_effect=Exception("synthesis boom"))
+
+        with patch.dict(
+            "sys.modules",
+            {
+                "services.knowledge.kb_synthesizer": MagicMock(
+                    get_kb_synthesizer=MagicMock(return_value=mock_synthesizer)
+                )
+            },
+        ):
+            result = await svc._run_kb_synthesis(["/docs/foo.md"])
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_passes_none_config_when_no_match(self):
+        """_run_kb_synthesis passes collection_config=None when no collection matches (#4658)."""
+        from services.knowledge.synthesis_schema_loader import CollectionConfig
+
+        col_cfg = CollectionConfig(name="api", paths=["api/"], synthesis_target="", prompt_template="")
+        mock_llm = MagicMock()
+        svc = DocIndexerService.__new__(DocIndexerService)
+        svc._llm_service = mock_llm
+        svc.synthesis_schema = MagicMock()
+        svc.synthesis_schema.collections = [col_cfg]
+
+        mock_synthesizer = MagicMock()
+        mock_synthesizer.synthesize_docs = AsyncMock()
+
+        with patch.dict(
+            "sys.modules",
+            {
+                "services.knowledge.kb_synthesizer": MagicMock(
+                    get_kb_synthesizer=MagicMock(return_value=mock_synthesizer)
+                )
+            },
+        ):
+            await svc._run_kb_synthesis(["docs/README.md"])
+
+        mock_synthesizer.synthesize_docs.assert_awaited_once_with(
+            ["docs/README.md"], collection_config=None
+        )
+
+
+class TestFindCollectionConfig:
+    """Tests for DocIndexerService._find_collection_config (#4658)."""
+
+    def _make_svc(self, collections):
+        from services.knowledge.synthesis_schema_loader import SynthesisSchema
+
+        svc = DocIndexerService.__new__(DocIndexerService)
+        schema = MagicMock(spec=SynthesisSchema)
+        schema.collections = collections
+        svc.synthesis_schema = schema
+        return svc
+
+    def test_returns_matching_config_when_path_prefix_found(self):
+        """Returns the collection whose path prefix is a substring of an indexed path (#4658)."""
+        from services.knowledge.synthesis_schema_loader import CollectionConfig
+
+        col_cfg = CollectionConfig(name="docs", paths=["docs/"], synthesis_target="", prompt_template="")
+        svc = self._make_svc([col_cfg])
+        result = svc._find_collection_config(["docs/README.md"])
+        assert result is col_cfg
+
+    def test_returns_none_when_no_path_matches(self):
+        """Returns None when no collection path is a substring of indexed_paths (#4658)."""
+        from services.knowledge.synthesis_schema_loader import CollectionConfig
+
+        col_cfg = CollectionConfig(name="src", paths=["src/"], synthesis_target="", prompt_template="")
+        svc = self._make_svc([col_cfg])
+        result = svc._find_collection_config(["tests/foo.py"])
+        assert result is None
+
+    def test_returns_none_on_empty_schema(self):
+        """Returns None when synthesis_schema has no collections (#4658)."""
+        svc = self._make_svc([])
+        result = svc._find_collection_config(["docs/README.md"])
+        assert result is None
+
+    def test_returns_first_match_when_multiple_collections(self):
+        """Returns the first matching collection when multiple collections match (#4658)."""
+        from services.knowledge.synthesis_schema_loader import CollectionConfig
+
+        col1 = CollectionConfig(name="docs", paths=["docs/"], synthesis_target="", prompt_template="")
+        col2 = CollectionConfig(name="api", paths=["api/"], synthesis_target="", prompt_template="")
+        svc = self._make_svc([col1, col2])
+        result = svc._find_collection_config(["docs/guide.md", "api/ref.md"])
+        assert result is col1
+
+
+# ---------------------------------------------------------------------------
+# Tests: DocIndexerService.search() — Issue #4953
+# ---------------------------------------------------------------------------
+
+
+class TestDocIndexerSearch:
+    """search() exposes autobot_docs ChromaDB collection for RAGService merging."""
+
+    @pytest.mark.asyncio
+    async def test_search_not_initialized_returns_empty(self):
+        """Returns [] when service is not initialised."""
+        svc = _make_service(initialized=False, collection_count=0)
+        result = await svc.search("what is autobot")
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_search_empty_collection_returns_empty(self):
+        """Returns [] when collection has no documents."""
+        svc = _make_service(initialized=True, collection_count=0)
+        result = await svc.search("what is autobot")
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_search_returns_search_results(self):
+        """Happy path: wraps ChromaDB hits into SearchResult objects."""
+        svc = _make_service(initialized=True, collection_count=3)
+        svc._collection.query = MagicMock(
+            return_value={
+                "documents": [["AutoBot is an AI platform.", "CLI usage guide."]],
+                "metadatas": [
+                    [
+                        {"file_path": "docs/overview.md", "chunk_index": 0},
+                        {"file_path": "docs/cli.md", "chunk_index": 1},
+                    ]
+                ],
+                "distances": [[0.1, 0.3]],
+            }
+        )
+
+        stub_mod = MagicMock()
+        stub_mod.SearchResult = MagicMock(side_effect=lambda **kw: kw)
+
+        with patch.dict("sys.modules", {"advanced_rag_optimizer": stub_mod}):
+            results = await svc.search("what is autobot", n_results=2)
+
+        assert len(results) == 2
+        first = results[0]
+        assert first["content"] == "AutoBot is an AI platform."
+        assert first["semantic_score"] == pytest.approx(0.9)
+        assert first["source_path"] == "docs/overview.md"
+        assert first["metadata"]["source"] == "autobot_docs"
+
+    @pytest.mark.asyncio
+    async def test_search_caps_n_results_to_collection_count(self):
+        """n_results is capped to avoid ChromaDB 'n_results > count' error."""
+        svc = _make_service(initialized=True, collection_count=2)
+        svc._collection.query = MagicMock(
+            return_value={
+                "documents": [["doc1", "doc2"]],
+                "metadatas": [[{"file_path": "a.md"}, {"file_path": "b.md"}]],
+                "distances": [[0.2, 0.4]],
+            }
+        )
+
+        stub_mod = MagicMock()
+        stub_mod.SearchResult = MagicMock(side_effect=lambda **kw: kw)
+        with patch.dict("sys.modules", {"advanced_rag_optimizer": stub_mod}):
+            await svc.search("query", n_results=100)
+
+        call_kwargs = svc._collection.query.call_args[1]
+        assert call_kwargs["n_results"] == 2  # capped to collection count
+
+    @pytest.mark.asyncio
+    async def test_search_exception_returns_empty(self):
+        """query() failure returns [] instead of raising."""
+        svc = _make_service(initialized=True, collection_count=5)
+        svc._collection.query = MagicMock(side_effect=RuntimeError("chromadb unavailable"))
+
+        stub_mod = MagicMock()
+        stub_mod.SearchResult = MagicMock(side_effect=lambda **kw: kw)
+        with patch.dict("sys.modules", {"advanced_rag_optimizer": stub_mod}):
+            result = await svc.search("query")
+
+        assert result == []

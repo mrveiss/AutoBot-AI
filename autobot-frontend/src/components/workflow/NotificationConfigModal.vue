@@ -247,19 +247,19 @@ async function handleSave(): Promise<void> {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
 }
 
 .notif-modal {
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   width: 560px;
   max-width: 95vw;
   max-height: 85vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-lg);
 }
 
 .notif-header {
@@ -271,12 +271,12 @@ async function handleSave(): Promise<void> {
 }
 
 .notif-header h3 {
-  margin: 0;
-  font-size: 16px;
+  margin: var(--spacing-0);
+  font-size: var(--text-base);
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .notif-header h3 i { color: var(--color-primary); }
@@ -287,49 +287,49 @@ async function handleSave(): Promise<void> {
   border: none;
   color: var(--text-tertiary);
   cursor: pointer;
-  border-radius: 4px;
-  font-size: 14px;
+  border-radius: var(--radius-default);
+  font-size: var(--text-sm);
 }
 .btn-close:hover { background: var(--bg-hover); color: var(--text-primary); }
 
 .notif-loading {
-  padding: 48px;
+  padding: var(--spacing-12);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-3);
   color: var(--text-tertiary);
 }
 
 .notif-body {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
+  padding: var(--spacing-5);
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--spacing-5);
 }
 
 .notif-error {
   padding: 10px 14px;
   background: var(--color-error-bg);
   color: var(--color-error);
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .notif-field {
   border: 1px solid var(--border-default);
-  border-radius: 8px;
-  padding: 14px;
-  margin: 0;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-3-5);
+  margin: var(--spacing-0);
 }
 
 .notif-field legend {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
   padding: 0 6px;
@@ -340,44 +340,45 @@ async function handleSave(): Promise<void> {
   padding: 8px 12px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: var(--text-sm);
   outline: none;
 }
 .notif-input:focus { border-color: var(--color-primary); }
+.notif-input:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 
 .tag-input-wrapper {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .tag-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 .tag {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
   padding: 4px 10px;
   background: var(--color-primary-bg);
   color: var(--color-primary);
-  border-radius: 14px;
-  font-size: 12px;
+  border-radius: var(--radius-2xl);
+  font-size: var(--text-xs);
   font-weight: 500;
 }
 
 .tag-remove {
-  padding: 0;
+  padding: var(--spacing-0);
   background: transparent;
   border: none;
   color: inherit;
   cursor: pointer;
-  font-size: 10px;
+  font-size: var(--text-xs);
   opacity: 0.7;
 }
 .tag-remove:hover { opacity: 1; }
@@ -387,43 +388,44 @@ async function handleSave(): Promise<void> {
   padding: 8px 12px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: var(--text-sm);
   outline: none;
 }
 .tag-input:focus { border-color: var(--color-primary); }
+.tag-input:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 
 .field-error {
   margin: 6px 0 0;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-error);
 }
 
 .field-hint {
   margin: 0 0 10px;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
 .channel-grid {
   display: grid;
   grid-template-columns: 1fr repeat(4, 64px);
-  gap: 4px;
+  gap: var(--spacing-1);
   align-items: center;
 }
 
 .channel-header {
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--text-tertiary);
   text-align: center;
   text-transform: uppercase;
-  padding: 4px;
+  padding: var(--spacing-1);
 }
 
 .event-label {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   padding: 6px 4px;
 }
@@ -444,7 +446,7 @@ async function handleSave(): Promise<void> {
 .notif-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  gap: var(--spacing-2-5);
   padding: 14px 20px;
   border-top: 1px solid var(--border-default);
 }
@@ -454,13 +456,13 @@ async function handleSave(): Promise<void> {
   background: var(--color-primary);
   color: white;
   border: none;
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 .btn-primary:hover:not(:disabled) { filter: brightness(1.1); }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -470,8 +472,8 @@ async function handleSave(): Promise<void> {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 .btn-secondary:hover { background: var(--bg-hover); }

@@ -403,7 +403,7 @@ watch(() => props.modelValue, (newValue) => {
 .edit-description {
   color: var(--text-secondary);
   font-size: var(--text-sm);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 /* Selected Preview */
@@ -510,11 +510,16 @@ watch(() => props.modelValue, (newValue) => {
   border-color: var(--color-primary);
   box-shadow: var(--ring-primary);
 }
+.form-select:focus-visible,
+.form-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .form-hint {
   font-size: var(--text-xs);
   color: var(--text-secondary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 /* Existing Tags */

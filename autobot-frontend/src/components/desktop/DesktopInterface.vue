@@ -59,9 +59,17 @@
       <button @click="reconnect" class="control-btn">
         {{ $t('desktop.interface.reconnect') }}
       </button>
+      <button @click="showContextPanel = !showContextPanel" class="control-btn" :title="$t('desktop.contextPanel.title')">
+        ℹ️
+      </button>
       <div class="connection-status">
         <span :class="connectionStatusClass">{{ connectionStatusDisplay }}</span>
       </div>
+    </div>
+
+    <!-- Context Panel (collapsible right-side) -->
+    <div v-if="showContextPanel" class="context-panel-overlay">
+      <DesktopContextPanel />
     </div>
 
     <!-- Desktop Actions Toolbar (Issue #74) -->
@@ -167,6 +175,7 @@ import { useI18n } from 'vue-i18n'
 import appConfig from '@/config/AppConfig.js'
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
 import TouchFriendlyButton from '@/components/ui/TouchFriendlyButton.vue'
+import DesktopContextPanel from '@/components/desktop/DesktopContextPanel.vue'
 import { useAsyncOperation } from '@/composables/useAsyncOperation'
 import { useVncControls } from '@/composables/useVncControls'
 import { createLogger } from '@/utils/debugUtils'
@@ -180,6 +189,7 @@ const { execute: executeCheckConnection, loading: loadingCheck, error: errorChec
 
 // VNC controls (Issue #74)
 const vncControls = useVncControls()
+const showContextPanel = ref(false)
 const showScreenshotModal = ref(false)
 const screenshotData = ref<string | null>(null)
 const textToType = ref('')
@@ -453,6 +463,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
+  position: relative;
   background-color: var(--bg-primary);
 }
 
@@ -493,13 +504,13 @@ onUnmounted(() => {
 
 .control-btn {
   padding: 0.375rem 0.75rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   background-color: var(--bg-secondary);
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background-color 0.15s ease;
+  transition: background-color var(--duration-150) var(--ease-out);
 }
 
 .control-btn:hover {
@@ -507,7 +518,7 @@ onUnmounted(() => {
 }
 
 .connection-status {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
@@ -518,7 +529,7 @@ onUnmounted(() => {
   border-top: 1px solid var(--border-default);
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .actions-label {
@@ -528,19 +539,19 @@ onUnmounted(() => {
 .actions-buttons {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   flex-wrap: wrap;
 }
 
 .action-btn {
   padding: 0.375rem 0.75rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   background-color: var(--color-primary-bg);
   color: var(--color-primary);
   border: 1px solid var(--color-primary-light);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background-color 0.15s ease;
+  transition: background-color var(--duration-150) var(--ease-out);
 }
 
 .action-btn:hover {
@@ -549,7 +560,7 @@ onUnmounted(() => {
 
 /* Touch-friendly button variant for desktop actions */
 .touch-action-btn {
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 /* Screenshot Modal (Issue #74) */
@@ -582,7 +593,7 @@ onUnmounted(() => {
 }
 
 .screenshot-body {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   overflow: auto;
   flex: 1;
 }
@@ -600,7 +611,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .download-btn {
@@ -610,7 +621,7 @@ onUnmounted(() => {
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background-color 0.15s ease;
+  transition: background-color var(--duration-150) var(--ease-out);
 }
 
 .download-btn:hover {
@@ -624,7 +635,7 @@ onUnmounted(() => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background-color 0.15s ease;
+  transition: background-color var(--duration-150) var(--ease-out);
 }
 
 .cancel-btn:hover {
@@ -632,12 +643,12 @@ onUnmounted(() => {
 }
 
 .close-btn {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   color: var(--text-muted);
   background: none;
   border: none;
   cursor: pointer;
-  transition: color 0.15s ease;
+  transition: color var(--duration-150) var(--ease-out);
 }
 
 .close-btn:hover {
@@ -672,7 +683,7 @@ onUnmounted(() => {
 }
 
 .type-dialog-body {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
 }
 
 .type-textarea {
@@ -683,13 +694,17 @@ onUnmounted(() => {
   background-color: var(--bg-secondary);
   color: var(--text-primary);
   resize: none;
-  transition: border-color 0.15s ease;
+  transition: border-color var(--duration-150) var(--ease-out);
 }
 
 .type-textarea:focus {
   outline: none;
   border-color: var(--color-primary);
   box-shadow: 0 0 0 2px var(--color-primary-bg);
+}
+.type-textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .type-dialog-footer {
@@ -698,7 +713,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .type-btn {
@@ -708,7 +723,7 @@ onUnmounted(() => {
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background-color 0.15s ease;
+  transition: background-color var(--duration-150) var(--ease-out);
 }
 
 .type-btn:hover {
@@ -718,5 +733,20 @@ onUnmounted(() => {
 .type-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Context Panel (Issue #4771) */
+.context-panel-overlay {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 20rem;
+  height: 100%;
+  overflow-y: auto;
+  z-index: 10;
+  padding: var(--spacing-4);
+  background-color: var(--bg-card);
+  border-left: 1px solid var(--border-default);
+  box-shadow: var(--shadow-lg, -2px 0 8px rgba(0, 0, 0, 0.15));
 }
 </style>

@@ -769,19 +769,19 @@ function formatTimestamp(timestamp: string): string {
 
 <style scoped>
 .code-intelligence-scores-section {
-  margin-top: 32px;
-  padding: 24px;
+  margin-top: var(--spacing-8);
+  padding: var(--spacing-6);
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
   contain: layout style;}
 
 .code-intelligence-scores-section h3 {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
   color: var(--text-primary);
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-5);
   font-size: 1.2em;
   font-weight: 600;
 }
@@ -794,15 +794,15 @@ function formatTimestamp(timestamp: string): string {
 .scores-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 20px;
+  gap: var(--spacing-5);
 }
 
 .score-card {
   background: rgba(17, 24, 39, 0.6);
-  border-radius: 12px;
-  padding: 20px;
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-5);
   border: 1px solid rgba(71, 85, 105, 0.4);
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .score-card:hover {
@@ -813,8 +813,8 @@ function formatTimestamp(timestamp: string): string {
 .score-card .score-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 16px;
+  gap: var(--spacing-2-5);
+  margin-bottom: var(--spacing-4);
   font-size: 1.1em;
   font-weight: 600;
   color: var(--text-secondary);
@@ -825,11 +825,11 @@ function formatTimestamp(timestamp: string): string {
   padding: 4px 8px;
   background: rgba(59, 130, 246, 0.1);
   border: 1px solid rgba(59, 130, 246, 0.3);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   color: var(--color-info-light);
   cursor: pointer;
   font-size: 0.8em;
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .score-card .score-header .card-refresh-btn:hover:not(:disabled) {
@@ -860,10 +860,10 @@ function formatTimestamp(timestamp: string): string {
 .score-card .score-error {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3);
   background: rgba(239, 68, 68, 0.1);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   color: var(--color-error-light);
   font-size: 0.85em;
 }
@@ -880,17 +880,17 @@ function formatTimestamp(timestamp: string): string {
 .score-card .score-details {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--spacing-2);
   justify-content: center;
-  margin-top: 8px;
+  margin-top: var(--spacing-2);
 }
 
 .score-card .detail-item {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
   padding: 4px 10px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.8em;
 }
 
@@ -920,14 +920,14 @@ function formatTimestamp(timestamp: string): string {
 /* Quality Metrics (#3073) */
 .quality-metrics {
   width: 100%;
-  margin-top: 12px;
+  margin-top: var(--spacing-3);
 }
 
 .quality-metric {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-1-5);
 }
 
 .quality-metric .metric-label {
@@ -941,14 +941,14 @@ function formatTimestamp(timestamp: string): string {
   flex: 1;
   height: 6px;
   background: rgba(71, 85, 105, 0.4);
-  border-radius: 3px;
+  border-radius: var(--radius-default);
   overflow: hidden;
 }
 
 .quality-metric .metric-fill {
   height: 100%;
-  border-radius: 3px;
-  transition: width 0.5s ease;
+  border-radius: var(--radius-default);
+  transition: width var(--duration-500) var(--ease-out);
 }
 
 .quality-metric .metric-fill.score-high { background: var(--chart-green); }
@@ -963,14 +963,14 @@ function formatTimestamp(timestamp: string): string {
 }
 
 .quality-trend {
-  margin-top: 8px;
+  margin-top: var(--spacing-2);
   padding: 4px 12px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.8em;
   font-weight: 500;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .quality-trend.trend-improving {
@@ -990,19 +990,19 @@ function formatTimestamp(timestamp: string): string {
 
 /* Suggestions Section (#3073) */
 .suggestions-section {
-  margin-top: 24px;
-  padding: 20px;
+  margin-top: var(--spacing-6);
+  padding: var(--spacing-5);
   background: rgba(30, 41, 59, 0.4);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.3);
 }
 
 .suggestions-section h4 {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   color: var(--text-primary);
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-4);
   font-size: 1.05em;
   font-weight: 600;
 }
@@ -1012,7 +1012,7 @@ function formatTimestamp(timestamp: string): string {
 .suggestions-count {
   padding: 2px 8px;
   background: rgba(245, 158, 11, 0.2);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   font-size: 0.75em;
   color: var(--color-warning-light);
 }
@@ -1020,13 +1020,13 @@ function formatTimestamp(timestamp: string): string {
 .suggestions-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .suggestion-item {
   padding: 14px 16px;
   background: rgba(17, 24, 39, 0.5);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border-left: 4px solid var(--text-tertiary);
 }
 
@@ -1037,14 +1037,14 @@ function formatTimestamp(timestamp: string): string {
 .suggestion-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-1-5);
 }
 
 .suggestion-type-badge {
   padding: 2px 8px;
   background: rgba(99, 102, 241, 0.2);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.75em;
   color: var(--chart-indigo-light);
   text-transform: capitalize;
@@ -1052,7 +1052,7 @@ function formatTimestamp(timestamp: string): string {
 
 .suggestion-priority {
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.7em;
   font-weight: 600;
   text-transform: uppercase;
@@ -1077,14 +1077,14 @@ function formatTimestamp(timestamp: string): string {
   font-weight: 600;
   color: var(--text-primary);
   font-size: 0.95em;
-  margin-bottom: 4px;
+  margin-bottom: var(--spacing-1);
 }
 
 .suggestion-description {
   color: var(--text-secondary);
   font-size: 0.85em;
   line-height: 1.5;
-  margin-bottom: 6px;
+  margin-bottom: var(--spacing-1-5);
 }
 
 .suggestion-impact {
@@ -1094,24 +1094,24 @@ function formatTimestamp(timestamp: string): string {
 
 .suggestion-impact i {
   color: var(--chart-green);
-  margin-right: 4px;
+  margin-right: var(--spacing-1);
 }
 
 /* Analysis History Section (#3073) */
 .analysis-history-section {
-  margin-top: 24px;
-  padding: 20px;
+  margin-top: var(--spacing-6);
+  padding: var(--spacing-5);
   background: rgba(30, 41, 59, 0.4);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.3);
 }
 
 .analysis-history-section h4 {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   color: var(--text-primary);
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-4);
   font-size: 1.05em;
   font-weight: 600;
 }
@@ -1121,7 +1121,7 @@ function formatTimestamp(timestamp: string): string {
 .history-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
   max-height: 300px;
   overflow-y: auto;
 }
@@ -1129,11 +1129,11 @@ function formatTimestamp(timestamp: string): string {
 .history-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-3);
   padding: 10px 14px;
   background: rgba(17, 24, 39, 0.5);
-  border-radius: 6px;
-  transition: background 0.2s ease;
+  border-radius: var(--radius-md);
+  transition: background var(--duration-200) var(--ease-out);
 }
 
 .history-item:hover {
@@ -1144,7 +1144,7 @@ function formatTimestamp(timestamp: string): string {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--spacing-0-5);
 }
 
 .history-language {
@@ -1180,20 +1180,20 @@ function formatTimestamp(timestamp: string): string {
 /* View Details Button */
 .view-details-btn {
   width: 100%;
-  margin-top: 12px;
+  margin-top: var(--spacing-3);
   padding: 8px 16px;
   background: rgba(99, 102, 241, 0.2);
   border: 1px solid rgba(99, 102, 241, 0.4);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--chart-indigo-light);
   font-size: 0.85em;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 .view-details-btn:hover:not(:disabled) {
@@ -1209,9 +1209,9 @@ function formatTimestamp(timestamp: string): string {
 
 /* Findings Panel Styles */
 .findings-panel {
-  margin-top: 16px;
+  margin-top: var(--spacing-4);
   background: rgba(30, 41, 59, 0.6);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
   overflow: hidden;
   animation: slideDown 0.3s ease-out;
@@ -1240,10 +1240,10 @@ function formatTimestamp(timestamp: string): string {
 }
 
 .findings-header h4 {
-  margin: 0;
+  margin: var(--spacing-0);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   color: var(--text-primary);
   font-size: 1.1em;
   font-weight: 600;
@@ -1256,7 +1256,7 @@ function formatTimestamp(timestamp: string): string {
 .findings-count {
   padding: 4px 12px;
   background: rgba(71, 85, 105, 0.5);
-  border-radius: 20px;
+  border-radius: var(--radius-2xl);
   color: var(--text-muted);
   font-size: 0.85em;
   font-weight: 500;
@@ -1267,7 +1267,7 @@ function formatTimestamp(timestamp: string): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
   padding: 40px 20px;
   color: var(--text-muted);
   font-size: 0.95em;
@@ -1279,21 +1279,21 @@ function formatTimestamp(timestamp: string): string {
 }
 
 .findings-list {
-  padding: 12px;
+  padding: var(--spacing-3);
   max-height: 500px;
   overflow-y: auto;
 }
 
 .finding-item {
   background: rgba(15, 23, 42, 0.6);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 14px 16px;
-  margin-bottom: 10px;
+  margin-bottom: var(--spacing-2-5);
   border-left: 4px solid var(--text-tertiary);
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
-.finding-item:last-child { margin-bottom: 0; }
+.finding-item:last-child { margin-bottom: var(--spacing-0); }
 .finding-item:hover { background: rgba(15, 23, 42, 0.8); }
 
 .finding-item.severity-critical {
@@ -1324,14 +1324,14 @@ function formatTimestamp(timestamp: string): string {
 .finding-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: var(--spacing-2-5);
+  margin-bottom: var(--spacing-2);
   flex-wrap: wrap;
 }
 
 .finding-severity {
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.75em;
   font-weight: 600;
   text-transform: uppercase;
@@ -1372,7 +1372,7 @@ function formatTimestamp(timestamp: string): string {
 .finding-category {
   padding: 2px 8px;
   background: rgba(71, 85, 105, 0.5);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.75em;
   color: var(--text-muted);
 }
@@ -1381,13 +1381,13 @@ function formatTimestamp(timestamp: string): string {
   color: var(--text-secondary);
   font-size: 0.9em;
   line-height: 1.5;
-  margin-bottom: 10px;
+  margin-bottom: var(--spacing-2-5);
 }
 
 .finding-location {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
   color: var(--text-tertiary);
   font-size: 0.85em;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
@@ -1401,10 +1401,10 @@ function formatTimestamp(timestamp: string): string {
 }
 
 .finding-recommendation {
-  margin-top: 10px;
+  margin-top: var(--spacing-2-5);
   padding: 10px 12px;
   background: rgba(34, 197, 94, 0.1);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border-left: 3px solid var(--chart-green);
   color: var(--color-success-light);
   font-size: 0.85em;
@@ -1413,17 +1413,17 @@ function formatTimestamp(timestamp: string): string {
 
 .finding-recommendation i {
   color: var(--chart-green);
-  margin-right: 6px;
+  margin-right: var(--spacing-1-5);
 }
 
 .finding-owasp {
-  margin-top: 8px;
+  margin-top: var(--spacing-2);
   color: var(--text-muted);
   font-size: 0.8em;
 }
 
 .finding-owasp i {
   color: var(--chart-orange);
-  margin-right: 4px;
+  margin-right: var(--spacing-1);
 }
 </style>

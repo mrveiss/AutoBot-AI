@@ -368,11 +368,11 @@ function resetEdit(): void {
   gap: var(--spacing-2, 0.5rem);
   font-weight: var(--font-semibold, 600);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .progress-percent {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   font-weight: var(--font-medium, 500);
 }
@@ -380,20 +380,20 @@ function resetEdit(): void {
 .progress-bar {
   height: 0.375rem;
   background: var(--bg-tertiary, #374151);
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
   background: var(--color-info, #3b82f6);
-  border-radius: 9999px;
-  transition: width 0.3s ease;
+  border-radius: var(--radius-full);
+  transition: width var(--duration-300) var(--ease-out);
 }
 
 /* Step Detail */
 .step-description {
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: var(--font-semibold, 600);
   color: var(--text-primary);
   margin: 0 0 var(--spacing-2, 0.5rem) 0;
@@ -401,8 +401,8 @@ function resetEdit(): void {
 
 .step-explanation {
   color: var(--text-secondary);
-  font-size: 0.875rem;
-  margin: 0;
+  font-size: var(--text-sm);
+  margin: var(--spacing-0);
   line-height: 1.5;
 }
 
@@ -420,7 +420,7 @@ function resetEdit(): void {
   gap: var(--spacing-2, 0.5rem);
   padding: var(--spacing-2, 0.5rem) var(--spacing-3, 0.75rem);
   background: var(--bg-tertiary, #374151);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: var(--font-medium, 500);
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -431,7 +431,7 @@ function resetEdit(): void {
   display: block;
   padding: var(--spacing-3, 0.75rem);
   font-family: var(--font-mono, monospace);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--color-success, #10b981);
   word-break: break-all;
   white-space: pre-wrap;
@@ -441,11 +441,11 @@ function resetEdit(): void {
 .modified-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
   padding: 0.125rem 0.5rem;
   background: var(--color-warning-bg, rgba(245, 158, 11, 0.15));
   color: var(--color-warning, #f59e0b);
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   font-size: 0.6875rem;
   font-weight: var(--font-medium, 500);
   text-transform: none;
@@ -457,7 +457,7 @@ function resetEdit(): void {
   margin-left: auto;
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
   padding: 0.125rem 0.5rem;
   background: transparent;
   border: 1px solid var(--border-default);
@@ -468,7 +468,7 @@ function resetEdit(): void {
   text-transform: none;
   letter-spacing: 0;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color var(--duration-150), border-color var(--duration-150);
 }
 
 .edit-trigger:hover {
@@ -487,7 +487,7 @@ function resetEdit(): void {
 }
 
 .edit-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: var(--font-medium, 500);
   color: var(--text-secondary);
 }
@@ -495,7 +495,7 @@ function resetEdit(): void {
 .edit-textarea {
   width: 100%;
   font-family: var(--font-mono, monospace);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-primary);
   background: var(--bg-terminal, #1a1b26);
   border: 1px solid var(--border-default);
@@ -511,6 +511,10 @@ function resetEdit(): void {
   border-color: var(--color-info, #3b82f6);
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
 }
+.edit-textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .edit-error {
   display: flex;
@@ -518,7 +522,7 @@ function resetEdit(): void {
   gap: var(--spacing-1, 0.25rem);
   font-size: 0.8125rem;
   color: var(--color-danger, #ef4444);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .edit-actions {
@@ -530,14 +534,14 @@ function resetEdit(): void {
 .edit-action-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
   padding: 0.3125rem 0.75rem;
   border-radius: var(--radius-sm, 0.25rem);
   font-size: 0.8125rem;
   font-weight: var(--font-medium, 500);
   cursor: pointer;
   border: 1px solid transparent;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--duration-150), color var(--duration-150);
 }
 
 .edit-action-cancel {
@@ -580,12 +584,12 @@ function resetEdit(): void {
 .guide-title {
   margin: 0 0 var(--spacing-2, 0.5rem) 0;
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .guide-list {
-  margin: 0;
-  padding-left: 1.25rem;
+  margin: var(--spacing-0);
+  padding-left: var(--spacing-5);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-1, 0.25rem);

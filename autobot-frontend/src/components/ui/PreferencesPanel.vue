@@ -215,7 +215,7 @@ function handleReset() {
   position: absolute;
   width: 1px;
   height: 1px;
-  padding: 0;
+  padding: var(--spacing-0);
   margin: -1px;
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
@@ -243,7 +243,7 @@ function handleReset() {
   font-size: var(--font-size-lg);
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .panel-title i {
@@ -295,8 +295,8 @@ function handleReset() {
   flex-direction: column;
   gap: var(--spacing-md);
   border: none;
-  padding: 0;
-  margin: 0;
+  padding: var(--spacing-0);
+  margin: var(--spacing-0);
 }
 
 .preference-label {

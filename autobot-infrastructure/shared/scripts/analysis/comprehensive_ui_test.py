@@ -23,7 +23,9 @@ from datetime import datetime
 from pathlib import Path
 
 # Add project root to path
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+
+from autobot_shared.network_constants import ServiceURLs
 
 # Import Puppeteer MCP tools
 try:
@@ -48,13 +50,13 @@ class ComprehensiveUITester:
     def __init__(self):
         self.results = UITestResult()
         self.test_urls = [
-            "ServiceURLs.FRONTEND_LOCAL/",
-            "ServiceURLs.FRONTEND_LOCAL/dashboard",
-            "ServiceURLs.FRONTEND_LOCAL/chat",
-            "ServiceURLs.FRONTEND_LOCAL/knowledge",
-            "ServiceURLs.FRONTEND_LOCAL/tools",
-            "ServiceURLs.FRONTEND_LOCAL/monitoring",
-            "ServiceURLs.FRONTEND_LOCAL/settings",
+            f"{ServiceURLs.FRONTEND_LOCAL}/",
+            f"{ServiceURLs.FRONTEND_LOCAL}/dashboard",
+            f"{ServiceURLs.FRONTEND_LOCAL}/chat",
+            f"{ServiceURLs.FRONTEND_LOCAL}/knowledge",
+            f"{ServiceURLs.FRONTEND_LOCAL}/tools",
+            f"{ServiceURLs.FRONTEND_LOCAL}/monitoring",
+            f"{ServiceURLs.FRONTEND_LOCAL}/settings",
         ]
         self.console_messages = []
 

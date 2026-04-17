@@ -1105,11 +1105,11 @@ watch(() => props.mode, () => {
 /* Header */
 .browser-header {
   background: var(--bg-card);
-  padding: 1rem;
+  padding: var(--spacing-4);
   border-bottom: 2px solid var(--border-default);
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--spacing-4);
   flex-wrap: wrap;
 }
 
@@ -1117,7 +1117,7 @@ watch(() => props.mode, () => {
 .category-tabs-container {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   flex: 1;
   min-width: 0;
 }
@@ -1125,10 +1125,10 @@ watch(() => props.mode, () => {
 /* Category Tabs */
 .category-tabs {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   overflow-x: auto;
   flex: 0 0 auto;
-  padding-bottom: 0.25rem;
+  padding-bottom: var(--spacing-1);
   scrollbar-width: thin;
   scrollbar-color: var(--color-primary-alpha-30) transparent;
 }
@@ -1143,12 +1143,12 @@ watch(() => props.mode, () => {
 
 .category-tabs::-webkit-scrollbar-thumb {
   background: var(--color-primary-alpha-30);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 
 .category-tab {
   white-space: nowrap;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-250) var(--ease-in-out);
   position: relative;
 }
 
@@ -1157,8 +1157,8 @@ watch(() => props.mode, () => {
 }
 
 .category-tab-icon {
-  margin-right: 0.25rem;
-  transition: transform 0.2s ease;
+  margin-right: var(--spacing-1);
+  transition: transform var(--duration-200) var(--ease-out);
 }
 
 .category-tab:hover .category-tab-icon {
@@ -1166,7 +1166,7 @@ watch(() => props.mode, () => {
 }
 
 .category-tab-label {
-  transition: color 0.2s ease;
+  transition: color var(--duration-200) var(--ease-out);
 }
 
 .category-count {
@@ -1177,11 +1177,11 @@ watch(() => props.mode, () => {
   height: 1.25rem;
   padding: 0 0.375rem;
   background: rgba(0, 0, 0, 0.1);
-  border-radius: 0.625rem;
-  font-size: 0.75rem;
+  border-radius: var(--radius-xl);
+  font-size: var(--text-xs);
   font-weight: 600;
-  margin-left: 0.375rem;
-  transition: all 0.2s ease;
+  margin-left: var(--spacing-1-5);
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .category-count-active {
@@ -1192,11 +1192,11 @@ watch(() => props.mode, () => {
 .active-filter-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   padding: 0.375rem 0.75rem;
   background: var(--color-primary-bg);
   border: 1px solid var(--color-primary-light);
-  border-radius: 1rem;
+  border-radius: var(--radius-2xl);
   font-size: 0.8125rem;
   color: var(--color-primary-dark);
   font-weight: 500;
@@ -1205,7 +1205,7 @@ watch(() => props.mode, () => {
 
 .active-filter-badge i.fa-filter {
   color: var(--color-primary);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .clear-filter-btn {
@@ -1214,13 +1214,13 @@ watch(() => props.mode, () => {
   justify-content: center;
   width: 1.25rem;
   height: 1.25rem;
-  padding: 0;
+  padding: var(--spacing-0);
   background: transparent;
   border: none;
   border-radius: 50%;
   color: var(--text-tertiary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .clear-filter-btn:hover {
@@ -1231,7 +1231,7 @@ watch(() => props.mode, () => {
 /* Category tab transitions */
 .category-tab-enter-active,
 .category-tab-leave-active {
-  transition: all 0.3s ease;
+  transition: all var(--duration-300) var(--ease-out);
 }
 
 .category-tab-enter-from {
@@ -1245,13 +1245,13 @@ watch(() => props.mode, () => {
 }
 
 .category-tab-move {
-  transition: transform 0.3s ease;
+  transition: transform var(--duration-300) var(--ease-out);
 }
 
 /* Fade transition for filter badge */
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: opacity var(--duration-200) var(--ease-out), transform var(--duration-200) var(--ease-out);
 }
 
 .fade-enter-from,
@@ -1264,13 +1264,13 @@ watch(() => props.mode, () => {
 .refresh-status-btn {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--spacing-1-5);
   white-space: nowrap;
   flex-shrink: 0;
 }
 
 .refresh-status-btn i {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 /* Batch Toolbar */
@@ -1295,18 +1295,18 @@ watch(() => props.mode, () => {
 .toolbar-info {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   color: var(--bg-card);
   font-weight: 500;
 }
 
 .toolbar-info i {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
 }
 
 .toolbar-actions {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 /* Toolbar button custom styling */
@@ -1323,7 +1323,7 @@ watch(() => props.mode, () => {
 
 .slide-down-enter-active,
 .slide-down-leave-active {
-  transition: all 0.3s ease;
+  transition: all var(--duration-300) var(--ease-out);
 }
 
 .slide-down-enter-from,
@@ -1352,15 +1352,19 @@ watch(() => props.mode, () => {
   width: 100%;
   padding: 0.625rem 2.5rem 0.625rem 2.5rem;
   border: 1px solid var(--border-light);
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
-  transition: all 0.2s;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+  transition: all var(--duration-200);
 }
 
 .search-input:focus {
   outline: none;
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px var(--color-primary-alpha-10);
+}
+.search-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .clear-btn {
@@ -1372,11 +1376,11 @@ watch(() => props.mode, () => {
 .breadcrumb {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   padding: 0.75rem 1.5rem;
   background: var(--bg-card);
   border-bottom: 1px solid var(--border-default);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .breadcrumb-item.active {
@@ -1386,7 +1390,7 @@ watch(() => props.mode, () => {
 
 .breadcrumb-sep {
   color: var(--border-light);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 /* Split pane layout */
@@ -1395,7 +1399,7 @@ watch(() => props.mode, () => {
   grid-template-columns: 30% 70%;
   flex: 1;
   overflow: hidden;
-  gap: 0;
+  gap: var(--spacing-0);
 }
 
 .tree-pane {
@@ -1412,29 +1416,29 @@ watch(() => props.mode, () => {
 
 /* Tree container */
 .tree-container {
-  padding: 0.5rem;
+  padding: var(--spacing-2);
 }
 
 /* Load More button container */
 .load-more-container {
   display: flex;
   justify-content: center;
-  padding: 1rem;
-  margin-top: 0.5rem;
+  padding: var(--spacing-4);
+  margin-top: var(--spacing-2);
 }
 
 .loading-more {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  padding: 1rem;
+  gap: var(--spacing-2);
+  padding: var(--spacing-4);
   color: var(--text-tertiary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .loading-more i {
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 
 /* States */
@@ -1453,8 +1457,8 @@ watch(() => props.mode, () => {
 .loading-state i,
 .error-state i,
 .placeholder-state i {
-  font-size: 3rem;
-  margin-bottom: 1rem;
+  font-size: var(--text-5xl);
+  margin-bottom: var(--spacing-4);
   opacity: 0.5;
 }
 
@@ -1463,7 +1467,7 @@ watch(() => props.mode, () => {
 }
 
 .retry-btn {
-  margin-top: 1rem;
+  margin-top: var(--spacing-4);
 }
 
 /* File viewer */
@@ -1477,7 +1481,7 @@ watch(() => props.mode, () => {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   background: var(--bg-card);
   border-bottom: 2px solid var(--border-default);
 }
@@ -1485,25 +1489,25 @@ watch(() => props.mode, () => {
 .file-info {
   display: flex;
   align-items: flex-start;
-  gap: 1rem;
+  gap: var(--spacing-4);
   flex: 1;
 }
 
 .file-info > i {
   font-size: 2rem;
   color: var(--color-primary);
-  margin-top: 0.25rem;
+  margin-top: var(--spacing-1);
 }
 
 .file-info h4 {
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--spacing-1);
 }
 
 .file-meta {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -1519,9 +1523,9 @@ watch(() => props.mode, () => {
   flex: 1;
   overflow-y: auto;
   background: var(--bg-card);
-  margin: 1rem;
-  border-radius: 0.5rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin: var(--spacing-4);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 .loading-content,
@@ -1530,7 +1534,7 @@ watch(() => props.mode, () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 3rem;
+  padding: var(--spacing-12);
   color: var(--text-tertiary);
 }
 
@@ -1539,14 +1543,14 @@ watch(() => props.mode, () => {
 }
 
 .content-display {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   line-height: 1.6;
   color: var(--text-primary);
   white-space: pre-wrap;
   word-wrap: break-word;
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 /* Scrollbar styling */
@@ -1563,7 +1567,7 @@ watch(() => props.mode, () => {
 .tree-pane::-webkit-scrollbar-thumb,
 .content-pane::-webkit-scrollbar-thumb {
   background: var(--border-secondary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 .tree-pane::-webkit-scrollbar-thumb:hover,

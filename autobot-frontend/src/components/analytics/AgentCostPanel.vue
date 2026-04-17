@@ -253,7 +253,7 @@ defineExpose({ fetchAgentCosts })
 }
 
 .section-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-primary);
   font-size: var(--text-lg);
   font-weight: var(--font-semibold);
@@ -444,6 +444,10 @@ defineExpose({ fetchAgentCosts })
 .budget-input:focus {
   outline: none;
   border-color: var(--color-primary);
+}
+.budget-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .budget-dialog-actions {

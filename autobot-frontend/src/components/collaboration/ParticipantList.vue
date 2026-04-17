@@ -363,11 +363,11 @@ watch(
 <style scoped>
 /* Participant animations */
 .participant-enter-active {
-  transition: all 0.3s ease-out;
+  transition: all var(--duration-300) var(--ease-out);
 }
 
 .participant-leave-active {
-  transition: all 0.2s ease-in;
+  transition: all var(--duration-200) var(--ease-in);
 }
 
 .participant-enter-from {
@@ -381,7 +381,7 @@ watch(
 }
 
 .participant-move {
-  transition: transform 0.3s ease;
+  transition: transform var(--duration-300) var(--ease-out);
 }
 
 /* Custom scrollbar */
@@ -395,7 +395,7 @@ watch(
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background: rgba(156, 163, 175, 0.3);
-  border-radius: 3px;
+  border-radius: var(--radius-default);
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {

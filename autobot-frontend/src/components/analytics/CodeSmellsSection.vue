@@ -364,7 +364,7 @@ const getItemSeverityClass = (severity: string): string => {
 .item-severity {
   padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-sm);
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-weight: var(--font-semibold);
   text-transform: uppercase;
 }
@@ -429,8 +429,8 @@ const getItemSeverityClass = (severity: string): string => {
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 4px;
-  transition: all 0.15s ease;
+  gap: var(--spacing-1);
+  transition: all var(--duration-150) var(--ease-out);
 }
 
 .export-btn:hover {

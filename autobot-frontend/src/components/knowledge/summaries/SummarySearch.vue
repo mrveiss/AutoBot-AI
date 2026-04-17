@@ -200,7 +200,7 @@ async function handleSearch(): Promise<void> {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .search-header h4 i {
@@ -241,6 +241,11 @@ async function handleSearch(): Promise<void> {
   color: var(--text-primary);
   font-size: var(--text-sm);
   outline: none;
+}
+
+.search-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .search-input::placeholder {

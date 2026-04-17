@@ -330,7 +330,7 @@ onUnmounted(() => {
 .workflow-live-dashboard {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--spacing-5);
   height: 100%;
   overflow-y: auto;
 }
@@ -339,10 +339,10 @@ onUnmounted(() => {
 .connection-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   padding: 8px 14px;
-  border-radius: 8px;
-  font-size: 13px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
@@ -369,13 +369,13 @@ onUnmounted(() => {
   padding: 4px 12px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: var(--text-xs);
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 .btn-reconnect:hover:not(:disabled) {
@@ -390,24 +390,24 @@ onUnmounted(() => {
 /* Stats Bar */
 .stats-bar {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
   flex-wrap: wrap;
 }
 
 .stat-chip {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   padding: 10px 16px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   flex: 1;
   min-width: 140px;
 }
 
 .stat-chip i {
-  font-size: 16px;
+  font-size: var(--text-base);
   color: var(--text-secondary);
 }
 
@@ -417,13 +417,13 @@ onUnmounted(() => {
 .stat-chip:nth-child(4) i { color: var(--color-error); }
 
 .stat-value {
-  font-size: 18px;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .stat-label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -432,16 +432,16 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-4);
 }
 
 .section-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: 15px;
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .section-header h3 i {
@@ -453,7 +453,7 @@ onUnmounted(() => {
   height: 32px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-secondary);
   cursor: pointer;
   display: flex;
@@ -486,7 +486,7 @@ onUnmounted(() => {
 .empty-state i,
 .loading-state i {
   font-size: 40px;
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
 }
 
 .empty-state h4 {
@@ -496,33 +496,33 @@ onUnmounted(() => {
 }
 
 .empty-state p {
-  margin: 0;
-  font-size: 13px;
+  margin: var(--spacing-0);
+  font-size: var(--text-sm);
 }
 
 /* Execution Grid */
 .execution-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 /* Execution Card */
 .execution-card {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   padding: 18px;
   cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: border-color var(--duration-200), box-shadow var(--duration-200);
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--spacing-3-5);
 }
 
 .execution-card:hover {
   border-color: var(--color-primary);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-sm);
 }
 
 .execution-card.card-running { border-left: 3px solid var(--color-success); }
@@ -534,18 +534,18 @@ onUnmounted(() => {
 .card-header {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .card-title-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .card-name {
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
   overflow: hidden;
@@ -555,7 +555,7 @@ onUnmounted(() => {
 }
 
 .card-desc {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -566,10 +566,10 @@ onUnmounted(() => {
 .status-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
   padding: 3px 10px;
-  border-radius: 12px;
-  font-size: 11px;
+  border-radius: var(--radius-xl);
+  font-size: var(--text-xs);
   font-weight: 500;
   white-space: nowrap;
   flex-shrink: 0;
@@ -586,20 +586,20 @@ onUnmounted(() => {
 .card-progress {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 .progress-track {
   height: 6px;
   background: var(--bg-tertiary);
-  border-radius: 3px;
+  border-radius: var(--radius-default);
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  border-radius: 3px;
-  transition: width 0.4s ease;
+  border-radius: var(--radius-default);
+  transition: width 0.4s var(--ease-out);
 }
 
 .progress-active { background: var(--color-success); }
@@ -610,7 +610,7 @@ onUnmounted(() => {
 .progress-meta {
   display: flex;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -618,7 +618,7 @@ onUnmounted(() => {
 .step-timeline {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
   flex-wrap: wrap;
 }
 
@@ -629,7 +629,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
+  font-size: var(--text-xs);
   border: 2px solid var(--border-default);
   background: var(--bg-tertiary);
   color: var(--text-tertiary);
@@ -672,9 +672,9 @@ onUnmounted(() => {
 }
 
 .timeline-overflow {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
-  padding-left: 4px;
+  padding-left: var(--spacing-1);
 }
 
 /* Card Footer */
@@ -682,23 +682,23 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .footer-meta {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .mode-tag,
 .phase-tag {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
   padding: 2px 8px;
   background: var(--bg-tertiary);
-  border-radius: 4px;
-  font-size: 11px;
+  border-radius: var(--radius-default);
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   text-transform: capitalize;
 }
@@ -706,8 +706,8 @@ onUnmounted(() => {
 .footer-time {
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 12px;
+  gap: var(--spacing-1);
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 </style>

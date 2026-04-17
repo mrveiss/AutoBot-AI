@@ -94,11 +94,12 @@ def test_hash_different_non_serializable_types_differ():
 # ---------------------------------------------------------------------------
 
 
-def test_hash_none_vs_empty_string_differ():
-    """None args and empty-string args must produce distinct hashes."""
-    h_none = AgentLoop._compute_tool_call_hash(_make_tool("t", None))
+def test_hash_no_args_vs_empty_string_differ():
+    """A tool with no args key and one with args='' must produce distinct hashes."""
+    # _make_tool("t", None) drops None args key → produces {"tool_name": "t"} (no args key)
+    h_no_args = AgentLoop._compute_tool_call_hash(_make_tool("t", None))
     h_str = AgentLoop._compute_tool_call_hash(_make_tool("t", ""))
-    assert h_none != h_str
+    assert h_no_args != h_str
 
 
 def test_hash_string_args_preserved():
@@ -118,7 +119,7 @@ def test_hash_int_args_vs_string_args_differ():
 def test_hash_missing_args_vs_none_differ():
     """A tool with no args key and one with args=None must hash differently."""
     tool_no_args = {"tool_name": "t"}  # no "args" key at all — falls back to {}
-    tool_none = _make_tool("t", None)
+    tool_none = {"tool_name": "t", "args": None}  # explicit None; _make_tool drops None args
     h_no_args = AgentLoop._compute_tool_call_hash(tool_no_args)
     h_none = AgentLoop._compute_tool_call_hash(tool_none)
     assert h_no_args != h_none
@@ -149,7 +150,7 @@ def test_halted_on_repetition_flag_set():
     h = AgentLoop._compute_tool_call_hash(tool)
     loop._current_context.tool_call_hashes[h] = 2  # already at threshold
 
-    result = asyncio.get_event_loop().run_until_complete(loop._execute_tools([tool]))
+    result = asyncio.run(loop._execute_tools([tool]))
 
     assert loop._halted_on_repetition is True
     assert "bash" in result
@@ -192,6 +193,7 @@ def test_loop_stops_after_repetition_halt():
         think_on_completion=False,
         mandatory_think_enabled=False,
         log_iterations=False,
+        require_approval_for_sensitive=False,  # disable approval gate — test focuses on repetition
     )
     loop = AgentLoop(event_stream=event_stream, config=config)
 
@@ -212,7 +214,7 @@ def test_loop_stops_after_repetition_halt():
         loop._think_before_tools = AsyncMock()  # type: ignore[method-assign]
         return await loop._execute_main_loop()
 
-    results = asyncio.get_event_loop().run_until_complete(run())
+    results = asyncio.run(run())
 
     # Halt fires on iteration 2; the loop breaks inside _execute_main_loop
     # because result.should_continue is False (error in tool_results) OR

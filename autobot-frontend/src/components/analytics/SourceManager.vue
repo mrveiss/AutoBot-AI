@@ -410,7 +410,7 @@ defineExpose({ loadSources })
   position: fixed;
   inset: 0;
   background: var(--bg-overlay-dark);
-  z-index: 1000;
+  z-index: var(--z-modal);
   display: flex;
   align-items: flex-start;
   justify-content: flex-end;
@@ -541,7 +541,7 @@ defineExpose({ loadSources })
 }
 
 .panel-empty p {
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .panel-empty-hint {
@@ -686,7 +686,7 @@ defineExpose({ loadSources })
   border-radius: var(--radius-full);
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
   text-transform: capitalize;
 }
 

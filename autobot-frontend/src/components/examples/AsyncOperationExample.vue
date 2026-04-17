@@ -780,9 +780,9 @@ const loadAnalytics = () => analytics.execute(async () => {
 
 .example-card {
   background: var(--bg-card);
-  border-radius: 8px;
-  padding: 24px;
-  margin-bottom: 24px;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-6);
+  margin-bottom: var(--spacing-6);
   box-shadow: var(--shadow-sm);
 }
 
@@ -790,13 +790,13 @@ const loadAnalytics = () => analytics.execute(async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 16px;
+  margin-bottom: var(--spacing-4);
+  padding-bottom: var(--spacing-4);
   border-bottom: 2px solid var(--border-default);
 }
 
 .example-title {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 600;
   color: var(--color-primary-dark);
 }
@@ -805,18 +805,18 @@ const loadAnalytics = () => analytics.execute(async () => {
   background: var(--color-success);
   color: var(--text-on-primary);
   padding: 4px 12px;
-  border-radius: 16px;
-  font-size: 0.875rem;
+  border-radius: var(--radius-2xl);
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
 .example-description {
   color: var(--text-tertiary);
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-5);
 }
 
 .example-content {
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-5);
 }
 
 /* Buttons */
@@ -824,12 +824,12 @@ const loadAnalytics = () => analytics.execute(async () => {
   background: var(--color-primary);
   color: var(--text-on-primary);
   padding: 10px 20px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-weight: 500;
   border: none;
   cursor: pointer;
-  transition: all 0.2s;
-  margin-right: 8px;
+  transition: all var(--duration-200);
+  margin-right: var(--spacing-2);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -845,11 +845,11 @@ const loadAnalytics = () => analytics.execute(async () => {
   background: var(--text-tertiary);
   color: var(--text-on-primary);
   padding: 8px 16px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-weight: 500;
   border: none;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .btn-secondary:hover {
@@ -860,12 +860,12 @@ const loadAnalytics = () => analytics.execute(async () => {
 .loading-indicator {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4);
   background: var(--color-info-bg);
   border: 1px solid var(--color-info-light);
-  border-radius: 6px;
-  margin-top: 12px;
+  border-radius: var(--radius-md);
+  margin-top: var(--spacing-3);
   color: var(--color-info-dark);
 }
 
@@ -884,30 +884,30 @@ const loadAnalytics = () => analytics.execute(async () => {
 
 /* Error Messages */
 .error-message {
-  padding: 16px;
+  padding: var(--spacing-4);
   background: var(--color-error-bg);
   border: 1px solid var(--color-error-light);
-  border-radius: 6px;
-  margin-top: 12px;
+  border-radius: var(--radius-md);
+  margin-top: var(--spacing-3);
   color: var(--color-error-dark);
 }
 
 /* Success Messages */
 .success-message {
-  padding: 16px;
+  padding: var(--spacing-4);
   background: var(--color-success-bg);
   border: 1px solid var(--color-success-light);
-  border-radius: 6px;
-  margin-top: 12px;
+  border-radius: var(--radius-md);
+  margin-top: var(--spacing-3);
   color: var(--color-success-dark);
 }
 
 .success-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   font-weight: 500;
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
 }
 
 .success-icon {
@@ -919,28 +919,28 @@ const loadAnalytics = () => analytics.execute(async () => {
 .data-display {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
-  padding: 12px;
-  margin-top: 12px;
+  border-radius: var(--radius-md);
+  padding: var(--spacing-3);
+  margin-top: var(--spacing-3);
   overflow-x: auto;
 }
 
 .data-display pre {
-  margin: 0;
-  font-size: 0.875rem;
+  margin: var(--spacing-0);
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
 /* Form Elements */
 .form-group {
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-4);
 }
 
 .form-group label {
   display: block;
   font-weight: 500;
   color: var(--text-secondary);
-  margin-bottom: 6px;
+  margin-bottom: var(--spacing-1-5);
 }
 
 .form-input {
@@ -948,15 +948,19 @@ const loadAnalytics = () => analytics.execute(async () => {
   max-width: 400px;
   padding: 8px 12px;
   border: 1px solid var(--border-light);
-  border-radius: 6px;
-  font-size: 1rem;
-  transition: border-color 0.2s;
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  transition: border-color var(--duration-200);
 }
 
 .form-input:focus {
   outline: none;
   border-color: var(--color-primary);
   box-shadow: var(--shadow-focus);
+}
+.form-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* Notifications */
@@ -965,11 +969,11 @@ const loadAnalytics = () => analytics.execute(async () => {
   top: 20px;
   right: 20px;
   padding: 16px 24px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-weight: 500;
   box-shadow: var(--shadow-lg);
   animation: slideIn 0.3s ease;
-  z-index: 1000;
+  z-index: var(--z-modal);
 }
 
 .notification-toast.success {
@@ -990,11 +994,11 @@ const loadAnalytics = () => analytics.execute(async () => {
 
 /* Error Log */
 .error-log {
-  margin-top: 16px;
-  padding: 16px;
+  margin-top: var(--spacing-4);
+  padding: var(--spacing-4);
   background: var(--color-error-bg);
   border: 1px solid var(--color-error-light);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 .error-log h4 {
@@ -1004,12 +1008,12 @@ const loadAnalytics = () => analytics.execute(async () => {
 
 .error-log ul {
   list-style: none;
-  padding: 0;
-  margin: 0;
+  padding: var(--spacing-0);
+  margin: var(--spacing-0);
 }
 
 .error-log li {
-  padding: 8px;
+  padding: var(--spacing-2);
   border-bottom: 1px solid var(--color-error-light);
 }
 
@@ -1018,9 +1022,9 @@ const loadAnalytics = () => analytics.execute(async () => {
 }
 
 .log-timestamp {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--color-error-dark);
-  margin-right: 12px;
+  margin-right: var(--spacing-3);
 }
 
 .log-message {
@@ -1031,42 +1035,42 @@ const loadAnalytics = () => analytics.execute(async () => {
 .data-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 20px;
-  margin-top: 20px;
+  gap: var(--spacing-5);
+  margin-top: var(--spacing-5);
 }
 
 .data-section {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
-  padding: 16px;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
 }
 
 .data-section h3 {
   margin: 0 0 12px 0;
   color: var(--text-primary);
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
 }
 
 /* Analytics Display */
 .analytics-display {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-  margin-top: 16px;
+  gap: var(--spacing-4);
+  margin-top: var(--spacing-4);
 }
 
 .analytics-card {
   background: var(--chart-purple);
   color: white;
-  padding: 20px;
-  border-radius: 8px;
+  padding: var(--spacing-5);
+  border-radius: var(--radius-lg);
   text-align: center;
 }
 
 .analytics-card h4 {
   margin: 0 0 12px 0;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   opacity: 0.9;
 }
@@ -1078,13 +1082,13 @@ const loadAnalytics = () => analytics.execute(async () => {
 
 /* Code Comparison */
 .code-comparison {
-  margin-top: 20px;
+  margin-top: var(--spacing-5);
 }
 
 .code-comparison details {
   border: 1px solid var(--border-default);
-  border-radius: 6px;
-  padding: 12px;
+  border-radius: var(--radius-md);
+  padding: var(--spacing-3);
   background: var(--bg-secondary);
 }
 
@@ -1102,8 +1106,8 @@ const loadAnalytics = () => analytics.execute(async () => {
 .code-blocks {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  margin-top: 16px;
+  gap: var(--spacing-5);
+  margin-top: var(--spacing-4);
 }
 
 @media (max-width: 1024px) {
@@ -1115,21 +1119,21 @@ const loadAnalytics = () => analytics.execute(async () => {
 .code-block {
   background: var(--bg-card);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
 .code-block h4 {
-  margin: 0;
+  margin: var(--spacing-0);
   padding: 12px 16px;
   background: var(--bg-tertiary);
   border-bottom: 1px solid var(--border-default);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .code-block pre {
-  margin: 0;
-  padding: 16px;
+  margin: var(--spacing-0);
+  padding: var(--spacing-4);
   overflow-x: auto;
 }
 
@@ -1143,9 +1147,9 @@ const loadAnalytics = () => analytics.execute(async () => {
 .summary-card {
   background: var(--chart-purple);
   color: white;
-  border-radius: 8px;
-  padding: 32px;
-  margin-top: 32px;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-8);
+  margin-top: var(--spacing-8);
 }
 
 .summary-title {
@@ -1158,17 +1162,17 @@ const loadAnalytics = () => analytics.execute(async () => {
 .benefits-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
+  gap: var(--spacing-5);
 }
 
 .benefit-item {
   background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
-  border-radius: 8px;
-  padding: 20px;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-5);
   display: flex;
-  gap: 16px;
-  transition: transform 0.2s;
+  gap: var(--spacing-4);
+  transition: transform var(--duration-200);
 }
 
 .benefit-item:hover {
@@ -1182,13 +1186,13 @@ const loadAnalytics = () => analytics.execute(async () => {
 
 .benefit-content h3 {
   margin: 0 0 8px 0;
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
 }
 
 .benefit-content p {
-  margin: 0;
+  margin: var(--spacing-0);
   opacity: 0.9;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 /* Scrollbar Styling */
@@ -1202,7 +1206,7 @@ const loadAnalytics = () => analytics.execute(async () => {
 
 .async-examples-container::-webkit-scrollbar-thumb {
   background: var(--border-secondary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 .async-examples-container::-webkit-scrollbar-thumb:hover {

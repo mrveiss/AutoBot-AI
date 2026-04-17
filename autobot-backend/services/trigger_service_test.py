@@ -159,6 +159,40 @@ class TestValidateCronExpression:
     def test_empty_string(self) -> None:
         assert validate_cron_expression("") is False
 
+    def test_dow_7_sunday_accepted(self) -> None:
+        # Standard cron: 7 is an alias for Sunday (same as 0); must not raise
+        assert validate_cron_expression("0 0 * * 7") is True
+
+    def test_dow_0_sunday_accepted(self) -> None:
+        assert validate_cron_expression("0 0 * * 0") is True
+
+    def test_dow_range_1_to_7_accepted(self) -> None:
+        # "1-7" used to corrupt to "1-0" (empty range -> ValueError); must now return True
+        assert validate_cron_expression("0 0 * * 1-7") is True
+
+    def test_dow_comma_list_with_7_accepted(self) -> None:
+        # "0,7" should be normalised to "0,0" (both Sunday) and accepted
+        assert validate_cron_expression("0 0 * * 0,7") is True
+
+    def test_dow_range_step_1_to_7_accepted(self) -> None:
+        # "1-7/2" — range-step spanning Sunday; must be normalised and accepted
+        assert validate_cron_expression("0 0 * * 1-7/2") is True
+
+    def test_dow_range_step_5_to_7_accepted(self) -> None:
+        # "5-7/2" — range-step ending on 7; must be normalised and accepted
+        assert validate_cron_expression("0 0 * * 5-7/2") is True
+
+    def test_dow_range_step_1_to_7_fires_on_sunday(self) -> None:
+        # "0 0 * * 1-7/2" fires Mon(1), Wed(3), Fri(5), Sun(0/7)
+        # Saturday base → next fire should be Sunday
+        base = datetime(2025, 6, 7, 23, 0, 0, tzinfo=timezone.utc)  # Saturday
+        nxt = next_cron_run("0 0 * * 1-7/2", after=base)
+        assert nxt.weekday() == 6, f"Expected Sunday (weekday=6), got weekday={nxt.weekday()}"
+
+    def test_dow_range_step_0_to_7_accepted(self) -> None:
+        # "0-7/2" — range-step from 0 to 7 with step; must be normalised and accepted
+        assert validate_cron_expression("0 0 * * 0-7/2") is True
+
 
 class TestNextCronRun:
     def test_every_minute_advances_by_one(self) -> None:
@@ -188,6 +222,24 @@ class TestNextCronRun:
     def test_invalid_expression_raises(self) -> None:
         with pytest.raises(ValueError):
             next_cron_run("bad expression")
+
+    def test_dow_7_sunday_fires_same_day_as_dow_0(self) -> None:
+        # Both "0 0 * * 7" and "0 0 * * 0" should fire on the same Sunday
+        # Use a Saturday base so the next Sunday is one day away for both
+        base = datetime(2025, 6, 7, 23, 0, 0, tzinfo=timezone.utc)  # Saturday
+        nxt_7 = next_cron_run("0 0 * * 7", after=base)
+        nxt_0 = next_cron_run("0 0 * * 0", after=base)
+        assert nxt_7 == nxt_0, f"7=Sunday and 0=Sunday must fire at same time: {nxt_7} vs {nxt_0}"
+
+    def test_dow_range_1_to_7_fires_on_sunday(self) -> None:
+        # "0 0 * * 1-7" should fire Mon-Sun; verify it fires on Sunday (weekday 6)
+        # Use Saturday 2025-06-07 23:00 UTC -- next fire should be Sunday 2025-06-08 00:00 UTC
+        base = datetime(2025, 6, 7, 23, 0, 0, tzinfo=timezone.utc)  # Saturday
+        nxt = next_cron_run("0 0 * * 1-7", after=base)
+        assert nxt == datetime(2025, 6, 8, 0, 0, 0, tzinfo=timezone.utc), (
+            f"1-7 range should include Sunday; got {nxt}"
+        )
+        assert nxt.weekday() == 6, f"Expected Sunday (weekday=6), got weekday={nxt.weekday()}"
 
 
 # ---------------------------------------------------------------------------

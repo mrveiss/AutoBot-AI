@@ -273,16 +273,16 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background: rgba(37, 99, 235, 0.15);
   color: #60a5fa;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .voice-panel__mode-select {
   appearance: none;
   padding: 0.2rem 1.5rem 0.2rem 0.4rem;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-default);
   border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.15));
   background: var(--bg-tertiary, #1e293b)
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M3 4.5L6 8l3-3.5H3z'/%3E%3C/svg%3E")
@@ -297,7 +297,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 0.2rem;
   padding: 0.1rem 0.4rem;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-default);
   background: rgba(37, 99, 235, 0.1);
   border: 1px solid rgba(37, 99, 235, 0.2);
   color: #93c5fd;
@@ -316,7 +316,7 @@ onBeforeUnmount(() => {
   height: 6px;
   border-radius: 50%;
   background: rgba(239, 68, 68, 0.6);
-  transition: background 0.2s;
+  transition: background var(--duration-200);
 }
 
 .voice-panel__ws-dot--connected {
@@ -337,7 +337,7 @@ onBeforeUnmount(() => {
   border-radius: 50%;
   border: 2px solid var(--border-subtle, rgba(148, 163, 184, 0.15));
   color: var(--text-muted, #64748b);
-  transition: all 0.3s ease;
+  transition: all var(--duration-300) var(--ease-out);
 }
 
 .voice-panel__state-ring--listening {
@@ -373,11 +373,11 @@ onBeforeUnmount(() => {
 .voice-panel__transcript {
   width: 100%;
   padding: 0.5rem 0.75rem;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background: rgba(37, 99, 235, 0.06);
   border: 1px dashed rgba(37, 99, 235, 0.2);
   color: #93c5fd;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-style: italic;
   word-break: break-word;
 }
@@ -386,25 +386,25 @@ onBeforeUnmount(() => {
 .voice-panel__error {
   margin: 0 0.75rem;
   padding: 0.375rem 0.5rem;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.2);
   color: #fca5a5;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 /* Cert warning */
 .voice-panel__cert-warning {
   margin: 0 0.75rem;
   padding: 0.5rem 0.625rem;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background: rgba(245, 158, 11, 0.08);
   border: 1px solid rgba(245, 158, 11, 0.25);
   color: #fcd34d;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 
 /* Hands-free controls */
@@ -412,21 +412,21 @@ onBeforeUnmount(() => {
   padding: 0.5rem 0.75rem 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .voice-panel__amplitude {
   height: 3px;
-  border-radius: 1.5px;
+  border-radius: var(--radius-xs);
   background: rgba(148, 163, 184, 0.1);
   overflow: hidden;
 }
 
 .voice-panel__amplitude-bar {
   height: 100%;
-  border-radius: 1.5px;
+  border-radius: var(--radius-xs);
   background: linear-gradient(90deg, #60a5fa, #818cf8);
-  transition: width 0.1s ease-out;
+  transition: width var(--duration-100) var(--ease-out);
   min-width: 0;
 }
 
@@ -434,9 +434,14 @@ onBeforeUnmount(() => {
   height: 3px;
   appearance: none;
   background: rgba(148, 163, 184, 0.15);
-  border-radius: 1.5px;
+  border-radius: var(--radius-xs);
   outline: none;
   cursor: pointer;
+}
+
+.voice-panel__slider:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .voice-panel__slider::-webkit-slider-thumb {
@@ -444,7 +449,7 @@ onBeforeUnmount(() => {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #60a5fa;
+  background: var(--color-primary);
   border: 2px solid var(--bg-card, #0f172a);
   cursor: pointer;
 }
@@ -453,7 +458,7 @@ onBeforeUnmount(() => {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #60a5fa;
+  background: var(--color-primary);
   border: 2px solid var(--bg-card, #0f172a);
   cursor: pointer;
 }
@@ -508,7 +513,7 @@ onBeforeUnmount(() => {
   background: rgba(37, 99, 235, 0.1);
   color: #60a5fa;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
   box-shadow: 0 0 16px -4px rgba(37, 99, 235, 0.2);
 }
 
@@ -570,6 +575,6 @@ onBeforeUnmount(() => {
 
 .overflow-y-auto::-webkit-scrollbar-thumb {
   background: var(--border-default, rgba(148, 163, 184, 0.15));
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 </style>

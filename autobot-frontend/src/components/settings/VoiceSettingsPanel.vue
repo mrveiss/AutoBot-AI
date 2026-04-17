@@ -265,7 +265,7 @@ async function handleDelete(voiceId: string, name: string) {
   padding: var(--spacing-sm, 8px) var(--spacing-md, 12px);
   border-radius: var(--radius-md, 6px);
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background var(--duration-150);
   border: 1px solid transparent;
 }
 
@@ -285,7 +285,7 @@ async function handleDelete(voiceId: string, name: string) {
 }
 
 .voice-badge {
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 2px 6px;
   border-radius: var(--radius-sm, 4px);
   font-weight: 500;
@@ -306,7 +306,7 @@ async function handleDelete(voiceId: string, name: string) {
   border: none;
   color: var(--text-tertiary, #64748b);
   cursor: pointer;
-  padding: 4px;
+  padding: var(--spacing-1);
   border-radius: var(--radius-sm, 4px);
 }
 
@@ -341,7 +341,7 @@ async function handleDelete(voiceId: string, name: string) {
   border-radius: var(--radius-md, 6px);
   cursor: pointer;
   font-size: var(--text-sm, 14px);
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .add-voice-btn:hover {
@@ -357,7 +357,7 @@ async function handleDelete(voiceId: string, name: string) {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
 }
 
 .dialog {
@@ -428,7 +428,7 @@ async function handleDelete(voiceId: string, name: string) {
 
 .audio-preview {
   margin-top: var(--spacing-xs, 6px);
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary, #64748b);
 }
 
@@ -469,7 +469,7 @@ async function handleDelete(voiceId: string, name: string) {
   border: 1px solid var(--color-primary, #60a5fa);
   border-radius: var(--radius-md, 6px);
   color: var(--text-secondary, #94a3b8);
-  font-size: 12px;
+  font-size: var(--text-xs);
   display: flex;
   align-items: center;
   gap: var(--spacing-xs, 6px);
@@ -478,7 +478,7 @@ async function handleDelete(voiceId: string, name: string) {
 .personality-voice-details {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--spacing-0-5);
 }
 
 .personality-voice-hint strong {

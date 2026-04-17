@@ -11,7 +11,7 @@ RAGConfig.mmr_lambda, and ResultReranker MMR integration.
 Acceptance criteria tested:
 - Disabled (lambda=0): results unchanged, backward-compatible.
 - Moderate diversity (lambda=0.5): diverse results preferred over redundant ones.
-- High diversity (lambda=0.9): most diverse ordering selected.
+- High diversity (lambda=0.1): most diverse ordering selected.
 - No embedding fallback: graceful degradation when embeddings absent.
 - RAGConfig mmr_lambda propagates to rerank_weights.
 """
@@ -153,17 +153,24 @@ class TestMMRModerateDiversity(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# apply_mmr_reorder — high diversity (lambda=0.9)
+# apply_mmr_reorder — high diversity (lambda=0.1)
 # ---------------------------------------------------------------------------
 
 
 class TestMMRHighDiversity(unittest.TestCase):
-    """lambda=0.9 should aggressively favour diversity over raw relevance."""
+    """Low lambda (near 0) aggressively favours diversity over raw relevance.
 
-    def test_high_lambda_strongly_penalises_duplicates(self):
+    The MMR formula is: mmr(doc) = lambda * relevance - (1-lambda) * max_sim.
+    lambda=1.0 is pure relevance; lambda=0.0 is pure diversity.
+    A low lambda (e.g. 0.1) heavily weights the similarity penalty,
+    causing near-duplicate documents to be ranked below diverse ones.
+    """
+
+    def test_low_lambda_strongly_penalises_duplicates(self):
         """
         Two near-identical high-scorers + one very different low-scorer.
-        At lambda=0.9 the diverse low-scorer should be ranked 2nd.
+        At lambda=0.1 (high diversity weight) the diverse low-scorer should
+        be ranked 2nd because the near-duplicate is heavily penalised.
         """
         emb_dup = _unit([1.0, 0.01])
         emb_unique = _unit([0.0, 1.0])
@@ -172,7 +179,7 @@ class TestMMRHighDiversity(unittest.TestCase):
         dup2 = _make_result("dup2", 0.90, list(emb_dup))  # near copy
         unique = _make_result("unique", 0.60, emb_unique)
 
-        reordered = apply_mmr_reorder([dup1, dup2, unique], mmr_lambda=0.9)
+        reordered = apply_mmr_reorder([dup1, dup2, unique], mmr_lambda=0.1)
 
         self.assertEqual(reordered[0]["content"], "dup1")
         # unique should be promoted above dup2 due to strong diversity penalty on dup2
@@ -278,10 +285,34 @@ class TestRAGConfigMMRLambda(unittest.TestCase):
 
 
 class TestResultRerankerMMRIntegration(unittest.TestCase):
-    """ResultReranker.rerank applies MMR when mmr_lambda > 0."""
+    """ResultReranker.rerank applies MMR when mmr_lambda > 0.
+
+    These tests patch sentence_transformers in sys.modules so that the
+    CrossEncoder availability check in rerank() does not cause an early return,
+    and inject a mock _cross_encoder directly on the reranker instance to avoid
+    loading a real model.
+    """
+
+    def setUp(self):
+        """Inject a sentinel sentence_transformers stub so the import guard passes."""
+        import sys
+
+        # Stub out sentence_transformers so the `from sentence_transformers import
+        # CrossEncoder` guard inside rerank() does not trigger ImportError.
+        self._st_patcher = patch.dict(
+            sys.modules,
+            {
+                "sentence_transformers": MagicMock(),
+                "sentence_transformers.cross_encoder": MagicMock(),
+            },
+        )
+        self._st_patcher.start()
+
+    def tearDown(self):
+        self._st_patcher.stop()
 
     def _run(self, coro):
-        return asyncio.get_event_loop().run_until_complete(coro)
+        return asyncio.run(coro)
 
     def _make_results(self) -> List[Dict[str, Any]]:
         emb_a = _unit([1.0, 0.0])
@@ -293,16 +324,20 @@ class TestResultRerankerMMRIntegration(unittest.TestCase):
             {"content": "doc_c", "score": 0.7, "embedding": emb_c},
         ]
 
-    def test_mmr_disabled_when_lambda_zero(self):
-        """With mmr_lambda=0, apply_mmr_reorder is not called."""
+    def _make_reranker_with_mock_ce(self, predict_scores):
+        """Return a ResultReranker with a mock cross-encoder pre-injected."""
         from knowledge.search_components.reranking import ResultReranker
 
         reranker = ResultReranker()
-        results = self._make_results()
-
         mock_ce = MagicMock()
-        mock_ce.predict.return_value = [2.0, 1.8, 1.0]
+        mock_ce.predict.return_value = predict_scores
         reranker._cross_encoder = mock_ce
+        return reranker
+
+    def test_mmr_disabled_when_lambda_zero(self):
+        """With mmr_lambda=0, apply_mmr_reorder is not called."""
+        reranker = self._make_reranker_with_mock_ce([2.0, 1.8, 1.0])
+        results = self._make_results()
 
         weights = RerankWeights(mmr_lambda=0.0)
 
@@ -315,14 +350,8 @@ class TestResultRerankerMMRIntegration(unittest.TestCase):
 
     def test_mmr_applied_when_lambda_positive(self):
         """With mmr_lambda=0.5, apply_mmr_reorder is called after scoring."""
-        from knowledge.search_components.reranking import ResultReranker
-
-        reranker = ResultReranker()
+        reranker = self._make_reranker_with_mock_ce([2.0, 1.9, 0.5])
         results = self._make_results()
-
-        mock_ce = MagicMock()
-        mock_ce.predict.return_value = [2.0, 1.9, 0.5]
-        reranker._cross_encoder = mock_ce
 
         weights = RerankWeights(mmr_lambda=0.5)
 
@@ -342,14 +371,8 @@ class TestResultRerankerMMRIntegration(unittest.TestCase):
 
     def test_mmr_does_not_drop_results(self):
         """MMR reorder must not drop any results."""
-        from knowledge.search_components.reranking import ResultReranker
-
-        reranker = ResultReranker()
+        reranker = self._make_reranker_with_mock_ce([2.0, 1.9, 0.5])
         results = self._make_results()
-
-        mock_ce = MagicMock()
-        mock_ce.predict.return_value = [2.0, 1.9, 0.5]
-        reranker._cross_encoder = mock_ce
 
         weights = RerankWeights(mmr_lambda=0.5)
         final = self._run(reranker.rerank("query", results, weights=weights))
@@ -357,14 +380,8 @@ class TestResultRerankerMMRIntegration(unittest.TestCase):
 
     def test_top_k_applied_after_mmr(self):
         """top_k slicing happens after the MMR reorder."""
-        from knowledge.search_components.reranking import ResultReranker
-
-        reranker = ResultReranker()
+        reranker = self._make_reranker_with_mock_ce([2.0, 1.9, 0.5])
         results = self._make_results()
-
-        mock_ce = MagicMock()
-        mock_ce.predict.return_value = [2.0, 1.9, 0.5]
-        reranker._cross_encoder = mock_ce
 
         weights = RerankWeights(mmr_lambda=0.5)
         final = self._run(reranker.rerank("query", results, top_k=2, weights=weights))

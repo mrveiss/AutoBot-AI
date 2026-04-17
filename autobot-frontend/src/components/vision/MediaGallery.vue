@@ -302,7 +302,7 @@ onUnmounted(() => {
 .media-gallery {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--spacing-5);
 }
 
 /* Header */
@@ -310,30 +310,30 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px;
+  padding: var(--spacing-5);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   flex-wrap: wrap;
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .header-info h3 {
   margin: 0 0 4px;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .header-info p {
-  margin: 0;
-  font-size: 13px;
+  margin: var(--spacing-0);
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
 .header-actions {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
   align-items: center;
 }
 
@@ -341,8 +341,8 @@ onUnmounted(() => {
   padding: 8px 12px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
-  font-size: 13px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
@@ -351,14 +351,14 @@ onUnmounted(() => {
   background: var(--color-error-bg);
   color: var(--color-error);
   border: 1px solid var(--color-error);
-  border-radius: 8px;
-  font-size: 13px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
-  transition: all 0.2s;
+  gap: var(--spacing-2);
+  transition: all var(--duration-200);
 }
 
 .btn-clear-all:hover:not(:disabled) {
@@ -375,21 +375,21 @@ onUnmounted(() => {
 .gallery-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .gallery-item {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   overflow: hidden;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .gallery-item:hover {
   border-color: var(--color-primary);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
 }
 
 .item-thumbnail {
@@ -408,7 +408,7 @@ onUnmounted(() => {
 }
 
 .thumbnail-placeholder {
-  font-size: 48px;
+  font-size: var(--text-5xl);
   color: var(--text-muted);
 }
 
@@ -419,23 +419,23 @@ onUnmounted(() => {
   width: 28px;
   height: 28px;
   background: rgba(0, 0, 0, 0.6);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .item-info {
-  padding: 12px;
+  padding: var(--spacing-3);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .item-name {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
   white-space: nowrap;
@@ -444,25 +444,25 @@ onUnmounted(() => {
 }
 
 .item-date {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
 .item-actions {
   display: flex;
-  gap: 4px;
+  gap: var(--spacing-1);
   padding: 0 12px 12px;
 }
 
 .btn-action {
   flex: 1;
-  padding: 8px;
+  padding: var(--spacing-2);
   background: var(--bg-tertiary);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-tertiary);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .btn-action:hover {
@@ -481,11 +481,11 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: var(--spacing-4);
   padding: 80px 20px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
 }
 
 .empty-icon {
@@ -501,14 +501,14 @@ onUnmounted(() => {
 }
 
 .empty-state h4 {
-  margin: 0;
-  font-size: 16px;
+  margin: var(--spacing-0);
+  font-size: var(--text-base);
   color: var(--text-primary);
 }
 
 .empty-state p {
-  margin: 0;
-  font-size: 13px;
+  margin: var(--spacing-0);
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
   text-align: center;
 }
@@ -524,13 +524,13 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
-  padding: 20px;
+  z-index: var(--z-modal);
+  padding: var(--spacing-5);
 }
 
 .detail-modal {
   background: var(--bg-secondary);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   width: 100%;
   max-width: 600px;
   max-height: 90vh;
@@ -548,8 +548,8 @@ onUnmounted(() => {
 }
 
 .modal-header h4 {
-  margin: 0;
-  font-size: 16px;
+  margin: var(--spacing-0);
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   white-space: nowrap;
@@ -558,7 +558,7 @@ onUnmounted(() => {
 }
 
 .btn-close {
-  padding: 8px;
+  padding: var(--spacing-2);
   background: none;
   border: none;
   color: var(--text-tertiary);
@@ -572,18 +572,18 @@ onUnmounted(() => {
 .modal-content {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
+  padding: var(--spacing-5);
 }
 
 .preview-section {
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-5);
 }
 
 .preview-image {
   width: 100%;
   max-height: 300px;
   object-fit: contain;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--bg-tertiary);
 }
 
@@ -591,7 +591,7 @@ onUnmounted(() => {
   width: 100%;
   height: 200px;
   background: var(--bg-tertiary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -602,7 +602,7 @@ onUnmounted(() => {
 .details-section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .detail-row {
@@ -612,24 +612,24 @@ onUnmounted(() => {
 }
 
 .detail-row .label {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
 .detail-row .value {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
 .analysis-section {
-  margin-top: 20px;
-  padding-top: 20px;
+  margin-top: var(--spacing-5);
+  padding-top: var(--spacing-5);
   border-top: 1px solid var(--border-default);
 }
 
 .analysis-section h5 {
   margin: 0 0 12px;
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -637,8 +637,8 @@ onUnmounted(() => {
 .analysis-data {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-3);
 }
 
 .data-row {
@@ -647,16 +647,16 @@ onUnmounted(() => {
   align-items: center;
   padding: 8px 12px;
   background: var(--bg-tertiary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 .data-row .label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
 .data-row .value {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--text-primary);
 }
@@ -666,11 +666,11 @@ onUnmounted(() => {
   background: none;
   border: none;
   color: var(--text-tertiary);
-  font-size: 13px;
+  font-size: var(--text-sm);
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .btn-toggle:hover {
@@ -678,11 +678,11 @@ onUnmounted(() => {
 }
 
 .json-display {
-  margin-top: 12px;
-  padding: 12px;
+  margin-top: var(--spacing-3);
+  padding: var(--spacing-3);
   background: var(--bg-tertiary);
-  border-radius: 8px;
-  font-size: 11px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   overflow-x: auto;
   max-height: 200px;
@@ -690,7 +690,7 @@ onUnmounted(() => {
 
 .modal-actions {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
   padding: 16px 20px;
   border-top: 1px solid var(--border-default);
 }
@@ -701,14 +701,14 @@ onUnmounted(() => {
   background: var(--color-primary);
   color: var(--text-on-primary);
   border: none;
-  border-radius: 8px;
-  font-size: 13px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .btn-primary:hover {
@@ -720,13 +720,13 @@ onUnmounted(() => {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
-  font-size: 13px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .btn-secondary:hover {
@@ -738,13 +738,13 @@ onUnmounted(() => {
   background: var(--color-error-bg);
   color: var(--color-error);
   border: 1px solid var(--color-error);
-  border-radius: 8px;
-  font-size: 13px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .btn-danger:hover {
@@ -763,14 +763,14 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1100;
-  padding: 20px;
+  z-index: var(--z-popover);
+  padding: var(--spacing-5);
 }
 
 .confirm-modal {
   background: var(--bg-secondary);
-  border-radius: 12px;
-  padding: 24px;
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-6);
   width: 100%;
   max-width: 360px;
   text-align: center;
@@ -786,25 +786,25 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   color: var(--color-warning);
-  font-size: 20px;
+  font-size: var(--text-xl);
 }
 
 .confirm-modal h4 {
   margin: 0 0 8px;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .confirm-modal p {
   margin: 0 0 20px;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
 .confirm-actions {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .btn-cancel {
@@ -813,8 +813,8 @@ onUnmounted(() => {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
-  font-size: 13px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
 }
@@ -829,8 +829,8 @@ onUnmounted(() => {
   background: var(--color-error);
   color: white;
   border: none;
-  border-radius: 8px;
-  font-size: 13px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
 }

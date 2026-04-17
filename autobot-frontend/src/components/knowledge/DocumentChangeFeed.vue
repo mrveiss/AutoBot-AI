@@ -327,43 +327,43 @@ onUnmounted(() => {
 .document-change-feed {
   background: var(--bg-card);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-6);
+  margin-bottom: var(--spacing-6);
 }
 
 .feed-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
-  padding-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
+  padding-bottom: var(--spacing-4);
   border-bottom: 1px solid var(--border-default);
 }
 
 .feed-title {
-  margin: 0;
-  font-size: 1.25rem;
+  margin: var(--spacing-0);
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .change-badges {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .badge {
   padding: 0.25rem 0.75rem;
-  border-radius: 9999px;
-  font-size: 0.875rem;
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
   font-weight: 500;
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--spacing-1-5);
 }
 
 .badge-success {
@@ -389,8 +389,8 @@ onUnmounted(() => {
 .feed-controls {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin-bottom: 1rem;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-4);
   flex-wrap: wrap;
 }
 
@@ -398,23 +398,23 @@ onUnmounted(() => {
 .section-filter {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .filter-label {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
-  font-size: 0.875rem;
+  gap: var(--spacing-1-5);
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   white-space: nowrap;
 }
 
 .section-select {
   padding: 0.375rem 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   border: 1px solid var(--border-light);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   background: var(--bg-card);
   color: var(--text-secondary);
   min-width: 180px;
@@ -425,6 +425,10 @@ onUnmounted(() => {
   outline: none;
   border-color: var(--color-primary);
   box-shadow: 0 0 0 2px var(--color-primary-alpha, rgba(59, 130, 246, 0.2));
+}
+.section-select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .auto-refresh-toggle {
@@ -440,7 +444,7 @@ onUnmounted(() => {
 .toggle-label {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   cursor: pointer;
   user-select: none;
 }
@@ -452,40 +456,40 @@ onUnmounted(() => {
 .last-scan {
   margin-left: auto;
   color: var(--text-tertiary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--spacing-1-5);
 }
 
 .vectorization-status {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 0.75rem 1rem;
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .status-header {
   font-weight: 600;
   color: var(--text-secondary);
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .status-stats {
   display: flex;
-  gap: 1rem;
+  gap: var(--spacing-4);
   flex-wrap: wrap;
 }
 
 .stat-item {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
-  font-size: 0.875rem;
+  gap: var(--spacing-1-5);
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
@@ -503,27 +507,27 @@ onUnmounted(() => {
 
 .change-filters {
   display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-4);
   flex-wrap: wrap;
 }
 
 .change-list {
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .change-items {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .change-item {
   display: flex;
-  gap: 0.75rem;
-  padding: 0.75rem;
-  border-radius: 6px;
-  transition: all 0.2s;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3);
+  border-radius: var(--radius-md);
+  transition: all var(--duration-200);
 }
 
 .change-item:hover {
@@ -549,7 +553,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
 }
 
 .change-content {
@@ -560,19 +564,19 @@ onUnmounted(() => {
 .change-title {
   font-weight: 500;
   color: var(--text-primary);
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--spacing-1);
   word-break: break-word;
 }
 
 .change-command {
   color: var(--text-tertiary);
   font-weight: 400;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .change-meta {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   font-size: 0.8125rem;
   color: var(--text-tertiary);
   flex-wrap: wrap;
@@ -585,8 +589,8 @@ onUnmounted(() => {
 
 .feed-actions {
   display: flex;
-  gap: 0.75rem;
-  padding-top: 1rem;
+  gap: var(--spacing-3);
+  padding-top: var(--spacing-4);
   border-top: 1px solid var(--border-default);
 }
 

@@ -281,7 +281,7 @@ onUnmounted(() => {
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.3);
-  z-index: 1000;
+  z-index: var(--z-modal);
   display: flex;
   justify-content: flex-end;
 }
@@ -305,7 +305,7 @@ onUnmounted(() => {
   width: 4px;
   cursor: ew-resize;
   background: transparent;
-  transition: background 0.15s;
+  transition: background var(--duration-150);
   z-index: 10;
 }
 
@@ -326,7 +326,7 @@ onUnmounted(() => {
 
 .header-content {
   display: flex;
-  gap: 0.875rem;
+  gap: var(--spacing-3-5);
   flex: 1;
   min-width: 0;
 }
@@ -339,8 +339,8 @@ onUnmounted(() => {
   justify-content: center;
   background: var(--color-info-bg);
   color: var(--color-info);
-  border-radius: 0.5rem;
-  font-size: 1.125rem;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-lg);
   flex-shrink: 0;
 }
 
@@ -350,10 +350,10 @@ onUnmounted(() => {
 }
 
 .panel-title {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--spacing-1);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -361,7 +361,7 @@ onUnmounted(() => {
 
 .panel-path {
   display: block;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   font-family: var(--font-mono);
   overflow: hidden;
@@ -379,8 +379,8 @@ onUnmounted(() => {
   background: none;
   color: var(--text-secondary);
   cursor: pointer;
-  border-radius: 0.375rem;
-  transition: all 0.15s;
+  border-radius: var(--radius-md);
+  transition: all var(--duration-150);
   flex-shrink: 0;
 }
 
@@ -404,7 +404,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .empty-state i {
@@ -416,7 +416,7 @@ onUnmounted(() => {
 .metadata-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: var(--spacing-4);
   padding: 0.75rem 1.5rem;
   border-bottom: 1px solid var(--border-default);
   background: var(--bg-secondary);
@@ -425,8 +425,8 @@ onUnmounted(() => {
 .meta-item {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
-  font-size: 0.75rem;
+  gap: var(--spacing-1-5);
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -445,7 +445,7 @@ onUnmounted(() => {
 /* Content */
 .content-area {
   flex: 1;
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   overflow-y: auto;
 }
 
@@ -455,7 +455,7 @@ onUnmounted(() => {
   line-height: 1.7;
   white-space: pre-wrap;
   word-wrap: break-word;
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-primary);
 }
 
@@ -463,7 +463,7 @@ onUnmounted(() => {
 .panel-footer {
   display: flex;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   padding: 1rem 1.5rem;
   border-top: 1px solid var(--border-default);
   background: var(--bg-card);
@@ -477,12 +477,12 @@ onUnmounted(() => {
 /* Transition */
 .panel-enter-active,
 .panel-leave-active {
-  transition: opacity 0.2s ease;
+  transition: opacity var(--duration-200) var(--ease-out);
 }
 
 .panel-enter-active .source-preview-panel,
 .panel-leave-active .source-preview-panel {
-  transition: transform 0.2s ease;
+  transition: transform var(--duration-200) var(--ease-out);
 }
 
 .panel-enter-from,

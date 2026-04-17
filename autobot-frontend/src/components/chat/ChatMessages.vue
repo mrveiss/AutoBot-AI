@@ -1379,17 +1379,20 @@ onMounted(async () => {
 
 /* USER MESSAGES - Right side, blue theme */
 .message-wrapper.user-message {
-  @apply bg-blue-600 text-white border-blue-700 ml-auto mr-0;
+  @apply ml-auto mr-0;
+  background: var(--color-primary);
+  color: var(--text-inverse);
+  border-color: var(--color-primary);
   border-radius: 18px 18px 4px 18px;
 }
 
 .message-wrapper.user-message .sender-name,
 .message-wrapper.user-message .message-time {
-  @apply text-blue-100;
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .message-wrapper.user-message .message-content {
-  @apply text-white;
+  color: var(--text-inverse);
 }
 
 /* ASSISTANT MESSAGES - Left side, design token theme */
@@ -1414,7 +1417,7 @@ onMounted(async () => {
 .message-wrapper.system-message {
   @apply bg-autobot-bg-tertiary border-autobot-border mx-auto text-autobot-text-secondary;
   max-width: 70%;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
 }
 
 /* ============================================
@@ -1429,90 +1432,99 @@ onMounted(async () => {
 
 /* THOUGHT MESSAGES - Purple theme for AI reasoning */
 .message-wrapper.type-thought {
-  @apply bg-purple-900/20 border-purple-500/40 text-purple-200;
+  background: var(--color-info-bg);
+  border-color: rgba(139, 92, 246, 0.3);
+  color: var(--text-secondary);
   border-left: 4px solid var(--color-purple-500);
 }
 
 .message-wrapper.type-thought .message-avatar {
-  @apply bg-purple-600;
+  background: var(--color-info);
 }
 
 .message-wrapper.type-thought .sender-name {
-  @apply text-purple-300;
+  color: var(--text-secondary);
 }
 
 .message-wrapper.type-thought .message-time {
-  @apply text-purple-400;
+  color: var(--text-muted);
 }
 
 .message-wrapper.type-thought .message-content {
-  @apply text-purple-200;
+  color: var(--text-secondary);
 }
 
 .message-wrapper.type-thought .message-text {
-  @apply text-purple-100;
+  color: var(--text-secondary);
 }
 
 .message-wrapper.type-thought::before {
   content: '';
-  @apply absolute top-2 right-2 w-2 h-2 rounded-full bg-purple-400;
+  @apply absolute top-2 right-2 w-2 h-2 rounded-full;
+  background: var(--color-info);
 }
 
 /* PLANNING MESSAGES - Indigo theme for task planning */
 .message-wrapper.type-planning {
-  @apply bg-indigo-900/20 border-indigo-500/40 text-indigo-200;
+  background: var(--color-info-bg);
+  border-color: rgba(99, 102, 241, 0.3);
+  color: var(--text-secondary);
   border-left: 4px solid var(--color-indigo-500);
 }
 
 .message-wrapper.type-planning .message-avatar {
-  @apply bg-indigo-600;
+  background: var(--color-info);
 }
 
 .message-wrapper.type-planning .sender-name {
-  @apply text-indigo-300;
+  color: var(--text-secondary);
 }
 
 .message-wrapper.type-planning .message-time {
-  @apply text-indigo-400;
+  color: var(--text-muted);
 }
 
 .message-wrapper.type-planning .message-content {
-  @apply text-indigo-200;
+  color: var(--text-secondary);
 }
 
 .message-wrapper.type-planning .message-text {
-  @apply text-indigo-100;
+  color: var(--text-secondary);
 }
 
 .message-wrapper.type-planning::before {
   content: '';
-  @apply absolute top-2 right-2 w-2 h-2 rounded-full bg-indigo-400;
+  @apply absolute top-2 right-2 w-2 h-2 rounded-full;
+  background: var(--color-info);
 }
 
 /* DEBUG MESSAGES - Orange/Amber theme for debug output */
 .message-wrapper.type-debug {
-  @apply bg-amber-900/20 border-amber-500/40 text-amber-200;
+  background: var(--color-warning-bg);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: var(--text-secondary);
   border-left: 4px solid var(--color-amber-500);
 }
 
 .message-wrapper.type-debug .message-avatar {
-  @apply bg-amber-600;
+  background: var(--color-warning);
 }
 
 .message-wrapper.type-debug .sender-name {
-  @apply text-amber-300;
+  color: var(--color-warning);
 }
 
 .message-wrapper.type-debug .message-time {
-  @apply text-amber-400;
+  color: var(--text-muted);
 }
 
 .message-wrapper.type-debug .message-content {
-  @apply text-amber-200;
+  color: var(--text-secondary);
 }
 
 .message-wrapper.type-debug .message-text {
-  @apply font-mono text-xs text-amber-100;
+  @apply font-mono text-xs;
+  color: var(--text-secondary);
 }
 
 /* UTILITY MESSAGES - Neutral theme-aware for tool/utility output */
@@ -1576,11 +1588,11 @@ onMounted(async () => {
 }
 
 .message-wrapper.type-terminal_output .message-avatar {
-  @apply bg-green-600;
+  background: var(--color-success);
 }
 
 .message-wrapper.type-terminal_output .sender-name {
-  @apply text-green-400;
+  color: var(--color-success);
 }
 
 .message-wrapper.type-terminal_output .message-time {
@@ -1605,7 +1617,7 @@ onMounted(async () => {
 }
 
 .message-wrapper.type-command_approval_request .message-avatar {
-  @apply bg-yellow-600;
+  background: var(--color-warning);
 }
 
 .message-wrapper.type-command_approval_request .message-content {
@@ -1619,12 +1631,14 @@ onMounted(async () => {
 
 .message-wrapper.type-thought::after {
   content: 'Thought';
-  @apply bg-purple-800/60 text-purple-200;
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .message-wrapper.type-planning::after {
   content: 'Planning';
-  @apply bg-indigo-800/60 text-indigo-200;
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .message-wrapper.type-debug::after {
@@ -1647,7 +1661,8 @@ onMounted(async () => {
 
 .message-wrapper.type-terminal_output::after {
   content: 'Terminal';
-  @apply bg-gray-700 text-green-400;
+  background: var(--bg-tertiary);
+  color: var(--color-success);
 }
 
 /* Issue #690: Overseer Agent Message Styles */
@@ -1658,7 +1673,8 @@ onMounted(async () => {
 
 .message-wrapper.type-overseer_step::after {
   content: 'Step';
-  @apply bg-purple-700 text-purple-100;
+  background: var(--color-info);
+  color: var(--text-inverse);
 }
 
 .message-wrapper.type-overseer_plan,
@@ -1667,7 +1683,9 @@ onMounted(async () => {
 }
 
 .message-wrapper.error {
-  @apply bg-red-50 border-red-300 text-red-900;
+  background: var(--color-error-bg);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: var(--color-error);
 }
 
 .message-wrapper.sending {
@@ -1683,7 +1701,7 @@ onMounted(async () => {
 }
 
 .message-avatar.user {
-  @apply bg-blue-700;
+  background: var(--color-primary);
 }
 
 .message-avatar.assistant {
@@ -1709,28 +1727,38 @@ onMounted(async () => {
 /* Issue #1310: Type badges for clear message identification */
 .message-type-badge {
   @apply inline-flex items-center text-xs font-semibold px-1.5 py-0.5 rounded ml-2;
-  font-size: 10px;
+  font-size: var(--text-xs);
   line-height: 1.2;
 }
 
 .badge-thought {
-  @apply bg-purple-900/40 text-purple-300 border border-purple-500/30;
+  background: var(--color-info-bg);
+  color: var(--color-info);
+  border: 1px solid rgba(139, 92, 246, 0.3);
 }
 
 .badge-planning {
-  @apply bg-indigo-900/40 text-indigo-300 border border-indigo-500/30;
+  background: var(--color-info-bg);
+  color: var(--color-info);
+  border: 1px solid rgba(99, 102, 241, 0.3);
 }
 
 .badge-debug {
-  @apply bg-amber-900/40 text-amber-300 border border-amber-500/30;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning-border);
 }
 
 .badge-utility {
-  @apply bg-slate-700/40 text-slate-300 border border-slate-500/30;
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
 }
 
 .badge-sources {
-  @apply bg-teal-900/40 text-teal-300 border border-teal-500/30;
+  background: var(--color-info-bg);
+  color: var(--color-info);
+  border: 1px solid rgba(20, 184, 166, 0.3);
 }
 
 .message-time {
@@ -1758,15 +1786,20 @@ onMounted(async () => {
 
 /* User message code styling - lighter for blue background */
 .user-message .message-text :deep(code) {
-  @apply bg-blue-500 text-blue-50 px-1.5 py-0.5 rounded text-xs font-mono;
+  @apply px-1.5 py-0.5 rounded text-xs font-mono;
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--text-inverse);
 }
 
 .user-message .message-text :deep(pre) {
-  @apply bg-blue-800 text-blue-50 p-3 rounded-lg overflow-x-auto my-1.5;
+  @apply p-3 rounded-lg overflow-x-auto my-1.5;
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--text-inverse);
 }
 
 .user-message .message-text :deep(a) {
-  @apply text-blue-100 hover:text-white underline;
+  @apply hover:text-white underline;
+  color: rgba(255, 255, 255, 0.85);
 }
 
 /* Assistant message code styling - standard colors for light background */
@@ -1790,11 +1823,13 @@ onMounted(async () => {
 
 /* User message metadata - lighter border for blue background */
 .user-message .message-metadata {
-  @apply mt-1.5 pt-1 border-t border-blue-400;
+  @apply mt-1.5 pt-1 border-t;
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 .user-message .metadata-items {
-  @apply flex flex-wrap gap-1.5 text-xs text-blue-100;
+  @apply flex flex-wrap gap-1.5 text-xs;
+  color: rgba(255, 255, 255, 0.85);
 }
 
 /* Assistant message metadata - standard styling */
@@ -1881,7 +1916,8 @@ onMounted(async () => {
 }
 
 .typing-dots-enhanced span {
-  @apply w-2.5 h-2.5 bg-blue-500 rounded-full;
+  @apply w-2.5 h-2.5 rounded-full;
+  background: var(--color-primary);
   animation: typingBounce 1.4s ease-in-out infinite both;
 }
 
@@ -1902,7 +1938,8 @@ onMounted(async () => {
 }
 
 .typing-wave {
-  @apply absolute top-0 left-0 right-0 h-1 bg-linear-to-r from-transparent via-blue-400 to-transparent rounded-full;
+  @apply absolute top-0 left-0 right-0 h-1 rounded-full;
+  background: linear-gradient(to right, transparent, var(--color-primary), transparent);
   animation: typingWave 2s ease-in-out infinite;
 }
 
@@ -1916,7 +1953,8 @@ onMounted(async () => {
 }
 
 .typing-eta {
-  @apply text-blue-600 font-medium;
+  @apply font-medium;
+  color: var(--color-primary);
 }
 
 /* Message Status Container */
@@ -1966,38 +2004,50 @@ onMounted(async () => {
 
 /* Approval Request Styles */
 .approval-request {
-  @apply mt-3 p-4 bg-yellow-50 border-2 border-yellow-300 rounded-lg;
+  @apply mt-3 p-4 rounded-lg border-2;
+  background: var(--color-warning-bg);
+  border-color: rgba(245, 158, 11, 0.4);
 }
 
 /* Pre-approved State - Blue theme (auto-approved by security policy) */
 .approval-confirmed.approval-pre-approved {
-  @apply mt-3 p-4 bg-blue-50 border-2 border-blue-300 rounded-lg;
+  @apply mt-3 p-4 rounded-lg border-2;
+  background: var(--color-info-bg);
+  border-color: rgba(59, 130, 246, 0.4);
 }
 
 .approval-confirmed.approval-pre-approved .approval-header {
-  @apply flex items-center gap-2 mb-3 text-blue-900 font-semibold;
+  @apply flex items-center gap-2 mb-3 font-semibold;
+  color: var(--color-info);
 }
 
 /* User Approved State - Green theme (manually approved by user) */
 .approval-confirmed.approval-approved {
-  @apply mt-3 p-4 bg-green-50 border-2 border-green-300 rounded-lg;
+  @apply mt-3 p-4 rounded-lg border-2;
+  background: var(--color-success-bg);
+  border-color: rgba(34, 197, 94, 0.4);
 }
 
 .approval-confirmed.approval-approved .approval-header {
-  @apply flex items-center gap-2 mb-3 text-green-900 font-semibold;
+  @apply flex items-center gap-2 mb-3 font-semibold;
+  color: var(--color-success);
 }
 
 /* Denied State - Red theme (manually denied by user) */
 .approval-confirmed.approval-denied {
-  @apply mt-3 p-4 bg-red-50 border-2 border-red-300 rounded-lg;
+  @apply mt-3 p-4 rounded-lg border-2;
+  background: var(--color-error-bg);
+  border-color: rgba(239, 68, 68, 0.4);
 }
 
 .approval-confirmed.approval-denied .approval-header {
-  @apply flex items-center gap-2 mb-3 text-red-900 font-semibold;
+  @apply flex items-center gap-2 mb-3 font-semibold;
+  color: var(--color-error);
 }
 
 .approval-header {
-  @apply flex items-center gap-2 mb-3 text-yellow-900 font-semibold;
+  @apply flex items-center gap-2 mb-3 font-semibold;
+  color: var(--color-warning);
 }
 
 .approval-details {
@@ -2022,7 +2072,9 @@ onMounted(async () => {
 
 /* Interactive Command Warning Styles (Issue #33) */
 .interactive-warning {
-  @apply flex-col bg-blue-50 p-3 rounded-lg border border-blue-200 mt-2;
+  @apply flex-col p-3 rounded-lg mt-2;
+  background: var(--color-info-bg);
+  border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
 .interactive-header {
@@ -2086,7 +2138,8 @@ onMounted(async () => {
 }
 
 .comment-textarea {
-  @apply w-full px-3 py-2 border border-autobot-border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-blue-500;
+  @apply w-full px-3 py-2 border border-autobot-border rounded-md resize-none focus:outline-none focus:ring-2;
+  --tw-ring-color: var(--color-primary);
 }
 
 .comment-actions {
@@ -2097,7 +2150,9 @@ onMounted(async () => {
 
 /* Auto-approve checkbox section */
 .auto-approve-section {
-  @apply mt-3 mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg;
+  @apply mt-3 mb-3 p-3 rounded-lg;
+  background: var(--color-info-bg);
+  border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
 .auto-approve-checkbox {
@@ -2105,7 +2160,8 @@ onMounted(async () => {
 }
 
 .checkbox-input {
-  @apply w-4 h-4 rounded border-autobot-border text-blue-600 focus:ring-2 focus:ring-blue-500 cursor-pointer;
+  @apply w-4 h-4 rounded border-autobot-border cursor-pointer;
+  accent-color: var(--color-primary);
 }
 
 .checkbox-label {
@@ -2113,11 +2169,12 @@ onMounted(async () => {
 }
 
 .checkbox-label i {
-  @apply text-blue-600;
+  color: var(--color-primary);
 }
 
 .auto-approve-hint {
-  @apply mt-2 pl-6 flex items-start gap-2 text-xs text-blue-700;
+  @apply mt-2 pl-6 flex items-start gap-2 text-xs;
+  color: var(--color-info);
 }
 
 .auto-approve-hint i {
@@ -2126,7 +2183,9 @@ onMounted(async () => {
 
 /* Permission v2: Remember for project checkbox section */
 .remember-project-section {
-  @apply mt-3 mb-3 p-3 bg-green-50 border border-green-200 rounded-lg;
+  @apply mt-3 mb-3 p-3 rounded-lg;
+  background: var(--color-success-bg);
+  border: 1px solid rgba(34, 197, 94, 0.3);
 }
 
 .remember-project-checkbox {
@@ -2134,11 +2193,12 @@ onMounted(async () => {
 }
 
 .remember-project-checkbox .checkbox-label i {
-  @apply text-green-600;
+  color: var(--color-success);
 }
 
 .remember-project-hint {
-  @apply mt-2 pl-6 flex items-start gap-2 text-xs text-green-700;
+  @apply mt-2 pl-6 flex items-start gap-2 text-xs;
+  color: var(--color-success);
 }
 
 .remember-project-hint i {
@@ -2199,15 +2259,15 @@ onMounted(async () => {
 }
 
 .citation-score.score-excellent {
-  @apply text-green-600;
+  color: var(--color-success);
 }
 
 .citation-score.score-good {
-  @apply text-blue-600;
+  color: var(--color-primary);
 }
 
 .citation-score.score-acceptable {
-  @apply text-yellow-600;
+  color: var(--color-warning);
 }
 
 .citation-score.score-low {
@@ -2220,11 +2280,11 @@ onMounted(async () => {
 
 /* Citation slide transition */
 .slide-fade-enter-active {
-  transition: all 0.2s ease-out;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .slide-fade-leave-active {
-  transition: all 0.15s ease-in;
+  transition: all var(--duration-150) var(--ease-in);
 }
 
 .slide-fade-enter-from,

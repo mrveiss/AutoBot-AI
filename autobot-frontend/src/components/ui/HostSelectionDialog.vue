@@ -1,21 +1,34 @@
 <template>
-  <div v-if="showDialog" class="host-selection-overlay">
-    <div class="host-selection-dialog">
+  <div
+    v-if="showDialog"
+    class="host-selection-overlay"
+    @click.self="!isProcessing && handleCancel()"
+  >
+    <div
+      ref="dialogRef"
+      class="host-selection-dialog"
+      role="dialog"
+      aria-modal="true"
+      :aria-labelledby="dialogTitleId"
+      :aria-describedby="dialogDescId"
+      tabindex="-1"
+    >
       <div class="dialog-header">
-        <div class="dialog-icon">
+        <div class="dialog-icon" aria-hidden="true">
           <i class="fas fa-server"></i>
         </div>
         <div class="dialog-title">
-          <h3>{{ t('ui.hostSelection.title') }}</h3>
-          <p class="dialog-subtitle">{{ purpose || t('ui.hostSelection.defaultPurpose') }}</p>
+          <h3 :id="dialogTitleId">{{ t('ui.hostSelection.title') }}</h3>
+          <p :id="dialogDescId" class="dialog-subtitle">{{ purpose || t('ui.hostSelection.defaultPurpose') }}</p>
         </div>
         <button
           v-if="!isProcessing"
           class="close-button"
+          type="button"
           @click="handleCancel"
           :aria-label="t('ui.hostSelection.close')"
         >
-          <i class="fas fa-times"></i>
+          <i class="fas fa-times" aria-hidden="true"></i>
         </button>
       </div>
 
@@ -30,25 +43,30 @@
 
         <!-- Host Selection -->
         <div class="host-selection-section">
-          <h4>{{ t('ui.hostSelection.availableHosts') }}:</h4>
+          <h4 :id="hostListLabelId">{{ t('ui.hostSelection.availableHosts') }}</h4>
 
           <!-- Loading State -->
-          <div v-if="loading" class="loading-state">
-            <i class="fas fa-spinner fa-spin"></i>
+          <div v-if="loading" class="loading-state" role="status" aria-live="polite">
+            <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
             <span>{{ t('ui.hostSelection.loadingHosts') }}</span>
           </div>
 
           <!-- No Hosts State -->
           <div v-else-if="hosts.length === 0" class="empty-state">
-            <i class="fas fa-exclamation-circle"></i>
+            <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
             <span>{{ t('ui.hostSelection.noHostsConfigured') }}</span>
-            <button @click="openSecretsManager" class="add-host-link">
-              <i class="fas fa-plus"></i> {{ t('ui.hostSelection.addHost') }}
+            <button type="button" @click="openSecretsManager" class="add-host-link">
+              <i class="fas fa-plus" aria-hidden="true"></i> {{ t('ui.hostSelection.addHost') }}
             </button>
           </div>
 
           <!-- Host List -->
-          <div v-else class="host-list">
+          <div
+            v-else
+            class="host-list"
+            role="radiogroup"
+            :aria-labelledby="hostListLabelId"
+          >
             <div
               v-for="host in hosts"
               :key="host.id"
@@ -66,24 +84,25 @@
                   :value="host.id"
                   v-model="selectedHostId"
                   :disabled="isProcessing"
+                  :aria-label="host.name"
                 />
               </div>
-              <div class="host-icon">
+              <div class="host-icon" aria-hidden="true">
                 <i :class="getHostIcon(host)"></i>
               </div>
               <div class="host-info">
                 <div class="host-name">
                   {{ host.name }}
                   <span v-if="host.id === defaultHostId" class="default-badge">
-                    <i class="fas fa-star"></i> {{ t('ui.hostSelection.default') }}
+                    <i class="fas fa-star" aria-hidden="true"></i> {{ t('ui.hostSelection.default') }}
                   </span>
                 </div>
                 <div class="host-details">
                   <span class="host-connection">
-                    <i class="fas fa-user"></i> {{ host.username || 'root' }}@{{ host.host }}:{{ host.ssh_port || 22 }}
+                    <i class="fas fa-user" aria-hidden="true"></i> {{ host.username || 'root' }}@{{ host.host }}:{{ host.ssh_port || 22 }}
                   </span>
                   <span v-if="host.capabilities?.includes('vnc')" class="host-capability">
-                    <i class="fas fa-desktop"></i> VNC
+                    <i class="fas fa-desktop" aria-hidden="true"></i> VNC
                   </span>
                 </div>
                 <div v-if="host.purpose" class="host-purpose">
@@ -93,12 +112,14 @@
               <div class="host-actions">
                 <button
                   v-if="host.id !== defaultHostId"
+                  type="button"
                   class="set-default-btn"
                   @click.stop="setAsDefault(host)"
+                  :aria-label="t('ui.hostSelection.setAsDefault')"
                   :title="t('ui.hostSelection.setAsDefault')"
                   :disabled="isProcessing"
                 >
-                  <i class="fas fa-star"></i>
+                  <i class="fas fa-star" aria-hidden="true"></i>
                 </button>
               </div>
             </div>
@@ -119,8 +140,8 @@
         </div>
 
         <!-- Error Message -->
-        <div v-if="error" class="error-message">
-          <i class="fas fa-exclamation-triangle"></i>
+        <div v-if="error" class="error-message" role="alert" aria-live="assertive">
+          <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
           <span>{{ error }}</span>
         </div>
       </div>
@@ -128,26 +149,29 @@
       <div class="dialog-footer">
         <div class="button-group">
           <button
+            type="button"
             class="btn btn-secondary"
             @click="handleCancel"
             :disabled="isProcessing"
           >
-            <i class="fas fa-times"></i>
+            <i class="fas fa-times" aria-hidden="true"></i>
             {{ t('ui.hostSelection.cancel') }}
           </button>
           <button
+            type="button"
             class="btn btn-primary"
             @click="handleConfirm"
             :disabled="!selectedHostId || isProcessing"
+            :aria-busy="isProcessing"
           >
-            <i v-if="isProcessing" class="fas fa-spinner fa-spin"></i>
-            <i v-else class="fas fa-check"></i>
+            <i v-if="isProcessing" class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+            <i v-else class="fas fa-check" aria-hidden="true"></i>
             {{ isProcessing ? t('ui.hostSelection.connecting') : t('ui.hostSelection.connectAndExecute') }}
           </button>
         </div>
 
         <div class="security-note">
-          <i class="fas fa-lock"></i>
+          <i class="fas fa-lock" aria-hidden="true"></i>
           <span>{{ t('ui.hostSelection.securityNote') }}</span>
         </div>
       </div>
@@ -156,7 +180,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { secretsApiClient } from '@/utils/SecretsApiClient';
 import { getBackendUrl } from '@/config/ssot-config';
@@ -206,6 +230,16 @@ const emit = defineEmits<{
 
 // #1721: In-memory session host preference (avoids clear-text sessionStorage)
 let _sessionHostChoice: string | null = null;
+
+// Stable IDs for ARIA labeling
+const _uid = Math.random().toString(36).substr(2, 9);
+const dialogTitleId = `host-dialog-title-${_uid}`;
+const dialogDescId = `host-dialog-desc-${_uid}`;
+const hostListLabelId = `host-list-label-${_uid}`;
+
+// Focus management
+const dialogRef = ref<HTMLElement | null>(null);
+let previousActiveElement: HTMLElement | null = null;
 
 // State
 const showDialog = ref(false);
@@ -380,11 +414,33 @@ const handleEscape = (event: KeyboardEvent) => {
   }
 };
 
+// Focus trap helpers
+const trapFocus = (event: FocusEvent) => {
+  if (!dialogRef.value) return;
+  if (!dialogRef.value.contains(event.target as Node)) {
+    const focusable = dialogRef.value.querySelectorAll<HTMLElement>(
+      'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
+    );
+    if (focusable.length > 0) {
+      focusable[0].focus();
+      event.preventDefault();
+    }
+  }
+};
+
 // Watchers
-watch(() => props.show, (newValue) => {
+watch(() => props.show, async (newValue) => {
   showDialog.value = newValue;
   if (newValue) {
+    previousActiveElement = document.activeElement as HTMLElement;
     loadHosts();
+    document.addEventListener('focusin', trapFocus);
+    await nextTick();
+    dialogRef.value?.focus();
+  } else {
+    document.removeEventListener('focusin', trapFocus);
+    previousActiveElement?.focus();
+    previousActiveElement = null;
   }
 }, { immediate: true });
 
@@ -395,6 +451,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleEscape);
+  document.removeEventListener('focusin', trapFocus);
 });
 </script>
 
@@ -410,7 +467,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
+  z-index: var(--z-maximum);
   backdrop-filter: blur(4px);
 }
 
@@ -465,7 +522,7 @@ onUnmounted(() => {
 }
 
 .dialog-subtitle {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--font-size-sm);
   opacity: 0.9;
 }
@@ -484,6 +541,11 @@ onUnmounted(() => {
 
 .close-button:hover {
   opacity: 1;
+}
+
+.close-button:focus-visible {
+  outline: 2px solid var(--text-on-primary);
+  outline-offset: 2px;
 }
 
 /* Body */
@@ -662,7 +724,7 @@ onUnmounted(() => {
 }
 
 .default-badge i {
-  font-size: 10px;
+  font-size: var(--text-xs);
 }
 
 .host-details {
@@ -720,6 +782,11 @@ onUnmounted(() => {
 .set-default-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.set-default-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* Options Section */
@@ -828,6 +895,11 @@ onUnmounted(() => {
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .security-note {

@@ -118,7 +118,8 @@
     "systemStatus": "System Status",
     "services": "Services",
     "skipToNavigation": "Skip to navigation",
-    "openMainMenu": "Open main menu"
+    "openMainMenu": "Open main menu",
+    "operations": "آپریشنز"
   },
   "agent": {
     "registry": {
@@ -6128,6 +6129,15 @@
       "statusLabel": "Status",
       "allTypes": "All Types",
       "allStatuses": "All Statuses"
+    },
+    "view": {
+      "title": "طویل مدتی آپریشنز",
+      "subtitle": "پس منظر کے کاموں کی نگرانی اور انتظام کریں",
+      "refresh": "تازہ کریں",
+      "loadError": "آپریشنز لوڈ کرنے میں ناکامی"
+    },
+    "panel": {
+      "selectOperation": "Select an operation to view details"
     }
   },
   "fileBrowser": {

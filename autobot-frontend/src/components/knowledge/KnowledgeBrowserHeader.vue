@@ -154,6 +154,11 @@ defineEmits<Emits>()
   background: transparent;
 }
 
+.search-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 .search-input::placeholder {
   color: var(--text-tertiary);
 }
@@ -176,7 +181,7 @@ defineEmits<Emits>()
 
   .category-tabs {
     overflow-x: auto;
-    padding-bottom: 0.5rem;
+    padding-bottom: var(--spacing-2);
     margin-bottom: -0.5rem;
   }
 

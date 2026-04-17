@@ -372,7 +372,7 @@ function formatTime(timestamp?: number): string {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .extractor-header h4 i {
@@ -434,6 +434,11 @@ function formatTime(timestamp?: number): string {
   outline: none;
   border-color: var(--color-primary);
   box-shadow: var(--shadow-focus);
+}
+.form-group input:focus-visible,
+.form-group textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .form-group input:disabled,
@@ -546,7 +551,7 @@ function formatTime(timestamp?: number): string {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .processing-time {
@@ -622,8 +627,8 @@ function formatTime(timestamp?: number): string {
 
 .error-list {
   list-style: none;
-  padding: 0;
-  margin: 0;
+  padding: var(--spacing-0);
+  margin: var(--spacing-0);
 }
 
 .error-list li {

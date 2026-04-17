@@ -248,7 +248,7 @@ async function copyId() {
 .type-icon {
   font-size: var(--text-2xl);
   color: var(--color-info);
-  margin-top: 0.125rem;
+  margin-top: var(--spacing-0-5);
 }
 
 .header-info {
@@ -260,7 +260,7 @@ async function copyId() {
   font-size: var(--text-xl);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .operation-type {
@@ -320,7 +320,7 @@ async function copyId() {
 }
 
 .section-title {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0 0 0.5rem 0;
@@ -330,55 +330,55 @@ async function copyId() {
 .description-section,
 .timing-section,
 .checkpoints-section {
-  padding-top: 0.75rem;
+  padding-top: var(--spacing-3);
   border-top: 1px solid var(--border-subtle);
 }
 
 .description-text {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
-  margin: 0;
+  margin: var(--spacing-0);
   line-height: 1.5;
 }
 
 .timing-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .timing-item {
   display: flex;
   flex-direction: column;
-  gap: 0.125rem;
+  gap: var(--spacing-0-5);
 }
 
 .timing-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
 .timing-value {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
 .error-section {
-  padding: 1rem;
+  padding: var(--spacing-4);
   background-color: #fef2f2;
   border: 1px solid #fecaca;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
 }
 
 .error-title {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--spacing-1-5);
   color: #991b1b;
 }
 
 .error-message {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: #7f1d1d;
   font-family: monospace;
   white-space: pre-wrap;
@@ -388,30 +388,30 @@ async function copyId() {
 .checkpoints-info {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  font-size: 0.875rem;
+  gap: var(--spacing-4);
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
 .can-resume {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
   color: var(--color-success);
 }
 
 .context-section {
   border-top: 1px solid var(--border-subtle);
-  padding-top: 0.75rem;
+  padding-top: var(--spacing-3);
 }
 
 .context-toggle {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   background: none;
   border: none;
-  padding: 0;
+  padding: var(--spacing-0);
   cursor: pointer;
   color: var(--text-secondary);
 }
@@ -421,39 +421,39 @@ async function copyId() {
 }
 
 .context-toggle .section-title {
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .context-content {
-  margin-top: 0.75rem;
+  margin-top: var(--spacing-3);
 }
 
 .context-json {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   background-color: var(--code-bg);
-  padding: 1rem;
-  border-radius: 0.375rem;
+  padding: var(--spacing-4);
+  border-radius: var(--radius-md);
   overflow-x: auto;
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .actions-section {
   display: flex;
-  gap: 0.75rem;
-  padding-top: 1rem;
+  gap: var(--spacing-3);
+  padding-top: var(--spacing-4);
   border-top: 1px solid var(--border-default);
 }
 
 .action-btn {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--spacing-1-5);
   padding: 0.5rem 1rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .action-btn:disabled {
@@ -495,23 +495,23 @@ async function copyId() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 0.75rem;
+  padding-top: var(--spacing-3);
   border-top: 1px solid var(--border-subtle);
 }
 
 .operation-id {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-family: monospace;
   color: var(--text-muted);
 }
 
 .copy-id-btn {
   padding: 0.25rem 0.5rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   background: none;
   border: 1px solid var(--border-default);
   color: var(--text-muted);
-  border-radius: 0.25rem;
+  border-radius: var(--radius-default);
   cursor: pointer;
 }
 

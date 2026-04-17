@@ -63,10 +63,10 @@ const typeIcon = (type: string): string => {
   background-color: #1e1e1e;
   border: 1px solid #444;
   border-bottom: none;
-  border-radius: 4px 4px 0 0;
-  z-index: 100;
+  border-radius: var(--radius-default) 4px 0 0;
+  z-index: var(--z-popover);
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .completion-item {
@@ -74,8 +74,8 @@ const typeIcon = (type: string): string => {
   align-items: center;
   padding: 4px 12px;
   cursor: pointer;
-  gap: 8px;
-  transition: background-color 0.1s;
+  gap: var(--spacing-2);
+  transition: background-color var(--duration-100);
 }
 
 .completion-item:hover,
@@ -104,7 +104,7 @@ const typeIcon = (type: string): string => {
 .item-desc {
   color: #666;
   margin-left: auto;
-  font-size: 11px;
+  font-size: var(--text-xs);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -112,7 +112,7 @@ const typeIcon = (type: string): string => {
 
 .completion-hint {
   padding: 2px 12px;
-  font-size: 10px;
+  font-size: var(--text-xs);
   color: #555;
   border-top: 1px solid #333;
   text-align: center;
@@ -129,6 +129,6 @@ const typeIcon = (type: string): string => {
 
 .completion-suggestions::-webkit-scrollbar-thumb {
   background: #555;
-  border-radius: 3px;
+  border-radius: var(--radius-default);
 }
 </style>

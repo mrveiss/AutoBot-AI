@@ -127,7 +127,7 @@ const isDevToolsActive = computed(() => {
 /* Issue #901: Technical Precision Analytics View Design */
 
 .tab-icon-fa {
-  font-size: 16px;
+  font-size: var(--text-base);
   flex-shrink: 0;
 }
 
@@ -157,8 +157,8 @@ const isDevToolsActive = computed(() => {
 }
 
 .page-title {
-  margin: 0;
-  font-size: 24px;
+  margin: var(--spacing-0);
+  font-size: var(--text-2xl);
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-sans);
@@ -167,7 +167,7 @@ const isDevToolsActive = computed(() => {
 
 .page-subtitle {
   margin: 6px 0 0 0;
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   line-height: 1.5;
 }
@@ -183,7 +183,7 @@ const isDevToolsActive = computed(() => {
 
 .nav-tabs {
   display: flex;
-  gap: 2px;
+  gap: var(--spacing-0-5);
   padding: 0 32px;
   max-width: 1400px;
   margin: 0 auto;
@@ -193,14 +193,14 @@ const isDevToolsActive = computed(() => {
 .nav-tab {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   padding: 12px 16px;
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
   text-decoration: none;
   border-bottom: 2px solid transparent;
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-150) var(--ease-in-out);
   position: relative;
   top: 1px;
   white-space: nowrap;
@@ -242,22 +242,22 @@ const isDevToolsActive = computed(() => {
   }
 
   .page-title {
-    font-size: 20px;
+    font-size: var(--text-xl);
   }
 
   .page-subtitle {
-    font-size: 13px;
+    font-size: var(--text-sm);
   }
 
   .nav-tabs {
     padding: 0 16px;
-    gap: 0;
+    gap: var(--spacing-0);
   }
 
   .nav-tab {
     padding: 10px 12px;
-    font-size: 13px;
-    gap: 6px;
+    font-size: var(--text-sm);
+    gap: var(--spacing-1-5);
   }
 
   .tab-icon {
@@ -266,7 +266,7 @@ const isDevToolsActive = computed(() => {
   }
 
   .analytics-router-view {
-    padding: 16px;
+    padding: var(--spacing-4);
   }
 }
 

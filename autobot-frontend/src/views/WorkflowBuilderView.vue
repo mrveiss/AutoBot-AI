@@ -1190,19 +1190,19 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .sidebar-header {
-  padding: 20px;
+  padding: var(--spacing-5);
   border-bottom: 1px solid var(--border-default);
 }
 
 .sidebar-header h3 {
-  margin: 0;
-  font-size: 16px;
+  margin: var(--spacing-0);
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-sans);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
   line-height: 1.5;
 }
 
@@ -1221,7 +1221,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 .category-divider {
   padding: 12px 20px 8px;
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.8px;
@@ -1238,7 +1238,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 .health-indicator {
   font-size: 0.65rem;
   padding: 1px 6px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   text-transform: uppercase;
   font-weight: 600;
 }
@@ -1261,10 +1261,10 @@ watch(hasActiveWorkflows, (hasActive) => {
 .category-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-3);
   padding: 10px 20px;
   cursor: pointer;
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-150) var(--ease-in-out);
   color: var(--text-secondary);
   border-left: 2px solid transparent;
   /* Reset button styles */
@@ -1295,17 +1295,17 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 .category-item span:first-of-type:not(.count) {
   flex: 1;
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   font-family: var(--font-sans);
 }
 
 .category-item .count {
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-family: var(--font-mono);
   background: var(--bg-tertiary);
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   color: var(--text-tertiary);
   font-weight: 500;
 }
@@ -1332,16 +1332,16 @@ watch(hasActiveWorkflows, (hasActive) => {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 2px;
-  font-size: 13px;
+  border-radius: var(--radius-xs);
+  font-size: var(--text-sm);
   font-weight: 500;
   font-family: var(--font-sans);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  gap: var(--spacing-2);
+  transition: all var(--duration-150) var(--ease-in-out);
 }
 
 .btn-refresh:hover:not(:disabled) {
@@ -1391,30 +1391,30 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .header-left h2 {
-  margin: 0;
-  font-size: 20px;
+  margin: var(--spacing-0);
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .header-left .subtitle {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
 .header-actions {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
   align-items: center;
 }
 
 .status-badge {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   padding: 8px 14px;
-  border-radius: 20px;
-  font-size: 13px;
+  border-radius: var(--radius-2xl);
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
@@ -1441,9 +1441,9 @@ watch(hasActiveWorkflows, (hasActive) => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: var(--spacing-4);
   color: var(--text-tertiary);
-  padding: 40px;
+  padding: var(--spacing-10);
 }
 
 .error-container .error-icon {
@@ -1459,12 +1459,12 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .error-container h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-primary);
 }
 
 .error-container p {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-secondary);
 }
 
@@ -1472,26 +1472,26 @@ watch(hasActiveWorkflows, (hasActive) => {
 .content-body {
   flex: 1;
   overflow-y: auto;
-  padding: 24px;
+  padding: var(--spacing-6);
 }
 
 /* Overview Stats Grid */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
 }
 
 .stat-card {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 20px;
+  gap: var(--spacing-4);
+  padding: var(--spacing-5);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
-  transition: all 0.2s;
+  border-radius: var(--radius-xl);
+  transition: all var(--duration-200);
 }
 
 .stat-card.active {
@@ -1501,12 +1501,12 @@ watch(hasActiveWorkflows, (hasActive) => {
 .stat-card .stat-icon {
   width: 48px;
   height: 48px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   background: var(--bg-tertiary);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: var(--text-xl);
   color: var(--text-secondary);
 }
 
@@ -1526,13 +1526,13 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .stat-value {
-  font-size: 20px;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .stat-label {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -1540,24 +1540,24 @@ watch(hasActiveWorkflows, (hasActive) => {
 .overview-sections {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--spacing-6);
 }
 
 .overview-card {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
-  padding: 20px;
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-5);
 }
 
 .overview-card h4 {
   margin: 0 0 16px;
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .overview-card h4 i {
@@ -1568,20 +1568,20 @@ watch(hasActiveWorkflows, (hasActive) => {
 .quick-actions-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .quick-action {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 16px;
+  gap: var(--spacing-2);
+  padding: var(--spacing-4);
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
   color: var(--text-secondary);
 }
 
@@ -1592,11 +1592,11 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .quick-action i {
-  font-size: 20px;
+  font-size: var(--text-xl);
 }
 
 .quick-action span {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
@@ -1604,20 +1604,20 @@ watch(hasActiveWorkflows, (hasActive) => {
 .strategies-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .strategy-item {
-  padding: 16px;
+  padding: var(--spacing-4);
   background: var(--bg-tertiary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .strategy-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: var(--spacing-2-5);
+  margin-bottom: var(--spacing-2);
 }
 
 .strategy-header i {
@@ -1630,13 +1630,13 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .strategy-description {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   margin: 0 0 8px;
 }
 
 .strategy-best-for {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   font-style: italic;
 }
@@ -1645,15 +1645,15 @@ watch(hasActiveWorkflows, (hasActive) => {
 .examples-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .example-item {
   padding: 12px 16px;
   background: var(--bg-tertiary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .example-item:hover {
@@ -1664,7 +1664,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
+  margin-bottom: var(--spacing-1);
 }
 
 .example-name {
@@ -1674,17 +1674,17 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .example-strategy {
-  font-size: 12px;
+  font-size: var(--text-xs);
   padding: 2px 8px;
   background: var(--color-primary-bg);
   color: var(--color-primary);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
 }
 
 .example-description {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 /* Natural Language Section */
@@ -1695,18 +1695,18 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 .nl-header {
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: var(--spacing-6);
 }
 
 .nl-header h3 {
-  margin: 0;
-  font-size: 18px;
+  margin: var(--spacing-0);
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .nl-header h3 i {
@@ -1721,18 +1721,18 @@ watch(hasActiveWorkflows, (hasActive) => {
 .nl-input-area {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
-  padding: 20px;
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-5);
 }
 
 .nl-input-area textarea {
   width: 100%;
-  padding: 12px;
+  padding: var(--spacing-3);
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: var(--text-sm);
   resize: vertical;
   font-family: inherit;
 }
@@ -1740,6 +1740,10 @@ watch(hasActiveWorkflows, (hasActive) => {
 .nl-input-area textarea:focus {
   outline: none;
   border-color: var(--color-primary);
+}
+.nl-input-area textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .nl-input-area textarea::placeholder {
@@ -1756,10 +1760,10 @@ watch(hasActiveWorkflows, (hasActive) => {
 .checkbox-option {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   cursor: pointer;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .checkbox-option input {
@@ -1771,9 +1775,9 @@ watch(hasActiveWorkflows, (hasActive) => {
   padding: 8px 12px;
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .nl-actions {
@@ -1783,27 +1787,27 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 /* Approval Panel */
 .approval-panel {
-  margin-top: 24px;
+  margin-top: var(--spacing-6);
   background: var(--bg-secondary);
   border: 1px solid var(--color-warning);
-  border-radius: 12px;
-  padding: 20px;
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-5);
 }
 
 .approval-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 16px;
+  gap: var(--spacing-2-5);
+  margin-bottom: var(--spacing-4);
 }
 
 .approval-header i {
-  font-size: 20px;
+  font-size: var(--text-xl);
   color: var(--color-warning);
 }
 
 .approval-header h4 {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-primary);
 }
 
@@ -1814,28 +1818,28 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 .approval-meta {
   display: flex;
-  gap: 16px;
-  font-size: 13px;
+  gap: var(--spacing-4);
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
 .approval-meta span {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 .approval-steps {
   margin: 16px 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .approval-step {
-  padding: 12px;
+  padding: var(--spacing-3);
   background: var(--bg-tertiary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border-left: 3px solid var(--border-default);
 }
 
@@ -1847,18 +1851,18 @@ watch(hasActiveWorkflows, (hasActive) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
 }
 
 .step-description {
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
 .risk-badge {
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   text-transform: uppercase;
 }
 
@@ -1880,17 +1884,17 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 .step-command {
   display: block;
-  padding: 8px;
+  padding: var(--spacing-2);
   background: var(--bg-primary);
-  border-radius: 4px;
-  font-size: 12px;
+  border-radius: var(--radius-default);
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   overflow-x: auto;
 }
 
 .approval-actions {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
   justify-content: flex-end;
 }
 
@@ -1898,25 +1902,25 @@ watch(hasActiveWorkflows, (hasActive) => {
 .agents-container {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
-  padding: 24px;
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-6);
 }
 
 .agents-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-5);
 }
 
 .agents-header h3 {
-  margin: 0;
-  font-size: 16px;
+  margin: var(--spacing-0);
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .agents-header h3 i {
@@ -1924,13 +1928,13 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .btn-refresh-sm {
-  padding: 8px;
+  padding: var(--spacing-2);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .btn-refresh-sm:hover:not(:disabled) {
@@ -1945,32 +1949,32 @@ watch(hasActiveWorkflows, (hasActive) => {
 .loading-inline {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 20px;
+  gap: var(--spacing-3);
+  padding: var(--spacing-5);
   color: var(--text-tertiary);
 }
 
 .agents-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .agent-card {
   background: var(--bg-tertiary);
-  border-radius: 8px;
-  padding: 16px;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
 }
 
 .agent-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: var(--spacing-2-5);
+  margin-bottom: var(--spacing-3);
 }
 
 .agent-header i {
-  font-size: 18px;
+  font-size: var(--text-lg);
   color: var(--color-primary);
 }
 
@@ -1982,32 +1986,32 @@ watch(hasActiveWorkflows, (hasActive) => {
 .agent-capabilities {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 12px;
+  gap: var(--spacing-1-5);
+  margin-bottom: var(--spacing-3);
 }
 
 .capability-tag {
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 2px 8px;
   background: var(--bg-secondary);
   color: var(--text-secondary);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
 }
 
 .agent-performance {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .agent-performance .perf-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .agent-performance .label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   min-width: 70px;
 }
@@ -2016,19 +2020,19 @@ watch(hasActiveWorkflows, (hasActive) => {
   flex: 1;
   height: 6px;
   background: var(--bg-secondary);
-  border-radius: 3px;
+  border-radius: var(--radius-default);
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
   background: var(--color-success);
-  border-radius: 3px;
-  transition: width 0.3s;
+  border-radius: var(--radius-default);
+  transition: width var(--duration-300);
 }
 
 .agent-performance .value {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--text-primary);
   min-width: 40px;
@@ -2041,15 +2045,15 @@ watch(hasActiveWorkflows, (hasActive) => {
   background: var(--color-primary);
   color: var(--text-on-primary);
   border: none;
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  transition: all 0.2s;
+  gap: var(--spacing-2);
+  transition: all var(--duration-200);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -2066,14 +2070,14 @@ watch(hasActiveWorkflows, (hasActive) => {
   background: var(--color-success);
   color: var(--text-on-primary);
   border: none;
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  transition: all 0.2s;
+  gap: var(--spacing-2);
+  transition: all var(--duration-200);
 }
 
 .btn-success:hover {
@@ -2085,14 +2089,14 @@ watch(hasActiveWorkflows, (hasActive) => {
   background: var(--color-error);
   color: var(--text-on-primary);
   border: none;
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  transition: all 0.2s;
+  gap: var(--spacing-2);
+  transition: all var(--duration-200);
 }
 
 .btn-danger:hover {

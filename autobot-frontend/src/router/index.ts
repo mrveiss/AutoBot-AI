@@ -543,7 +543,30 @@ const routes: RouteRecordRaw[] = [
     redirect: '/',
     meta: { title: 'LLM Configuration' }
   },
-  // Issue #4490: Agent Registry removed — lives in SLM admin at /slm/agents/
+  // Issue #4270: Wire OperationDetail via OperationsView — long-running operations tracker
+  {
+    path: '/operations',
+    name: 'operations',
+    component: () => import('@/views/OperationsView.vue'),
+    meta: {
+      title: 'Operations',
+      icon: 'fas fa-tasks',
+      description: 'Monitor and manage long-running operations',
+      requiresAuth: true
+    }
+  },
+  // Issue #4703: Wire AgentRegistryView into router (#1794, #1822)
+  {
+    path: '/agents/registry',
+    name: 'agent-registry',
+    component: () => import('@/views/AgentRegistryView.vue'),
+    meta: {
+      title: 'Agent Registry',
+      icon: 'fas fa-robot',
+      description: 'Browse backend and specialized agents, and manage agent settings',
+      requiresAuth: true
+    }
+  },
   // Issue #1521: Agent Heartbeat Panel — real-time agent run status
   {
     path: '/agents/heartbeat',
@@ -611,7 +634,9 @@ const routes: RouteRecordRaw[] = [
       admin: true,
     },
   },
-  // Issue #4491: Desktop removed — VNC is the noVNC tab in /chat
+  // /desktop removed from nav — noVNC is accessible via the Chat tab's noVNC tab.
+  // Redirect any bookmarked /desktop URLs to /chat.
+  { path: '/desktop', redirect: '/chat' },
   // Issue #3502: Custom Dashboard renamed to /home (see home route above)
 
   // Issue #729: Infrastructure routes redirected to slm-admin

@@ -788,10 +788,10 @@ onMounted(() => {
 
 <style scoped>
 .code-review-dashboard {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: var(--spacing-6);
 }
 
 /* Header */
@@ -800,15 +800,15 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .header-content h2 {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin: 0;
-  font-size: 1.5rem;
+  gap: var(--spacing-2);
+  margin: var(--spacing-0);
+  font-size: var(--text-2xl);
   color: var(--text-primary);
 }
 
@@ -819,26 +819,26 @@ onMounted(() => {
 .subtitle {
   color: var(--text-secondary);
   margin: 0.25rem 0 0 0;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .header-actions {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 /* Buttons */
 .action-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   padding: 0.5rem 1rem;
   border: none;
-  border-radius: 6px;
-  font-size: 0.875rem;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .action-btn.primary {
@@ -888,21 +888,21 @@ onMounted(() => {
 .path-selection {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 1rem;
-  padding: 1rem;
+  gap: var(--spacing-4);
+  padding: var(--spacing-4);
   background: var(--bg-secondary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-color);
 }
 
 .input-group {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .input-group label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -913,30 +913,34 @@ onMounted(() => {
   padding: 0.625rem 0.875rem;
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .input-group input:focus {
   outline: none;
   border-color: var(--accent-color);
 }
+.input-group input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .language-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .chip {
   padding: 0.375rem 0.75rem;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
-  border-radius: 16px;
-  font-size: 0.75rem;
+  border-radius: var(--radius-2xl);
+  font-size: var(--text-xs);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .chip.active {
@@ -949,21 +953,21 @@ onMounted(() => {
 .summary-cards {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .summary-card {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 1rem;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4);
   background: var(--bg-secondary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-color);
 }
 
 .card-icon {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
 }
 
 .card-content {
@@ -972,13 +976,13 @@ onMounted(() => {
 }
 
 .card-value {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .card-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -986,13 +990,13 @@ onMounted(() => {
 .content-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
+  gap: var(--spacing-6);
 }
 
 /* Panels */
 .panel {
   background: var(--bg-secondary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-color);
   overflow: hidden;
 }
@@ -1001,18 +1005,18 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem;
+  padding: var(--spacing-4);
   border-bottom: 1px solid var(--border-color);
 }
 
 .panel-header h3 {
-  margin: 0;
-  font-size: 1rem;
+  margin: var(--spacing-0);
+  font-size: var(--text-base);
   color: var(--text-primary);
 }
 
 .panel-content {
-  padding: 1rem;
+  padding: var(--spacing-4);
   max-height: 400px;
   overflow-y: auto;
 }
@@ -1020,7 +1024,7 @@ onMounted(() => {
 .close-btn {
   background: none;
   border: none;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   color: var(--text-secondary);
   cursor: pointer;
 }
@@ -1028,19 +1032,19 @@ onMounted(() => {
 /* Filter Tabs */
 .filter-tabs {
   display: flex;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
   flex-wrap: wrap;
 }
 
 .filter-tab {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
   padding: 0.25rem 0.5rem;
   background: transparent;
   border: none;
-  border-radius: 4px;
-  font-size: 0.75rem;
+  border-radius: var(--radius-default);
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   cursor: pointer;
 }
@@ -1053,7 +1057,7 @@ onMounted(() => {
 .filter-tab .count {
   background: rgba(0,0,0,0.2);
   padding: 0.125rem 0.375rem;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 0.625rem;
 }
 
@@ -1061,16 +1065,16 @@ onMounted(() => {
 .issues-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .issue-card {
-  padding: 0.875rem;
+  padding: var(--spacing-3-5);
   background: var(--bg-tertiary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border-left: 3px solid;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .issue-card:hover {
@@ -1097,32 +1101,32 @@ onMounted(() => {
 .issue-header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-2);
 }
 
 .severity-badge {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .severity-badge.large {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
 }
 
 .severity-badge.small {
   font-size: 0.625rem;
   padding: 0.125rem 0.375rem;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   background: var(--bg-quaternary);
 }
 
 .issue-code {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--accent-color);
   background: var(--bg-quaternary);
   padding: 0.125rem 0.375rem;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 .issue-name {
@@ -1132,10 +1136,10 @@ onMounted(() => {
 
 .issue-location {
   display: flex;
-  gap: 0.5rem;
-  font-size: 0.75rem;
+  gap: var(--spacing-2);
+  font-size: var(--text-xs);
   color: var(--text-secondary);
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
 }
 
 .file-path {
@@ -1147,7 +1151,7 @@ onMounted(() => {
 }
 
 .issue-message {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: 0.8125rem;
   color: var(--text-secondary);
   line-height: 1.4;
@@ -1155,76 +1159,76 @@ onMounted(() => {
 
 /* Detail Panel */
 .detail-section {
-  margin-bottom: 1.25rem;
+  margin-bottom: var(--spacing-5);
 }
 
 .detail-section label {
   display: block;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
 }
 
 .detail-header {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .detail-title h4 {
-  margin: 0;
-  font-size: 1rem;
+  margin: var(--spacing-0);
+  font-size: var(--text-base);
   color: var(--text-primary);
 }
 
 .location-info {
   font-family: monospace;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
 .line-info {
   color: var(--text-secondary);
-  margin-left: 0.5rem;
+  margin-left: var(--spacing-2);
 }
 
 .description {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-secondary);
   line-height: 1.5;
 }
 
 .suggestion-box {
   display: flex;
-  gap: 0.75rem;
-  padding: 0.875rem;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3-5);
   background: rgba(16, 185, 129, 0.1);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
 .suggestion-icon {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
 }
 
 .suggestion-box p {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-primary);
   line-height: 1.4;
 }
 
 .code-snippet {
   background: var(--bg-tertiary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
 .code-snippet pre {
-  margin: 0;
-  padding: 0.875rem;
+  margin: var(--spacing-0);
+  padding: var(--spacing-3-5);
   overflow-x: auto;
 }
 
@@ -1236,8 +1240,8 @@ onMounted(() => {
 
 .detail-actions {
   display: flex;
-  gap: 0.75rem;
-  padding-top: 1rem;
+  gap: var(--spacing-3);
+  padding-top: var(--spacing-4);
   border-top: 1px solid var(--border-color);
 }
 
@@ -1276,20 +1280,20 @@ onMounted(() => {
 .chart-legend {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   padding: 0 1rem;
 }
 
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .legend-color {
   width: 12px;
   height: 12px;
-  border-radius: 3px;
+  border-radius: var(--radius-default);
 }
 
 .legend-label {
@@ -1311,7 +1315,7 @@ onMounted(() => {
 .history-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .history-item {
@@ -1320,9 +1324,9 @@ onMounted(() => {
   align-items: center;
   padding: 0.75rem 1rem;
   background: var(--bg-tertiary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .history-item:hover {
@@ -1332,28 +1336,28 @@ onMounted(() => {
 .history-info {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 
 .history-path {
   font-family: monospace;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
 .history-date {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
 .history-stats {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .stat {
   padding: 0.25rem 0.5rem;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.6875rem;
   font-weight: 600;
 }
@@ -1389,12 +1393,12 @@ onMounted(() => {
 
 .empty-icon {
   font-size: 2.5rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--spacing-3);
 }
 
 .empty-state p {
-  margin: 0;
-  font-size: 0.875rem;
+  margin: var(--spacing-0);
+  font-size: var(--text-sm);
 }
 
 /* Modal */
@@ -1405,12 +1409,12 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: var(--z-modal-backdrop);
 }
 
 .modal {
   background: var(--bg-secondary);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   width: 90%;
   max-width: 600px;
   max-height: 80vh;
@@ -1428,38 +1432,38 @@ onMounted(() => {
 }
 
 .modal-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-primary);
 }
 
 .modal-content {
-  padding: 1.25rem;
+  padding: var(--spacing-5);
   overflow-y: auto;
 }
 
 .pattern-category {
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
 }
 
 .pattern-category h4 {
   margin: 0 0 0.75rem 0;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
 .pattern-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .pattern-item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   padding: 0.625rem 0.875rem;
   background: var(--bg-tertiary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   opacity: 0.6;
 }
 
@@ -1476,20 +1480,20 @@ onMounted(() => {
 .pattern-info {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   flex: 1;
 }
 
 .pattern-code {
   font-family: monospace;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--accent-color);
 }
 
 .pattern-name {
   flex: 1;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 

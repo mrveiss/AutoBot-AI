@@ -46,7 +46,7 @@
       </Transition>
 
       <!-- Main Chat Area -->
-      <div class="flex-1 flex flex-col min-w-0 relative">
+      <div class="flex-1 flex flex-col min-w-0 min-h-0 relative overflow-hidden">
 
         <!-- Chat Header (Sticky at top) -->
         <ChatHeader
@@ -107,7 +107,7 @@
           @loading-complete="handleContentLoadingComplete"
           @loading-error="handleContentLoadingError"
           @loading-timeout="handleContentLoadingTimeout"
-          class="flex-1 min-h-0 flex flex-col overflow-y-auto"
+          class="flex-1 min-h-0 flex flex-col overflow-hidden"
         >
           <!-- Issue #3232: Live reasoning trace panel above the chat input -->
           <ReasoningTrace
@@ -168,6 +168,64 @@
         @close="showCommandDialog = false"
       />
 
+      <!-- Agent-Loop Tool Approval Dialog (#4952) -->
+      <!-- Shown when the agent loop publishes APPROVAL_REQUIRED for a sensitive tool -->
+      <div v-if="pendingToolApproval" class="tool-approval-overlay" role="dialog" aria-modal="true" :aria-label="$t('chat.interface.toolApprovalTitle')">
+        <div class="tool-approval-dialog">
+          <div class="tool-approval-header">
+            <i class="fas fa-shield-exclamation" aria-hidden="true"></i>
+            <h3>{{ $t('chat.interface.toolApprovalTitle') }}</h3>
+          </div>
+          <div class="tool-approval-body">
+            <div class="tool-approval-row">
+              <span class="tool-approval-label">{{ $t('chat.interface.toolApprovalTool') }}</span>
+              <code class="tool-approval-value">{{ pendingToolApproval.tool_name }}</code>
+            </div>
+            <div class="tool-approval-row">
+              <span class="tool-approval-label">{{ $t('chat.interface.toolApprovalRisk') }}</span>
+              <span class="tool-approval-value" :class="`risk-${pendingToolApproval.risk_level.toLowerCase()}`">{{ pendingToolApproval.risk_level }}</span>
+            </div>
+            <div class="tool-approval-row">
+              <span class="tool-approval-label">{{ $t('chat.interface.toolApprovalReason') }}</span>
+              <span class="tool-approval-value">{{ pendingToolApproval.reason }}</span>
+            </div>
+            <div v-if="Object.keys(pendingToolApproval.arguments).length" class="tool-approval-row">
+              <span class="tool-approval-label">{{ $t('chat.interface.toolApprovalArgs') }}</span>
+              <pre class="tool-approval-args">{{ JSON.stringify(pendingToolApproval.arguments, null, 2) }}</pre>
+            </div>
+            <!-- Issue #4960: countdown timer -->
+            <div class="tool-approval-countdown" role="timer" :aria-label="$t('chat.interface.toolApprovalCountdown', { seconds: toolApprovalSecondsLeft })">
+              <div class="tool-approval-countdown-bar-track">
+                <div
+                  class="tool-approval-countdown-bar-fill"
+                  :style="{ width: `${(toolApprovalSecondsLeft / pendingToolApproval.timeout_seconds) * 100}%` }"
+                  :class="toolApprovalSecondsLeft <= 10 ? 'tool-approval-countdown-bar-fill--urgent' : ''"
+                ></div>
+              </div>
+              <span class="tool-approval-countdown-label">{{ $t('chat.interface.toolApprovalCountdown', { seconds: toolApprovalSecondsLeft }) }}</span>
+            </div>
+          </div>
+          <div class="tool-approval-footer">
+            <button
+              class="tool-approval-btn tool-approval-btn--deny"
+              :disabled="submittingApproval"
+              @click="onToolDenied()"
+            >
+              <i class="fas fa-times" aria-hidden="true"></i>
+              {{ $t('chat.interface.toolApprovalDeny') }}
+            </button>
+            <button
+              class="tool-approval-btn tool-approval-btn--approve"
+              :disabled="submittingApproval"
+              @click="onToolApproved()"
+            >
+              <i class="fas fa-check" aria-hidden="true"></i>
+              {{ submittingApproval ? $t('chat.interface.toolApprovalSubmitting') : $t('chat.interface.toolApprovalApprove') }}
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Workflow Progress Widget -->
       <div v-if="showWorkflowProgress" class="workflow-progress-widget">
         <WorkflowProgressWidget
@@ -225,6 +283,8 @@ import { fetchWithAuth } from '@/utils/fetchWithAuth'
 // Issue #3232: chain-of-thought reasoning trace
 import ReasoningTrace from './ReasoningTrace.vue'
 import { useReasoningTrace } from '@/composables/useReasoningTrace'
+// Issue #4952: agent-loop tool approval
+import { useToolApproval, type PendingToolApproval } from '@/composables/useToolApproval'
 
 // i18n
 const { t } = useI18n()
@@ -240,6 +300,69 @@ const {
   isActive: cotIsActive,
   clear: cotClear,
 } = useReasoningTrace(store.currentSessionId)
+
+// Issue #4952: agent-loop tool approval via POST /api/agent-terminal/tools/approve/{id}
+const {
+  pendingToolApproval,
+  submittingApproval,
+  submitToolApproval,
+  clearToolApproval,
+} = useToolApproval()
+
+// Issue #4960: countdown timer — tracks seconds remaining until server auto-denies
+const toolApprovalSecondsLeft = ref<number>(0)
+let _countdownInterval: ReturnType<typeof setInterval> | null = null
+
+const _stopCountdown = (): void => {
+  if (_countdownInterval !== null) {
+    clearInterval(_countdownInterval)
+    _countdownInterval = null
+  }
+}
+
+const _startCountdown = (timeoutSeconds: number): void => {
+  _stopCountdown()
+  toolApprovalSecondsLeft.value = timeoutSeconds
+  _countdownInterval = setInterval(() => {
+    if (toolApprovalSecondsLeft.value <= 1) {
+      _stopCountdown()
+      toolApprovalSecondsLeft.value = 0
+    } else {
+      toolApprovalSecondsLeft.value -= 1
+    }
+  }, 1000)
+}
+
+// Start countdown when a new approval arrives; stop when cleared
+watch(pendingToolApproval, (approval: PendingToolApproval | null) => {
+  if (approval) {
+    _startCountdown(approval.timeout_seconds)
+  } else {
+    _stopCountdown()
+  }
+}, { immediate: false })
+
+const onToolApproved = async (comment?: string): Promise<void> => {
+  _stopCountdown()
+  try {
+    await submitToolApproval(true, comment)
+    notify(t('chat.interface.toolApprovalApprovedMsg'), 'success')
+  } catch {
+    notify(t('chat.interface.toolApprovalErrorMsg'), 'error')
+  }
+}
+
+const onToolDenied = async (comment?: string): Promise<void> => {
+  _stopCountdown()
+  try {
+    await submitToolApproval(false, comment)
+    notify(t('chat.interface.toolApprovalDeniedMsg'), 'warning')
+  } catch {
+    // On error, clear anyway so the dialog doesn't stay open forever
+    clearToolApproval()
+    notify(t('chat.interface.toolApprovalErrorMsg'), 'error')
+  }
+}
 
 // Voice output (#928)
 const {
@@ -914,6 +1037,7 @@ onUnmounted(() => {
     autoSaveInterval.value = null
   }
 
+  _stopCountdown()
   messagePoller.stop()
 })
 
@@ -1121,7 +1245,7 @@ function _extractCompleteSentences(text: string): string[] {
 /* File Panel Transitions */
 .slide-left-enter-active,
 .slide-left-leave-active {
-  transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+  transition: transform var(--duration-300) var(--ease-out), opacity var(--duration-300) var(--ease-out);
 }
 
 .slide-left-enter-from {
@@ -1154,4 +1278,43 @@ function _extractCompleteSentences(text: string): string[] {
 .header-btn {
   @apply w-8 h-8 flex items-center justify-center rounded-md transition-colors text-autobot-text-secondary hover:bg-autobot-bg-tertiary;
 }
+
+/* Agent-loop tool approval dialog (#4952) */
+.tool-approval-overlay {
+  @apply fixed inset-0 z-50 flex items-center justify-center bg-black/50;
+}
+.tool-approval-dialog {
+  @apply bg-autobot-bg-card rounded-xl shadow-2xl max-w-md w-full mx-4 p-0 overflow-hidden;
+  border: 1px solid var(--border-light);
+}
+.tool-approval-header {
+  @apply flex items-center gap-3 px-5 py-4;
+  background: var(--color-warning-bg);
+  border-bottom: 1px solid var(--color-warning-border);
+}
+.tool-approval-header i { color: var(--color-warning); font-size: 1.25rem; }
+.tool-approval-header h3 { @apply text-sm font-semibold; color: var(--text-primary); margin: 0; }
+.tool-approval-body { @apply flex flex-col gap-3 px-5 py-4; }
+.tool-approval-row { @apply flex flex-col gap-1; }
+.tool-approval-label { @apply text-xs font-medium; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.05em; }
+.tool-approval-value { @apply text-sm; color: var(--text-primary); }
+.tool-approval-value code { @apply font-mono text-xs px-2 py-0.5 rounded; background: var(--bg-tertiary); }
+.tool-approval-args { @apply text-xs font-mono p-2 rounded overflow-auto max-h-32; background: var(--bg-tertiary); color: var(--text-primary); margin: 0; }
+.risk-low    { color: var(--color-success); font-weight: 600; }
+.risk-medium { color: var(--color-warning); font-weight: 600; }
+.risk-high   { color: var(--color-error); font-weight: 600; }
+.risk-critical { color: var(--color-error-hover); font-weight: 700; }
+.tool-approval-footer { @apply flex items-center justify-end gap-3 px-5 py-4; border-top: 1px solid var(--border-subtle); }
+.tool-approval-btn { @apply flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors; }
+.tool-approval-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.tool-approval-btn--deny { background: var(--color-error-bg); color: var(--color-error); border: 1px solid var(--color-error-border); }
+.tool-approval-btn--deny:hover:not(:disabled) { background: var(--color-error); color: #fff; }
+.tool-approval-btn--approve { background: var(--color-success-bg); color: var(--color-success); border: 1px solid var(--color-success-border); }
+.tool-approval-btn--approve:hover:not(:disabled) { background: var(--color-success); color: #fff; }
+/* Issue #4960: countdown timer */
+.tool-approval-countdown { @apply flex flex-col gap-1 pt-1; }
+.tool-approval-countdown-bar-track { @apply w-full rounded-full overflow-hidden; height: 4px; background: var(--bg-tertiary); }
+.tool-approval-countdown-bar-fill { height: 4px; border-radius: 9999px; background: var(--color-warning); transition: width 1s linear, background 0.3s ease; }
+.tool-approval-countdown-bar-fill--urgent { background: var(--color-error); }
+.tool-approval-countdown-label { @apply text-xs; color: var(--text-tertiary); }
 </style>

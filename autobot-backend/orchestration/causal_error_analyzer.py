@@ -152,7 +152,9 @@ class CausalErrorAnalyzer:
 
         # Parse causal chain from reasoning (simplified extraction)
         causal_chain = self._extract_causal_chain(reasoning)
-        root_cause = self._extract_root_cause(reasoning)
+        # Prefer conclusion for root cause — it's the ThinkTool's explicit summary;
+        # fall back to extracting from raw reasoning when conclusion is empty.
+        root_cause = self._extract_root_cause(conclusion or reasoning)
 
         return CausalErrorAnalysis(
             error_description=str(error),

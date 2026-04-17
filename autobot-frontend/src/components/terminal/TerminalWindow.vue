@@ -1509,18 +1509,18 @@ export default {
 .window-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
+  gap: var(--spacing-2);
+  font-size: var(--text-sm);
   font-weight: 600;
 }
 
 .terminal-icon {
-  font-size: 16px;
+  font-size: var(--text-base);
 }
 
 .window-controls {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .control-button {
@@ -1528,10 +1528,10 @@ export default {
   border: 1px solid #666;
   color: #fff;
   padding: 4px 8px;
-  border-radius: 3px;
+  border-radius: var(--radius-default);
   cursor: pointer;
-  font-size: 12px;
-  transition: all 0.2s;
+  font-size: var(--text-xs);
+  transition: all var(--duration-200);
 }
 
 .control-button:hover:not(:disabled) {
@@ -1555,20 +1555,20 @@ export default {
   background-color: #1e1e1e;
   padding: 4px 16px;
   border-bottom: 1px solid #333;
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: #888;
 }
 
 .status-left, .status-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .connection-status {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 .status-dot {
@@ -1601,17 +1601,17 @@ export default {
 
 .terminal-output {
   flex: 1;
-  padding: 16px;
+  padding: var(--spacing-4);
   overflow-y: auto;
-  font-size: 13px;
+  font-size: var(--text-sm);
   line-height: 1.4;
   white-space: pre-wrap;
   word-break: break-all;
 }
 
 .terminal-line {
-  margin: 0;
-  padding: 0;
+  margin: var(--spacing-0);
+  padding: var(--spacing-0);
   min-height: 1.4em;
 }
 
@@ -1649,7 +1649,7 @@ export default {
 
 .prompt {
   color: #00ff00;
-  margin-right: 8px;
+  margin-right: var(--spacing-2);
   flex-shrink: 0;
 }
 
@@ -1664,10 +1664,15 @@ export default {
   min-width: 0;
 }
 
+.terminal-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 .cursor {
   color: #00ff00;
   font-weight: bold;
-  margin-left: 2px;
+  margin-left: var(--spacing-0-5);
 }
 
 .cursor.blink {
@@ -1681,7 +1686,7 @@ export default {
   background-color: #2d2d2d;
   padding: 6px 16px;
   border-top: 1px solid #333;
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 
 .footer-info {
@@ -1690,7 +1695,7 @@ export default {
 
 .footer-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .footer-button {
@@ -1698,10 +1703,10 @@ export default {
   border: 1px solid #666;
   color: #ccc;
   padding: 3px 8px;
-  border-radius: 3px;
+  border-radius: var(--radius-default);
   cursor: pointer;
-  font-size: 10px;
-  transition: background-color 0.2s;
+  font-size: var(--text-xs);
+  transition: background-color var(--duration-200);
 }
 
 .footer-button:hover {
@@ -1730,38 +1735,38 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
 }
 
 .modal-content {
   background-color: #2d2d2d;
   color: #fff;
-  padding: 24px;
-  border-radius: 8px;
+  padding: var(--spacing-6);
+  border-radius: var(--radius-lg);
   max-width: 400px;
   width: 90%;
   text-align: center;
 }
 
 .modal-content h3 {
-  margin-top: 0;
+  margin-top: var(--spacing-0);
   color: #ffc107;
 }
 
 .modal-actions {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
   justify-content: center;
-  margin-top: 20px;
+  margin-top: var(--spacing-5);
 }
 
 .btn {
   padding: 8px 16px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   cursor: pointer;
-  font-size: 14px;
-  transition: background-color 0.2s;
+  font-size: var(--text-sm);
+  transition: background-color var(--duration-200);
 }
 
 .btn-primary {
@@ -1850,18 +1855,18 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2000;
+  z-index: var(--z-popover);
   backdrop-filter: blur(2px);
 }
 
 .confirmation-modal {
   background-color: #2d2d2d;
   color: #fff;
-  padding: 0;
-  border-radius: 12px;
+  padding: var(--spacing-0);
+  border-radius: var(--radius-xl);
   max-width: 600px;
   width: 90%;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-lg);
   border: 1px solid #444;
 }
 
@@ -1874,17 +1879,17 @@ export default {
   padding: 20px 24px 16px 24px;
   border-bottom: 1px solid #444;
   background: var(--bg-secondary);
-  border-radius: 12px 12px 0 0;
+  border-radius: var(--radius-xl) 12px 0 0;
 }
 
 .modal-title {
-  margin: 0;
+  margin: var(--spacing-0);
   color: #ffc107;
-  font-size: 18px;
+  font-size: var(--text-lg);
   font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .confirmation-modal.emergency .modal-title {
@@ -1892,47 +1897,47 @@ export default {
 }
 
 .modal-content {
-  padding: 24px;
+  padding: var(--spacing-6);
 }
 
 .command-preview {
   background-color: #1e1e1e;
   border: 1px solid #444;
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 20px;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
+  margin-bottom: var(--spacing-5);
 }
 
 .command-label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: #888;
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .command-text {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: #87ceeb;
   background-color: #000;
-  padding: 12px;
-  border-radius: 6px;
+  padding: var(--spacing-3);
+  border-radius: var(--radius-md);
   border-left: 4px solid #ffc107;
   white-space: pre-wrap;
   word-break: break-all;
 }
 
 .risk-assessment {
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-5);
 }
 
 .risk-level {
   padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   font-weight: 600;
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
 }
 
 .risk-level.low {
@@ -1965,8 +1970,8 @@ export default {
 }
 
 .risk-reason {
-  margin-bottom: 4px;
-  font-size: 13px;
+  margin-bottom: var(--spacing-1);
+  font-size: var(--text-sm);
 }
 
 .confirmation-message {
@@ -1974,16 +1979,16 @@ export default {
 }
 
 .confirmation-message p {
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
 }
 
 .confirmation-message ul {
   margin: 12px 0;
-  padding-left: 20px;
+  padding-left: var(--spacing-5);
 }
 
 .confirmation-message li {
-  margin-bottom: 6px;
+  margin-bottom: var(--spacing-1-5);
   color: #ccc;
 }
 
@@ -1992,28 +1997,28 @@ export default {
 }
 
 .emergency-warning p {
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
   font-weight: 500;
 }
 
 .process-item {
   background-color: #1e1e1e;
   padding: 8px 12px;
-  border-radius: 4px;
-  margin-bottom: 4px;
+  border-radius: var(--radius-default);
+  margin-bottom: var(--spacing-1);
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: #87ceeb;
 }
 
 .modal-actions {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
   justify-content: flex-end;
   padding: 20px 24px;
   border-top: 1px solid #444;
   background-color: #252525;
-  border-radius: 0 0 12px 12px;
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
 }
 
 /* Enhanced animations */
@@ -2061,11 +2066,11 @@ export default {
   background-color: #17a2b8;
   color: white;
   padding: 8px 16px;
-  border-radius: 20px;
+  border-radius: var(--radius-2xl);
   display: inline-block;
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 600;
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-4);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -2073,22 +2078,22 @@ export default {
 .step-description h4 {
   margin: 0 0 8px 0;
   color: #17a2b8;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
 }
 
 .step-description p {
   margin: 0 0 16px 0;
   color: #ccc;
-  font-size: 14px;
+  font-size: var(--text-sm);
   line-height: 1.5;
 }
 
 .workflow-options {
   background-color: #1e1e1e;
-  border-radius: 8px;
-  padding: 16px;
-  margin-top: 20px;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
+  margin-top: var(--spacing-5);
   border-left: 4px solid #17a2b8;
 }
 
@@ -2099,14 +2104,14 @@ export default {
 }
 
 .option-info ul {
-  margin: 0;
-  padding-left: 20px;
+  margin: var(--spacing-0);
+  padding-left: var(--spacing-5);
   color: #ccc;
 }
 
 .option-info li {
-  margin-bottom: 8px;
-  font-size: 13px;
+  margin-bottom: var(--spacing-2);
+  font-size: var(--text-sm);
   line-height: 1.4;
 }
 
@@ -2157,7 +2162,7 @@ export default {
   font-weight: 500;
   background-color: rgba(23, 162, 184, 0.1);
   border-left: 3px solid #17a2b8;
-  padding-left: 8px;
+  padding-left: var(--spacing-2);
 }
 
 .line-manual_command {
@@ -2165,14 +2170,14 @@ export default {
   font-weight: 500;
   background-color: rgba(40, 167, 69, 0.1);
   border-left: 3px solid #28a745;
-  padding-left: 8px;
+  padding-left: var(--spacing-2);
 }
 
 .line-workflow_info {
   color: #6f42c1;
   background-color: rgba(111, 66, 193, 0.1);
   border-left: 3px solid #6f42c1;
-  padding-left: 8px;
+  padding-left: var(--spacing-2);
   font-style: italic;
 }
 
@@ -2203,7 +2208,7 @@ export default {
 
 .terminal-output::-webkit-scrollbar-thumb {
   background: #555;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 .terminal-output::-webkit-scrollbar-thumb:hover {
@@ -2221,8 +2226,8 @@ export default {
   }
 
   .terminal-output {
-    padding: 12px;
-    font-size: 12px;
+    padding: var(--spacing-3);
+    font-size: var(--text-xs);
   }
 
   .terminal-input-line {

@@ -380,11 +380,11 @@ const prevPage = async () => {
 
 <style scoped>
 .audit-enter-active {
-  transition: all 0.3s ease-out;
+  transition: all var(--duration-300) var(--ease-out);
 }
 
 .audit-leave-active {
-  transition: all 0.2s ease-in;
+  transition: all var(--duration-200) var(--ease-in);
 }
 
 .audit-enter-from {
@@ -398,7 +398,7 @@ const prevPage = async () => {
 }
 
 .audit-move {
-  transition: transform 0.3s ease;
+  transition: transform var(--duration-300) var(--ease-out);
 }
 
 .custom-scrollbar::-webkit-scrollbar {
@@ -411,6 +411,6 @@ const prevPage = async () => {
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background: rgba(156, 163, 175, 0.3);
-  border-radius: 3px;
+  border-radius: var(--radius-default);
 }
 </style>

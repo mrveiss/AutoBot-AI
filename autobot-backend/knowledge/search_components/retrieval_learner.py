@@ -21,6 +21,7 @@ rag:rl:cursors                                   HASH   — last processed strea
 import hashlib
 import json
 import logging
+import math
 import threading
 import time
 from dataclasses import dataclass, field
@@ -379,6 +380,7 @@ class RetrievalLearner:
         complexity: str = "simple",
         categories: Optional[List[str]] = None,
         user_id: Optional[str] = None,
+        exploration_constant: Optional[float] = None,
     ) -> Optional[RetrievalPattern]:
         """Return the best matching historical pattern for a query, or None.
 
@@ -388,17 +390,19 @@ class RetrievalLearner:
         3. Global exact hash — fallback when the user has no patterns yet.
         4. Global complexity-only hash — final fallback.
 
-        Only returns patterns with success_rate >= 0.6 and usage_count >= 3
-        to avoid acting on sparse evidence.
+        Issue #4674: Qualifying candidates (success_rate >= 0.6, usage_count >= 3)
+        are ranked by UCB1 score instead of raw success_rate so that
+        under-sampled patterns are explored rather than permanently ignored.
 
         Args:
-            query:      Raw query string (unused in current implementation but
-                        reserved for future embedding-based matching).
-            complexity: QueryComplexity.value string.
-            categories: Optional category list from the calling context.
-            user_id:    Authenticated user identifier for per-user scope.
-                        Falls back to global patterns when None or when the
-                        user has no qualifying patterns.
+            query:                Raw query string (unused in current implementation but
+                                  reserved for future embedding-based matching).
+            complexity:           QueryComplexity.value string.
+            categories:           Optional category list from the calling context.
+            user_id:              Authenticated user identifier for per-user scope.
+                                  Falls back to global patterns when None or when the
+                                  user has no qualifying patterns.
+            exploration_constant: UCB1 C constant; defaults to RAGConfig value (~sqrt(2)).
 
         Returns:
             Best matching RetrievalPattern or None.
@@ -420,22 +424,41 @@ class RetrievalLearner:
             candidates.append(f"{_PATTERN_KEY_PREFIX}{GLOBAL_USER}:{exact_hash}")
             candidates.append(f"{_PATTERN_KEY_PREFIX}{GLOBAL_USER}:{complexity_hash}")
 
+        if exploration_constant is None:
+            try:
+                from services.rag_config import get_rag_config
+
+                exploration_constant = get_rag_config().ucb1_exploration_constant
+            except Exception:
+                exploration_constant = math.sqrt(2)
+
         try:
             redis = await self._get_redis()
+            qualifying: List[RetrievalPattern] = []
             for redis_key in candidates:
                 raw = await redis.hgetall(redis_key)
                 if not raw:
                     continue
                 pattern = RetrievalPattern.from_redis_mapping(raw)
                 if pattern.success_rate >= 0.6 and pattern.usage_count >= 3:
-                    logger.debug(
-                        "RetrievalLearner: matched pattern %s (rate=%.2f, usage=%d, key=%s)",
-                        pattern.pattern_hash,
-                        pattern.success_rate,
-                        pattern.usage_count,
-                        redis_key,
-                    )
-                    return pattern
+                    qualifying.append(pattern)
+
+            if not qualifying:
+                return None
+
+            # Issue #4674: rank by UCB1 score — explore under-sampled patterns.
+            total_queries = sum(p.usage_count for p in qualifying)
+            best = max(
+                qualifying,
+                key=lambda p: _ucb1_score(p.success_rate, p.usage_count, total_queries, exploration_constant),
+            )
+            logger.debug(
+                "RetrievalLearner: matched pattern %s via UCB1 (rate=%.2f, usage=%d)",
+                best.pattern_hash,
+                best.success_rate,
+                best.usage_count,
+            )
+            return best
         except Exception as exc:
             logger.warning("RetrievalLearner: get_matching_pattern failed: %s", exc)
 
@@ -618,6 +641,37 @@ def get_retrieval_learner() -> RetrievalLearner:
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
+
+def _ucb1_score(
+    success_rate: float,
+    usage_count: int,
+    total_queries: int,
+    exploration_constant: float,
+) -> float:
+    """Compute UCB1 score for a retrieval pattern.
+
+    Issue #4674: UCB1 balances exploitation (high success_rate) with exploration
+    (patterns with low usage relative to total queries).
+
+    Patterns with usage_count == 0 receive +inf so they are always tried first.
+
+    Args:
+        success_rate:         EMA-smoothed success rate in [0, 1].
+        usage_count:          Number of times this pattern has been matched.
+        total_queries:        Sum of usage_count across all candidate patterns.
+        exploration_constant: UCB1 C constant (sqrt(2) by default).
+
+    Returns:
+        UCB1 score; higher is better.
+    """
+    if usage_count == 0:
+        return float("inf")
+    if total_queries <= 0:
+        return success_rate
+    return success_rate + exploration_constant * math.sqrt(
+        math.log(total_queries) / usage_count
+    )
 
 
 def _compute_pattern_hash(query_type: str, categories: List[str]) -> str:

@@ -971,19 +971,23 @@ watch([debouncedSearchQuery, filterCategory, filterType], () => {
 .search-input {
   padding: var(--spacing-2) var(--spacing-3) var(--spacing-2) var(--spacing-9);
   border: 1px solid var(--border-default);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   width: 250px;
   background: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  font-size: 14px;
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  font-size: var(--text-sm);
+  transition: all var(--duration-150) var(--ease-in-out);
 }
 
 .search-input:focus {
   outline: none;
   border-color: var(--color-info);
   box-shadow: 0 0 0 3px var(--color-info-bg);
+}
+.search-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* Filter bar */
@@ -993,7 +997,7 @@ watch([debouncedSearchQuery, filterCategory, filterType], () => {
   gap: var(--spacing-4);
   padding: var(--spacing-4);
   background: var(--bg-secondary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   margin-bottom: var(--spacing-4);
   flex-wrap: wrap;
 }
@@ -1013,18 +1017,22 @@ watch([debouncedSearchQuery, filterCategory, filterType], () => {
 .filter-select {
   padding: var(--spacing-1-5) var(--spacing-3);
   border: 1px solid var(--border-default);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   font-size: var(--text-sm);
   font-family: var(--font-sans);
   background: var(--bg-card);
   color: var(--text-primary);
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-150) var(--ease-in-out);
 }
 
 .filter-select:focus {
   outline: none;
   border-color: var(--color-info);
   box-shadow: 0 0 0 3px var(--color-info-bg);
+}
+.filter-select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* Loading and empty states */
@@ -1037,7 +1045,7 @@ watch([debouncedSearchQuery, filterCategory, filterType], () => {
 /* Table styles */
 .entries-table {
   background: var(--bg-card);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   overflow: hidden;
   box-shadow: var(--shadow-sm);
 }
@@ -1121,8 +1129,8 @@ tr.selected {
 .category-badge {
   display: inline-block;
   padding: var(--spacing-1) var(--spacing-3);
-  border-radius: 2px;
-  font-size: 11px;
+  border-radius: var(--radius-xs);
+  font-size: var(--text-xs);
   font-weight: 500;
   font-family: var(--font-sans);
   background: var(--bg-tertiary);
@@ -1149,8 +1157,8 @@ tr.selected {
   display: inline-block;
   padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--bg-tertiary);
-  border-radius: 2px;
-  font-size: 11px;
+  border-radius: var(--radius-xs);
+  font-size: var(--text-xs);
   font-family: var(--font-mono);
   font-weight: 400;
   color: var(--text-secondary);
@@ -1163,7 +1171,7 @@ tr.selected {
 
 /* Issue #901: Monospace for dates */
 .date-cell {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
@@ -1208,7 +1216,7 @@ tr.selected {
   margin-bottom: var(--spacing-8);
   padding: var(--spacing-4);
   background: var(--bg-secondary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 .meta-item {
@@ -1288,6 +1296,13 @@ tr.selected {
   border-color: var(--color-primary);
   box-shadow: var(--shadow-focus);
 }
+.form-input:focus-visible,
+.form-select:focus-visible,
+.form-textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.form-input:focus-visible,
 
 .form-row {
   display: grid;

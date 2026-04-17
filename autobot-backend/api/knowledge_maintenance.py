@@ -21,7 +21,7 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path as PathLib
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query, Request
 
 # Import Pydantic models from dedicated module
 from api.knowledge_models import (
@@ -41,6 +41,13 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.threshold_constants import QueryDefaults
 from knowledge_factory import get_or_create_knowledge_base
+from services.knowledge.contradiction_detector import (
+    ContradictionDetector,
+    generate_job_id,
+    load_report,
+    store_report,
+)
+from services.knowledge.synthesis_provenance import SynthesisProvenanceLog
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -1901,3 +1908,94 @@ async def delete_backup(
     result = await kb.delete_backup(backup_file=request.backup_file)
 
     return result
+
+
+# ===== KNOWLEDGE LINT ENDPOINTS =====
+
+_provenance_log = SynthesisProvenanceLog()
+
+
+async def _run_lint_scan(job_id: str, chunks: list[dict]) -> None:
+    """Background task: run contradiction scan and store result in Redis."""
+    logger.info("Lint job %s started (%d chunks)", job_id, len(chunks))
+    try:
+        detector = ContradictionDetector()
+        report = await detector.scan(chunks)
+        await store_report(report)
+        logger.info(
+            "Lint job %s finished: %d contradiction(s), %d gap(s)",
+            job_id,
+            len(report.contradictions),
+            len(report.gaps),
+        )
+    except Exception:
+        logger.exception("Lint job %s failed", job_id)
+
+
+async def _fetch_all_chunks(kb) -> list[dict]:
+    """Fetch all KB chunks as dicts with a 'text' key."""
+    def _load():
+        results = kb.chroma_collection.get(include=["documents", "metadatas"])
+        docs = results.get("documents") or []
+        metas = results.get("metadatas") or [{}] * len(docs)
+        return [{"text": d, "metadata": m} for d, m in zip(docs, metas)]
+
+    return await asyncio.to_thread(_load)
+
+
+@router.post("/lint")
+async def start_lint(
+    background_tasks: BackgroundTasks,
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+):
+    """Trigger a background contradiction scan of the knowledge base (Issue #4566).
+
+    Returns immediately with a job_id; poll GET /knowledge/lint/report for results.
+    """
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(status_code=500, detail="Knowledge base not initialized")
+
+    job_id = generate_job_id()
+    chunks = await _fetch_all_chunks(kb)
+    background_tasks.add_task(_run_lint_scan, job_id, chunks)
+    logger.info("Lint job %s queued (%d chunks)", job_id, len(chunks))
+    return {"status": "started", "job_id": job_id}
+
+
+@router.get("/lint/report")
+async def get_lint_report(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Return the latest stored contradiction report from Redis (Issue #4566).
+
+    Returns 404 if no report has been generated yet.
+    """
+    report = await load_report()
+    if report is None:
+        raise HTTPException(status_code=404, detail="No lint report available yet")
+    return report
+
+
+@router.get("/synthesis/log")
+async def get_synthesis_log(
+    limit: int = Query(
+        default=50,
+        ge=1,
+        le=200,
+        description="Max log entries to return (newest first)",
+    ),
+):
+    """Return recent synthesis provenance log entries from Redis stream.
+
+    Issue #4567: Synthesis provenance log.
+
+    Query parameters:
+    - limit: Maximum entries to return (default: 50, max: 200)
+
+    Returns list of provenance entries with: run_id, source_docs, synthesis_ids,
+    llm_model, prompt_template, ran_at, duration_ms.
+    """
+    entries = await _provenance_log.get_recent(limit=limit)
+    return {"entries": entries, "count": len(entries)}

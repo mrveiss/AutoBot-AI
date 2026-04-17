@@ -199,7 +199,7 @@ export const cacheService = new CacheService();
 
 // Make available globally for debugging
 if (typeof window !== 'undefined') {
-  (window as Record<string, unknown>).cacheService = cacheService;
+  (window as unknown as Record<string, unknown>).cacheService = cacheService;
 }
 
 export default cacheService;

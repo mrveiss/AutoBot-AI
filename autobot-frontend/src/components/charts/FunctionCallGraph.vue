@@ -1422,6 +1422,11 @@ watch(viewMode, async (newMode) => {
   border-color: var(--color-primary);
   box-shadow: var(--shadow-focus);
 }
+.graph-search:focus-visible,
+.module-filter:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .view-toggle {
   display: flex;
@@ -1435,7 +1440,7 @@ watch(viewMode, async (newMode) => {
   border-radius: var(--radius-md);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all var(--duration-200) ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .view-toggle button.active {
@@ -1477,7 +1482,7 @@ watch(viewMode, async (newMode) => {
   cursor: pointer;
   padding: var(--spacing-2) var(--spacing-3);
   border-radius: var(--radius-md);
-  transition: all var(--duration-200) ease;
+  transition: all var(--duration-200) var(--ease-out);
   border: 1px solid transparent;
 }
 
@@ -1592,7 +1597,7 @@ watch(viewMode, async (newMode) => {
   gap: var(--spacing-2);
   padding: var(--spacing-2) var(--spacing-3);
   cursor: pointer;
-  transition: background var(--duration-200) ease;
+  transition: background var(--duration-200) var(--ease-out);
 }
 
 .func-header:hover {
@@ -1719,7 +1724,7 @@ watch(viewMode, async (newMode) => {
   padding: 1px var(--spacing-1);
   background: var(--color-warning-bg);
   color: var(--color-warning);
-  border-radius: 3px;
+  border-radius: var(--radius-default);
 }
 
 .more-calls {
@@ -1872,7 +1877,7 @@ watch(viewMode, async (newMode) => {
 }
 
 .detail-row:last-child {
-  margin-bottom: 0;
+  margin-bottom: var(--spacing-0);
 }
 
 .detail-label {
@@ -1974,6 +1979,11 @@ watch(viewMode, async (newMode) => {
   outline: none;
   border-color: var(--color-primary);
 }
+.orphaned-search:focus-visible,
+.orphaned-module-filter:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .orphaned-list {
   display: flex;
@@ -1989,7 +1999,7 @@ watch(viewMode, async (newMode) => {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--duration-150) var(--ease-out);
 }
 
 .orphaned-item:hover {
@@ -2050,7 +2060,7 @@ watch(viewMode, async (newMode) => {
   border-radius: var(--radius-md);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--duration-150) var(--ease-out);
 }
 
 .btn-show-more:hover {
@@ -2077,7 +2087,7 @@ watch(viewMode, async (newMode) => {
 /* Orphaned stat styling */
 .stat-orphaned {
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--duration-150) var(--ease-out);
 }
 
 .stat-orphaned:hover,

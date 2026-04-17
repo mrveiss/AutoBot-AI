@@ -199,6 +199,24 @@ class MeshDB:
             )
             return [dict(r) for r in rows.mappings()]
 
+    async def get_anchor_neighbors(self, seed_ids: list[str]) -> list[str]:
+        """Return IDs of anchor nodes adjacent to any seed_id. Satisfies _AnchorDB Protocol (#4819)."""
+        if not seed_ids:
+            return []
+        sql = text("""
+            SELECT DISTINCT n.id::text
+            FROM mesh_nodes n
+            JOIN mesh_edges e
+              ON e.from_node = n.id OR e.to_node = n.id
+            WHERE (e.from_node = ANY(:seeds::uuid[])
+               OR  e.to_node   = ANY(:seeds::uuid[]))
+              AND n.is_anchor = TRUE
+              AND n.id != ALL(:seeds::uuid[])
+            """)
+        async with self.engine.connect() as conn:
+            rows = await conn.execute(sql, {"seeds": seed_ids})
+            return [row["id"] for row in rows.mappings()]
+
     async def fetch_candidate_edges(
         self,
         edge_type: str,

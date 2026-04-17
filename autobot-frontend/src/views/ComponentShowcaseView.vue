@@ -128,32 +128,32 @@
           <div class="card-stack">
             <BaseCard variant="default" size="sm">
               <template #header>
-                <h4 style="margin: 0; font-size: 14px;">{{ $t('views.componentShowcase.defaultCard') }}</h4>
+                <h4 style="margin: 0; font-size: var(--text-sm);">{{ $t('views.componentShowcase.defaultCard') }}</h4>
               </template>
-              <p style="margin: 0; font-size: 13px;">{{ $t('views.componentShowcase.defaultCardDesc') }}</p>
+              <p style="margin: 0; font-size: var(--text-sm);">{{ $t('views.componentShowcase.defaultCardDesc') }}</p>
             </BaseCard>
 
             <BaseCard variant="bordered" size="sm">
               <template #header>
-                <h4 style="margin: 0; font-size: 14px;">{{ $t('views.componentShowcase.borderedCard') }}</h4>
+                <h4 style="margin: 0; font-size: var(--text-sm);">{{ $t('views.componentShowcase.borderedCard') }}</h4>
               </template>
-              <p style="margin: 0; font-size: 13px;">{{ $t('views.componentShowcase.borderedCardDesc') }}</p>
+              <p style="margin: 0; font-size: var(--text-sm);">{{ $t('views.componentShowcase.borderedCardDesc') }}</p>
             </BaseCard>
 
             <BaseCard variant="elevated" size="sm">
               <template #header>
-                <h4 style="margin: 0; font-size: 14px;">{{ $t('views.componentShowcase.elevatedCard') }}</h4>
+                <h4 style="margin: 0; font-size: var(--text-sm);">{{ $t('views.componentShowcase.elevatedCard') }}</h4>
               </template>
-              <p style="margin: 0; font-size: 13px;">{{ $t('views.componentShowcase.elevatedCardDesc') }}</p>
+              <p style="margin: 0; font-size: var(--text-sm);">{{ $t('views.componentShowcase.elevatedCardDesc') }}</p>
             </BaseCard>
           </div>
 
           <h4 class="section-heading">{{ $t('views.componentShowcase.withFooter') }}</h4>
           <BaseCard variant="default" size="sm">
             <template #header>
-              <h4 style="margin: 0; font-size: 14px;">{{ $t('views.componentShowcase.cardWithFooter') }}</h4>
+              <h4 style="margin: 0; font-size: var(--text-sm);">{{ $t('views.componentShowcase.cardWithFooter') }}</h4>
             </template>
-            <p style="margin: 0; font-size: 13px;">{{ $t('views.componentShowcase.cardContent') }}</p>
+            <p style="margin: 0; font-size: var(--text-sm);">{{ $t('views.componentShowcase.cardContent') }}</p>
             <template #footer>
               <BaseButton size="sm" variant="ghost">{{ $t('views.componentShowcase.cancel') }}</BaseButton>
               <BaseButton size="sm" variant="primary">{{ $t('views.componentShowcase.save') }}</BaseButton>
@@ -203,7 +203,7 @@
 
             <template #footer>
               <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 13px; color: var(--text-secondary);">
+                <span style="font-size: var(--text-sm); color: var(--text-secondary);">
                   {{ $t('views.componentShowcase.showingEntries', { from: 1, to: 5, total: 5 }) }}
                 </span>
                 <div style="display: flex; gap: 4px;">
@@ -262,25 +262,25 @@
         <div class="component-section">
           <h4 class="section-heading">{{ $t('views.componentShowcase.uiFont') }}</h4>
           <div class="type-samples">
-            <p style="font-size: 28px; font-weight: 600; margin: 0;">{{ $t('views.componentShowcase.dashboardHeading') }}</p>
-            <p style="font-size: 18px; font-weight: 600; margin: 8px 0 0 0;">{{ $t('views.componentShowcase.sectionTitle') }}</p>
-            <p style="font-size: 14px; margin: 8px 0 0 0;">{{ $t('views.componentShowcase.bodyText') }}</p>
-            <p style="font-size: 13px; color: var(--text-secondary); margin: 4px 0 0 0;">{{ $t('views.componentShowcase.secondaryText') }}</p>
+            <p style="font-size: var(--text-3xl); font-weight: 600; margin: 0;">{{ $t('views.componentShowcase.dashboardHeading') }}</p>
+            <p style="font-size: var(--text-lg); font-weight: 600; margin: 8px 0 0 0;">{{ $t('views.componentShowcase.sectionTitle') }}</p>
+            <p style="font-size: var(--text-sm); margin: 8px 0 0 0;">{{ $t('views.componentShowcase.bodyText') }}</p>
+            <p style="font-size: var(--text-sm); color: var(--text-secondary); margin: 4px 0 0 0;">{{ $t('views.componentShowcase.secondaryText') }}</p>
           </div>
 
           <h4 class="section-heading">{{ $t('views.componentShowcase.dataFont') }}</h4>
           <div class="type-samples" style="font-family: var(--font-mono);">
-            <p style="font-size: 13px; margin: 0;">192.168.1.100</p>
-            <p style="font-size: 13px; margin: 4px 0 0 0;">2026-02-16T14:30:45Z</p>
-            <p style="font-size: 13px; margin: 4px 0 0 0;">user_id: 1234567890</p>
-            <p style="font-size: 13px; margin: 4px 0 0 0;">SHA: a3f4c2e1b7d</p>
+            <p style="font-size: var(--text-sm); margin: 0;">192.168.1.100</p>
+            <p style="font-size: var(--text-sm); margin: 4px 0 0 0;">2026-02-16T14:30:45Z</p>
+            <p style="font-size: var(--text-sm); margin: 4px 0 0 0;">user_id: 1234567890</p>
+            <p style="font-size: var(--text-sm); margin: 4px 0 0 0;">SHA: a3f4c2e1b7d</p>
           </div>
 
           <h4 class="section-heading">{{ $t('views.componentShowcase.numericFont') }}</h4>
           <div class="type-samples" style="font-family: var(--font-numeric); font-variant-numeric: tabular-nums;">
-            <p style="font-size: 13px; margin: 0;">1,234.56</p>
-            <p style="font-size: 13px; margin: 4px 0 0 0;">9,876.54</p>
-            <p style="font-size: 13px; margin: 4px 0 0 0;">  123.00</p>
+            <p style="font-size: var(--text-sm); margin: 0;">1,234.56</p>
+            <p style="font-size: var(--text-sm); margin: 4px 0 0 0;">9,876.54</p>
+            <p style="font-size: var(--text-sm); margin: 4px 0 0 0;">  123.00</p>
           </div>
         </div>
       </BaseCard>
@@ -330,25 +330,25 @@ const handleRemove = () => {
 </script>
 
 <style scoped>
-.showcase-container { padding: 24px; max-width: 1400px; margin: 0 auto; background-color: var(--bg-primary); min-height: 100%; overflow-y: auto; }
-.showcase-header { margin-bottom: 32px; }
+.showcase-container { padding: var(--spacing-6); max-width: 1400px; margin: 0 auto; background-color: var(--bg-primary); min-height: 100%; overflow-y: auto; }
+.showcase-header { margin-bottom: var(--spacing-8); }
 .showcase-title { font-size: 32px; font-weight: 600; color: var(--text-primary); margin: 0 0 8px 0; font-family: var(--font-sans); }
-.showcase-subtitle { font-size: 16px; color: var(--text-secondary); margin: 0; }
-.showcase-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 24px; }
+.showcase-subtitle { font-size: var(--text-base); color: var(--text-secondary); margin: var(--spacing-0); }
+.showcase-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: var(--spacing-6); }
 .showcase-full-width { grid-column: 1 / -1; }
-.component-section { display: flex; flex-direction: column; gap: 20px; }
-.section-heading { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin: 0; padding-bottom: 8px; border-bottom: 1px solid var(--border-subtle); }
-.button-group { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-.input-stack { display: flex; flex-direction: column; gap: 12px; }
-.badge-group { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.card-stack { display: flex; flex-direction: column; gap: 16px; }
-.color-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
-.color-swatch { aspect-ratio: 1; border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 12px; box-shadow: var(--shadow-md); }
-.swatch-label { font-size: 11px; font-weight: 600; color: white; text-transform: uppercase; letter-spacing: 0.05em; }
-.swatch-hex { font-size: 10px; font-family: var(--font-mono); color: rgba(255, 255, 255, 0.8); }
-.type-samples { padding: 16px; background-color: var(--bg-secondary); border-radius: 4px; border: 1px solid var(--border-default); }
+.component-section { display: flex; flex-direction: column; gap: var(--spacing-5); }
+.section-heading { font-size: var(--text-sm); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin: var(--spacing-0); padding-bottom: var(--spacing-2); border-bottom: 1px solid var(--border-subtle); }
+.button-group { display: flex; flex-wrap: wrap; gap: var(--spacing-3); align-items: center; }
+.input-stack { display: flex; flex-direction: column; gap: var(--spacing-3); }
+.badge-group { display: flex; flex-wrap: wrap; gap: var(--spacing-2); align-items: center; }
+.card-stack { display: flex; flex-direction: column; gap: var(--spacing-4); }
+.color-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: var(--spacing-3); }
+.color-swatch { aspect-ratio: 1; border-radius: var(--radius-default); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--spacing-1); padding: var(--spacing-3); box-shadow: var(--shadow-md); }
+.swatch-label { font-size: var(--text-xs); font-weight: 600; color: white; text-transform: uppercase; letter-spacing: 0.05em; }
+.swatch-hex { font-size: var(--text-xs); font-family: var(--font-mono); color: rgba(255, 255, 255, 0.8); }
+.type-samples { padding: var(--spacing-4); background-color: var(--bg-secondary); border-radius: var(--radius-default); border: 1px solid var(--border-default); }
 @media (max-width: 768px) {
   .showcase-grid { grid-template-columns: 1fr; }
-  .showcase-container { padding: 16px; }
+  .showcase-container { padding: var(--spacing-4); }
 }
 </style>

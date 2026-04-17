@@ -228,7 +228,7 @@ async function handleSubmit(): Promise<void> {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .runner-header h4 i {
@@ -284,6 +284,10 @@ async function handleSubmit(): Promise<void> {
   outline: none;
   border-color: var(--color-primary);
 }
+.form-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .config-label-row {
   display: flex;
@@ -323,7 +327,7 @@ async function handleSubmit(): Promise<void> {
 .field-error {
   color: var(--color-error);
   font-size: var(--text-xs);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .submit-btn {
@@ -399,7 +403,7 @@ async function handleSubmit(): Promise<void> {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .result-duration {

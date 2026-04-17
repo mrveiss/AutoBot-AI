@@ -167,13 +167,13 @@ const getTabCount = (tabId: string): number => {
 .code-intelligence-section h3 {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-3);
   flex-wrap: wrap;
 }
 
 .code-intelligence-section .section-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
   margin-left: auto;
 }
 
@@ -187,8 +187,8 @@ const getTabCount = (tabId: string): number => {
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 6px;
-  transition: all 0.15s ease;
+  gap: var(--spacing-1-5);
+  transition: all var(--duration-150) var(--ease-out);
 }
 
 .code-intelligence-section .action-btn:hover:not(:disabled) {
@@ -213,14 +213,14 @@ const getTabCount = (tabId: string): number => {
 
 /* Code Intelligence Tabs */
 .code-intel-tabs {
-  margin-top: 16px;
+  margin-top: var(--spacing-4);
 }
 
 .code-intel-tabs .tabs-header {
   display: flex;
-  gap: 4px;
+  gap: var(--spacing-1);
   border-bottom: 1px solid var(--border-primary);
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-4);
 }
 
 .code-intel-tabs .tab-btn {
@@ -232,9 +232,9 @@ const getTabCount = (tabId: string): number => {
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   font-size: 0.9em;
-  transition: all 0.15s ease;
+  transition: all var(--duration-150) var(--ease-out);
 }
 
 .code-intel-tabs .tab-btn:hover {

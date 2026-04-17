@@ -587,8 +587,8 @@ defineExpose({
 
 .workflow-visualization {
   background: var(--bg-secondary-alpha);
-  border-radius: 12px;
-  padding: 20px;
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-5);
   border: 1px solid var(--border-subtle);
   position: relative;
 }
@@ -597,36 +597,36 @@ defineExpose({
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
+  margin-bottom: var(--spacing-4);
+  padding-bottom: var(--spacing-3);
   border-bottom: 1px solid var(--border-subtle);
 }
 
 .header-info h3 {
-  font-size: 18px;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .workflow-id {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
 .header-actions {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
   align-items: center;
 }
 
 .status-badge {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
   padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
@@ -655,10 +655,10 @@ defineExpose({
   padding: 8px 10px;
   background: transparent;
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .layout-btn:hover,
@@ -671,7 +671,7 @@ defineExpose({
 .workflow-container {
   position: relative;
   background: rgba(15, 23, 42, 0.5);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
   min-height: 400px;
 }
@@ -691,7 +691,7 @@ defineExpose({
   fill: none;
   stroke: var(--text-muted);
   stroke-width: 2;
-  transition: stroke 0.3s;
+  transition: stroke var(--duration-300);
 }
 
 .connection-line.active {
@@ -722,7 +722,7 @@ defineExpose({
   fill: var(--bg-secondary);
   stroke: var(--text-muted);
   stroke-width: 2;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .workflow-node:hover .node-bg {
@@ -753,12 +753,12 @@ defineExpose({
 }
 
 .node-icon {
-  font-size: 18px;
+  font-size: var(--text-lg);
   fill: var(--text-primary);
 }
 
 .node-label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   fill: var(--text-secondary);
   font-weight: 500;
 }
@@ -795,7 +795,7 @@ defineExpose({
 }
 
 .duration-badge {
-  font-size: 10px;
+  font-size: var(--text-xs);
   fill: var(--text-tertiary);
 }
 
@@ -806,10 +806,10 @@ defineExpose({
   right: 16px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   background: rgba(30, 41, 59, 0.9);
-  padding: 8px;
-  border-radius: 8px;
+  padding: var(--spacing-2);
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-subtle);
 }
 
@@ -818,13 +818,13 @@ defineExpose({
   height: 28px;
   border: 1px solid var(--border-subtle);
   background: transparent;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   color: var(--text-secondary);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .zoom-controls button:hover {
@@ -833,7 +833,7 @@ defineExpose({
 }
 
 .zoom-level {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   min-width: 40px;
   text-align: center;
@@ -847,7 +847,7 @@ defineExpose({
   width: 200px;
   height: 24px;
   background: rgba(30, 41, 59, 0.9);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid var(--border-subtle);
   overflow: hidden;
 }
@@ -855,7 +855,7 @@ defineExpose({
 .progress-fill {
   height: 100%;
   background: var(--chart-blue);
-  transition: width 0.3s ease;
+  transition: width var(--duration-300) var(--ease-out);
 }
 
 .progress-text {
@@ -863,7 +863,7 @@ defineExpose({
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-primary);
   font-weight: 500;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
@@ -876,17 +876,17 @@ defineExpose({
   right: 20px;
   width: 280px;
   background: var(--bg-secondary);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid var(--border-subtle);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
 
 .details-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4);
   background: var(--bg-tertiary-alpha);
   border-bottom: 1px solid var(--border-subtle);
 }
@@ -894,11 +894,11 @@ defineExpose({
 .details-icon {
   width: 40px;
   height: 40px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: var(--text-lg);
   background: var(--color-info-bg);
 }
 
@@ -919,25 +919,25 @@ defineExpose({
 }
 
 .details-title h4 {
-  margin: 0;
-  font-size: 14px;
+  margin: var(--spacing-0);
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .node-type {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
 .close-btn {
-  padding: 6px;
+  padding: var(--spacing-1-5);
   background: transparent;
   border: none;
   color: var(--text-tertiary);
   cursor: pointer;
-  border-radius: 4px;
-  transition: all 0.2s;
+  border-radius: var(--radius-default);
+  transition: all var(--duration-200);
 }
 
 .close-btn:hover {
@@ -946,7 +946,7 @@ defineExpose({
 }
 
 .details-content {
-  padding: 16px;
+  padding: var(--spacing-4);
 }
 
 .detail-row {
@@ -962,12 +962,12 @@ defineExpose({
 }
 
 .detail-row .label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
 .detail-row .value {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-primary);
   font-weight: 500;
 }
@@ -977,11 +977,11 @@ defineExpose({
 }
 
 .detail-row .output {
-  font-size: 11px;
+  font-size: var(--text-xs);
   background: rgba(15, 23, 42, 0.5);
-  padding: 8px;
-  border-radius: 4px;
-  margin-top: 4px;
+  padding: var(--spacing-2);
+  border-radius: var(--radius-default);
+  margin-top: var(--spacing-1);
   overflow-x: auto;
   max-width: 200px;
 }
@@ -989,7 +989,7 @@ defineExpose({
 /* Transitions */
 .slide-enter-active,
 .slide-leave-active {
-  transition: all 0.3s ease;
+  transition: all var(--duration-300) var(--ease-out);
 }
 
 .slide-enter-from,
@@ -1002,7 +1002,7 @@ defineExpose({
 @media (max-width: 768px) {
   .workflow-header {
     flex-direction: column;
-    gap: 12px;
+    gap: var(--spacing-3);
     align-items: stretch;
   }
 
@@ -1017,7 +1017,7 @@ defineExpose({
     left: 0;
     right: 0;
     width: 100%;
-    border-radius: 12px 12px 0 0;
+    border-radius: var(--radius-xl) 12px 0 0;
     max-height: 50vh;
     overflow-y: auto;
   }

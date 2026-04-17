@@ -26,6 +26,7 @@ import json
 import logging
 import subprocess
 import sys
+import os
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -40,7 +41,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Add AutoBot paths
-sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
+sys.path.append(os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
 
 
 @dataclass

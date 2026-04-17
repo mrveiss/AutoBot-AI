@@ -3,10 +3,13 @@
 # Author: mrveiss
 """Tests for MeshDBAdapter — concrete MeshGraph/MeshDB adapter (#2548)."""
 
+import sys
+from types import ModuleType
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from services.mesh_brain.community_clusterer import CommunityClusterer
 from services.mesh_brain.mesh_db_adapter import MeshDBAdapter, create_mesh_db_adapter
 
 # ---------------------------------------------------------------------------
@@ -149,6 +152,47 @@ class TestUpdateAccessCount:
 
 
 # =============================================================================
+# CommunityClusterer protocol surface — fetch_edges + promote_to_anchor
+# =============================================================================
+
+
+class TestFetchEdges:
+    """MeshDBAdapter.fetch_edges delegates to inner MeshDB and returns list[dict]."""
+
+    @pytest.mark.asyncio
+    async def test_forwards_min_weight_and_returns_rows(self):
+        edge_rows = [
+            {"id": _EDGE_ID, "from_node": _NODE_A, "to_node": _NODE_B, "weight": 0.8},
+        ]
+        adapter, mock_db = _make_adapter(fetch_edges=edge_rows)
+
+        result = await adapter.fetch_edges(min_weight=0.7)
+
+        assert result == edge_rows
+        mock_db.fetch_edges.assert_awaited_once_with(min_weight=0.7)
+
+    @pytest.mark.asyncio
+    async def test_default_min_weight_is_forwarded(self):
+        adapter, mock_db = _make_adapter(fetch_edges=[])
+
+        await adapter.fetch_edges()
+
+        mock_db.fetch_edges.assert_awaited_once_with(min_weight=0.5)
+
+
+class TestPromoteToAnchor:
+    """MeshDBAdapter.promote_to_anchor delegates to inner MeshDB."""
+
+    @pytest.mark.asyncio
+    async def test_forwards_node_id(self):
+        adapter, mock_db = _make_adapter(promote_to_anchor=None)
+
+        await adapter.promote_to_anchor(_NODE_A)
+
+        mock_db.promote_to_anchor.assert_awaited_once_with(_NODE_A)
+
+
+# =============================================================================
 # MeshGraph protocol surface
 # =============================================================================
 
@@ -254,3 +298,85 @@ class TestCreateMeshDbAdapter:
 
         # The inner MeshDB must have been given the engine
         assert adapter._db.engine is mock_engine
+
+
+# =============================================================================
+# CommunityClusterer integration — MeshDBAdapter satisfies fetch_edges /
+# promote_to_anchor protocol without AttributeError (#4864)
+# =============================================================================
+
+
+def _ensure_graspologic_stub() -> None:
+    """Install a minimal graspologic stub if not present so tests run without the package."""
+    if "graspologic" not in sys.modules:
+        def _leiden(G, trials=3):
+            import networkx as nx  # networkx is a declared dep
+            partition = {}
+            for comm_id, component in enumerate(nx.connected_components(G)):
+                for node in component:
+                    partition[node] = comm_id
+            return partition
+
+        graspologic_mod = ModuleType("graspologic")
+        partition_mod = ModuleType("graspologic.partition")
+        partition_mod.leiden = _leiden
+        graspologic_mod.partition = partition_mod
+        sys.modules["graspologic"] = graspologic_mod
+        sys.modules["graspologic.partition"] = partition_mod
+
+
+class TestCommunityClustererWithAdapter:
+    """CommunityClusterer.run() works end-to-end through a real MeshDBAdapter (#4864).
+
+    Verifies that the adapter exposes both ``fetch_edges`` and ``promote_to_anchor``
+    so that CommunityClusterer never raises AttributeError when given an adapter
+    rather than a raw MeshDB.
+    """
+
+    @pytest.mark.asyncio
+    async def test_run_completes_without_attribute_error(self):
+        """run() on a MeshDBAdapter-backed clusterer promotes centroids without error."""
+        _ensure_graspologic_stub()
+        edge_rows = [
+            {"id": "e1", "from_node": _NODE_A, "to_node": _NODE_B, "weight": 0.9},
+        ]
+        adapter, mock_db = _make_adapter(
+            fetch_edges=edge_rows,
+            promote_to_anchor=None,
+        )
+
+        clusterer = CommunityClusterer(db=adapter)
+        promoted = await clusterer.run(min_weight=0.3)
+
+        assert isinstance(promoted, list)
+        assert len(promoted) == 1
+        assert promoted[0] in (_NODE_A, _NODE_B)
+
+    @pytest.mark.asyncio
+    async def test_run_empty_edges_promotes_nothing(self):
+        """run() with no edges above min_weight returns [] and never calls promote_to_anchor."""
+        _ensure_graspologic_stub()
+        adapter, mock_db = _make_adapter(
+            fetch_edges=[],
+            promote_to_anchor=None,
+        )
+
+        clusterer = CommunityClusterer(db=adapter)
+        promoted = await clusterer.run()
+
+        assert promoted == []
+        mock_db.promote_to_anchor.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_fetch_edges_called_with_min_weight(self):
+        """run() forwards min_weight to adapter.fetch_edges."""
+        _ensure_graspologic_stub()
+        adapter, mock_db = _make_adapter(
+            fetch_edges=[],
+            promote_to_anchor=None,
+        )
+
+        clusterer = CommunityClusterer(db=adapter)
+        await clusterer.run(min_weight=0.7)
+
+        mock_db.fetch_edges.assert_awaited_once_with(min_weight=0.7)

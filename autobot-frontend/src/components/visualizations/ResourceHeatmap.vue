@@ -465,7 +465,7 @@ defineExpose({
   font-size: var(--text-lg);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .header-actions {
@@ -490,6 +490,11 @@ defineExpose({
 .time-select:focus {
   outline: none;
   border-color: var(--chart-blue);
+}
+.metric-select:focus-visible,
+.time-select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .refresh-btn {

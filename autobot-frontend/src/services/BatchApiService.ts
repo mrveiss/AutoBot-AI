@@ -293,10 +293,29 @@ export class BatchApiService {
 
     const results = await this.batchRequests(essentialRequests);
 
+    // Issue #4537: use explicit success/failure checks per the null-vs-empty contract
+    // established in #4353. The || operator treated null (API error) the same as missing
+    // data, silently firing the fallback instead of surfacing the error.
+    const chatsResult = results.find(r => r.endpoint === `${getApiBase()}/chats`);
+    const chatHealthResult = results.find(r => r.endpoint === `${getApiBase()}/chat/health`);
+    const systemHealthResult = results.find(r => r.endpoint === `${getApiBase()}/health`);
+
+    const chatSessions: ApiResponse<Record<string, unknown>[]> = chatsResult?.success
+      ? { data: this.extractSessionsList(chatsResult.data) as Record<string, unknown>[] }
+      : { data: null, error: chatsResult?.error ?? 'api_failed' };
+
+    if (!chatsResult?.success) {
+      logger.warn('loadEssentialChatData: /chats request failed:', chatsResult?.error);
+    }
+
     return {
-      chat_sessions: results.find(r => r.endpoint === `${getApiBase()}/chats` && r.success)?.data || { sessions: [] },
-      chat_health: results.find(r => r.endpoint === `${getApiBase()}/chat/health` && r.success)?.data || { status: 'unknown' },
-      system_health: results.find(r => r.endpoint === `${getApiBase()}/health` && r.success)?.data || { status: 'unknown' }
+      chat_sessions: chatSessions,
+      chat_health: chatHealthResult?.success
+        ? { data: chatHealthResult.data }
+        : { data: null, error: chatHealthResult?.error ?? 'api_failed' },
+      system_health: systemHealthResult?.success
+        ? { data: systemHealthResult.data }
+        : { data: null, error: systemHealthResult?.error ?? 'api_failed' }
     };
   }
 

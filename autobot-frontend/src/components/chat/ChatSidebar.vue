@@ -697,7 +697,8 @@ const deleteSelectedSessions = async () => {
 }
 
 .group:focus-visible {
-  outline: none;
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
   box-shadow: 0 0 0 2px var(--color-primary-transparent);
 }
 </style>

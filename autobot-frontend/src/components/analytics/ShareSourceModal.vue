@@ -264,7 +264,7 @@ watch(() => props.source, (source) => {
   position: fixed;
   inset: 0;
   background: var(--bg-overlay-dark);
-  z-index: 1100;
+  z-index: var(--z-popover);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -297,7 +297,7 @@ watch(() => props.source, (source) => {
   font-size: var(--text-lg);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
   display: flex;
   align-items: center;
   gap: var(--spacing-2-5);
@@ -404,6 +404,10 @@ watch(() => props.source, (source) => {
   border-color: var(--color-info);
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
 }
+.form-textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .form-hint {
   font-size: var(--text-xs);
@@ -467,7 +471,7 @@ watch(() => props.source, (source) => {
   position: absolute;
   width: 1px;
   height: 1px;
-  padding: 0;
+  padding: var(--spacing-0);
   margin: -1px;
   overflow: hidden;
   clip: rect(0, 0, 0, 0);

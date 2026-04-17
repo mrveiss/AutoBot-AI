@@ -443,6 +443,11 @@ onMounted(() => {
   padding: var(--spacing-2) 0;
 }
 
+.url-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 .url-input::placeholder {
   color: var(--text-muted);
 }
@@ -520,7 +525,7 @@ onMounted(() => {
 }
 
 .viewport-icon {
-  font-size: 3rem;
+  font-size: var(--text-5xl);
   color: var(--text-secondary);
 }
 
@@ -532,14 +537,14 @@ onMounted(() => {
   font-size: var(--text-lg);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .viewport-msg {
   font-size: var(--text-sm);
   color: var(--text-muted);
   max-width: 360px;
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .capture-btn {
@@ -591,7 +596,7 @@ onMounted(() => {
 /* Panel slide transition */
 .slide-panel-enter-active,
 .slide-panel-leave-active {
-  transition: width 0.25s ease, opacity 0.25s ease;
+  transition: width var(--duration-250) var(--ease-out), opacity var(--duration-250) var(--ease-out);
 }
 
 .slide-panel-enter-from,

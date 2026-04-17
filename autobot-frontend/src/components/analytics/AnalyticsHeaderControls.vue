@@ -129,7 +129,7 @@ const emit = defineEmits<{
 
 .header-controls {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
   align-items: center;
   flex-wrap: wrap;
 }
@@ -143,7 +143,7 @@ const emit = defineEmits<{
   transition: var(--transition-all);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .btn-primary {
@@ -184,7 +184,7 @@ const emit = defineEmits<{
   transition: var(--transition-all);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .btn-cancel:hover {
@@ -195,7 +195,7 @@ const emit = defineEmits<{
 .btn-back {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   color: var(--text-secondary);
   text-decoration: none;
   font-size: var(--text-sm);
@@ -211,18 +211,18 @@ const emit = defineEmits<{
 
 .debug-controls {
   width: 100%;
-  padding-top: 12px;
+  padding-top: var(--spacing-3);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .btn-debug {
   font-size: 0.85em;
   font-weight: 500;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .btn-debug:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-md);
 }
 </style>

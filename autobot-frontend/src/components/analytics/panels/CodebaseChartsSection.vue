@@ -323,22 +323,22 @@ function getCategoryIcon(categoryId: string): string {
 <style scoped>
 /* Codebase Statistics Section (#4063: Fix rendering gaps) */
 .stats-section {
-  margin-top: 32px;
-  padding: 24px;
+  margin-top: var(--spacing-8);
+  padding: var(--spacing-6);
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
   contain: layout style;}
 
 .stats-section h3 {
   margin: 0 0 20px 0;
   color: var(--text-secondary);
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .stats-section h3 i {
@@ -348,28 +348,28 @@ function getCategoryIcon(categoryId: string): string {
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .section-export-buttons {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
   align-items: center;
 }
 
 .export-btn {
   background: rgba(51, 65, 85, 0.5);
   border: 1px solid rgba(71, 85, 105, 0.5);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-muted);
   padding: 6px 12px;
   font-size: 0.85rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 .export-btn:hover:not(:disabled) {
@@ -397,10 +397,10 @@ function getCategoryIcon(categoryId: string): string {
 }
 
 .charts-section {
-  margin-top: 32px;
-  padding: 24px;
+  margin-top: var(--spacing-8);
+  padding: var(--spacing-6);
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
 }
 
@@ -408,19 +408,19 @@ function getCategoryIcon(categoryId: string): string {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 12px;
+  margin-bottom: var(--spacing-5);
+  padding-bottom: var(--spacing-3);
   border-bottom: 1px solid rgba(71, 85, 105, 0.5);
 }
 
 .charts-section .section-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-secondary);
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .charts-section .section-header h3 i {
@@ -429,7 +429,7 @@ function getCategoryIcon(categoryId: string): string {
 
 .section-header-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
   align-items: center;
 }
 
@@ -437,27 +437,27 @@ function getCategoryIcon(categoryId: string): string {
 .category-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 20px;
-  padding: 12px;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-5);
+  padding: var(--spacing-3);
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid rgba(71, 85, 105, 0.3);
 }
 
 .category-tab {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   padding: 8px 16px;
   background: rgba(51, 65, 85, 0.5);
   border: 1px solid rgba(71, 85, 105, 0.5);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-muted);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .category-tab:hover {
@@ -473,7 +473,7 @@ function getCategoryIcon(categoryId: string): string {
 }
 
 .category-tab i {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .tab-count {
@@ -484,8 +484,8 @@ function getCategoryIcon(categoryId: string): string {
   height: 20px;
   padding: 0 6px;
   background: rgba(0, 0, 0, 0.2);
-  border-radius: 10px;
-  font-size: 0.75rem;
+  border-radius: var(--radius-xl);
+  font-size: var(--text-xs);
   font-weight: 600;
 }
 
@@ -500,7 +500,7 @@ function getCategoryIcon(categoryId: string): string {
   align-items: center;
   justify-content: center;
   min-height: 200px;
-  gap: 12px;
+  gap: var(--spacing-3);
   color: var(--text-muted);
 }
 
@@ -521,23 +521,23 @@ function getCategoryIcon(categoryId: string): string {
 .charts-grid {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--spacing-6);
 }
 
 .chart-summary {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-4);
 }
 
 .summary-stat {
   background: rgba(51, 65, 85, 0.5);
-  border-radius: 8px;
-  padding: 16px;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
   text-align: center;
   border: 1px solid rgba(71, 85, 105, 0.5);
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .summary-stat:hover {
@@ -568,14 +568,14 @@ function getCategoryIcon(categoryId: string): string {
 .summary-label {
   font-size: 0.85rem;
   color: var(--text-muted);
-  margin-top: 4px;
+  margin-top: var(--spacing-1);
   display: block;
 }
 
 .charts-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
+  gap: var(--spacing-5);
 }
 
 /* Chart items (BaseChart components) - minimal layout adjustment */
@@ -586,8 +586,8 @@ function getCategoryIcon(categoryId: string): string {
 /* Empty state placeholder (when chart has no data) */
 .chart-empty-slot {
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 8px;
-  padding: 16px;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
   border: 1px solid rgba(71, 85, 105, 0.5);
   min-height: 350px;
   display: flex;
@@ -614,16 +614,16 @@ function getCategoryIcon(categoryId: string): string {
   }
 
   .summary-value {
-    font-size: 1.5rem;
+    font-size: var(--text-2xl);
   }
 }
 
 /* Dependency Section Styles */
 .dependency-section {
-  margin-top: 32px;
-  padding: 24px;
+  margin-top: var(--spacing-8);
+  padding: var(--spacing-6);
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
 }
 
@@ -631,19 +631,19 @@ function getCategoryIcon(categoryId: string): string {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 12px;
+  margin-bottom: var(--spacing-5);
+  padding-bottom: var(--spacing-3);
   border-bottom: 1px solid rgba(71, 85, 105, 0.5);
 }
 
 .dependency-section .section-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-secondary);
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .dependency-section .section-header h3 i {
@@ -653,24 +653,24 @@ function getCategoryIcon(categoryId: string): string {
 .dependency-grid {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--spacing-6);
 }
 
 /* Circular Dependencies Warning */
 .circular-deps-warning {
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 8px;
-  padding: 16px;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
 }
 
 .circular-deps-warning .warning-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   font-weight: 600;
   color: var(--color-error-light);
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
 }
 
 .circular-deps-warning .warning-header i {
@@ -680,16 +680,16 @@ function getCategoryIcon(categoryId: string): string {
 .circular-deps-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .circular-dep-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   padding: 8px 12px;
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.85rem;
   color: var(--text-secondary);
@@ -702,19 +702,19 @@ function getCategoryIcon(categoryId: string): string {
 /* External Dependencies Table */
 .external-deps-table {
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 8px;
-  padding: 16px;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
   border: 1px solid rgba(71, 85, 105, 0.3);
 }
 
 .external-deps-table h4 {
   margin: 0 0 16px 0;
   color: var(--text-secondary);
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .external-deps-table h4 i {
@@ -724,7 +724,7 @@ function getCategoryIcon(categoryId: string): string {
 .deps-table-content {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .dep-row {
@@ -733,8 +733,8 @@ function getCategoryIcon(categoryId: string): string {
   align-items: center;
   padding: 8px 12px;
   background: rgba(51, 65, 85, 0.4);
-  border-radius: 4px;
-  transition: background 0.2s ease;
+  border-radius: var(--radius-default);
+  transition: background var(--duration-200) var(--ease-out);
 }
 
 .dep-row:hover {
@@ -752,15 +752,15 @@ function getCategoryIcon(categoryId: string): string {
   color: var(--text-muted);
   background: rgba(59, 130, 246, 0.2);
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 /* Import Tree Section */
 .import-tree-section {
-  margin-top: 32px;
-  padding: 24px;
+  margin-top: var(--spacing-8);
+  padding: var(--spacing-6);
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
 }
 
@@ -768,17 +768,17 @@ function getCategoryIcon(categoryId: string): string {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-5);
 }
 
 .import-tree-section .section-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-secondary);
   font-size: 1.1rem;
   font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .import-tree-section .section-header h3 i {
@@ -788,11 +788,11 @@ function getCategoryIcon(categoryId: string): string {
 .import-tree-section .section-error {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px;
+  gap: var(--spacing-2-5);
+  padding: var(--spacing-3);
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   color: var(--color-error-light);
 }
 
@@ -801,15 +801,15 @@ function getCategoryIcon(categoryId: string): string {
 }
 
 .import-tree-content {
-  margin-top: 16px;
+  margin-top: var(--spacing-4);
 }
 
 /* Call Graph Section */
 .call-graph-section {
-  margin-top: 32px;
-  padding: 24px;
+  margin-top: var(--spacing-8);
+  padding: var(--spacing-6);
   background: rgba(30, 41, 59, 0.5);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
 }
 
@@ -817,17 +817,17 @@ function getCategoryIcon(categoryId: string): string {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-5);
 }
 
 .call-graph-section .section-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-secondary);
   font-size: 1.1rem;
   font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .call-graph-section .section-header h3 i {
@@ -837,11 +837,11 @@ function getCategoryIcon(categoryId: string): string {
 .call-graph-section .section-error {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px;
+  gap: var(--spacing-2-5);
+  padding: var(--spacing-3);
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   color: var(--color-error-light);
 }
 
@@ -850,7 +850,7 @@ function getCategoryIcon(categoryId: string): string {
 }
 
 .call-graph-content {
-  margin-top: 16px;
+  margin-top: var(--spacing-4);
 }
 
 /* Issue #527: API Endpoint Checker Section */

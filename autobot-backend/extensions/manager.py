@@ -41,7 +41,7 @@ class ExtensionManager:
 
         # Or invoke until one extension handles
         result = await manager.invoke_until_handled(
-            HookPoint.ON_APPROVAL_REQUIRED,
+            HookPoint.APPROVAL_REQUIRED,
             ctx
         )
     """

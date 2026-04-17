@@ -212,7 +212,7 @@ function copyPath(finding: Finding): void {
 .findings-table {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   overflow: hidden;
 }
 
@@ -242,13 +242,13 @@ function copyPath(finding: Finding): void {
 .search-input {
   padding: var(--spacing-2);
   border: 1px solid var(--border-default);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   background: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--text-sm);
   width: 200px;
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-150) var(--ease-in-out);
 }
 
 .search-input:focus {
@@ -256,12 +256,16 @@ function copyPath(finding: Finding): void {
   border-color: var(--color-info);
   box-shadow: 0 0 0 3px var(--color-info-bg);
 }
+.search-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 /* Issue #901: Technical Precision severity badges */
 .severity-badge {
   padding: 2px 8px;
-  border-radius: 2px;
-  font-size: 11px;
+  border-radius: var(--radius-xs);
+  font-size: var(--text-xs);
   font-weight: 500;
   font-family: var(--font-sans);
   text-transform: uppercase;
@@ -336,13 +340,13 @@ th, td {
 th {
   background: var(--bg-tertiary);
   font-weight: var(--font-medium);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
 .finding-row {
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background var(--duration-150);
   position: relative;
 }
 
@@ -362,14 +366,14 @@ th {
 /* Issue #901: Monospace for file paths and line numbers */
 code {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-primary);
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
 
 .detail-row td {
-  padding: 0;
+  padding: var(--spacing-0);
   background: var(--bg-tertiary);
 }
 
@@ -378,7 +382,7 @@ code {
   border-left: 2px solid var(--color-info);
   margin: var(--spacing-2);
   background: var(--bg-secondary);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 
 .detail-section {
@@ -393,7 +397,7 @@ code {
 
 .detail-section p {
   color: var(--text-secondary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 /* Issue #901: Electric blue for OWASP tags */
@@ -402,8 +406,8 @@ code {
   padding: 2px 8px;
   background: var(--color-info-bg);
   color: var(--color-info-dark);
-  border-radius: 2px;
-  font-size: 12px;
+  border-radius: var(--radius-xs);
+  font-size: var(--text-xs);
   font-family: var(--font-mono);
   font-weight: 500;
   letter-spacing: 0.05em;
@@ -421,16 +425,16 @@ code {
   padding: 6px 12px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   color: var(--text-primary);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   font-family: var(--font-sans);
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-150) var(--ease-in-out);
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 .btn-small:hover {

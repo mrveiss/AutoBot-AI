@@ -430,7 +430,7 @@ const roleOptions = computed(() => [
 /* Modal animations */
 .modal-backdrop-enter-active,
 .modal-backdrop-leave-active {
-  transition: opacity 0.3s ease;
+  transition: opacity var(--duration-300) var(--ease-out);
 }
 
 .modal-backdrop-enter-from,
@@ -439,11 +439,11 @@ const roleOptions = computed(() => [
 }
 
 .modal-content-enter-active {
-  transition: all 0.3s ease-out;
+  transition: all var(--duration-300) var(--ease-out);
 }
 
 .modal-content-leave-active {
-  transition: all 0.2s ease-in;
+  transition: all var(--duration-200) var(--ease-in);
 }
 
 .modal-content-enter-from {
@@ -467,7 +467,7 @@ const roleOptions = computed(() => [
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background: rgba(156, 163, 175, 0.3);
-  border-radius: 3px;
+  border-radius: var(--radius-default);
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {

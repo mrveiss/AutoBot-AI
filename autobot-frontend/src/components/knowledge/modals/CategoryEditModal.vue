@@ -444,18 +444,18 @@ function selectIcon(icon: string): void {
 
 <style scoped>
 .category-edit-modal {
-  padding: 1rem;
+  padding: var(--spacing-4);
 }
 
 /* Alerts */
 .alert {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   padding: 0.875rem 1rem;
-  border-radius: 0.5rem;
-  margin-bottom: 1.5rem;
-  font-size: 0.875rem;
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-6);
+  font-size: var(--text-sm);
 }
 
 .alert-success {
@@ -474,36 +474,36 @@ function selectIcon(icon: string): void {
 .category-path {
   background: var(--bg-secondary);
   padding: 0.75rem 1rem;
-  border-radius: 0.5rem;
-  margin-bottom: 1.5rem;
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-6);
 }
 
 .category-path label {
   display: block;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--spacing-1);
 }
 
 .path-value {
   font-family: var(--font-mono);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--color-info);
 }
 
 /* Form Groups */
 .form-group {
-  margin-bottom: 1.25rem;
+  margin-bottom: var(--spacing-5);
 }
 
 .form-group label {
   display: block;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
   font-weight: 500;
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .form-input,
@@ -511,11 +511,11 @@ function selectIcon(icon: string): void {
   width: 100%;
   padding: 0.625rem 0.875rem;
   border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   background: var(--bg-input);
   color: var(--text-primary);
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: border-color var(--duration-200), box-shadow var(--duration-200);
 }
 
 .form-input:focus,
@@ -523,6 +523,11 @@ function selectIcon(icon: string): void {
   outline: none;
   border-color: var(--color-info);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+.form-input:focus-visible,
+.form-textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .form-input:disabled,
@@ -540,7 +545,7 @@ function selectIcon(icon: string): void {
 .icon-picker {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .icon-option {
@@ -550,12 +555,12 @@ function selectIcon(icon: string): void {
   align-items: center;
   justify-content: center;
   border: 2px solid var(--border-default);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background: var(--bg-card);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s;
-  font-size: 1rem;
+  transition: all var(--duration-200);
+  font-size: var(--text-base);
 }
 
 .icon-option:hover {
@@ -578,16 +583,16 @@ function selectIcon(icon: string): void {
 .color-picker {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .color-option {
   width: 2rem;
   height: 2rem;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   border: 2px solid transparent;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
   position: relative;
 }
 
@@ -608,7 +613,7 @@ function selectIcon(icon: string): void {
   transform: translate(-50%, -50%);
   color: white;
   font-weight: bold;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
@@ -621,22 +626,22 @@ function selectIcon(icon: string): void {
 .category-preview {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 1rem;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4);
   background: var(--bg-secondary);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-default);
 }
 
 .preview-icon {
   width: 2.5rem;
   height: 2.5rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
 }
 
 .preview-name {
@@ -649,80 +654,80 @@ function selectIcon(icon: string): void {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 1.5rem;
-  padding-top: 1.5rem;
+  margin-top: var(--spacing-6);
+  padding-top: var(--spacing-6);
   border-top: 1px solid var(--border-default);
 }
 
 .left-actions,
 .right-actions {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   align-items: center;
 }
 
 .delete-disabled-hint {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.75rem;
+  gap: var(--spacing-2);
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
 /* Delete Confirmation */
 .delete-confirm {
   text-align: center;
-  padding: 1rem;
+  padding: var(--spacing-4);
 }
 
 .delete-warning {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   background: var(--color-warning-bg);
   border: 1px solid var(--color-warning-border);
-  border-radius: 0.75rem;
-  margin-bottom: 1.5rem;
+  border-radius: var(--radius-xl);
+  margin-bottom: var(--spacing-6);
 }
 
 .delete-warning i.fa-exclamation-triangle {
   font-size: 2.5rem;
   color: var(--color-warning);
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .delete-warning h3 {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--spacing-3);
 }
 
 .delete-warning p {
   color: var(--text-secondary);
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
 }
 
 .fact-warning {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  padding: 0.75rem;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3);
   background: var(--color-error-bg);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   color: var(--color-error-dark);
-  margin-top: 1rem;
+  margin-top: var(--spacing-4);
 }
 
 .delete-note {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   font-style: italic;
-  margin-top: 0.75rem;
+  margin-top: var(--spacing-3);
 }
 
 .delete-actions {
   display: flex;
   justify-content: center;
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 </style>

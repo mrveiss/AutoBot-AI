@@ -134,7 +134,7 @@ const customStyle = computed(() => ({
 /* Dots Spinner */
 .loading-dots {
   display: flex;
-  gap: 4px;
+  gap: var(--spacing-1);
   align-items: center;
 }
 
@@ -194,7 +194,7 @@ const customStyle = computed(() => ({
 /* Bars Spinner */
 .loading-bars {
   display: flex;
-  gap: 2px;
+  gap: var(--spacing-0-5);
   align-items: center;
   height: 100%;
 }
@@ -231,13 +231,13 @@ const customStyle = computed(() => ({
 }
 
 .label-right {
-  margin-top: 0;
+  margin-top: var(--spacing-0);
   margin-left: var(--spacing-2);
 }
 
 .label-bottom {
   margin-top: var(--spacing-2);
-  margin-left: 0;
+  margin-left: var(--spacing-0);
 }
 
 /* Right-aligned label layout */

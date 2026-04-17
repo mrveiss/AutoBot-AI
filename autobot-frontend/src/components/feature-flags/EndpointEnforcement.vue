@@ -274,25 +274,25 @@ const closeModal = () => {
 .endpoint-enforcement {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
-  padding: 24px;
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-6);
 }
 
 .section-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-5);
 }
 
 .header-info h3 {
   margin: 0 0 8px;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .header-info h3 i {
@@ -300,8 +300,8 @@ const closeModal = () => {
 }
 
 .header-info .description {
-  margin: 0;
-  font-size: 14px;
+  margin: var(--spacing-0);
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
   max-width: 500px;
 }
@@ -311,14 +311,14 @@ const closeModal = () => {
   background: var(--color-primary);
   color: var(--text-on-primary);
   border: none;
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
-  transition: all 0.2s;
+  gap: var(--spacing-2);
+  transition: all var(--duration-200);
 }
 
 .btn-add:hover {
@@ -341,19 +341,19 @@ const closeModal = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
+  font-size: var(--text-2xl);
 }
 
 .empty-state h4 {
   margin: 0 0 8px;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .empty-state p {
   margin: 0 0 20px;
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -361,19 +361,19 @@ const closeModal = () => {
 .overrides-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .global-mode-banner {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
   padding: 12px 16px;
   background: var(--bg-tertiary);
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   color: var(--text-secondary);
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
 }
 
 .global-mode-banner i {
@@ -384,11 +384,11 @@ const closeModal = () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px;
+  padding: var(--spacing-4);
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: 10px;
-  transition: all 0.15s;
+  border-radius: var(--radius-xl);
+  transition: all var(--duration-150);
 }
 
 .override-item:hover {
@@ -398,31 +398,31 @@ const closeModal = () => {
 .override-info {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .endpoint-path code {
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
   background: var(--bg-tertiary);
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 .override-mode {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .mode-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
   padding: 4px 10px;
-  border-radius: 4px;
-  font-size: 12px;
+  border-radius: var(--radius-default);
+  font-size: var(--text-xs);
   font-weight: 500;
 }
 
@@ -442,13 +442,13 @@ const closeModal = () => {
 }
 
 .vs-global {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
 .override-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .action-btn {
@@ -459,10 +459,10 @@ const closeModal = () => {
   justify-content: center;
   background: var(--bg-tertiary);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
   color: var(--text-secondary);
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .action-btn:hover {
@@ -479,17 +479,17 @@ const closeModal = () => {
 .override-form {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--spacing-5);
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .form-group label {
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -499,12 +499,12 @@ const closeModal = () => {
 }
 
 .form-input {
-  padding: 12px;
+  padding: var(--spacing-3);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   font-family: var(--font-mono);
-  transition: all 0.2s;
+  transition: all var(--duration-200);
   background: var(--bg-input);
   color: var(--text-primary);
 }
@@ -514,6 +514,10 @@ const closeModal = () => {
   border-color: var(--color-primary);
   box-shadow: var(--shadow-focus);
 }
+.form-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .form-input:disabled {
   opacity: 0.6;
@@ -521,13 +525,13 @@ const closeModal = () => {
 }
 
 .input-hint {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
 .mode-selector {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .mode-selector .mode-option {
@@ -535,12 +539,12 @@ const closeModal = () => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 16px;
+  gap: var(--spacing-2-5);
+  padding: var(--spacing-4);
   border: 2px solid var(--border-default);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .mode-selector .mode-option:hover {
@@ -559,11 +563,11 @@ const closeModal = () => {
 .mode-selector .option-icon {
   width: 40px;
   height: 40px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: var(--text-base);
 }
 
 .mode-selector .option-icon.disabled {
@@ -589,14 +593,14 @@ const closeModal = () => {
   display: block;
   font-weight: 600;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .mode-selector .option-desc {
   display: block;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
-  margin-top: 4px;
+  margin-top: var(--spacing-1);
 }
 
 /* Remove Modal */
@@ -620,13 +624,13 @@ const closeModal = () => {
 
 .remove-content h4 {
   margin: 0 0 8px;
-  font-size: 18px;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .remove-content p {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-secondary);
 }
 
@@ -634,7 +638,7 @@ const closeModal = () => {
   font-family: var(--font-mono);
   background: var(--bg-tertiary);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 /* Buttons */
@@ -643,15 +647,15 @@ const closeModal = () => {
   background: var(--color-primary);
   color: var(--text-on-primary);
   border: none;
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  transition: all 0.2s;
+  gap: var(--spacing-2);
+  transition: all var(--duration-200);
 }
 
 .btn-primary:hover {
@@ -668,11 +672,11 @@ const closeModal = () => {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: none;
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .btn-secondary:hover {
@@ -683,7 +687,7 @@ const closeModal = () => {
 @media (max-width: 600px) {
   .section-header {
     flex-direction: column;
-    gap: 16px;
+    gap: var(--spacing-4);
   }
 
   .mode-selector {

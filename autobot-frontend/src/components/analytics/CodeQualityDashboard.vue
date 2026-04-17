@@ -465,6 +465,7 @@ interface HealthScore {
   grade: string;
   trend: number;
   breakdown: Record<string, number>;
+  components: Record<string, number>;
   recommendations: string[];
 }
 
@@ -512,6 +513,7 @@ const healthScore = ref<HealthScore>({
   grade: 'C',
   trend: 0,
   breakdown: {},
+  components: {},
   recommendations: [],
 });
 
@@ -1077,7 +1079,7 @@ watch(selectedPeriod, () => {
   font-size: var(--text-2xl);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .realtime-status {
@@ -1208,7 +1210,7 @@ watch(selectedPeriod, () => {
 }
 
 .score-progress {
-  transition: stroke-dashoffset 1s ease-out;
+  transition: stroke-dashoffset var(--duration-1000) var(--ease-out);
 }
 
 .score-content {
@@ -1289,7 +1291,7 @@ watch(selectedPeriod, () => {
 }
 
 .recommendations ul {
-  margin: 0;
+  margin: var(--spacing-0);
   padding-left: var(--spacing-5);
 }
 
@@ -1368,7 +1370,7 @@ watch(selectedPeriod, () => {
 .metric-bar .bar-fill {
   height: 100%;
   border-radius: var(--radius-xs);
-  transition: width 0.5s ease;
+  transition: width var(--duration-500) var(--ease-out);
 }
 
 .bar-fill.excellent { background: var(--color-success); }
@@ -1416,7 +1418,7 @@ watch(selectedPeriod, () => {
 }
 
 .panel-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-base);
   color: var(--text-primary);
 }
@@ -1818,7 +1820,7 @@ watch(selectedPeriod, () => {
 }
 
 .modal-header h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-lg);
   color: var(--text-primary);
 }

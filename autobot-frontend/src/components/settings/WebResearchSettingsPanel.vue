@@ -274,7 +274,7 @@ function clamp(value: number, min: number, max: number): number {
   font-size: var(--font-size-lg);
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .panel-title i {
@@ -293,8 +293,8 @@ function clamp(value: number, min: number, max: number): number {
   flex-direction: column;
   gap: var(--spacing-md);
   border: none;
-  padding: 0;
-  margin: 0;
+  padding: var(--spacing-0);
+  margin: var(--spacing-0);
 }
 
 .preference-label {
@@ -316,7 +316,7 @@ function clamp(value: number, min: number, max: number): number {
 .preference-hint {
   font-size: var(--font-size-sm);
   color: var(--text-secondary);
-  margin: 0;
+  margin: var(--spacing-0);
   line-height: var(--leading-normal);
 }
 
@@ -339,11 +339,11 @@ function clamp(value: number, min: number, max: number): number {
   position: relative;
   width: 44px;
   height: 24px;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease;
+  transition: background var(--duration-200) var(--ease-out), border-color var(--duration-200) var(--ease-out);
   flex-shrink: 0;
 }
 
@@ -360,7 +360,7 @@ function clamp(value: number, min: number, max: number): number {
   height: 18px;
   border-radius: 50%;
   background: white;
-  transition: transform 0.2s ease;
+  transition: transform var(--duration-200) var(--ease-out);
   pointer-events: none;
 }
 

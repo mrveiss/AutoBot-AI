@@ -347,7 +347,7 @@ onMounted(() => {
 
 .header-description {
   color: var(--text-secondary);
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-sm);
 }
 
@@ -428,12 +428,16 @@ onMounted(() => {
   border-color: var(--color-primary);
   box-shadow: var(--shadow-focus);
 }
+.description-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .backups-list-section h5 {
   font-size: var(--text-sm);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .list-header {
@@ -495,14 +499,14 @@ onMounted(() => {
   background: var(--color-primary-bg);
   color: var(--color-primary);
   border-radius: var(--radius-md);
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 
 .backup-info {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 0.125rem;
+  gap: var(--spacing-0-5);
 }
 
 .backup-name {

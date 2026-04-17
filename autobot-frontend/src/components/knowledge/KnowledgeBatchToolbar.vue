@@ -95,7 +95,7 @@ defineEmits<Emits>()
 }
 
 .toolbar-info i {
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
 }
 
 .toolbar-actions {

@@ -19,6 +19,7 @@ import re
 from typing import TYPE_CHECKING, Any
 
 from async_chat_workflow import WorkflowMessage
+from tools.code_interpreter import CODE_INTERPRETER_SCHEMA
 from utils.errors import RepairableException
 
 if TYPE_CHECKING:
@@ -98,85 +99,119 @@ def validate_tool_arguments(
         return None
 
 
+# Issue #4726: Named schema constants — one per tool, single source of truth.
+# Browser tools and web_search have no dedicated tools/ module; constants are
+# defined here alongside BROWSER_TOOL_NAMES so they stay co-located with the
+# routing logic.  execute_command is also defined here for the same reason.
+EXECUTE_COMMAND_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "command": {"type": "string"},
+        "host": {"type": "string"},
+    },
+    "required": ["command"],
+}
+
+WEB_SEARCH_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "query": {"type": "string"},
+    },
+    "required": ["query"],
+}
+
+# Browser tool schemas — co-located with BROWSER_TOOL_NAMES (Issue #4726).
+NAVIGATE_SCHEMA: dict = {
+    "type": "object",
+    "properties": {"url": {"type": "string"}},
+    "required": ["url"],
+}
+
+CLICK_SCHEMA: dict = {
+    "type": "object",
+    "properties": {"selector": {"type": "string"}},
+    "required": ["selector"],
+}
+
+FILL_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "selector": {"type": "string"},
+        "value": {"type": "string"},
+    },
+    "required": ["selector", "value"],
+}
+
+SELECT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "selector": {"type": "string"},
+        "value": {"type": "string"},
+    },
+    "required": ["selector", "value"],
+}
+
+HOVER_SCHEMA: dict = {
+    "type": "object",
+    "properties": {"selector": {"type": "string"}},
+    "required": ["selector"],
+}
+
+SCREENSHOT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {},
+}
+
+EVALUATE_SCHEMA: dict = {
+    "type": "object",
+    "properties": {"script": {"type": "string"}},
+    "required": ["script"],
+}
+
+GET_TEXT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {"selector": {"type": "string"}},
+    "required": ["selector"],
+}
+
+GET_ATTRIBUTE_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "selector": {"type": "string"},
+        "attribute": {"type": "string"},
+    },
+    "required": ["selector", "attribute"],
+}
+
+WAIT_FOR_SELECTOR_SCHEMA: dict = {
+    "type": "object",
+    "properties": {"selector": {"type": "string"}},
+    "required": ["selector"],
+}
+
 # Issue #4529: JSON Schema definitions for built-in tools dispatched directly
 # (not via MCP).  Used by _validate_builtin_tool_arguments() so every dispatch
 # path passes through validate_tool_arguments() before execution.
+# Issue #4726: inline dicts replaced with named constants above; schema content
+# is unchanged.
 _BUILTIN_TOOL_SCHEMAS: dict[str, dict] = {
-    "execute_command": {
-        "type": "object",
-        "properties": {
-            "command": {"type": "string"},
-            "host": {"type": "string"},
-        },
-        "required": ["command"],
-    },
-    "web_search": {
-        "type": "object",
-        "properties": {
-            "query": {"type": "string"},
-        },
-        "required": ["query"],
-    },
-    # Browser tools share a common structure: at minimum one string parameter.
-    # Each tool is registered with its specific required field.
-    "navigate": {
-        "type": "object",
-        "properties": {"url": {"type": "string"}},
-        "required": ["url"],
-    },
-    "click": {
-        "type": "object",
-        "properties": {"selector": {"type": "string"}},
-        "required": ["selector"],
-    },
-    "fill": {
-        "type": "object",
-        "properties": {
-            "selector": {"type": "string"},
-            "value": {"type": "string"},
-        },
-        "required": ["selector", "value"],
-    },
-    "select": {
-        "type": "object",
-        "properties": {
-            "selector": {"type": "string"},
-            "value": {"type": "string"},
-        },
-        "required": ["selector", "value"],
-    },
-    "hover": {
-        "type": "object",
-        "properties": {"selector": {"type": "string"}},
-        "required": ["selector"],
-    },
-    "screenshot": {
-        "type": "object",
-        "properties": {},
-    },
-    "evaluate": {
-        "type": "object",
-        "properties": {"script": {"type": "string"}},
-        "required": ["script"],
-    },
-    "get_text": {
-        "type": "object",
-        "properties": {"selector": {"type": "string"}},
-        "required": ["selector"],
-    },
-    "get_attribute": {
-        "type": "object",
-        "properties": {
-            "selector": {"type": "string"},
-            "attribute": {"type": "string"},
-        },
-        "required": ["selector", "attribute"],
-    },
-    "wait_for_selector": {
-        "type": "object",
-        "properties": {"selector": {"type": "string"}},
-        "required": ["selector"],
-    },
+    "execute_command": EXECUTE_COMMAND_SCHEMA,
+    "web_search": WEB_SEARCH_SCHEMA,
+    "navigate": NAVIGATE_SCHEMA,
+    "click": CLICK_SCHEMA,
+    "fill": FILL_SCHEMA,
+    "select": SELECT_SCHEMA,
+    "hover": HOVER_SCHEMA,
+    "screenshot": SCREENSHOT_SCHEMA,
+    "evaluate": EVALUATE_SCHEMA,
+    "get_text": GET_TEXT_SCHEMA,
+    "get_attribute": GET_ATTRIBUTE_SCHEMA,
+    "wait_for_selector": WAIT_FOR_SELECTOR_SCHEMA,
+    # Imported from tools.code_interpreter — single source of truth for the schema.
+    # Issue #4561: was missing, causing code_interpreter args to bypass validation
+    # (Issue #4562).  All future built-in tool schemas should follow this pattern:
+    # define the schema constant in the tool module and import it here.
+    "code_interpreter": CODE_INTERPRETER_SCHEMA["parameters"],
 }
 
 

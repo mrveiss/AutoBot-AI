@@ -2,11 +2,11 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""Unit tests for Neural Mesh RAG feature flags and RAGService mesh path (#2059)."""
-
-from unittest.mock import AsyncMock, MagicMock, patch
+"""Unit tests for Neural Mesh RAG feature flags and RAGService mesh path (#2059, #4724)."""
 
 import pytest
+from unittest.mock import AsyncMock, MagicMock
+
 
 # =============================================================================
 # Helpers
@@ -14,22 +14,29 @@ import pytest
 
 
 def _make_service(mesh_retriever_enabled: bool = False):
-    """Build a RAGService with a stub config; no Redis or ChromaDB connections."""
+    """Build a RAGService stub; no Redis or ChromaDB connections."""
+    from advanced_rag_optimizer import RAGMetrics
     from services.rag_config import RAGConfig
     from services.rag_service import RAGService
 
     svc = RAGService.__new__(RAGService)
     svc._initialized = True
+    svc._cache = {}
+    svc._cache_lock = MagicMock()
     cfg = RAGConfig()
     cfg.enable_advanced_rag = True
     cfg.mesh_retriever_enabled = mesh_retriever_enabled
     svc.config = cfg
     svc._mesh_retriever = None
+    opt = MagicMock()
+    opt.advanced_search = AsyncMock(return_value=([], RAGMetrics()))
+    opt.advanced_search_with_refinement = AsyncMock(return_value=([], RAGMetrics(), []))
+    svc.optimizer = opt
     return svc
 
 
 def _make_mesh_result(chunk_ids):
-    """Return a mock MeshRetrievalResult whose .chunks list uses chunk_id metadata."""
+    """Return a mock MeshRetrievalResult."""
     from advanced_rag_optimizer import SearchResult
 
     chunks = [
@@ -50,48 +57,56 @@ def _make_mesh_result(chunk_ids):
 
 
 # =============================================================================
+# Test: mesh_retriever_enabled default and to_dict
+# =============================================================================
+
+
+class TestMeshFeatureFlagsDefaultValues:
+    def test_defaults(self):
+        from services.rag_config import RAGConfig
+        cfg = RAGConfig()
+        assert cfg.mesh_retriever_enabled is False
+        assert cfg.mesh_seed_edges is True
+        assert cfg.mesh_edge_learner is False
+
+    def test_to_dict_includes_mesh_retriever_enabled(self):
+        from services.rag_config import RAGConfig
+        d = RAGConfig().to_dict()
+        assert "mesh_retriever_enabled" in d
+        assert d["mesh_retriever_enabled"] is False
+
+    def test_from_dict_round_trip(self):
+        from services.rag_config import RAGConfig
+        original = RAGConfig()
+        original.mesh_edge_learner = True
+        restored = RAGConfig.from_dict(original.to_dict())
+        assert restored.mesh_edge_learner is True
+        assert restored.mesh_retriever_enabled is False
+
+
+# =============================================================================
 # Test: flag disabled — legacy optimizer path is taken
 # =============================================================================
 
 
-class TestMeshFlagDisabledUsesLegacyPath:
-    """When mesh_retriever_enabled=False, advanced_search uses the legacy optimizer."""
-
+class TestMeshFlagDisabled:
     @pytest.mark.asyncio
-    async def test_mesh_flag_disabled_uses_legacy_path(self):
-        """optimizer.advanced_search is invoked when mesh flag is False."""
-        from advanced_rag_optimizer import RAGMetrics
+    async def test_legacy_path_when_flag_off(self):
+        from unittest.mock import patch
 
         svc = _make_service(mesh_retriever_enabled=False)
 
-        with patch(
-            "services.rag_service.RAGService._check_cache_tiers",
-            new_callable=AsyncMock,
-            return_value=None,
-        ), patch(
-            "services.rag_service.RAGService.initialize",
-            new_callable=AsyncMock,
-            return_value=True,
-        ), patch(
-            "services.rag_service.RAGService._execute_and_cache_search",
-            new_callable=AsyncMock,
-            return_value=([], RAGMetrics()),
-        ) as mock_exec, patch(
-            "services.rag_service.RAGService._store_in_semantic_cache",
-            new_callable=AsyncMock,
-        ), patch(
-            "services.rag_service.RAGService._store_in_topic_cache",
-            new_callable=AsyncMock,
-        ), patch(
-            "services.rag_service.RAGService._emit_retrieval_feedback",
-            new_callable=AsyncMock,
-        ), patch(
-            "services.rag_service.RAGService._store_feedback_in_stream",
-            new_callable=AsyncMock,
-        ):
-            await svc.advanced_search(query="test query")
-
-        mock_exec.assert_called_once()
+        with patch("services.rag_service.RAGService._check_cache_tiers",
+                   new_callable=AsyncMock, return_value=None), \
+             patch("services.rag_service.RAGService.initialize",
+                   new_callable=AsyncMock, return_value=True), \
+             patch("services.rag_service.RAGService._emit_ranked_feedback",
+                   new_callable=AsyncMock), \
+             patch("services.rag_service.RAGService._run_mesh_retriever",
+                   new_callable=AsyncMock) as mock_mesh:
+            await svc.advanced_search("test query")
+            mock_mesh.assert_not_called()
+            svc.optimizer.advanced_search.assert_called_once()
 
 
 # =============================================================================
@@ -99,160 +114,221 @@ class TestMeshFlagDisabledUsesLegacyPath:
 # =============================================================================
 
 
-class TestMeshFlagEnabledUsesMeshRetriever:
-    """When mesh_retriever_enabled=True and _mesh_retriever is set, mesh path runs."""
-
+class TestMeshFlagEnabled:
     @pytest.mark.asyncio
-    async def test_mesh_flag_enabled_uses_mesh_retriever(self):
-        """_mesh_retriever.retrieve() is called when flag is True and retriever is set."""
-        svc = _make_service(mesh_retriever_enabled=True)
-        mesh_result = _make_mesh_result(["c1", "c2"])
-        svc._mesh_retriever = AsyncMock()
-        svc._mesh_retriever.retrieve = AsyncMock(return_value=mesh_result)
-
-        with patch(
-            "services.rag_service.RAGService._check_cache_tiers",
-            new_callable=AsyncMock,
-            return_value=None,
-        ), patch(
-            "services.rag_service.RAGService._emit_retrieval_feedback",
-            new_callable=AsyncMock,
-        ), patch(
-            "services.rag_service.RAGService._store_feedback_in_stream",
-            new_callable=AsyncMock,
-        ):
-            results, metrics = await svc.advanced_search(
-                query="mesh query", max_results=2
-            )
-
-        svc._mesh_retriever.retrieve.assert_called_once_with("mesh query", 2)
-        assert len(results) == 2
-        assert metrics.final_results_count == 2
-
-    @pytest.mark.asyncio
-    async def test_mesh_path_emits_feedback_events(self):
-        """Mesh path calls _emit_retrieval_feedback and _store_feedback_in_stream."""
-        svc = _make_service(mesh_retriever_enabled=True)
-        mesh_result = _make_mesh_result(["c1"])
-        svc._mesh_retriever = AsyncMock()
-        svc._mesh_retriever.retrieve = AsyncMock(return_value=mesh_result)
-
-        with patch(
-            "services.rag_service.RAGService._check_cache_tiers",
-            new_callable=AsyncMock,
-            return_value=None,
-        ), patch(
-            "services.rag_service.RAGService._emit_retrieval_feedback",
-            new_callable=AsyncMock,
-        ) as mock_emit, patch(
-            "services.rag_service.RAGService._store_feedback_in_stream",
-            new_callable=AsyncMock,
-        ) as mock_store:
-            await svc.advanced_search(query="q")
-
-        mock_emit.assert_called_once()
-        mock_store.assert_called_once()
-
-
-# =============================================================================
-# Test: flag enabled but retriever is None — falls back to legacy path
-# =============================================================================
-
-
-class TestMeshFlagEnabledButNoRetrieverFallsBack:
-    """When mesh_retriever_enabled=True but _mesh_retriever is None, legacy path runs."""
-
-    @pytest.mark.asyncio
-    async def test_mesh_flag_enabled_but_no_retriever_falls_back(self):
-        """_execute_and_cache_search is invoked when _mesh_retriever is None."""
+    async def test_mesh_path_when_flag_on_and_retriever_injected(self):
         from advanced_rag_optimizer import RAGMetrics
+        from unittest.mock import patch
 
         svc = _make_service(mesh_retriever_enabled=True)
-        # _mesh_retriever stays None (set by _make_service)
+        svc._mesh_retriever = MagicMock()  # non-None
 
-        with patch(
-            "services.rag_service.RAGService._check_cache_tiers",
-            new_callable=AsyncMock,
-            return_value=None,
-        ), patch(
-            "services.rag_service.RAGService.initialize",
-            new_callable=AsyncMock,
-            return_value=True,
-        ), patch(
-            "services.rag_service.RAGService._execute_and_cache_search",
-            new_callable=AsyncMock,
-            return_value=([], RAGMetrics()),
-        ) as mock_exec, patch(
-            "services.rag_service.RAGService._store_in_semantic_cache",
-            new_callable=AsyncMock,
-        ), patch(
-            "services.rag_service.RAGService._store_in_topic_cache",
-            new_callable=AsyncMock,
-        ), patch(
-            "services.rag_service.RAGService._emit_retrieval_feedback",
-            new_callable=AsyncMock,
-        ), patch(
-            "services.rag_service.RAGService._store_feedback_in_stream",
-            new_callable=AsyncMock,
-        ):
-            await svc.advanced_search(query="test")
+        expected = _make_mesh_result(["c1", "c2"]).chunks
+        metrics = RAGMetrics()
 
-        mock_exec.assert_called_once()
+        with patch("services.rag_service.RAGService._check_cache_tiers",
+                   new_callable=AsyncMock, return_value=None), \
+             patch("services.rag_service.RAGService._emit_ranked_feedback",
+                   new_callable=AsyncMock), \
+             patch("services.rag_service.RAGService._run_mesh_retriever",
+                   new_callable=AsyncMock, return_value=(expected, metrics)) as mock_mesh:
+            results, _ = await svc.advanced_search("test query")
+            mock_mesh.assert_called_once_with("test query", 5)
+            assert results is expected
 
 
 # =============================================================================
-# Test: default values for all 6 mesh flags
+# Test: flag enabled but retriever None — falls through to legacy
 # =============================================================================
 
 
-class TestMeshFeatureFlagsDefaultValues:
-    """All six mesh feature flags must have the correct defaults."""
+class TestMeshFlagEnabledRetrieverNone:
+    @pytest.mark.asyncio
+    async def test_falls_through_when_retriever_not_injected(self):
+        from unittest.mock import patch
 
-    def test_mesh_feature_flags_default_values(self):
-        """Verify all six mesh flags have correct defaults from RAGConfig()."""
+        svc = _make_service(mesh_retriever_enabled=True)
+        svc._mesh_retriever = None  # not injected yet
+
+        with patch("services.rag_service.RAGService._check_cache_tiers",
+                   new_callable=AsyncMock, return_value=None), \
+             patch("services.rag_service.RAGService.initialize",
+                   new_callable=AsyncMock, return_value=True), \
+             patch("services.rag_service.RAGService._emit_ranked_feedback",
+                   new_callable=AsyncMock), \
+             patch("services.rag_service.RAGService._run_mesh_retriever",
+                   new_callable=AsyncMock) as mock_mesh:
+            await svc.advanced_search("test query")
+            mock_mesh.assert_not_called()
+            svc.optimizer.advanced_search.assert_called_once()
+
+
+# =============================================================================
+# Test: register_shared_mesh_components builds per-instance retriever (#4765)
+# =============================================================================
+
+
+class TestSharedMeshComponentsPerInstanceBuild:
+    """Per-instance NeuralMeshRetriever is built from shared components (#4765)."""
+
+    def setup_method(self):
+        import services.rag_service as _mod
+        self._orig = _mod._shared_mesh_components
+        _mod._shared_mesh_components = None
+
+    def teardown_method(self):
+        import services.rag_service as _mod
+        _mod._shared_mesh_components = self._orig
+
+    def _make_components(self):
+        return {
+            "mesh_db": MagicMock(name="mesh_db"),
+            "ppr": MagicMock(name="ppr"),
+            "edge_learner": MagicMock(name="edge_learner"),
+            "reranker": MagicMock(name="reranker"),
+            "classifier": MagicMock(name="classifier"),
+            "llm": None,
+        }
+
+    @pytest.mark.asyncio
+    async def test_builds_per_instance_retriever_on_initialize(self):
+        """initialize() builds a fresh NeuralMeshRetriever bound to this instance's optimizer."""
+        from services.rag_service import RAGService, register_shared_mesh_components
         from services.rag_config import RAGConfig
+        from unittest.mock import patch, AsyncMock
 
-        cfg = RAGConfig()
-        assert cfg.mesh_retriever_enabled is False
-        assert cfg.mesh_seed_edges is True
-        assert cfg.mesh_edge_learner is False
-        assert cfg.mesh_edge_discoverer is False
-        assert cfg.mesh_pruner is False
-        assert cfg.mesh_node_promoter is False
+        register_shared_mesh_components(self._make_components())
 
+        svc = RAGService.__new__(RAGService)
+        svc._initialized = False
+        svc._cache = {}
+        svc._cache_lock = MagicMock()
+        svc.config = RAGConfig()
+        svc._mesh_retriever = None
+        svc.kb_adapter = MagicMock()
+        svc.kb_adapter.kb = MagicMock()
 
-# =============================================================================
-# Test: to_dict() includes all mesh flags
-# =============================================================================
+        built_retriever = MagicMock(name="built_NeuralMeshRetriever")
+        with patch("services.rag_service.AdvancedRAGOptimizer") as MockOpt, \
+             patch("services.rag_service.NeuralMeshRetriever", return_value=built_retriever) as MockNMR:
+            mock_opt = MagicMock()
+            mock_opt.initialize = AsyncMock(return_value=True)
+            MockOpt.return_value = mock_opt
 
+            result = await svc.initialize()
 
-class TestRAGConfigSerializationIncludesMeshFlags:
-    """RAGConfig.to_dict() must expose all six mesh flags for YAML round-trips."""
+        assert result is True
+        assert MockNMR.called, "NeuralMeshRetriever should have been instantiated"
+        # chroma_search and hybrid_search closures must be present
+        kwargs = MockNMR.call_args.kwargs
+        assert callable(kwargs.get("chroma_search")), "chroma_search closure missing"
+        assert callable(kwargs.get("hybrid_search")), "hybrid_search closure missing"
+        assert svc._mesh_retriever is built_retriever
+        assert svc.config.mesh_retriever_enabled is True
 
-    def test_rag_config_serialization_includes_mesh_flags(self):
-        """to_dict() contains all six mesh flag keys with correct default values."""
+    @pytest.mark.asyncio
+    async def test_two_instances_get_independent_retrievers(self):
+        """Two RAGService instances each get their own NeuralMeshRetriever."""
+        from services.rag_service import RAGService, register_shared_mesh_components
         from services.rag_config import RAGConfig
+        from unittest.mock import patch, AsyncMock
 
-        d = RAGConfig().to_dict()
-        assert d["mesh_retriever_enabled"] is False
-        assert d["mesh_seed_edges"] is True
-        assert d["mesh_edge_learner"] is False
-        assert d["mesh_edge_discoverer"] is False
-        assert d["mesh_pruner"] is False
-        assert d["mesh_node_promoter"] is False
+        register_shared_mesh_components(self._make_components())
 
-    def test_from_dict_round_trips_mesh_flags(self):
-        """from_dict(to_dict()) preserves non-default mesh flag values."""
+        def _make_svc():
+            svc = RAGService.__new__(RAGService)
+            svc._initialized = False
+            svc._cache = {}
+            svc._cache_lock = MagicMock()
+            svc.config = RAGConfig()
+            svc._mesh_retriever = None
+            svc.kb_adapter = MagicMock()
+            svc.kb_adapter.kb = MagicMock()
+            return svc
+
+        svc1, svc2 = _make_svc(), _make_svc()
+
+        call_count = {"n": 0}
+        retrievers = []
+
+        def _fake_nmr(**kwargs):
+            r = MagicMock(name=f"retriever_{call_count['n']}")
+            call_count["n"] += 1
+            retrievers.append(r)
+            return r
+
+        with patch("services.rag_service.AdvancedRAGOptimizer") as MockOpt, \
+             patch("services.rag_service.NeuralMeshRetriever", side_effect=_fake_nmr):
+            mock_opt = MagicMock()
+            mock_opt.initialize = AsyncMock(return_value=True)
+            MockOpt.return_value = mock_opt
+
+            await svc1.initialize()
+            await svc2.initialize()
+
+        assert len(retrievers) == 2, "Expected two distinct NeuralMeshRetriever instances"
+        assert retrievers[0] is not retrievers[1], "Instances should be independent"
+        assert svc1._mesh_retriever is not svc2._mesh_retriever
+
+    @pytest.mark.asyncio
+    async def test_already_set_retriever_not_overwritten(self):
+        """An existing _mesh_retriever is NOT replaced even when components are registered."""
+        from services.rag_service import RAGService, register_shared_mesh_components
         from services.rag_config import RAGConfig
+        from unittest.mock import patch, AsyncMock
 
-        original = RAGConfig()
-        original.mesh_retriever_enabled = True
-        original.mesh_edge_learner = True
-        d = original.to_dict()
+        register_shared_mesh_components(self._make_components())
 
-        restored = RAGConfig.from_dict(d)
-        assert restored.mesh_retriever_enabled is True
-        assert restored.mesh_edge_learner is True
-        # Unmodified flags stay at defaults
-        assert restored.mesh_seed_edges is True
-        assert restored.mesh_edge_discoverer is False
+        existing = MagicMock(name="existing_retriever")
+
+        svc = RAGService.__new__(RAGService)
+        svc._initialized = False
+        svc._cache = {}
+        svc._cache_lock = MagicMock()
+        svc.config = RAGConfig()
+        svc.config.mesh_retriever_enabled = True
+        svc._mesh_retriever = existing
+        svc.kb_adapter = MagicMock()
+        svc.kb_adapter.kb = MagicMock()
+
+        with patch("services.rag_service.AdvancedRAGOptimizer") as MockOpt, \
+             patch("services.rag_service.NeuralMeshRetriever") as MockNMR:
+            mock_opt = MagicMock()
+            mock_opt.initialize = AsyncMock(return_value=True)
+            MockOpt.return_value = mock_opt
+
+            await svc.initialize()
+
+        MockNMR.assert_not_called()
+        assert svc._mesh_retriever is existing
+
+    @pytest.mark.asyncio
+    async def test_no_components_no_retriever_built(self):
+        """If components are not registered, no retriever is built."""
+        from services.rag_service import RAGService
+        from services.rag_config import RAGConfig
+        from unittest.mock import patch, AsyncMock
+
+        # _shared_mesh_components is None (cleared in setup_method)
+
+        svc = RAGService.__new__(RAGService)
+        svc._initialized = False
+        svc._cache = {}
+        svc._cache_lock = MagicMock()
+        svc.config = RAGConfig()
+        svc._mesh_retriever = None
+        svc.kb_adapter = MagicMock()
+        svc.kb_adapter.kb = MagicMock()
+
+        with patch("services.rag_service.AdvancedRAGOptimizer") as MockOpt, \
+             patch("services.rag_service.NeuralMeshRetriever") as MockNMR:
+            mock_opt = MagicMock()
+            mock_opt.initialize = AsyncMock(return_value=True)
+            MockOpt.return_value = mock_opt
+
+            result = await svc.initialize()
+
+        assert result is True
+        MockNMR.assert_not_called()
+        assert svc._mesh_retriever is None
+        assert svc.config.mesh_retriever_enabled is False

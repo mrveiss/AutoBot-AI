@@ -253,7 +253,7 @@ const formatCellValue = (value: any, column: TableColumn) => {
   flex-direction: column;
   background-color: var(--bg-card);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 /* Table Controls */
@@ -278,7 +278,7 @@ const formatCellValue = (value: any, column: TableColumn) => {
 .base-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-family: var(--font-sans);
 }
 
@@ -295,7 +295,7 @@ const formatCellValue = (value: any, column: TableColumn) => {
 
 .table-header-cell {
   padding: 12px 8px;
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -308,7 +308,7 @@ const formatCellValue = (value: any, column: TableColumn) => {
 
 .sortable-header {
   cursor: pointer;
-  transition: color 150ms ease;
+  transition: color var(--duration-150) var(--ease-out);
 }
 
 .sortable-header:hover {
@@ -318,7 +318,7 @@ const formatCellValue = (value: any, column: TableColumn) => {
 .header-content {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .sort-indicator {
@@ -329,7 +329,7 @@ const formatCellValue = (value: any, column: TableColumn) => {
 .sort-icon {
   width: 14px;
   height: 14px;
-  transition: transform 150ms ease, color 150ms ease;
+  transition: transform var(--duration-150) var(--ease-out), color var(--duration-150) var(--ease-out);
   color: var(--color-info);
 }
 
@@ -353,7 +353,7 @@ const formatCellValue = (value: any, column: TableColumn) => {
 }
 
 .table-row {
-  transition: background-color 150ms ease;
+  transition: background-color var(--duration-150) var(--ease-out);
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -387,13 +387,13 @@ const formatCellValue = (value: any, column: TableColumn) => {
 
 .monospace-cell {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 /* Selection Cells */
 .select-cell {
   width: 40px;
-  padding: 8px;
+  padding: var(--spacing-2);
   text-align: center;
 }
 
@@ -409,7 +409,7 @@ const formatCellValue = (value: any, column: TableColumn) => {
 .actions-cell {
   width: 120px;
   text-align: right;
-  padding-right: 16px;
+  padding-right: var(--spacing-4);
 }
 
 .actions-cell {
@@ -435,8 +435,8 @@ const formatCellValue = (value: any, column: TableColumn) => {
 }
 
 .empty-text {
-  margin: 0;
-  font-size: 14px;
+  margin: var(--spacing-0);
+  font-size: var(--text-sm);
 }
 
 /* Table Footer */

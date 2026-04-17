@@ -1,7 +1,7 @@
 ---
 # Browser role variables
 
-playwright_port: 3000
+playwright_port: 9001
 vnc_port: 5901
 vnc_display: ":1"
 browser_timeout: 30

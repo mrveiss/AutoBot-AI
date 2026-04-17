@@ -224,13 +224,13 @@ function getPhaseIcon(status: string): string {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
 }
 
 .progress-title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   color: var(--chart-green);
   font-weight: var(--font-semibold);
 }
@@ -247,13 +247,13 @@ function getPhaseIcon(status: string): string {
   background: var(--bg-tertiary);
   border-radius: var(--radius-default);
   overflow: hidden;
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
 }
 
 .progress-fill {
   height: 100%;
   background: var(--color-success);
-  transition: width 0.3s ease;
+  transition: width var(--duration-300) var(--ease-out);
   border-radius: var(--radius-default);
 }
 
@@ -289,9 +289,9 @@ function getPhaseIcon(status: string): string {
 .phase-progress {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 16px;
-  padding: 12px;
+  gap: var(--spacing-3);
+  margin-bottom: var(--spacing-4);
+  padding: var(--spacing-3);
   background: var(--bg-primary);
   border-radius: var(--radius-md);
 }
@@ -299,7 +299,7 @@ function getPhaseIcon(status: string): string {
 .phase-item {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
   padding: 6px 12px;
   background: var(--bg-secondary);
   border-radius: var(--radius-default);
@@ -331,8 +331,8 @@ function getPhaseIcon(status: string): string {
 
 /* Batch Progress */
 .batch-progress {
-  margin-top: 16px;
-  padding: 12px;
+  margin-top: var(--spacing-4);
+  padding: var(--spacing-3);
   background: var(--bg-primary);
   border-radius: var(--radius-md);
 }
@@ -341,7 +341,7 @@ function getPhaseIcon(status: string): string {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
 }
 
 .batch-label {
@@ -359,32 +359,32 @@ function getPhaseIcon(status: string): string {
   width: 100%;
   height: 6px;
   background: var(--bg-tertiary);
-  border-radius: 3px;
+  border-radius: var(--radius-default);
   overflow: hidden;
 }
 
 .batch-fill {
   height: 100%;
   background: var(--color-success);
-  transition: width 0.3s ease;
-  border-radius: 3px;
+  transition: width var(--duration-300) var(--ease-out);
+  border-radius: var(--radius-default);
 }
 
 /* Live Stats */
 .live-stats {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
-  margin-top: 16px;
-  padding: 12px;
+  gap: var(--spacing-4);
+  margin-top: var(--spacing-4);
+  padding: var(--spacing-3);
   background: var(--bg-card);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 .live-stats .stat-item {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
   color: var(--text-secondary);
   font-size: 0.85em;
 }
@@ -430,7 +430,7 @@ function getPhaseIcon(status: string): string {
 .scan-runner-progress .mini-progress-bar {
   height: 100%;
   background: var(--color-purple);
-  transition: width 0.3s ease;
+  transition: width var(--duration-300) var(--ease-out);
 }
 .scan-runner-items {
   display: flex;

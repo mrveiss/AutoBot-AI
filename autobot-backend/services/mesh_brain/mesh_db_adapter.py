@@ -72,6 +72,18 @@ class MeshDBAdapter:
         """Increment access_count and set last_accessed for the given node UUIDs."""
         await self._db.update_access_count(node_ids)
 
+    async def get_anchor_neighbors(self, seed_ids: list[str]) -> list[str]:
+        """Return IDs of anchor nodes adjacent to any seed_id (#4819)."""
+        return await self._db.get_anchor_neighbors(seed_ids)
+
+    async def fetch_edges(self, min_weight: float = 0.5) -> list[dict]:
+        """Return all edges above min_weight. Satisfies MeshEdgeSync Protocol (#4837)."""
+        return await self._db.fetch_edges(min_weight=min_weight)
+
+    async def promote_to_anchor(self, node_id: str) -> None:
+        """Set is_anchor=True for node_id. Forwards to MeshDB (#4837)."""
+        await self._db.promote_to_anchor(node_id)
+
     # ------------------------------------------------------------------
     # MeshGraph protocol — StalenessPropagor surface
     # ------------------------------------------------------------------

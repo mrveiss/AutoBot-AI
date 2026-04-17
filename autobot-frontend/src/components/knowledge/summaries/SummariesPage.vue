@@ -145,7 +145,7 @@ function handleDrillDown(summaryId: string): void {
 
 .doc-id-input {
   padding: var(--spacing-lg);
-  padding-bottom: 0;
+  padding-bottom: var(--spacing-0);
 }
 
 .doc-id-input label {
@@ -174,6 +174,10 @@ function handleDrillDown(summaryId: string): void {
 .form-input:focus {
   outline: none;
   border-color: var(--color-primary);
+}
+.form-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .load-btn {

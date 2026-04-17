@@ -553,7 +553,7 @@ defineExpose({
   font-size: var(--text-lg);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .header-controls {
@@ -685,7 +685,7 @@ defineExpose({
 }
 
 .avatar-icon.small {
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .status-ring {
@@ -795,7 +795,7 @@ defineExpose({
 }
 
 .metric-label {
-  font-size: 10px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: var(--tracking-wide);
@@ -817,7 +817,7 @@ defineExpose({
 
 .task-list {
   list-style: none;
-  padding: 0;
+  padding: var(--spacing-0);
   margin: 0 0 var(--spacing-3) 0;
 }
 

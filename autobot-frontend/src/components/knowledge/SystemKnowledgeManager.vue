@@ -757,7 +757,7 @@ export default {
 }
 
 .subtitle {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-secondary);
   font-size: var(--text-sm);
 }
@@ -795,6 +795,10 @@ export default {
   border-color: var(--color-info);
   box-shadow: var(--shadow-focus);
 }
+.host-select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .status-cards {
   display: grid;
@@ -821,7 +825,7 @@ export default {
 }
 
 .status-content p {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-secondary);
   font-size: var(--text-xs);
 }

@@ -1623,18 +1623,18 @@ watch(selectedScope, () => {
 }
 
 .sidebar-header {
-  padding: 20px;
+  padding: var(--spacing-5);
   border-bottom: 1px solid var(--border-default);
 }
 
 .sidebar-header h3 {
-  margin: 0;
-  font-size: 18px;
+  margin: var(--spacing-0);
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .sidebar-header i {
@@ -1656,16 +1656,16 @@ watch(selectedScope, () => {
   position: absolute;
   left: 12px;
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .search-wrapper .search-input {
   width: 100%;
   padding: 10px 36px 10px 36px;
   border: 1px solid var(--border-default);
-  border-radius: 8px;
-  font-size: 14px;
-  transition: all 0.2s;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+  transition: all var(--duration-200);
   background: var(--bg-input);
   color: var(--text-primary);
 }
@@ -1675,13 +1675,17 @@ watch(selectedScope, () => {
   border-color: var(--color-primary);
   box-shadow: var(--shadow-focus);
 }
+.search-wrapper .search-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .clear-search {
   position: absolute;
   right: 8px;
   background: none;
   border: none;
-  padding: 4px;
+  padding: var(--spacing-1);
   cursor: pointer;
   color: var(--text-muted);
 }
@@ -1694,7 +1698,7 @@ watch(selectedScope, () => {
 
 .category-divider {
   padding: 12px 20px 8px;
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -1704,10 +1708,10 @@ watch(selectedScope, () => {
 .category-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-3);
   padding: 10px 20px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-150);
   color: var(--text-secondary);
 }
 
@@ -1723,19 +1727,19 @@ watch(selectedScope, () => {
 .category-item i {
   width: 20px;
   text-align: center;
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .category-item span:first-of-type:not(.count) {
   flex: 1;
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .category-item .count {
-  font-size: 12px;
+  font-size: var(--text-xs);
   background: var(--bg-tertiary);
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   color: var(--text-tertiary);
 }
 
@@ -1760,19 +1764,19 @@ watch(selectedScope, () => {
 
 .btn-create {
   width: 100%;
-  padding: 12px;
+  padding: var(--spacing-3);
   background: var(--color-primary);
   color: var(--text-on-primary);
   border: none;
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  transition: all 0.2s;
+  gap: var(--spacing-2);
+  transition: all var(--duration-200);
 }
 
 .btn-create:hover {
@@ -1798,20 +1802,20 @@ watch(selectedScope, () => {
 }
 
 .header-left h2 {
-  margin: 0;
-  font-size: 20px;
+  margin: var(--spacing-0);
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .header-left .subtitle {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
 .header-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .btn-icon {
@@ -1822,10 +1826,10 @@ watch(selectedScope, () => {
   justify-content: center;
   background: var(--bg-tertiary);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
   color: var(--text-secondary);
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .btn-icon:hover {
@@ -1840,7 +1844,7 @@ watch(selectedScope, () => {
 /* Stats Bar */
 .stats-bar {
   display: flex;
-  gap: 24px;
+  gap: var(--spacing-6);
   padding: 16px 24px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-default);
@@ -1849,12 +1853,12 @@ watch(selectedScope, () => {
 .stat-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .stat-item i {
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .stat-item .stat-value {
@@ -1863,7 +1867,7 @@ watch(selectedScope, () => {
 }
 
 .stat-item .stat-label {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -1883,7 +1887,7 @@ watch(selectedScope, () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: var(--spacing-4);
   color: var(--text-tertiary);
 }
 
@@ -1891,32 +1895,32 @@ watch(selectedScope, () => {
 .credentials-container {
   flex: 1;
   overflow-y: auto;
-  padding: 24px;
+  padding: var(--spacing-6);
 }
 
 .credentials-container.grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 16px;
+  gap: var(--spacing-4);
   align-content: start;
 }
 
 .credentials-container.list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 /* Credential Card */
 .credential-card {
   display: flex;
-  gap: 16px;
-  padding: 16px;
+  gap: var(--spacing-4);
+  padding: var(--spacing-4);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .credential-card:hover {
@@ -1937,12 +1941,12 @@ watch(selectedScope, () => {
   width: 48px;
   height: 48px;
   min-width: 48px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-on-primary);
-  font-size: 18px;
+  font-size: var(--text-lg);
 }
 
 .card-content {
@@ -1954,12 +1958,12 @@ watch(selectedScope, () => {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 8px;
-  margin-bottom: 6px;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-1-5);
 }
 
 .card-header h4 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
@@ -1970,14 +1974,14 @@ watch(selectedScope, () => {
 
 .card-badges {
   display: flex;
-  gap: 6px;
+  gap: var(--spacing-1-5);
   flex-shrink: 0;
 }
 
 .badge {
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-weight: 500;
   text-transform: capitalize;
 }
@@ -1997,14 +2001,14 @@ watch(selectedScope, () => {
   color: var(--color-error);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 /* Issue #685: Visibility badge styles */
 .badge.visibility {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .badge.visibility-private {
@@ -2018,38 +2022,38 @@ watch(selectedScope, () => {
 }
 
 .badge.visibility-group {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .badge.visibility-organization {
-  background: #dbeafe;
-  color: #1e40af;
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .badge.visibility-system {
-  background: #d1fae5;
-  color: #065f46;
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .card-description {
   margin: 0 0 8px;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
   line-height: 1.4;
 }
 
 .card-meta {
   display: flex;
-  gap: 16px;
-  font-size: 12px;
+  gap: var(--spacing-4);
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
 .meta-item {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .meta-item.text-warning {
@@ -2058,16 +2062,16 @@ watch(selectedScope, () => {
 
 .card-tags {
   display: flex;
-  gap: 6px;
-  margin-top: 8px;
+  gap: var(--spacing-1-5);
+  margin-top: var(--spacing-2);
   flex-wrap: wrap;
 }
 
 .tag {
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 2px 8px;
   background: var(--bg-tertiary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   color: var(--text-secondary);
 }
 
@@ -2078,33 +2082,33 @@ watch(selectedScope, () => {
 .card-workflow-usage {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
   flex-wrap: wrap;
-  margin-top: 6px;
+  margin-top: var(--spacing-1-5);
 }
 
 .usage-label {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .usage-tag {
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 2px 8px;
   background: var(--color-primary-bg);
   color: var(--color-primary);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
 }
 
 .card-actions {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity var(--duration-150);
 }
 
 .credential-card:hover .card-actions {
@@ -2119,10 +2123,10 @@ watch(selectedScope, () => {
   justify-content: center;
   background: var(--bg-tertiary);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   color: var(--text-secondary);
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .action-btn:hover {
@@ -2137,17 +2141,17 @@ watch(selectedScope, () => {
 
 /* Templates Section */
 .templates-section {
-  padding: 24px;
+  padding: var(--spacing-6);
 }
 
 .templates-section h3 {
   margin: 0 0 8px;
-  font-size: 18px;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .templates-section h3 i {
@@ -2156,26 +2160,26 @@ watch(selectedScope, () => {
 
 .templates-subtitle {
   margin: 0 0 20px;
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
 .templates-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .template-card {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3-5);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .template-card:hover {
@@ -2186,24 +2190,24 @@ watch(selectedScope, () => {
 .template-icon {
   width: 40px;
   height: 40px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-on-primary);
-  font-size: 16px;
+  font-size: var(--text-base);
 }
 
 .template-info h4 {
-  margin: 0;
-  font-size: 14px;
+  margin: var(--spacing-0);
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .template-info p {
   margin: 2px 0 0;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -2211,7 +2215,7 @@ watch(selectedScope, () => {
 .credential-form {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--spacing-5);
 }
 
 .template-selection h4 {
@@ -2224,19 +2228,19 @@ watch(selectedScope, () => {
 .type-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .type-option {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 16px;
+  gap: var(--spacing-2-5);
+  padding: var(--spacing-4);
   border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .type-option:hover {
@@ -2247,16 +2251,16 @@ watch(selectedScope, () => {
 .type-option .type-icon {
   width: 44px;
   height: 44px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-on-primary);
-  font-size: 18px;
+  font-size: var(--text-lg);
 }
 
 .type-option span {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
   text-align: center;
@@ -2265,22 +2269,22 @@ watch(selectedScope, () => {
 .selected-type {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3);
   background: var(--bg-tertiary);
-  border-radius: 10px;
-  margin-bottom: 8px;
+  border-radius: var(--radius-xl);
+  margin-bottom: var(--spacing-2);
 }
 
 .selected-type .type-icon {
   width: 40px;
   height: 40px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-on-primary);
-  font-size: 16px;
+  font-size: var(--text-base);
 }
 
 .selected-type .type-info {
@@ -2296,8 +2300,8 @@ watch(selectedScope, () => {
 .selected-type .change-type {
   background: none;
   border: none;
-  padding: 0;
-  font-size: 12px;
+  padding: var(--spacing-0);
+  font-size: var(--text-xs);
   color: var(--color-primary);
   cursor: pointer;
 }
@@ -2305,12 +2309,12 @@ watch(selectedScope, () => {
 .form-fields {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .form-row {
   display: flex;
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .form-row.two-col > .form-group {
@@ -2320,12 +2324,12 @@ watch(selectedScope, () => {
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--spacing-1-5);
   flex: 1;
 }
 
 .form-group label {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -2337,9 +2341,9 @@ watch(selectedScope, () => {
 .form-input {
   padding: 10px 12px;
   border: 1px solid var(--border-default);
-  border-radius: 8px;
-  font-size: 14px;
-  transition: all 0.2s;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+  transition: all var(--duration-200);
   background: var(--bg-input);
   color: var(--text-primary);
 }
@@ -2351,7 +2355,7 @@ watch(selectedScope, () => {
 }
 
 .input-hint {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
@@ -2362,7 +2366,7 @@ watch(selectedScope, () => {
 .secret-input {
   padding-right: 44px;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .secret-masked {
@@ -2377,7 +2381,7 @@ watch(selectedScope, () => {
   top: 8px;
   background: var(--bg-tertiary);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   width: 32px;
   height: 32px;
   display: flex;
@@ -2389,19 +2393,19 @@ watch(selectedScope, () => {
 
 .scope-selector {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .scope-option {
   flex: 1;
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 14px;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3-5);
   border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .scope-option:hover {
@@ -2418,9 +2422,9 @@ watch(selectedScope, () => {
 }
 
 .scope-option i {
-  font-size: 20px;
+  font-size: var(--text-xl);
   color: var(--text-muted);
-  margin-top: 2px;
+  margin-top: var(--spacing-0-5);
 }
 
 .scope-option.active i {
@@ -2438,57 +2442,57 @@ watch(selectedScope, () => {
 }
 
 .scope-option small {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
-  margin-top: 2px;
+  margin-top: var(--spacing-0-5);
 }
 
 /* View Modal */
 .view-credential {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--spacing-5);
 }
 
 .view-header {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding-bottom: 16px;
+  gap: var(--spacing-4);
+  padding-bottom: var(--spacing-4);
   border-bottom: 1px solid var(--border-default);
 }
 
 .view-icon {
   width: 56px;
   height: 56px;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-on-primary);
-  font-size: 24px;
+  font-size: var(--text-2xl);
 }
 
 .view-title h3 {
-  margin: 0;
-  font-size: 18px;
+  margin: var(--spacing-0);
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .view-type {
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
 .view-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .view-section label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -2496,46 +2500,46 @@ watch(selectedScope, () => {
 }
 
 .view-section p {
-  margin: 0;
+  margin: var(--spacing-0);
   color: var(--text-primary);
 }
 
 .secret-display {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3);
   background: var(--bg-tertiary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .secret-display code {
   flex: 1;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--text-sm);
   word-break: break-all;
   color: var(--text-primary);
 }
 
 .secret-actions {
   display: flex;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .view-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .view-item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .view-item label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -2543,14 +2547,14 @@ watch(selectedScope, () => {
 }
 
 .view-item span {
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
 .tags-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .text-danger {
@@ -2593,7 +2597,7 @@ watch(selectedScope, () => {
 .transfer-content h4,
 .delete-content h4 {
   margin: 0 0 8px;
-  font-size: 18px;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -2608,10 +2612,10 @@ watch(selectedScope, () => {
 .delete-warning {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   padding: 10px 16px;
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
 }
 
 .transfer-warning {
@@ -2630,15 +2634,15 @@ watch(selectedScope, () => {
   background: var(--color-primary);
   color: var(--text-on-primary);
   border: none;
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  transition: all 0.2s;
+  gap: var(--spacing-2);
+  transition: all var(--duration-200);
 }
 
 .btn-primary:hover {
@@ -2655,11 +2659,11 @@ watch(selectedScope, () => {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: none;
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .btn-secondary:hover {
@@ -2671,15 +2675,15 @@ watch(selectedScope, () => {
   background: var(--color-error);
   color: var(--text-on-error);
   border: none;
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  transition: all 0.2s;
+  gap: var(--spacing-2);
+  transition: all var(--duration-200);
 }
 
 .btn-danger:hover {
@@ -2694,20 +2698,20 @@ watch(selectedScope, () => {
 /* Infrastructure Host Form Styles */
 .capability-checkboxes {
   display: flex;
-  gap: 16px;
+  gap: var(--spacing-4);
   flex-wrap: wrap;
 }
 
 .checkbox-option {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   padding: 10px 16px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-150);
   user-select: none;
 }
 
@@ -2738,7 +2742,7 @@ watch(selectedScope, () => {
 }
 
 .checkbox-option i {
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 
@@ -2747,7 +2751,7 @@ watch(selectedScope, () => {
 }
 
 .checkbox-option span {
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
   font-weight: 500;
 }

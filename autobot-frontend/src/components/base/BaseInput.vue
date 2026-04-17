@@ -160,22 +160,22 @@ defineExpose({
 .base-input-wrapper {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 /* Label */
 .input-label {
   display: block;
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
-  margin-bottom: 4px;
+  margin-bottom: var(--spacing-1);
   font-family: var(--font-sans);
 }
 
 .label-asterisk {
   color: var(--color-error);
-  margin-left: 2px;
+  margin-left: var(--spacing-0-5);
 }
 
 /* Input Container */
@@ -185,8 +185,8 @@ defineExpose({
   align-items: center;
   background-color: var(--bg-input);
   border: 1px solid var(--border-default);
-  border-radius: 2px;
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: var(--radius-xs);
+  transition: all var(--duration-150) var(--ease-in-out);
 }
 
 .container-focused {
@@ -216,9 +216,14 @@ defineExpose({
   border: none;
   outline: none;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-family: var(--font-sans);
-  transition: color 150ms ease;
+  transition: color var(--duration-150) var(--ease-out);
+}
+
+.base-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .base-input::placeholder {
@@ -237,7 +242,7 @@ defineExpose({
 }
 
 .input-size-sm .base-input {
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .input-size-md .input-container {
@@ -246,7 +251,7 @@ defineExpose({
 }
 
 .input-size-md .base-input {
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .input-size-lg .input-container {
@@ -255,7 +260,7 @@ defineExpose({
 }
 
 .input-size-lg .base-input {
-  font-size: 16px;
+  font-size: var(--text-base);
 }
 
 /* Prefix/Suffix */
@@ -267,25 +272,25 @@ defineExpose({
 }
 
 .input-prefix {
-  margin-right: 8px;
+  margin-right: var(--spacing-2);
 }
 
 .input-suffix {
-  margin-left: 8px;
-  gap: 4px;
+  margin-left: var(--spacing-2);
+  gap: var(--spacing-1);
 }
 
 .clear-button {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 4px;
+  padding: var(--spacing-1);
   background: transparent;
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  border-radius: 2px;
-  transition: all 150ms ease;
+  border-radius: var(--radius-xs);
+  transition: all var(--duration-150) var(--ease-out);
 }
 
 .clear-button:hover {
@@ -299,16 +304,16 @@ defineExpose({
 }
 
 .helper-text {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
-  margin: 0;
+  margin: var(--spacing-0);
   font-family: var(--font-sans);
 }
 
 .error-text {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-error);
-  margin: 0;
+  margin: var(--spacing-0);
   font-family: var(--font-sans);
   font-weight: 500;
 }
@@ -317,7 +322,7 @@ defineExpose({
 .base-input[type="number"]::-webkit-inner-spin-button,
 .base-input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .base-input[type="number"] {
@@ -331,6 +336,6 @@ defineExpose({
 .base-input:-webkit-autofill:focus {
   -webkit-text-fill-color: var(--text-primary);
   -webkit-box-shadow: 0 0 0 1000px var(--bg-input) inset;
-  transition: background-color 5000s ease-in-out 0s;
+  transition: background-color 5000s var(--ease-in-out) 0s;
 }
 </style>

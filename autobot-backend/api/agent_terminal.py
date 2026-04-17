@@ -298,6 +298,16 @@ class ApproveCommandRequest(BaseModel):
     )
 
 
+class ToolApprovalRequest(BaseModel):
+    """Request to approve/deny a pending agent tool (event-stream level approval)."""
+
+    approved: bool = Field(..., description="Whether the tool execution is approved")
+    comment: Optional[str] = Field(None, description="Optional reason for the decision")
+    task_id: Optional[str] = Field(
+        None, description="Task ID from the APPROVAL_REQUIRED event"
+    )
+
+
 class InterruptRequest(BaseModel):
     """Request to interrupt agent and take control"""
 
@@ -605,6 +615,45 @@ async def approve_agent_command(
         f"[API] Approval result: {result.get('status')}, error={result.get('error')}"
     )
     return result
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="submit_tool_approval",
+    error_code_prefix="AGENT_TERMINAL",
+)
+@router.post("/tools/approve/{approval_id}")
+async def submit_tool_approval(
+    approval_id: str,
+    request: ToolApprovalRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Publish an APPROVAL_RESPONSE event for an agent tool approval request.
+
+    The agent loop's _request_approval() subscribes to the event stream waiting
+    for this event.  Without it the loop times out after approval_timeout_seconds.
+
+    The frontend receives the approval_id from the APPROVAL_REQUIRED event and
+    calls this endpoint when the user approves or denies the tool execution.
+    """
+    from events.stream_manager import RedisEventStreamManager
+    from events.types import create_approval_response_event
+
+    event = create_approval_response_event(
+        approval_id=approval_id,
+        approved=request.approved,
+        comment=request.comment,
+        task_id=request.task_id,
+    )
+    stream = RedisEventStreamManager()
+    await stream.publish(event)
+    logger.info(
+        "[API] Tool approval submitted: approval_id=%s approved=%s task_id=%s",
+        approval_id,
+        request.approved,
+        request.task_id,
+    )
+    return {"status": "ok", "approval_id": approval_id, "approved": request.approved}
 
 
 @with_error_handling(

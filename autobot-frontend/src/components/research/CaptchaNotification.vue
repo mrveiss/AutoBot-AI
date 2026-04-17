@@ -299,7 +299,7 @@ watch(activeCaptcha, (newVal) => {
 }
 
 .captcha-title h3 {
-  margin: 0;
+  margin: var(--spacing-0);
   font-size: var(--text-base);
   font-weight: var(--font-semibold);
 }
@@ -460,7 +460,7 @@ watch(activeCaptcha, (newVal) => {
 .timeout-bar {
   height: 100%;
   background: var(--color-info);
-  transition: width 1s linear;
+  transition: width var(--duration-1000) linear;
 }
 
 .timeout-bar.bar-warning {

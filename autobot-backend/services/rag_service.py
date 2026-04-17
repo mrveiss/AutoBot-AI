@@ -26,8 +26,10 @@ from services.context_sufficiency import (
     SufficiencyVerdict,
     get_context_sufficiency_evaluator,
 )
+from services.neural_mesh_retriever import NeuralMeshRetriever
 from services.knowledge_base_adapter import KnowledgeBaseAdapter
 from services.rag_config import RAGConfig, get_rag_config
+from services.session_adaptive_reranker import get_session_adaptive_reranker
 from services.semantic_query_cache import get_semantic_query_cache
 from services.topic_retrieval_cache import CachedChunk, get_topic_retrieval_cache
 from type_defs.common import Metadata
@@ -35,6 +37,27 @@ from type_defs.common import Metadata
 logger = get_llm_logger("rag_service")
 
 _STREAM_TTL_SECONDS = TTL_30_DAYS
+
+# In-process cache for the DocIndexer hash cache file (Issue #4723).
+# The file is only rewritten when indexing completes (infrequent), so reading
+# it on every advanced_search() call is unnecessary I/O.
+_hash_cache_memo: dict = {}
+_hash_cache_loaded_at: float = 0.0
+_HASH_CACHE_TTL: float = 60.0  # seconds
+
+# Module-level singleton cache for synthesis schema — avoids repeated disk reads on the
+# hot path (_get_kb_synthesis_context is called on every advanced_search). (#4654)
+_SYNTHESIS_SCHEMA_CACHE: "object | None" = None
+
+
+def _get_synthesis_schema() -> "object":
+    """Return the cached SynthesisSchema, loading from disk only on first call."""
+    global _SYNTHESIS_SCHEMA_CACHE
+    if _SYNTHESIS_SCHEMA_CACHE is None:
+        from services.knowledge.synthesis_schema_loader import load_synthesis_schema
+
+        _SYNTHESIS_SCHEMA_CACHE = load_synthesis_schema()
+    return _SYNTHESIS_SCHEMA_CACHE
 
 
 class RAGService:
@@ -67,12 +90,14 @@ class RAGService:
         self._initialized = False
         self._cache: Dict[str, Tuple[List[SearchResult], float]] = {}
         self._cache_lock = asyncio.Lock()  # CRITICAL: Protect concurrent cache access
-        # Neural Mesh RAG retriever (Issue #2059); set externally when Phase 3 is active.
+        # Neural Mesh RAG retriever (Issue #2059); injected at startup when Phase 3 is active.
         self._mesh_retriever: Optional[Any] = None
-
-        logger.info(
-            f"RAGService initialized with {self.kb_adapter.implementation_type}"
+        # Issue #4690: Session-adaptive reranking weight adjuster.
+        self._session_reranker = get_session_adaptive_reranker(
+            default_semantic=self.config.hybrid_weight_semantic,
+            default_keyword=self.config.hybrid_weight_keyword,
         )
+        logger.info(f"RAGService initialized with {self.kb_adapter.implementation_type}")
 
     async def initialize(self) -> bool:
         """
@@ -90,9 +115,7 @@ class RAGService:
             # Create optimizer instance
             # Issue #2034: Pass rerank_weights at construction time so
             # RAGConfig.rerank_weights is honoured instead of defaulting to 0.8/0.2.
-            self.optimizer = AdvancedRAGOptimizer(
-                rerank_weights=self.config.rerank_weights
-            )
+            self.optimizer = AdvancedRAGOptimizer(rerank_weights=self.config.rerank_weights)
 
             # Configure from settings
             self.optimizer.hybrid_weight_semantic = self.config.hybrid_weight_semantic
@@ -107,6 +130,38 @@ class RAGService:
             self.optimizer.kb = self.kb_adapter.kb
 
             self._initialized = True
+
+            # Build a per-instance NeuralMeshRetriever from shared components if not already
+            # set (#4765).  Each instance gets its OWN retriever so the search closures bind
+            # to THIS instance's optimizer — not to the GraphRAGService optimizer singleton.
+            if self._mesh_retriever is None and _shared_mesh_components is not None:
+                try:
+                    from advanced_rag_optimizer import RAGMetrics as _RAGMetrics
+
+                    _opt = self.optimizer
+
+                    async def _chroma(q: str, k: int) -> list:
+                        return await _opt._perform_semantic_search(q, limit=k)
+
+                    async def _hybrid(q: str, top_k: int = 5) -> list:
+                        results = await _opt._retrieve_hybrid_results(q, _RAGMetrics())
+                        return results[:top_k]
+
+                    self._mesh_retriever = NeuralMeshRetriever(
+                        chroma_search=_chroma,
+                        hybrid_search=_hybrid,
+                        **_shared_mesh_components,
+                    )
+                    self.config.mesh_retriever_enabled = True
+                    logger.debug(
+                        "Built per-instance NeuralMeshRetriever from shared components (#4765)"
+                    )
+                except Exception as _mesh_err:
+                    logger.warning(
+                        "Per-instance NeuralMeshRetriever build failed (non-fatal): %s",
+                        _mesh_err,
+                    )
+
             logger.info("AdvancedRAGOptimizer initialized successfully")
             return True
 
@@ -133,12 +188,34 @@ class RAGService:
         enable_reranking: bool,
         timeout_seconds: float,
     ) -> Tuple[List[SearchResult], RAGMetrics]:
-        """Execute search with timeout protection (Issue #665: extracted helper)."""
+        """Execute search with timeout protection (Issue #665: extracted helper).
+
+        Issue #4696: when enable_rlm_refinement is True, delegates to
+        advanced_search_with_refinement() for RLM-driven query refinement.
+        The extra refinement_history is logged at debug level and discarded.
+        """
+        reranking = enable_reranking and self.config.enable_reranking
+        if self.config.enable_rlm_refinement:
+            results, metrics, history = await asyncio.wait_for(
+                self.optimizer.advanced_search_with_refinement(
+                    query=query,
+                    max_results=fetch_limit,
+                    enable_reranking=reranking,
+                ),
+                timeout=timeout_seconds,
+            )
+            if history:
+                logger.debug(
+                    "RLM refinement completed: %d iteration(s) for query %r",
+                    len(history),
+                    query,
+                )
+            return results, metrics
         return await asyncio.wait_for(
             self.optimizer.advanced_search(
                 query=query,
                 max_results=fetch_limit,
-                enable_reranking=enable_reranking and self.config.enable_reranking,
+                enable_reranking=reranking,
             ),
             timeout=timeout_seconds,
         )
@@ -167,8 +244,7 @@ class RAGService:
                 filtered = self._filter_by_categories(results, categories)[:max_results]
                 if not filtered and unfiltered_count > 0:
                     logger.warning(
-                        "Category filter %s eliminated all %d results — "
-                        "returning unfiltered results instead",
+                        "Category filter %s eliminated all %d results — " "returning unfiltered results instead",
                         categories,
                         unfiltered_count,
                     )
@@ -182,14 +258,10 @@ class RAGService:
                     )
                 metrics.final_results_count = len(results)
             await self._add_to_cache(cache_key, (results, metrics))
-            logger.info(
-                f"Advanced search completed: {len(results)} results in {metrics.total_time:.3f}s"
-            )
+            logger.info(f"Advanced search completed: {len(results)} results in {metrics.total_time:.3f}s")
             return results, metrics
         except asyncio.TimeoutError:
-            logger.error(
-                f"Advanced search timed out after {timeout_seconds}s, using fallback"
-            )
+            logger.error(f"Advanced search timed out after {timeout_seconds}s, using fallback")
             if self.config.fallback_to_basic_search:
                 return await self._fallback_basic_search(query, max_results)
             raise
@@ -199,9 +271,7 @@ class RAGService:
                 return await self._fallback_basic_search(query, max_results)
             raise
 
-    async def _check_topic_cache(
-        self, query: str
-    ) -> Optional[Tuple[List[SearchResult], RAGMetrics]]:
+    async def _check_topic_cache(self, query: str) -> Optional[Tuple[List[SearchResult], RAGMetrics]]:
         """Check topic retrieval cache for related chunks. Issue #1376."""
         try:
             from knowledge.facts import _generate_embedding_with_npu_fallback
@@ -259,9 +329,7 @@ class RAGService:
         except Exception as exc:
             logger.debug("Topic cache store failed: %s", exc)
 
-    async def _check_semantic_cache(
-        self, query: str
-    ) -> Optional[Tuple[List[SearchResult], RAGMetrics]]:
+    async def _check_semantic_cache(self, query: str) -> Optional[Tuple[List[SearchResult], RAGMetrics]]:
         """Check semantic query cache for similar past queries. Issue #1372."""
         try:
             sem_cache = await get_semantic_query_cache()
@@ -387,9 +455,45 @@ class RAGService:
             learner = get_retrieval_learner()
             await learner.record_pattern_outcome(pattern_hash, success, user_id=user_id)
         except Exception as exc:
-            logger.debug(
-                "RetrievalLearner outcome recording failed (non-fatal): %s", exc
-            )
+            logger.debug("RetrievalLearner outcome recording failed (non-fatal): %s", exc)
+
+    def _record_session_signal(
+        self,
+        session_id: str,
+        results: List[SearchResult],
+    ) -> None:
+        """Feed retrieval success/miss signal into the session-adaptive reranker. Issue #4690.
+
+        Uses hybrid_score >= 0.5 as the success threshold (mirrors context-sufficiency
+        evaluator).  Semantic success is indicated by a high semantic_score component;
+        keyword success by a high keyword_score component.
+
+        Args:
+            session_id: Conversation/session identifier.
+            results:    Final search results after all filtering.
+        """
+        # A result is a semantic hit if its semantic contribution exceeds threshold.
+        # A result is a keyword hit if its keyword contribution exceeds threshold.
+        _THRESHOLD = 0.5
+        semantic_success = any(r.semantic_score >= _THRESHOLD for r in results)
+        keyword_success = any(r.keyword_score >= _THRESHOLD for r in results)
+        self._session_reranker.record_signal(
+            session_id,
+            semantic_success=semantic_success,
+            keyword_success=keyword_success,
+        )
+
+    def end_session(self, session_id: str) -> None:
+        """Discard session-scoped adaptive reranking state for this session. Issue #4690.
+
+        Call at conversation/session end to prevent memory leaks and ensure no
+        cross-session state bleed.  No-op if session was never created or feature
+        flag is disabled.
+
+        Args:
+            session_id: Conversation/session identifier to clear.
+        """
+        self._session_reranker.end_session(session_id)
 
     async def _emit_retrieval_feedback(
         self,
@@ -486,18 +590,14 @@ class RAGService:
         sem_result = await self._check_semantic_cache(query)
         if sem_result is not None:
             context_text = sem_result[0][0].content if sem_result[0] else ""
-            cached_at = (
-                sem_result[0][0].metadata.get("cached_at", 0) if sem_result[0] else 0
-            )
+            cached_at = sem_result[0][0].metadata.get("cached_at", 0) if sem_result[0] else 0
             check = await evaluator.evaluate(query, context_text, cached_at)
             if check.verdict != SufficiencyVerdict.INSUFFICIENT:
                 return sem_result + ("",)
             logger.info("Semantic cache hit rejected: %s", check.reason)
 
         # Tier 1: Exact-match cache
-        cache_key = self._build_cache_key(
-            query, max_results, enable_reranking, categories
-        )
+        cache_key = self._build_cache_key(query, max_results, enable_reranking, categories)
         cached_result = await self._get_from_cache(cache_key)
         if cached_result:
             context_text = " ".join(r.content for r in cached_result[0][:3])
@@ -562,9 +662,7 @@ class RAGService:
         complexity = classifier.classify(query)
         ranked_ids = [r.metadata.get("chunk_id", r.source_path) for r in results]
         pre_rerank_order = sorted(results, key=lambda r: r.hybrid_score, reverse=True)
-        retrieved_ids = [
-            r.metadata.get("chunk_id", r.source_path) for r in pre_rerank_order
-        ]
+        retrieved_ids = [r.metadata.get("chunk_id", r.source_path) for r in pre_rerank_order]
         await self._emit_retrieval_feedback(
             query=query,
             retrieved_ids=retrieved_ids,
@@ -587,6 +685,7 @@ class RAGService:
         timeout: Optional[float] = None,
         categories: Optional[List[str]] = None,
         user_id: Optional[str] = None,
+        session_id: Optional[str] = None,
     ) -> Tuple[List[SearchResult], RAGMetrics]:
         """Perform advanced RAG search with reranking.
 
@@ -594,6 +693,8 @@ class RAGService:
         Issue #1376: topic cache. Issue #1374: sufficiency guard.
         Issue #3240: user_id scopes retrieval pattern lookup and feedback
         storage to the authenticated user, enabling personalised RAG behaviour.
+        Issue #4690: session_id enables session-adaptive reranking weight
+        adjustment when ``enable_session_adaptive_reranking`` is True.
 
         Args:
             query:            Search query string.
@@ -602,13 +703,12 @@ class RAGService:
             timeout:          Override timeout in seconds.
             categories:       Optional category filter list.
             user_id:          Authenticated user identifier; None uses global scope.
+            session_id:       Conversation session identifier for adaptive reranking.
         """
         if not self.config.enable_advanced_rag:
             return await self._fallback_basic_search(query, max_results, categories)
 
-        hit = await self._check_cache_tiers(
-            query, max_results, enable_reranking, categories
-        )
+        hit = await self._check_cache_tiers(query, max_results, enable_reranking, categories)
         if hit is not None:
             return hit[0], hit[1]
 
@@ -620,6 +720,23 @@ class RAGService:
             logger.warning("RAG init failed, using fallback")
             return await self._fallback_basic_search(query, max_results, categories)
 
+        # Issue #4690: Apply session-adapted weights before executing the search so
+        # the optimizer uses weights refined by earlier hits/misses in this session.
+        _prev_semantic: Optional[float] = None
+        _prev_keyword: Optional[float] = None
+        if self.config.enable_session_adaptive_reranking and session_id and self.optimizer:
+            _prev_semantic = self.optimizer.hybrid_weight_semantic
+            _prev_keyword = self.optimizer.hybrid_weight_keyword
+            adapted_sem, adapted_kw = self._session_reranker.get_weights(session_id)
+            self.optimizer.hybrid_weight_semantic = adapted_sem
+            self.optimizer.hybrid_weight_keyword = adapted_kw
+            logger.debug(
+                "Session adaptive reranking [%s]: sem=%.3f kw=%.3f",
+                session_id,
+                adapted_sem,
+                adapted_kw,
+            )
+
         # Issue #2095/#3240: consult retrieval learner with user_id for personalised hints.
         classifier = get_query_classifier()
         complexity = classifier.classify(query)
@@ -630,9 +747,7 @@ class RAGService:
             user_id=user_id,
         )
 
-        cache_key = self._build_cache_key(
-            query, max_results, enable_reranking, categories
-        )
+        cache_key = self._build_cache_key(query, max_results, enable_reranking, categories)
         timeout_seconds = timeout or self.config.timeout_seconds
         results, metrics = await self._execute_and_cache_search(
             query,
@@ -643,6 +758,34 @@ class RAGService:
             cache_key,
         )
 
+        # Issue #4690: Restore original weights so other non-session callers are unaffected.
+        if _prev_semantic is not None and self.optimizer:
+            self.optimizer.hybrid_weight_semantic = _prev_semantic
+            self.optimizer.hybrid_weight_keyword = _prev_keyword  # type: ignore[assignment]
+
+        # Issue #4953: merge autobot_docs results when category is requested or
+        # no category filter is active (search-all).
+        if categories is None or "autobot_docs" in categories:
+            try:
+                from services.knowledge.doc_indexer import get_doc_indexer_service
+
+                doc_svc = get_doc_indexer_service()
+                if doc_svc._initialized:
+                    doc_results = await doc_svc.search(query, n_results=max_results)
+                    if doc_results:
+                        combined = results + doc_results
+                        combined.sort(key=lambda r: r.hybrid_score, reverse=True)
+                        results = combined[:max_results]
+                        logger.debug(
+                            "autobot_docs merged %d result(s) into search", len(doc_results)
+                        )
+            except Exception as _doc_exc:
+                logger.debug("autobot_docs search skipped: %s", _doc_exc)
+
+        # Issue #4689: filter chunks whose source_path is absent from the hash cache
+        # (file was removed/moved since last index run).
+        results = await self._filter_stale_chunks(results)
+
         # Store in semantic + topic caches for future lookups
         await self._store_in_semantic_cache(query, results)
         await self._store_in_topic_cache(results)
@@ -652,6 +795,10 @@ class RAGService:
 
         # Issue #2095/#3240: record outcome so the learner can update success_rate.
         await self._record_retrieval_outcome(pattern_hash, results, user_id=user_id)
+
+        # Issue #4690: Record session-scoped retrieval signal for future weight adaptation.
+        if self.config.enable_session_adaptive_reranking and session_id:
+            self._record_session_signal(session_id, results)
 
         return results, metrics
 
@@ -689,11 +836,91 @@ class RAGService:
                 query=query, max_context_length=context_length
             )
 
+            # Issue #4564: enrich context with KB synthesis summaries (optional)
+            synthesis_prefix = await self._get_kb_synthesis_context(query)
+            if synthesis_prefix:
+                context = synthesis_prefix + "\n\n" + context
+
+            # Issue #4678: optionally inject AnalyzerService lessons (low-weight)
+            if self.config.enable_analyzer_lessons:
+                lessons_ctx = await self._get_analyzer_lessons_context(query)
+                if lessons_ctx:
+                    context = context + "\n\n" + lessons_ctx
+
             return context, metrics
 
         except Exception as e:
             logger.error("Failed to get optimized context: %s", e)
             return "Error: RAG context retrieval failed", RAGMetrics()
+
+    async def _get_kb_synthesis_context(self, query: str) -> str:
+        """Query all KB synthesis ChromaDB collections for enrichment (Issue #4564, #4635).
+
+        Queries the default ``kb_synthesis`` collection plus any
+        ``synthesis_target`` collections defined in synthesis_schema.yaml.
+        Results from all collections are merged.  Per-collection errors are
+        logged and swallowed so the main context path is never interrupted.
+        """
+        from utils.chromadb_client import get_async_chromadb_client
+
+        # Collect all synthesis collection names: default + schema-defined targets.
+        collection_names: List[str] = ["kb_synthesis"]
+        try:
+            schema = _get_synthesis_schema()
+            for col in schema.collections:
+                target = col.synthesis_target.strip()
+                if target and target not in collection_names:
+                    collection_names.append(target)
+        except Exception as exc:
+            logger.debug("Could not load synthesis schema (non-fatal): %s", exc)
+
+        all_docs: List[str] = []
+        try:
+            client = await get_async_chromadb_client()
+        except Exception as exc:
+            logger.debug("KB synthesis ChromaDB client unavailable (non-fatal): %s", exc)
+            return ""
+
+        for col_name in collection_names:
+            try:
+                collection = await client.get_or_create_collection(name=col_name)
+                results = await collection.query(query_texts=[query], n_results=2)
+                if results and results.get("ids") and results["ids"][0]:
+                    docs = results.get("documents", [[]])[0]
+                    all_docs.extend(d for d in docs if d)
+            except Exception as exc:
+                logger.debug("KB synthesis fetch from '%s' failed (non-fatal): %s", col_name, exc)
+
+        if not all_docs:
+            return ""
+        return "KB synthesis summaries:\n" + "\n".join(f"- {d}" for d in all_docs)
+
+    async def _get_analyzer_lessons_context(self, query: str) -> str:
+        """Query the ``autobot_lessons`` ChromaDB collection for supplemental context.
+
+        Issue #4678: Injects AnalyzerService-distilled lessons as low-weight
+        supplemental context after primary synthesis summaries.  Requires
+        ``RAGConfig.enable_analyzer_lessons`` to be True (checked by caller).
+
+        Returns an empty string on any error so the main context path is never
+        interrupted.
+        """
+        try:
+            from utils.chromadb_client import get_async_chromadb_client
+
+            client = await get_async_chromadb_client()
+            collection = await client.get_or_create_collection(name="autobot_lessons")
+            results = await collection.query(query_texts=[query], n_results=2)
+            if not (results and results.get("ids") and results["ids"][0]):
+                return ""
+            docs = results.get("documents", [[]])[0]
+            relevant = [d for d in docs if d]
+            if not relevant:
+                return ""
+            return "Analyzer lessons:\n" + "\n".join(f"- {d}" for d in relevant)
+        except Exception as exc:
+            logger.debug("Analyzer lessons fetch failed (non-fatal): %s", exc)
+            return ""
 
     async def rerank_results(
         self,
@@ -732,9 +959,7 @@ class RAGService:
                 search_results.append(sr)
 
             # Apply reranking
-            reranked = await self.optimizer._rerank_with_cross_encoder(
-                query, search_results
-            )
+            reranked = await self.optimizer._rerank_with_cross_encoder(query, search_results)
 
             # Convert back to dictionaries
             reranked_dicts = []
@@ -750,6 +975,76 @@ class RAGService:
         except Exception as e:
             logger.error("Reranking failed: %s", e)
             return results
+
+    async def _filter_stale_chunks(
+        self,
+        results: List[SearchResult],
+    ) -> List[SearchResult]:
+        """Filter out chunks whose source_path is absent from the DocIndexer hash cache.
+
+        Issue #4689: chunks for files removed/moved since the last index run must
+        not reach the LLM context.  If the hash cache is unavailable (file missing,
+        parse error) the method returns the original list unchanged so RAG is never
+        disrupted by a cache I/O failure.
+
+        The check is path-presence only (not hash equality); we trust that the
+        DocIndexer re-indexes changed files on the next cycle.
+
+        Returns:
+            Filtered list (stale chunks dropped) or original list on cache failure.
+        """
+        import json as _json
+        from pathlib import Path as _Path
+
+        try:
+            from services.knowledge.doc_indexer import HASH_CACHE_FILE
+
+            cache_path: _Path = HASH_CACHE_FILE
+        except Exception as exc:
+            logger.debug("Could not import HASH_CACHE_FILE (skipping provenance check): %s", exc)
+            return results
+
+        def _load() -> dict:
+            if not cache_path.exists():
+                return {}
+            try:
+                with open(cache_path, "r", encoding="utf-8") as fh:
+                    return _json.load(fh)
+            except Exception:
+                return {}
+
+        try:
+            global _hash_cache_memo, _hash_cache_loaded_at
+            now = time.monotonic()
+            if now - _hash_cache_loaded_at > _HASH_CACHE_TTL:
+                _hash_cache_memo = await asyncio.to_thread(_load)
+                _hash_cache_loaded_at = now
+            hash_cache: dict = _hash_cache_memo
+        except Exception as exc:
+            logger.debug("Hash cache load failed (skipping provenance check): %s", exc)
+            return results
+
+        if not hash_cache:
+            # Empty cache means indexer hasn't run yet; skip filtering to avoid
+            # dropping all results on a fresh deployment.
+            return results
+
+        valid: List[SearchResult] = []
+        stale_paths: List[str] = []
+        for chunk in results:
+            if chunk.source_path in hash_cache:
+                valid.append(chunk)
+            else:
+                stale_paths.append(chunk.source_path)
+
+        if stale_paths:
+            logger.warning(
+                "Provenance check: dropped %d stale chunk(s) — source paths absent from " "hash cache: %s",
+                len(stale_paths),
+                stale_paths[:10],  # cap log line length
+            )
+
+        return valid
 
     def _filter_by_categories(
         self,
@@ -864,6 +1159,9 @@ class RAGService:
                 search_results = self._filter_by_categories(search_results, categories)
                 search_results = search_results[:max_results]
 
+            # Issue #4721: filter stale chunks on the fallback path too.
+            search_results = await self._filter_stale_chunks(search_results)
+
             metrics.total_time = time.time() - start_time
             metrics.final_results_count = len(search_results)
 
@@ -873,9 +1171,7 @@ class RAGService:
             logger.error("Basic search fallback failed: %s", e)
             return [], metrics
 
-    async def _get_from_cache(
-        self, cache_key: str
-    ) -> Optional[Tuple[List[SearchResult], RAGMetrics]]:
+    async def _get_from_cache(self, cache_key: str) -> Optional[Tuple[List[SearchResult], RAGMetrics]]:
         """Get results from cache if not expired."""
         # CRITICAL: Protect cache access with lock to prevent race conditions
         async with self._cache_lock:
@@ -888,9 +1184,7 @@ class RAGService:
                     del self._cache[cache_key]
         return None
 
-    async def _add_to_cache(
-        self, cache_key: str, results: Tuple[List[SearchResult], RAGMetrics]
-    ):
+    async def _add_to_cache(self, cache_key: str, results: Tuple[List[SearchResult], RAGMetrics]):
         """Add results to cache with timestamp.
 
         Args:
@@ -924,6 +1218,51 @@ class RAGService:
             "cache_entries": len(self._cache),
             "config": self.config.to_dict(),
         }
+
+
+# Shared mesh components — registered by lifespan at startup (#4765).
+# Each RAGService.initialize() builds its OWN NeuralMeshRetriever from these components so
+# the search closures are bound to THAT instance's optimizer, not to a shared singleton.
+_shared_mesh_components: Optional[Dict[str, Any]] = None
+
+
+def register_shared_mesh_components(components: Dict[str, Any]) -> None:
+    """Register mesh brain components for per-instance NeuralMeshRetriever construction.
+
+    Called once by lifespan._init_graph_rag_service().  Every subsequent
+    RAGService.initialize() builds its own retriever with closures bound to its
+    own optimizer (#4765).
+
+    Args:
+        components: dict with keys mesh_db, ppr, edge_learner, reranker, classifier.
+    """
+    global _shared_mesh_components
+    _shared_mesh_components = components
+    logger.info("Mesh brain components registered for per-instance retriever (#4765)")
+
+
+def get_shared_mesh_components() -> Optional[Dict[str, Any]]:
+    """Return the registered mesh components, or None if not yet registered."""
+    return _shared_mesh_components
+
+
+# ---------------------------------------------------------------------------
+# Legacy singleton kept for backward compatibility — no longer used by
+# RAGService.initialize() (replaced by per-instance build from components above).
+# Retained so external callers importing this symbol don't break.
+# ---------------------------------------------------------------------------
+_shared_mesh_retriever: Optional[Any] = None
+
+
+def register_shared_mesh_retriever(retriever: Any) -> None:
+    """Deprecated: register a pre-built retriever singleton.
+
+    Kept for backward compatibility.  Prefer register_shared_mesh_components()
+    so each RAGService gets its own retriever bound to its own optimizer (#4765).
+    """
+    global _shared_mesh_retriever
+    _shared_mesh_retriever = retriever
+    logger.info("NeuralMeshRetriever registered as shared singleton (legacy #4757)")
 
 
 # Global service instance (lazily initialized per knowledge base)

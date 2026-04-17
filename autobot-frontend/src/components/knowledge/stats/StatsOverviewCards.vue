@@ -116,7 +116,7 @@ defineProps<Props>()
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   color: var(--text-on-primary);
 }
 
@@ -135,7 +135,7 @@ defineProps<Props>()
 }
 
 .stat-value {
-  font-size: 1.875rem;
+  font-size: var(--text-3xl);
   font-weight: var(--font-bold);
   color: var(--text-primary);
   margin-bottom: var(--spacing-1);

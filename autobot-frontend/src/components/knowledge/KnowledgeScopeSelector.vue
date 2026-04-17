@@ -155,13 +155,13 @@ const handleGroupChange = () => {
 .scope-selector {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .scope-label {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -176,12 +176,12 @@ const handleGroupChange = () => {
 }
 
 .scope-dropdown {
-  padding: 0.5rem;
+  padding: var(--spacing-2);
   border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   cursor: pointer;
-  transition: border-color 0.2s;
+  transition: border-color var(--duration-200);
   background-color: var(--bg-secondary);
   color: var(--text-primary);
 }
@@ -195,6 +195,10 @@ const handleGroupChange = () => {
   border-color: var(--color-electric-500, #3b82f6);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
+.scope-dropdown:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .scope-dropdown:disabled {
   background-color: var(--bg-secondary);
@@ -203,20 +207,20 @@ const handleGroupChange = () => {
 }
 
 .scope-help {
-  margin-top: 0.5rem;
-  padding: 0.75rem;
+  margin-top: var(--spacing-2);
+  padding: var(--spacing-3);
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   font-size: 0.813rem;
 }
 
 .help-item {
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
 }
 
 .help-item:last-child {
-  margin-bottom: 0;
+  margin-bottom: var(--spacing-0);
 }
 
 .help-item strong {
@@ -224,16 +228,16 @@ const handleGroupChange = () => {
 }
 
 .group-selector {
-  margin-top: 0.75rem;
-  padding: 0.75rem;
+  margin-top: var(--spacing-3);
+  padding: var(--spacing-3);
   border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background-color: var(--bg-secondary);
 }
 
 .group-selector label {
   display: block;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -241,17 +245,17 @@ const handleGroupChange = () => {
 .group-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .group-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem;
-  border-radius: 0.25rem;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2);
+  border-radius: var(--radius-default);
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: background-color var(--duration-200);
 }
 
 .group-item:hover {

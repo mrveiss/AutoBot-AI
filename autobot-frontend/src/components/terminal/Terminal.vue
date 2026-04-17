@@ -598,8 +598,8 @@ onUnmounted(() => {
   /* Remove shadow and border-radius to prevent overlap with tabs */
   border-top-left-radius: 0;
   border-top-right-radius: 0;
-  border-bottom-left-radius: 0.5rem;
-  border-bottom-right-radius: 0.5rem;
+  border-bottom-left-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-lg);
 }
 
 /* Terminal button styling matching browser controls */
@@ -612,15 +612,23 @@ onUnmounted(() => {
 }
 
 .terminal-btn.connect-btn {
-  @apply text-green-600 hover:text-green-800 hover:bg-green-100;
+  color: var(--color-success);
+  &:hover {
+    color: var(--color-success);
+    background: var(--color-success-bg);
+  }
 }
 
 .terminal-btn.disconnect-btn {
-  @apply text-red-600 hover:text-red-800 hover:bg-red-100;
+  color: var(--color-error);
+  &:hover {
+    color: var(--color-error);
+    background: var(--color-error-bg);
+  }
 }
 
 .terminal-btn.connecting {
-  @apply text-blue-600;
+  color: var(--color-info);
 }
 
 /* Terminal body with dark theme */
@@ -658,7 +666,7 @@ onUnmounted(() => {
 }
 
 .terminal-line {
-  margin-bottom: 4px;
+  margin-bottom: var(--spacing-1);
   word-wrap: break-word;
 }
 
@@ -697,13 +705,13 @@ onUnmounted(() => {
 .terminal-prompt {
   display: flex;
   align-items: center;
-  margin-top: 8px;
+  margin-top: var(--spacing-2);
   flex-shrink: 0; /* Prevent prompt from shrinking */
 }
 
 .prompt {
   color: #6c757d;
-  margin-right: 8px;
+  margin-right: var(--spacing-2);
   user-select: none;
 }
 
@@ -715,7 +723,12 @@ onUnmounted(() => {
   font-family: inherit;
   font-size: inherit;
   outline: none;
-  padding: 0;
+  padding: var(--spacing-0);
+}
+
+.terminal-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* Additional styling for terminal line types */
@@ -728,23 +741,24 @@ onUnmounted(() => {
 }
 
 .command {
-  @apply text-blue-400 font-medium;
+  @apply font-medium;
+  color: var(--color-info);
 }
 
 .output {
-  @apply text-green-400;
+  color: var(--color-success);
 }
 
 .error {
-  @apply text-red-400;
+  color: var(--color-error);
 }
 
 .info {
-  @apply text-cyan-400;
+  color: var(--color-info);
 }
 
 .warning {
-  @apply text-yellow-400;
+  color: var(--color-warning);
 }
 
 .terminal-prompt {
@@ -781,17 +795,17 @@ onUnmounted(() => {
   }
 
   .terminal-header h3 {
-    font-size: 12px;
+    font-size: var(--text-xs);
   }
 
   .terminal-controls button {
     padding: 4px 8px;
-    font-size: 11px;
+    font-size: var(--text-xs);
   }
 
   .terminal-output {
-    padding: 12px;
-    font-size: 12px;
+    padding: var(--spacing-3);
+    font-size: var(--text-xs);
   }
 }
 

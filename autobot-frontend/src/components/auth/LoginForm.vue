@@ -310,7 +310,7 @@ onMounted(async () => {
   font-size: var(--text-3xl);
   font-weight: var(--font-bold);
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .subtitle {
@@ -355,6 +355,10 @@ onMounted(async () => {
   border-color: var(--color-primary);
   box-shadow: var(--shadow-focus);
 }
+.form-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
 .form-input.error {
   border-color: var(--color-error);
@@ -375,7 +379,7 @@ onMounted(async () => {
 }
 
 .password-input-wrapper .form-input {
-  padding-right: 2.5rem;
+  padding-right: var(--spacing-10);
 }
 
 .password-toggle {
@@ -387,7 +391,7 @@ onMounted(async () => {
   border: none;
   color: var(--text-secondary);
   cursor: pointer;
-  padding: 0;
+  padding: var(--spacing-0);
   font-size: var(--text-lg);
   transition: color var(--duration-150) var(--ease-in-out);
 }
@@ -456,7 +460,7 @@ onMounted(async () => {
   color: var(--text-on-primary);
   opacity: 0.8;
   font-size: var(--text-sm);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 /* Icon classes for basic icons */

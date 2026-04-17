@@ -283,7 +283,7 @@ onMounted(() => {
 .feature-flags-settings-panel {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--spacing-6);
 }
 
 .loading-state,
@@ -305,34 +305,34 @@ onMounted(() => {
   background: var(--color-error-bg);
   color: var(--color-error);
   border: 1px solid var(--color-error);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   min-height: 200px;
-  padding: 40px;
+  padding: var(--spacing-10);
 }
 
 .error-state i {
   font-size: 32px;
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
 }
 
 .error-state p {
   margin: 0 0 16px;
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .retry-btn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   padding: 10px 16px;
   background: var(--color-error);
   color: var(--text-on-error);
   border: none;
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition: opacity var(--duration-200);
 }
 
 .retry-btn:hover {
@@ -342,7 +342,7 @@ onMounted(() => {
 .settings-content {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--spacing-6);
 }
 
 .settings-section {

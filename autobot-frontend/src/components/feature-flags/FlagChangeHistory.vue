@@ -160,22 +160,22 @@ const formatRelativeTime = (timestamp: string) => {
 .flag-change-history {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
-  padding: 24px;
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-6);
 }
 
 .section-header {
-  margin-bottom: 24px;
+  margin-bottom: var(--spacing-6);
 }
 
 .section-header h3 {
   margin: 0 0 8px;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .section-header h3 i {
@@ -183,8 +183,8 @@ const formatRelativeTime = (timestamp: string) => {
 }
 
 .section-header .description {
-  margin: 0;
-  font-size: 14px;
+  margin: var(--spacing-0);
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -195,7 +195,7 @@ const formatRelativeTime = (timestamp: string) => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px;
+  padding: var(--spacing-10);
   color: var(--text-tertiary);
 }
 
@@ -208,20 +208,20 @@ const formatRelativeTime = (timestamp: string) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
-  margin-bottom: 16px;
+  font-size: var(--text-2xl);
+  margin-bottom: var(--spacing-4);
 }
 
 .empty-state h4 {
   margin: 0 0 8px;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .empty-state p {
-  margin: 0;
-  font-size: 14px;
+  margin: var(--spacing-0);
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -233,7 +233,7 @@ const formatRelativeTime = (timestamp: string) => {
 
 .timeline-entry {
   display: flex;
-  gap: 20px;
+  gap: var(--spacing-5);
 }
 
 .timeline-marker {
@@ -250,7 +250,7 @@ const formatRelativeTime = (timestamp: string) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: var(--text-base);
   flex-shrink: 0;
 }
 
@@ -278,26 +278,26 @@ const formatRelativeTime = (timestamp: string) => {
 
 .timeline-content {
   flex: 1;
-  padding-bottom: 32px;
+  padding-bottom: var(--spacing-8);
 }
 
 .timeline-entry:last-child .timeline-content {
-  padding-bottom: 0;
+  padding-bottom: var(--spacing-0);
 }
 
 .entry-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 8px;
+  gap: var(--spacing-3);
+  margin-bottom: var(--spacing-2);
 }
 
 .mode-badge {
   display: inline-flex;
   align-items: center;
   padding: 4px 10px;
-  border-radius: 4px;
-  font-size: 12px;
+  border-radius: var(--radius-default);
+  font-size: var(--text-xs);
   font-weight: 600;
 }
 
@@ -317,34 +317,34 @@ const formatRelativeTime = (timestamp: string) => {
 }
 
 .timestamp {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
 .entry-details {
-  padding: 14px;
+  padding: var(--spacing-3-5);
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
 }
 
 .action-text {
   margin: 0 0 10px;
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
 .meta-info {
   display: flex;
-  gap: 20px;
-  font-size: 12px;
+  gap: var(--spacing-5);
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
 .changed-by {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 .relative-time {
@@ -353,29 +353,29 @@ const formatRelativeTime = (timestamp: string) => {
 
 /* Legend */
 .legend {
-  margin-top: 24px;
-  padding-top: 20px;
+  margin-top: var(--spacing-6);
+  padding-top: var(--spacing-5);
   border-top: 1px solid var(--border-default);
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: var(--spacing-5);
 }
 
 .legend-title {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
 .legend-items {
   display: flex;
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 12px;
+  gap: var(--spacing-2);
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -404,13 +404,13 @@ const formatRelativeTime = (timestamp: string) => {
   }
 
   .timeline-entry {
-    gap: 0;
+    gap: var(--spacing-0);
   }
 
   .legend {
     flex-direction: column;
     align-items: flex-start;
-    gap: 12px;
+    gap: var(--spacing-3);
   }
 }
 </style>

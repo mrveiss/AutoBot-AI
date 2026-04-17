@@ -119,9 +119,10 @@ const { t } = useI18n()
 const dialogRef = ref<HTMLElement | null>(null)
 let previousActiveElement: HTMLElement | null = null
 
-// Generate unique IDs for ARIA labeling
-const titleId = computed(() => `modal-title-${Math.random().toString(36).substr(2, 9)}`)
-const descriptionId = computed(() => `modal-desc-${Math.random().toString(36).substr(2, 9)}`)
+// Generate stable unique IDs for ARIA labeling (random only once, not per-render)
+const _uid = Math.random().toString(36).substr(2, 9)
+const titleId = computed(() => `modal-title-${_uid}`)
+const descriptionId = computed(() => `modal-desc-${_uid}`)
 
 const sizeClass = computed(() => {
   switch (props.size) {
@@ -224,7 +225,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
   padding: var(--spacing-4);
 }
 
@@ -270,7 +271,7 @@ onUnmounted(() => {
   font-size: var(--text-xl);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .close-btn {
@@ -290,6 +291,11 @@ onUnmounted(() => {
 .close-btn:hover {
   background: var(--bg-tertiary);
   color: var(--text-primary);
+}
+
+.close-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* Content */

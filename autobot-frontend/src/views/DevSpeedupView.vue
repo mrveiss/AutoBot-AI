@@ -470,7 +470,7 @@ const templateCategories = computed(() => {
   font-weight: var(--font-medium);
   font-family: var(--font-mono);
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .result-line {
@@ -533,7 +533,7 @@ const templateCategories = computed(() => {
   font-size: var(--text-lg);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .snippet-desc,
@@ -578,7 +578,7 @@ const templateCategories = computed(() => {
   overflow-x: auto;
   font-family: var(--font-mono);
   font-size: var(--text-sm);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .code-sm { padding: var(--spacing-3); font-size: var(--text-xs); }
@@ -646,7 +646,7 @@ const templateCategories = computed(() => {
   font-size: var(--text-sm);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 /* Empty state */
@@ -663,7 +663,7 @@ const templateCategories = computed(() => {
   color: var(--text-muted);
 }
 
-.empty-state p { margin: 0; font-size: var(--text-sm); }
+.empty-state p { margin: var(--spacing-0); font-size: var(--text-sm); }
 
 @media (max-width: 768px) {
   .search-row { flex-direction: column; }

@@ -833,17 +833,17 @@ onUnmounted(() => {
 }
 
 .chart-title {
-  margin: 0;
-  font-size: 1.125rem;
+  margin: var(--spacing-0);
+  font-size: var(--text-lg);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
 }
 
 .chart-subtitle {
   display: block;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
-  margin-top: 4px;
+  margin-top: var(--spacing-1);
 }
 
 .chart-loading,
@@ -897,7 +897,7 @@ onUnmounted(() => {
 
 .error-icon {
   font-weight: bold;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   color: var(--color-error, #ef4444);
 }
 
@@ -907,8 +907,8 @@ onUnmounted(() => {
   color: var(--color-primary);
   cursor: pointer;
   text-decoration: underline;
-  font-size: 0.875rem;
-  padding: 0;
+  font-size: var(--text-sm);
+  padding: var(--spacing-0);
 }
 
 .tree-container {
@@ -937,7 +937,7 @@ onUnmounted(() => {
   border-radius: var(--radius-md);
   background: var(--bg-primary);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .tree-search::placeholder {
@@ -947,7 +947,7 @@ onUnmounted(() => {
 .tree-stats {
   display: flex;
   gap: var(--spacing-3);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   white-space: nowrap;
 }
@@ -958,7 +958,7 @@ onUnmounted(() => {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   background: var(--bg-primary);
-  padding: 2px;
+  padding: var(--spacing-0-5);
 }
 
 .view-toggle button {
@@ -968,8 +968,8 @@ onUnmounted(() => {
   border-radius: var(--radius-md);
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 0.875rem;
-  transition: all 0.2s ease;
+  font-size: var(--text-sm);
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .view-toggle button.active {
@@ -1057,8 +1057,8 @@ onUnmounted(() => {
   border-radius: var(--radius-md);
   color: var(--text-primary);
   cursor: pointer;
-  font-size: 0.875rem;
-  transition: all 0.2s ease;
+  font-size: var(--text-sm);
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 .network-controls button:hover {
@@ -1090,7 +1090,7 @@ onUnmounted(() => {
   border-radius: 0;
   overflow-y: auto;
   z-index: 100;
-  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-sm);
 }
 
 .detail-header {
@@ -1106,7 +1106,7 @@ onUnmounted(() => {
 }
 
 .detail-icon {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   min-width: 24px;
 }
 
@@ -1123,8 +1123,8 @@ onUnmounted(() => {
   border: none;
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 1.125rem;
-  padding: 0;
+  font-size: var(--text-lg);
+  padding: var(--spacing-0);
   width: 24px;
   height: 24px;
   display: flex;
@@ -1146,11 +1146,11 @@ onUnmounted(() => {
 .detail-row {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .detail-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: var(--font-semibold);
   color: var(--text-tertiary);
   text-transform: uppercase;
@@ -1158,7 +1158,7 @@ onUnmounted(() => {
 }
 
 .detail-value {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-primary);
   word-break: break-word;
 }
@@ -1216,7 +1216,7 @@ onUnmounted(() => {
   padding: var(--spacing-2) var(--spacing-3);
   cursor: pointer;
   background: var(--bg-primary);
-  transition: background 0.15s ease;
+  transition: background var(--duration-150) var(--ease-out);
 }
 
 .node-header:hover {
@@ -1237,7 +1237,7 @@ onUnmounted(() => {
 }
 
 .file-icon {
-  font-size: 1rem;
+  font-size: var(--text-base);
   flex-shrink: 0;
 }
 
@@ -1292,17 +1292,17 @@ onUnmounted(() => {
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-bottom: 4px;
+  margin-bottom: var(--spacing-1);
 }
 
 .section-icon {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .import-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
   padding-left: var(--spacing-2);
 }
 
@@ -1315,7 +1315,7 @@ onUnmounted(() => {
   border-radius: var(--radius-sm);
   background: var(--bg-primary);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--duration-150) var(--ease-out);
   color: var(--text-secondary);
 }
 
@@ -1354,7 +1354,7 @@ onUnmounted(() => {
 .import-via {
   flex-shrink: 0;
   color: var(--text-tertiary);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .import-tree-chart.fullscreen {
@@ -1365,7 +1365,7 @@ onUnmounted(() => {
   bottom: 0;
   width: 100%;
   height: 100%;
-  z-index: 1000;
+  z-index: var(--z-modal);
   border-radius: 0;
 }
 

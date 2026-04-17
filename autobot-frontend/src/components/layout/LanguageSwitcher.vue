@@ -135,8 +135,8 @@ onUnmounted(() => document.removeEventListener('click', handleOutsideClick))
   border-radius: var(--radius-md);
   background-color: rgba(255, 255, 255, 0.1);
   color: white;
-  font-size: 18px;
-  transition: all 0.2s ease;
+  font-size: var(--text-lg);
+  transition: all var(--duration-200) var(--ease-out);
   cursor: pointer;
 }
 
@@ -159,10 +159,10 @@ onUnmounted(() => document.removeEventListener('click', handleOutsideClick))
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
-  z-index: 100;
+  z-index: var(--z-popover);
   padding: var(--spacing-xs) 0;
   list-style: none;
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .lang-option {
@@ -173,7 +173,7 @@ onUnmounted(() => document.removeEventListener('click', handleOutsideClick))
   cursor: pointer;
   font-size: var(--font-size-sm);
   color: var(--text-primary);
-  transition: background 0.15s;
+  transition: background var(--duration-150);
 }
 
 .lang-option:hover {
@@ -228,7 +228,7 @@ onUnmounted(() => document.removeEventListener('click', handleOutsideClick))
 /* Dropdown transition */
 .lang-dropdown-enter-active,
 .lang-dropdown-leave-active {
-  transition: opacity 0.15s ease, transform 0.15s ease;
+  transition: opacity var(--duration-150) var(--ease-out), transform var(--duration-150) var(--ease-out);
 }
 
 .lang-dropdown-enter-from,

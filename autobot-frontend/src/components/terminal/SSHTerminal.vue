@@ -317,9 +317,9 @@ defineExpose({
 .connection-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: var(--text-xs);
   border-bottom: 1px solid #333;
 }
 
@@ -367,11 +367,11 @@ defineExpose({
   padding: 4px 12px;
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   color: inherit;
-  font-size: 12px;
+  font-size: var(--text-xs);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .reconnect-btn:hover {
@@ -380,7 +380,7 @@ defineExpose({
 
 .terminal-viewport {
   flex: 1;
-  padding: 4px;
+  padding: var(--spacing-1);
   overflow: hidden;
 }
 

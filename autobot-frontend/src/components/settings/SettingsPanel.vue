@@ -861,7 +861,7 @@ onMounted(async () => {
   flex: 1;
   min-height: 0; /* Required for flex child to shrink and enable overflow */
   overflow-y: auto;
-  padding: 24px;
+  padding: var(--spacing-6);
 }
 
 .settings-loading {
@@ -961,7 +961,7 @@ onMounted(async () => {
   }
 
   .settings-content-inner {
-    padding: 16px;
+    padding: var(--spacing-4);
   }
 
   .settings-actions {

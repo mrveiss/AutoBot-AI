@@ -283,18 +283,18 @@ watch(() => props.modelValue, (isOpen) => {
 
 <style scoped>
 .export-modal {
-  padding: 0.5rem;
+  padding: var(--spacing-2);
 }
 
 /* Alert */
 .alert {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   padding: 0.75rem 1rem;
-  border-radius: 0.375rem;
-  margin-bottom: 1rem;
-  font-size: 0.875rem;
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-4);
+  font-size: var(--text-sm);
 }
 
 .alert-error {
@@ -307,49 +307,49 @@ watch(() => props.modelValue, (isOpen) => {
 .export-summary {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 1rem;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4);
   background: var(--bg-secondary);
-  border-radius: 0.5rem;
-  margin-bottom: 1.5rem;
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-6);
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .export-summary i {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   color: var(--color-info);
 }
 
 /* Form Groups */
 .form-group {
-  margin-bottom: 1.25rem;
+  margin-bottom: var(--spacing-5);
 }
 
 .form-group > label {
   display: block;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
   font-weight: 500;
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 /* Format Options */
 .format-options {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .format-option {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   padding: 0.875rem 1rem;
   border: 2px solid var(--border-default);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-150);
 }
 
 .format-option:hover {
@@ -369,9 +369,9 @@ watch(() => props.modelValue, (isOpen) => {
   align-items: center;
   justify-content: center;
   background: var(--bg-secondary);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   color: var(--color-info);
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 
 .format-option.selected .format-icon {
@@ -387,12 +387,12 @@ watch(() => props.modelValue, (isOpen) => {
   display: block;
   font-weight: 500;
   color: var(--text-primary);
-  margin-bottom: 0.125rem;
+  margin-bottom: var(--spacing-0-5);
 }
 
 .format-desc {
   display: block;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -404,9 +404,9 @@ watch(() => props.modelValue, (isOpen) => {
 .checkbox-label {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   cursor: pointer;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
@@ -421,7 +421,7 @@ watch(() => props.modelValue, (isOpen) => {
   position: absolute;
   width: 1px;
   height: 1px;
-  padding: 0;
+  padding: var(--spacing-0);
   margin: -1px;
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
@@ -433,9 +433,9 @@ watch(() => props.modelValue, (isOpen) => {
 .modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
-  margin-top: 1.5rem;
-  padding-top: 1rem;
+  gap: var(--spacing-3);
+  margin-top: var(--spacing-6);
+  padding-top: var(--spacing-4);
   border-top: 1px solid var(--border-default);
 }
 </style>

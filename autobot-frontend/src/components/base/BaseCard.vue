@@ -74,7 +74,7 @@ const footerClasses = computed(() => ({
 
 .base-card {
   background-color: var(--bg-card);
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-150) var(--ease-in-out);
   position: relative;
   overflow: hidden;
   contain: layout style;
@@ -83,23 +83,23 @@ const footerClasses = computed(() => ({
 /* Variant Styles */
 .card-default {
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 .card-bordered {
   border: 2px solid var(--border-strong);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 .card-elevated {
   border: 1px solid var(--border-subtle);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   box-shadow: var(--shadow-md);
 }
 
 .card-flat {
   background-color: var(--bg-secondary);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 /* Hover Effect */
@@ -115,15 +115,15 @@ const footerClasses = computed(() => ({
 
 /* Size Variants */
 .card-sm {
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .card-md {
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .card-lg {
-  font-size: 16px;
+  font-size: var(--text-base);
 }
 
 /* Card Header */
@@ -131,13 +131,13 @@ const footerClasses = computed(() => ({
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 16px;
+  padding: var(--spacing-4);
   border-bottom: 1px solid var(--border-default);
   background-color: var(--bg-card);
 }
 
 .header-no-padding {
-  padding: 0;
+  padding: var(--spacing-0);
   border-bottom: none;
 }
 
@@ -147,8 +147,8 @@ const footerClasses = computed(() => ({
 }
 
 .card-title {
-  margin: 0;
-  font-size: 16px;
+  margin: var(--spacing-0);
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-sans);
@@ -157,7 +157,7 @@ const footerClasses = computed(() => ({
 
 .card-subtitle {
   margin: 4px 0 0 0;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   line-height: 1.4;
 }
@@ -165,18 +165,18 @@ const footerClasses = computed(() => ({
 .card-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-left: 12px;
+  gap: var(--spacing-2);
+  margin-left: var(--spacing-3);
 }
 
 /* Card Body */
 .card-body {
-  padding: 16px;
+  padding: var(--spacing-4);
   color: var(--text-primary);
 }
 
 .body-no-padding {
-  padding: 0;
+  padding: var(--spacing-0);
 }
 
 /* Card Footer */
@@ -187,11 +187,11 @@ const footerClasses = computed(() => ({
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .footer-no-padding {
-  padding: 0;
+  padding: var(--spacing-0);
   border-top: none;
   background-color: transparent;
 }
@@ -225,16 +225,16 @@ const footerClasses = computed(() => ({
   .card-header {
     flex-direction: column;
     align-items: stretch;
-    gap: 12px;
+    gap: var(--spacing-3);
   }
 
   .card-actions {
-    margin-left: 0;
-    margin-top: 8px;
+    margin-left: var(--spacing-0);
+    margin-top: var(--spacing-2);
   }
 
   .card-body {
-    padding: 12px;
+    padding: var(--spacing-3);
   }
 
   .card-footer {

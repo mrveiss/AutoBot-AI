@@ -55,10 +55,10 @@ const router = createRouter({
       },
     },
     {
-      // Issue #850: Consolidated into unified orchestration view
+      // Issue #4762: Wire ServicesView as direct route (was redirect to /orchestration/per-node)
       path: '/services',
       name: 'services',
-      redirect: '/orchestration/per-node',
+      component: () => import('@/views/ServicesView.vue'),
       meta: { title: 'Services' }
     },
     {
@@ -99,13 +99,7 @@ const router = createRouter({
         {
           path: 'updates',
           name: 'maintenance-updates',
-          component: () => import('@/views/UpdatesView.vue'),
-          meta: { title: 'Updates', parent: 'maintenance' },
-          beforeEnter: (to) => {
-            if (!to.params.tab) {
-              return { ...to, params: { ...to.params, tab: 'system' }, replace: true }
-            }
-          },
+          redirect: { name: 'maintenance-updates-tab', params: { tab: 'system' } },
         },
         {
           path: 'updates/:tab',
@@ -159,10 +153,10 @@ const router = createRouter({
           meta: { title: 'General Settings', parent: 'settings' }
         },
         {
-          // Issue #850: Consolidated into unified orchestration view (Tab 5)
+          // Issue #4705: Wire InfrastructureSettings view into settings router
           path: 'infrastructure',
           name: 'settings-infrastructure',
-          redirect: '/orchestration/infrastructure',
+          component: () => import('@/views/settings/InfrastructureSettings.vue'),
           meta: { title: 'Infrastructure', parent: 'settings' }
         },
         {
@@ -360,10 +354,10 @@ const router = createRouter({
       },
     },
     {
-      // Issue #850: Consolidated into unified orchestration view (Tab 3)
+      // Issue #841/#1129: Role Registry — standalone CRUD view (wired via #4706)
       path: '/roles',
       name: 'roles',
-      redirect: '/orchestration/roles',
+      component: () => import('@/views/RolesView.vue'),
       meta: { title: 'Role Registry' }
     },
     {

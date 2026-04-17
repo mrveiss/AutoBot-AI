@@ -231,35 +231,35 @@ class TestDebugController:
     def test_resume_signal(self) -> None:
         async def _run() -> None:
             ctrl = DebugController()
-            asyncio.get_event_loop().call_soon(
+            asyncio.get_running_loop().call_soon(
                 lambda: asyncio.ensure_future(ctrl.resume())
             )
             signal = await ctrl.wait_for_resume("step_1")
             assert signal == DebugController.Signal.RESUME
 
-        asyncio.get_event_loop().run_until_complete(_run())
+        asyncio.run(_run())
 
     def test_skip_signal(self) -> None:
         async def _run() -> None:
             ctrl = DebugController()
-            asyncio.get_event_loop().call_soon(
+            asyncio.get_running_loop().call_soon(
                 lambda: asyncio.ensure_future(ctrl.skip())
             )
             signal = await ctrl.wait_for_resume("step_1")
             assert signal == DebugController.Signal.SKIP
 
-        asyncio.get_event_loop().run_until_complete(_run())
+        asyncio.run(_run())
 
     def test_retry_signal(self) -> None:
         async def _run() -> None:
             ctrl = DebugController()
-            asyncio.get_event_loop().call_soon(
+            asyncio.get_running_loop().call_soon(
                 lambda: asyncio.ensure_future(ctrl.retry())
             )
             signal = await ctrl.wait_for_resume("step_1")
             assert signal == DebugController.Signal.RETRY
 
-        asyncio.get_event_loop().run_until_complete(_run())
+        asyncio.run(_run())
 
     def test_stop_returns_resume_immediately(self) -> None:
         async def _run() -> None:
@@ -268,7 +268,7 @@ class TestDebugController:
             signal = await ctrl.wait_for_resume("step_1")
             assert signal == DebugController.Signal.RESUME
 
-        asyncio.get_event_loop().run_until_complete(_run())
+        asyncio.run(_run())
 
     def test_is_active_starts_true(self) -> None:
         ctrl = DebugController()
@@ -290,7 +290,7 @@ class TestWorkflowExecutorDryRun:
         executor = _make_executor()
         steps = _make_steps(2)
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             executor.execute_coordinated_workflow(
                 "wf_dr_1",
                 steps,
@@ -320,7 +320,7 @@ class TestWorkflowExecutorDryRun:
 
         executor._execute_coordinated_step = _spy  # type: ignore[method-assign]
 
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             executor.execute_coordinated_workflow(
                 "wf_dr_spy",
                 steps,
@@ -343,7 +343,7 @@ class TestWorkflowExecutorDryRun:
             },
         ]
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             executor.execute_coordinated_workflow(
                 "wf_dr_broken",
                 steps,
@@ -384,7 +384,7 @@ class TestWorkflowExecutorDebugMode:
             await ctrl.skip()
             return await task
 
-        result = asyncio.get_event_loop().run_until_complete(_run())
+        result = asyncio.run(_run())
 
         # Step was skipped, so it should appear in step_results
         step_id = steps[0]["id"]
@@ -398,7 +398,7 @@ class TestWorkflowExecutorDebugMode:
         with caplog.at_level(
             logging.WARNING, logger="autobot-backend.orchestration.workflow_executor"
         ):
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 executor.execute_coordinated_workflow(
                     "wf_dbg_no_ctrl",
                     steps,
@@ -415,7 +415,7 @@ class TestWorkflowExecutorDebugMode:
         executor = _make_executor()
         steps = _make_steps(1)
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             executor.execute_coordinated_workflow(
                 "wf_normal",
                 steps,
@@ -438,7 +438,7 @@ class TestWorkflowExecutorDebugMode:
         steps = _make_steps(1)
         cfg = {"workflow_id": "wf_nc", "channels": {}}
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             executor.execute_coordinated_workflow(
                 "wf_nc",
                 steps,
@@ -457,7 +457,7 @@ class TestWorkflowExecutorDebugMode:
         executor = _make_executor()
         steps = _make_steps(1)
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             executor.execute_coordinated_workflow(
                 "wf_no_nc",
                 steps,
@@ -505,7 +505,7 @@ class TestWorkflowExecutorDebugMode:
         with unittest.mock.patch.object(
             executor, "_send_workflow_notification", mock_notify
         ):
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 executor.execute_coordinated_workflow(
                     "wf_dag_notif",
                     steps,

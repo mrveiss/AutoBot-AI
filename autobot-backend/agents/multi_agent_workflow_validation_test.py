@@ -7,6 +7,7 @@ Tests the complete multi-agent coordination system for production readiness
 import asyncio
 import json
 import sys
+import os
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -16,7 +17,7 @@ from typing import Dict, List
 import requests
 
 # Add AutoBot paths
-sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
+sys.path.append(os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
 
 
 @dataclass

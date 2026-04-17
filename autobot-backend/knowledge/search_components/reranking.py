@@ -64,6 +64,34 @@ def recency_score(days_since_access: float) -> float:
     return 1.0 / (1.0 + days_since_access)
 
 
+# Issue #4836: boost/penalty applied to blended rerank score based on how a
+# graph-expanded result was sourced.  "extracted" relations come directly from
+# the document text (highest confidence); "ambiguous" ones are heuristically
+# inferred (lowest confidence).  The delta is intentionally small (±0.05) so
+# that cross-encoder relevance still dominates the final ordering.
+_PROVENANCE_BOOST: Dict[str, float] = {
+    "extracted": 0.05,
+    "inferred": 0.0,
+    "ambiguous": -0.05,
+}
+
+
+def provenance_adjustment(source_provenance: Optional[str]) -> float:
+    """Return a score delta in [-0.05, +0.05] for the given source_provenance value.
+
+    Issue #4836: Consumes the source_provenance field set by GraphRAGService so
+    that extracted relations rank higher than ambiguous ones after blending.
+
+    Args:
+        source_provenance: One of "extracted", "inferred", "ambiguous", or None.
+
+    Returns:
+        Score delta: +0.05 for extracted, 0.0 for inferred / unknown, -0.05 for
+        ambiguous.
+    """
+    return _PROVENANCE_BOOST.get(source_provenance or "inferred", 0.0)
+
+
 def staleness_penalty(staleness_score: float) -> float:
     """Convert a staleness score (0-1) to a penalty factor (1-0).
 
@@ -122,7 +150,7 @@ def apply_mmr_reorder(
         result lacks an embedding the function degrades gracefully and returns
         the original order.
     """
-    if not results or mmr_lambda >= 1.0:
+    if not results or mmr_lambda == 0.0 or mmr_lambda >= 1.0:
         return results
 
     selected: List[Dict[str, Any]] = []
@@ -287,12 +315,16 @@ class ResultReranker:
                 raw_staleness = staleness_map.get(chunk_id, 0.0)  # type: ignore[union-attr]
                 penalty = staleness_penalty(raw_staleness)
 
-            result["rerank_score"] = compute_blended_score(
+            blended = compute_blended_score(
                 reranker_score=normalized,
                 vector_score=original_score,
                 staleness_penalty_value=penalty,
                 weights=effective_weights,
             )
+            # Issue #4836: apply provenance-based delta so extracted relations
+            # rank above inferred, and inferred rank above ambiguous ones.
+            prov = (result.get("metadata") or {}).get("source_provenance")
+            result["rerank_score"] = min(1.0, max(0.0, blended + provenance_adjustment(prov)))
         results.sort(key=lambda x: x.get("rerank_score", 0), reverse=True)
         for result in results:
             result["score"] = result.get("rerank_score", 0)

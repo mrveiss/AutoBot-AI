@@ -201,7 +201,7 @@ function toggleExpand(eventId: string): void {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .timeline-header h4 i {
@@ -240,7 +240,7 @@ function toggleExpand(eventId: string): void {
 /* Timeline */
 .timeline-container {
   position: relative;
-  padding-left: 40px;
+  padding-left: var(--spacing-10);
 }
 
 .timeline-line {
@@ -260,7 +260,7 @@ function toggleExpand(eventId: string): void {
 .date-marker {
   margin-bottom: var(--spacing-sm);
   margin-left: -40px;
-  padding-left: 40px;
+  padding-left: var(--spacing-10);
 }
 
 .date-marker span {
@@ -292,7 +292,7 @@ function toggleExpand(eventId: string): void {
 
 .timeline-dot i {
   color: white;
-  font-size: 10px;
+  font-size: var(--text-xs);
 }
 
 /* Event Card */
@@ -342,7 +342,7 @@ function toggleExpand(eventId: string): void {
 .event-description {
   font-size: var(--text-sm);
   color: var(--text-secondary);
-  margin: 0;
+  margin: var(--spacing-0);
   line-height: 1.5;
 }
 
@@ -402,7 +402,7 @@ function toggleExpand(eventId: string): void {
 
 @media (max-width: 768px) {
   .timeline-container {
-    padding-left: 32px;
+    padding-left: var(--spacing-8);
   }
 
   .timeline-line {

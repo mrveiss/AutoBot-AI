@@ -603,6 +603,37 @@
   tags: ['backend', 'ufw']
 
 # ==========================================================
+# Cognition Store seed-on-deploy (#4679)
+# Pre-populates ChromaDB cognition_store collection with curated
+# foundational docs so new deployments avoid cold-start degradation.
+# Runs only when cognition_seed.yaml is present; non-fatal if it fails.
+# ==========================================================
+- name: "Backend | Check cognition_seed.yaml exists (#4679)"
+  ansible.builtin.stat:
+    path: "{{ backend_code_dir }}/cognition_seed.yaml"
+  register: _cognition_seed_manifest
+  tags: ['backend', 'cognition-seed']
+
+- name: "Backend | Seed Cognition Store from manifest (#4679)"
+  ansible.builtin.command:
+    cmd: >
+      {{ backend_code_dir }}/venv/bin/python -c
+      "import asyncio;
+      from services.knowledge.cognition_seeder import CognitionSeeder;
+      s = CognitionSeeder();
+      count = asyncio.run(s.seed_from_manifest('{{ backend_code_dir }}/cognition_seed.yaml'));
+      print('cognition_store seeded:', count, 'chunks')"
+    chdir: "{{ backend_code_dir }}"
+  environment:
+    PYTHONPATH: "{{ backend_code_dir }}:{{ backend_shared_standalone_dir }}"
+  become: true
+  become_user: "{{ backend_service_account }}"
+  when: _cognition_seed_manifest.stat.exists
+  failed_when: false
+  changed_when: false
+  tags: ['backend', 'cognition-seed']
+
+# ==========================================================
 # Post-deploy smoke test (#3687)
 # systemd reports active (running) even when all uvicorn
 # workers crash-loop because the master process stays alive.
