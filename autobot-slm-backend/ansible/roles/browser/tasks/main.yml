@@ -154,24 +154,25 @@
   tags: ['browser', 'packages']
 
 # Install Chromium via the Node.js playwright package (not Python pip playwright).
-# Browsers go to a shared path so the autobot service user can find them regardless
-# of which user ran the install. (#provisioning-gaps)
+# Browsers live under /var/lib/autobot/playwright-browsers (world-readable, root-owned)
+# so the service user can always find them regardless of which user ran the install
+# or where the service user's HOME points. (#4662)
 - name: "Browser | Create Playwright browsers directory"
   ansible.builtin.file:
-    path: /opt/autobot/autobot-browser-worker/browsers
+    path: /var/lib/autobot/playwright-browsers
     state: directory
-    owner: autobot
-    group: autobot
+    owner: root
+    group: root
     mode: "0755"
   become: yes
   tags: ['browser', 'packages']
 
-# Guard: skip the ~2-minute install when Chromium is already present. (#4855)
+# Guard: skip the ~2-minute install when Chromium is already present. (#4855, #4662)
 # Playwright installs into a versioned subdir (chromium-NNNN/chrome-linux/chrome);
 # find the first match rather than hard-coding the version number.
 - name: "Browser | Check if Playwright Chromium is already installed"
   ansible.builtin.find:
-    paths: /opt/autobot/autobot-browser-worker/browsers
+    paths: /var/lib/autobot/playwright-browsers
     patterns: "chrome"
     recurse: yes
     file_type: file
@@ -184,19 +185,20 @@
     chdir: /opt/autobot/autobot-browser-worker
   become: yes
   environment:
-    PLAYWRIGHT_BROWSERS_PATH: /opt/autobot/autobot-browser-worker/browsers
+    PLAYWRIGHT_BROWSERS_PATH: /var/lib/autobot/playwright-browsers
   changed_when: true
   when:
     - _browser_worker_dir.stat.exists | default(false)
     - _chromium_binary.matched == 0
   tags: ['browser', 'packages']
 
-- name: "Browser | Fix Playwright browsers directory ownership"
+- name: "Browser | Ensure Playwright browsers are world-readable (#4662)"
   ansible.builtin.file:
-    path: /opt/autobot/autobot-browser-worker/browsers
+    path: /var/lib/autobot/playwright-browsers
     state: directory
-    owner: autobot
-    group: autobot
+    owner: root
+    group: root
+    mode: "0755"
     recurse: true
   become: yes
   when: _browser_worker_dir.stat.exists | default(false)
