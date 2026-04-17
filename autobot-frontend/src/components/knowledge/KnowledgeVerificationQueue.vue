@@ -654,7 +654,7 @@ onMounted(() => {
 }
 
 .card-checkbox {
-  margin-top: 3px;
+  margin-top: var(--spacing-3px);
   flex-shrink: 0;
 }
 

@@ -259,6 +259,30 @@
   --spacing-24: 6rem;
   --spacing-32: 8rem;
 
+  /* Sub-half-unit micro spacing — used in dense UI (badges, chips, voice controls) */
+  --spacing-micro-1: 0.1rem;   /* ~1.6px */
+  --spacing-micro-2: 0.15rem;  /* ~2.4px */
+  --spacing-micro-3: 0.2rem;   /* ~3.2px */
+  --spacing-micro-4: 0.3rem;   /* ~4.8px */
+  --spacing-micro-5: 0.4rem;   /* ~6.4px */
+  --spacing-micro-6: 0.45rem;  /* ~7.2px */
+
+  /* Pixel-value tokens for values that don't fit the rem scale */
+  --spacing-3px: 3px;   /* dense chip/badge padding; nearest rem token is --spacing-1 (4px) */
+  --spacing-15px: 15px; /* mid-point between --spacing-3 (12px) and --spacing-4 (16px) */
+  --spacing-18px: 18px; /* mid-point between --spacing-4 (16px) and --spacing-5 (20px) */
+  --spacing-30px: 30px; /* mid-point between --spacing-7 (28px) and --spacing-8 (32px) */
+  --spacing-44px: 44px; /* touch-target minimum (WCAG 2.5.8) */
+  --spacing-140px: 140px; /* fixed layout offset (AgentActivityVisualization timeline) */
+
+  /* Negative spacing tokens — used for border-overlap, tab underline alignment */
+  --spacing-neg-px: -1px;
+  --spacing-neg-2px: -2px;
+  --spacing-neg-4px: -4px;
+  --spacing-neg-8px: -8px;
+  --spacing-neg-40px: -40px;
+  --spacing-neg-0-5: -0.5rem;
+
   /* Semantic spacing aliases */
   --spacing-xs: var(--spacing-1);
   --spacing-sm: var(--spacing-2);

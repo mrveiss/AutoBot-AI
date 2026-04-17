@@ -658,7 +658,7 @@ defineExpose({ loadSources })
   font-size: var(--text-xs);
   display: flex;
   align-items: center;
-  gap: 0.2rem;
+  gap: var(--spacing-micro-3);
 }
 
 .source-timestamps {

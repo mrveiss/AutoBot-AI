@@ -600,7 +600,7 @@ onMounted(async () => {
   font-weight: 500;
   cursor: pointer;
   transition: color var(--duration-150) var(--ease-in-out), border-color var(--duration-150) var(--ease-in-out);
-  margin-bottom: -1px;
+  margin-bottom: var(--spacing-neg-px);
 }
 
 .tab-btn:hover {

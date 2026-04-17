@@ -2364,7 +2364,7 @@ watch(selectedScope, () => {
 }
 
 .secret-input {
-  padding-right: 44px;
+  padding-right: var(--spacing-44px);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
 }

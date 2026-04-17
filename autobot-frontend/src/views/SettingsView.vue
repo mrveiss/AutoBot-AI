@@ -325,7 +325,7 @@ function onApiKeysSaved(): void {
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
+  margin-bottom: var(--spacing-neg-2px);
   cursor: pointer;
   transition: color var(--duration-150), border-color var(--duration-150);
 }

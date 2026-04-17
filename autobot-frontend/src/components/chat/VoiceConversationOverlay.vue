@@ -441,7 +441,7 @@ onBeforeUnmount(() => {
 .voice-overlay__lang-badge {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: var(--spacing-micro-4);
   padding: 0.15rem 0.5rem;
   border-radius: var(--radius-md);
   background: rgba(37, 99, 235, 0.1);
@@ -608,7 +608,7 @@ onBeforeUnmount(() => {
   font-size: 0.8125rem;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: var(--spacing-micro-5);
 }
 
 .voice-overlay__cert-warning-title {

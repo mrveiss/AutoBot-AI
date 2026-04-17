@@ -629,7 +629,7 @@ onUnmounted(() => {
   cursor: pointer;
   transition: all var(--duration-200);
   border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
+  margin-bottom: var(--spacing-neg-2px);
 }
 
 .tab-btn:hover {
