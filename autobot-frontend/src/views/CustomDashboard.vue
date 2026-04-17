@@ -716,8 +716,8 @@ onMounted(() => {
 }
 
 .icon-btn {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
@@ -861,8 +861,8 @@ onMounted(() => {
 }
 
 .widget-actions button {
-  width: 28px;
-  height: 28px;
+  width: 44px;
+  height: 44px;
   background: transparent;
   border: none;
   color: var(--text-tertiary);
