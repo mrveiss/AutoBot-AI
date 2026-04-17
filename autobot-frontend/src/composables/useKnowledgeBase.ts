@@ -6,8 +6,6 @@
  */
 
 import apiClient from '@/utils/ApiClient'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import {
   formatDate as formatDateHelper,
   formatFileSize as formatFileSizeHelper,
@@ -308,25 +306,18 @@ export function useKnowledgeBase() {
 
   /**
    * Upload knowledge base file
+   *
+   * Uses apiClient.post which handles FormData natively — rawRequest strips
+   * Content-Type so the browser sets multipart boundary automatically, and
+   * inherits the same auth/retry/error-handling as every other API call.
    */
   const uploadKnowledgeFile = async (formData: FormData): Promise<UploadResponse> => {
     try {
-      const url = await appConfig.getApiUrl(`${getApiBase()}/knowledge_base/upload`)
-
-      const response = await fetchWithAuth(url, {
-        method: 'POST',
-        body: formData
-      })
-
-      if (!response.ok) {
-        logger.error('File upload failed with status:', response.status)
-        const errorText = await response.text()
-        logger.error('Error response:', errorText)
-        throw new Error(`Upload failed: ${response.status} ${response.statusText}`)
-      }
-
-      const data = (await parseApiResponse<Record<string, any>>(response)) as any
-      return data
+      const data = await apiClient.post<Record<string, any>>(
+        `${getApiBase()}/knowledge_base/upload`,
+        formData
+      )
+      return data as UploadResponse
     } catch (error) {
       logger.error('Error uploading file:', error)
       throw error
