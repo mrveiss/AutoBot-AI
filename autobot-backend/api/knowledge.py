@@ -50,6 +50,7 @@ from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from exceptions import InternalError
+from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 
 # NOTE: Pydantic models moved to knowledge_maintenance.py (Issue #185 - split oversized files)
 # NOTE: Tag-related models moved to knowledge_tags.py
@@ -1163,6 +1164,10 @@ async def upload_file_to_knowledge(
         raise HTTPException(
             status_code=400, detail="No text content could be extracted from file"
         )
+
+    # Issue #5064: sanitize uploaded document content against prompt injection
+    # before the text reaches the KB / embedding pipeline.
+    content = _sanitize_document(content, source="file_upload").sanitized_text
 
     logger.info("Uploading file: filename='%s', size=%d", filename, len(file_content))
 

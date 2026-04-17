@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from autobot_shared.ssot_config import get_ollama_url
 from constants.path_constants import PATH
+from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 from services.knowledge.synthesis_schema_loader import SynthesisSchema, load_synthesis_schema
 
 logger = logging.getLogger(__name__)
@@ -930,6 +931,8 @@ class DocIndexerService:
         import asyncio
 
         body, fm_tags, fm_aliases = _parse_frontmatter(content)
+        # Issue #5064: sanitize ingested content before chunking / embedding.
+        body = _sanitize_document(body, source="doc_indexer").sanitized_text
         chunks = _chunk_markdown(body, file_str)
         if not chunks:
             return 0, 0
@@ -1012,6 +1015,8 @@ class DocIndexerService:
                 return
 
             body, fm_tags, fm_aliases = _parse_frontmatter(content)
+            # Issue #5064: sanitize ingested content before chunking / embedding.
+            body = _sanitize_document(body, source="doc_indexer").sanitized_text
             chunks = _chunk_markdown(body, file_path)
             if not chunks:
                 result.skipped += 1
