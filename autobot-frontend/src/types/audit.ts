@@ -186,30 +186,6 @@ export const DEFAULT_AUDIT_FILTER: AuditFilter = {
 }
 
 /**
- * Helper to format audit timestamp to readable string
- */
-export function formatAuditTimestamp(timestamp: string): string {
-  const date = new Date(timestamp)
-  return date.toLocaleString()
-}
-
-/**
- * Helper to format audit timestamp to relative time
- */
-export function formatAuditRelativeTime(timestamp: string): string {
-  const date = new Date(timestamp)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-
-  if (diffMs < 60000) return 'Just now'
-  if (diffMs < 3600000) return `${Math.floor(diffMs / 60000)} min ago`
-  if (diffMs < 86400000) return `${Math.floor(diffMs / 3600000)} hours ago`
-  if (diffMs < 604800000) return `${Math.floor(diffMs / 86400000)} days ago`
-
-  return date.toLocaleDateString()
-}
-
-/**
  * Helper to calculate success rate percentage
  */
 export function calculateSuccessRate(stats: AuditStatistics): number {

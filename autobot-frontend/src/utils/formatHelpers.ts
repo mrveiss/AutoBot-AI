@@ -190,6 +190,42 @@ export function formatTimeAgo(timestamp: Date | string | number): string {
   }
 }
 
+/**
+ * Format duration between two timestamps in human-readable form
+ *
+ * @param startTime - ISO timestamp string or null
+ * @param endTime - ISO timestamp string or null (if null, uses Date.now())
+ * @returns Formatted duration (e.g., "1.5s", "2m 30s", "1h 15m") or "-" if no start
+ *
+ * @example
+ * ```typescript
+ * formatDuration('2025-01-01T00:00:00Z', '2025-01-01T00:01:30Z') // "1m 30s"
+ * formatDuration(null, null) // "-"
+ * ```
+ */
+export function formatDuration(
+  startTime: string | null | undefined,
+  endTime: string | null | undefined
+): string {
+  if (!startTime) return '-'
+
+  const start = new Date(startTime).getTime()
+  const end = endTime ? new Date(endTime).getTime() : Date.now()
+  const durationMs = end - start
+
+  if (durationMs < 1000) return `${durationMs}ms`
+  if (durationMs < 60000) return `${Math.round(durationMs / 1000)}s`
+  if (durationMs < 3600000) {
+    const mins = Math.floor(durationMs / 60000)
+    const secs = Math.round((durationMs % 60000) / 1000)
+    return `${mins}m ${secs}s`
+  }
+
+  const hours = Math.floor(durationMs / 3600000)
+  const mins = Math.floor((durationMs % 3600000) / 60000)
+  return `${hours}h ${mins}m`
+}
+
 // ==================== FILE SIZE FORMATTING ====================
 
 /**
@@ -333,6 +369,7 @@ export default {
   formatDateTime,
   formatISOString,
   formatTimeAgo,
+  formatDuration,
 
   // File Size
   formatFileSize,
