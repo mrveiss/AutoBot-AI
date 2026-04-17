@@ -65,6 +65,8 @@ class FileServerConnector(AbstractConnector):
     """
 
     connector_type = "file_server"
+    # Issue #4421: zero-config — needs only a mount point, no credentials.
+    tier = 0
 
     def __init__(self, config: ConnectorConfig) -> None:
         super().__init__(config)
