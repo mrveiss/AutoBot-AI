@@ -271,17 +271,33 @@ class TestParallelDispatchNoRegression:
 
     @pytest.mark.asyncio
     async def test_spawn_parallel_honours_max_parallel(self):
-        """Tasks beyond max_parallel are dropped (existing behaviour)."""
-        orch = SubagentDispatcher(max_parallel=2)
+        """max_parallel caps concurrency, not total task count.
+
+        All tasks are processed; at most max_parallel run simultaneously.
+        """
+        import asyncio as _asyncio
+
+        max_parallel = 2
+        peak = 0
+        active = 0
+
+        orch = SubagentDispatcher(max_parallel=max_parallel)
 
         async def my_func():
+            nonlocal peak, active
+            active += 1
+            peak = max(peak, active)
+            await _asyncio.sleep(0.01)
+            active -= 1
             return "ok"
 
-        tasks = [
-            SubagentTask(task_id=f"t{i}", func=my_func) for i in range(4)
-        ]
+        tasks = [SubagentTask(task_id=f"t{i}", func=my_func) for i in range(4)]
         results = await orch.spawn_parallel_tasks(tasks)
-        assert len(results) == 2
+
+        # All 4 tasks complete (no truncation)
+        assert len(results) == 4
+        # Concurrency was bounded
+        assert peak <= max_parallel
 
     @pytest.mark.asyncio
     async def test_task_exception_propagates_as_exception_result(self):
