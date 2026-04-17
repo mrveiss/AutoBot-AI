@@ -8,10 +8,11 @@
 
 """Link processing pipeline for web content and URLs."""
 
+import ipaddress
 import logging
 import re
 from typing import Any, Dict, List
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 from media.core.pipeline import BasePipeline
 from media.core.types import MediaInput, MediaType, ProcessingResult
@@ -35,8 +36,10 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TIMEOUT = aiohttp.ClientTimeout(total=15) if _AIOHTTP_AVAILABLE else None
+_JINA_TIMEOUT = aiohttp.ClientTimeout(total=5) if _AIOHTTP_AVAILABLE else None
 _MAX_CONTENT_LENGTH = 1_000_000  # 1 MB cap on HTML download
 _USER_AGENT = "AutoBot/1.0 (media-pipeline)"
+_JINA_BASE_URL = "https://r.jina.ai/"
 
 
 class LinkPipeline(BasePipeline):
@@ -85,8 +88,67 @@ class LinkPipeline(BasePipeline):
     # HTTP fetch
     # ------------------------------------------------------------------
 
+    def _is_public_url(self, url: str) -> bool:
+        """Return True only for public HTTP/HTTPS URLs (not localhost or private IPs)."""
+        try:
+            parsed = urlparse(url)
+            if parsed.scheme not in ("http", "https"):
+                return False
+            host = parsed.hostname or ""
+            if host in ("localhost", "127.0.0.1", "::1"):
+                return False
+            try:
+                addr = ipaddress.ip_address(host)
+                return addr.is_global
+            except ValueError:
+                # hostname — treat as public unless it looks internal
+                return not (host.endswith(".local") or host.endswith(".internal"))
+        except Exception:
+            return False
+
+    async def _try_jina(self, url: str) -> str | None:
+        """Attempt to fetch URL via Jina Reader. Returns text content or None on failure."""
+        jina_url = f"{_JINA_BASE_URL}{url}"
+        try:
+            async with aiohttp.ClientSession(timeout=_JINA_TIMEOUT) as session:
+                async with session.get(jina_url, allow_redirects=True) as response:
+                    if response.status == 200:
+                        return await response.text(encoding="utf-8", errors="replace")
+        except Exception as exc:
+            logger.debug("Jina Reader fast-path failed for %s: %s", url, exc)
+        return None
+
+    def _jina_result(self, url: str, content: str, metadata: Dict) -> Dict[str, Any]:
+        """Build a result dict from Jina Reader plain-text response."""
+        word_count = len(content.split()) if content else 0
+        # Extract a title from the first non-empty line if present
+        first_line = next((ln.strip() for ln in content.splitlines() if ln.strip()), "")
+        title = first_line[:200] if first_line else ""
+        return {
+            "type": "link_fetch",
+            "url": url,
+            "title": title,
+            "description": "",
+            "content": content,
+            "word_count": word_count,
+            "links": [],
+            "open_graph": {},
+            "content_type": "text/plain",
+            "confidence": 0.9 if word_count > 0 else 0.5,
+            "source": "jina",
+            "metadata": metadata,
+        }
+
     async def _fetch_and_parse(self, url: str, metadata: Dict) -> Dict[str, Any]:
-        """Fetch URL and parse the HTML response."""
+        """Fetch URL — tries Jina Reader fast-path first, falls back to BeautifulSoup."""
+        # Fast-path: Jina Reader (public URLs only, 5-second timeout)
+        if self._is_public_url(url):
+            content = await self._try_jina(url)
+            if content is not None:
+                logger.debug("Jina Reader fast-path succeeded for %s", url)
+                return self._jina_result(url, content, metadata)
+
+        # Fallback: direct fetch + BeautifulSoup parse
         headers = {"User-Agent": _USER_AGENT}
         # ssl=None uses the default aiohttp SSL context (cert verification enabled).
         # Callers may pass metadata={"allow_self_signed": True} to opt-in to skipping
