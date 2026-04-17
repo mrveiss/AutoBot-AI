@@ -25,7 +25,10 @@
     browser_worker_code_dir: "{{ browser_worker_install_dir }}/autobot-browser-worker"
     browser_worker_user: autobot
     browser_worker_group: autobot
-    browser_worker_port: 3000
+    # (#4662) Port 9001 is canonical — port 3000 was legacy and caused
+    # EADDRINUSE conflicts. Keep aligned with roles/browser/defaults/main.yml
+    # (playwright_port) and playwright-server.js PLAYWRIGHT_PORT default.
+    browser_worker_port: "{{ playwright_port | default(9001) }}"
     browser_worker_service_name: autobot-playwright
     backend_host: "{{ infrastructure.hosts.backend }}"
     backend_port: 8001
