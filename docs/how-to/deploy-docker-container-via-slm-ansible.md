@@ -7,7 +7,7 @@ AutoBot's SLM (Service Lifecycle Manager) backend runs Ansible playbooks on enro
 ```
 AutoBot backend
   └─ POST /api/slm/deployments/docker
-       └─ SLMDeploymentOrchestrator.deploy_docker()
+       └─ SLMDeploymentBridge.deploy_docker()
             └─ SLMClient.create_deployment()
                  └─ SLM backend POST /deployments
                       └─ Ansible playbook runner
@@ -85,7 +85,7 @@ print(f"Status: {deployment['status']}")
 
 ## Ansible extra_vars injected by the SLM
 
-The `SLMDeploymentOrchestrator` translates the request into a `docker_containers` extra_vars list that the playbook consumes:
+The `SLMDeploymentBridge` translates the request into a `docker_containers` extra_vars list that the playbook consumes:
 
 ```yaml
 docker_containers:
@@ -232,7 +232,7 @@ else:
     print("Deployment completed successfully")
 ```
 
-## Multi-step multi-node deployment (DeploymentOrchestrator)
+## Multi-step multi-node deployment (DeploymentCoordinator)
 
 For rolling out across multiple nodes with a sequential, parallel, or canary strategy, use the generic deployment API:
 
@@ -303,8 +303,8 @@ if result["status"] == "failed":
 ## Architecture reference
 
 - **Request/response models** — `autobot-backend/models/infrastructure.py`
-- **SLMDeploymentOrchestrator** — `autobot-backend/services/slm/deployment_orchestrator.py`
-- **DeploymentOrchestrator** (multi-node) — `autobot-backend/services/slm/deployment_orchestrator.py`
+- **SLMDeploymentBridge** — `autobot-backend/services/slm/deployment_bridge.py`
+- **DeploymentCoordinator** (multi-node) — `autobot-backend/services/slm/deployment_coordinator.py`
 - **API routes** — `autobot-backend/api/slm/deployments.py`
 - **SLM client** — `autobot-backend/services/slm_client.py`
 - **Ansible playbook** — `autobot-slm-backend/ansible/roles/docker/tasks/main.yml` (via `deploy-hybrid-docker.yml`)

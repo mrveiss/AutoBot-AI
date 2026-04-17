@@ -1,8 +1,10 @@
-# Agent Orchestrator
+# Distributed Agent Coordinator
 
 ## Overview
 
-The Agent Orchestrator serves as the central hub for routing, coordinating, and managing all agent interactions within AutoBot. It implements intelligent request routing, load balancing, failover handling, and performance monitoring across the entire multi-agent system.
+The Distributed Agent Coordinator (class `DistributedAgentCoordinator` in `autobot-backend/agents/agent_orchestration/coordinator.py`) serves as the central hub for routing, coordinating, and managing all agent interactions within AutoBot. It implements intelligent request routing, load balancing, failover handling, and performance monitoring across the entire multi-agent system.
+
+> **Note:** This class was renamed from `AgentOrchestrator` as part of the single-Orchestrator refactor (#5040). There is now exactly one `Orchestrator` class in the codebase — the top-level multi-agent conductor in `autobot-backend/orchestrator.py`. The `DistributedAgentCoordinator` described here is the distributed-agent routing layer that sits below it.
 
 ## System Integration & Interactions
 
@@ -14,7 +16,7 @@ The Agent Orchestrator serves as the central hub for routing, coordinating, and 
 └─────────────────┬───────────────────────────────────────────┘
                   │
 ┌─────────────────▼───────────────────────────────────────────┐
-│                Agent Orchestrator                           │
+│            Distributed Agent Coordinator                    │
 ├─────────────────────────────────────────────────────────────┤
 │ • Request Analysis & Routing                               │
 │ • Agent Selection & Load Balancing                         │
@@ -34,7 +36,7 @@ The Agent Orchestrator serves as the central hub for routing, coordinating, and 
 
 #### 1. **Request Processing Pipeline**
 ```python
-class AgentOrchestrator:
+class DistributedAgentCoordinator:
     async def process_request(self, request: dict) -> dict:
         """
         Main request processing pipeline

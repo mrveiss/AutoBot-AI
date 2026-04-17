@@ -2286,8 +2286,8 @@ with httpx.Client(verify=False) as client:
 ### How it works
 
 1. `POST /api/v1/slm/deployments/docker` is handled by `autobot-backend/api/slm/deployments.py`.
-2. The route delegates to `SLMDeploymentOrchestrator` (`autobot-backend/services/slm/deployment_orchestrator.py`).
-3. The orchestrator translates the `DockerDeploymentRequest` into the SLM's
+2. The route delegates to `SLMDeploymentBridge` (`autobot-backend/services/slm/deployment_bridge.py`).
+3. The bridge translates the `DockerDeploymentRequest` into the SLM's
    `POST /deployments` shape: `{node_id, roles: ["docker"], extra_data: {playbook, extra_vars}}`.
 4. The SLM runs the specified Ansible playbook against the target node.
 5. Deployment status is polled via `GET /api/v1/slm/deployments/{id}`, which
