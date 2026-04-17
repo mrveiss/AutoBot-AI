@@ -320,14 +320,14 @@ export function useKnowledgeBase() {
         body: formData
       })
 
-      if (!(response as any).ok) {
-        logger.error('File upload failed with status:', (response as any).status)
+      if (!response.ok) {
+        logger.error('File upload failed with status:', response.status)
         const errorText = await response.text()
         logger.error('Error response:', errorText)
-        throw new Error(`Upload failed: ${(response as any).status} ${(response as any).statusText}`)
+        throw new Error(`Upload failed: ${response.status} ${response.statusText}`)
       }
 
-      const data = ((await parseApiResponse(response as any))) as any
+      const data = (await parseApiResponse(response)) as any
       return data
     } catch (error) {
       logger.error('Error uploading file:', error)
@@ -437,12 +437,7 @@ export function useKnowledgeBase() {
         skip_existing: skipExisting
       }, { timeout: knowledgeTimeout })
 
-      logger.debug('[vectorizeFacts] Response received:', {
-        ok: (response as any).ok,
-        status: (response as any).status,
-        statusText: (response as any).statusText,
-        headers: Object.fromEntries((response as any).headers?.entries?.() || [])
-      })
+      logger.debug('[vectorizeFacts] Response received')
 
       if (!response) {
         throw new Error('Vectorization failed: No response from server');
@@ -475,11 +470,7 @@ export function useKnowledgeBase() {
         machine_id: machineId
       })
 
-      logger.debug('[initializeMachineKnowledge] Response received:', {
-        ok: (response as any).ok,
-        status: (response as any).status,
-        statusText: (response as any).statusText
-      })
+      logger.debug('[initializeMachineKnowledge] Response received')
 
       if (!response) {
         throw new Error('Machine knowledge initialization failed: No response from server');
@@ -504,11 +495,7 @@ export function useKnowledgeBase() {
 
       const response = await apiClient.post(`${getApiBase()}/knowledge_base/refresh_system_knowledge`, {})
 
-      logger.debug('[refreshSystemKnowledge] Response received:', {
-        ok: (response as any).ok,
-        status: (response as any).status,
-        statusText: (response as any).statusText
-      })
+      logger.debug('[refreshSystemKnowledge] Response received')
 
       if (!response) {
         throw new Error('System knowledge refresh failed: No response from server');
@@ -532,11 +519,7 @@ export function useKnowledgeBase() {
     try {
       const response = await apiClient.get(`${getApiBase()}/knowledge_base/job_status/${taskId}`)
 
-      logger.debug('[pollJobStatus] Response received:', {
-        ok: (response as any).ok,
-        status: (response as any).status,
-        taskId
-      })
+      logger.debug('[pollJobStatus] Response received', { taskId })
 
       if (!response) {
         throw new Error('Job status check failed: No response from server');
@@ -561,11 +544,7 @@ export function useKnowledgeBase() {
         machine_id: machineId
       })
 
-      logger.debug('[populateManPages] Response received:', {
-        ok: (response as any).ok,
-        status: (response as any).status,
-        statusText: (response as any).statusText
-      })
+      logger.debug('[populateManPages] Response received')
 
       if (!response) {
         throw new Error('Man pages population failed: No response from server');
@@ -588,11 +567,7 @@ export function useKnowledgeBase() {
 
       const response = await apiClient.post(`${getApiBase()}/knowledge_base/populate_autobot_docs`, {})
 
-      logger.debug('[populateAutoBotDocs] Response received:', {
-        ok: (response as any).ok,
-        status: (response as any).status,
-        statusText: (response as any).statusText
-      })
+      logger.debug('[populateAutoBotDocs] Response received')
 
       if (!response) {
         throw new Error('AutoBot docs population failed: No response from server');
@@ -617,11 +592,7 @@ export function useKnowledgeBase() {
         `${getApiBase()}/knowledge_base/machine_profile?machine_id=${encodeURIComponent(machineId)}`
       )
 
-      logger.debug('[fetchMachineProfile] Response received:', {
-        ok: (response as any).ok,
-        status: (response as any).status,
-        statusText: (response as any).statusText
-      })
+      logger.debug('[fetchMachineProfile] Response received')
 
       if (!response) {
         throw new Error('Machine profile fetch failed: No response from server');
@@ -644,11 +615,7 @@ export function useKnowledgeBase() {
 
       const response = await apiClient.get(`${getApiBase()}/knowledge_base/stats/basic`)
 
-      logger.debug('[fetchBasicStats] Response received:', {
-        ok: (response as any).ok,
-        status: (response as any).status,
-        statusText: (response as any).statusText
-      })
+      logger.debug('[fetchBasicStats] Response received')
 
       if (!response) {
         throw new Error('Basic stats fetch failed: No response from server');
