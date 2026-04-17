@@ -17,6 +17,7 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urljoin, urlparse
 
+from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 from media.core.pipeline import BasePipeline
 from media.core.types import MediaInput, MediaType, ProcessingResult
 
@@ -224,6 +225,9 @@ class LinkPipeline(BasePipeline):
         header from the body returned to callers.
         """
         title, body = _parse_jina_output(content)
+        # Issue #5064: strip prompt-injection tokens from scraped body
+        # before it reaches the KB or the LLM context.
+        body = _sanitize_document(body, source="jina").sanitized_text
         word_count = len(body.split()) if body else 0
         return {
             "type": "link_fetch",
@@ -302,6 +306,10 @@ class LinkPipeline(BasePipeline):
         main_text = self._extract_main_text(soup)
         links = self._extract_links(soup, url)
         og_data = self._extract_open_graph(soup)
+
+        # Issue #5064: strip prompt-injection tokens from extracted page text
+        # before it reaches the KB or the LLM context.
+        main_text = _sanitize_document(main_text, source="web_html").sanitized_text
 
         word_count = len(main_text.split()) if main_text else 0
         confidence = 0.9 if main_text else 0.5
