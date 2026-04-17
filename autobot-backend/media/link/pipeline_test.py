@@ -532,3 +532,228 @@ class TestLinkPipelineJina:
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock(return_value=False)
         return mock_session
+
+
+# ----------------------------------------------------------------------
+# Circuit breaker, pooled session, title parsing (issue #5022)
+# ----------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=False)
+def _reset_jina_state():
+    """Reset module-level circuit-breaker + pooled session state between tests."""
+    from media.link import pipeline as pl
+
+    pl._jina_cooldown_until = 0.0
+    pl._jina_failures_in_window.clear()
+    # Force re-creation of pooled session on next use
+    pl._jina_session = None
+    yield
+    pl._jina_cooldown_until = 0.0
+    pl._jina_failures_in_window.clear()
+    pl._jina_session = None
+
+
+class TestJinaCircuitBreaker:
+    """Circuit breaker opens after N failures in rolling window (#5022)."""
+
+    @pytest.mark.asyncio
+    async def test_circuit_opens_after_threshold_failures(self, _reset_jina_state):
+        """After _JINA_FAILURE_THRESHOLD failures, subsequent calls short-circuit."""
+        from media.link import pipeline as pl
+
+        pipe = LinkPipeline()
+
+        # First N calls raise → circuit opens
+        async def _always_raise(*args, **kwargs):
+            raise RuntimeError("simulated Jina outage")
+
+        with patch("media.link.pipeline._get_jina_session", new=AsyncMock(side_effect=_always_raise)):
+            for _ in range(pl._JINA_FAILURE_THRESHOLD):
+                result = await pipe._try_jina("https://example.com/a")
+                assert result is None
+
+        # Circuit should now be open
+        assert pl._jina_cooldown_until > 0
+        assert pl._jina_cooldown_until > __import__("time").monotonic()
+
+        # Subsequent call must NOT invoke _get_jina_session (short-circuit)
+        called = AsyncMock()
+        with patch("media.link.pipeline._get_jina_session", new=called):
+            result = await pipe._try_jina("https://example.com/b")
+        assert result is None
+        called.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_circuit_expires_after_cooldown(self, _reset_jina_state):
+        """After cooldown expires, Jina is tried again."""
+        from media.link import pipeline as pl
+
+        pipe = LinkPipeline()
+
+        # Manually open the circuit in the past (already-expired cooldown)
+        import time as _time
+
+        pl._jina_cooldown_until = _time.monotonic() - 1.0  # expired
+
+        # Mock a successful Jina call; circuit should NOT short-circuit
+        mock_response = AsyncMock()
+        mock_response.status = 200
+        mock_response.text = AsyncMock(return_value="Title: Foo\n\nBody")
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = MagicMock()
+        mock_session.get = MagicMock(return_value=mock_response)
+
+        with patch("media.link.pipeline._get_jina_session", new=AsyncMock(return_value=mock_session)):
+            result = await pipe._try_jina("https://example.com/c")
+
+        assert result == "Title: Foo\n\nBody"
+
+    @pytest.mark.asyncio
+    async def test_success_clears_failure_window(self, _reset_jina_state):
+        """A successful call resets the failure counter so the circuit stays closed."""
+        from media.link import pipeline as pl
+
+        pipe = LinkPipeline()
+
+        # Two failures (below threshold)
+        async def _raise(*args, **kwargs):
+            raise RuntimeError("boom")
+
+        with patch("media.link.pipeline._get_jina_session", new=AsyncMock(side_effect=_raise)):
+            await pipe._try_jina("https://example.com/x")
+            await pipe._try_jina("https://example.com/y")
+
+        assert len(pl._jina_failures_in_window) == 2
+
+        # One success — window clears
+        mock_response = AsyncMock()
+        mock_response.status = 200
+        mock_response.text = AsyncMock(return_value="ok")
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+        mock_session = MagicMock()
+        mock_session.get = MagicMock(return_value=mock_response)
+
+        with patch("media.link.pipeline._get_jina_session", new=AsyncMock(return_value=mock_session)):
+            await pipe._try_jina("https://example.com/z")
+
+        assert len(pl._jina_failures_in_window) == 0
+
+
+class TestJinaPooledSession:
+    """Pooled ClientSession is reused across sequential calls (#5022)."""
+
+    @pytest.mark.asyncio
+    async def test_pooled_session_reused_across_calls(self, _reset_jina_state):
+        """Two sequential _try_jina calls reuse the same _jina_session instance."""
+        from media.link import pipeline as pl
+
+        pipe = LinkPipeline()
+
+        mock_response = AsyncMock()
+        mock_response.status = 200
+        mock_response.text = AsyncMock(return_value="Title: Hi\n\nBody")
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+
+        # Patch aiohttp.ClientSession to return a tracked MagicMock (not AsyncMock,
+        # so `.closed` is a truthy-free MagicMock attribute; we set it explicitly).
+        created_session = MagicMock()
+        created_session.closed = False
+        created_session.get = MagicMock(return_value=mock_response)
+
+        call_count = MagicMock(return_value=created_session)
+
+        with patch("media.link.pipeline.aiohttp.ClientSession", call_count):
+            await pipe._try_jina("https://example.com/1")
+            first_id = id(pl._jina_session)
+            await pipe._try_jina("https://example.com/2")
+            second_id = id(pl._jina_session)
+
+        assert first_id == second_id, "Pooled session must be the same instance across calls"
+        # aiohttp.ClientSession() constructor should have been called exactly once
+        assert call_count.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_close_jina_session_allows_recreation(self, _reset_jina_state):
+        """close_jina_session() closes the pooled session; next call creates a new one."""
+        from media.link import pipeline as pl
+
+        pipe = LinkPipeline()
+
+        mock_response = AsyncMock()
+        mock_response.status = 200
+        mock_response.text = AsyncMock(return_value="ok")
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+
+        session_a = MagicMock()
+        session_a.closed = False
+        session_a.get = MagicMock(return_value=mock_response)
+        session_a.close = AsyncMock()
+        session_b = MagicMock()
+        session_b.closed = False
+        session_b.get = MagicMock(return_value=mock_response)
+
+        with patch("media.link.pipeline.aiohttp.ClientSession", side_effect=[session_a, session_b]):
+            await pipe._try_jina("https://example.com/1")
+            assert pl._jina_session is session_a
+            await pl.close_jina_session()
+            assert pl._jina_session is None
+            await pipe._try_jina("https://example.com/2")
+            assert pl._jina_session is session_b
+
+        session_a.close.assert_awaited_once()
+
+
+class TestJinaTitleExtraction:
+    """Title is parsed from `Title:` prefix; metadata is stripped from body (#5022)."""
+
+    def test_parse_title_prefix_and_strip_metadata(self):
+        """`Title: Foo\\nURL Source: ...\\n\\nBody` yields title=Foo and clean body."""
+        from media.link.pipeline import _parse_jina_output
+
+        raw = "Title: Foo\nURL Source: https://example.com\n\nBody paragraph here."
+        title, body = _parse_jina_output(raw)
+        assert title == "Foo"
+        assert "Title:" not in body
+        assert "URL Source:" not in body
+        assert body.strip() == "Body paragraph here."
+
+    def test_jina_result_strips_metadata_from_content(self):
+        """_jina_result's content field must not contain Title: or URL Source: lines."""
+        pipe = LinkPipeline()
+        raw = "Title: My Article\nURL Source: https://example.com\n\nThe actual article body."
+        result = pipe._jina_result("https://example.com", raw, {})
+        assert result["title"] == "My Article"
+        assert "Title:" not in result["content"]
+        assert "URL Source:" not in result["content"]
+        assert "The actual article body." in result["content"]
+
+    def test_parse_fallback_when_no_title_prefix(self):
+        """Without a Title: prefix, first non-empty body line is used as title."""
+        from media.link.pipeline import _parse_jina_output
+
+        raw = "Just a plain first line\n\nSecond paragraph."
+        title, body = _parse_jina_output(raw)
+        assert title == "Just a plain first line"
+        # Fallback preserves the full content
+        assert body == raw
+
+    def test_parse_empty_content(self):
+        """Empty or None content returns empty title and body."""
+        from media.link.pipeline import _parse_jina_output
+
+        assert _parse_jina_output("") == ("", "")
+
+    def test_parse_title_truncated_to_200_chars(self):
+        """Title longer than 200 chars is truncated."""
+        from media.link.pipeline import _parse_jina_output
+
+        long_title = "X" * 300
+        raw = f"Title: {long_title}\n\nBody"
+        title, _ = _parse_jina_output(raw)
+        assert len(title) == 200
