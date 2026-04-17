@@ -13,9 +13,9 @@ from fastapi.testclient import TestClient
 
 from api.slm.deployments import router
 from models.infrastructure import DeploymentStrategy as DeploymentStrategyType
-from services.slm.deployment_orchestrator import (
+from services.slm.deployment_bridge import (
     DeploymentContext,
-    DeploymentOrchestrator,
+    DeploymentCoordinator as DeploymentOrchestrator,
     DeploymentStatus,
     DeploymentStep,
     DeploymentStepType,
@@ -463,7 +463,7 @@ class TestSLMDeploymentOrchestratorIntegration:
 
     @pytest.fixture
     def slm_orch(self, fake_client):
-        from services.slm.deployment_orchestrator import SLMDeploymentOrchestrator
+        from services.slm.deployment_bridge import SLMDeploymentBridge as SLMDeploymentOrchestrator
 
         return SLMDeploymentOrchestrator(slm_client=fake_client)
 
@@ -496,7 +496,7 @@ class TestSLMDeploymentOrchestratorIntegration:
             DockerDeploymentRequest,
             PortMapping,
         )
-        from services.slm.deployment_orchestrator import SLMDeploymentOrchestrator
+        from services.slm.deployment_bridge import SLMDeploymentBridge as SLMDeploymentOrchestrator
 
         captured: dict = {}
 
@@ -552,7 +552,7 @@ class TestSLMDeploymentOrchestratorIntegration:
     @pytest.mark.asyncio
     async def test_list_deployments_node_filter_forwarded(self, fake_client):
         """node_id filter is forwarded to the SLM client."""
-        from services.slm.deployment_orchestrator import SLMDeploymentOrchestrator
+        from services.slm.deployment_bridge import SLMDeploymentBridge as SLMDeploymentOrchestrator
 
         received_kwargs: dict = {}
 

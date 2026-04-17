@@ -36,11 +36,11 @@ from models.infrastructure import (
     DockerDeploymentRequest,
     DockerDeploymentStatus,
 )
-from services.slm.deployment_orchestrator import (
+from services.slm.deployment_bridge import (
     DeploymentContext,
-    DeploymentOrchestrator,
+    DeploymentCoordinator as DeploymentOrchestrator,
     DeploymentStatus,
-    SLMDeploymentOrchestrator,
+    SLMDeploymentBridge as SLMDeploymentOrchestrator,
     get_orchestrator,
 )
 from services.slm_client import get_slm_client

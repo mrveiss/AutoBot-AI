@@ -2,7 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-AutonomousLoopOrchestrator — Issue #4680
+AutonomousLoopRunner — Issue #4680
 
 Scheduled self-directed RAG/synthesis optimisation loop modelled on ASI-Evolve's
 hypothesis → experiment → score → analyze → promote cycle.
@@ -264,11 +264,11 @@ class _RAGEvaluator:
 
 
 # ---------------------------------------------------------------------------
-# AutonomousLoopOrchestrator
+# AutonomousLoopRunner
 # ---------------------------------------------------------------------------
 
 
-class AutonomousLoopOrchestrator:
+class AutonomousLoopRunner:
     """Drives the 6-phase autonomous improvement cycle for RAG/synthesis quality.
 
     Issue #4680: Modelled on ASI-Evolve's hypothesis→experiment→score→analyze→promote
@@ -304,7 +304,7 @@ class AutonomousLoopOrchestrator:
     async def restore_state(self) -> None:
         """Restore _pending_approval from Redis after a server restart.
 
-        Called once by get_loop_orchestrator() immediately after construction.
+        Called once by get_loop_runner() immediately after construction.
         Silently skips if Redis is unavailable.
         Discards entries older than 7 days (matches TTL on the Redis key).
         """
@@ -746,19 +746,19 @@ class AutonomousLoopOrchestrator:
 # Module-level singleton
 # ---------------------------------------------------------------------------
 
-_loop_orchestrator: Optional[AutonomousLoopOrchestrator] = None
+_loop_orchestrator: Optional[AutonomousLoopRunner] = None
 _loop_lock = asyncio.Lock()
 
 
-async def get_loop_orchestrator(
+async def get_loop_runner(
     llm_service: Any,
     *,
     dry_run: bool = True,
     max_variants: int = _DEFAULT_VARIANTS,
     promotion_threshold: float = _DEFAULT_PROMOTION_THRESHOLD,
     max_no_improvement_rounds: int = _DEFAULT_MAX_NO_IMPROVEMENT,
-) -> AutonomousLoopOrchestrator:
-    """Return the singleton AutonomousLoopOrchestrator.
+) -> AutonomousLoopRunner:
+    """Return the singleton AutonomousLoopRunner.
 
     Parameters are only applied on first call; subsequent calls return the
     cached instance regardless of arguments.
@@ -778,7 +778,7 @@ async def get_loop_orchestrator(
         if _loop_orchestrator is None or (
             _loop_orchestrator._llm is None and llm_service is not None
         ):
-            orchestrator = AutonomousLoopOrchestrator(
+            orchestrator = AutonomousLoopRunner(
                 llm_service,
                 dry_run=dry_run,
                 max_variants=max_variants,
@@ -801,7 +801,7 @@ async def run_scheduled_loop(llm_service: Any) -> None:
         logger.info("AutonomousLoop: disabled via config — skipping scheduled run")
         return
 
-    orchestrator = await get_loop_orchestrator(
+    orchestrator = await get_loop_runner(
         llm_service,
         dry_run=cfg.autonomous_loop_dry_run,
         promotion_threshold=cfg.autonomous_loop_promotion_threshold,

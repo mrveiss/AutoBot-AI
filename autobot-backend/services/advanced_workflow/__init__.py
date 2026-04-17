@@ -19,14 +19,17 @@ from .models import (
     WorkflowTemplate,
 )
 from .optimizer import WorkflowOptimizer
-from .orchestrator import AdvancedWorkflowOrchestrator
+from .coordinator import WorkflowCoordinator
+from .coordinator import WorkflowCoordinator as AdvancedWorkflowOrchestrator
 from .risk_analyzer import RiskAnalyzer
 from .routes import get_orchestrator_instance, router
 from .step_generator import StepGenerator
 from .templates import TemplateManager
 
 __all__ = [
-    # Main orchestrator
+    # Main coordinator
+    "WorkflowCoordinator",
+    # Backward-compat alias (Issue #5040)
     "AdvancedWorkflowOrchestrator",
     # Models
     "WorkflowComplexity",

@@ -91,7 +91,7 @@ except ImportError as e:
     logger.debug("Some specialized agents not available: %s", e)
 
 
-class AgentOrchestrator:
+class DistributedAgentCoordinator:
     """
     Enhanced orchestrator that coordinates both legacy and distributed agents.
 
@@ -406,12 +406,12 @@ _agent_orchestrator_instance = None
 _agent_orchestrator_lock = threading.Lock()
 
 
-def get_agent_orchestrator() -> AgentOrchestrator:
+def get_distributed_agent_coordinator() -> DistributedAgentCoordinator:
     """Get the singleton Agent Orchestrator instance (thread-safe)."""
     global _agent_orchestrator_instance
     if _agent_orchestrator_instance is None:
         with _agent_orchestrator_lock:
             # Double-check after acquiring lock
             if _agent_orchestrator_instance is None:
-                _agent_orchestrator_instance = AgentOrchestrator()
+                _agent_orchestrator_instance = DistributedAgentCoordinator()
     return _agent_orchestrator_instance
