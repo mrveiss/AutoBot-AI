@@ -53,12 +53,23 @@ _gpu_mod.get_hybrid_vector_search = AsyncMock()
 sys.modules.setdefault("utils", types.ModuleType("utils"))
 sys.modules.setdefault("utils.gpu_vector_search", _gpu_mod)
 
-# knowledge.facts (for GPUBackend embedding generation)
+# knowledge.facts (legacy stub — no longer used by GPUBackend after #5105
+# but retained because other test paths may import the module name)
 _facts_mod = types.ModuleType("knowledge.facts")
 _facts_mod._generate_embedding_with_npu_fallback = AsyncMock(
     return_value=[0.1, 0.2, 0.3]
 )
 sys.modules.setdefault("knowledge.facts", _facts_mod)
+
+# services.npu_client (canonical NPU-fallback helper used by GPUBackend
+# after #5105 consolidation)
+_services_mod = types.ModuleType("services")
+_npu_client_mod = types.ModuleType("services.npu_client")
+_npu_client_mod.generate_embedding_with_fallback = AsyncMock(
+    return_value=[0.1, 0.2, 0.3]
+)
+sys.modules.setdefault("services", _services_mod)
+sys.modules.setdefault("services.npu_client", _npu_client_mod)
 
 # ---------------------------------------------------------------------------
 # Import after stubs are in place

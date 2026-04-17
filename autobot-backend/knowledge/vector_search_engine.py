@@ -157,12 +157,16 @@ class _GPUBackend:
         return self._hybrid
 
     async def _generate_embedding(self, query: str):
-        """Generate a query embedding using the NPU-fallback path."""
-        from knowledge.facts import (  # noqa: PLC0415
-            _generate_embedding_with_npu_fallback,
+        """Generate a query embedding via the canonical NPU-fallback path.
+
+        Issue #5105: Calls ``services.npu_client.generate_embedding_with_fallback``
+        directly — same pattern as ``knowledge/memory_graph/query_processor.py``.
+        """
+        from services.npu_client import (  # noqa: PLC0415
+            generate_embedding_with_fallback,
         )
 
-        return await _generate_embedding_with_npu_fallback(query)
+        return await generate_embedding_with_fallback(query)
 
     async def search(
         self,
