@@ -10,7 +10,7 @@ from pathlib import Path
 # Add AutoBot to Python path
 sys.path.append(str(Path(__file__).parent))
 
-from orchestrator import ConsolidatedOrchestrator as Orchestrator, TaskComplexity
+from orchestrator import Orchestrator, TaskComplexity
 
 
 async def final_workflow_test():

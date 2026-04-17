@@ -53,13 +53,7 @@ from autobot_shared.redis_client import get_async_redis_client, get_redis_client
 from event_manager import event_manager as _event_manager
 
 from enhanced_orchestration.execution_strategies import ExecutionStrategyHandler
-from enhanced_orchestration.success_criteria import (
-    CriteriaResult,
-    EvaluationResult,
-    SuccessCriteria,
-    SuccessCriteriaEvaluator,
-    SuccessCriteriaType,
-)
+from enhanced_orchestration.success_criteria import SuccessCriteriaEvaluator
 from enhanced_orchestration.types import (
     FALLBACK_TIERS,
     AgentPerformance,
@@ -218,11 +212,13 @@ class OrchestratorConfig:
         )
 
 
-class ConsolidatedOrchestrator:
+class Orchestrator:
     """
-    Consolidated Orchestrator for AutoBot - Phase 5
+    Orchestrator for AutoBot — single conductor.
 
-    Integrates all orchestrator features into a single, comprehensive system
+    Issue #5040: Renamed from Orchestrator. Integrates all orchestrator
+    features into a single, comprehensive system including multi-agent workflow
+    planning and execution (merged from EnhancedMultiAgentOrchestrator).
     """
 
     def _init_core_components(self, config_mgr) -> None:
@@ -1037,7 +1033,7 @@ class ConsolidatedOrchestrator:
     ) -> Dict[str, Any]:
         """Execute workflow with enhanced orchestration and auto-documentation.
 
-        Issue #3393: Merged from enhanced_orchestrator.py into ConsolidatedOrchestrator.
+        Issue #3393: Merged from enhanced_orchestrator.py into Orchestrator.
         """
         workflow_id = str(uuid.uuid4())
         start_time = time.time()
@@ -1639,7 +1635,7 @@ class ConsolidatedOrchestrator:
         """Update AgentPerformance metrics for multi-agent task execution.
 
         Issue #5040: Renamed from _update_agent_performance (EnhancedMultiAgentOrchestrator)
-        to avoid collision with ConsolidatedOrchestrator._update_agent_performance which
+        to avoid collision with Orchestrator._update_agent_performance which
         operates on AgentProfile objects. This method operates on AgentPerformance objects.
         """
         if agent_type in self.agent_performance:
@@ -1730,7 +1726,7 @@ _orchestrator_instance = None
 _orchestrator_lock = asyncio.Lock()
 
 
-async def get_orchestrator() -> ConsolidatedOrchestrator:
+async def get_orchestrator() -> Orchestrator:
     """Get or create global orchestrator instance (thread-safe)"""
     global _orchestrator_instance
 
@@ -1738,7 +1734,7 @@ async def get_orchestrator() -> ConsolidatedOrchestrator:
         async with _orchestrator_lock:
             # Double-check after acquiring lock
             if _orchestrator_instance is None:
-                _orchestrator_instance = ConsolidatedOrchestrator()
+                _orchestrator_instance = Orchestrator()
                 await _orchestrator_instance.initialize()
 
     return _orchestrator_instance
@@ -1760,20 +1756,20 @@ async def shutdown_orchestrator():
 _sync_instance_lock = __import__("threading").Lock()
 
 
-def get_orchestrator_sync() -> ConsolidatedOrchestrator:
-    """Return the shared ConsolidatedOrchestrator singleton (sync-safe).
+def get_orchestrator_sync() -> Orchestrator:
+    """Return the shared Orchestrator singleton (sync-safe).
 
     Issue #3393: Replaces the sync get_orchestrator() that was in
     enhanced_orchestrator.py.  Use the async get_orchestrator() when you are
     inside an async context and need the fully-initialized instance.
-    Issue #5040: ConsolidatedOrchestrator is the single conductor.
+    Issue #5040: Orchestrator is the single conductor.
     """
     global _orchestrator_instance
     if _orchestrator_instance is None:
         with _sync_instance_lock:
             if _orchestrator_instance is None:
                 logger.info("Creating shared Orchestrator singleton (sync)")
-                _orchestrator_instance = ConsolidatedOrchestrator()
+                _orchestrator_instance = Orchestrator()
     return _orchestrator_instance
 
 
@@ -1781,8 +1777,14 @@ def get_orchestrator_sync() -> ConsolidatedOrchestrator:
 # Module Exports
 # ============================================================================
 
+# Issue #5040: Backward-compat alias so any import of ConsolidatedOrchestrator still works
+# during the transition. Remove when all call-sites are updated.
+ConsolidatedOrchestrator = Orchestrator
+
 __all__ = [
     # Main orchestrator class
+    "Orchestrator",
+    # Backward-compat alias (Issue #5040 — remove after all call-sites updated)
     "ConsolidatedOrchestrator",
     "OrchestratorConfig",
     # Enums

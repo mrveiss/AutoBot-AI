@@ -1205,7 +1205,7 @@ async def _wire_scheduler_executor() -> None:
     """Wire the orchestration WorkflowExecutor into the global WorkflowScheduler (#2166).
 
     Replaces the scheduler's fallback _default_template_executor with an adapter
-    that delegates non-template scheduled workflows to ConsolidatedOrchestrator, enabling
+    that delegates non-template scheduled workflows to Orchestrator, enabling
     full agent coordination, step dependency management, and auto-documentation for
     all scheduled workflows — not just template-based ones.
 
@@ -1219,7 +1219,7 @@ async def _wire_scheduler_executor() -> None:
         orchestrator = get_orchestrator_sync()
 
         async def _orchestration_executor(workflow: ScheduledWorkflow):
-            """Adapter: ScheduledWorkflow → ConsolidatedOrchestrator.execute_enhanced_workflow.
+            """Adapter: ScheduledWorkflow → Orchestrator.execute_enhanced_workflow.
 
             Routes template-based workflows to the template executor and
             non-template workflows through the full orchestration pipeline.
