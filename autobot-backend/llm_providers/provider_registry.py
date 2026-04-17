@@ -116,6 +116,26 @@ class ProviderRegistry:
         """Return the provider name pinned to this conversation, or None."""
         return self._conversation_overrides.get(conversation_id)
 
+    async def _resolve_org_provider(self, org_id: Optional[str]) -> Optional[str]:
+        """Return the org's persisted provider preference, or None (Issue #4451).
+
+        Safe to call even when the knowledge Redis DB is unavailable — errors
+        are swallowed and ``None`` is returned so the existing fallback chain
+        still applies.
+        """
+        if org_id is None:
+            return None
+        try:
+            from services.knowledge.org_knowledge_config import (
+                get_org_knowledge_config_service,
+            )
+
+            cfg = await get_org_knowledge_config_service().get(org_id)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.debug("Per-org provider lookup failed for %s: %s", org_id, exc)
+            return None
+        return cfg.llm_provider if cfg else None
+
     # ------------------------------------------------------------------
     # Health
     # ------------------------------------------------------------------
@@ -199,14 +219,16 @@ class ProviderRegistry:
         provider_name: Optional[str] = None,
         conversation_id: Optional[str] = None,
         request: Optional[LLMRequest] = None,
+        org_id: Optional[str] = None,
     ) -> Optional[BaseProvider]:
         """
         Return the best provider for a request, applying:
 
         1. Explicit ``provider_name`` argument (highest priority)
         2. Per-conversation override from ``conversation_id``
-        3. Fallback chain order
-        4. Any remaining registered provider
+        3. Per-org persisted config via ``org_id`` (Issue #4451)
+        4. Fallback chain order
+        5. Any remaining registered provider
 
         When *request* is supplied, per-model api_kwargs from the YAML registry
         are merged into ``request.metadata["api_kwargs"]`` before returning
@@ -222,6 +244,10 @@ class ProviderRegistry:
             conv_pref = self._conversation_overrides.get(conversation_id)
             if conv_pref and conv_pref not in candidates:
                 candidates.append(conv_pref)
+        # Issue #4451: per-org persisted provider preference.
+        org_pref = await self._resolve_org_provider(org_id)
+        if org_pref and org_pref not in candidates:
+            candidates.append(org_pref)
         for name in self._fallback_chain:
             if name not in candidates:
                 candidates.append(name)

@@ -2864,6 +2864,91 @@ async def control_documentation_watcher(
         }
 
 
+# ===== PER-ORG LLM + EMBEDDING MODEL CONFIG (Issue #4451) =====
+# Admin-only endpoints for reading and writing an organization's persisted
+# LLM provider, LLM model, and embedding model. Config is resolved via the
+# fallback chain org config -> SSOT default (see OrgKnowledgeConfigService).
+
+
+class OrgKnowledgeConfigPayload(BaseModel):
+    """Per-org LLM + embedding model config payload (Issue #4451)."""
+
+    llm_provider: Optional[str] = Field(default=None, max_length=64)
+    llm_model: Optional[str] = Field(default=None, max_length=256)
+    embedding_model: Optional[str] = Field(default=None, max_length=256)
+    embedding_dimension: Optional[int] = Field(default=None, ge=1, le=65536)
+
+
+def _resolve_target_org_id(
+    current_user: dict, override_org_id: Optional[str]
+) -> Optional[str]:
+    """Pick the org_id a config request should target.
+
+    Admins can target another org via ``?org_id=`` query param. Non-admins
+    always read/write their own org. A missing ``org_id`` means single-org
+    mode — the service uses the ``__default__`` sentinel.
+    """
+    if override_org_id:
+        role = (current_user or {}).get("role", "")
+        if role not in ("admin", "platform_admin", "superadmin"):
+            raise HTTPException(
+                status_code=403, detail="Only admins may target another org"
+            )
+        return override_org_id
+    return (current_user or {}).get("org_id")
+
+
+@router.get("/org-config")
+async def get_org_model_config(
+    org_id: Optional[str] = Query(default=None, max_length=128),
+    current_user: dict = Depends(get_current_user),
+):
+    """Return the org's persisted model config with SSOT-resolved defaults.
+
+    The response always contains a non-null ``effective`` payload (org
+    config merged over SSOT defaults) and a ``stored`` payload showing what
+    was actually persisted (may be ``null`` when the org has never set a
+    preference).
+    """
+    from services.knowledge.org_knowledge_config import (
+        get_org_knowledge_config_service,
+    )
+
+    target_org = _resolve_target_org_id(current_user, org_id)
+    service = get_org_knowledge_config_service()
+    stored = await service.get(target_org)
+    effective = await service.get_effective(target_org)
+    return {
+        "org_id": target_org or "__default__",
+        "stored": stored.model_dump() if stored else None,
+        "effective": effective.model_dump(),
+    }
+
+
+@router.put("/org-config")
+async def set_org_model_config(
+    payload: OrgKnowledgeConfigPayload,
+    org_id: Optional[str] = Query(default=None, max_length=128),
+    current_user: dict = Depends(get_current_user),
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Persist the org's LLM + embedding model config (admin only)."""
+    from services.knowledge.org_knowledge_config import (
+        OrgKnowledgeConfig,
+        get_org_knowledge_config_service,
+    )
+
+    target_org = _resolve_target_org_id(current_user, org_id)
+    service = get_org_knowledge_config_service()
+    stored = await service.set(target_org, OrgKnowledgeConfig(**payload.model_dump()))
+    effective = await service.get_effective(target_org)
+    return {
+        "org_id": target_org or "__default__",
+        "stored": stored.model_dump(),
+        "effective": effective.model_dump(),
+    }
+
+
 # ===== MAINTENANCE ENDPOINTS =====
 # NOTE: Maintenance and bulk operation endpoints moved to knowledge_maintenance.py (Issue #185)
 # Includes: deduplication, bulk operations, orphaned facts, export/import, cleanup, host scanning
