@@ -21,7 +21,7 @@ from knowledge_base import KnowledgeBase
 
 # Import components to benchmark
 from llm_interface import LLMInterface
-from orchestrator import Orchestrator
+from orchestrator import ConsolidatedOrchestrator as Orchestrator
 
 
 class PerformanceBenchmark:
