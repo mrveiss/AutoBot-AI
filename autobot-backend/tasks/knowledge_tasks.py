@@ -10,16 +10,52 @@ Issue #424: Added periodic task for incremental man page updates.
 """
 
 import asyncio
+import fnmatch
 import logging
 import os
 import subprocess  # nosec B404 - used for internal script execution only
 import sys
 import time
+from pathlib import Path
 
 from celery_app import celery_app
 from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
+
+
+# Issue #5083: exclude patterns for cleanup_generated_files. Matches filenames
+# (via fnmatch) or any parent directory name. Prevents accidental deletion of
+# persistent artefacts (ChromaDB sqlite journals, Redis AOF/RDB, WAL files)
+# that may land in cache/temp dirs through operator mistake or future refactor.
+_CLEANUP_EXCLUDE_PATTERNS = (
+    "*.sqlite",
+    "*.sqlite3",
+    "*.sqlite-journal",
+    "*.sqlite-wal",
+    "*.sqlite-shm",
+    "*.wal",
+    "*.aof",
+    "*.rdb",
+    "*chroma*",  # chromadb artefact names (chromadb/, chroma.sqlite, etc.)
+    "*redis*",  # redis data dirs/files (redis-data/, dump.rdb rename, etc.)
+)
+
+
+def _is_excluded(path: Path) -> bool:
+    """Return True if path or any parent dir matches an exclude pattern.
+
+    Issue #5083: guard cleanup_generated_files from deleting persistent
+    artefacts (ChromaDB sqlite journals, Redis AOF fragments, WAL files).
+    """
+    for pattern in _CLEANUP_EXCLUDE_PATTERNS:
+        if fnmatch.fnmatch(path.name, pattern):
+            return True
+        # Check parent directory names too (for *chroma* catching chromadb/)
+        for parent in path.parents:
+            if fnmatch.fnmatch(parent.name, pattern):
+                return True
+    return False
 
 
 def _parse_indexing_output(output: str) -> tuple:
@@ -664,6 +700,11 @@ def _cleanup_files_older_than(
             if not file_path.is_file():
                 continue
             scanned += 1
+            # Issue #5083: skip persistent artefacts (sqlite/WAL/AOF/RDB,
+            # chromadb/, redis-data/) regardless of age.
+            if _is_excluded(file_path):
+                logger.debug("Skipping excluded file: %s", file_path)
+                continue
             try:
                 stat = file_path.stat()
             except OSError as e:
