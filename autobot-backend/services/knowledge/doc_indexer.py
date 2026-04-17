@@ -1160,6 +1160,29 @@ class DocIndexerService:
 
         return total_result
 
+    async def enqueue_reindex(
+        self,
+        document_path: str,
+        reason: "SyncReason | str" = "manual",
+    ) -> "SyncQueueEntry":
+        """Persist a re-indexing work item instead of re-embedding in-line.
+
+        Issue #4453: routing re-indexing through :class:`DocumentSyncQueue`
+        gives us retry, priority ordering, and crash-safety that the old
+        fire-and-forget path lacked.  Callers that need an immediate synchronous
+        index should continue to use :meth:`index_file` directly.
+
+        ``reason`` accepts either a :class:`SyncReason` enum value or the
+        string form (``content_changed`` / ``model_updated`` / ``manual``).
+        """
+        from services.knowledge.sync_queue import (
+            SyncReason,
+            get_document_sync_queue,
+        )
+
+        reason_enum = reason if isinstance(reason, SyncReason) else SyncReason(reason)
+        return await get_document_sync_queue().enqueue_sync(document_path, reason_enum)
+
     async def search(self, query: str, n_results: int = 5) -> List[Any]:
         """Query the autobot_docs ChromaDB collection.
 
