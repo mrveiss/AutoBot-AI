@@ -1,4 +1,4 @@
-import { ref, onMounted, onUnmounted, nextTick, type Ref } from 'vue'
+import { ref, watch, onMounted, onUnmounted, nextTick, type Ref } from 'vue'
 
 const MORE_BUTTON_WIDTH = 90
 const GAP = 16
@@ -25,7 +25,7 @@ export function useNavOverflow(
     if (naturalWidths.length === 0) measureNaturalWidths()
     if (naturalWidths.length === 0) return
 
-    const totalNatural = naturalWidths.reduce((s, w) => s + w + GAP, 0)
+    const totalNatural = naturalWidths.reduce((s, w) => s + w, 0) + GAP * Math.max(0, naturalWidths.length - 1)
     const available = container.clientWidth
 
     if (totalNatural <= available) {
@@ -36,8 +36,8 @@ export function useNavOverflow(
     const budget = available - MORE_BUTTON_WIDTH
     let consumed = 0
     let count = 0
-    for (const w of naturalWidths) {
-      consumed += w + GAP
+    for (let i = 0; i < naturalWidths.length; i++) {
+      consumed += naturalWidths[i] + (i > 0 ? GAP : 0)
       if (consumed > budget) break
       count++
     }
@@ -50,6 +50,13 @@ export function useNavOverflow(
     recalculate()
     ro = new ResizeObserver(recalculate)
     if (containerRef.value) ro.observe(containerRef.value)
+  })
+
+  watch(itemCount, async () => {
+    await nextTick()
+    naturalWidths = []
+    measureNaturalWidths()
+    recalculate()
   })
 
   onUnmounted(() => ro?.disconnect())

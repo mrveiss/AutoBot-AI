@@ -36,12 +36,12 @@ function useComposableInComponent(container: HTMLElement, itemCount: number) {
     },
     render: () => null
   })
-  
+
   const app = createApp(Comp)
   const root = document.createElement('div')
   document.body.appendChild(root)
   app.mount(root)
-  
+
   return {
     get visibleCount() { return result.visibleCount.value },
     dispose: () => { app.unmount() }
@@ -88,5 +88,47 @@ describe('useNavOverflow', () => {
     await nextTick()
     expect(test.visibleCount).toBe(1)
     test.dispose()
+  })
+
+  it('shows all items at exact fit boundary (no trailing-gap false overflow)', async () => {
+    // 4 items × 80px + 3 gaps × 16px = 368px; container = 368px exactly — should show all 4
+    const container = makeContainer(368, [80, 80, 80, 80])
+    const test = useComposableInComponent(container, 4)
+    await nextTick()
+    expect(test.visibleCount).toBe(4)
+    test.dispose()
+  })
+
+  it('re-measures when itemCount changes', async () => {
+    const container = makeContainer(800, [80, 80])
+    const itemCountRef = ref(2)
+    let result: any
+    const Comp = defineComponent({
+      setup() {
+        result = useNavOverflow(ref(container), itemCountRef)
+        return result
+      },
+      render: () => null
+    })
+
+    const app = createApp(Comp)
+    const root = document.createElement('div')
+    document.body.appendChild(root)
+    app.mount(root)
+
+    await nextTick()
+    expect(result.visibleCount.value).toBe(2)
+
+    // Add a third item to the container and update itemCount
+    const el = document.createElement('a')
+    el.setAttribute('data-nav-item', '')
+    el.getBoundingClientRect = () => ({ width: 80 } as DOMRect)
+    container.appendChild(el)
+    itemCountRef.value = 3
+    await nextTick()
+    await nextTick()  // second tick for watch + remeasure
+    expect(result.visibleCount.value).toBe(3)
+
+    app.unmount()
   })
 })
