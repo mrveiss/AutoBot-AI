@@ -512,7 +512,7 @@ onUnmounted(() => {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
-  padding: var(--spacing-18px);
+  padding: var(--spacing-5);
   cursor: pointer;
   transition: border-color var(--duration-200), box-shadow var(--duration-200);
   display: flex;

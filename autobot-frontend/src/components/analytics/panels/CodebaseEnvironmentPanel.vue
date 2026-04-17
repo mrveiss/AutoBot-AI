@@ -39,8 +39,8 @@
     <!-- AI Filtering Toggle (#633) -->
     <div
       class="ai-filter-controls"
-      style="margin-bottom: var(--spacing-15px); padding: 10px; background: rgba(0,0,0,0.2);
-             border-radius: 6px; display: flex; align-items: center; gap: var(--spacing-15px); flex-wrap: wrap;"
+      style="margin-bottom: var(--spacing-4); padding: 10px; background: rgba(0,0,0,0.2);
+             border-radius: 6px; display: flex; align-items: center; gap: var(--spacing-4); flex-wrap: wrap;"
     >
       <label
         class="toggle-label"

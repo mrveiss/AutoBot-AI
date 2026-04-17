@@ -222,7 +222,7 @@ const { formatDate } = useKnowledgeBase()
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--spacing-15px);
+  gap: var(--spacing-4);
   padding: var(--spacing-10);
   color: var(--text-muted);
   font-style: italic;
