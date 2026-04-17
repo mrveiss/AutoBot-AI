@@ -626,7 +626,11 @@ class DocIndexerService:
 
     COLLECTION_NAME = "autobot_docs"
 
-    def __init__(self, llm_service: Optional[Any] = None):
+    def __init__(
+        self,
+        llm_service: Optional[Any] = None,
+        org_id: Optional[str] = None,
+    ):
         self._client = None
         self._collection = None
         self._embed_model = None
@@ -634,6 +638,9 @@ class DocIndexerService:
         self._root_dir = PATH.PROJECT_ROOT
         # Issue #4564: optional LLM service for KB synthesis
         self._llm_service = llm_service
+        # Issue #4451: per-org embedding model selection (None => __default__)
+        self._org_id = org_id
+        self.embedding_model_name: Optional[str] = None
         self.synthesis_schema: SynthesisSchema = self._load_schema()
 
     def _load_schema(self) -> SynthesisSchema:
@@ -677,17 +684,31 @@ class DocIndexerService:
             )
 
             ollama_url = get_ollama_url()
+
+            # Issue #4451: per-org embedding model config, SSOT fallback.
+            from services.knowledge.org_knowledge_config import (
+                get_org_knowledge_config_service,
+            )
+
+            effective = await get_org_knowledge_config_service().get_effective(
+                self._org_id
+            )
+            embed_model_name = effective.embedding_model or "nomic-embed-text"
+            self.embedding_model_name = embed_model_name
+
             self._embed_model = OllamaEmbedding(
-                model_name="nomic-embed-text", base_url=ollama_url
+                model_name=embed_model_name, base_url=ollama_url
             )
 
             doc_count = self._collection.count()
             logger.info(
                 "DocIndexerService initialized: collection='%s', "
-                "existing_vectors=%d, ollama=%s",
+                "existing_vectors=%d, ollama=%s, embed_model=%s, org_id=%s",
                 self.COLLECTION_NAME,
                 doc_count,
                 ollama_url,
+                embed_model_name,
+                self._org_id or "__default__",
             )
             self._initialized = True
             return True

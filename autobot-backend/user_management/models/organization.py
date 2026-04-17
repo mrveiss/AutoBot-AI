@@ -158,3 +158,31 @@ class Organization(Base):
             current = current[k]
         current[keys[-1]] = value
         self.settings = settings
+
+    # ------------------------------------------------------------------
+    # Per-org LLM + embedding model config (Issue #4451)
+    # ------------------------------------------------------------------
+
+    def get_model_config(self) -> dict:
+        """Return the org's persisted LLM/embedding model config.
+
+        Known keys: ``llm_provider``, ``llm_model``, ``embedding_model``,
+        ``embedding_dimension``.  Missing keys indicate "use SSOT default".
+        """
+        return {
+            "llm_provider": self.get_setting("llm_provider"),
+            "llm_model": self.get_setting("llm_model"),
+            "embedding_model": self.get_setting("embedding_model"),
+            "embedding_dimension": self.get_setting("embedding_dimension"),
+        }
+
+    def set_model_config(self, config: dict) -> None:
+        """Persist the org's LLM/embedding model config.
+
+        Only the four well-known keys are accepted.  Passing ``None`` for a
+        key clears that field; omitting the key leaves the existing value
+        untouched.
+        """
+        known = {"llm_provider", "llm_model", "embedding_model", "embedding_dimension"}
+        for key in known & set(config.keys()):
+            self.set_setting(key, config[key])
