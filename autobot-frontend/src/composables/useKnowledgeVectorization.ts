@@ -10,7 +10,6 @@ import { ref, computed } from 'vue'
 import { useKnowledgeBase } from './useKnowledgeBase'
 import apiClient from '@/utils/ApiClient'
 import appConfig from '@/config/AppConfig.js'
-import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import { useDebounce } from './useTimeout'
@@ -130,11 +129,10 @@ export function useKnowledgeVectorization() {
   const fetchDocumentStatus = async (documentId: string): Promise<VectorizationStatus> => {
     try {
       // Query actual backend status
-      const response = await apiClient.post(`${getApiBase()}/knowledge_base/vectorization_status`, {
+      const data = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/vectorization_status`, {
         fact_ids: [documentId],
         use_cache: true
       })
-      const data = await parseApiResponse<Record<string, any>>(response)
 
       if (data?.statuses?.[documentId]) {
         const status: VectorizationStatus = data.statuses[documentId].vectorized ? 'vectorized' : 'pending'
@@ -191,11 +189,10 @@ export function useKnowledgeVectorization() {
         for (let i = 0; i < documentIds.length; i += batchSize) {
           const batch = documentIds.slice(i, i + batchSize)
 
-          const response = await apiClient.post(`${getApiBase()}/knowledge_base/vectorization_status`, {
+          const data = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/vectorization_status`, {
             fact_ids: batch,
             use_cache: true
           })
-          const data = await parseApiResponse<Record<string, any>>(response)
 
           if (data?.statuses) {
             // Update cache with all statuses, including document names if provided (Issue #165)
@@ -354,13 +351,9 @@ export function useKnowledgeVectorization() {
       const knowledgeTimeout = appConfig.getTimeout('knowledge')
 
       // Call backend API to vectorize the fact with proper timeout
-      // Issue #648: Use parseApiResponse to handle both Response objects and parsed JSON
-      const response = await apiClient.post(`${getApiBase()}/knowledge_base/vectorize_fact/${documentId}`, undefined, {
+      const data = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/vectorize_fact/${documentId}`, undefined, {
         timeout: knowledgeTimeout
       })
-
-      // Parse JSON response (handles both ApiClient parsed JSON)
-      const data = await parseApiResponse<Record<string, any>>(response)
 
       // Check if backend returned success status
       if (data.status !== 'success') {
@@ -379,11 +372,9 @@ export function useKnowledgeVectorization() {
         await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second
 
         // Use knowledge timeout for job status polling as well
-        // Issue #648: Use parseApiResponse to handle both Response objects and parsed JSON
-        const jobResponse = await apiClient.get(`${getApiBase()}/knowledge_base/vectorize_job/${jobId}`, {
+        const jobData = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/vectorize_job/${jobId}`, {
           timeout: knowledgeTimeout
         })
-        const jobData = await parseApiResponse<Record<string, any>>(jobResponse)
 
         // Backend returns: { status: "success", job: { status: "completed", error: null, ... } }
         const job = jobData.job
@@ -428,12 +419,11 @@ export function useKnowledgeVectorization() {
   ): Promise<{ succeeded: string[], failed: string[] }> => {
     const knowledgeTimeout = appConfig.getTimeout('knowledge')
     const batchTimeout = Math.min(knowledgeTimeout * documentIds.length, 300000)
-    const response = await apiClient.post(`${getApiBase()}/knowledge_base/vectorize_documents`, {
+    const data = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/vectorize_documents`, {
       document_ids: documentIds
     }, {
       timeout: batchTimeout
     })
-    const data = await parseApiResponse<Record<string, any>>(response)
 
     const succeeded: string[] = []
     const failed: string[] = []
