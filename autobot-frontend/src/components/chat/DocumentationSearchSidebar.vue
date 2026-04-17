@@ -222,7 +222,41 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<Emits>()
 
-const { apiClient, parseApiResponse } = useApi() as any
+const apiClient = useApi()
+
+interface SearchResultItem {
+  node_id?: string
+  doc_id?: string
+  content?: string
+  score?: number
+  rrf_score?: number
+  metadata?: {
+    content_hash?: string
+    title?: string
+    category?: string
+    section?: string
+    file_path?: string
+  }
+}
+
+interface SearchResponse {
+  results?: SearchResultItem[]
+}
+
+interface BrowseDocument {
+  content_hash?: string
+  title?: string
+  category?: string
+  file_path?: string
+}
+
+interface BrowseResponse {
+  documents?: BrowseDocument[]
+}
+
+interface CategoriesResponse {
+  categories?: Category[]
+}
 
 // State
 const isCollapsed = ref(!props.initiallyOpen)
@@ -295,17 +329,16 @@ const executeSearch = async () => {
   currentPage.value = 1
 
   try {
-    const response = await apiClient.post(`${getApiBase()}/knowledge_base/search`, {
+    const data = await apiClient.post<SearchResponse>(`${getApiBase()}/knowledge_base/search`, {
       query: searchQuery.value || '*',
       top_k: 20,
       filters: selectedCategories.value.length > 0
         ? { category: selectedCategories.value }
         : undefined
     })
-    const data = await parseApiResponse(response)
 
     if (data?.results) {
-      results.value = data.results.map((r: any) => ({
+      results.value = data.results.map((r) => ({
         id: r.node_id || r.doc_id,
         contentHash: r.metadata?.content_hash,
         title: r.metadata?.title || 'Untitled',
@@ -357,16 +390,15 @@ const loadMore = async () => {
   currentPage.value++
 
   try {
-    const response = await apiClient.post(`${getApiBase()}/knowledge_base/docs/browse`, {
+    const data = await apiClient.post<BrowseResponse>(`${getApiBase()}/knowledge_base/docs/browse`, {
       search_query: searchQuery.value,
       category: selectedCategories.value[0] || null,
       page: currentPage.value,
       page_size: 20
     })
-    const data = await parseApiResponse(response)
 
     if (data?.documents) {
-      const newResults = data.documents.map((d: any) => ({
+      const newResults = data.documents.map((d) => ({
         id: d.content_hash,
         title: d.title || 'Untitled',
         content: '',
@@ -436,8 +468,7 @@ const openRecentDoc = (doc: RecentDoc) => {
 const loadCategories = async () => {
   isLoadingCategories.value = true
   try {
-    const response = await apiClient.get(`${getApiBase()}/knowledge_base/docs/categories`)
-    const data = await parseApiResponse(response)
+    const data = await apiClient.get<CategoriesResponse>(`${getApiBase()}/knowledge_base/docs/categories`)
     if (data?.categories) {
       categories.value = data.categories
     }
