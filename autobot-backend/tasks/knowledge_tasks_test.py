@@ -20,9 +20,11 @@ import pytest
 
 # conftest.py stubs celery when it isn't installed in the dev venv.
 from tasks.knowledge_tasks import (
+    _CLEANUP_EXCLUDE_PATTERNS,
     _cleanup_files_older_than,
     _cleanup_orphan_documents_async,
     _collect_orphan_doc_ids,
+    _is_excluded,
     _run_async_in_loop,
 )
 
@@ -222,6 +224,111 @@ def test_cleanup_files_older_than_recurses_subdirectories(tmp_path):
     assert scanned == 1
     assert removed == 1
     assert not old_file.exists()
+
+
+# ---------------------------------------------------------------------------
+# Issue #5083: exclude patterns guard persistent artefacts from cleanup.
+# ---------------------------------------------------------------------------
+
+
+def test_cleanup_excludes_sqlite_files(tmp_path):
+    """Stale sqlite/journal/WAL files must be preserved regardless of age."""
+    stale_log = tmp_path / "old.log"
+    stale_sqlite = tmp_path / "chroma.sqlite"
+    stale_journal = tmp_path / "chroma.sqlite-journal"
+    stale_wal = tmp_path / "database.wal"
+    stale_aof = tmp_path / "appendonly.aof"
+    stale_rdb = tmp_path / "dump.rdb"
+    for f in (stale_log, stale_sqlite, stale_journal, stale_wal, stale_aof, stale_rdb):
+        _touch(f, "payload" * 20, age_seconds=30 * 86400)
+
+    cutoff = time.time() - (7 * 86400)
+    scanned, removed, _ = _cleanup_files_older_than(
+        [tmp_path], cutoff, dry_run=False
+    )
+
+    # All 6 files scanned; only .log removed.
+    assert scanned == 6
+    assert removed == 1
+    assert not stale_log.exists()
+    assert stale_sqlite.exists()
+    assert stale_journal.exists()
+    assert stale_wal.exists()
+    assert stale_aof.exists()
+    assert stale_rdb.exists()
+
+
+def test_cleanup_excludes_files_under_chromadb_parent_dir(tmp_path):
+    """Files inside a chromadb/ directory are preserved even if they have
+    an otherwise-deletable name (regression guard for parent-dir matching)."""
+    chroma_dir = tmp_path / "chromadb"
+    chroma_dir.mkdir()
+    protected = chroma_dir / "segment.bin"
+    _touch(protected, "payload", age_seconds=30 * 86400)
+
+    other_dir = tmp_path / "embeddings_cache"
+    other_dir.mkdir()
+    stale = other_dir / "old.pkl"
+    _touch(stale, "stale", age_seconds=30 * 86400)
+
+    cutoff = time.time() - (7 * 86400)
+    scanned, removed, _ = _cleanup_files_older_than(
+        [tmp_path], cutoff, dry_run=False
+    )
+
+    assert scanned == 2
+    assert removed == 1
+    assert protected.exists()
+    assert not stale.exists()
+
+
+def test_cleanup_excludes_files_under_redis_parent_dir(tmp_path):
+    """Files under a redis-data/ directory are preserved."""
+    redis_dir = tmp_path / "redis-data"
+    redis_dir.mkdir()
+    protected = redis_dir / "dump.bin"
+    _touch(protected, "payload", age_seconds=30 * 86400)
+
+    cutoff = time.time() - (7 * 86400)
+    scanned, removed, _ = _cleanup_files_older_than(
+        [tmp_path], cutoff, dry_run=False
+    )
+
+    assert scanned == 1
+    assert removed == 0
+    assert protected.exists()
+
+
+def test_is_excluded_matches_filename_patterns(tmp_path):
+    assert _is_excluded(tmp_path / "foo.sqlite")
+    assert _is_excluded(tmp_path / "foo.sqlite3")
+    assert _is_excluded(tmp_path / "foo.sqlite-journal")
+    assert _is_excluded(tmp_path / "foo.sqlite-wal")
+    assert _is_excluded(tmp_path / "foo.sqlite-shm")
+    assert _is_excluded(tmp_path / "db.wal")
+    assert _is_excluded(tmp_path / "appendonly.aof")
+    assert _is_excluded(tmp_path / "dump.rdb")
+    assert _is_excluded(tmp_path / "my-chroma-file.bin")
+    assert _is_excluded(tmp_path / "redis-dump.bin")
+
+
+def test_is_excluded_matches_parent_dir_patterns(tmp_path):
+    nested = tmp_path / "chromadb" / "nested" / "file.bin"
+    assert _is_excluded(nested)
+    nested_redis = tmp_path / "redis-data" / "file.bin"
+    assert _is_excluded(nested_redis)
+
+
+def test_is_excluded_allows_unrelated_files(tmp_path):
+    assert not _is_excluded(tmp_path / "cache" / "embedding.pkl")
+    assert not _is_excluded(tmp_path / "exports" / "report.json")
+    assert not _is_excluded(tmp_path / "chunks_temp" / "chunk-42.bin")
+
+
+def test_cleanup_exclude_patterns_is_tuple():
+    # Immutable constant guard — prevents accidental runtime mutation.
+    assert isinstance(_CLEANUP_EXCLUDE_PATTERNS, tuple)
+    assert len(_CLEANUP_EXCLUDE_PATTERNS) > 0
 
 
 # ---------------------------------------------------------------------------
