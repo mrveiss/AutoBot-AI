@@ -17,18 +17,20 @@ from pydantic import BaseModel
 from auth_middleware import check_admin_permission, get_current_user
 
 try:
-    from enhanced_orchestration import (
-        create_and_execute_workflow,
-        enhanced_orchestrator,
-    )
+    from orchestrator import create_and_execute_workflow, get_orchestrator_sync
 
+    # Issue #5040: Use the single Orchestrator conductor instead of the removed
+    # EnhancedMultiAgentOrchestrator singleton. The shared singleton provides
+    # all multi-agent workflow methods (create_workflow_plan, execute_workflow,
+    # get_performance_report, get_agent_recommendations, etc.).
+    enhanced_orchestrator = get_orchestrator_sync()
     _ORCHESTRATOR_AVAILABLE = True
 except ImportError:
     _ORCHESTRATOR_AVAILABLE = False
     create_and_execute_workflow = None
     enhanced_orchestrator = None
     logging.getLogger(__name__).warning(
-        "enhanced_orchestration package not available"
+        "orchestrator module not available"
     )
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -265,7 +267,7 @@ async def recommend_agents(
     if not _ORCHESTRATOR_AVAILABLE:
         raise HTTPException(status_code=503, detail="Orchestrator module not available")
     try:
-        from enhanced_orchestration import AgentCapability
+        from enhanced_orchestration import AgentCapability  # noqa: PLC0415
 
         # Convert capability strings to enums
         capabilities_needed = set()
