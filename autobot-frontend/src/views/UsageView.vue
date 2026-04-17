@@ -1,3 +1,6 @@
+// AutoBot - AI-Powered Automation Platform
+// Copyright (c) 2025 mrveiss
+// Author: mrveiss
 <template>
   <div class="usage-view">
     <div class="page-header">
@@ -6,11 +9,16 @@
         <p class="page-subtitle">Token usage, LLM costs, and billing-ready metrics</p>
       </div>
       <div class="header-actions">
+        <select v-model="days" class="period-select" @change="load">
+          <option :value="7">Last 7 days</option>
+          <option :value="30">Last 30 days</option>
+          <option :value="90">Last 90 days</option>
+        </select>
         <button class="btn-action-secondary" :disabled="loading" @click="load">
           <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
           Refresh
         </button>
-        <button class="btn-action-secondary" :disabled="csvLoading" @click="downloadCsv">
+        <button v-if="isAdmin" class="btn-action-secondary" :disabled="csvLoading" @click="downloadCsv">
           <i class="fas fa-download" :class="{ 'fa-spin': csvLoading }"></i>
           Export CSV
         </button>
@@ -23,67 +31,154 @@
       <button class="btn-dismiss" @click="error = null"><i class="fas fa-times"></i></button>
     </div>
 
-    <!-- Summary Cards -->
-    <div v-if="summary" class="summary-grid">
-      <div class="stat-card">
-        <div class="stat-label">Total Tokens</div>
-        <div class="stat-value">{{ summary.tokens.total.toLocaleString() }}</div>
-        <div class="stat-sub">
-          {{ summary.tokens.input.toLocaleString() }} in /
-          {{ summary.tokens.output.toLocaleString() }} out
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Total Cost</div>
-        <div class="stat-value">${{ summary.cost_usd.toFixed(4) }}</div>
-        <div class="stat-sub">Last {{ summary.period.days }} days</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Requests</div>
-        <div class="stat-value">{{ summary.requests.toLocaleString() }}</div>
-        <div class="stat-sub">{{ summary.active_users }} active users</div>
-      </div>
+    <!-- Tabs -->
+    <div class="tab-bar">
+      <button
+        class="tab-btn"
+        :class="{ active: activeTab === 'personal' }"
+        @click="activeTab = 'personal'"
+      >
+        My Usage
+      </button>
+      <button
+        v-if="isAdmin"
+        class="tab-btn"
+        :class="{ active: activeTab === 'admin' }"
+        @click="activeTab = 'admin'"
+      >
+        System Overview
+      </button>
     </div>
 
-    <!-- Per-User Table -->
-    <div class="table-section">
-      <h3 class="section-title">Usage by User</h3>
+    <!-- Personal Tab -->
+    <template v-if="activeTab === 'personal'">
       <div v-if="loading" class="loading-row">
         <i class="fas fa-spinner fa-spin"></i> Loading...
       </div>
-      <table v-else-if="users.length" class="usage-table">
-        <thead>
-          <tr>
-            <th>User</th>
-            <th>Requests</th>
-            <th>Input Tokens</th>
-            <th>Output Tokens</th>
-            <th>Cost (USD)</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="u in users" :key="u.user_id">
-            <td>{{ u.user_id || '(unknown)' }}</td>
-            <td>{{ u.call_count.toLocaleString() }}</td>
-            <td>{{ u.input_tokens.toLocaleString() }}</td>
-            <td>{{ u.output_tokens.toLocaleString() }}</td>
-            <td>${{ u.total_cost_usd.toFixed(4) }}</td>
-          </tr>
-        </tbody>
-      </table>
-      <div v-else class="empty-row">No usage data available.</div>
-    </div>
+      <template v-else-if="personal">
+        <div class="summary-grid">
+          <div class="stat-card">
+            <div class="stat-label">My Total Tokens</div>
+            <div class="stat-value">
+              {{ ((personal.input_tokens ?? 0) + (personal.output_tokens ?? 0)).toLocaleString() }}
+            </div>
+            <div class="stat-sub">
+              {{ (personal.input_tokens ?? 0).toLocaleString() }} in /
+              {{ (personal.output_tokens ?? 0).toLocaleString() }} out
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">My Total Cost</div>
+            <div class="stat-value">${{ (personal.total_cost_usd ?? 0).toFixed(4) }}</div>
+            <div class="stat-sub">All time</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">My Requests</div>
+            <div class="stat-value">{{ (personal.call_count ?? 0).toLocaleString() }}</div>
+            <div class="stat-sub">LLM API calls</div>
+          </div>
+        </div>
+
+        <!-- Recent requests -->
+        <div class="table-section">
+          <h3 class="section-title">Recent Requests</h3>
+          <table v-if="personalRecent.length" class="usage-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Provider</th>
+                <th>Model</th>
+                <th>Input Tokens</th>
+                <th>Output Tokens</th>
+                <th>Cost (USD)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(r, i) in personalRecent" :key="i">
+                <td>{{ r.timestamp ? new Date(r.timestamp).toLocaleString() : '—' }}</td>
+                <td>{{ r.provider ?? '—' }}</td>
+                <td>{{ r.model ?? '—' }}</td>
+                <td>{{ (r.input_tokens ?? 0).toLocaleString() }}</td>
+                <td>{{ (r.output_tokens ?? 0).toLocaleString() }}</td>
+                <td>${{ (r.cost_usd ?? 0).toFixed(6) }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-else class="empty-row">No recent request history available.</div>
+        </div>
+      </template>
+      <div v-else class="empty-row">No personal usage data available.</div>
+    </template>
+
+    <!-- Admin Tab -->
+    <template v-if="activeTab === 'admin' && isAdmin">
+      <div v-if="loading" class="loading-row">
+        <i class="fas fa-spinner fa-spin"></i> Loading...
+      </div>
+      <template v-else>
+        <!-- Summary Cards -->
+        <div v-if="summary" class="summary-grid">
+          <div class="stat-card">
+            <div class="stat-label">Total Tokens</div>
+            <div class="stat-value">{{ summary.tokens.total.toLocaleString() }}</div>
+            <div class="stat-sub">
+              {{ summary.tokens.input.toLocaleString() }} in /
+              {{ summary.tokens.output.toLocaleString() }} out
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total Cost</div>
+            <div class="stat-value">${{ summary.cost_usd.toFixed(4) }}</div>
+            <div class="stat-sub">Last {{ summary.period.days }} days</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Requests</div>
+            <div class="stat-value">{{ summary.requests.toLocaleString() }}</div>
+            <div class="stat-sub">{{ summary.active_users }} active users</div>
+          </div>
+        </div>
+
+        <!-- Per-User Table -->
+        <div class="table-section">
+          <h3 class="section-title">Usage by User</h3>
+          <table v-if="users.length" class="usage-table">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Requests</th>
+                <th>Input Tokens</th>
+                <th>Output Tokens</th>
+                <th>Cost (USD)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="u in users" :key="u.user_id">
+                <td>{{ u.user_id || '(unknown)' }}</td>
+                <td>{{ u.call_count.toLocaleString() }}</td>
+                <td>{{ u.input_tokens.toLocaleString() }}</td>
+                <td>{{ u.output_tokens.toLocaleString() }}</td>
+                <td>${{ u.total_cost_usd.toFixed(4) }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-else class="empty-row">No usage data available.</div>
+        </div>
+      </template>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { getApiBase } from '@/config/ssot-config'
 import { useApi } from '@/composables/useApi'
+import { useUserStore } from '@/stores/useUserStore'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('UsageView')
 const api = useApi()
+const userStore = useUserStore()
+const isAdmin = computed(() => userStore.isAdmin)
 
 interface UsageSummary {
   period: { days: number; start: string; end: string }
@@ -101,25 +196,52 @@ interface UserUsage {
   total_cost_usd: number
 }
 
+interface PersonalUsage {
+  user_id?: string
+  call_count?: number
+  input_tokens?: number
+  output_tokens?: number
+  total_cost_usd?: number
+  recent_requests?: RecentRequest[]
+}
+
+interface RecentRequest {
+  timestamp?: string
+  provider?: string
+  model?: string
+  input_tokens?: number
+  output_tokens?: number
+  cost_usd?: number
+}
+
+const activeTab = ref<'personal' | 'admin'>('personal')
+const days = ref(30)
 const loading = ref(false)
 const csvLoading = ref(false)
 const error = ref<string | null>(null)
 const summary = ref<UsageSummary | null>(null)
 const users = ref<UserUsage[]>([])
+const personal = ref<PersonalUsage | null>(null)
+const personalRecent = computed<RecentRequest[]>(() => personal.value?.recent_requests ?? [])
 
 async function load() {
   loading.value = true
   error.value = null
   try {
-    const [sum, byUser] = await Promise.all([
-      api.get<UsageSummary>('/usage/summary'),
-      api.get<{ users: UserUsage[] }>('/usage/by-user'),
-    ])
-    summary.value = sum
-    users.value = byUser.users ?? []
+    const personalResult = await api.get<PersonalUsage>('/usage/me')
+    personal.value = personalResult
+
+    if (isAdmin.value) {
+      const [sum, byUser] = await Promise.all([
+        api.get<UsageSummary>(`/usage/summary?days=${days.value}`),
+        api.get<{ users: UserUsage[] }>('/usage/by-user'),
+      ])
+      summary.value = sum
+      users.value = byUser.users ?? []
+    }
   } catch (e) {
     logger.error('Failed to load usage data:', e)
-    error.value = 'Failed to load usage data. Check that you have admin access.'
+    error.value = 'Failed to load usage data.'
   } finally {
     loading.value = false
   }
@@ -129,7 +251,7 @@ async function downloadCsv() {
   csvLoading.value = true
   try {
     const token = localStorage.getItem('authToken') || ''
-    const res = await fetch(`${getApiBase()}/usage/export/csv`, {
+    const res = await fetch(`${getApiBase()}/usage/export/csv?days=${days.value}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
@@ -137,7 +259,7 @@ async function downloadCsv() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'usage.csv'
+    a.download = `usage_${days.value}d.csv`
     a.click()
     URL.revokeObjectURL(url)
   } catch (e) {
@@ -169,6 +291,16 @@ onMounted(load)
   display: flex;
   gap: var(--spacing-2);
   align-items: center;
+}
+
+.period-select {
+  padding: var(--spacing-2) var(--spacing-3);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
 }
 
 .btn-action-secondary {
@@ -216,6 +348,34 @@ onMounted(load)
   color: var(--text-secondary);
   cursor: pointer;
   border-radius: var(--radius-md);
+}
+
+.tab-bar {
+  display: flex;
+  gap: var(--spacing-1);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.tab-btn {
+  padding: var(--spacing-2) var(--spacing-4);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color var(--duration-150) var(--ease-in-out);
+  margin-bottom: -1px;
+}
+
+.tab-btn:hover {
+  color: var(--text-primary);
+}
+
+.tab-btn.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
 }
 
 .summary-grid {
