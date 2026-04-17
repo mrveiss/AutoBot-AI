@@ -235,7 +235,7 @@ After ALL PRs merged:
 **Before spawning agents for issue implementation, verify:**
 
 1. **Main session branch check:** `git branch --show-current` — must be `Dev_new_gui`
-2. **Main session clean:** `git status --porcelain` — no uncommitted changes
+2. **Main session clean:** `git status --porcelain` — **if any files are dirty, commit or stash them before spawning agents.** Uncommitted edits are silently discarded when a subagent commits and upstream is merged (#4969).
 3. **Issue not already resolved:** Check if `#<issue>` is already in `origin/Dev_new_gui` commits
 4. **No stale worktrees:** Clean up any existing `.worktrees/issue-<number>/` directories
 5. **Issue preconditions:** Verify issue dependencies are resolved before starting work
