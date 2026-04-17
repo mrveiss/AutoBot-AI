@@ -1411,3 +1411,89 @@ class TestFindCollectionConfig:
         svc = self._make_svc([col1, col2])
         result = svc._find_collection_config(["docs/guide.md", "api/ref.md"])
         assert result is col1
+
+
+# ---------------------------------------------------------------------------
+# Tests: DocIndexerService.search() — Issue #4953
+# ---------------------------------------------------------------------------
+
+
+class TestDocIndexerSearch:
+    """search() exposes autobot_docs ChromaDB collection for RAGService merging."""
+
+    @pytest.mark.asyncio
+    async def test_search_not_initialized_returns_empty(self):
+        """Returns [] when service is not initialised."""
+        svc = _make_service(initialized=False, collection_count=0)
+        result = await svc.search("what is autobot")
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_search_empty_collection_returns_empty(self):
+        """Returns [] when collection has no documents."""
+        svc = _make_service(initialized=True, collection_count=0)
+        result = await svc.search("what is autobot")
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_search_returns_search_results(self):
+        """Happy path: wraps ChromaDB hits into SearchResult objects."""
+        svc = _make_service(initialized=True, collection_count=3)
+        svc._collection.query = MagicMock(
+            return_value={
+                "documents": [["AutoBot is an AI platform.", "CLI usage guide."]],
+                "metadatas": [
+                    [
+                        {"file_path": "docs/overview.md", "chunk_index": 0},
+                        {"file_path": "docs/cli.md", "chunk_index": 1},
+                    ]
+                ],
+                "distances": [[0.1, 0.3]],
+            }
+        )
+
+        stub_mod = MagicMock()
+        stub_mod.SearchResult = MagicMock(side_effect=lambda **kw: kw)
+
+        with patch.dict("sys.modules", {"advanced_rag_optimizer": stub_mod}):
+            results = await svc.search("what is autobot", n_results=2)
+
+        assert len(results) == 2
+        first = results[0]
+        assert first["content"] == "AutoBot is an AI platform."
+        assert first["semantic_score"] == pytest.approx(0.9)
+        assert first["source_path"] == "docs/overview.md"
+        assert first["metadata"]["source"] == "autobot_docs"
+
+    @pytest.mark.asyncio
+    async def test_search_caps_n_results_to_collection_count(self):
+        """n_results is capped to avoid ChromaDB 'n_results > count' error."""
+        svc = _make_service(initialized=True, collection_count=2)
+        svc._collection.query = MagicMock(
+            return_value={
+                "documents": [["doc1", "doc2"]],
+                "metadatas": [[{"file_path": "a.md"}, {"file_path": "b.md"}]],
+                "distances": [[0.2, 0.4]],
+            }
+        )
+
+        stub_mod = MagicMock()
+        stub_mod.SearchResult = MagicMock(side_effect=lambda **kw: kw)
+        with patch.dict("sys.modules", {"advanced_rag_optimizer": stub_mod}):
+            await svc.search("query", n_results=100)
+
+        call_kwargs = svc._collection.query.call_args[1]
+        assert call_kwargs["n_results"] == 2  # capped to collection count
+
+    @pytest.mark.asyncio
+    async def test_search_exception_returns_empty(self):
+        """query() failure returns [] instead of raising."""
+        svc = _make_service(initialized=True, collection_count=5)
+        svc._collection.query = MagicMock(side_effect=RuntimeError("chromadb unavailable"))
+
+        stub_mod = MagicMock()
+        stub_mod.SearchResult = MagicMock(side_effect=lambda **kw: kw)
+        with patch.dict("sys.modules", {"advanced_rag_optimizer": stub_mod}):
+            result = await svc.search("query")
+
+        assert result == []

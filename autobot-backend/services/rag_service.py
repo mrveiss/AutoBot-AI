@@ -763,6 +763,25 @@ class RAGService:
             self.optimizer.hybrid_weight_semantic = _prev_semantic
             self.optimizer.hybrid_weight_keyword = _prev_keyword  # type: ignore[assignment]
 
+        # Issue #4953: merge autobot_docs results when category is requested or
+        # no category filter is active (search-all).
+        if categories is None or "autobot_docs" in categories:
+            try:
+                from services.knowledge.doc_indexer import get_doc_indexer_service
+
+                doc_svc = get_doc_indexer_service()
+                if doc_svc._initialized:
+                    doc_results = await doc_svc.search(query, n_results=max_results)
+                    if doc_results:
+                        combined = results + doc_results
+                        combined.sort(key=lambda r: r.hybrid_score, reverse=True)
+                        results = combined[:max_results]
+                        logger.debug(
+                            "autobot_docs merged %d result(s) into search", len(doc_results)
+                        )
+            except Exception as _doc_exc:
+                logger.debug("autobot_docs search skipped: %s", _doc_exc)
+
         # Issue #4689: filter chunks whose source_path is absent from the hash cache
         # (file was removed/moved since last index run).
         results = await self._filter_stale_chunks(results)
