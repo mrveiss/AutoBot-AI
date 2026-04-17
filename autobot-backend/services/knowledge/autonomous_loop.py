@@ -371,6 +371,7 @@ class AutonomousLoopOrchestrator:
         started_at = datetime.now(timezone.utc).isoformat()
         logger.info("AutonomousLoop: starting run %s (dry_run=%s)", run_id, self.dry_run)
 
+        self._running = True
         record = LoopRunRecord(
             run_id=run_id,
             started_at=started_at,
@@ -429,6 +430,9 @@ class AutonomousLoopOrchestrator:
         except Exception:
             logger.exception("AutonomousLoop: run %s failed", run_id)
             record.error = "unexpected_error"
+
+        finally:
+            self._running = False
 
         record.finished_at = datetime.now(timezone.utc).isoformat()
         self._history.append(record)
