@@ -1,21 +1,20 @@
+<!--
+  Icon.vue renders a single-path SVG icon from the ICONS registry.
+  For multi-element loading indicators use `<LoadingSpinner>` instead — this
+  component is intentionally single-responsibility so each IconName maps to
+  exactly one path.
+-->
 <template>
   <svg
     xmlns="http://www.w3.org/2000/svg"
-    :class="['icon', sizeClass, { 'icon-spin': effectiveSpin }]"
+    :class="['icon', sizeClass, { 'icon-spin': spin }]"
     :fill="filled ? 'currentColor' : 'none'"
     :stroke="filled ? 'none' : 'currentColor'"
     viewBox="0 0 24 24"
     aria-hidden="true"
   >
-    <template v-if="name === 'spinner'">
-      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" opacity="0.25" />
-      <path
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-      />
-    </template>
     <path
-      v-else-if="path"
+      v-if="path"
       stroke-linecap="round"
       stroke-linejoin="round"
       :stroke-width="strokeWidth"
@@ -65,7 +64,6 @@ const ICONS = {
   font: 'M5 4v3h5.5v12h3V7H19V4z',
   'paint-brush': 'M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485',
   th: 'M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z',
-  spinner: '',
 } as const
 
 export type IconName = keyof typeof ICONS
@@ -88,8 +86,6 @@ const props = withDefaults(defineProps<IconProps>(), {
 const path = computed(() => ICONS[props.name])
 
 const sizeClass = computed(() => `icon-${props.size}`)
-
-const effectiveSpin = computed(() => props.spin || props.name === 'spinner')
 </script>
 
 <style scoped>
