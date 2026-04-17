@@ -9,7 +9,7 @@ from pathlib import Path
 # Add AutoBot to Python path
 sys.path.append(str(Path(__file__).parent))
 
-from orchestrator import Orchestrator
+from orchestrator import ConsolidatedOrchestrator as Orchestrator
 
 
 def test_orchestrator_initialization():

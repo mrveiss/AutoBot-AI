@@ -1150,10 +1150,6 @@ class ConsolidatedOrchestrator:
             logger.error("Failed to update configuration: %s", e)
             return False
 
-    # ========================================================================
-    # Backward Compatibility Methods
-    # ========================================================================
-
     async def classify_request_complexity(self, user_request: str) -> TaskComplexity:
         """
         Classify request complexity (backward compatibility method).
@@ -1286,19 +1282,6 @@ async def shutdown_orchestrator():
             _orchestrator_instance = None
 
 
-# ============================================================================
-# Backward Compatibility Aliases
-# ============================================================================
-
-# Provide backward compatibility for code expecting "Orchestrator" class
-Orchestrator = ConsolidatedOrchestrator
-
-# Issue #3393: EnhancedOrchestrator alias for callers previously importing from
-# enhanced_orchestrator.py (now deleted).  ConsolidatedOrchestrator is a strict
-# superset — it exposes execute_enhanced_workflow and plan_workflow_steps.
-EnhancedOrchestrator = ConsolidatedOrchestrator
-
-
 # Issue #3393: Sync accessor for callers that cannot await get_orchestrator().
 # Creates the singleton without calling initialize() — callers that need the
 # fully-initialised instance should use the async get_orchestrator() instead.
@@ -1327,8 +1310,6 @@ def get_orchestrator_sync() -> ConsolidatedOrchestrator:
 
 __all__ = [
     # Main orchestrator classes
-    "Orchestrator",  # backward compatibility alias → ConsolidatedOrchestrator
-    "EnhancedOrchestrator",  # backward compatibility alias → ConsolidatedOrchestrator
     "ConsolidatedOrchestrator",
     "OrchestratorConfig",
     # Enums

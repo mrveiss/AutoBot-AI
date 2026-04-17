@@ -131,7 +131,7 @@ async def test_orchestrator_classification():
 
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-        from orchestrator import Orchestrator, TaskComplexity
+        from orchestrator import ConsolidatedOrchestrator as Orchestrator, TaskComplexity
 
         orchestrator = Orchestrator()
 
@@ -178,7 +178,7 @@ async def demonstrate_workflow_vs_generic():
 
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-        from orchestrator import Orchestrator
+        from orchestrator import ConsolidatedOrchestrator as Orchestrator
 
         orchestrator = Orchestrator()
 

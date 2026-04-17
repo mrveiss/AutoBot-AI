@@ -11,7 +11,7 @@ import logging
 import uuid
 from typing import Dict, List, Optional
 
-from orchestrator import Orchestrator
+from orchestrator import ConsolidatedOrchestrator
 from orchestrator import get_orchestrator_sync as get_orchestrator
 from services.notification_service import NotificationService
 from type_defs.common import Metadata
@@ -55,7 +55,7 @@ class WorkflowAutomationManager:
         self.template_manager = WorkflowTemplateManager()
 
         # Orchestrators for chat request processing
-        self.orchestrator = Orchestrator()
+        self.orchestrator = ConsolidatedOrchestrator()
         self.enhanced_orchestrator = get_orchestrator()
 
     @property

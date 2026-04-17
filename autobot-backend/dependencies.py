@@ -91,12 +91,12 @@ def get_orchestrator(
         diagnostics: Diagnostics instance
 
     Returns:
-        Orchestrator: Orchestrator instance configured with all dependencies
+        ConsolidatedOrchestrator: Orchestrator instance configured with all dependencies
     """
     # Lazy import to reduce startup time
-    from orchestrator import Orchestrator
+    from orchestrator import ConsolidatedOrchestrator
 
-    return Orchestrator(
+    return ConsolidatedOrchestrator(
         config_manager=config,
         llm_interface=llm_interface,
         knowledge_base=knowledge_base,
@@ -184,15 +184,15 @@ def get_cached_orchestrator(config: ConfigManager = Depends(get_config)):
         config: Configuration manager instance
 
     Returns:
-        Orchestrator: Cached orchestrator instance
+        ConsolidatedOrchestrator: Cached orchestrator instance
     """
 
     # Lazy import inside cache function to defer loading
     def _create_orchestrator():
         """Create orchestrator instance with configuration manager."""
-        from orchestrator import Orchestrator
+        from orchestrator import ConsolidatedOrchestrator
 
-        return Orchestrator(config_manager=config)
+        return ConsolidatedOrchestrator(config_manager=config)
 
     return dependency_cache.get_or_create("orchestrator", _create_orchestrator)
 
