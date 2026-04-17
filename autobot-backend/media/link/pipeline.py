@@ -13,7 +13,8 @@ import ipaddress
 import logging
 import re
 import socket
-from typing import Any, Dict, List
+import time
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urljoin, urlparse
 
 from media.core.pipeline import BasePipeline
@@ -50,6 +51,21 @@ _PRIVATE_TLDS = (".onion", ".internal", ".local", ".localhost", ".lan", ".home",
 _IPV6_ULA = ipaddress.ip_network("fc00::/7")
 # Short DNS timeout to prevent the SSRF check itself from becoming a DoS vector.
 _DNS_TIMEOUT_SECONDS = 2.0
+
+# Jina Reader circuit breaker: open after N failures in a rolling window,
+# stay open for _JINA_COOLDOWN_SECONDS, then retry. Prevents paying the
+# full timeout cost on every URL during a Jina outage.
+_JINA_COOLDOWN_SECONDS = 60.0
+_JINA_FAILURE_THRESHOLD = 3
+_JINA_FAILURE_WINDOW_SECONDS = 60.0
+_jina_cooldown_until: float = 0.0
+_jina_failures_in_window: List[float] = []
+
+# Pooled aiohttp session for Jina Reader (reused across calls for connection
+# pooling). Lazy-created under _jina_session_lock to serialize the first-
+# creation race. Close via close_jina_session() during app shutdown.
+_jina_session: Optional["aiohttp.ClientSession"] = None
+_jina_session_lock: Optional[asyncio.Lock] = None
 
 
 class LinkPipeline(BasePipeline):
@@ -169,29 +185,52 @@ class LinkPipeline(BasePipeline):
         return await loop.run_in_executor(None, self._is_public_url, url)
 
     async def _try_jina(self, url: str) -> str | None:
-        """Attempt to fetch URL via Jina Reader. Returns text content or None on failure."""
+        """Attempt to fetch URL via Jina Reader. Returns text content or None on failure.
+
+        Uses a pooled ClientSession and a circuit breaker: after
+        _JINA_FAILURE_THRESHOLD failures within _JINA_FAILURE_WINDOW_SECONDS,
+        the circuit opens for _JINA_COOLDOWN_SECONDS and all calls short-
+        circuit to None immediately.
+        """
+        global _jina_cooldown_until
+
+        # Circuit open? Skip the call entirely.
+        if time.monotonic() < _jina_cooldown_until:
+            return None
+
         jina_url = f"{_JINA_BASE_URL}{url}"
         try:
-            async with aiohttp.ClientSession(timeout=_JINA_TIMEOUT) as session:
-                async with session.get(jina_url, allow_redirects=True) as response:
-                    if response.status == 200:
-                        return await response.text(encoding="utf-8", errors="replace")
+            session = await _get_jina_session()
+            async with session.get(
+                jina_url, allow_redirects=True, timeout=_JINA_TIMEOUT
+            ) as response:
+                if response.status == 200:
+                    text = await response.text(encoding="utf-8", errors="replace")
+                    _record_jina_success()
+                    return text
+                # Non-200 counts as a failure for circuit-breaker purposes.
+                _record_jina_failure()
         except Exception as exc:
             logger.debug("Jina Reader fast-path failed for %s: %s", url, exc)
+            _record_jina_failure()
         return None
 
     def _jina_result(self, url: str, content: str, metadata: Dict) -> Dict[str, Any]:
-        """Build a result dict from Jina Reader plain-text response."""
-        word_count = len(content.split()) if content else 0
-        # Extract a title from the first non-empty line if present
-        first_line = next((ln.strip() for ln in content.splitlines() if ln.strip()), "")
-        title = first_line[:200] if first_line else ""
+        """Build a result dict from Jina Reader plain-text response.
+
+        Jina Reader prepends metadata lines like ``Title: ...`` and
+        ``URL Source: ...`` before a blank line and the markdown body. We
+        parse the title from the ``Title:`` prefix and strip the metadata
+        header from the body returned to callers.
+        """
+        title, body = _parse_jina_output(content)
+        word_count = len(body.split()) if body else 0
         return {
             "type": "link_fetch",
             "url": url,
             "title": title,
             "description": "",
-            "content": content,
+            "content": body,
             "word_count": word_count,
             "links": [],
             "open_graph": {},
@@ -375,3 +414,108 @@ class LinkPipeline(BasePipeline):
     def _calculate_confidence(self, result_data: Dict[str, Any]) -> float:
         """Calculate confidence score from result data."""
         return result_data.get("confidence", 0.5)
+
+
+# ----------------------------------------------------------------------
+# Module-level helpers: pooled session, circuit breaker, title parsing
+# ----------------------------------------------------------------------
+
+
+async def _get_jina_session() -> "aiohttp.ClientSession":
+    """Return the shared Jina Reader aiohttp.ClientSession, creating on first call.
+
+    Lazy-created under an asyncio.Lock so concurrent first calls don't each
+    create their own session. Closed at app shutdown via close_jina_session().
+    """
+    global _jina_session, _jina_session_lock
+    if _jina_session_lock is None:
+        _jina_session_lock = asyncio.Lock()
+    if _jina_session is None or _jina_session.closed:
+        async with _jina_session_lock:
+            if _jina_session is None or _jina_session.closed:
+                _jina_session = aiohttp.ClientSession()
+    return _jina_session
+
+
+async def close_jina_session() -> None:
+    """Close the pooled Jina Reader session. Call from app shutdown hook."""
+    global _jina_session
+    if _jina_session is not None and not _jina_session.closed:
+        await _jina_session.close()
+    _jina_session = None
+
+
+def _record_jina_failure() -> None:
+    """Record a Jina Reader failure and open the circuit if threshold reached."""
+    global _jina_cooldown_until
+    now = time.monotonic()
+    cutoff = now - _JINA_FAILURE_WINDOW_SECONDS
+    # Drop entries older than the window.
+    _jina_failures_in_window[:] = [t for t in _jina_failures_in_window if t > cutoff]
+    _jina_failures_in_window.append(now)
+    if len(_jina_failures_in_window) >= _JINA_FAILURE_THRESHOLD:
+        _jina_cooldown_until = now + _JINA_COOLDOWN_SECONDS
+        logger.info(
+            "Jina Reader circuit opened for %.0fs after %d failures",
+            _JINA_COOLDOWN_SECONDS,
+            len(_jina_failures_in_window),
+        )
+        _jina_failures_in_window.clear()
+
+
+def _record_jina_success() -> None:
+    """Record a Jina Reader success, clearing the failure window."""
+    _jina_failures_in_window.clear()
+
+
+def _parse_jina_output(content: str) -> Tuple[str, str]:
+    """Parse Jina Reader output into (title, body).
+
+    Jina Reader output format::
+
+        Title: Actual Page Title Here
+        URL Source: https://...
+
+        Markdown body starts here...
+
+    We scan the first ~10 lines for a ``Title:`` prefix, then strip the
+    metadata header (everything up to and including the first blank line
+    after the metadata block) from the body. If no ``Title:`` prefix is
+    found, title falls back to the first non-empty line of the body and
+    no header is stripped.
+    """
+    if not content:
+        return "", ""
+
+    lines = content.splitlines()
+    title = ""
+    metadata_end_idx = -1  # index of the blank line after metadata block
+
+    # Scan up to the first 10 lines for a Title: prefix and the metadata block end.
+    scan_limit = min(len(lines), 10)
+    for idx in range(scan_limit):
+        line = lines[idx]
+        stripped = line.strip()
+        if not stripped and title:
+            # Blank line AFTER a Title line — end of metadata header.
+            metadata_end_idx = idx
+            break
+        match = re.match(r"^([A-Za-z][A-Za-z0-9 _-]*):\s*(.+)$", stripped)
+        if match:
+            key = match.group(1).strip().lower()
+            if key == "title" and not title:
+                title = match.group(2).strip()[:200]
+            # Continue scanning — could be Title, URL Source, etc.
+
+    if title and metadata_end_idx >= 0:
+        # Strip metadata header (header lines + the blank separator).
+        body = "\n".join(lines[metadata_end_idx + 1 :]).lstrip("\n")
+        return title, body
+
+    if title:
+        # Title found but no blank-line separator — return title + full content.
+        return title, content
+
+    # Fallback: no Title: prefix. Use first non-empty line as title.
+    first_nonempty = next((ln.strip() for ln in lines if ln.strip()), "")
+    return first_nonempty[:200], content
