@@ -246,34 +246,28 @@ class DocumentationWatcherService:
         Issue #1385: Uses ChromaDB-based DocIndexerService instead of Redis KB.
         Issue #2547: After successful indexing, propagate staleness through the
         mesh graph and enqueue affected nodes for re-embedding.
+        Issue #4453: Enqueue the re-index onto DocumentSyncQueue so a worker
+        crash mid-batch no longer leaves the document silently stale — the
+        persistent queue retries up to MAX_ATTEMPTS with priority ordering.
 
         Args:
             file_path: Path to the updated file
         """
         try:
             from services.knowledge.doc_indexer import get_doc_indexer_service
+            from services.knowledge.sync_queue import SyncReason
 
             indexer = get_doc_indexer_service()
             if not await indexer.initialize():
                 logger.error("DocIndexerService not available for reindexing")
                 return
 
-            # force=True to re-index even if hash matches (file watcher
-            # already debounced, so we trust it actually changed)
-            result = await indexer.index_file(file_path, force=True)
-
-            if result.success > 0:
-                logger.info("Reindexed documentation: %s", file_path.name)
-                doc_id = str(file_path.relative_to(PROJECT_ROOT))
-                await self._propagate_staleness_for_doc(doc_id)
-            elif result.skipped > 0:
-                logger.debug("File unchanged, skipped: %s", file_path.name)
-            else:
-                logger.warning(
-                    "Failed to reindex %s: %s",
-                    file_path.name,
-                    result.errors,
-                )
+            await indexer.enqueue_reindex(
+                str(file_path), reason=SyncReason.CONTENT_CHANGED
+            )
+            logger.info("Enqueued re-index for documentation: %s", file_path.name)
+            doc_id = str(file_path.relative_to(PROJECT_ROOT))
+            await self._propagate_staleness_for_doc(doc_id)
 
         except Exception as e:
             logger.error("Error updating documentation %s: %s", file_path, e)

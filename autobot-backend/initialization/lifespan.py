@@ -530,6 +530,24 @@ async def _warmup_npu_connection():
         logger.warning("NPU warmup failed: %s", warmup_error)
 
 
+async def _start_doc_sync_queue_worker(app: FastAPI) -> None:
+    """Start the persistent document sync queue worker (#4453).
+
+    The worker drains :class:`DocumentSyncQueue` so re-indexing survives
+    crashes, retries up to MAX_ATTEMPTS, and respects priority ordering.
+    """
+    try:
+        from services.knowledge.sync_queue import SyncQueueWorker
+
+        worker = SyncQueueWorker()
+        task = asyncio.create_task(worker.run())
+        app.state.doc_sync_queue_worker = worker
+        app.state.doc_sync_queue_worker_task = task
+        logger.info("✅ Doc Sync Queue: worker started")
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Doc sync queue worker failed to start: %s", e)
+
+
 async def _init_documentation_watcher():
     """
     Initialize documentation watcher for real-time sync (NON-CRITICAL).
@@ -1389,6 +1407,7 @@ async def initialize_background_services(app: FastAPI):
         await _init_slm_client()
         await _init_background_llm_sync(app)
         await _init_documentation_watcher()
+        await _start_doc_sync_queue_worker(app)
         await _auto_index_documentation()
         await _init_log_forwarding()
         await _init_heartbeat_scheduler(app)
@@ -1446,6 +1465,18 @@ async def cleanup_services(app: FastAPI):
             await stop_documentation_watcher()
         except ImportError:
             pass  # Watcher not available
+
+        # Issue #4453: Stop doc sync queue worker
+        worker = getattr(app.state, "doc_sync_queue_worker", None)
+        task = getattr(app.state, "doc_sync_queue_worker_task", None)
+        if worker is not None:
+            worker.stop()
+        if task is not None and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
 
         # Issue #760: Shutdown SLM client
         try:
