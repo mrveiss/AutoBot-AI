@@ -79,7 +79,7 @@ export function useKnowledgeBase() {
   /**
    * Fetch knowledge base statistics
    */
-  const fetchStats = async (): Promise<KnowledgeStats | null> => {
+  const fetchStats = async (): Promise<KnowledgeStats> => {
     try {
       const response = await apiClient.get<KnowledgeStats>(`${getApiBase()}/knowledge_base/stats`)
 
