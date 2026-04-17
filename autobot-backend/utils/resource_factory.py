@@ -78,10 +78,11 @@ class ResourceFactory:
             raise
 
     @staticmethod
-    async def get_enhanced_orchestrator(request: Request = None):
-        """Get the shared ConsolidatedOrchestrator singleton.
+    async def get_orchestrator(request: Request = None):
+        """Get the shared Orchestrator singleton.
 
-        Issue #2207: Delegates to module-level singleton in enhanced_orchestrator.
+        Issue #2207: Delegates to module-level singleton.
+        Issue #5038: Renamed from get_enhanced_orchestrator → get_orchestrator.
         The request parameter is kept for backward compatibility but no longer
         used for app.state caching — the singleton handles its own lifecycle.
         """
@@ -165,7 +166,7 @@ class ResourceFactory:
         resource_names = [
             "knowledge_base",
             "llm_interface",
-            "enhanced_orchestrator",
+            "orchestrator",
             "chat_history_manager",
             "workflow_automation_manager",
             "advanced_workflow_orchestrator",
@@ -194,8 +195,8 @@ async def get_llm(request: Request = None):
 
 
 async def get_orchestrator(request: Request = None):
-    """Shorthand for getting ConsolidatedOrchestrator"""
-    return await ResourceFactory.get_enhanced_orchestrator(request)
+    """Shorthand for getting the Orchestrator singleton."""
+    return await ResourceFactory.get_orchestrator(request)
 
 
 async def get_chat_manager(request: Request = None):

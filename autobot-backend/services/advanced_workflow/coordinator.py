@@ -32,7 +32,7 @@ from .templates import TemplateManager
 logger = logging.getLogger(__name__)
 
 
-class AdvancedWorkflowOrchestrator:
+class WorkflowCoordinator:
     """AI-driven workflow orchestrator with learning capabilities"""
 
     def __init__(self):
@@ -64,7 +64,7 @@ class AdvancedWorkflowOrchestrator:
             "time_savings_achieved": [],
         }
 
-        logger.info("AdvancedWorkflowOrchestrator initialized with modular components")
+        logger.info("WorkflowCoordinator initialized with modular components")
 
     @property
     def workflow_templates(self):

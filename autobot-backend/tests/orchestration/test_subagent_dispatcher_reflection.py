@@ -2,7 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Unit tests for subagent orchestrator reflection pass (#4691).
+Unit tests for subagent dispatcher reflection pass (#4691).
 
 Covers:
 - Reflection disabled → original result returned unchanged
@@ -17,10 +17,10 @@ import json
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from services.orchestration.subagent_orchestrator import (
-    SubagentOrchestrator,
+from services.orchestration.subagent_dispatcher import (
+    SubagentDispatcher,
     SubagentTask,
-    get_subagent_orchestrator,
+    get_subagent_dispatcher,
 )
 
 
@@ -70,7 +70,7 @@ class TestReflectionDisabled:
     @pytest.mark.asyncio
     async def test_disabled_skips_reflection(self):
         """enable_reflection=False → _reflection_pass never called."""
-        orch = SubagentOrchestrator()
+        orch = SubagentDispatcher()
 
         async def my_func():
             return "original"
@@ -92,7 +92,7 @@ class TestReflectionHighScore:
     @pytest.mark.asyncio
     async def test_high_score_returns_original(self):
         """Score >= threshold → original result returned unchanged."""
-        orch = SubagentOrchestrator()
+        orch = SubagentDispatcher()
 
         async def my_func():
             return "original result"
@@ -108,7 +108,7 @@ class TestReflectionHighScore:
         mock_llm = MagicMock()
         mock_llm.chat = AsyncMock(return_value=_score_response(0.9, []))
 
-        with patch("services.orchestration.subagent_orchestrator._get_llm_service", return_value=mock_llm):
+        with patch("services.orchestration.subagent_dispatcher._get_llm_service", return_value=mock_llm):
             result = await orch._execute_task(task)
 
         assert result == "original result"
@@ -124,7 +124,7 @@ class TestReflectionLowScore:
     @pytest.mark.asyncio
     async def test_low_score_returns_revised(self):
         """Score < threshold → one revision call, revised result returned."""
-        orch = SubagentOrchestrator()
+        orch = SubagentDispatcher()
 
         async def my_func():
             return "incomplete result"
@@ -143,7 +143,7 @@ class TestReflectionLowScore:
         mock_llm.chat = AsyncMock(side_effect=[score_resp, revision_resp])
 
         with patch(
-            "services.orchestration.subagent_orchestrator._get_llm_service",
+            "services.orchestration.subagent_dispatcher._get_llm_service",
             return_value=mock_llm,
         ):
             result = await orch._execute_task(task)
@@ -154,7 +154,7 @@ class TestReflectionLowScore:
     @pytest.mark.asyncio
     async def test_exactly_at_threshold_is_not_revised(self):
         """Score == threshold is treated as passing (>= check)."""
-        orch = SubagentOrchestrator()
+        orch = SubagentDispatcher()
 
         async def my_func():
             return "borderline result"
@@ -171,7 +171,7 @@ class TestReflectionLowScore:
         mock_llm.chat = AsyncMock(return_value=_score_response(0.7, ["minor gap"]))
 
         with patch(
-            "services.orchestration.subagent_orchestrator._get_llm_service",
+            "services.orchestration.subagent_dispatcher._get_llm_service",
             return_value=mock_llm,
         ):
             result = await orch._execute_task(task)
@@ -188,7 +188,7 @@ class TestReflectionLLMUnavailable:
     @pytest.mark.asyncio
     async def test_llm_import_error_returns_original(self):
         """LLM service unavailable → original result returned without error."""
-        orch = SubagentOrchestrator()
+        orch = SubagentDispatcher()
 
         async def my_func():
             return "original"
@@ -201,7 +201,7 @@ class TestReflectionLLMUnavailable:
         )
 
         with patch(
-            "services.orchestration.subagent_orchestrator._get_llm_service",
+            "services.orchestration.subagent_dispatcher._get_llm_service",
             side_effect=ImportError("no llm"),
         ):
             result = await orch._execute_task(task)
@@ -211,7 +211,7 @@ class TestReflectionLLMUnavailable:
     @pytest.mark.asyncio
     async def test_scoring_exception_returns_original(self):
         """Scoring LLM call raises → original result returned (score assumed 1.0)."""
-        orch = SubagentOrchestrator()
+        orch = SubagentDispatcher()
 
         async def my_func():
             return "original"
@@ -227,7 +227,7 @@ class TestReflectionLLMUnavailable:
         mock_llm.chat = AsyncMock(side_effect=RuntimeError("llm error"))
 
         with patch(
-            "services.orchestration.subagent_orchestrator._get_llm_service",
+            "services.orchestration.subagent_dispatcher._get_llm_service",
             return_value=mock_llm,
         ):
             result = await orch._execute_task(task)
@@ -243,7 +243,7 @@ class TestParallelDispatchNoRegression:
     @pytest.mark.asyncio
     async def test_spawn_parallel_tasks_no_reflection(self):
         """Parallel dispatch works correctly when reflection is disabled."""
-        orch = SubagentOrchestrator(max_parallel=3)
+        orch = SubagentDispatcher(max_parallel=3)
         call_order = []
 
         async def make_func(val):
@@ -272,7 +272,7 @@ class TestParallelDispatchNoRegression:
     @pytest.mark.asyncio
     async def test_spawn_parallel_honours_max_parallel(self):
         """Tasks beyond max_parallel are dropped (existing behaviour)."""
-        orch = SubagentOrchestrator(max_parallel=2)
+        orch = SubagentDispatcher(max_parallel=2)
 
         async def my_func():
             return "ok"
@@ -286,7 +286,7 @@ class TestParallelDispatchNoRegression:
     @pytest.mark.asyncio
     async def test_task_exception_propagates_as_exception_result(self):
         """A failing task result is stored as an exception (existing behaviour)."""
-        orch = SubagentOrchestrator()
+        orch = SubagentDispatcher()
 
         async def bad_func():
             raise ValueError("boom")
@@ -300,17 +300,17 @@ class TestParallelDispatchNoRegression:
 # get_subagent_orchestrator singleton
 # ---------------------------------------------------------------------------
 
-class TestGetSubagentOrchestrator:
+class TestGetSubagentDispatcher:
     def test_returns_singleton(self):
-        import services.orchestration.subagent_orchestrator as mod
+        import services.orchestration.subagent_dispatcher as mod
         mod._orchestrator_instance = None  # reset
-        a = get_subagent_orchestrator()
-        b = get_subagent_orchestrator()
+        a = get_subagent_dispatcher()
+        b = get_subagent_dispatcher()
         assert a is b
 
     def test_custom_max_parallel(self):
-        import services.orchestration.subagent_orchestrator as mod
+        import services.orchestration.subagent_dispatcher as mod
         mod._orchestrator_instance = None
-        orch = get_subagent_orchestrator(max_parallel=5)
+        orch = get_subagent_dispatcher(max_parallel=5)
         assert orch.max_parallel == 5
         mod._orchestrator_instance = None  # clean up

@@ -921,11 +921,11 @@ async def _init_slm_client():
 
         await init_slm_client(slm_url, slm_token)
         logger.info("✅ [ 89%] SLM Client: Connected to SLM server at %s", slm_url)
-        from services.slm.deployment_orchestrator import init_orchestrator
+        from services.slm.deployment_bridge import init_orchestrator
         from services.slm_client import get_slm_client as _get_slm_client
 
         init_orchestrator(_get_slm_client())
-        logger.info("✅ [ 89%] SLM Client: DeploymentOrchestrator initialised")
+        logger.info("✅ [ 89%] SLM Client: DeploymentCoordinator initialised")
     except Exception as slm_error:
         logger.warning(
             "SLM client initialization failed (continuing without): %s", slm_error
@@ -1205,7 +1205,7 @@ async def _wire_scheduler_executor() -> None:
     """Wire the orchestration WorkflowExecutor into the global WorkflowScheduler (#2166).
 
     Replaces the scheduler's fallback _default_template_executor with an adapter
-    that delegates non-template scheduled workflows to ConsolidatedOrchestrator, enabling
+    that delegates non-template scheduled workflows to Orchestrator, enabling
     full agent coordination, step dependency management, and auto-documentation for
     all scheduled workflows — not just template-based ones.
 
@@ -1219,7 +1219,7 @@ async def _wire_scheduler_executor() -> None:
         orchestrator = get_orchestrator_sync()
 
         async def _orchestration_executor(workflow: ScheduledWorkflow):
-            """Adapter: ScheduledWorkflow → ConsolidatedOrchestrator.execute_enhanced_workflow.
+            """Adapter: ScheduledWorkflow → Orchestrator.execute_enhanced_workflow.
 
             Routes template-based workflows to the template executor and
             non-template workflows through the full orchestration pipeline.

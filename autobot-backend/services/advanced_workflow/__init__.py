@@ -19,15 +19,15 @@ from .models import (
     WorkflowTemplate,
 )
 from .optimizer import WorkflowOptimizer
-from .orchestrator import AdvancedWorkflowOrchestrator
+from .coordinator import WorkflowCoordinator
 from .risk_analyzer import RiskAnalyzer
 from .routes import get_orchestrator_instance, router
 from .step_generator import StepGenerator
 from .templates import TemplateManager
 
 __all__ = [
-    # Main orchestrator
-    "AdvancedWorkflowOrchestrator",
+    # Main coordinator
+    "WorkflowCoordinator",
     # Models
     "WorkflowComplexity",
     "AdaptiveMode",

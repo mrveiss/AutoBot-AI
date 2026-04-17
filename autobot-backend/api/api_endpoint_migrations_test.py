@@ -20398,7 +20398,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         source = inspect.getsource(orchestration.create_workflow_plan)
 
         # Check plan creation operations preserved
-        self.assertIn("enhanced_orchestrator.create_workflow_plan", source)
+        self.assertIn("orchestrator.create_workflow_plan", source)
         self.assertIn("plan_id", source)
         self.assertIn("strategy", source)
         self.assertIn("estimated_duration", source)
@@ -29346,21 +29346,21 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
     def test_batch_168_migration_preserves_orchestrator_integration(self):
         """Verify migration preserves Orchestrator integration for chat workflow creation.
 
-        Issue #4048: Orchestrator/EnhancedOrchestrator backward-compat aliases removed;
-        ConsolidatedOrchestrator is now the canonical class.
+        Issue #4048: Orchestrator/EnhancedOrchestrator backward-compat aliases removed.
+        Issue #5040: ConsolidatedOrchestrator renamed to Orchestrator (single conductor).
         """
-        from orchestrator import ConsolidatedOrchestrator
+        from orchestrator import Orchestrator
 
         # Verify the canonical orchestrator class is available
-        self.assertTrue(issubclass(ConsolidatedOrchestrator, object))
+        self.assertTrue(issubclass(Orchestrator, object))
 
-        # Verify workflow_automation manager uses ConsolidatedOrchestrator
+        # Verify workflow_automation manager imports from orchestrator
         import inspect
 
         from services.workflow_automation import manager as wam_module
 
         manager_source = inspect.getsource(wam_module)
-        self.assertIn("ConsolidatedOrchestrator", manager_source)
+        self.assertIn("Orchestrator", manager_source)
 
     def test_batch_168_migration_preserves_dataclasses(self):
         """Verify migration preserves WorkflowStep and ActiveWorkflow dataclasses"""

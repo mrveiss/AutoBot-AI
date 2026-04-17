@@ -73,8 +73,8 @@ class SubagentTask:
             self.kwargs = {}
 
 
-class SubagentOrchestrator:
-    """Orchestrates autonomous subagent spawning for parallel workstreams."""
+class SubagentDispatcher:
+    """Dispatches autonomous subagents for parallel workstreams."""
 
     def __init__(self, max_parallel: int = 10) -> None:
         self.max_parallel = max_parallel
@@ -222,12 +222,12 @@ class SubagentOrchestrator:
             return result_text
 
 
-_orchestrator_instance: Optional[SubagentOrchestrator] = None
+_orchestrator_instance: Optional[SubagentDispatcher] = None
 
 
-def get_subagent_orchestrator(max_parallel: int = 10) -> SubagentOrchestrator:
-    """Get or create global orchestrator instance."""
+def get_subagent_dispatcher(max_parallel: int = 10) -> SubagentDispatcher:
+    """Get or create global dispatcher instance."""
     global _orchestrator_instance
     if _orchestrator_instance is None:
-        _orchestrator_instance = SubagentOrchestrator(max_parallel=max_parallel)
+        _orchestrator_instance = SubagentDispatcher(max_parallel=max_parallel)
     return _orchestrator_instance

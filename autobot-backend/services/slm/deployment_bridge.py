@@ -2,11 +2,11 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-SLM Deployment Orchestrator
+SLM Deployment Bridge
 
 Bridges autobot-backend to the SLM deployment API so that Docker containers
 can be deployed via Ansible playbooks without callers needing to know the SLM
-request shape.  Also exposes a richer in-process DeploymentOrchestrator for
+request shape.  Also exposes a richer in-process DeploymentCoordinator for
 multi-role, multi-node rollouts that tracks steps locally before forwarding
 the underlying playbook call to the SLM.
 
@@ -93,11 +93,11 @@ class DeploymentContext:
 
 
 # ---------------------------------------------------------------------------
-# SLMDeploymentOrchestrator — thin SLM HTTP bridge for Docker deployments
+# SLMDeploymentBridge — thin SLM HTTP bridge for Docker deployments
 # ---------------------------------------------------------------------------
 
 
-class SLMDeploymentOrchestrator:
+class SLMDeploymentBridge:
     """
     Calls the SLM backend to trigger and query Docker deployments.
 
@@ -175,11 +175,11 @@ class SLMDeploymentOrchestrator:
 
 
 # ---------------------------------------------------------------------------
-# DeploymentOrchestrator — in-process multi-step orchestrator
+# DeploymentCoordinator — in-process multi-step coordinator
 # ---------------------------------------------------------------------------
 
 
-class DeploymentOrchestrator:
+class DeploymentCoordinator:
     """
     In-process orchestrator that tracks multi-role, multi-node deployments.
 
@@ -295,17 +295,17 @@ class DeploymentOrchestrator:
 # Module-level singleton
 # ---------------------------------------------------------------------------
 
-_orchestrator: Optional[DeploymentOrchestrator] = None
+_orchestrator: Optional[DeploymentCoordinator] = None
 
 
-def get_orchestrator() -> Optional[DeploymentOrchestrator]:
-    """Return the module-level DeploymentOrchestrator singleton, or None."""
+def get_orchestrator() -> Optional[DeploymentCoordinator]:
+    """Return the module-level DeploymentCoordinator singleton, or None."""
     return _orchestrator
 
 
-def init_orchestrator(slm_client: Any) -> DeploymentOrchestrator:
-    """Initialize the module-level orchestrator singleton."""
+def init_orchestrator(slm_client: Any) -> DeploymentCoordinator:
+    """Initialize the module-level coordinator singleton."""
     global _orchestrator
-    _orchestrator = DeploymentOrchestrator(slm_client=slm_client)
-    logger.info("DeploymentOrchestrator initialised")
+    _orchestrator = DeploymentCoordinator(slm_client=slm_client)
+    logger.info("DeploymentCoordinator initialised")
     return _orchestrator

@@ -18,7 +18,7 @@ from dependencies import (
 )
 from diagnostics import Diagnostics
 from knowledge_base import KnowledgeBase
-from orchestrator import ConsolidatedOrchestrator as Orchestrator
+from orchestrator import Orchestrator
 
 
 class TestDependencyInjection:
@@ -190,7 +190,7 @@ class TestDependencyInjection:
         # Manually call with resolved dependencies (as FastAPI would do)
         from diagnostics import Diagnostics
         from knowledge_base import KnowledgeBase
-        from orchestrator import ConsolidatedOrchestrator as Orchestrator
+        from orchestrator import Orchestrator
 
         diagnostics = Diagnostics(config_manager=config)
         assert isinstance(diagnostics, Diagnostics)

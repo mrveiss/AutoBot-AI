@@ -403,7 +403,7 @@ DEFAULT_AGENT_CONFIGS = {
         "priority": 4,
         "tasks": ["web_research", "content_extraction", "knowledge_storage"],
         "mcp_tools": ["memory_mcp", "knowledge_mcp", "filesystem_mcp", "browser_mcp", "sequential_thinking_mcp"],
-        "invoked_by": "AgentOrchestrator when external research is needed",
+        "invoked_by": "Orchestrator when external research is needed",
         "source_file": "src/agents/librarian_assistant.py",
     },
     "system_knowledge_manager": {

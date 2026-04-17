@@ -13,9 +13,9 @@ from fastapi.testclient import TestClient
 
 from api.slm.deployments import router
 from models.infrastructure import DeploymentStrategy as DeploymentStrategyType
-from services.slm.deployment_orchestrator import (
+from services.slm.deployment_bridge import (
     DeploymentContext,
-    DeploymentOrchestrator,
+    DeploymentCoordinator,
     DeploymentStatus,
     DeploymentStep,
     DeploymentStepType,
@@ -39,7 +39,7 @@ def client(app):
 @pytest.fixture
 def mock_orchestrator():
     """Create mock orchestrator."""
-    orch = MagicMock(spec=DeploymentOrchestrator)
+    orch = MagicMock(spec=DeploymentCoordinator)
     orch.active_deployments = []
     return orch
 
@@ -402,7 +402,7 @@ class TestDeploymentResponseFormat:
 
 
 # =============================================================================
-# SLMDeploymentOrchestrator integration tests (real orchestrator + test-double
+# SLMDeploymentBridge integration tests (real bridge + test-double
 # SLM HTTP client — not MagicMock wrapping the whole orchestrator)
 # =============================================================================
 
@@ -412,7 +412,7 @@ class FakeSLMClient:
     Test-double for the SLM HTTP client.
 
     Returns deterministic canned responses so tests exercise the real
-    SLMDeploymentOrchestrator translation logic without hitting a live SLM.
+    SLMDeploymentBridge translation logic without hitting a live SLM.
     """
 
     def __init__(self, deployment_id: str = "slm-deploy-001", node_id: str = "node-99"):
@@ -454,8 +454,8 @@ class FakeSLMClient:
         }
 
 
-class TestSLMDeploymentOrchestratorIntegration:
-    """Integration tests for SLMDeploymentOrchestrator with a test-double SLM client."""
+class TestSLMDeploymentBridgeIntegration:
+    """Integration tests for SLMDeploymentBridge with a test-double SLM client."""
 
     @pytest.fixture
     def fake_client(self):
@@ -463,9 +463,9 @@ class TestSLMDeploymentOrchestratorIntegration:
 
     @pytest.fixture
     def slm_orch(self, fake_client):
-        from services.slm.deployment_orchestrator import SLMDeploymentOrchestrator
+        from services.slm.deployment_bridge import SLMDeploymentBridge
 
-        return SLMDeploymentOrchestrator(slm_client=fake_client)
+        return SLMDeploymentBridge(slm_client=fake_client)
 
     @pytest.mark.asyncio
     async def test_deploy_docker_calls_slm_and_maps_response(self, slm_orch):
@@ -496,7 +496,7 @@ class TestSLMDeploymentOrchestratorIntegration:
             DockerDeploymentRequest,
             PortMapping,
         )
-        from services.slm.deployment_orchestrator import SLMDeploymentOrchestrator
+        from services.slm.deployment_bridge import SLMDeploymentBridge
 
         captured: dict = {}
 
@@ -512,7 +512,7 @@ class TestSLMDeploymentOrchestratorIntegration:
             }
 
         fake_client.create_deployment = capturing_create
-        orch = SLMDeploymentOrchestrator(slm_client=fake_client)
+        orch = SLMDeploymentBridge(slm_client=fake_client)
 
         request = DockerDeploymentRequest(
             node_id="node-1",
@@ -552,7 +552,7 @@ class TestSLMDeploymentOrchestratorIntegration:
     @pytest.mark.asyncio
     async def test_list_deployments_node_filter_forwarded(self, fake_client):
         """node_id filter is forwarded to the SLM client."""
-        from services.slm.deployment_orchestrator import SLMDeploymentOrchestrator
+        from services.slm.deployment_bridge import SLMDeploymentBridge
 
         received_kwargs: dict = {}
 
@@ -561,7 +561,7 @@ class TestSLMDeploymentOrchestratorIntegration:
             return {"deployments": []}
 
         fake_client.list_deployments = spy_list
-        orch = SLMDeploymentOrchestrator(slm_client=fake_client)
+        orch = SLMDeploymentBridge(slm_client=fake_client)
         await orch.list_deployments(node_id="node-42")
 
         assert received_kwargs["node_id"] == "node-42"

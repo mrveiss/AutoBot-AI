@@ -11,7 +11,7 @@ import logging
 from typing import List, Optional
 
 from autobot_types import TaskComplexity
-from orchestrator import ConsolidatedOrchestrator
+from orchestrator import Orchestrator
 from orchestrator import get_orchestrator_sync as get_orchestrator
 from type_defs.common import Metadata
 
@@ -39,7 +39,7 @@ _HIGH_RISK_PATTERNS = (
 class StepGenerator:
     """Generates intelligent workflow steps"""
 
-    def __init__(self, enhanced_orchestrator: ConsolidatedOrchestrator = None):
+    def __init__(self, enhanced_orchestrator: Orchestrator = None):
         """Initialize step generator with optional enhanced orchestrator."""
         self.enhanced_orchestrator = enhanced_orchestrator or get_orchestrator()
 

@@ -2,13 +2,14 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Orchestrator for AutoBot - Phase 5 Code Consolidation
+Orchestrator for AutoBot - Single Conductor
 
-This module consolidates all orchestrator implementations into a single,
-comprehensive orchestrator that integrates the best features from:
+This module is the single authoritative orchestrator, consolidating all orchestrator
+implementations:
 - src/orchestrator.py (main orchestrator)
 - src/enhanced_orchestrator.py (enhanced features, merged in #3393)
 - chat_workflow/graph.py (LangGraph StateGraph — Issue #1043, replaces legacy LangChain)
+- enhanced_orchestration/EnhancedMultiAgentOrchestrator (merged in #5040)
 """
 
 import asyncio
@@ -46,6 +47,23 @@ from utils.agent_selection import find_best_agent_for_task as _find_best_agent
 from utils.agent_selection import release_agent as _release_agent
 from utils.agent_selection import reserve_agent as _reserve_agent
 from utils.agent_selection import update_agent_performance as _update_performance
+
+# Issue #5040: Imports for merged EnhancedMultiAgentOrchestrator functionality
+from autobot_shared.redis_client import get_async_redis_client, get_redis_client
+from event_manager import event_manager as _event_manager
+
+from enhanced_orchestration.execution_strategies import ExecutionStrategyHandler
+from enhanced_orchestration.success_criteria import SuccessCriteriaEvaluator
+from enhanced_orchestration.types import (
+    FALLBACK_TIERS,
+    AgentPerformance,
+    AgentTask,
+    ExecutionStrategy,
+    WorkflowPlan,
+)
+from enhanced_orchestration.workflow_planning import (
+    WorkflowPlanner as MultiAgentWorkflowPlanner,
+)
 
 logger = get_logger("orchestrator")
 
@@ -194,11 +212,13 @@ class OrchestratorConfig:
         )
 
 
-class ConsolidatedOrchestrator:
+class Orchestrator:
     """
-    Consolidated Orchestrator for AutoBot - Phase 5
+    Orchestrator for AutoBot — single conductor.
 
-    Integrates all orchestrator features into a single, comprehensive system
+    Issue #5040: Renamed from Orchestrator. Integrates all orchestrator
+    features into a single, comprehensive system including multi-agent workflow
+    planning and execution (merged from EnhancedMultiAgentOrchestrator).
     """
 
     def _init_core_components(self, config_mgr) -> None:
@@ -258,16 +278,62 @@ class ConsolidatedOrchestrator:
             except Exception as e:
                 logger.warning("Failed to initialize classification agent: %s", e)
 
+    def _init_multi_agent_state(self) -> None:
+        """Initialize state for merged EnhancedMultiAgentOrchestrator. Issue #5040."""
+        # Redis clients (lazy-init on first use)
+        self._ma_redis_sync = get_redis_client(async_client=False)
+        self._ma_redis_async = None
+
+        # Agent capabilities registry (task-routing layer distinct from agent_registry)
+        self.agent_capabilities: Dict[str, Set] = {
+            "research_agent": {AgentCapability.RESEARCH, AgentCapability.ANALYSIS},
+            "classification_agent": {AgentCapability.ANALYSIS, AgentCapability.VALIDATION},
+            "kb_librarian": {AgentCapability.RESEARCH, AgentCapability.SYNTHESIS},
+            "system_commands": {AgentCapability.EXECUTION, AgentCapability.MONITORING},
+            "security_scanner": {AgentCapability.SECURITY, AgentCapability.VALIDATION},
+            "npu_code_search": {AgentCapability.ANALYSIS, AgentCapability.OPTIMIZATION},
+            "development_speedup": {AgentCapability.ANALYSIS, AgentCapability.OPTIMIZATION},
+            "json_formatter": {AgentCapability.VALIDATION, AgentCapability.SYNTHESIS},
+            "llm_failsafe": {AgentCapability.SYNTHESIS},
+        }
+
+        # Performance tracking (AgentPerformance objects, distinct from AgentProfile registry)
+        self.agent_performance: Dict[str, AgentPerformance] = {}
+        for agent in self.agent_capabilities:
+            self.agent_performance[agent] = AgentPerformance(agent_type=agent)
+
+        # Workflow tracking
+        self.active_workflows: Dict[str, WorkflowPlan] = {}
+        self.task_queue: asyncio.Queue = asyncio.Queue()
+        self.running_tasks: Dict[str, AgentTask] = {}
+
+        # Coordination channels
+        self.coordination_prefix = "autobot:orchestrator:coord:"
+        self.result_prefix = "autobot:orchestrator:results:"
+
+        # Resource management
+        self.max_parallel_tasks: int = 5
+        self.resource_semaphore: asyncio.Semaphore = asyncio.Semaphore(self.max_parallel_tasks)
+
+        # Multi-agent planner and strategy handler (lazy)
+        self._ma_planner = MultiAgentWorkflowPlanner(self.agent_capabilities)
+        self._ma_strategy_handler: Optional[ExecutionStrategyHandler] = None
+
+        # Agent client registry for actual agent instances
+        from agents.agent_client import AgentRegistry as AgentClientRegistry
+        self._agent_client_registry = AgentClientRegistry()
+
     def __init__(self, config_mgr=None):
-        """Initialize consolidated orchestrator with all core components."""
+        """Initialize orchestrator with all core and multi-agent components."""
         self._init_core_components(config_mgr)
         self._init_task_state()
         self._init_enhanced_components()
         self._init_classification_agent()
         self._initialize_default_agents()
+        self._init_multi_agent_state()
 
         logger.info(
-            "Consolidated Orchestrator initialized with session: %s", self.session_id
+            "Orchestrator initialized with session: %s", self.session_id
         )
 
     def _create_research_agent_profile(self) -> AgentProfile:
@@ -967,7 +1033,7 @@ class ConsolidatedOrchestrator:
     ) -> Dict[str, Any]:
         """Execute workflow with enhanced orchestration and auto-documentation.
 
-        Issue #3393: Merged from enhanced_orchestrator.py into ConsolidatedOrchestrator.
+        Issue #3393: Merged from enhanced_orchestrator.py into Orchestrator.
         """
         workflow_id = str(uuid.uuid4())
         start_time = time.time()
@@ -1252,13 +1318,415 @@ class ConsolidatedOrchestrator:
             logger.error("Failed to plan workflow steps: %s", e)
             return []
 
+    # ========================================================================
+    # Multi-Agent Orchestration Methods (merged from EnhancedMultiAgentOrchestrator #5040)
+    # ========================================================================
+
+    async def _ensure_ma_redis(self) -> None:
+        """Lazy-init async Redis client for multi-agent coordination (#2725)."""
+        if self._ma_redis_async is None:
+            self._ma_redis_async = await get_async_redis_client()
+
+    def _get_ma_strategy_handler(self) -> ExecutionStrategyHandler:
+        """Lazy initialization of multi-agent strategy handler."""
+        if self._ma_strategy_handler is None:
+            self._ma_strategy_handler = ExecutionStrategyHandler(
+                max_parallel_tasks=self.max_parallel_tasks,
+                resource_semaphore=self.resource_semaphore,
+                execute_single_task=self._execute_single_agent_task,
+                topological_sort_tasks=self._ma_planner.topological_sort_tasks,
+                dependencies_met=self._ma_planner.dependencies_met,
+                group_pipeline_stages=self._ma_planner.group_pipeline_stages,
+                enhance_task_for_collaboration=self._ma_planner.enhance_task_for_collaboration,
+                coordinate_collaboration=self._coordinate_collaboration,
+            )
+        return self._ma_strategy_handler
+
+    def _build_planning_prompt(self, goal: str) -> str:
+        """Build LLM prompt for multi-agent workflow planning."""
+        capabilities_json = json.dumps(
+            {
+                agent: [cap.value for cap in caps]
+                for agent, caps in self.agent_capabilities.items()
+            },
+            indent=2,
+        )
+        return f"""
+        You are an expert workflow planner. Analyze this goal and create an execution plan.
+
+        Goal: {goal}
+
+        Available agents and their capabilities:
+        {capabilities_json}
+
+        Create a workflow plan with:
+        1. Required agents and their specific tasks
+        2. Task dependencies (which tasks must complete before others)
+        3. Execution strategy (sequential, parallel, pipeline, collaborative)
+        4. Success criteria
+        5. Estimated duration and resource requirements
+
+        Respond in JSON format:
+        {{
+            "strategy": "parallel|sequential|pipeline|collaborative",
+            "tasks": [
+                {{
+                    "agent": "agent_type",
+                    "action": "specific_action",
+                    "inputs": {{}},
+                    "dependencies": ["task_ids"],
+                    "priority": 1-10,
+                    "capabilities_required": ["capability_names"]
+                }}
+            ],
+            "success_criteria": ["criteria1", "criteria2"],
+            "estimated_duration": 60.0,
+            "resource_requirements": {{}}
+        }}
+        """
+
+    def _parse_planning_response(self, response: Any, goal: str) -> Dict[str, Any]:
+        """Parse LLM planning response with fallback."""
+        if response.tier_used.value in FALLBACK_TIERS:
+            return self._ma_planner.create_fallback_plan(goal)
+        from agents.json_formatter_agent import json_formatter
+        parse_result = json_formatter.parse_llm_response(response.content)
+        if parse_result.success:
+            return parse_result.data
+        return self._ma_planner.create_fallback_plan(goal)
+
+    async def create_workflow_plan(
+        self, goal: str, context: Optional[Dict[str, Any]] = None
+    ) -> WorkflowPlan:
+        """Create an intelligent workflow plan for a goal via LLM planning.
+
+        Issue #5040: Merged from EnhancedMultiAgentOrchestrator.
+        """
+        logger.info("Creating workflow plan for: %s", goal)
+        try:
+            from agents.llm_failsafe_agent import get_robust_llm_response
+            planning_prompt = self._build_planning_prompt(goal)
+            response = await get_robust_llm_response(planning_prompt, context)
+            plan_data = self._parse_planning_response(response, goal)
+            plan = self._ma_planner.build_workflow_plan(goal, plan_data)
+            self.active_workflows[plan.plan_id] = plan
+            return plan
+        except Exception as e:
+            logger.error("Failed to create workflow plan: %s", e)
+            return self._ma_planner.create_simple_workflow_plan(goal)
+
+    async def _evaluate_workflow_criteria(
+        self, plan: WorkflowPlan, results: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Evaluate structured success criteria for a workflow."""
+        if plan.structured_criteria:
+            evaluator = SuccessCriteriaEvaluator()
+            eval_result = await evaluator.evaluate(plan.structured_criteria, results)
+            return eval_result.to_dict()
+        binary_pass = self._ma_planner.check_success_criteria(plan, results)
+        return {
+            "overall": "full" if binary_pass else "failed",
+            "score": 1.0 if binary_pass else 0.0,
+            "results": [],
+        }
+
+    async def _handle_workflow_execution_success(
+        self,
+        plan: WorkflowPlan,
+        results: Dict[str, Any],
+        start_time: float,
+    ) -> Dict[str, Any]:
+        """Handle successful workflow completion including metrics and event publishing."""
+        criteria_eval = await self._evaluate_workflow_criteria(plan, results)
+        success = criteria_eval["overall"] in ("full", "partial")
+        execution_time = time.time() - start_time
+        await self._update_workflow_performance_metrics(plan, results, execution_time)
+        await self._publish_workflow_event(
+            plan.plan_id,
+            "workflow_completed",
+            {
+                "success": success,
+                "execution_time": execution_time,
+                "results_summary": self._ma_planner.summarize_results(results),
+                "criteria_evaluation": criteria_eval,
+            },
+        )
+        return {
+            "plan_id": plan.plan_id,
+            "success": success,
+            "results": results,
+            "execution_time": execution_time,
+            "strategy_used": plan.strategy.value,
+            "criteria_evaluation": criteria_eval,
+        }
+
+    async def _handle_workflow_execution_failure(
+        self,
+        plan: WorkflowPlan,
+        error: Exception,
+        results: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Handle workflow failure including fallback plan execution."""
+        logger.error("Workflow execution failed: %s", error)
+        if plan.fallback_plans:
+            logger.info("Attempting fallback plan...")
+            for fallback in plan.fallback_plans:
+                try:
+                    return await self.execute_workflow(fallback)
+                except Exception as fallback_error:
+                    logger.error("Fallback plan failed: %s", fallback_error)
+        return {
+            "plan_id": plan.plan_id,
+            "success": False,
+            "error": str(error),
+            "results": results,
+        }
+
+    async def execute_workflow(self, plan: WorkflowPlan) -> Dict[str, Any]:
+        """Execute a WorkflowPlan with intelligent multi-agent coordination.
+
+        Issue #5040: Merged from EnhancedMultiAgentOrchestrator.
+        """
+        logger.info(
+            "Executing workflow %s with strategy: %s",
+            plan.plan_id,
+            plan.strategy.value,
+        )
+        start_time = time.time()
+        results: Dict[str, Any] = {}
+        try:
+            await self._publish_workflow_event(
+                plan.plan_id,
+                "workflow_started",
+                {
+                    "goal": plan.goal,
+                    "strategy": plan.strategy.value,
+                    "task_count": len(plan.tasks),
+                },
+            )
+            results = await self._get_ma_strategy_handler().execute_by_strategy(plan)
+            return await self._handle_workflow_execution_success(plan, results, start_time)
+        except Exception as e:
+            return await self._handle_workflow_execution_failure(plan, e, results)
+
+    async def _handle_task_timeout(
+        self, task: AgentTask, context: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Handle task timeout with retry logic."""
+        task.fail_execution("Timeout")
+        if task.can_retry():
+            task.increment_retry()
+            logger.warning(
+                "Task %s timed out, retrying (%d/%d)",
+                task.task_id,
+                task.retry_count,
+                task.max_retries,
+            )
+            return await self._execute_single_agent_task(task, context)
+        self._update_task_agent_performance(task.agent_type, False, task.timeout)
+        return task.to_failed_result("Task execution timed out")
+
+    def _handle_task_exception(
+        self, task: AgentTask, error: Exception
+    ) -> Dict[str, Any]:
+        """Handle task execution exception."""
+        task.fail_execution(str(error))
+        execution_time = time.time() - (task.start_time or time.time())
+        self._update_task_agent_performance(task.agent_type, False, execution_time)
+        return task.to_failed_result(str(error))
+
+    async def _execute_single_agent_task(
+        self, task: AgentTask, context: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Execute a single AgentTask via the agent client registry."""
+        task.start_execution()
+        try:
+            async with self.resource_semaphore:
+                agent = await self._get_agent_instance(task.agent_type)
+                if not agent:
+                    raise Exception(f"Agent {task.agent_type} not available")
+                enhanced_inputs = task.get_enhanced_inputs(context)
+                result = await asyncio.wait_for(
+                    agent.process_request(
+                        {"action": task.action, "payload": enhanced_inputs}
+                    ),
+                    timeout=task.timeout,
+                )
+                task.complete_execution(result)
+                self._update_task_agent_performance(
+                    task.agent_type, True, task.get_execution_time()
+                )
+                return task.to_completed_result(result)
+        except asyncio.TimeoutError:
+            return await self._handle_task_timeout(task, context)
+        except Exception as e:
+            return self._handle_task_exception(task, e)
+
+    async def get_agent_recommendations(
+        self, task_type: str, capabilities_needed: Set
+    ) -> List[str]:
+        """Get recommended agents for a task based on capabilities and performance.
+
+        Issue #5040: Merged from EnhancedMultiAgentOrchestrator.
+        """
+        suitable_agents = []
+        for agent, caps in self.agent_capabilities.items():
+            if capabilities_needed.issubset(caps):
+                performance = self.agent_performance[agent]
+                reliability = performance.reliability_score
+                capability_match = len(capabilities_needed.intersection(caps)) / len(
+                    capabilities_needed
+                )
+                experience_boost = min(performance.total_tasks / 100, 1.0)
+                score = (
+                    (reliability * 0.5) + (capability_match * 0.3) + (experience_boost * 0.2)
+                )
+                suitable_agents.append((agent, score))
+        suitable_agents.sort(key=lambda x: x[1], reverse=True)
+        return [agent for agent, _ in suitable_agents]
+
+    async def _coordinate_collaboration(
+        self, plan: WorkflowPlan, collab_channel: str
+    ) -> None:
+        """Coordinate inter-agent collaboration via Redis pubsub."""
+        await self._ensure_ma_redis()
+        try:
+            pubsub = self._ma_redis_async.pubsub()
+            await pubsub.subscribe(collab_channel)
+            shared_context: Dict[str, Any] = {}
+            async for message in pubsub.listen():
+                if message["type"] != "message":
+                    continue
+                try:
+                    data = json.loads(message["data"])
+                    if data.get("type") == "share_insight":
+                        agent = data.get("agent")
+                        insight = data.get("insight")
+                        shared_context[f"{agent}_insight"] = insight
+                        await self._broadcast_to_agents(
+                            collab_channel,
+                            {"type": "context_update", "shared_context": shared_context},
+                        )
+                except Exception as e:
+                    logger.error("Collaboration coordination error: %s", e)
+        except asyncio.CancelledError:
+            await pubsub.unsubscribe(collab_channel)
+            raise
+
+    async def _broadcast_to_agents(self, channel: str, data: Dict[str, Any]) -> None:
+        """Broadcast data to agents on collaboration channel."""
+        await self._ensure_ma_redis()
+        await self._ma_redis_async.publish(channel, json.dumps(data))
+
+    async def _update_workflow_performance_metrics(
+        self, plan: WorkflowPlan, results: Dict[str, Any], execution_time: float
+    ) -> None:
+        """Update agent performance metrics for all tasks in a completed workflow."""
+        for task in plan.tasks:
+            result = results.get(task.task_id, {})
+            if result:
+                success = result.get("status") == "completed"
+                task_time = result.get("execution_time", 0)
+                self._update_task_agent_performance(task.agent_type, success, task_time)
+
+    def _update_task_agent_performance(
+        self, agent_type: str, success: bool, execution_time: float
+    ) -> None:
+        """Update AgentPerformance metrics for multi-agent task execution.
+
+        Issue #5040: Renamed from _update_agent_performance (EnhancedMultiAgentOrchestrator)
+        to avoid collision with Orchestrator._update_agent_performance which
+        operates on AgentProfile objects. This method operates on AgentPerformance objects.
+        """
+        if agent_type in self.agent_performance:
+            perf = self.agent_performance[agent_type]
+            perf.total_tasks += 1
+            if success:
+                perf.successful_tasks += 1
+            else:
+                perf.failed_tasks += 1
+            perf.average_execution_time = (
+                perf.average_execution_time * (perf.total_tasks - 1) + execution_time
+            ) / perf.total_tasks
+            perf.reliability_score = perf.successful_tasks / perf.total_tasks
+            perf.last_update = time.time()
+
+    async def _publish_workflow_event(
+        self, workflow_id: str, event_type: str, data: Dict[str, Any]
+    ) -> None:
+        """Publish a workflow lifecycle event via the event manager."""
+        await _event_manager.publish(
+            "workflow_event",
+            {
+                "workflow_id": workflow_id,
+                "event_type": event_type,
+                "timestamp": time.time(),
+                "data": data,
+            },
+        )
+
+    async def _get_agent_instance(self, agent_type: str) -> Optional[Any]:
+        """Get an agent instance from the agent client registry."""
+        agent = self._agent_client_registry.get_agent(agent_type)
+        if agent is not None:
+            await self._agent_client_registry.update_agent_health(agent_type)
+            return agent
+        logger.warning(
+            "Agent '%s' not found in registry. Available agents: %s",
+            agent_type,
+            self._agent_client_registry.list_agents(),
+        )
+        return None
+
+    def get_performance_report(self) -> Dict[str, Any]:
+        """Get comprehensive performance report for all tracked agents.
+
+        Issue #5040: Merged from EnhancedMultiAgentOrchestrator.
+        """
+        return {
+            "agent_performance": {
+                agent: {
+                    "total_tasks": perf.total_tasks,
+                    "success_rate": perf.reliability_score,
+                    "average_time": perf.average_execution_time,
+                    "last_update": perf.last_update,
+                }
+                for agent, perf in self.agent_performance.items()
+            },
+            "active_workflows": len(self.active_workflows),
+            "capabilities_coverage": self._calculate_capability_coverage(),
+        }
+
+    def _calculate_capability_coverage(self) -> Dict[str, float]:
+        """Calculate coverage for each capability across all tracked agents."""
+        coverage: Dict[str, float] = {}
+        for capability in AgentCapability:
+            agents_with_cap = sum(
+                1 for caps in self.agent_capabilities.values() if capability in caps
+            )
+            coverage[capability.value] = agents_with_cap / len(self.agent_capabilities)
+        return coverage
+
+
+async def create_and_execute_workflow(
+    goal: str, context: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """Create and execute a multi-agent workflow plan.
+
+    Issue #5040: Replaces enhanced_orchestration.create_and_execute_workflow.
+    Uses the shared Orchestrator singleton.
+    """
+    orch = get_orchestrator_sync()
+    plan = await orch.create_workflow_plan(goal, context)
+    return await orch.execute_workflow(plan)
+
 
 # Global orchestrator instance (thread-safe)
 _orchestrator_instance = None
 _orchestrator_lock = asyncio.Lock()
 
 
-async def get_orchestrator() -> ConsolidatedOrchestrator:
+async def get_orchestrator() -> Orchestrator:
     """Get or create global orchestrator instance (thread-safe)"""
     global _orchestrator_instance
 
@@ -1266,7 +1734,7 @@ async def get_orchestrator() -> ConsolidatedOrchestrator:
         async with _orchestrator_lock:
             # Double-check after acquiring lock
             if _orchestrator_instance is None:
-                _orchestrator_instance = ConsolidatedOrchestrator()
+                _orchestrator_instance = Orchestrator()
                 await _orchestrator_instance.initialize()
 
     return _orchestrator_instance
@@ -1288,19 +1756,20 @@ async def shutdown_orchestrator():
 _sync_instance_lock = __import__("threading").Lock()
 
 
-def get_orchestrator_sync() -> ConsolidatedOrchestrator:
-    """Return the shared ConsolidatedOrchestrator singleton (sync-safe).
+def get_orchestrator_sync() -> Orchestrator:
+    """Return the shared Orchestrator singleton (sync-safe).
 
     Issue #3393: Replaces the sync get_orchestrator() that was in
     enhanced_orchestrator.py.  Use the async get_orchestrator() when you are
     inside an async context and need the fully-initialized instance.
+    Issue #5040: Orchestrator is the single conductor.
     """
     global _orchestrator_instance
     if _orchestrator_instance is None:
         with _sync_instance_lock:
             if _orchestrator_instance is None:
-                logger.info("Creating shared ConsolidatedOrchestrator singleton (sync)")
-                _orchestrator_instance = ConsolidatedOrchestrator()
+                logger.info("Creating shared Orchestrator singleton (sync)")
+                _orchestrator_instance = Orchestrator()
     return _orchestrator_instance
 
 
@@ -1309,8 +1778,8 @@ def get_orchestrator_sync() -> ConsolidatedOrchestrator:
 # ============================================================================
 
 __all__ = [
-    # Main orchestrator classes
-    "ConsolidatedOrchestrator",
+    # Main orchestrator class
+    "Orchestrator",
     "OrchestratorConfig",
     # Enums
     "TaskPriority",
@@ -1324,8 +1793,14 @@ __all__ = [
     "AgentProfile",
     "WorkflowDocumentation",
     "AgentInteraction",
+    # Multi-agent workflow types (Issue #5040: merged from enhanced_orchestration)
+    "WorkflowPlan",
+    "AgentTask",
+    "AgentPerformance",
+    "ExecutionStrategy",
     # Functions
     "get_orchestrator",
     "get_orchestrator_sync",
     "shutdown_orchestrator",
+    "create_and_execute_workflow",
 ]

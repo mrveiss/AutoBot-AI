@@ -352,7 +352,7 @@ async def get_loop_status(
 
     # Import lazily to avoid hard startup dependency
     try:
-        from services.knowledge.autonomous_loop import get_loop_orchestrator
+        from services.knowledge.autonomous_loop import get_loop_runner as get_loop_orchestrator
 
         orchestrator = await get_loop_orchestrator(None, dry_run=cfg.autonomous_loop_dry_run)
         status = orchestrator.get_status()
@@ -391,7 +391,7 @@ async def approve_loop_variant(
     Issue #4680.
     """
     from services.rag_config import get_rag_config
-    from services.knowledge.autonomous_loop import get_loop_orchestrator
+    from services.knowledge.autonomous_loop import get_loop_runner as get_loop_orchestrator
 
     cfg = get_rag_config()
     orchestrator = await get_loop_orchestrator(None, dry_run=cfg.autonomous_loop_dry_run)
@@ -425,7 +425,7 @@ async def reject_loop_variant(
     Issue #4916.
     """
     from services.rag_config import get_rag_config
-    from services.knowledge.autonomous_loop import get_loop_orchestrator
+    from services.knowledge.autonomous_loop import get_loop_runner as get_loop_orchestrator
 
     cfg = get_rag_config()
     orchestrator = await get_loop_orchestrator(None, dry_run=cfg.autonomous_loop_dry_run)
