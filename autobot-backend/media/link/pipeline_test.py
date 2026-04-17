@@ -14,6 +14,9 @@ import pytest
 from media.core.types import MediaInput, MediaType, ProcessingIntent
 from media.link.pipeline import LinkPipeline
 
+bs4 = pytest.importorskip("bs4", reason="beautifulsoup4 not installed")
+BeautifulSoup = bs4.BeautifulSoup
+
 
 def _make_input(url, metadata=None):
     return MediaInput(
@@ -53,8 +56,6 @@ class TestLinkPipelineHtmlParsing:
         self.pipe = LinkPipeline()
 
     def _soup(self, html):
-        from bs4 import BeautifulSoup
-
         return BeautifulSoup(html, "html.parser")
 
     def test_extract_title_from_title_tag(self):
