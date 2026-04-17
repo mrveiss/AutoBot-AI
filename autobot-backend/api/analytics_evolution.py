@@ -27,6 +27,7 @@ from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_utils import decode_redis_value as _decode_redis_value
 from autobot_shared.security.path_validator import validate_path
 
 logger = logging.getLogger(__name__)
@@ -63,11 +64,6 @@ def _build_evolution_prefixes(source_id: Optional[str]) -> tuple[str, str, str]:
     else:
         ev = EVOLUTION_PREFIX
     return ev, f"{ev}snapshot:", f"{ev}patterns:"
-
-
-def _decode_redis_value(value) -> str:
-    """Decode Redis bytes value to string (Issue #315)."""
-    return value.decode("utf-8") if isinstance(value, bytes) else value
 
 
 def _get_snapshot_data(redis_client, keys: list) -> dict | None:
