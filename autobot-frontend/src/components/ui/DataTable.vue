@@ -13,16 +13,29 @@
     </div>
 
     <!-- Table -->
+    <div
+      v-if="loading || sortedData.length === 0"
+      aria-live="polite"
+      aria-atomic="true"
+      class="sr-only"
+    >
+      {{ loading ? t('ui.dataTable.loading') : t('ui.dataTable.noDataAvailable') }}
+    </div>
     <div class="table-wrapper">
-      <table class="data-table">
+      <table
+        class="data-table"
+        :aria-label="title || t('ui.dataTable.dataTable')"
+        :aria-busy="loading"
+      >
         <thead>
           <tr>
             <th
               v-for="column in columns"
               :key="column.key"
+              scope="col"
               :class="{ sortable: column.sortable }"
               @click="column.sortable ? handleSort(column.key) : null"
-              :role="column.sortable ? 'button' : undefined"
+              :role="column.sortable ? 'columnheader' : undefined"
               :tabindex="column.sortable ? 0 : undefined"
               :aria-sort="column.sortable && sortKey === column.key ? (sortDirection === 'asc' ? 'ascending' : 'descending') : (column.sortable ? 'none' : undefined)"
               :aria-label="column.sortable ? t('ui.dataTable.sortBy', { column: column.label }) : undefined"
@@ -37,7 +50,7 @@
                 aria-hidden="true"
               ></i>
             </th>
-            <th v-if="$slots.actions" class="actions-column">{{ t('ui.dataTable.actions') }}</th>
+            <th v-if="$slots.actions" scope="col" class="actions-column">{{ t('ui.dataTable.actions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -71,25 +84,31 @@
     </div>
 
     <!-- Pagination -->
-    <div v-if="pagination && totalPages > 1" class="table-pagination">
+    <nav
+      v-if="pagination && totalPages > 1"
+      class="table-pagination"
+      :aria-label="t('ui.dataTable.pagination')"
+    >
       <button
         class="pagination-btn"
         :disabled="currentPage === 1"
+        :aria-label="t('ui.dataTable.previousPage')"
         @click="handlePageChange(currentPage - 1)"
       >
-        <i class="fas fa-chevron-left"></i>
+        <i class="fas fa-chevron-left" aria-hidden="true"></i>
       </button>
-      <span class="pagination-info">
+      <span class="pagination-info" aria-live="polite" aria-atomic="true">
         {{ t('ui.dataTable.pageOf', { current: currentPage, total: totalPages }) }}
       </span>
       <button
         class="pagination-btn"
         :disabled="currentPage === totalPages"
+        :aria-label="t('ui.dataTable.nextPage')"
         @click="handlePageChange(currentPage + 1)"
       >
-        <i class="fas fa-chevron-right"></i>
+        <i class="fas fa-chevron-right" aria-hidden="true"></i>
       </button>
-    </div>
+    </nav>
   </div>
 </template>
 
@@ -241,6 +260,19 @@ const formatCell = (value: any, column: Column) => {
  * All colors reference CSS custom properties from design-tokens.css
  */
 
+/* Visually hidden but accessible to screen readers */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .data-table-container {
   background: var(--bg-card);
   border-radius: var(--radius-default);
@@ -306,6 +338,11 @@ const formatCell = (value: any, column: Column) => {
   color: var(--text-primary);
 }
 
+.data-table th.sortable:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
 .data-table th.sortable i {
   margin-left: var(--spacing-2);
   font-size: var(--text-xs);
@@ -368,6 +405,11 @@ const formatCell = (value: any, column: Column) => {
 .pagination-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.pagination-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* Issue #901: Monospace for page numbers */

@@ -4968,7 +4968,12 @@
       "actions": "Actions",
       "noDataAvailable": "No data available",
       "noItemsToDisplay": "No items to display",
-      "pageOf": "Page {current} of {total}"
+      "pageOf": "Page {current} of {total}",
+      "pagination": "Table pagination",
+      "previousPage": "Previous page",
+      "nextPage": "Next page",
+      "dataTable": "Data table",
+      "loading": "Loading data..."
     },
     "hostSelection": {
       "title": "Select Host",
@@ -5645,8 +5650,8 @@
   },
   "operations": {
     "view": {
-      "title": "Operations",
-      "subtitle": "Monitor and manage ongoing operations",
+      "title": "Long-Running Operations",
+      "subtitle": "Monitor and manage background tasks",
       "refresh": "Refresh",
       "loadError": "Failed to load operations"
     },
@@ -5695,12 +5700,6 @@
       "resume": "Resume",
       "viewDetails": "View Details",
       "showingCount": "Showing {shown} of {total} operations"
-    },
-    "view": {
-      "title": "Long-Running Operations",
-      "subtitle": "Monitor and manage background tasks",
-      "refresh": "Refresh",
-      "loadError": "Failed to load operations"
     },
     "panel": {
       "selectOperation": "Select an operation to view details"
