@@ -638,7 +638,9 @@ export function useAnalyticsDataFetchers(
   const getCodebaseStats = async () => {
     try {
       const backendUrl = await appConfig.getServiceUrl('backend')
-      const statsEndpoint = `${backendUrl}/api/analytics/codebase/stats`
+      const statsEndpoint = withSourceId(
+        `${backendUrl}/api/analytics/codebase/stats`,
+      )
       const response = await fetchWithAuth(statsEndpoint)
       if (!response.ok) {
         throw new Error(
@@ -669,7 +671,9 @@ export function useAnalyticsDataFetchers(
     )
     try {
       const backendUrl = await appConfig.getServiceUrl('backend')
-      const problemsEndpoint = `${backendUrl}/api/analytics/codebase/problems`
+      const problemsEndpoint = withSourceId(
+        `${backendUrl}/api/analytics/codebase/problems`,
+      )
       const response = await fetchWithAuth(problemsEndpoint)
       if (!response.ok) {
         throw new Error(
