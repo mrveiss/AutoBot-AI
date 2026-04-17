@@ -11,7 +11,7 @@
           : 'text-autobot-text-primary hover:bg-autobot-bg-tertiary'
       ]"
       @click="toggle"
-      @keydown.escape="close"
+      @keydown.escape="close(true)"
     >
       <span>{{ $t('nav.more') }}</span>
       <svg
@@ -34,7 +34,7 @@
         class="fixed z-50 bg-autobot-bg-secondary border border-autobot-border rounded-md shadow-lg py-1 min-w-40"
         role="menu"
         :aria-label="$t('nav.moreItems')"
-        @keydown.escape="close"
+        @keydown.escape="close(true)"
       >
         <router-link
           v-for="item in items"
@@ -109,7 +109,7 @@ const hasActiveItem = computed(() =>
 function positionDropdown() {
   if (!triggerRef.value) return
   const rect = triggerRef.value.getBoundingClientRect()
-  const menuWidth = 160  // min-w-40 = 10rem
+  const menuWidth = dropdownRef.value?.getBoundingClientRect().width || 160
   const spaceRight = window.innerWidth - rect.left
   const left = spaceRight < menuWidth ? rect.right - menuWidth : rect.left
   dropdownStyle.value = {
@@ -129,14 +129,16 @@ async function toggle() {
     await nextTick()
     const firstItem = dropdownRef.value?.querySelector<HTMLElement>('[role="menuitem"]')
     firstItem?.focus()
+    // Re-position now that the dropdown is rendered and its real width is known
+    positionDropdown()
   } else {
     close()
   }
 }
 
-function close() {
+function close(restoreFocus = false) {
   open.value = false
-  triggerRef.value?.focus()
+  if (restoreFocus) triggerRef.value?.focus()
 }
 
 function onClickOutside(event: MouseEvent) {
