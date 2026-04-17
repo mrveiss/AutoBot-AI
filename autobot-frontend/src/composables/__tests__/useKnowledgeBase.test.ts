@@ -166,9 +166,7 @@ describe('useKnowledgeBase', () => {
         last_updated: '2025-04-12T10:00:00Z',
       }
 
-      const response = mockApiResponse(mockStats)
-      vi.mocked(apiClient.get).mockResolvedValue(response)
-      mockParseApi<KnowledgeStats>(mockStats)
+      vi.mocked(apiClient.get).mockResolvedValue(mockStats)
 
       const { fetchStats } = useKnowledgeBase()
       const result = await fetchStats()
@@ -183,16 +181,6 @@ describe('useKnowledgeBase', () => {
       const { fetchStats } = useKnowledgeBase()
 
       await expect(fetchStats()).rejects.toThrow('Failed to fetch stats')
-    })
-
-    it('should throw error when parseApiResponse fails', async () => {
-      const response = mockApiResponse<null>(null)
-      vi.mocked(apiClient.get).mockResolvedValue(response)
-      vi.mocked(parseApiResponse).mockRejectedValue(new Error('Parse failed'))
-
-      const { fetchStats } = useKnowledgeBase()
-
-      await expect(fetchStats()).rejects.toThrow('Parse failed')
     })
   })
 
@@ -209,9 +197,7 @@ describe('useKnowledgeBase', () => {
         total: 2,
       }
 
-      const response = mockApiResponse(mockCategoriesResponse)
-      vi.mocked(apiClient.get).mockResolvedValue(response)
-      mockParseApi<CategoriesListResponse>(mockCategoriesResponse)
+      vi.mocked(apiClient.get).mockResolvedValue(mockCategoriesResponse)
 
       const { fetchCategories } = useKnowledgeBase()
       const result = await fetchCategories()
@@ -227,9 +213,7 @@ describe('useKnowledgeBase', () => {
       // shape-invalid.
       const invalidResponse: unknown = { notCategories: [] }
 
-      const response = mockApiResponse(invalidResponse)
-      vi.mocked(apiClient.get).mockResolvedValue(response)
-      mockParseApi<unknown>(invalidResponse)
+      vi.mocked(apiClient.get).mockResolvedValue(invalidResponse)
 
       const { fetchCategories } = useKnowledgeBase()
 
@@ -245,9 +229,7 @@ describe('useKnowledgeBase', () => {
         ],
       }
 
-      const response = mockApiResponse(mockCategory)
-      vi.mocked(apiClient.get).mockResolvedValue(response)
-      mockParseApi<CategoryResponse>(mockCategory)
+      vi.mocked(apiClient.get).mockResolvedValue(mockCategory)
 
       const { fetchCategory } = useKnowledgeBase()
       const result = await fetchCategory('security')
@@ -283,9 +265,7 @@ describe('useKnowledgeBase', () => {
         },
       }
 
-      const response = mockApiResponse(mockCategorizedFacts)
-      vi.mocked(apiClient.get).mockResolvedValue(response)
-      mockParseApi<CategorizedFactsResponse>(mockCategorizedFacts)
+      vi.mocked(apiClient.get).mockResolvedValue(mockCategorizedFacts)
 
       const { getCategorizedFacts } = useKnowledgeBase()
       const result = await getCategorizedFacts()
@@ -312,9 +292,7 @@ describe('useKnowledgeBase', () => {
         },
       }
 
-      const response = mockApiResponse(mockCategorizedFacts)
-      vi.mocked(apiClient.get).mockResolvedValue(response)
-      mockParseApi<CategorizedFactsResponse>(mockCategorizedFacts)
+      vi.mocked(apiClient.get).mockResolvedValue(mockCategorizedFacts)
 
       const { getCategorizedFacts } = useKnowledgeBase()
       await getCategorizedFacts('security', 100)
@@ -330,9 +308,7 @@ describe('useKnowledgeBase', () => {
       // shape is deliberately non-conforming.
       const invalidResponse: unknown = { total_facts: 0, noCategoriesField: {} }
 
-      const response = mockApiResponse(invalidResponse)
-      vi.mocked(apiClient.get).mockResolvedValue(response)
-      mockParseApi<unknown>(invalidResponse)
+      vi.mocked(apiClient.get).mockResolvedValue(invalidResponse)
 
       const { getCategorizedFacts } = useKnowledgeBase()
 
@@ -401,9 +377,7 @@ describe('useKnowledgeBase', () => {
         total_results: 1,
       }
 
-      const response = mockApiResponse(mockSearchResult)
-      vi.mocked(apiClient.post).mockResolvedValue(response)
-      mockParseApi<SearchResponse>(mockSearchResult)
+      vi.mocked(apiClient.post).mockResolvedValue(mockSearchResult)
 
       const { searchKnowledge } = useKnowledgeBase()
       const result = await searchKnowledge('test query')
@@ -431,9 +405,7 @@ describe('useKnowledgeBase', () => {
         total_results: 1,
       }
 
-      const response = mockApiResponse(mockResults)
-      vi.mocked(apiClient.post).mockResolvedValue(response)
-      mockParseApi<SearchResponse>(mockResults)
+      vi.mocked(apiClient.post).mockResolvedValue(mockResults)
 
       const { advancedSearch } = useKnowledgeBase()
       const result = await advancedSearch({
@@ -459,9 +431,7 @@ describe('useKnowledgeBase', () => {
     it('should support hybrid search mode', async () => {
       const mockResults: SearchResponse = { results: [], total_results: 0 }
 
-      const response = mockApiResponse(mockResults)
-      vi.mocked(apiClient.post).mockResolvedValue(response)
-      mockParseApi<SearchResponse>(mockResults)
+      vi.mocked(apiClient.post).mockResolvedValue(mockResults)
 
       const { advancedSearch } = useKnowledgeBase()
       await advancedSearch({
@@ -497,9 +467,7 @@ describe('useKnowledgeBase', () => {
         },
       }
 
-      const response = mockApiResponse(mockAddResponse)
-      vi.mocked(apiClient.post).mockResolvedValue(response)
-      mockParseApi<AddFactResponse>(mockAddResponse)
+      vi.mocked(apiClient.post).mockResolvedValue(mockAddResponse)
 
       const { addFact } = useKnowledgeBase()
       const result = await addFact({
@@ -530,9 +498,7 @@ describe('useKnowledgeBase', () => {
         },
       }
 
-      const response = mockApiResponse(mockAddResponse)
-      vi.mocked(apiClient.post).mockResolvedValue(response)
-      mockParseApi<AddFactResponse>(mockAddResponse)
+      vi.mocked(apiClient.post).mockResolvedValue(mockAddResponse)
 
       const { addFact } = useKnowledgeBase()
       const result = await addFact({
@@ -592,9 +558,7 @@ describe('useKnowledgeBase', () => {
         { machine_id: 'host2', os_type: 'linux', distro: 'CentOS' },
       ]
 
-      const response = mockApiResponse(mockProfiles)
-      vi.mocked(apiClient.get).mockResolvedValue(response)
-      mockParseApi<MachineProfile[]>(mockProfiles)
+      vi.mocked(apiClient.get).mockResolvedValue(mockProfiles)
 
       const { fetchMachineProfiles } = useKnowledgeBase()
       const result = await fetchMachineProfiles()
@@ -622,9 +586,7 @@ describe('useKnowledgeBase', () => {
         current_man_page_files: 1500,
       }
 
-      const response = mockApiResponse(mockSummary)
-      vi.mocked(apiClient.get).mockResolvedValue(response)
-      mockParseApi<ManPagesSummary>(mockSummary)
+      vi.mocked(apiClient.get).mockResolvedValue(mockSummary)
 
       const { fetchManPagesSummary } = useKnowledgeBase()
       const result = await fetchManPagesSummary()
@@ -657,9 +619,7 @@ describe('useKnowledgeBase', () => {
         total_processed: 50,
       }
 
-      const response = mockApiResponse(mockVectorizationResponse)
-      vi.mocked(apiClient.post).mockResolvedValue(response)
-      mockParseApi<VectorizationResponse>(mockVectorizationResponse)
+      vi.mocked(apiClient.post).mockResolvedValue(mockVectorizationResponse)
 
       const { vectorizeFacts } = useKnowledgeBase()
       const result = await vectorizeFacts()
@@ -686,9 +646,7 @@ describe('useKnowledgeBase', () => {
         total_processed: 125,
       }
 
-      const response = mockApiResponse(mockResponse)
-      vi.mocked(apiClient.post).mockResolvedValue(response)
-      mockParseApi<VectorizationResponse>(mockResponse)
+      vi.mocked(apiClient.post).mockResolvedValue(mockResponse)
 
       const { vectorizeFacts } = useKnowledgeBase()
       await vectorizeFacts(100, 1.0, false)
@@ -713,9 +671,7 @@ describe('useKnowledgeBase', () => {
         vectorized_facts: 50,
       }
 
-      const response = mockApiResponse(mockStatus)
-      vi.mocked(apiClient.get).mockResolvedValue(response)
-      mockParseApi<VectorizationStatusResponse>(mockStatus)
+      vi.mocked(apiClient.get).mockResolvedValue(mockStatus)
 
       const { getVectorizationStatus } = useKnowledgeBase()
       const result = await getVectorizationStatus()
@@ -736,9 +692,7 @@ describe('useKnowledgeBase', () => {
         result: { processed: 100 },
       }
 
-      const response = mockApiResponse(mockJobStatus)
-      vi.mocked(apiClient.get).mockResolvedValue(response)
-      mockParseApi<JobStatus>(mockJobStatus)
+      vi.mocked(apiClient.get).mockResolvedValue(mockJobStatus)
 
       const { pollJobStatus } = useKnowledgeBase()
       const result = await pollJobStatus('task-123')
@@ -755,9 +709,7 @@ describe('useKnowledgeBase', () => {
       for (const status of statuses) {
         const mockJobStatus: JobStatus = { task_id: 'task-123', status }
 
-        const response = mockApiResponse(mockJobStatus)
-        vi.mocked(apiClient.get).mockResolvedValue(response)
-        mockParseApi<JobStatus>(mockJobStatus)
+        vi.mocked(apiClient.get).mockResolvedValue(mockJobStatus)
 
         const { pollJobStatus } = useKnowledgeBase()
         const result = await pollJobStatus('task-123')
@@ -776,9 +728,7 @@ describe('useKnowledgeBase', () => {
         facts_added: 50,
       }
 
-      const response = mockApiResponse(mockResponse)
-      vi.mocked(apiClient.post).mockResolvedValue(response)
-      mockParseApi<MachineKnowledgeResponse>(mockResponse)
+      vi.mocked(apiClient.post).mockResolvedValue(mockResponse)
 
       const { initializeMachineKnowledge } = useKnowledgeBase()
       const result = await initializeMachineKnowledge('host1')
@@ -799,9 +749,7 @@ describe('useKnowledgeBase', () => {
         total_machines: 3,
       }
 
-      const response = mockApiResponse(mockResponse)
-      vi.mocked(apiClient.post).mockResolvedValue(response)
-      mockParseApi<SystemKnowledgeResponse>(mockResponse)
+      vi.mocked(apiClient.post).mockResolvedValue(mockResponse)
 
       const { refreshSystemKnowledge } = useKnowledgeBase()
       const result = await refreshSystemKnowledge()
@@ -1011,9 +959,7 @@ describe('useKnowledgeBase', () => {
         man_pages_added: 150,
       }
 
-      const response = mockApiResponse(mockResponse)
-      vi.mocked(apiClient.post).mockResolvedValue(response)
-      mockParseApi<ManPagesPopulateResponse>(mockResponse)
+      vi.mocked(apiClient.post).mockResolvedValue(mockResponse)
 
       const { populateManPages } = useKnowledgeBase()
       const result = await populateManPages('host1')
@@ -1031,9 +977,7 @@ describe('useKnowledgeBase', () => {
         facts_added: 120,
       }
 
-      const response = mockApiResponse(mockResponse)
-      vi.mocked(apiClient.post).mockResolvedValue(response)
-      mockParseApi<AutoBotDocsResponse>(mockResponse)
+      vi.mocked(apiClient.post).mockResolvedValue(mockResponse)
 
       const { populateAutoBotDocs } = useKnowledgeBase()
       const result = await populateAutoBotDocs()
@@ -1050,9 +994,7 @@ describe('useKnowledgeBase', () => {
         distro: 'Ubuntu 20.04',
       }
 
-      const response = mockApiResponse(mockProfile)
-      vi.mocked(apiClient.get).mockResolvedValue(response)
-      mockParseApi<MachineProfile>(mockProfile)
+      vi.mocked(apiClient.get).mockResolvedValue(mockProfile)
 
       const { fetchMachineProfile } = useKnowledgeBase()
       const result = await fetchMachineProfile('host1')
@@ -1080,9 +1022,7 @@ describe('useKnowledgeBase', () => {
         total_documents: 3,
       }
 
-      const response = mockApiResponse(mockStats)
-      vi.mocked(apiClient.get).mockResolvedValue(response)
-      mockParseApi<KnowledgeStats>(mockStats)
+      vi.mocked(apiClient.get).mockResolvedValue(mockStats)
 
       const { fetchBasicStats } = useKnowledgeBase()
       const result = await fetchBasicStats()
@@ -1105,9 +1045,7 @@ describe('useKnowledgeBase', () => {
         machine_id: 'host1',
       }
 
-      const response = mockApiResponse(mockResponse)
-      vi.mocked(apiClient.post).mockResolvedValue(response)
-      mockParseApi<IntegrationResponse>(mockResponse)
+      vi.mocked(apiClient.post).mockResolvedValue(mockResponse)
 
       const { integrateManPages } = useKnowledgeBase()
       const result = await integrateManPages('host1')
