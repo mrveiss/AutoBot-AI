@@ -668,3 +668,65 @@ async def test_deduplicate_and_rank_no_provenance_unchanged(graph_rag_service):
     assert len(ranked) == 1
     # No adjustment for missing provenance (0.0 delta skipped)
     assert ranked[0].hybrid_score == 0.7
+
+
+@pytest.mark.asyncio
+async def test_metadata_none_does_not_raise(graph_rag_service):
+    """Result with metadata=None passes through _deduplicate_and_rank without AttributeError (#4939)."""
+    result = SearchResult(
+        content="Graph entity F",
+        metadata=None,
+        semantic_score=0.0,
+        keyword_score=0.0,
+        hybrid_score=0.5,
+        relevance_rank=0,
+        source_path="graph:F",
+        chunk_index=0,
+    )
+
+    # Must not raise AttributeError
+    ranked = await graph_rag_service._deduplicate_and_rank([result], max_results=10)
+
+    assert len(ranked) == 1
+    # No provenance adjustment applied when metadata is None
+    assert ranked[0].hybrid_score == 0.5
+
+
+@pytest.mark.asyncio
+async def test_hybrid_score_clamped_at_1_0(graph_rag_service):
+    """hybrid_score + provenance boost is clamped at 1.0 (#4943)."""
+    result = SearchResult(
+        content="Graph entity G",
+        metadata={"source_provenance": "extracted"},
+        semantic_score=0.0,
+        keyword_score=0.0,
+        hybrid_score=0.98,
+        relevance_rank=0,
+        source_path="graph:G",
+        chunk_index=0,
+    )
+
+    ranked = await graph_rag_service._deduplicate_and_rank([result], max_results=10)
+
+    assert len(ranked) == 1
+    assert ranked[0].hybrid_score <= 1.0
+
+
+@pytest.mark.asyncio
+async def test_hybrid_score_clamped_at_0_0(graph_rag_service):
+    """hybrid_score + provenance penalty is clamped at 0.0 (#4943)."""
+    result = SearchResult(
+        content="Graph entity H",
+        metadata={"source_provenance": "ambiguous"},
+        semantic_score=0.0,
+        keyword_score=0.0,
+        hybrid_score=0.02,
+        relevance_rank=0,
+        source_path="graph:H",
+        chunk_index=0,
+    )
+
+    ranked = await graph_rag_service._deduplicate_and_rank([result], max_results=10)
+
+    assert len(ranked) == 1
+    assert ranked[0].hybrid_score >= 0.0

@@ -471,10 +471,10 @@ class GraphRAGService:
         # ranking so that graph-expanded results with "extracted" relations rank
         # above "ambiguous" ones when base scores are equal.
         for r in deduplicated:
-            prov = r.metadata.get("source_provenance") if hasattr(r, "metadata") else None
+            prov = r.metadata.get("source_provenance") if r.metadata else None
             adjustment = provenance_adjustment(prov)
             if adjustment != 0.0:
-                r.hybrid_score = r.hybrid_score + adjustment
+                r.hybrid_score = min(1.0, max(0.0, r.hybrid_score + adjustment))
 
         final_results = self._assign_relevance_ranks(deduplicated, max_results)
 
