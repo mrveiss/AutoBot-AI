@@ -12,6 +12,7 @@
       :aria-labelledby="dialogTitleId"
       :aria-describedby="dialogDescId"
       tabindex="-1"
+      @keydown="handleDialogKeydown"
     >
       <div class="dialog-header">
         <div class="dialog-icon" aria-hidden="true">
@@ -180,7 +181,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue';
+import { ref, nextTick, onMounted, onUnmounted, watch, useId } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { secretsApiClient } from '@/utils/SecretsApiClient';
 import { getBackendUrl } from '@/config/ssot-config';
@@ -231,8 +232,8 @@ const emit = defineEmits<{
 // #1721: In-memory session host preference (avoids clear-text sessionStorage)
 let _sessionHostChoice: string | null = null;
 
-// Stable IDs for ARIA labeling
-const _uid = Math.random().toString(36).substr(2, 9);
+// Stable IDs for ARIA labeling (Vue 3.5+ useId)
+const _uid = useId();
 const dialogTitleId = `host-dialog-title-${_uid}`;
 const dialogDescId = `host-dialog-desc-${_uid}`;
 const hostListLabelId = `host-list-label-${_uid}`;
@@ -414,18 +415,31 @@ const handleEscape = (event: KeyboardEvent) => {
   }
 };
 
-// Focus trap helpers
-const trapFocus = (event: FocusEvent) => {
-  if (!dialogRef.value) return;
-  if (!dialogRef.value.contains(event.target as Node)) {
-    const focusable = dialogRef.value.querySelectorAll<HTMLElement>(
-      'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
-    );
-    if (focusable.length > 0) {
-      focusable[0].focus();
-      event.preventDefault();
-    }
+/**
+ * Real focus trap via Tab/Shift+Tab wrap. Only intercepts when focus would
+ * leave the dialog boundary — otherwise falls through to browser default,
+ * which keeps outside clicks (devtools, etc.) from being yanked back.
+ */
+const handleDialogKeydown = (event: KeyboardEvent) => {
+  if (event.key !== 'Tab' || !dialogRef.value) return;
+
+  const focusable = dialogRef.value.querySelectorAll<HTMLElement>(
+    'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
+  );
+  if (focusable.length === 0) return;
+
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  const active = document.activeElement;
+
+  if (event.shiftKey && active === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && active === last) {
+    event.preventDefault();
+    first.focus();
   }
+  // Otherwise allow default Tab behavior
 };
 
 // Watchers
@@ -434,11 +448,9 @@ watch(() => props.show, async (newValue) => {
   if (newValue) {
     previousActiveElement = document.activeElement as HTMLElement;
     loadHosts();
-    document.addEventListener('focusin', trapFocus);
     await nextTick();
     dialogRef.value?.focus();
   } else {
-    document.removeEventListener('focusin', trapFocus);
     previousActiveElement?.focus();
     previousActiveElement = null;
   }
@@ -451,7 +463,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleEscape);
-  document.removeEventListener('focusin', trapFocus);
 });
 </script>
 
