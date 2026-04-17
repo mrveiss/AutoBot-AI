@@ -68,6 +68,9 @@ class ConnectorConfig:
     last_sync_at: Optional[datetime] = None
     include_patterns: List[str] = field(default_factory=list)
     exclude_patterns: List[str] = field(default_factory=list)
+    # Issue #4421: readiness tier copied from the connector class at instance-
+    # creation time (0 = zero-config, 1 = free key/env var, 2 = credentials).
+    tier: int = 0
 
 
 @dataclass

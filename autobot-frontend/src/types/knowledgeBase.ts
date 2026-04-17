@@ -314,6 +314,13 @@ export interface ConnectorConfig {
   last_sync_at: string | null
   include_patterns: string[]
   exclude_patterns: string[]
+  /**
+   * Issue #4421: readiness tier.
+   *   0 = Zero-config — works immediately.
+   *   1 = Free key / env var needed (e.g. Notion integration token).
+   *   2 = Credentials / OAuth / cookie needed (e.g. database, private GitHub).
+   */
+  tier?: number
 }
 
 /**

@@ -50,6 +50,8 @@ class NotionConnector(AbstractConnector):
     """
 
     connector_type = "notion"
+    # Issue #4421: needs a free Notion integration token (config.token).
+    tier = 1
 
     def __init__(self, config: ConnectorConfig) -> None:
         super().__init__(config)

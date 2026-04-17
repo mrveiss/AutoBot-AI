@@ -2831,6 +2831,14 @@
         "confirm": "Confirm",
         "cancel": "Cancel"
       },
+      "tier": {
+        "ready": "Ready",
+        "readyTooltip": "Zero-config connector — works immediately, no credentials required.",
+        "freeKey": "Free key needed",
+        "freeKeyTooltip": "Needs a free API key or environment variable (for example a Notion integration token).",
+        "setupRequired": "Setup required",
+        "setupRequiredTooltip": "Needs credentials, OAuth, a cookie, or a private connection string."
+      },
       "config": {
         "editTitle": "Edit Connector",
         "addTitle": "Add Connector",

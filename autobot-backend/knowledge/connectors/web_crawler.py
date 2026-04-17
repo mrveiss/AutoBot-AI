@@ -45,6 +45,8 @@ class WebCrawlerConnector(AbstractConnector):
     """
 
     connector_type = "web_crawler"
+    # Issue #4421: zero-config — unauthenticated crawl via Playwright service.
+    tier = 0
 
     def __init__(self, config: ConnectorConfig) -> None:
         super().__init__(config)

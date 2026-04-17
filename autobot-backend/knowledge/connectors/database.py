@@ -47,6 +47,8 @@ class DatabaseConnector(AbstractConnector):
     """
 
     connector_type = "database"
+    # Issue #4421: needs a DB connection string with credentials — tier 2.
+    tier = 2
 
     def __init__(self, config: ConnectorConfig) -> None:
         super().__init__(config)
