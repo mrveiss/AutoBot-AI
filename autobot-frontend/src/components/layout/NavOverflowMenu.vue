@@ -34,6 +34,7 @@
         class="fixed z-50 bg-autobot-bg-secondary border border-autobot-border rounded-md shadow-lg py-1 min-w-40"
         role="menu"
         :aria-label="$t('nav.moreItems')"
+        @keydown.escape="close"
       >
         <router-link
           v-for="item in items"
