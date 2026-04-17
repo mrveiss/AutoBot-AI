@@ -83,12 +83,7 @@ export function useKnowledgeBase() {
     try {
       const response = await apiClient.get<KnowledgeStats>(`${getApiBase()}/knowledge_base/stats`)
 
-      if (!response) {
-        throw new Error('Failed to fetch stats: No response from server');
-      }
-
-      const data = response
-      return data
+      return response
     } catch (error) {
       logger.error('Error fetching stats:', error)
       throw error
@@ -104,18 +99,13 @@ export function useKnowledgeBase() {
     try {
       const response = await apiClient.get<CategoriesListResponse>(`${getApiBase()}/knowledge_base/categories`)
 
-      if (!response) {
-        throw new Error('Failed to fetch categories: No response from server')
-      }
-
-      const data = response
 
       // Validate response structure
-      if (!data || !Array.isArray(data.categories)) {
+      if (!response || !Array.isArray(response.categories)) {
         throw new Error('Invalid categories response format')
       }
 
-      return data.categories
+      return response.categories
     } catch (error) {
       logger.error('Error fetching categories:', error)
       throw error // Throw consistently with other API functions
@@ -129,12 +119,7 @@ export function useKnowledgeBase() {
     try {
       const response = await apiClient.get<CategoryResponse>(`${getApiBase()}/knowledge_base/category/${category}`)
 
-      if (!response) {
-        throw new Error('Failed to fetch category: No response from server');
-      }
-
-      const data = response
-      return data
+      return response
     } catch (error) {
       logger.error('Error fetching category:', error)
       throw error
@@ -162,20 +147,15 @@ export function useKnowledgeBase() {
       const url = `${getApiBase()}/knowledge_base/facts/by_category?${params.toString()}`
       const response = await apiClient.get<CategorizedFactsResponse>(url)
 
-      if (!response) {
-        throw new Error('Failed to fetch categorized facts: No response from server')
-      }
-
-      const data = response
 
       // Validate response structure
-      if (!data || typeof data.categories !== 'object') {
+      if (!response || typeof response.categories !== 'object') {
         throw new Error('Invalid categorized facts response format')
       }
 
-      logger.debug(`Fetched categorized facts: ${data.total_facts} total facts across ${Object.keys(data.categories).length} categories`)
+      logger.debug(`Fetched categorized facts: ${response.total_facts} total facts across ${Object.keys(response.categories).length} categories`)
 
-      return data
+      return response
     } catch (error) {
       logger.error('Error fetching categorized facts:', error)
       throw error
@@ -228,12 +208,7 @@ export function useKnowledgeBase() {
       // Issue #552: Backend expects POST for search
       const response = await apiClient.post<SearchResponse>(`${getApiBase()}/knowledge_base/search`, { query })
 
-      if (!response) {
-        throw new Error('Search failed: No response from server');
-      }
-
-      const data = response
-      return data
+      return response
     } catch (error) {
       logger.error('Error searching knowledge:', error)
       throw error
@@ -269,12 +244,7 @@ export function useKnowledgeBase() {
     try {
       const response = await apiClient.post<SearchResponse>(`${getApiBase()}/knowledge_base/search`, options)
 
-      if (!response) {
-        throw new Error('Advanced search failed: No response from server')
-      }
-
-      const data = response
-      return data
+      return response
     } catch (error) {
       logger.error('Error in advanced search:', error)
       throw error
@@ -292,12 +262,7 @@ export function useKnowledgeBase() {
     try {
       const response = await apiClient.post<AddFactResponse>(`${getApiBase()}/knowledge_base/facts`, fact)
 
-      if (!response) {
-        throw new Error('Failed to add fact: No response from server');
-      }
-
-      const data = response
-      return data
+      return response
     } catch (error) {
       logger.error('Error adding fact:', error)
       throw error
@@ -332,12 +297,7 @@ export function useKnowledgeBase() {
       // Issue #552: Fixed path - backend uses singular /api/knowledge_base/machine_profile
       const response = await apiClient.get<MachineProfile[]>(`${getApiBase()}/knowledge_base/machine_profile`)
 
-      if (!response) {
-        throw new Error('Failed to fetch machine profiles: No response from server');
-      }
-
-      const data = response
-      return Array.isArray(data) ? data : []
+      return Array.isArray(response) ? response : []
     } catch (error) {
       logger.error('Error fetching machine profiles:', error)
       return []
@@ -351,12 +311,7 @@ export function useKnowledgeBase() {
     try {
       const response = await apiClient.get<ManPagesSummary>(`${getApiBase()}/knowledge_base/man_pages/summary`)
 
-      if (!response) {
-        throw new Error('Failed to fetch man pages summary: No response from server');
-      }
-
-      const data = response
-      return data
+      return response
     } catch (error) {
       logger.error('Error fetching man pages summary:', error)
       return null
@@ -372,12 +327,7 @@ export function useKnowledgeBase() {
         machine_id: machineId
       })
 
-      if (!response) {
-        throw new Error('Integration failed: No response from server');
-      }
-
-      const data = response
-      return data
+      return response
     } catch (error) {
       logger.error('Error integrating man pages:', error)
       throw error
@@ -392,12 +342,7 @@ export function useKnowledgeBase() {
       // Issue #552: Fixed path - backend uses /api/knowledge_base/vectorize_facts/status
       const response = await apiClient.get<VectorizationStatusResponse>(`${getApiBase()}/knowledge_base/vectorize_facts/status`)
 
-      if (!response) {
-        throw new Error('Failed to get vectorization status: No response from server');
-      }
-
-      const data = response
-      return data
+      return response
     } catch (error) {
       logger.error('Error getting vectorization status:', error)
       throw error
@@ -428,14 +373,9 @@ export function useKnowledgeBase() {
 
       logger.debug('[vectorizeFacts] Response received')
 
-      if (!response) {
-        throw new Error('Vectorization failed: No response from server');
-      }
-
       // Parse successful response
-      const data = response
 
-      return data
+      return response
     } catch (error) {
       logger.error('[vectorizeFacts] Error occurred:', error)
 
@@ -461,12 +401,7 @@ export function useKnowledgeBase() {
 
       logger.debug('[initializeMachineKnowledge] Response received')
 
-      if (!response) {
-        throw new Error('Machine knowledge initialization failed: No response from server');
-      }
-
-      const data = response
-      return data
+      return response
     } catch (error) {
       logger.error('[initializeMachineKnowledge] Error:', error)
       throw error
@@ -486,12 +421,7 @@ export function useKnowledgeBase() {
 
       logger.debug('[refreshSystemKnowledge] Response received')
 
-      if (!response) {
-        throw new Error('System knowledge refresh failed: No response from server');
-      }
-
-      const data = response
-      return data
+      return response
     } catch (error) {
       logger.error('[refreshSystemKnowledge] Error:', error)
       throw error
@@ -510,12 +440,7 @@ export function useKnowledgeBase() {
 
       logger.debug('[pollJobStatus] Response received', { taskId })
 
-      if (!response) {
-        throw new Error('Job status check failed: No response from server');
-      }
-
-      const data = response
-      return data
+      return response
     } catch (error) {
       logger.error('[pollJobStatus] Error:', error)
       throw error
@@ -535,12 +460,7 @@ export function useKnowledgeBase() {
 
       logger.debug('[populateManPages] Response received')
 
-      if (!response) {
-        throw new Error('Man pages population failed: No response from server');
-      }
-
-      const data = response
-      return data
+      return response
     } catch (error) {
       logger.error('[populateManPages] Error:', error)
       throw error
@@ -558,12 +478,7 @@ export function useKnowledgeBase() {
 
       logger.debug('[populateAutoBotDocs] Response received')
 
-      if (!response) {
-        throw new Error('AutoBot docs population failed: No response from server');
-      }
-
-      const data = response
-      return data
+      return response
     } catch (error) {
       logger.error('[populateAutoBotDocs] Error:', error)
       throw error
@@ -583,12 +498,7 @@ export function useKnowledgeBase() {
 
       logger.debug('[fetchMachineProfile] Response received')
 
-      if (!response) {
-        throw new Error('Machine profile fetch failed: No response from server');
-      }
-
-      const data = response
-      return data
+      return response
     } catch (error) {
       logger.error('[fetchMachineProfile] Error:', error)
       return null
@@ -606,12 +516,7 @@ export function useKnowledgeBase() {
 
       logger.debug('[fetchBasicStats] Response received')
 
-      if (!response) {
-        throw new Error('Basic stats fetch failed: No response from server');
-      }
-
-      const data = response
-      return data
+      return response
     } catch (error) {
       logger.error('[fetchBasicStats] Error:', error)
       return null
