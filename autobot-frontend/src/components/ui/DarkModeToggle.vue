@@ -15,8 +15,8 @@ Issue #753: Dark/Light Mode Refinement
     :aria-label="t('ui.darkModeToggle.toggleDarkMode')"
   >
     <transition name="icon-fade" mode="out-in">
-      <i v-if="isDark" key="moon" class="fas fa-moon" aria-hidden="true"></i>
-      <i v-else key="sun" class="fas fa-sun" aria-hidden="true"></i>
+      <Icon v-if="isDark" key="moon" name="moon" size="md" />
+      <Icon v-else key="sun" name="sun" size="md" />
     </transition>
   </button>
 </template>
@@ -24,6 +24,7 @@ Issue #753: Dark/Light Mode Refinement
 <script setup lang="ts">
 import { useTheme } from '@/composables/useTheme'
 import { useI18n } from 'vue-i18n'
+import Icon from './Icon.vue'
 
 const { isDark, toggleTheme } = useTheme()
 const { t } = useI18n()
@@ -81,7 +82,7 @@ function toggleDarkMode() {
 }
 
 /* Rotate animation on hover */
-.dark-mode-toggle:hover i {
+.dark-mode-toggle:hover :deep(.icon) {
   animation: rotate-subtle 0.5s ease;
 }
 

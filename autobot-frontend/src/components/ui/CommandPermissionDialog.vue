@@ -3,7 +3,7 @@
     <div class="command-dialog">
       <div class="command-header">
         <div class="command-icon">
-          <i class="fas fa-terminal"></i>
+          <Icon name="terminal" size="md" />
         </div>
         <div class="command-title">
           <h3>{{ t('ui.commandPermission.title') }}</h3>
@@ -47,7 +47,7 @@
           </div>
 
           <div class="warning-message" v-if="error">
-            <i class="fas fa-exclamation-triangle"></i>
+            <Icon name="exclamation-triangle" size="sm" />
             <span>{{ error }}</span>
           </div>
         </div>
@@ -74,7 +74,7 @@
               variant="secondary"
               @click="cancelComment"
               :disabled="isProcessing">
-              <i class="fas fa-times"></i>
+              <Icon name="times" size="sm" />
               {{ t('ui.commandPermission.cancel') }}
             </BaseButton>
             <BaseButton
@@ -82,7 +82,7 @@
               @click="submitComment"
               :disabled="!commentText.trim()"
               :loading="isProcessing">
-              <i class="fas fa-paper-plane"></i>
+              <Icon name="paper-plane" size="sm" />
               {{ isProcessing ? t('ui.commandPermission.sending') : t('ui.commandPermission.sendFeedback') }}
             </BaseButton>
           </div>
@@ -96,7 +96,7 @@
             @click="handleDeny"
             :disabled="isProcessing"
             :aria-label="t('ui.commandPermission.deny')">
-            <i class="fas fa-times"></i>
+            <Icon name="times" size="sm" />
             {{ t('ui.commandPermission.deny') }}
           </BaseButton>
           <BaseButton
@@ -104,7 +104,7 @@
             @click="handleComment"
             :disabled="isProcessing"
             :aria-label="t('ui.commandPermission.comment')">
-            <i class="fas fa-comment"></i>
+            <Icon name="comment" size="sm" />
             {{ t('ui.commandPermission.comment') }}
           </BaseButton>
           <BaseButton
@@ -112,13 +112,13 @@
             @click="handleAllow"
             :loading="isProcessing"
             :aria-label="t('ui.commandPermission.allow')">
-            <i class="fas fa-check"></i>
+            <Icon name="check" size="sm" />
             {{ isProcessing ? t('ui.commandPermission.executing') : t('ui.commandPermission.allow') }}
           </BaseButton>
         </div>
 
         <div class="security-note">
-          <i class="fas fa-info-circle"></i>
+          <Icon name="info-circle" size="sm" />
           <span>{{ t('ui.commandPermission.securityNote') }}</span>
         </div>
       </div>
@@ -133,6 +133,7 @@ import { apiService } from '@/services/api';
 import appConfig from '@/config/AppConfig.js';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import BaseButton from '@/components/base/BaseButton.vue';
+import Icon from '@/components/ui/Icon.vue';
 import { useModal } from '@/composables/useModal';
 import { useAsyncOperation } from '@/composables/useAsyncOperation';
 import { createLogger } from '@/utils/debugUtils';
@@ -145,7 +146,8 @@ export default {
   name: 'CommandPermissionDialog',
   components: {
     StatusBadge,
-    BaseButton
+    BaseButton,
+    Icon
   },
   props: {
     show: {

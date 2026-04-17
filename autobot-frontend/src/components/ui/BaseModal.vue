@@ -32,7 +32,7 @@
               :aria-label="t('ui.modal.closeDialog')"
               type="button"
             >
-              <i class="fas fa-times" aria-hidden="true"></i>
+              <Icon name="times" size="sm" />
             </button>
           </div>
 
@@ -54,6 +54,7 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import Icon from './Icon.vue'
 
 /**
  * Reusable Modal/Dialog Component
