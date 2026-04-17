@@ -13,7 +13,7 @@ import os
 import sys
 from typing import Any, Dict, List, Tuple
 
-sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
+sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
 from constants import ServiceURLs
 from constants.network_constants import NetworkConstants
 

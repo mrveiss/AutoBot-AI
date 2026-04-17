@@ -9,11 +9,12 @@ Test script to check circuit breaker state
 import asyncio
 import logging
 import sys
+import os
 
 logger = logging.getLogger(__name__)
 
 # Add the src directory to the path
-sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
+sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
 
 from circuit_breaker import circuit_breaker_manager
 

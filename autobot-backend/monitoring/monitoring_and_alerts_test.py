@@ -27,6 +27,7 @@ import logging
 import statistics
 import subprocess
 import sys
+import os
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -36,7 +37,7 @@ from typing import Dict, List, Optional
 import requests
 
 # Add AutoBot paths
-sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
+sys.path.append(os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from tests.test_helpers import get_test_backend_url

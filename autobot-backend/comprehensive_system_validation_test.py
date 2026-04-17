@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 # Add AutoBot paths
-sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
+sys.path.append(os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
 
 
 @dataclass
