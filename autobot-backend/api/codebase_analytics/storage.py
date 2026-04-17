@@ -30,7 +30,7 @@ async def get_redis_connection():
     For async operations, use get_redis_connection_async() instead.
     """
     # Use canonical Redis utility - returns sync client
-    from autobot_shared.redis_client import get_async_redis_client
+    from autobot_shared.redis_client import get_redis_client
 
     redis_client = get_redis_client(database="analytics", async_client=False)
     if redis_client is None:
