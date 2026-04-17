@@ -89,6 +89,16 @@
             >
               <i class="fas fa-paperclip"></i>
             </button>
+            <!-- Issue #4414: multi-model comparison toggle -->
+            <button
+              @click="showComparePanel = !showComparePanel"
+              class="header-btn"
+              :class="{ 'bg-electric-100 text-electric-600': showComparePanel }"
+              :title="$t('chat.compare.toggleTitle')"
+              :aria-pressed="showComparePanel"
+            >
+              <i class="fas fa-columns" aria-hidden="true"></i>
+            </button>
           </template>
         </ChatHeader>
 
@@ -114,6 +124,11 @@
             v-if="activeTab === 'chat'"
             :entries="cotEntries"
             :is-active="cotIsActive"
+            class="mx-2 mt-1"
+          />
+          <!-- Issue #4414: multi-model comparison panel -->
+          <MultiModelChat
+            v-if="showComparePanel && activeTab === 'chat'"
             class="mx-2 mt-1"
           />
           <ChatTabContent
@@ -285,6 +300,8 @@ import ReasoningTrace from './ReasoningTrace.vue'
 import { useReasoningTrace } from '@/composables/useReasoningTrace'
 // Issue #4952: agent-loop tool approval
 import { useToolApproval, type PendingToolApproval } from '@/composables/useToolApproval'
+// Issue #4414: multi-model comparison
+import MultiModelChat from './MultiModelChat.vue'
 
 // i18n
 const { t } = useI18n()
@@ -395,6 +412,9 @@ const { showToast } = useToast()
 const notify = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
   showToast(message, type, type === 'error' ? 5000 : 3000)
 }
+
+// Issue #4414: multi-model compare panel toggle
+const showComparePanel = ref(false)
 
 // Dialog states
 const showKnowledgeDialog = ref(false)
