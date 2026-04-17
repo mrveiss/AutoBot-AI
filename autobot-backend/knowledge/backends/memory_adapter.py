@@ -137,10 +137,20 @@ class InMemoryCollection(BaseCollection):
         metadatas: Optional[Sequence[Metadata]] = None,
         embeddings: Optional[Sequence[Embedding]] = None,
     ) -> None:
+        # Build id → index map, detect duplicates in the same call.
+        # list.index() only returns the first occurrence, so duplicate ids
+        # in a single update call would silently reuse the first entry's
+        # aligned values instead of surfacing the caller's mistake (#5133).
+        id_to_idx: Dict[str, int] = {}
+        for i, _id in enumerate(ids):
+            if _id in id_to_idx:
+                raise ValueError(f"duplicate id in single update call: {_id}")
+            id_to_idx[_id] = i
+
         existing_ids = [_id for _id in ids if _id in self._documents]
         if not existing_ids:
             return
-        idx = [list(ids).index(_id) for _id in existing_ids]
+        idx = [id_to_idx[_id] for _id in existing_ids]
 
         def _pick(seq: Optional[Sequence[Any]]) -> Optional[List[Any]]:
             return [seq[i] for i in idx] if seq is not None else None
@@ -314,7 +324,7 @@ class InMemoryClient(BaseClient):
         self._collections[name] = col
         return col
 
-    def list_collections(self) -> List[Any]:
+    def list_collections(self) -> List[BaseCollection]:
         return list(self._collections.values())
 
     def delete_collection(self, name: str) -> None:

@@ -29,7 +29,7 @@ Any new adapter must honour this shape so existing callers keep working.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Dict, List, Optional, Sequence
 
 # Type aliases kept loose on purpose: callers already use plain lists/dicts
 # against ChromaDB, so tightening these would break the migration seam.
@@ -176,8 +176,12 @@ class BaseClient(ABC):
         """Create collection. Raise ``ValueError`` if name already exists."""
 
     @abstractmethod
-    def list_collections(self) -> List[Union[str, BaseCollection]]:
-        """Return known collections. Adapters may return names or objects."""
+    def list_collections(self) -> List[BaseCollection]:
+        """Return known collections as ``BaseCollection`` instances.
+
+        Adapters MUST wrap any raw backend objects so callers get a
+        uniform interface regardless of backend (#5134).
+        """
 
     @abstractmethod
     def delete_collection(self, name: str) -> None:
