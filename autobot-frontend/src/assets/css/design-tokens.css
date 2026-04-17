@@ -267,14 +267,6 @@
   --spacing-micro-5: 0.4rem;   /* ~6.4px */
   --spacing-micro-6: 0.45rem;  /* ~7.2px */
 
-  /* Pixel-value tokens for values that don't fit the rem scale.
-   * See #5036 for audit of whether each of these values is intentional
-   * or represents a design error that should be rounded to the scale. */
-  --spacing-3px: 3px;   /* dense chip/badge padding; nearest rem token is --spacing-1 (4px) */
-  --spacing-15px: 15px; /* mid-point between --spacing-3 (12px) and --spacing-4 (16px) */
-  --spacing-18px: 18px; /* mid-point between --spacing-4 (16px) and --spacing-5 (20px) */
-  --spacing-30px: 30px; /* mid-point between --spacing-7 (28px) and --spacing-8 (32px) */
-
   /* Semantic accessibility tokens */
   --touch-target-min: 44px; /* WCAG 2.5.8 minimum touch target size */
 

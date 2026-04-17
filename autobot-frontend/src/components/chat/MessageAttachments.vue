@@ -196,7 +196,7 @@ const formatSize = (bytes: number): string => {
 
   .attachment-size {
     width: 100%;
-    margin-left: var(--spacing-30px);
+    margin-left: var(--spacing-8);
     margin-top: var(--spacing-neg-4px);
   }
 }

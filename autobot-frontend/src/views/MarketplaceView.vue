@@ -672,7 +672,7 @@ onMounted(async () => {
 .stat-item {
   display: flex;
   align-items: center;
-  gap: var(--spacing-3px);
+  gap: var(--spacing-1);
 }
 
 .stat-icon {
