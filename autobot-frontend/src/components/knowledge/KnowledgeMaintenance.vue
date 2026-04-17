@@ -248,7 +248,7 @@ const loadHealthDashboard = async () => {
 
   try {
     const response = await apiClient.get(`${getApiBase()}/knowledge-maintenance/health/dashboard`)
-    const data = await parseApiResponse(response)
+    const data = await parseApiResponse<Record<string, any>>(response)
 
     if (data) {
       healthDashboard.value = data

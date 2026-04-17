@@ -195,7 +195,7 @@ const loadBackups = async () => {
   try {
     isLoadingBackups.value = true
     const response = await apiClient.get(`${getApiBase()}/knowledge-maintenance/backups`)
-    const data = await parseApiResponse(response)
+    const data = await parseApiResponse<Record<string, any>>(response)
 
     if (data.backups) {
       backups.value = data.backups
@@ -218,7 +218,7 @@ const createBackup = async () => {
       description: backupOptions.value.description || undefined
     })
 
-    const data = await parseApiResponse(response)
+    const data = await parseApiResponse<Record<string, any>>(response)
 
     if (data.status === 'success') {
       showStatus('success', t('knowledge.backup.statusBackupCreated', { name: data.backup_name }))
@@ -251,7 +251,7 @@ const restoreBackup = async (backupName: string) => {
       dry_run: true
     })
 
-    const dryRunData = await parseApiResponse(dryRunResponse)
+    const dryRunData = await parseApiResponse<Record<string, any>>(dryRunResponse)
 
     if (dryRunData.status !== 'success') {
       throw new Error(dryRunData.message || t('knowledge.backup.errorValidation'))
@@ -271,7 +271,7 @@ const restoreBackup = async (backupName: string) => {
       skip_duplicates: true
     })
 
-    const restoreData = await parseApiResponse(restoreResponse)
+    const restoreData = await parseApiResponse<Record<string, any>>(restoreResponse)
 
     if (restoreData.status === 'success') {
       showStatus('success', t('knowledge.backup.statusRestored', { count: restoreData.restored }))
@@ -301,7 +301,7 @@ const deleteBackup = async (backupName: string) => {
       headers: { 'Content-Type': 'application/json' }
     } as any)
 
-    const data = await parseApiResponse(response)
+    const data = await parseApiResponse<Record<string, any>>(response)
 
     if (data.status === 'success') {
       showStatus('success', t('knowledge.backup.statusDeleted'))

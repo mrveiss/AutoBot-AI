@@ -254,7 +254,7 @@ const viewCategoryDocuments = async (category: any) => {
 
   try {
     const response = await apiClient.get(`${getApiBase()}/knowledge_base/categories/${encodeURIComponent(category.path)}`)
-    const data = await parseApiResponse(response)
+    const data = await parseApiResponse<Record<string, any>>(response)
     categoryDocuments.value = data?.documents || []
     showCategoryDocuments.value = true
   } catch (error) {
@@ -298,7 +298,7 @@ const loadMainCategories = async () => {
         return
       }
     }
-    const data = await parseApiResponse(response)
+    const data = await parseApiResponse<Record<string, any>>(response)
     if (!data?.categories || !Array.isArray(data.categories)) {
       categoriesError.value = t('knowledge.categories.invalidResponse')
       return

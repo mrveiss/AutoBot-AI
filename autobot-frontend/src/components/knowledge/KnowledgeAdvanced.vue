@@ -319,7 +319,7 @@ const populateSystemCommands = async () => {
     progressDetails.value = t('knowledge.advanced.progressAddingCommands')
 
     const apiResponse = await ApiClient.post(`${getApiBase()}/knowledge_base/populate_system_commands`, {})
-    const response = await parseApiResponse(apiResponse)
+    const response = await parseApiResponse<Record<string, any>>(apiResponse)
 
     if (response.status === 'success') {
       populateStatus.value.systemCommands = 'success'
@@ -358,7 +358,7 @@ const populateManPages = async () => {
     progressDetails.value = t('knowledge.advanced.progressAddingManPages')
 
     const apiResponse = await ApiClient.post(`${getApiBase()}/knowledge_base/populate_man_pages`, {})
-    const response = await parseApiResponse(apiResponse)
+    const response = await parseApiResponse<Record<string, any>>(apiResponse)
 
     if (response.status === 'success') {
       populateStatus.value.manPages = 'success'
@@ -397,7 +397,7 @@ const populateAutoBotDocs = async () => {
     progressDetails.value = t('knowledge.advanced.progressAddingAutobotDocs')
 
     const apiResponse = await ApiClient.post(`${getApiBase()}/knowledge_base/populate_autobot_docs`, {})
-    const response = await parseApiResponse(apiResponse)
+    const response = await parseApiResponse<Record<string, any>>(apiResponse)
 
     if (response.status === 'success') {
       populateStatus.value.autobotDocs = 'success'
@@ -451,7 +451,7 @@ const clearAllKnowledge = async () => {
     progressDetails.value = t('knowledge.advanced.progressRemovingEntries')
 
     const apiResponse = await ApiClient.post(`${getApiBase()}/knowledge_base/clear_all`, {})
-    const response = await parseApiResponse(apiResponse)
+    const response = await parseApiResponse<Record<string, any>>(apiResponse)
 
     if (response.status === 'success') {
       addStatusMessage('success', t('knowledge.advanced.clearSuccess'),

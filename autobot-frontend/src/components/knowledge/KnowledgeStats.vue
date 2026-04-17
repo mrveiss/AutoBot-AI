@@ -787,7 +787,7 @@ const refreshVectorStats = async () => {
     // Fetch category fact counts (secondary API call - only when needed)
     try {
       const factsResponse = await apiClient.get(`${getApiBase()}/knowledge_base/facts/by_category`)
-      const factsData = await parseApiResponse(factsResponse)
+      const factsData = await parseApiResponse<Record<string, any>>(factsResponse)
 
       if (factsData && factsData.categories) {
         const counts: Record<string, number> = {}

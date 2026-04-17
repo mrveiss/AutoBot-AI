@@ -705,7 +705,7 @@ async function refreshArchitecture() {
   try {
     // Issue #552: Fixed path - backend uses /api/monitoring/services/health
     const healthResponse = await apiClient.get(`${getApiBase()}/monitoring/services/health`)
-    const healthData = await parseApiResponse(healthResponse)
+    const healthData = await parseApiResponse<Record<string, any>>(healthResponse)
 
     // Generate architecture based on known infrastructure
     generateArchitecture(healthData?.data?.services || healthData?.services || {})
