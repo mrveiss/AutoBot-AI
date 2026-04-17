@@ -53,6 +53,10 @@ jobs:
         working-directory: autobot-frontend
         run: npm run lint
 
+      - name: Check i18n keys
+        working-directory: autobot-frontend
+        run: npm run check:i18n
+
       - name: Run unit tests
         working-directory: autobot-frontend
         run: npm run test:unit
