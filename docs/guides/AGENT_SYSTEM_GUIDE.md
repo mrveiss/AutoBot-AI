@@ -244,12 +244,12 @@ class CachedAgent(BaseAgent):
 
 ### **Inter-Agent Communication**
 ```python
-from src.agents.agent_orchestrator import AgentOrchestrator
+from agents.agent_orchestration.coordinator import DistributedAgentCoordinator
 
 class CommunicatingAgent(BaseAgent):
     def __init__(self):
         super().__init__("communicating_agent")
-        self.orchestrator = AgentOrchestrator()
+        self.coordinator = DistributedAgentCoordinator()
 
     async def process_request(self, request: AgentRequest) -> AgentResponse:
         # Step 1: Get information from research agent
@@ -260,7 +260,7 @@ class CommunicatingAgent(BaseAgent):
             payload={"query": request.payload.get("topic")}
         )
 
-        research_response = await self.orchestrator.route_request(research_request)
+        research_response = await self.coordinator.process_request(research_request)
 
         # Step 2: Synthesize with RAG agent
         rag_request = AgentRequest(
@@ -356,7 +356,7 @@ async def test_agent_health():
 ```python
 @pytest.mark.asyncio
 async def test_agent_integration():
-    orchestrator = AgentOrchestrator()
+    coordinator = DistributedAgentCoordinator()
 
     # Test routing to your agent
     request = AgentRequest(
@@ -366,7 +366,7 @@ async def test_agent_integration():
         payload={"test_data": "value"}
     )
 
-    response = await orchestrator.route_request(request)
+    response = await coordinator.process_request(request)
     assert response.status == "success"
     assert response.agent_type == "your_agent"
 ```

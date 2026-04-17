@@ -1,5 +1,7 @@
 # Orchestrator Consolidation Analysis
 
+> **Historical** — This document describes the state as of 2025-10-18. The decisions here have been superseded by the consolidation work in #4048 and the single-conductor refactor in #5040. For current canonical orchestrator structure, see `autobot-backend/orchestrator.py` (`Orchestrator` class — the one and only conductor).
+
 **Date**: 2025-10-18
 **Status**: Investigation Complete - Consolidation Plan Required
 

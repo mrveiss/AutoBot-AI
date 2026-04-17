@@ -448,12 +448,12 @@ class RedisEventStreamManager(EventStreamManager):
 
 ## 5. Integration Points
 
-### 5.1 Agent Orchestrator Integration
+### 5.1 Orchestrator Integration
 
 ```python
-# In autobot-backend/agents/agent_orchestrator.py
+# In autobot-backend/orchestrator.py
 
-class AgentOrchestrator:
+class Orchestrator:
     def __init__(self):
         self.event_stream = RedisEventStreamManager()
 

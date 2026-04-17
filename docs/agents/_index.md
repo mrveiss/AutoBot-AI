@@ -18,4 +18,4 @@ aliases:
 | [STANDARDIZED_AGENT_MIGRATION](STANDARDIZED_AGENT_MIGRATION.md) | Agent migration guide |
 | [development/npu_code_search_agent](development/npu_code_search_agent.md) | NPU code search agent |
 | [knowledge/kb_librarian_agent](knowledge/kb_librarian_agent.md) | KB librarian agent |
-| [orchestration/agent_orchestrator](orchestration/agent_orchestrator.md) | Agent orchestrator |
+| [orchestration/distributed_agent_coordinator](orchestration/distributed_agent_coordinator.md) | Distributed agent coordinator |

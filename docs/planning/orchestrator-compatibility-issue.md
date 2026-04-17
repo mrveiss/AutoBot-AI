@@ -1,5 +1,7 @@
 # Orchestrator Compatibility Issue Found
 
+> **Historical** — This document describes a compatibility problem and its original resolution (backward-compat aliases). The aliases described here were later **removed** as part of #4048 and the single-conductor refactor in #5040. For the current canonical structure, see `autobot-backend/orchestrator.py` (`Orchestrator` class — no aliases, no shims). Kept for historical context only.
+
 **Date**: 2025-10-18
 **Severity**: HIGH
 **Status**: ✅ RESOLVED - Backward compatibility implemented
