@@ -95,7 +95,7 @@
         :aria-label="t('ui.dataTable.previousPage')"
         @click="handlePageChange(currentPage - 1)"
       >
-        <i class="fas fa-chevron-left" aria-hidden="true"></i>
+        <Icon name="chevron-left" size="sm" />
       </button>
       <span class="pagination-info" aria-live="polite" aria-atomic="true">
         {{ t('ui.dataTable.pageOf', { current: currentPage, total: totalPages }) }}
@@ -106,7 +106,7 @@
         :aria-label="t('ui.dataTable.nextPage')"
         @click="handlePageChange(currentPage + 1)"
       >
-        <i class="fas fa-chevron-right" aria-hidden="true"></i>
+        <Icon name="chevron-right" size="sm" />
       </button>
     </nav>
   </div>
@@ -117,6 +117,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import EmptyState from './EmptyState.vue'
 import LoadingSpinner from './LoadingSpinner.vue'
+import Icon from './Icon.vue'
 
 /**
  * Reusable Data Table Component

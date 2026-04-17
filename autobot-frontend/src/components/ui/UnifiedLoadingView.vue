@@ -4,13 +4,13 @@
     <div v-if="error && !isLoading" class="error-container">
       <div class="error-content">
         <div class="error-icon">
-          <i class="fas fa-exclamation-triangle text-4xl" style="color: var(--color-error)"></i>
+          <Icon name="exclamation-triangle" size="xl" class="text-4xl" style="color: var(--color-error)" />
         </div>
         <h3 class="error-title">{{ t('ui.unifiedLoading.somethingWentWrong') }}</h3>
         <p class="error-message">{{ error }}</p>
         <div class="error-actions">
           <button @click="retry" class="btn-retry">
-            <i class="fas fa-redo mr-2"></i>
+            <Icon name="redo" size="sm" class="mr-2" />
             {{ t('ui.unifiedLoading.retry') }}
           </button>
           <button @click="dismiss" class="btn-dismiss">
@@ -54,6 +54,7 @@ import { computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import { useUnifiedLoading } from '@/composables/useUnifiedLoading'
+import Icon from './Icon.vue'
 
 const logger = createLogger('UnifiedLoadingView')
 const { t } = useI18n()
