@@ -28,7 +28,7 @@
     "postcss": "^8.5.8",
     "tailwindcss": "^4.2.2",
     "typescript": "~5.9.3",
-    "typescript-eslint": "^8.58.0",
+    "typescript-eslint": "^8.58.2",
     "vite": "^7.3.2",
     "vue-tsc": "^3.2.6"
   }
