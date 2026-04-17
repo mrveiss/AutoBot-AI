@@ -104,7 +104,7 @@ Before spawning agents or starting worktree work:
 1. **Verify branch isolation:** `git branch --show-current` in main session. Should be `Dev_new_gui`. If on a feature branch, STOP — you'll break parallel worktrees.
 2. **Verify Bash is approved:** Main session must have Bash permission approved — sub-agents inherit from parent. If Bash requires a prompt, approve it once before spawning any agents.
 3. **Create worktrees correctly:** Each issue gets `.worktrees/issue-XXXX/` with dedicated branch. NO shared branches between worktrees.
-4. **Check git status:** `git status` — main session must be clean (no uncommitted changes).
+4. **Check git status:** `git status` — **if any files are dirty, commit or stash them before spawning subagents.** Uncommitted edits are silently discarded when a subagent commits and upstream Dev_new_gui is merged (#4969).
 5. **Verify issue isn't resolved:** Check if issue is already closed or if `Dev_new_gui` already has the fix via `git log origin/Dev_new_gui --oneline --grep="#XXXX"`.
 6. **Confirm approach:** For architectural decisions, state in 1-2 sentences and wait for confirmation.
 
@@ -235,7 +235,7 @@ After ALL PRs merged:
 **Before spawning agents for issue implementation, verify:**
 
 1. **Main session branch check:** `git branch --show-current` — must be `Dev_new_gui`
-2. **Main session clean:** `git status --porcelain` — no uncommitted changes
+2. **Main session clean:** `git status --porcelain` — **if any files are dirty, commit or stash them before spawning agents.** Uncommitted edits are silently discarded when a subagent commits and upstream is merged (#4969).
 3. **Issue not already resolved:** Check if `#<issue>` is already in `origin/Dev_new_gui` commits
 4. **No stale worktrees:** Clean up any existing `.worktrees/issue-<number>/` directories
 5. **Issue preconditions:** Verify issue dependencies are resolved before starting work
