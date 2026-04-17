@@ -7,7 +7,7 @@
     viewBox="0 0 24 24"
     aria-hidden="true"
   >
-    <template v-if="resolvedName === 'spinner'">
+    <template v-if="name === 'spinner'">
       <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" opacity="0.25" />
       <path
         fill="currentColor"
@@ -27,22 +27,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-interface IconProps {
-  name: string
-  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
-  spin?: boolean
-  strokeWidth?: number
-  filled?: boolean
-}
-
-const props = withDefaults(defineProps<IconProps>(), {
-  size: 'md',
-  spin: false,
-  strokeWidth: 2,
-  filled: false,
-})
-
-const ICONS: Record<string, string> = {
+const ICONS = {
   // Navigation
   'chevron-down': 'M19 9l-7 7-7-7',
   'chevron-up': 'M5 15l7-7 7 7',
@@ -80,22 +65,31 @@ const ICONS: Record<string, string> = {
   font: 'M5 4v3h5.5v12h3V7H19V4z',
   'paint-brush': 'M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485',
   th: 'M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z',
+  spinner: '',
+} as const
+
+export type IconName = keyof typeof ICONS
+
+interface IconProps {
+  name: IconName
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
+  spin?: boolean
+  strokeWidth?: number
+  filled?: boolean
 }
 
-const resolvedName = computed(() => {
-  return props.name
-    .replace(/^(fas |far |fa-)+/g, '')
-    .replace(/\s*fa-spin\s*/g, '')
-    .trim()
+const props = withDefaults(defineProps<IconProps>(), {
+  size: 'md',
+  spin: false,
+  strokeWidth: 2,
+  filled: false,
 })
 
-const path = computed(() => ICONS[resolvedName.value])
+const path = computed(() => ICONS[props.name])
 
 const sizeClass = computed(() => `icon-${props.size}`)
 
-const effectiveSpin = computed(
-  () => props.spin || /fa-spin/.test(props.name) || resolvedName.value === 'spinner'
-)
+const effectiveSpin = computed(() => props.spin || props.name === 'spinner')
 </script>
 
 <style scoped>
