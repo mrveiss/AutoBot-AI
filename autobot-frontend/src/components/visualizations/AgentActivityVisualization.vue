@@ -890,7 +890,8 @@ defineExpose({
 .time-labels {
   display: flex;
   justify-content: space-between;
-  padding-left: var(--spacing-140px);
+  /* 140px is a fixed timeline-layout offset, not a spacing-scale value */
+  padding-left: 140px;
 }
 
 .time-label {
