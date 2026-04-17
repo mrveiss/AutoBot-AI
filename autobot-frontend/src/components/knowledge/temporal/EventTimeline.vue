@@ -259,7 +259,7 @@ function toggleExpand(eventId: string): void {
 
 .date-marker {
   margin-bottom: var(--spacing-sm);
-  margin-left: -40px;
+  margin-left: var(--spacing-neg-40px);
   padding-left: var(--spacing-10);
 }
 

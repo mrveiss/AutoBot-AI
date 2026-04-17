@@ -450,7 +450,7 @@ function statusClass(status: string): string {
 .config-grid {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: var(--spacing-micro-5);
   margin-bottom: var(--spacing-4);
 }
 .config-row {
@@ -477,13 +477,13 @@ function statusClass(status: string): string {
 .toggle-label {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: var(--spacing-micro-5);
   cursor: pointer;
 }
 .interval-input {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: var(--spacing-micro-5);
 }
 .interval-input label {
   color: var(--text-secondary, #94a3b8);

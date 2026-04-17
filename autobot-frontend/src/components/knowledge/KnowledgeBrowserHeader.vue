@@ -182,7 +182,7 @@ defineEmits<Emits>()
   .category-tabs {
     overflow-x: auto;
     padding-bottom: var(--spacing-2);
-    margin-bottom: -0.5rem;
+    margin-bottom: var(--spacing-neg-0-5);
   }
 
   .search-bar {

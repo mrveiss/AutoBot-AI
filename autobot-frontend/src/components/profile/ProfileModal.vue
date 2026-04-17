@@ -412,7 +412,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   font-weight: 500;
   cursor: pointer;
   border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
+  margin-bottom: var(--spacing-neg-px);
   transition: color var(--duration-150), border-color var(--duration-150);
 }
 

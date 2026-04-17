@@ -890,7 +890,7 @@ defineExpose({
 .time-labels {
   display: flex;
   justify-content: space-between;
-  padding-left: 140px;
+  padding-left: var(--spacing-140px);
 }
 
 .time-label {

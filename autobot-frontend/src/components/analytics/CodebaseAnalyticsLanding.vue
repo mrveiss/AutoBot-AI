@@ -644,7 +644,7 @@ onUnmounted(() => {
   font-family: var(--font-mono, monospace);
   display: flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: var(--spacing-micro-4);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -656,7 +656,7 @@ onUnmounted(() => {
   font-size: var(--text-xs);
   display: flex;
   align-items: center;
-  gap: 0.2rem;
+  gap: var(--spacing-micro-3);
 }
 
 /* Error */
