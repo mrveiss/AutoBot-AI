@@ -8,15 +8,18 @@ Covers:
   - empty registry returns empty structure
   - healthy + unhealthy aggregation with realistic labels
   - exceptions surfaced in ``errors``
+  - hydration degrades to in-memory registry when Redis is down (Issue #5054)
+  - hydration skips corrupted connector records and continues (Issue #5055)
 """
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from redis.exceptions import RedisError
 
-from api.knowledge_connectors import router
+from api.knowledge_connectors import _hydrate_all_instances, router
 from auth_middleware import check_admin_permission
 from knowledge.connectors.models import ConnectorConfig
 from knowledge.connectors.registry import ConnectorRegistry
@@ -125,3 +128,80 @@ def test_health_route_matched_before_connector_id_path():
     # If dispatched to GET /{connector_id}, we'd get 404 "connector not found".
     assert resp.status_code == 200
     assert "healthy" in resp.json()
+
+
+# ---------------------------------------------------------------------------
+# Issue #5054 / #5055: hydration resiliency
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_hydration_returns_gracefully_when_redis_down():
+    """Issue #5054: Redis failure must not propagate out of hydration."""
+    with patch(
+        "api.knowledge_connectors._list_connector_ids",
+        new=AsyncMock(side_effect=RedisError("connection refused")),
+    ):
+        # Should return without raising, allowing the caller to fall back
+        # to the in-memory registry.
+        await _hydrate_all_instances()
+
+
+@pytest.mark.asyncio
+async def test_hydration_returns_gracefully_on_connection_error():
+    """Issue #5054: OSError/ConnectionError from the Redis client must also
+    be caught so the health endpoint stays usable."""
+    with patch(
+        "api.knowledge_connectors._list_connector_ids",
+        new=AsyncMock(side_effect=ConnectionError("ECONNREFUSED")),
+    ):
+        await _hydrate_all_instances()
+
+
+def test_health_endpoint_works_when_redis_hydration_fails():
+    """Issue #5054: /connectors/health must return 200 using the in-memory
+    registry even when Redis is unreachable during hydration."""
+    app = _make_app()
+    client = TestClient(app)
+
+    ConnectorRegistry.add_instance(
+        _FakeConnector(_make_cfg("in-mem", "file_server", "local-only"), result=True)
+    )
+
+    with patch(
+        "api.knowledge_connectors._list_connector_ids",
+        new=AsyncMock(side_effect=RedisError("down")),
+    ):
+        resp = client.get("/api/knowledge_base/connectors/health")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "file_server:local-only" in body["healthy"]
+    assert body["errors"] == {}
+
+
+@pytest.mark.asyncio
+async def test_hydration_skips_corrupted_record_and_continues():
+    """Issue #5055: a single bad connector record must not abort the loop —
+    subsequent connectors still load into the registry."""
+    ConnectorRegistry._instances.clear()
+
+    async def _fake_list_ids():
+        return ["bad", "good"]
+
+    good_cfg = _make_cfg("good", "file_server", "healthy-share")
+
+    async def _fake_load(cid: str):
+        if cid == "bad":
+            raise ValueError("invalid JSON / missing required field")
+        return good_cfg
+
+    with patch(
+        "api.knowledge_connectors._list_connector_ids", new=_fake_list_ids
+    ), patch("api.knowledge_connectors._load_connector", new=_fake_load), patch(
+        "api.knowledge_connectors._load_or_create_instance"
+    ) as mock_load_or_create:
+        await _hydrate_all_instances()
+
+    # The good connector must still have been processed after the bad one raised.
+    mock_load_or_create.assert_called_once_with(good_cfg)
