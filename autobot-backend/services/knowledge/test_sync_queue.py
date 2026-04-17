@@ -11,6 +11,7 @@ without a running Redis server or optional fakeredis dependency.
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any, Dict, List, Optional, Tuple
 from unittest.mock import patch
 
@@ -62,6 +63,7 @@ class _FakeAsyncRedis:
     def __init__(self) -> None:
         self.hashes: Dict[str, Dict[str, str]] = {}
         self.zsets: Dict[str, Dict[str, float]] = {}
+        self.strings: Dict[str, str] = {}
 
     def pipeline(self) -> _Pipeline:
         return _Pipeline(self)
@@ -79,6 +81,13 @@ class _FakeAsyncRedis:
     async def hgetall(self, key: str) -> Dict[str, str]:
         return dict(self.hashes.get(key, {}))
 
+    async def get(self, key: str) -> Optional[str]:
+        return self.strings.get(key)
+
+    async def set(self, key: str, value: str) -> bool:
+        self.strings[key] = str(value)
+        return True
+
     async def delete(self, *keys: str) -> int:
         removed = 0
         for k in keys:
@@ -87,6 +96,9 @@ class _FakeAsyncRedis:
                 removed += 1
             if k in self.zsets:
                 del self.zsets[k]
+                removed += 1
+            if k in self.strings:
+                del self.strings[k]
                 removed += 1
         return removed
 
@@ -214,6 +226,33 @@ class TestPriorityOrdering:
         assert nxt.reason == SyncReason.CONTENT_CHANGED
 
     @pytest.mark.asyncio
+    async def test_priority_beats_fifo_across_one_second_gap(
+        self, queue: DocumentSyncQueue, fake_redis: _FakeAsyncRedis
+    ) -> None:
+        """Regression for #5078: FIFO component must not overflow priority bucket.
+
+        With the old ``float(priority) + time.time() * 1e-9`` formula the
+        FIFO component was ~1.76 today — larger than the priority gap of 1
+        — so a MANUAL entry enqueued first would incorrectly come out ahead
+        of a later CONTENT_CHANGED entry.  Simulate the 1-second enqueue
+        gap by back-dating MANUAL's score in the fake zset and verify
+        CONTENT_CHANGED still wins.
+        """
+        manual = await queue.enqueue_sync("manual.md", SyncReason.MANUAL)
+        changed = await queue.enqueue_sync("changed.md", SyncReason.CONTENT_CHANGED)
+
+        # MANUAL was enqueued 1 second earlier than CONTENT_CHANGED.
+        now = time.time()
+        fake_redis.zsets["doc_sync:queue:pending"][manual.id] = 2.0 * 1e12 + (now - 1.0)
+        fake_redis.zsets["doc_sync:queue:pending"][changed.id] = 0.0 * 1e12 + now
+
+        nxt = await queue.get_next_pending()
+
+        assert nxt is not None
+        assert nxt.id == changed.id
+        assert nxt.reason == SyncReason.CONTENT_CHANGED
+
+    @pytest.mark.asyncio
     async def test_model_updated_between_content_and_manual(
         self, queue: DocumentSyncQueue
     ) -> None:
@@ -234,6 +273,99 @@ class TestPriorityOrdering:
 
         third = await queue.get_next_pending()
         assert third.id == manual.id
+
+
+# ---------------------------------------------------------------------------
+# Atomic claim (#5079)
+# ---------------------------------------------------------------------------
+
+
+class TestAtomicClaim:
+    @pytest.mark.asyncio
+    async def test_claim_next_pending_returns_and_removes(
+        self, queue: DocumentSyncQueue
+    ) -> None:
+        entry = await queue.enqueue_sync("a.md", SyncReason.MANUAL)
+
+        claimed = await queue.claim_next_pending()
+
+        assert claimed is not None
+        assert claimed.id == entry.id
+        assert claimed.status == SyncStatus.PROCESSING
+        # Queue is now empty — no second claim possible.
+        assert await queue.claim_next_pending() is None
+
+    @pytest.mark.asyncio
+    async def test_claim_next_pending_empty_queue_returns_none(
+        self, queue: DocumentSyncQueue
+    ) -> None:
+        assert await queue.claim_next_pending() is None
+
+    @pytest.mark.asyncio
+    async def test_concurrent_claims_only_one_wins(
+        self, queue: DocumentSyncQueue
+    ) -> None:
+        """Two workers calling claim_next_pending concurrently — exactly one gets it."""
+        await queue.enqueue_sync("a.md", SyncReason.CONTENT_CHANGED)
+
+        results = await asyncio.gather(
+            queue.claim_next_pending(),
+            queue.claim_next_pending(),
+        )
+
+        # Exactly one result is non-None; the other is None.
+        winners = [r for r in results if r is not None]
+        assert len(winners) == 1
+        assert winners[0].status == SyncStatus.PROCESSING
+
+
+# ---------------------------------------------------------------------------
+# Path deduplication (#5080)
+# ---------------------------------------------------------------------------
+
+
+class TestPathDedup:
+    @pytest.mark.asyncio
+    async def test_duplicate_enqueue_returns_existing_entry(
+        self, queue: DocumentSyncQueue
+    ) -> None:
+        first = await queue.enqueue_sync("docs/a.md", SyncReason.CONTENT_CHANGED)
+        second = await queue.enqueue_sync("docs/a.md", SyncReason.MANUAL)
+
+        # Same entry returned — not a new one.
+        assert second.id == first.id
+        # Only one pending entry in the queue.
+        stats = await queue.stats()
+        assert stats["pending"] == 1
+
+    @pytest.mark.asyncio
+    async def test_reenqueue_allowed_after_mark_done(
+        self, queue: DocumentSyncQueue
+    ) -> None:
+        first = await queue.enqueue_sync("docs/a.md", SyncReason.CONTENT_CHANGED)
+        await queue.mark_processing(first.id)
+        await queue.mark_done(first.id)
+
+        # Path is free again — a fresh enqueue creates a new entry.
+        second = await queue.enqueue_sync("docs/a.md", SyncReason.CONTENT_CHANGED)
+
+        assert second.id != first.id
+        stats = await queue.stats()
+        assert stats["pending"] == 1
+        assert stats["done"] == 1
+
+    @pytest.mark.asyncio
+    async def test_reenqueue_allowed_after_terminal_failure(
+        self, queue: DocumentSyncQueue
+    ) -> None:
+        first = await queue.enqueue_sync("docs/a.md", SyncReason.CONTENT_CHANGED)
+        for _ in range(MAX_ATTEMPTS):
+            await queue.mark_processing(first.id)
+            await queue.mark_failed(first.id, "boom")
+
+        # Terminal failure frees the dedup key.
+        second = await queue.enqueue_sync("docs/a.md", SyncReason.CONTENT_CHANGED)
+        assert second.id != first.id
 
 
 # ---------------------------------------------------------------------------

@@ -43,6 +43,7 @@ _ENTRY_KEY_PREFIX = "doc_sync:entry:"
 _PENDING_KEY = "doc_sync:queue:pending"
 _FAILED_KEY = "doc_sync:queue:failed"
 _DONE_KEY = "doc_sync:queue:done"
+_PENDING_PATH_KEY_PREFIX = "doc_sync:pending_paths:"
 
 MAX_ATTEMPTS = 3
 DONE_TTL_SECONDS = 7 * 24 * 3600  # 7 days
@@ -166,14 +167,18 @@ class DocumentSyncQueue:
         return f"{_ENTRY_KEY_PREFIX}{entry_id}"
 
     @staticmethod
-    def _priority_score(reason: SyncReason) -> float:
-        """Compose a priority score: ``priority.high_bits + monotonic_suffix``.
+    def _pending_path_key(path: str) -> str:
+        return f"{_PENDING_PATH_KEY_PREFIX}{path}"
 
-        The integer priority component dominates so reason ordering is strict;
-        the sub-second suffix (``time.time()`` scaled by 1e-9) preserves FIFO
-        order inside a priority bucket.
+    @staticmethod
+    def _priority_score(reason: SyncReason) -> float:
+        """Compose a priority score: ``priority_bucket + fifo_suffix``.
+
+        Priority bucket uses a 1e12 multiplier so it always dominates the
+        FIFO component (``time.time()`` ~ 1.76e9 today, << 1e12). Within a
+        bucket the raw timestamp preserves FIFO order.
         """
-        return float(reason._priority) + time.time() * 1e-9
+        return float(reason._priority) * 1e12 + time.time()
 
     # ------------------------------------------------------------------
     # Public API
@@ -182,16 +187,40 @@ class DocumentSyncQueue:
     async def enqueue_sync(
         self, document_path: str, reason: SyncReason
     ) -> SyncQueueEntry:
-        """Create a pending entry for ``document_path`` and return it."""
+        """Create a pending entry for ``document_path`` and return it.
+
+        Dedups by ``document_path``: if an entry for this path is already
+        pending (or currently being processed), returns that entry instead
+        of creating a duplicate.  The secondary key is cleared when the
+        entry reaches a terminal state via :meth:`mark_done` or
+        :meth:`mark_failed` (permanent failure only).
+        """
+        redis = await self._redis()
+        path_key = self._pending_path_key(document_path)
+        existing_id = await redis.get(path_key)
+        if existing_id is not None:
+            if isinstance(existing_id, bytes):
+                existing_id = existing_id.decode()
+            raw = await redis.hgetall(self._entry_key(existing_id))
+            if raw:
+                logger.debug(
+                    "enqueue_sync dedup: path=%s already queued as id=%s",
+                    document_path,
+                    existing_id,
+                )
+                return SyncQueueEntry.from_redis_mapping(raw)
+            # Stale secondary key — entry hash was pruned; fall through.
+            await redis.delete(path_key)
+
         entry = SyncQueueEntry(
             id=str(uuid.uuid4()),
             document_path=document_path,
             reason=reason,
         )
-        redis = await self._redis()
         pipe = redis.pipeline()
         pipe.hset(self._entry_key(entry.id), mapping=entry.to_redis_mapping())
         pipe.zadd(_PENDING_KEY, {entry.id: self._priority_score(reason)})
+        pipe.set(path_key, entry.id)
         await pipe.execute()
         logger.info(
             "enqueued sync: path=%s reason=%s id=%s",
@@ -206,6 +235,10 @@ class DocumentSyncQueue:
 
         Uses ``zrange`` with ``withscores=False`` to read the smallest-score
         member (priority 0 before 1 before 2, FIFO inside a bucket).
+
+        Note: this is an inspection helper.  Workers must use
+        :meth:`claim_next_pending` to avoid the read-then-remove race where
+        two workers claim the same entry (#5079).
         """
         redis = await self._redis()
         ids = await redis.zrange(_PENDING_KEY, 0, 0)
@@ -221,8 +254,48 @@ class DocumentSyncQueue:
             return None
         return SyncQueueEntry.from_redis_mapping(raw)
 
+    async def claim_next_pending(self) -> Optional[SyncQueueEntry]:
+        """Atomically claim the highest-priority pending entry.
+
+        Returns the claimed entry (status set to PROCESSING) or ``None`` if
+        the queue is empty or another worker won the race for this id.  The
+        atomic ``zrem`` acts as the claim token — exactly one caller
+        observes ``removed == 1`` for a given id, so double-processing is
+        impossible even with multiple worker processes (#5079).
+        """
+        redis = await self._redis()
+        ids = await redis.zrange(_PENDING_KEY, 0, 0)
+        if not ids:
+            return None
+        entry_id = ids[0]
+        if isinstance(entry_id, bytes):
+            entry_id = entry_id.decode()
+        removed = await redis.zrem(_PENDING_KEY, entry_id)
+        if not removed:
+            return None  # Another worker claimed it first.
+        raw = await redis.hgetall(self._entry_key(entry_id))
+        if not raw:
+            # Orphaned zset member with no hash — nothing to process.
+            return None
+        entry = SyncQueueEntry.from_redis_mapping(raw)
+        now = datetime.now(tz=timezone.utc).isoformat()
+        await redis.hset(
+            self._entry_key(entry_id),
+            mapping={"status": SyncStatus.PROCESSING.value, "updated_at": now},
+        )
+        entry.status = SyncStatus.PROCESSING
+        entry.updated_at = now
+        return entry
+
     async def mark_processing(self, entry_id: str) -> None:
-        """Move an entry out of ``pending`` and set status = processing."""
+        """Move an entry out of ``pending`` and set status = processing.
+
+        Prefer :meth:`claim_next_pending` in worker loops — this helper is
+        retained for tests and admin tooling that want an explicit
+        transition.  The secondary ``pending_paths`` key stays set so a
+        concurrent enqueue for the same path still dedups to this in-flight
+        entry.
+        """
         now = datetime.now(tz=timezone.utc).isoformat()
         redis = await self._redis()
         pipe = redis.pipeline()
@@ -234,11 +307,20 @@ class DocumentSyncQueue:
         await pipe.execute()
 
     async def mark_done(self, entry_id: str) -> None:
-        """Mark an entry complete and place it on the TTL-pruned done zset."""
+        """Mark an entry complete and place it on the TTL-pruned done zset.
+
+        Clears the ``pending_paths`` secondary key so a subsequent re-edit
+        of the same path can be re-enqueued (#5080).
+        """
         now_dt = datetime.now(tz=timezone.utc)
         now_iso = now_dt.isoformat()
         now_ts = now_dt.timestamp()
         redis = await self._redis()
+        # Look up path so we can clear the dedup key alongside the transition.
+        raw = await redis.hgetall(self._entry_key(entry_id))
+        path = None
+        if raw:
+            path = SyncQueueEntry.from_redis_mapping(raw).document_path
         pipe = redis.pipeline()
         pipe.hset(
             self._entry_key(entry_id),
@@ -246,6 +328,8 @@ class DocumentSyncQueue:
         )
         pipe.zrem(_PENDING_KEY, entry_id)
         pipe.zadd(_DONE_KEY, {entry_id: now_ts})
+        if path:
+            pipe.delete(self._pending_path_key(path))
         await pipe.execute()
 
     async def mark_failed(self, entry_id: str, error_msg: str) -> SyncQueueEntry:
@@ -268,6 +352,9 @@ class DocumentSyncQueue:
             pipe.hset(self._entry_key(entry_id), mapping=entry.to_redis_mapping())
             pipe.zrem(_PENDING_KEY, entry_id)
             pipe.zadd(_FAILED_KEY, {entry_id: time.time()})
+            # Terminal failure — free the dedup key so the path can be
+            # re-enqueued by a future edit (#5080).
+            pipe.delete(self._pending_path_key(entry.document_path))
             logger.error(
                 "sync entry %s permanently failed after %d attempts: %s",
                 entry_id,
@@ -361,16 +448,17 @@ class DocumentSyncQueue:
         self,
         processor: Callable[[SyncQueueEntry], Awaitable[None]],
     ) -> Optional[SyncQueueEntry]:
-        """Pop one entry and pass it to ``processor``.
+        """Atomically claim one entry and pass it to ``processor``.
 
-        The processor is expected to be an async callable that raises on
-        failure.  Returns the processed entry (with its final status) or
-        ``None`` if the queue was empty.
+        Uses :meth:`claim_next_pending` so concurrent workers cannot both
+        process the same entry (#5079).  The processor is an async callable
+        that raises on failure.  Returns the processed entry (with its
+        final status) or ``None`` if the queue was empty or another worker
+        won the race.
         """
-        entry = await self.get_next_pending()
+        entry = await self.claim_next_pending()
         if entry is None:
             return None
-        await self.mark_processing(entry.id)
         try:
             await processor(entry)
         except Exception as exc:  # noqa: BLE001 — worker must survive any failure
