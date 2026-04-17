@@ -29,6 +29,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
+from redis.exceptions import RedisError
 
 from auth_middleware import check_admin_permission
 from autobot_shared.redis_client import get_redis_client
@@ -354,13 +355,30 @@ async def _hydrate_all_instances() -> None:
     after a restart, the instance map may be empty even though configs exist
     in Redis.  The health endpoint needs every configured connector to appear
     in the report, so we hydrate from Redis before aggregating.
+
+    Degrades gracefully (Issue #5054): if Redis is unavailable, hydration
+    returns without raising so the health endpoint can still report on the
+    in-memory registry.  Per-connector load failures (Issue #5055) are
+    isolated so a single corrupted record does not abort hydration of the
+    remaining connectors.
     """
-    ids = await _list_connector_ids()
+    try:
+        ids = await _list_connector_ids()
+    except (RedisError, ConnectionError, TimeoutError, OSError) as exc:
+        logger.warning(
+            "Redis hydration failed — health check runs on in-memory registry only: %s",
+            exc,
+        )
+        return
+
     for cid in ids:
-        cfg = await _load_connector(cid)
-        if cfg is None:
-            continue
-        _load_or_create_instance(cfg)
+        try:
+            cfg = await _load_connector(cid)
+            if cfg is None:
+                continue
+            _load_or_create_instance(cfg)
+        except Exception as exc:  # noqa: BLE001 — isolate bad records per Issue #5055
+            logger.warning("Skipping corrupted connector %s: %s", cid, exc)
 
 
 @router.get("/knowledge_base/connectors/{connector_id}")
