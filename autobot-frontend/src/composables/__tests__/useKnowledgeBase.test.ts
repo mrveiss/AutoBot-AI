@@ -49,19 +49,6 @@ vi.mock('@/utils/ApiClient', () => ({
   },
 }))
 
-// Mock fetchWithAuth
-vi.mock('@/utils/fetchWithAuth', () => ({
-  fetchWithAuth: vi.fn(),
-}))
-
-// Mock parseApiResponse
-vi.mock('@/utils/apiResponseHelpers', () => ({
-  parseApiResponse: vi.fn((response) => {
-    if (!response) return null
-    return response.json ? response.json() : response
-  }),
-}))
-
 // Mock formatHelpers
 vi.mock('@/utils/formatHelpers', () => ({
   formatDate: (date: any) => new Date(date).toLocaleDateString(),
@@ -101,37 +88,10 @@ vi.mock('@/config/ssot-config', () => ({
 }))
 
 import apiClient from '@/utils/ApiClient'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import { parseApiResponse } from '@/utils/apiResponseHelpers'
-import appConfig from '@/config/AppConfig.js'
 
 // ========================================
 // Helper Functions
 // ========================================
-
-function mockApiResponse<T>(data: T, ok = true) {
-  return {
-    ok,
-    status: ok ? 200 : 400,
-    statusText: ok ? 'OK' : 'Bad Request',
-    json: () => Promise.resolve(data),
-    text: () => Promise.resolve(JSON.stringify(data)),
-    headers: new Map(),
-  } as unknown as Response
-}
-
-/**
- * Typed wrapper around parseApiResponse mock.
- *
- * `parseApiResponse` in production returns `Promise<any>`, so mocking it with
- * `vi.mocked(parseApiResponse).mockResolvedValue(x)` accepts any value and
- * silently hides test-fixture typos. This helper adds an explicit type
- * parameter so `mockParseApi<KnowledgeStats>(fixture)` fails type-check if
- * `fixture` is not assignable to `KnowledgeStats`.
- */
-function mockParseApi<T>(data: T): void {
-  vi.mocked(parseApiResponse).mockResolvedValue(data)
-}
 
 /**
  * Shape of the background job status response used by `pollJobStatus`.
@@ -525,22 +485,22 @@ describe('useKnowledgeBase', () => {
       const formData = new FormData()
       formData.append('file', new Blob(['test'], { type: 'application/pdf' }))
 
-      const response = mockApiResponse(mockUploadResponse)
-      vi.mocked(fetchWithAuth).mockResolvedValue(response)
-      mockParseApi<UploadResponse>(mockUploadResponse)
+      vi.mocked(apiClient.post).mockResolvedValue(mockUploadResponse)
 
       const { uploadKnowledgeFile } = useKnowledgeBase()
       const result = await uploadKnowledgeFile(formData)
 
       expect(result).toEqual(mockUploadResponse)
-      expect(fetchWithAuth).toHaveBeenCalled()
+      expect(apiClient.post).toHaveBeenCalledWith(
+        '/knowledge_base/knowledge_base/upload',
+        formData
+      )
     })
 
     it('should throw error on upload failure', async () => {
       const formData = new FormData()
 
-      const response = mockApiResponse<null>(null, false)
-      vi.mocked(fetchWithAuth).mockResolvedValue(response)
+      vi.mocked(apiClient.post).mockRejectedValue(new Error('HTTP 400: Upload failed'))
 
       const { uploadKnowledgeFile } = useKnowledgeBase()
 
