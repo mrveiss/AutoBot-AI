@@ -40,16 +40,17 @@
           <!-- Desktop Navigation -->
           <nav id="navigation" class="hidden lg:block" role="navigation" :aria-label="$t('nav.mainNavigation')">
             <div class="hidden lg:flex items-center space-x-8">
-                            <div class="flex items-center space-x-4">
-                <template v-for="item in navItems" :key="item.to">
+              <div ref="navContainerRef" class="flex items-center space-x-4 overflow-hidden">
+                <template v-for="item in visibleNavItems" :key="item.to">
                 <router-link
                   v-if="!item.adminOnly || userStore.isAdmin"
                   :to="item.to"
+                  data-nav-item
                   :class="{
                     'bg-autobot-primary text-white': $route.path.startsWith(item.to),
                     'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith(item.to)
                   }"
-                  class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                  class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 shrink-0"
                 >
                   <div class="flex items-center space-x-1">
                     <svg class="w-4 h-4" :fill="item.iconStroke ? 'none' : 'currentColor'" :stroke="item.iconStroke ? 'currentColor' : undefined" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
@@ -63,12 +64,17 @@
                 </router-link>
                 </template>
 
+                <NavOverflowMenu
+                  v-if="overflowNavItems.length > 0"
+                  :items="overflowNavItems"
+                />
+
                 <!-- SLM Admin: external link (Issue #729) -->
                 <a
                   :href="slmAdminUrl"
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="px-3 py-2 rounded text-sm font-medium transition-colors duration-150 text-autobot-text-primary hover:bg-autobot-bg-tertiary"
+                  class="px-3 py-2 rounded text-sm font-medium transition-colors duration-150 text-autobot-text-primary hover:bg-autobot-bg-tertiary shrink-0"
                   :title="$t('nav.slmAdminTitle')"
                   :aria-label="$t('nav.slmAdminTitle')"
                 >
@@ -410,6 +416,8 @@ import { useChatStore } from '@/stores/useChatStore'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useSystemStatus } from '@/composables/useSystemStatus'
 import { useHostSelection } from '@/composables/useHostSelection';
+import { useNavOverflow } from '@/composables/useNavOverflow'
+import NavOverflowMenu from '@/components/layout/NavOverflowMenu.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { cacheBuster } from '@/utils/CacheBuster.js';
 import { optimizedHealthMonitor } from '@/utils/OptimizedHealthMonitor.js';
@@ -440,6 +448,7 @@ export default {
     UnifiedLoadingView,
     ProfileModal,
     ErrorBoundary,
+    NavOverflowMenu,
     DarkModeToggle: defineAsyncComponent(() => import('@/components/ui/DarkModeToggle.vue')),
     LanguageSwitcher: defineAsyncComponent(() => import('@/components/layout/LanguageSwitcher.vue')),
   },
@@ -814,6 +823,21 @@ export default {
       { to: '/experiments', labelKey: 'nav.experiments', adminOnly: true, icon: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z' },
     ];
 
+    // Nav overflow: ref for container, filtered/visible/overflow computed slices
+    const navContainerRef = ref<HTMLElement | null>(null)
+
+    const filteredNavItems = computed(() =>
+      navItems.filter(item => !item.adminOnly || userStore.isAdmin)
+    )
+
+    const { visibleCount } = useNavOverflow(
+      navContainerRef,
+      computed(() => filteredNavItems.value.length)
+    )
+
+    const visibleNavItems = computed(() => filteredNavItems.value.slice(0, visibleCount.value))
+    const overflowNavItems = computed(() => filteredNavItems.value.slice(visibleCount.value))
+
     // Issue #973: Guard against Promise objects being rendered as username
     const displayUsername = computed(() => {
       const username = userStore.currentUser?.username
@@ -843,6 +867,11 @@ export default {
       navItems,
       slmAdminUrl,
       displayUsername,
+
+      // Nav overflow
+      navContainerRef,
+      visibleNavItems,
+      overflowNavItems,
 
       // Methods
       toggleMobileNav,
