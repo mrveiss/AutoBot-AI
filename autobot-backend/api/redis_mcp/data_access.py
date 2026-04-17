@@ -12,6 +12,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_utils import decode_redis_value as _decode
 from constants.ttl_constants import TTL_24_HOURS
 from type_defs.common import Metadata
 
@@ -39,11 +40,6 @@ def _resolve_ttl(ttl: Optional[int], key: str) -> Optional[int]:
     if key.startswith(AGENT_MEMORY_PREFIX):
         return AGENT_MEMORY_TTL_SECONDS
     return None
-
-
-def _decode(value):
-    """Decode bytes to UTF-8 string, pass through other types."""
-    return value.decode("utf-8") if isinstance(value, bytes) else value
 
 
 async def _get_client(database: str = "main"):

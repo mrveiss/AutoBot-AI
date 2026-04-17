@@ -12,6 +12,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_utils import decode_redis_value as _decode
 from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
@@ -149,13 +150,6 @@ async def handle_redis_slowlog(count: int = 10, database: str = "main") -> Metad
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _decode(value: Any) -> Any:
-    """Decode bytes to str if needed."""
-    if isinstance(value, bytes):
-        return value.decode("utf-8")
-    return value
 
 
 def _stringify_info(info: dict) -> dict:
