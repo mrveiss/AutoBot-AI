@@ -37,6 +37,7 @@ from agent_loop.types import (
     ThinkCategory,
 )
 from events import EventStreamManager, EventType
+from events.event_types import APPROVAL_REQUIRED as EVT_APPROVAL_REQUIRED
 from events.types import create_approval_required_event, create_message_event
 from live_event_manager import publish_live_event
 from planner import PlannerModule
@@ -915,7 +916,7 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
         # never reach the other without an explicit bridge call.
         await publish_live_event(
             "global",
-            "tool_approval_required",
+            EVT_APPROVAL_REQUIRED,
             {
                 "approval_id": approval_id,
                 "tool_name": tool_name,
