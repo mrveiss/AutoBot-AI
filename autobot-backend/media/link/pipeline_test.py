@@ -7,6 +7,7 @@
 
 """Unit tests for LinkPipeline."""
 
+import socket
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -16,6 +17,19 @@ from media.link.pipeline import LinkPipeline
 
 bs4 = pytest.importorskip("bs4", reason="beautifulsoup4 not installed")
 BeautifulSoup = bs4.BeautifulSoup
+
+
+def _mock_getaddrinfo(ip: str):
+    """Return a patcher that makes socket.getaddrinfo resolve to a fixed IP.
+
+    Supports both IPv4 and IPv6 literals.
+    """
+    family = socket.AF_INET6 if ":" in ip else socket.AF_INET
+    sockaddr = (ip, 0, 0, 0) if family == socket.AF_INET6 else (ip, 0)
+    return patch(
+        "media.link.pipeline.socket.getaddrinfo",
+        return_value=[(family, socket.SOCK_STREAM, 0, "", sockaddr)],
+    )
 
 
 def _make_input(url, metadata=None):
@@ -307,11 +321,28 @@ class TestLinkPipelineJina:
         pipe = LinkPipeline()
         jina_content = "Article title\n\nArticle body text."
 
-        with patch.object(pipe, "_try_jina", new=AsyncMock(return_value=jina_content)):
+        with patch.object(pipe, "_try_jina", new=AsyncMock(return_value=jina_content)), \
+             _mock_getaddrinfo("93.184.216.34"):
             result = await pipe._fetch_and_parse("https://example.com/article", {})
 
         assert result["source"] == "jina"
         assert result["content"] == jina_content
+
+    @pytest.mark.asyncio
+    async def test_fetch_skips_jina_when_hostname_resolves_to_private_ip(self):
+        """SSRF guard: hostname resolving to RFC1918 must skip Jina fast-path."""
+        pipe = LinkPipeline()
+        bs4_result = {"type": "link_fetch", "confidence": 0.9, "url": "https://intranet.attacker/"}
+        jina_mock = AsyncMock(return_value="should-not-be-called")
+
+        with patch.object(pipe, "_try_jina", new=jina_mock), \
+             patch.object(pipe, "_parse_html", return_value=bs4_result), \
+             patch("media.link.pipeline.aiohttp.ClientSession", return_value=self._make_mock_bs4_session()), \
+             _mock_getaddrinfo("10.0.0.5"):
+            result = await pipe._fetch_and_parse("https://intranet.attacker/", {})
+
+        jina_mock.assert_not_called()
+        assert result.get("source") != "jina"
 
     @pytest.mark.asyncio
     async def test_jina_non200_falls_back_to_beautifulsoup(self):
@@ -371,8 +402,120 @@ class TestLinkPipelineJina:
 
     def test_is_public_url_accepts_public_https(self):
         pipe = LinkPipeline()
-        assert pipe._is_public_url("https://example.com/article")
-        assert pipe._is_public_url("http://news.ycombinator.com/")
+        with _mock_getaddrinfo("93.184.216.34"):  # example.com, public IP
+            assert pipe._is_public_url("https://example.com/article")
+        with _mock_getaddrinfo("209.216.230.240"):  # news.ycombinator.com, public IP
+            assert pipe._is_public_url("http://news.ycombinator.com/")
+
+    # ------------------------------------------------------------------
+    # SSRF defence: DNS resolution + private-IP rejection (#5015)
+    # ------------------------------------------------------------------
+
+    def test_is_public_url_rejects_intranet_hostname_resolving_to_rfc1918(self):
+        """Internal hostname resolving to 10.x must be rejected (SSRF guard)."""
+        pipe = LinkPipeline()
+        with _mock_getaddrinfo("10.0.0.5"):
+            assert not pipe._is_public_url("https://intranet-db.company/admin")
+
+    def test_is_public_url_rejects_dns_rebinding_label(self):
+        """DNS-rebinding style names like 10-0-0-1.my-domain.com must be rejected."""
+        pipe = LinkPipeline()
+        with _mock_getaddrinfo("10.0.0.1"):
+            assert not pipe._is_public_url("https://10-0-0-1.my-domain.com/")
+
+    def test_is_public_url_rejects_hostname_resolving_to_loopback(self):
+        pipe = LinkPipeline()
+        with _mock_getaddrinfo("127.0.0.1"):
+            assert not pipe._is_public_url("https://spoofed-loopback.example/")
+
+    def test_is_public_url_rejects_hostname_resolving_to_link_local(self):
+        pipe = LinkPipeline()
+        with _mock_getaddrinfo("169.254.169.254"):  # AWS metadata service
+            assert not pipe._is_public_url("https://metadata.attacker.example/")
+
+    def test_is_public_url_rejects_hostname_resolving_to_ipv6_loopback(self):
+        pipe = LinkPipeline()
+        with _mock_getaddrinfo("::1"):
+            assert not pipe._is_public_url("https://v6-loopback.attacker.example/")
+
+    def test_is_public_url_rejects_hostname_resolving_to_ipv6_ula(self):
+        pipe = LinkPipeline()
+        with _mock_getaddrinfo("fd00::1"):  # IPv6 ULA
+            assert not pipe._is_public_url("https://v6-ula.attacker.example/")
+
+    def test_is_public_url_rejects_multi_answer_with_any_private(self):
+        """If any resolved IP is private, reject — even if others are public."""
+        pipe = LinkPipeline()
+        infos = [
+            (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 0)),
+            (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("10.0.0.1", 0)),
+        ]
+        with patch(
+            "media.link.pipeline.socket.getaddrinfo", return_value=infos
+        ):
+            assert not pipe._is_public_url("https://multi-answer.attacker.example/")
+
+    def test_is_public_url_rejects_onion(self):
+        pipe = LinkPipeline()
+        # Must not resolve DNS; rejected by TLD alone.
+        with patch(
+            "media.link.pipeline.socket.getaddrinfo",
+            side_effect=AssertionError("DNS should not be called for .onion"),
+        ):
+            assert not pipe._is_public_url("http://example.onion/page")
+
+    def test_is_public_url_rejects_internal_tld(self):
+        pipe = LinkPipeline()
+        with patch(
+            "media.link.pipeline.socket.getaddrinfo",
+            side_effect=AssertionError("DNS should not be called for .internal"),
+        ):
+            assert not pipe._is_public_url("https://service.internal/")
+
+    def test_is_public_url_rejects_bare_localhost(self):
+        pipe = LinkPipeline()
+        assert not pipe._is_public_url("http://localhost/")
+
+    def test_is_public_url_fails_closed_on_dns_error(self):
+        """DNS lookup failure must return False (fail closed)."""
+        pipe = LinkPipeline()
+        with patch(
+            "media.link.pipeline.socket.getaddrinfo",
+            side_effect=socket.gaierror("Name or service not known"),
+        ):
+            assert not pipe._is_public_url("https://nonexistent-host.example/")
+
+    def test_is_public_url_fails_closed_on_dns_timeout(self):
+        pipe = LinkPipeline()
+        with patch(
+            "media.link.pipeline.socket.getaddrinfo",
+            side_effect=socket.timeout(),
+        ):
+            assert not pipe._is_public_url("https://slow-dns.example/")
+
+    def test_is_public_url_rejects_non_http_scheme(self):
+        pipe = LinkPipeline()
+        assert not pipe._is_public_url("file:///etc/passwd")
+        assert not pipe._is_public_url("ftp://ftp.example.com/")
+        assert not pipe._is_public_url("gopher://example.com/")
+
+    def test_is_public_url_accepts_ipv4_literal_public(self):
+        """Literal public IP short-circuits DNS."""
+        pipe = LinkPipeline()
+        with patch(
+            "media.link.pipeline.socket.getaddrinfo",
+            side_effect=AssertionError("DNS should not be called for literal IP"),
+        ):
+            assert pipe._is_public_url("http://8.8.8.8/")
+
+    @pytest.mark.asyncio
+    async def test_is_public_url_async_wraps_sync_version(self):
+        """Async wrapper delegates to the blocking implementation via executor."""
+        pipe = LinkPipeline()
+        with _mock_getaddrinfo("93.184.216.34"):
+            assert await pipe._is_public_url_async("https://example.com/")
+        with _mock_getaddrinfo("10.0.0.1"):
+            assert not await pipe._is_public_url_async("https://intranet.attacker/")
 
     def _make_mock_bs4_session(self, status=200):
         """Helper: mock ClientSession for the BS4 fallback path."""
