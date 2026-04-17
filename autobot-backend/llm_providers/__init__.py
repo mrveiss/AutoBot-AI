@@ -13,6 +13,8 @@ Provider implementations:
   AnthropicProvider     — Anthropic Claude models
   HuggingFaceProvider   — HuggingFace Inference API
   CustomOpenAIProvider  — any OpenAI-compatible endpoint
+  OpenRouterProvider    — OpenRouter multi-provider gateway (Issue #4341)
+  NousPortalProvider    — Nous Research curated open-source models (Issue #4341)
   VLLMProvider          — local vLLM inference server (existing)
 
 Registry:
@@ -25,8 +27,10 @@ from .base_provider import BaseProvider
 from .custom_openai_provider import CustomOpenAIProvider
 from .groq_provider import GroqProvider
 from .huggingface_provider import HuggingFaceProvider
+from .nous_portal_provider import NousPortalProvider
 from .ollama_provider import OllamaProvider
 from .openai_provider import OpenAIProvider
+from .openrouter_provider import OpenRouterProvider
 from .provider_registry import ProviderRegistry, get_provider_registry
 from .vllm_provider import RECOMMENDED_MODELS, VLLMModelManager, VLLMProvider
 
@@ -40,6 +44,8 @@ __all__ = [
     "GroqProvider",
     "HuggingFaceProvider",
     "CustomOpenAIProvider",
+    "OpenRouterProvider",
+    "NousPortalProvider",
     # vLLM (existing)
     "VLLMProvider",
     "VLLMModelManager",
