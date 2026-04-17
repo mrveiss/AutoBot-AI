@@ -79,7 +79,7 @@ class ResourceFactory:
 
     @staticmethod
     async def get_enhanced_orchestrator(request: Request = None):
-        """Get the shared EnhancedOrchestrator singleton.
+        """Get the shared ConsolidatedOrchestrator singleton.
 
         Issue #2207: Delegates to module-level singleton in enhanced_orchestrator.
         The request parameter is kept for backward compatibility but no longer
@@ -194,7 +194,7 @@ async def get_llm(request: Request = None):
 
 
 async def get_orchestrator(request: Request = None):
-    """Shorthand for getting EnhancedOrchestrator"""
+    """Shorthand for getting ConsolidatedOrchestrator"""
     return await ResourceFactory.get_enhanced_orchestrator(request)
 
 
