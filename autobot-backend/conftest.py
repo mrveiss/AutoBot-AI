@@ -75,6 +75,50 @@ for _mod in _SIMPLE_STUBS:
         except ImportError:
             sys.modules[_mod] = MagicMock()
 
+# Celery stub — issue #4455. When celery isn't installed in the dev venv,
+# provide a tiny shim so modules that do ``@celery_app.task`` import cleanly.
+# The real package is used on production nodes; tests never rely on Beat.
+try:
+    import celery as _celery_real  # noqa: F401
+except ImportError:
+    _celery_stub = types.ModuleType("celery")
+
+    class _StubCelery:
+        def __init__(self, *args, **kwargs) -> None:
+            self.conf = types.SimpleNamespace(
+                update=lambda **_k: None,
+                beat_schedule={},
+            )
+
+        def task(self, *_args, **_kwargs):
+            def decorator(fn):
+                fn.update_state = lambda *a, **k: None
+                return fn
+
+            return decorator
+
+        def autodiscover_tasks(self, *_args, **_kwargs) -> None:
+            return None
+
+    _celery_stub.Celery = _StubCelery
+    sys.modules["celery"] = _celery_stub
+
+    _schedules_stub = types.ModuleType("celery.schedules")
+
+    class _StubCrontab:
+        def __init__(self, **fields) -> None:
+            def _parse(v):
+                try:
+                    return {int(v)}
+                except (TypeError, ValueError):
+                    return set()
+
+            self.minute = _parse(fields.get("minute", 0))
+            self.hour = _parse(fields.get("hour", 0))
+
+    _schedules_stub.crontab = _StubCrontab
+    sys.modules["celery.schedules"] = _schedules_stub
+
 # Package stubs for SQLAlchemy and alembic sub-packages (need __path__ so
 # dotted sub-module imports like ``sqlalchemy.dialects.postgresql`` resolve).
 _PKG_STUBS = [
