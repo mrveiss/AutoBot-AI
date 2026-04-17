@@ -468,6 +468,91 @@ async def get_rag_stats(
 
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
+    operation="run_rag_benchmark",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.post("/benchmark/run")
+async def run_rag_benchmark(
+    current_user: dict = Depends(get_current_user),
+):
+    """Run the RAG precision@k benchmark suite and publish results to RetrievalLearner.
+
+    Issue #4676: Executes ``run_benchmark_suite()`` against an ephemeral
+    ChromaDB collection, then calls ``publish_feedback_events()`` to inject
+    the results as synthetic ``rag:feedback:__global__:{date}`` stream entries.
+    RetrievalLearner will pick up these events on its next scheduled consume
+    run and update global retrieval patterns accordingly.
+
+    **Returns:**
+    - **published**: Number of feedback events written to Redis.
+    - **total**: Total benchmark queries run.
+    - **stream_key**: Redis stream key where events were written.
+    """
+    import asyncio
+    from datetime import datetime, timezone
+
+    import chromadb
+
+    from autobot_shared.redis_client import get_async_redis_client
+    from knowledge.rag_benchmarks import (
+        _BENCHMARK_USER,
+        _TOPIC_DOCS,
+        _deterministic_embed,
+        publish_feedback_events,
+        run_benchmark_suite,
+    )
+
+    # Build an ephemeral ChromaDB collection seeded with the domain corpus.
+    _DIM = 128
+    client = chromadb.EphemeralClient()
+    collection = client.create_collection(
+        name="benchmark_run",
+        metadata={"hnsw:space": "cosine"},
+    )
+    collection.add(
+        ids=[doc_id for doc_id, _, _ in _TOPIC_DOCS],
+        embeddings=[_deterministic_embed(text, _DIM) for _, text, _ in _TOPIC_DOCS],
+        documents=[text for _, text, _ in _TOPIC_DOCS],
+        metadatas=[{"topic": topic} for _, _, topic in _TOPIC_DOCS],
+    )
+
+    # run_benchmark_suite is synchronous (ChromaDB EphemeralClient is sync).
+    loop = asyncio.get_event_loop()
+    results = await loop.run_in_executor(None, run_benchmark_suite, collection, 5)
+
+    try:
+        client.delete_collection("benchmark_run")
+    except Exception:
+        pass
+
+    redis = await get_async_redis_client(database="analytics")
+    if redis is None:
+        logger.warning("run_rag_benchmark: Redis unavailable; benchmark events dropped")
+        return {
+            "published": 0,
+            "total": len(results),
+            "stream_key": None,
+            "reason": "redis_unavailable",
+        }
+
+    date_key = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
+    stream_key = f"rag:feedback:{_BENCHMARK_USER}:{date_key}"
+
+    published = await publish_feedback_events(redis, results)
+    logger.info(
+        "run_rag_benchmark: published %d/%d benchmark feedback events",
+        published,
+        len(results),
+    )
+    return {
+        "published": published,
+        "total": len(results),
+        "stream_key": stream_key,
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
     operation="get_entity_history",
     error_code_prefix="KNOWLEDGE",
 )

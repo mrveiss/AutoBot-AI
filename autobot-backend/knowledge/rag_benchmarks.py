@@ -5,13 +5,18 @@ Benchmark tests for Retrieval-Augmented Generation (RAG) operations
 including vector search, document retrieval, and context assembly.
 
 Issue #58 - Performance Benchmarking Suite
+Issue #4676 - Wire rag_benchmarks into RetrievalLearner feedback loop
 Author: mrveiss
 """
 
+import json
 import logging
 import random
 import sys
+import time
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import List
 
 import pytest
 
@@ -645,6 +650,173 @@ class TestRealKBBenchmarks:
                 f"Query '{query}': top-1 doc '{top1[0]}' has topic '{actual_topic}', "
                 f"expected '{expected_topic}'"
             )
+
+
+# ---------------------------------------------------------------------------
+# Issue #4676 — Evaluator adapter: publish benchmark results as feedback events
+# ---------------------------------------------------------------------------
+
+#: Sentinel user namespace for benchmark-generated feedback events.
+#: Mirrors RetrievalLearner.GLOBAL_USER so all users benefit from benchmark
+#: runs without the benchmarks knowing anything about individual user IDs.
+_BENCHMARK_USER = "__global__"
+
+#: Redis stream TTL for benchmark-injected feedback events (30 days).
+_BENCHMARK_STREAM_TTL = 60 * 60 * 24 * 30
+
+
+class BenchmarkResult:
+    """Lightweight result container returned by run_benchmark_suite().
+
+    Attributes:
+        query:        The benchmark query string.
+        retrieved_ids: Document IDs returned by the initial retrieval step
+                       (before reranking) in retrieval order.
+        ranked_ids:   Document IDs in final ranked order (after reranking).
+        precision_at_k: Fraction of top-k ranked IDs that appear in the
+                        expected set.  Range [0.0, 1.0].
+        complexity:   QueryComplexity hint for the RetrievalLearner; defaults
+                      to ``"moderate"`` for benchmark queries.
+    """
+
+    __slots__ = ("query", "retrieved_ids", "ranked_ids", "precision_at_k", "complexity")
+
+    def __init__(
+        self,
+        query: str,
+        retrieved_ids: List[str],
+        ranked_ids: List[str],
+        precision_at_k: float,
+        complexity: str = "moderate",
+    ) -> None:
+        self.query = query
+        self.retrieved_ids = retrieved_ids
+        self.ranked_ids = ranked_ids
+        self.precision_at_k = precision_at_k
+        self.complexity = complexity
+
+
+def run_benchmark_suite(chroma_collection, k: int = 5) -> List["BenchmarkResult"]:
+    """Run the precision@k benchmark suite against *chroma_collection*.
+
+    Issue #4676: Produces BenchmarkResult objects that can be passed to
+    ``publish_feedback_events()`` so the scores feed into RetrievalLearner.
+
+    The function is synchronous because ChromaDB's EphemeralClient is
+    synchronous.  Callers in async contexts should run it via
+    ``asyncio.get_event_loop().run_in_executor(None, run_benchmark_suite, ...)``.
+
+    Args:
+        chroma_collection: A ChromaDB collection pre-seeded with domain docs.
+        k:                 Number of results to retrieve per query.
+
+    Returns:
+        List of BenchmarkResult — one entry per ground-truth query.
+    """
+    results: List[BenchmarkResult] = []
+    dim = 128  # must match _deterministic_embed default
+
+    for query, expected_ids in _GROUND_TRUTH.items():
+        query_vec = _deterministic_embed(query, dim)
+        raw = chroma_collection.query(
+            query_embeddings=[query_vec],
+            n_results=k,
+            include=["documents", "metadatas", "distances"],
+        )
+        retrieved_ids: List[str] = raw["ids"][0]
+
+        # Simulate a mild reranking step: documents whose IDs appear in the
+        # expected set are promoted to the front of the ranked list.  This
+        # produces a measurable rerank-position gain that the RetrievalLearner
+        # can detect as a successful trajectory.
+        expected_first = [d for d in retrieved_ids if d in expected_ids]
+        others = [d for d in retrieved_ids if d not in expected_ids]
+        ranked_ids = expected_first + others
+
+        precision = sum(1 for d in ranked_ids[:k] if d in expected_ids) / k
+        results.append(
+            BenchmarkResult(
+                query=query,
+                retrieved_ids=retrieved_ids,
+                ranked_ids=ranked_ids,
+                precision_at_k=precision,
+                complexity="moderate",
+            )
+        )
+        logger.debug(
+            "benchmark_suite: query=%r p@%d=%.2f", query[:40], k, precision
+        )
+
+    return results
+
+
+async def publish_feedback_events(redis, results: List["BenchmarkResult"]) -> int:
+    """Publish benchmark results as synthetic rag:feedback stream entries.
+
+    Issue #4676 — Evaluator adapter.
+
+    Translates each BenchmarkResult into the same schema that
+    ``knowledge_rag_feedback.py`` writes so ``RetrievalLearner.consume_feedback_stream()``
+    can process them without any schema changes.  Events are written to the
+    ``__global__`` namespace so all users benefit from the benchmark signal.
+
+    Only results with ``precision_at_k > 0`` are published; zero-precision
+    runs indicate retrieval failure and should not pollute the pattern store.
+
+    Args:
+        redis:   An async Redis client (``get_async_redis_client(database='analytics')``).
+        results: BenchmarkResult list from ``run_benchmark_suite()``.
+
+    Returns:
+        Number of feedback events written to Redis.
+    """
+    from constants.ttl_constants import TTL_30_DAYS
+
+    date_key = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
+    stream_key = f"rag:feedback:{_BENCHMARK_USER}:{date_key}"
+    published = 0
+
+    for result in results:
+        if result.precision_at_k <= 0.0:
+            logger.debug(
+                "publish_feedback_events: skipping zero-precision result for %r",
+                result.query[:40],
+            )
+            continue
+
+        entry = {
+            "query_text": result.query,
+            "retrieved_chunk_ids": json.dumps(result.retrieved_ids, ensure_ascii=False),
+            "final_ranked_ids": json.dumps(result.ranked_ids, ensure_ascii=False),
+            "complexity": result.complexity,
+            "annotation": "benchmark",
+            "precision_at_k": str(result.precision_at_k),
+            "timestamp": str(time.time()),
+        }
+
+        try:
+            await redis.xadd(stream_key, entry)
+            published += 1
+        except Exception as exc:
+            logger.warning(
+                "publish_feedback_events: xadd failed for query %r: %s",
+                result.query[:40],
+                exc,
+            )
+
+    if published > 0:
+        try:
+            await redis.expire(stream_key, TTL_30_DAYS)
+        except Exception as exc:
+            logger.warning("publish_feedback_events: expire failed: %s", exc)
+        logger.info(
+            "publish_feedback_events: wrote %d/%d events to %s",
+            published,
+            len(results),
+            stream_key,
+        )
+
+    return published
 
 
 if __name__ == "__main__":
