@@ -20,6 +20,7 @@
           class="dialog"
           :class="[sizeClass, { 'dialog-scrollable': scrollable }]"
           @click.stop
+          @keydown="handleKeydown"
           tabindex="-1"
         >
           <!-- Header -->
@@ -52,7 +53,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onUnmounted } from 'vue'
+import { ref, computed, nextTick, onUnmounted, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from './Icon.vue'
 
@@ -64,7 +65,7 @@ import Icon from './Icon.vue'
  *
  * Accessibility Features:
  * - WCAG 2.1 Level AA compliant
- * - Focus trap (prevents focus from escaping modal)
+ * - Focus trap via Tab/Shift+Tab wrap (does not fight browser devtools or outside clicks)
  * - ESC key to close
  * - Focus restoration (returns focus to trigger element)
  * - Screen reader announcements (role="dialog", aria-modal="true")
@@ -120,8 +121,8 @@ const { t } = useI18n()
 const dialogRef = ref<HTMLElement | null>(null)
 let previousActiveElement: HTMLElement | null = null
 
-// Generate stable unique IDs for ARIA labeling (random only once, not per-render)
-const _uid = Math.random().toString(36).substr(2, 9)
+// Stable unique IDs for ARIA labeling (Vue 3.5+ useId)
+const _uid = useId()
 const titleId = computed(() => `modal-title-${_uid}`)
 const descriptionId = computed(() => `modal-desc-${_uid}`)
 
@@ -157,7 +158,7 @@ const onAfterEnter = async () => {
   // Focus the dialog or first focusable element
   if (dialogRef.value) {
     const firstFocusable = dialogRef.value.querySelector<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
     )
 
     if (firstFocusable) {
@@ -169,9 +170,6 @@ const onAfterEnter = async () => {
 
   // Lock body scroll
   document.body.style.overflow = 'hidden'
-
-  // Add focus trap
-  document.addEventListener('focusin', trapFocus)
 }
 
 const onAfterLeave = () => {
@@ -182,32 +180,37 @@ const onAfterLeave = () => {
 
   // Unlock body scroll
   document.body.style.overflow = ''
-
-  // Remove focus trap
-  document.removeEventListener('focusin', trapFocus)
 }
 
-const trapFocus = (event: FocusEvent) => {
-  if (!dialogRef.value) return
+/**
+ * Real focus trap via Tab/Shift+Tab wrap. Only intercepts when focus would
+ * leave the dialog — otherwise falls through to browser default, allowing
+ * natural navigation plus outside clicks (e.g. devtools) to remain usable.
+ */
+const handleKeydown = (event: KeyboardEvent) => {
+  if (event.key !== 'Tab' || !dialogRef.value) return
 
-  const focusableElements = dialogRef.value.querySelectorAll<HTMLElement>(
-    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+  const focusable = dialogRef.value.querySelectorAll<HTMLElement>(
+    'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
   )
+  if (focusable.length === 0) return
 
-  if (focusableElements.length === 0) return
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  const active = document.activeElement
 
-  const firstElement = focusableElements[0]
-
-  // If focus leaves dialog, trap it back to first element
-  if (!dialogRef.value.contains(event.target as Node)) {
-    firstElement.focus()
+  if (event.shiftKey && active === first) {
     event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && active === last) {
+    event.preventDefault()
+    first.focus()
   }
+  // Otherwise allow default Tab behavior
 }
 
 // Cleanup on unmount
 onUnmounted(() => {
-  document.removeEventListener('focusin', trapFocus)
   document.body.style.overflow = ''
 })
 </script>
