@@ -268,7 +268,7 @@ async def list_connector_types():
     the class attribute on each registered connector.
     """
     types = []
-    for type_name, klass in ConnectorRegistry._connectors.items():
+    for type_name, klass in ConnectorRegistry.registered_types().items():
         types.append(
             {
                 "connector_type": type_name,
@@ -306,7 +306,12 @@ async def create_connector(request: CreateConnectorRequest):
             detail="connector_type must be one of: %s" % _SUPPORTED_TYPES,
         )
     connector_id = str(uuid.uuid4())
-    klass = ConnectorRegistry._connectors.get(request.connector_type)
+    klass = ConnectorRegistry.get_registered_class(request.connector_type)
+    if klass is None:
+        raise HTTPException(
+            status_code=422,
+            detail="connector_type '%s' is not registered" % request.connector_type,
+        )
     cfg = ConnectorConfig(
         connector_id=connector_id,
         connector_type=request.connector_type,
@@ -317,7 +322,7 @@ async def create_connector(request: CreateConnectorRequest):
         schedule_cron=request.schedule_cron,
         include_patterns=request.include_patterns,
         exclude_patterns=request.exclude_patterns,
-        tier=int(getattr(klass, "tier", 0)) if klass is not None else 0,
+        tier=int(getattr(klass, "tier", 0)),
     )
     instance = _load_or_create_instance(cfg)
     healthy = await instance.test_connection()
@@ -551,7 +556,7 @@ def _resolve_tier(cfg: ConnectorConfig) -> int:
     connector is the source of truth — fall back to ``cfg.tier`` only when the
     type isn't registered.
     """
-    klass = ConnectorRegistry._connectors.get(cfg.connector_type)
+    klass = ConnectorRegistry.get_registered_class(cfg.connector_type)
     if klass is not None:
         return int(getattr(klass, "tier", 0))
     return int(getattr(cfg, "tier", 0))
