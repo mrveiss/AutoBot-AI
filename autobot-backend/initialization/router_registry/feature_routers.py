@@ -461,6 +461,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["resilience", "monitoring"],
         "error_resilience",
     ),
+    # User management (users, teams, organizations) — router defines /user-management internally
+    (
+        "api.user_management",
+        "",
+        ["user-management", "users"],
+        "user_management",
+    ),
     # Issue #1803: Plugin manager endpoints (list, discover, load/unload/enable/disable, config)
     ("plugin_manager", "", ["plugins"], "plugin_manager"),
     # Issue #1803: Plugin and agent marketplace — community catalog
