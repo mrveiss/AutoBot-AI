@@ -37,19 +37,14 @@ Usage:
             return error_response("Internal server error", status_code=500)
 """
 
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, TypeVar, Union
 
 from fastapi.responses import JSONResponse
 
+from autobot_shared.time_utils import utc_timestamp as get_timestamp
 from type_defs.common import Metadata
 
 T = TypeVar("T")
-
-
-def get_timestamp() -> str:
-    """Get current UTC timestamp in ISO format."""
-    return datetime.now(timezone.utc).isoformat()
 
 
 def success_response(
