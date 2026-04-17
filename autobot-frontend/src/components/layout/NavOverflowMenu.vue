@@ -1,8 +1,8 @@
 <template>
-  <div ref="triggerRef" class="relative">
+  <div v-if="items.length > 0" ref="triggerRef" class="relative">
     <button
       :aria-expanded="open"
-      aria-haspopup="true"
+      aria-haspopup="menu"
       :aria-label="$t('nav.moreItems')"
       :class="[
         'px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-1',
@@ -41,8 +41,9 @@
           :key="item.to"
           :to="item.to"
           role="menuitem"
-          class="flex items-center space-x-2 px-3 py-2 text-sm transition-colors duration-150 hover:bg-autobot-bg-tertiary"
-          :class="$route.path.startsWith(item.to) ? 'text-autobot-primary' : 'text-autobot-text-primary'"
+          active-class=""
+          exact-active-class="text-autobot-primary"
+          class="flex items-center space-x-2 px-3 py-2 text-sm transition-colors duration-150 hover:bg-autobot-bg-tertiary text-autobot-text-primary"
           @click="close"
         >
           <svg
@@ -79,7 +80,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 
 type SvgFillRule = 'evenodd' | 'nonzero' | 'inherit'
@@ -108,19 +109,34 @@ const hasActiveItem = computed(() =>
 function positionDropdown() {
   if (!triggerRef.value) return
   const rect = triggerRef.value.getBoundingClientRect()
+  const menuWidth = 160  // min-w-40 = 10rem
+  const spaceRight = window.innerWidth - rect.left
+  const left = spaceRight < menuWidth ? rect.right - menuWidth : rect.left
   dropdownStyle.value = {
     top: `${rect.bottom + 4}px`,
-    left: `${rect.left}px`,
+    left: `${Math.max(0, left)}px`,
   }
 }
 
-function toggle() {
-  if (!open.value) positionDropdown()
-  open.value = !open.value
+function handleResize() {
+  if (open.value) positionDropdown()
+}
+
+async function toggle() {
+  if (!open.value) {
+    positionDropdown()
+    open.value = true
+    await nextTick()
+    const firstItem = dropdownRef.value?.querySelector<HTMLElement>('[role="menuitem"]')
+    firstItem?.focus()
+  } else {
+    close()
+  }
 }
 
 function close() {
   open.value = false
+  triggerRef.value?.focus()
 }
 
 function onClickOutside(event: MouseEvent) {
@@ -130,6 +146,13 @@ function onClickOutside(event: MouseEvent) {
   }
 }
 
-onMounted(() => document.addEventListener('click', onClickOutside, true))
-onUnmounted(() => document.removeEventListener('click', onClickOutside, true))
+onMounted(() => {
+  document.addEventListener('click', onClickOutside, true)
+  window.addEventListener('resize', handleResize)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', onClickOutside, true)
+  window.removeEventListener('resize', handleResize)
+})
 </script>
