@@ -103,8 +103,17 @@
         </div>
       </div>
 
-      <!-- Network view (Cytoscape) - DEFAULT -->
+      <!-- Network view (Cytoscape) - DEFAULT, lazy-loaded on demand (#5158) -->
       <div v-show="viewMode === 'network'" class="network-view">
+        <div v-if="cytoscapeLoading && !cy" class="cytoscape-loading">
+          <div class="loading-spinner"></div>
+          <span>{{ $t('charts.callGraph.loadingVisualization', 'Loading visualization library...') }}</span>
+        </div>
+        <div v-else-if="cytoscapeError" class="chart-error">
+          <span class="error-icon">!</span>
+          <span>{{ cytoscapeError }}</span>
+          <button @click="retryCytoscape" class="btn-link">{{ $t('charts.callGraph.retry', 'Retry') }}</button>
+        </div>
         <div ref="cytoscapeContainer" class="cytoscape-container"></div>
         <div class="network-controls">
           <button @click="zoomIn" :title="$t('charts.callGraph.controls.zoomIn')">
@@ -340,11 +349,9 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-// Type imports only - actual implementation loaded dynamically
+// Type imports only - actual implementation loaded dynamically (#5158)
 import type cytoscape from 'cytoscape'
 import type { Core, NodeSingular } from 'cytoscape'
-// @ts-expect-error - cytoscape-fcose has no type declarations
-// import fcose from 'cytoscape-fcose' // Lazy-loaded on demand
 // Issue #711: Virtual scrolling for large orphaned function lists
 import { useVirtualScrollSimple } from '@/composables/useVirtualScroll'
 import { getCssVar } from '@/composables/useCssVars'
@@ -586,13 +593,44 @@ const filteredNodes = computed(() => {
 
 
 // ============================================================================
+// Cytoscape Lazy Loading (#5158 — completes the partial refactor from #3998)
+// ============================================================================
+
+async function loadCytoscapeLibrary() {
+  if (cytoscapeModule) return // Already loaded
+  try {
+    cytoscapeLoading.value = true
+    cytoscapeError.value = ''
+    const [cyModule, fcoseModuleImport] = await Promise.all([
+      import('cytoscape'),
+      // @ts-expect-error - cytoscape-fcose has no type declarations
+      import('cytoscape-fcose'),
+    ])
+    cytoscapeModule = cyModule.default
+    fcoseModule = fcoseModuleImport.default
+    if (cytoscapeModule) {
+      cytoscapeModule.use(fcoseModule)
+    }
+  } catch (err) {
+    cytoscapeError.value = `Failed to load visualization library: ${err instanceof Error ? err.message : 'Unknown error'}`
+    console.error('Cytoscape lazy-load error:', err)
+  } finally {
+    cytoscapeLoading.value = false
+  }
+}
+
+function retryCytoscape() {
+  loadCytoscapeLibrary()
+}
+
+// ============================================================================
 // Cytoscape Methods
 // ============================================================================
 
 function initCytoscape() {
-  if (!cytoscapeContainer.value) return
+  if (!cytoscapeModule || !cytoscapeContainer.value) return
 
-  cy = cytoscape({
+  cy = cytoscapeModule({
     container: cytoscapeContainer.value,
     style: getCytoscapeStyles(),
     elements: [],
@@ -894,9 +932,9 @@ function toggleFullscreen() {
 // ============================================================================
 
 function initClusterCytoscape() {
-  if (!clusterContainer.value) return
+  if (!cytoscapeModule || !clusterContainer.value) return
 
-  clusterCy = cytoscape({
+  clusterCy = cytoscapeModule({
     container: clusterContainer.value,
     style: getClusterCytoscapeStyles(),
     elements: [],
@@ -1261,6 +1299,8 @@ function truncateFunc(funcId: string): string {
 onMounted(async () => {
   await nextTick()
   if (cytoscapeContainer.value && props.data?.nodes?.length) {
+    await loadCytoscapeLibrary()
+    if (cytoscapeError.value) return
     initCytoscape()
     updateCytoscapeElements()
   }
@@ -1282,6 +1322,8 @@ watch(() => props.data, async (newData) => {
   if (newData?.nodes?.length) {
     await nextTick()
     if (!cy && cytoscapeContainer.value) {
+      await loadCytoscapeLibrary()
+      if (cytoscapeError.value) return
       initCytoscape()
     }
     updateCytoscapeElements()
@@ -1305,12 +1347,16 @@ watch(viewMode, async (newMode) => {
   if (newMode === 'network') {
     await nextTick()
     if (!cy && cytoscapeContainer.value) {
+      await loadCytoscapeLibrary()
+      if (cytoscapeError.value) return
       initCytoscape()
       updateCytoscapeElements()
     }
   } else if (newMode === 'stats') {
     await nextTick()
     if (!clusterCy && clusterContainer.value) {
+      await loadCytoscapeLibrary()
+      if (cytoscapeError.value) return
       initClusterCytoscape()
     }
     updateClusterElements()
@@ -1357,6 +1403,28 @@ watch(viewMode, async (newMode) => {
   min-height: 200px;
   color: var(--text-secondary);
   gap: var(--spacing-sm);
+}
+
+/* #5158: lazy-load states for the cytoscape library */
+.cytoscape-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 200px;
+  gap: var(--spacing-2);
+  color: var(--text-secondary);
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: var(--text-sm);
+  padding: 0;
 }
 
 .loading-spinner {
