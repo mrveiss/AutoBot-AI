@@ -15,8 +15,6 @@ import logging
 from dataclasses import dataclass
 from typing import List, Optional
 
-import httpx
-
 from rlm.types import RLMConfig
 
 logger = logging.getLogger(__name__)
@@ -182,25 +180,17 @@ class AdaptiveRAGRefiner:
         """Send prompt to Ollama."""
         from autobot_shared.ssot_config import get_config
 
-        ssot = get_config()
-        url = f"{ssot.ollama_url}/api/generate"
-        timeout = self.config.timeout_ms / 1000
+        from llm_providers.ollama_helpers import call_ollama_generate
 
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(
-                url,
-                json={
-                    "model": self.config.model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {
-                        "temperature": self.config.temperature,
-                        "num_predict": self.config.max_eval_tokens,
-                    },
-                },
-            )
-            resp.raise_for_status()
-            return resp.json().get("response", "")
+        ssot = get_config()
+        return await call_ollama_generate(
+            prompt=prompt,
+            model=self.config.model,
+            base_url=ssot.ollama_url,
+            temperature=self.config.temperature,
+            max_tokens=self.config.max_eval_tokens,
+            timeout_ms=self.config.timeout_ms,
+        )
 
     @staticmethod
     def _parse(raw: str) -> RefinementResult:
