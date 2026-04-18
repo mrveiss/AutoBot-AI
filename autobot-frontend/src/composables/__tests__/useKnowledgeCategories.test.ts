@@ -236,4 +236,56 @@ describe('useKnowledgeCategories', () => {
       expect(getCategoryIcon('SeCuRiTy')).toBe('fas fa-shield-alt')
     })
   })
+
+  describe('reactive refs + refresh (#5149)', () => {
+    it('should populate categories + isLoading refs on refresh', async () => {
+      const mockResponse: CategoriesListResponse = {
+        categories: [{ name: 'security', count: 3, id: 's-1' }],
+        total: 1,
+      }
+      vi.mocked(apiClient.get).mockResolvedValue(mockResponse)
+
+      const { categories, isLoading, error, refresh } = useKnowledgeCategories()
+
+      expect(categories.value).toEqual([])
+      expect(isLoading.value).toBe(false)
+
+      const promise = refresh()
+      expect(isLoading.value).toBe(true)
+
+      const data = await promise
+      expect(data).toEqual(mockResponse.categories)
+      expect(categories.value).toEqual(mockResponse.categories)
+      expect(isLoading.value).toBe(false)
+      expect(error.value).toBe(null)
+    })
+
+    it('should surface error via error ref when refresh fails', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({ notCategories: [] })
+
+      const { error, isLoading, refresh } = useKnowledgeCategories()
+
+      await expect(refresh()).rejects.toThrow('Invalid categories response format')
+      expect(isLoading.value).toBe(false)
+      expect(error.value).toBeInstanceOf(Error)
+    })
+
+    it('refreshCategorizedFacts populates categorizedFacts ref', async () => {
+      const mockCategorizedFacts: CategorizedFactsResponse = {
+        total_facts: 1,
+        categories: {
+          security: [
+            { key: '1', title: 'f1', content: 'c', category: 'security', type: 'general', metadata: {} },
+          ],
+        },
+      }
+      vi.mocked(apiClient.get).mockResolvedValue(mockCategorizedFacts)
+
+      const { categorizedFacts, refreshCategorizedFacts } = useKnowledgeCategories()
+      const data = await refreshCategorizedFacts()
+
+      expect(data).toEqual(mockCategorizedFacts)
+      expect(categorizedFacts.value).toEqual(mockCategorizedFacts)
+    })
+  })
 })
