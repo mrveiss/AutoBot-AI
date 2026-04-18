@@ -211,6 +211,107 @@ describe('useAnalyticsEndpoint', () => {
     expect(url).toContain('source_id=s1')
   })
 
+  it('defaults to GET (no body sent) when method is omitted', async () => {
+    mockedFetch.mockResolvedValueOnce(
+      jsonResponse({ status: 'success', stats: { total: 1 } }),
+    )
+    const { load } = useAnalyticsEndpoint<RawStats, Stats>(
+      {
+        path: '/api/analytics/codebase/stats',
+        scopeToSource: false,
+        pickData: (raw) =>
+          raw.status === 'success' && raw.stats ? raw.stats : null,
+      },
+      { withSourceId },
+    )
+
+    await load()
+
+    const init = mockedFetch.mock.calls[0]?.[1] as RequestInit | undefined
+    expect(init?.method).toBe('GET')
+    expect(init?.body).toBeUndefined()
+  })
+
+  it('sends POST with JSON body when method=POST', async () => {
+    mockedFetch.mockResolvedValueOnce(
+      jsonResponse({ status: 'success', stats: { total: 7 } }),
+    )
+
+    const { load } = useAnalyticsEndpoint<RawStats, Stats>(
+      {
+        path: '/api/code-intelligence/analyze',
+        method: 'POST',
+        scopeToSource: false,
+        body: () => ({ path: '/opt/project', min_severity: 'low' }),
+        pickData: (raw) =>
+          raw.status === 'success' && raw.stats ? raw.stats : null,
+      },
+      { withSourceId },
+    )
+
+    await load()
+
+    const init = mockedFetch.mock.calls[0]?.[1] as RequestInit | undefined
+    expect(init?.method).toBe('POST')
+    expect(init?.body).toBe(
+      JSON.stringify({ path: '/opt/project', min_severity: 'low' }),
+    )
+    const headers = init?.headers as Record<string, string> | undefined
+    expect(headers?.['Content-Type']).toBe('application/json')
+  })
+
+  it('re-evaluates POST body factory on each load (reactive-friendly)', async () => {
+    // fresh Response per call — Response.json() consumes the body
+    mockedFetch.mockImplementation(async () =>
+      jsonResponse({ status: 'success', stats: { total: 1 } }),
+    )
+    let currentPath = '/a'
+    const { load } = useAnalyticsEndpoint<RawStats, Stats>(
+      {
+        path: '/api/code-intelligence/analyze',
+        method: 'POST',
+        scopeToSource: false,
+        body: () => ({ path: currentPath }),
+        pickData: (raw) =>
+          raw.status === 'success' && raw.stats ? raw.stats : null,
+      },
+      { withSourceId },
+    )
+
+    await load()
+    currentPath = '/b'
+    await load()
+
+    expect(mockedFetch.mock.calls[0]?.[1]).toMatchObject({
+      body: JSON.stringify({ path: '/a' }),
+    })
+    expect(mockedFetch.mock.calls[1]?.[1]).toMatchObject({
+      body: JSON.stringify({ path: '/b' }),
+    })
+  })
+
+  it('POST without body factory sends no body', async () => {
+    mockedFetch.mockResolvedValueOnce(
+      jsonResponse({ status: 'success', stats: { total: 1 } }),
+    )
+    const { load } = useAnalyticsEndpoint<RawStats, Stats>(
+      {
+        path: '/api/analytics/codebase/cache',
+        method: 'POST',
+        scopeToSource: false,
+        pickData: (raw) =>
+          raw.status === 'success' && raw.stats ? raw.stats : null,
+      },
+      { withSourceId },
+    )
+
+    await load()
+
+    const init = mockedFetch.mock.calls[0]?.[1] as RequestInit | undefined
+    expect(init?.method).toBe('POST')
+    expect(init?.body).toBeUndefined()
+  })
+
   it('skips empty queryExtras entries', async () => {
     mockedFetch.mockResolvedValueOnce(
       jsonResponse({ status: 'success', stats: { total: 1 } }),
