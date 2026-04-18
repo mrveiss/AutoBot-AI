@@ -6,17 +6,22 @@ including vector search, document retrieval, and context assembly.
 
 Issue #58 - Performance Benchmarking Suite
 Issue #4676 - Wire rag_benchmarks into RetrievalLearner feedback loop
+Issue #5074 - Enforce held-out dev/test split for benchmark runs
 Author: mrveiss
 """
 
+import enum
+import hashlib
 import json
 import logging
 import random
 import sys
 import time
+from contextlib import contextmanager
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List
+from typing import Callable, Dict, List, Optional, Set
 
 import pytest
 
@@ -518,6 +523,191 @@ _GROUND_TRUTH = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Issue #5074 — Held-out dev/test split enforcement
+# ---------------------------------------------------------------------------
+
+
+class BenchmarkSplit(str, enum.Enum):
+    """Which portion of the dataset a benchmark run touches.
+
+    - ``DEV``: tuning / hyperparameter search.  Results NOT suitable for
+      external reporting.
+    - ``TEST``: final held-out evaluation.  Results MAY be reported externally
+      provided no tuning touched the test IDs in this run.
+    - ``ALL``: combined DEV+TEST (for internal reporting only — ``held_out_score``
+      is always False here).
+    """
+
+    DEV = "dev"
+    TEST = "test"
+    ALL = "all"
+
+
+def _deterministic_dev_test_split(
+    query_ids: List[str], dev_fraction: float = 0.8
+) -> Dict[str, Set[str]]:
+    """Split *query_ids* into ``dev_ids`` and ``test_ids`` deterministically.
+
+    Uses SHA-256 of each query string modulo 100 as a sort key; a query ``q``
+    lands in DEV when ``int(sha256(q).hexdigest(), 16) % 100 < dev_fraction*100``.
+    This means:
+      - The same query always lands in the same split across runs (reproducible).
+      - Adding or removing queries doesn't reshuffle the existing assignments.
+
+    Args:
+        query_ids:    List of query identifiers (query text works as the ID).
+        dev_fraction: Fraction of queries routed to DEV.  Default 0.8 (80/20).
+
+    Returns:
+        ``{"dev_ids": set[str], "test_ids": set[str]}`` — disjoint and
+        covering ``query_ids``.
+    """
+    threshold = int(dev_fraction * 100)
+    dev_ids: Set[str] = set()
+    test_ids: Set[str] = set()
+    for qid in query_ids:
+        h = hashlib.sha256(qid.encode("utf-8")).hexdigest()
+        bucket = int(h, 16) % 100
+        if bucket < threshold:
+            dev_ids.add(qid)
+        else:
+            test_ids.add(qid)
+    # Guarantee both splits are non-empty for tiny datasets: if one side is
+    # empty, move the deterministically-smallest-hash query from the other.
+    if query_ids and (not dev_ids or not test_ids):
+        if not test_ids:
+            move = sorted(dev_ids, key=lambda q: hashlib.sha256(q.encode()).hexdigest())[-1]
+            dev_ids.remove(move)
+            test_ids.add(move)
+        elif not dev_ids:
+            move = sorted(test_ids, key=lambda q: hashlib.sha256(q.encode()).hexdigest())[0]
+            test_ids.remove(move)
+            dev_ids.add(move)
+    return {"dev_ids": dev_ids, "test_ids": test_ids}
+
+
+@dataclass
+class BenchmarkDataset:
+    """Explicit dev/test split for a benchmark dataset.
+
+    Issue #5074: formalizes train/dev/test hygiene so that a number
+    published externally can only come from the held-out TEST split.
+
+    Access to ground-truth IDs is tracked per-split so ``BenchmarkHarness``
+    can assert that ``tune()`` never touches ``test_ids`` and ``score()``
+    never touches ``dev_ids``.
+    """
+
+    ground_truth: Dict[str, Set[str]]
+    dev_ids: Set[str] = field(default_factory=set)
+    test_ids: Set[str] = field(default_factory=set)
+
+    # Access tracking — reset at the start of each tune/score call.
+    _accessed_dev: Set[str] = field(default_factory=set, init=False, repr=False)
+    _accessed_test: Set[str] = field(default_factory=set, init=False, repr=False)
+    _enforce_dev_only: bool = field(default=False, init=False, repr=False)
+    _enforce_test_only: bool = field(default=False, init=False, repr=False)
+
+    @classmethod
+    def from_ground_truth(
+        cls,
+        ground_truth: Dict[str, Set[str]],
+        dev_fraction: float = 0.8,
+    ) -> "BenchmarkDataset":
+        """Build a dataset with a deterministic hash-based dev/test split."""
+        split = _deterministic_dev_test_split(
+            sorted(ground_truth.keys()), dev_fraction=dev_fraction
+        )
+        return cls(
+            ground_truth=dict(ground_truth),
+            dev_ids=split["dev_ids"],
+            test_ids=split["test_ids"],
+        )
+
+    def iter_split(self, split: "BenchmarkSplit") -> List[str]:
+        """Return the list of query IDs for *split* (sorted for determinism)."""
+        if split == BenchmarkSplit.DEV:
+            return sorted(self.dev_ids)
+        if split == BenchmarkSplit.TEST:
+            return sorted(self.test_ids)
+        if split == BenchmarkSplit.ALL:
+            return sorted(self.dev_ids | self.test_ids)
+        raise ValueError(f"Unknown split: {split!r}")
+
+    def expected(self, query_id: str) -> Set[str]:
+        """Return expected doc IDs for *query_id*, tracking access per split.
+
+        Raises RuntimeError if enforcement is active and the caller crosses
+        the split boundary (e.g. tune() touching a test_id).
+        """
+        if query_id in self.dev_ids:
+            if self._enforce_test_only:
+                raise RuntimeError(
+                    f"score() accessed dev query_id={query_id!r}; "
+                    "test-only enforcement is active"
+                )
+            self._accessed_dev.add(query_id)
+        elif query_id in self.test_ids:
+            if self._enforce_dev_only:
+                raise RuntimeError(
+                    f"tune() accessed test query_id={query_id!r}; "
+                    "dev-only enforcement is active"
+                )
+            self._accessed_test.add(query_id)
+        else:
+            raise KeyError(
+                f"query_id {query_id!r} is not in any split of this dataset"
+            )
+        return set(self.ground_truth[query_id])
+
+    def reset_access(self) -> None:
+        """Clear per-run access tracking."""
+        self._accessed_dev.clear()
+        self._accessed_test.clear()
+
+    @contextmanager
+    def enforce_dev_only(self):
+        """Context manager: raise if caller accesses any test_id."""
+        prev = self._enforce_dev_only
+        self._enforce_dev_only = True
+        try:
+            yield self
+        finally:
+            self._enforce_dev_only = prev
+
+    @contextmanager
+    def enforce_test_only(self):
+        """Context manager: raise if caller accesses any dev_id."""
+        prev = self._enforce_test_only
+        self._enforce_test_only = True
+        try:
+            yield self
+        finally:
+            self._enforce_test_only = prev
+
+    @property
+    def dev_size(self) -> int:
+        return len(self.dev_ids)
+
+    @property
+    def test_size(self) -> int:
+        return len(self.test_ids)
+
+    @property
+    def accessed_dev(self) -> Set[str]:
+        return set(self._accessed_dev)
+
+    @property
+    def accessed_test(self) -> Set[str]:
+        return set(self._accessed_test)
+
+
+def get_default_dataset() -> BenchmarkDataset:
+    """Return the canonical BenchmarkDataset derived from ``_GROUND_TRUTH``."""
+    return BenchmarkDataset.from_ground_truth(_GROUND_TRUTH, dev_fraction=0.8)
+
+
 @pytest.mark.real_kb
 class TestRealKBBenchmarks:
     """
@@ -677,9 +867,18 @@ class BenchmarkResult:
                         expected set.  Range [0.0, 1.0].
         complexity:   QueryComplexity hint for the RetrievalLearner; defaults
                       to ``"moderate"`` for benchmark queries.
+        split_used:   Which split this query was drawn from
+                      (``"dev"`` | ``"test"`` | ``"all"``).  Issue #5074.
     """
 
-    __slots__ = ("query", "retrieved_ids", "ranked_ids", "precision_at_k", "complexity")
+    __slots__ = (
+        "query",
+        "retrieved_ids",
+        "ranked_ids",
+        "precision_at_k",
+        "complexity",
+        "split_used",
+    )
 
     def __init__(
         self,
@@ -688,35 +887,225 @@ class BenchmarkResult:
         ranked_ids: List[str],
         precision_at_k: float,
         complexity: str = "moderate",
+        split_used: str = BenchmarkSplit.ALL.value,
     ) -> None:
         self.query = query
         self.retrieved_ids = retrieved_ids
         self.ranked_ids = ranked_ids
         self.precision_at_k = precision_at_k
         self.complexity = complexity
+        self.split_used = split_used
 
 
-def run_benchmark_suite(chroma_collection, k: int = 5) -> List["BenchmarkResult"]:
+@dataclass
+class BenchmarkRunReport:
+    """Aggregate report returned by ``BenchmarkHarness.tune/score/run``.
+
+    Issue #5074: every run carries its split metadata so downstream consumers
+    (API response, feedback publisher, docs) can prove whether a reported
+    score was actually held out.
+
+    Attributes:
+        split_used:    Which split produced these results (``"dev"``/``"test"``/``"all"``).
+        dev_size:      Total number of dev queries in the dataset.
+        test_size:     Total number of test queries in the dataset.
+        tuned_on_dev:  True iff a tune() pass was completed on this dataset
+                       before this run (harness-level state).
+        held_out_score: True iff ``split_used == "test"`` **and** this run
+                        touched only ``test_ids`` (no dev-set leakage).
+                        Any other combination is False.
+        mean_precision_at_k: Mean precision@k across results in the run.
+        results:       The underlying BenchmarkResult list.
+    """
+
+    split_used: str
+    dev_size: int
+    test_size: int
+    tuned_on_dev: bool
+    held_out_score: bool
+    mean_precision_at_k: float
+    results: List["BenchmarkResult"]
+
+    def as_dict(self) -> dict:
+        return {
+            "split_used": self.split_used,
+            "dev_size": self.dev_size,
+            "test_size": self.test_size,
+            "tuned_on_dev": self.tuned_on_dev,
+            "held_out_score": self.held_out_score,
+            "mean_precision_at_k": self.mean_precision_at_k,
+            "num_results": len(self.results),
+        }
+
+
+class BenchmarkHarness:
+    """Enforces held-out dev/test discipline for RAG benchmarks.
+
+    Issue #5074.  Use ``harness.tune(fn)`` while searching hyperparameters
+    and ``harness.score(fn)`` for the final held-out number.  Any cross-split
+    access raises ``RuntimeError`` — the guard is runtime-checked, not advisory.
+
+    Example:
+        harness = BenchmarkHarness(dataset=get_default_dataset())
+
+        # Tune on dev only (score will be labelled held_out_score=False).
+        tune_report = harness.tune(lambda ds: run_benchmark_suite(
+            collection, dataset=ds, split=BenchmarkSplit.DEV,
+        ))
+
+        # Final held-out score on test only.
+        test_report = harness.score(lambda ds: run_benchmark_suite(
+            collection, dataset=ds, split=BenchmarkSplit.TEST,
+        ))
+        assert test_report.held_out_score is True
+    """
+
+    def __init__(self, dataset: BenchmarkDataset) -> None:
+        self.dataset = dataset
+        self._tuned_on_dev: bool = False
+
+    @property
+    def tuned_on_dev(self) -> bool:
+        return self._tuned_on_dev
+
+    def _build_report(
+        self,
+        split: BenchmarkSplit,
+        results: List["BenchmarkResult"],
+        touched_test: bool,
+    ) -> BenchmarkRunReport:
+        mean_p = (
+            sum(r.precision_at_k for r in results) / len(results)
+            if results
+            else 0.0
+        )
+        held_out = (split == BenchmarkSplit.TEST) and not touched_test_leakage(
+            self.dataset, split
+        )
+        return BenchmarkRunReport(
+            split_used=split.value,
+            dev_size=self.dataset.dev_size,
+            test_size=self.dataset.test_size,
+            tuned_on_dev=self._tuned_on_dev,
+            held_out_score=held_out,
+            mean_precision_at_k=mean_p,
+            results=results,
+        )
+
+    def tune(
+        self,
+        harness_fn: Callable[[BenchmarkDataset], List["BenchmarkResult"]],
+    ) -> BenchmarkRunReport:
+        """Run *harness_fn* under dev-only enforcement.
+
+        ``harness_fn`` receives the dataset and MUST only call
+        ``dataset.expected(qid)`` for qid in ``dataset.dev_ids``.  Any
+        access to a test_id raises RuntimeError.
+        """
+        self.dataset.reset_access()
+        with self.dataset.enforce_dev_only():
+            results = harness_fn(self.dataset)
+        self._tuned_on_dev = True
+        return self._build_report(
+            BenchmarkSplit.DEV, results, touched_test=False
+        )
+
+    def score(
+        self,
+        scorer_fn: Callable[[BenchmarkDataset], List["BenchmarkResult"]],
+    ) -> BenchmarkRunReport:
+        """Run *scorer_fn* under test-only enforcement.
+
+        ``scorer_fn`` receives the dataset and MUST only call
+        ``dataset.expected(qid)`` for qid in ``dataset.test_ids``.  Any
+        access to a dev_id raises RuntimeError.
+        """
+        self.dataset.reset_access()
+        with self.dataset.enforce_test_only():
+            results = scorer_fn(self.dataset)
+        return self._build_report(
+            BenchmarkSplit.TEST, results, touched_test=False
+        )
+
+    def run(
+        self,
+        runner_fn: Callable[[BenchmarkDataset], List["BenchmarkResult"]],
+        split: BenchmarkSplit = BenchmarkSplit.TEST,
+    ) -> BenchmarkRunReport:
+        """Generic entry point; dispatches to tune / score / combined run."""
+        if split == BenchmarkSplit.DEV:
+            return self.tune(runner_fn)
+        if split == BenchmarkSplit.TEST:
+            return self.score(runner_fn)
+        if split == BenchmarkSplit.ALL:
+            self.dataset.reset_access()
+            results = runner_fn(self.dataset)
+            mean_p = (
+                sum(r.precision_at_k for r in results) / len(results)
+                if results
+                else 0.0
+            )
+            return BenchmarkRunReport(
+                split_used=BenchmarkSplit.ALL.value,
+                dev_size=self.dataset.dev_size,
+                test_size=self.dataset.test_size,
+                tuned_on_dev=self._tuned_on_dev,
+                held_out_score=False,
+                mean_precision_at_k=mean_p,
+                results=results,
+            )
+        raise ValueError(f"Unknown split: {split!r}")
+
+
+def touched_test_leakage(dataset: BenchmarkDataset, split: BenchmarkSplit) -> bool:
+    """Return True if a run labelled *split* actually touched the wrong side.
+
+    This is the runtime check that turns ``held_out_score`` from a hope into
+    a fact: if TEST was the declared split but the run accessed dev_ids, the
+    score is leaky and ``held_out_score`` must be False.
+    """
+    if split == BenchmarkSplit.TEST:
+        return bool(dataset.accessed_dev)
+    if split == BenchmarkSplit.DEV:
+        return bool(dataset.accessed_test)
+    return False
+
+
+def run_benchmark_suite(
+    chroma_collection,
+    k: int = 5,
+    dataset: Optional[BenchmarkDataset] = None,
+    split: BenchmarkSplit = BenchmarkSplit.ALL,
+) -> List["BenchmarkResult"]:
     """Run the precision@k benchmark suite against *chroma_collection*.
 
     Issue #4676: Produces BenchmarkResult objects that can be passed to
     ``publish_feedback_events()`` so the scores feed into RetrievalLearner.
+    Issue #5074: Accepts an explicit *dataset* and *split* so the same suite
+    can serve both tuning (DEV) and held-out scoring (TEST).
 
     The function is synchronous because ChromaDB's EphemeralClient is
     synchronous.  Callers in async contexts should run it via
-    ``asyncio.get_event_loop().run_in_executor(None, run_benchmark_suite, ...)``.
+    ``loop.run_in_executor(None, run_benchmark_suite, ...)``.
 
     Args:
         chroma_collection: A ChromaDB collection pre-seeded with domain docs.
         k:                 Number of results to retrieve per query.
+        dataset:           Optional BenchmarkDataset.  If omitted, defaults to
+                           ``get_default_dataset()`` which has an 80/20 split.
+        split:             Which portion of the dataset to run against.
 
     Returns:
-        List of BenchmarkResult — one entry per ground-truth query.
+        List of BenchmarkResult — one entry per query in the requested split.
     """
+    if dataset is None:
+        dataset = get_default_dataset()
+
     results: List[BenchmarkResult] = []
     dim = 128  # must match _deterministic_embed default
 
-    for query, expected_ids in _GROUND_TRUTH.items():
+    for query in dataset.iter_split(split):
+        expected_ids = dataset.expected(query)
         query_vec = _deterministic_embed(query, dim)
         raw = chroma_collection.query(
             query_embeddings=[query_vec],
@@ -741,10 +1130,15 @@ def run_benchmark_suite(chroma_collection, k: int = 5) -> List["BenchmarkResult"
                 ranked_ids=ranked_ids,
                 precision_at_k=precision,
                 complexity="moderate",
+                split_used=split.value,
             )
         )
         logger.debug(
-            "benchmark_suite: query=%r p@%d=%.2f", query[:40], k, precision
+            "benchmark_suite: query=%r split=%s p@%d=%.2f",
+            query[:40],
+            split.value,
+            k,
+            precision,
         )
 
     return results
@@ -792,6 +1186,9 @@ async def publish_feedback_events(redis, results: List["BenchmarkResult"]) -> in
             "annotation": "benchmark",
             "precision_at_k": str(result.precision_at_k),
             "timestamp": str(time.time()),
+            # Issue #5074: tag each event with the split it came from so
+            # RetrievalLearner can exclude test-set feedback from training.
+            "split_used": getattr(result, "split_used", BenchmarkSplit.ALL.value),
         }
 
         try:
