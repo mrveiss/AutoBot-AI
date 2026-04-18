@@ -24,9 +24,21 @@ import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useAnalyticsEndpoint')
 
+export type AnalyticsEndpointMethod = 'GET' | 'POST'
+
 export interface UseAnalyticsEndpointOptions<TRaw, TOut> {
   /** API path appended to the resolved backend URL, e.g. '/api/analytics/codebase/stats'. */
   path: string
+  /**
+   * HTTP method. Defaults to 'GET'. Use 'POST' for action endpoints
+   * (e.g. `/api/code-intelligence/analyze`) that accept a JSON body.
+   */
+  method?: AnalyticsEndpointMethod
+  /**
+   * Factory returning the JSON body to send. Called at each `load()` so it
+   * can read fresh reactive state. Ignored when `method === 'GET'`.
+   */
+  body?: () => unknown
   /**
    * Whether to wrap the URL with `withSourceId()` before fetching.
    * Defaults to TRUE — opt-out only. #5111 was caused by forgetting this,
@@ -95,6 +107,7 @@ export function useAnalyticsEndpoint<TRaw, TOut>(
   const error = ref('')
 
   const scopeToSource = opts.scopeToSource !== false
+  const method: AnalyticsEndpointMethod = opts.method ?? 'GET'
   const label = opts.label ?? opts.path
 
   const load = async (
@@ -110,13 +123,17 @@ export function useAnalyticsEndpoint<TRaw, TOut>(
       }
       url = appendQueryExtras(url, queryExtras)
 
-      const response = await fetchWithAuth(url, {
-        method: 'GET',
+      const init: RequestInit = {
+        method,
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
         },
-      })
+      }
+      if (method === 'POST' && opts.body) {
+        init.body = JSON.stringify(opts.body())
+      }
+      const response = await fetchWithAuth(url, init)
       if (!response.ok) {
         throw new Error(`${label} returned ${response.status}`)
       }
