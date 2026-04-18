@@ -12,6 +12,8 @@ Uses the analytics Redis database (DB 11) with keys:
 import logging
 from typing import List, Optional
 
+from autobot_shared.redis_client import get_async_redis_client
+
 from .source_models import CodeSource, SourceAccess
 
 logger = logging.getLogger(__name__)
@@ -20,20 +22,13 @@ _SOURCES_KEY_PREFIX = "code_source:"
 _SOURCES_INDEX_KEY = "code_sources:index"
 
 
-async def _get_redis():
-    """Return an async Redis client for the analytics database."""
-    from autobot_shared.redis_client import get_async_redis_client
-
-    return await get_async_redis_client(database="analytics")
-
-
 async def save_source(source: CodeSource) -> bool:
     """Persist a CodeSource to Redis.
 
     Stores JSON at code_source:{id} and adds the ID to the index set.
     Returns True on success, False if Redis is unavailable.
     """
-    redis = await _get_redis()
+    redis = await get_async_redis_client(database="analytics")
     if redis is None:
         logger.error("Redis unavailable; cannot save source %s", source.id)
         return False
@@ -49,7 +44,7 @@ update_source = save_source
 
 async def get_source(source_id: str) -> Optional[CodeSource]:
     """Retrieve a CodeSource by ID. Returns None if not found."""
-    redis = await _get_redis()
+    redis = await get_async_redis_client(database="analytics")
     if redis is None:
         return None
     key = f"{_SOURCES_KEY_PREFIX}{source_id}"
@@ -76,7 +71,7 @@ def _is_visible(source: CodeSource, owner_id: Optional[str]) -> bool:
 
 async def list_sources(owner_id: Optional[str] = None) -> List[CodeSource]:
     """Return all accessible code sources, optionally scoped to owner_id."""
-    redis = await _get_redis()
+    redis = await get_async_redis_client(database="analytics")
     if redis is None:
         return []
     raw_ids = await redis.smembers(_SOURCES_INDEX_KEY)
@@ -105,7 +100,7 @@ async def delete_source(source_id: str) -> bool:
     Removes the key and clears the source from the index set.
     Returns True on success, False if Redis is unavailable.
     """
-    redis = await _get_redis()
+    redis = await get_async_redis_client(database="analytics")
     if redis is None:
         return False
     key = f"{_SOURCES_KEY_PREFIX}{source_id}"
