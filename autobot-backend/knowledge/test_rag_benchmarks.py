@@ -168,10 +168,15 @@ def test_run_test_is_held_out():
     harness = BenchmarkHarness(dataset=ds)
 
     def runner(dataset: BenchmarkDataset):
-        return [
-            BenchmarkResult(q, [], [], 0.5, split_used=BenchmarkSplit.TEST.value)
-            for q in dataset.iter_split(BenchmarkSplit.TEST)
-        ]
+        out = []
+        for q in dataset.iter_split(BenchmarkSplit.TEST):
+            dataset.expected(q)  # Issue #5160: must access to mark held_out
+            out.append(
+                BenchmarkResult(
+                    q, [], [], 0.5, split_used=BenchmarkSplit.TEST.value
+                )
+            )
+        return out
 
     report = harness.run(runner, split=BenchmarkSplit.TEST)
     assert report.held_out_score is True
@@ -279,6 +284,44 @@ def test_endpoint_rejects_invalid_split():
     client = TestClient(app)
     resp = client.post("/rag/benchmark/run", json={"split": "holdout"})
     assert resp.status_code == 422  # pydantic validation error
+
+
+# ---------------------------------------------------------------------------
+# Issue #5160: empty-results guard on score()
+# ---------------------------------------------------------------------------
+
+
+def test_score_with_empty_results_raises():
+    """score() must raise when the scorer accesses zero test_ids.
+
+    Otherwise `held_out_score=True` would be falsely confident on an
+    empty run (harness silently succeeded with no evidence).
+    """
+    ds = get_default_dataset()
+    harness = BenchmarkHarness(dataset=ds)
+
+    def noop_runner(_dataset: BenchmarkDataset):
+        return []
+
+    with pytest.raises(RuntimeError, match="no test_ids were accessed"):
+        harness.score(noop_runner)
+
+
+def test_held_out_score_requires_test_access():
+    """run(split=TEST) with zero test accesses must surface as a RuntimeError.
+
+    Previously `held_out_score` could be True on a run that touched no
+    test_ids (no leakage, but also no evidence). The guard in score()
+    now refuses that outcome.
+    """
+    ds = get_default_dataset()
+    harness = BenchmarkHarness(dataset=ds)
+
+    def noop_runner(_dataset: BenchmarkDataset):
+        return []
+
+    with pytest.raises(RuntimeError, match="no test_ids were accessed"):
+        harness.run(noop_runner, split=BenchmarkSplit.TEST)
 
 
 def test_endpoint_dev_split_is_not_held_out():

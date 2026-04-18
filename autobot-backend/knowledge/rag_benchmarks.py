@@ -912,8 +912,10 @@ class BenchmarkRunReport:
         tuned_on_dev:  True iff a tune() pass was completed on this dataset
                        before this run (harness-level state).
         held_out_score: True iff ``split_used == "test"`` **and** this run
-                        touched only ``test_ids`` (no dev-set leakage).
-                        Any other combination is False.
+                        touched only ``test_ids`` (no dev-set leakage) **and**
+                        at least one ``test_id`` was actually accessed.
+                        Any other combination is False (Issue #5160: empty
+                        runs must not be labelled held-out).
         mean_precision_at_k: Mean precision@k across results in the run.
         results:       The underlying BenchmarkResult list.
     """
@@ -979,8 +981,10 @@ class BenchmarkHarness:
             if results
             else 0.0
         )
-        held_out = (split == BenchmarkSplit.TEST) and not touched_test_leakage(
-            self.dataset, split
+        held_out = (
+            split == BenchmarkSplit.TEST
+            and not touched_test_leakage(self.dataset, split)
+            and len(self.dataset.accessed_test) > 0
         )
         return BenchmarkRunReport(
             split_used=split.value,
@@ -1023,6 +1027,11 @@ class BenchmarkHarness:
         self.dataset.reset_access()
         with self.dataset.enforce_test_only():
             results = scorer_fn(self.dataset)
+        if not self.dataset.accessed_test:
+            raise RuntimeError(
+                "score() called but no test_ids were accessed — "
+                "harness returned zero results"
+            )
         return self._build_report(
             BenchmarkSplit.TEST, results, touched_test=False
         )
