@@ -216,8 +216,11 @@ class ChromaDBClient(BaseClient):
         except Exception as exc:
             raise ValueError(f"collection already exists: {name}") from exc
 
-    def list_collections(self) -> List[Any]:
-        return list(self._raw.list_collections())
+    def list_collections(self) -> List[BaseCollection]:
+        # Wrap every returned raw chromadb.Collection so callers get
+        # a uniform BaseCollection — ChromaDB 1.x returns raw objects,
+        # older 0.4.x returns names; wrapping normalises the shape (#5134).
+        return [ChromaDBCollection(c) for c in self._raw.list_collections()]
 
     def delete_collection(self, name: str) -> None:
         try:

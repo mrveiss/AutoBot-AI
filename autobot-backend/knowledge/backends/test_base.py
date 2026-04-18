@@ -181,3 +181,142 @@ def test_list_collections_reflects_state(client: BaseClient) -> None:
     client.create_collection("beta")
     cols = client.list_collections()
     assert len(cols) >= 2
+
+
+def test_list_collections_returns_base_collection_instances(
+    client: BaseClient,
+) -> None:
+    """Every adapter MUST return ``BaseCollection`` instances so callers
+    can invoke .add/.get/.query uniformly regardless of backend (#5134)."""
+    client.create_collection("alpha")
+    cols = client.list_collections()
+    assert cols, "list_collections returned empty"
+    for col in cols:
+        assert isinstance(col, BaseCollection), (
+            f"list_collections must wrap raw backend objects, got {type(col)!r}"
+        )
+
+
+# --- update / where-filter / pagination contract (Issue #5135) --------------
+
+def test_update_replaces_document_and_metadata(
+    collection: BaseCollection,
+) -> None:
+    """update() must change both document and metadata for the targeted id
+    and leave unaffected entries untouched."""
+    collection.add(
+        ids=["a", "b", "c"],
+        documents=["doc-a", "doc-b", "doc-c"],
+        metadatas=[{"n": 1}, {"n": 2}, {"n": 3}],
+        embeddings=[[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]],
+    )
+    collection.update(
+        ids=["b"],
+        documents=["doc-b-v2"],
+        metadatas=[{"n": 20}],
+        embeddings=[[0.0, 1.0]],
+    )
+    got_b = collection.get(ids=["b"])
+    assert got_b["documents"] == ["doc-b-v2"]
+    assert got_b["metadatas"] == [{"n": 20}]
+    # Unaffected entries stay identical.
+    got_a = collection.get(ids=["a"])
+    assert got_a["documents"] == ["doc-a"]
+    assert got_a["metadatas"] == [{"n": 1}]
+    got_c = collection.get(ids=["c"])
+    assert got_c["documents"] == ["doc-c"]
+    assert got_c["metadatas"] == [{"n": 3}]
+
+
+def test_update_preserves_ordering(collection: BaseCollection) -> None:
+    """After update(), the order of existing ids in get() must be unchanged."""
+    collection.add(
+        ids=["a", "b", "c", "d"],
+        documents=["doc-a", "doc-b", "doc-c", "doc-d"],
+        embeddings=[[1.0, 0.0], [0.0, 1.0], [1.0, 1.0], [0.5, 0.5]],
+    )
+    before = collection.get(ids=["a", "b", "c", "d"])["ids"]
+    collection.update(ids=["c"], documents=["doc-c-v2"], embeddings=[[1.0, 1.0]])
+    after = collection.get(ids=["a", "b", "c", "d"])["ids"]
+    assert before == after == ["a", "b", "c", "d"]
+
+
+def test_update_duplicate_id_raises(collection: BaseCollection) -> None:
+    """Regression for #5133: duplicate ids in a single update() call must
+    surface an error rather than silently reusing the first occurrence's
+    aligned document/metadata/embedding.
+
+    Both adapters must reject this — ChromaDB raises ``DuplicateIDError``,
+    the in-memory adapter raises ``ValueError``. We accept any exception
+    so the contract is ``raises SOMETHING``, not the specific class.
+    """
+    collection.add(
+        ids=["a"],
+        documents=["doc-a"],
+        embeddings=[[1.0, 0.0]],
+    )
+    with pytest.raises(Exception):
+        collection.update(
+            ids=["a", "a"],
+            documents=["first", "second"],
+            embeddings=[[0.5, 0.5], [0.25, 0.75]],
+        )
+
+
+def test_query_with_where_filter_matches_metadata(
+    collection: BaseCollection,
+) -> None:
+    """query() honours a ``where`` metadata filter and only returns matches."""
+    collection.add(
+        ids=["a", "b", "c"],
+        documents=["doc-a", "doc-b", "doc-c"],
+        metadatas=[
+            {"source": "x"},
+            {"source": "y"},
+            {"source": "x"},
+        ],
+        embeddings=[[1.0, 0.0], [0.0, 1.0], [0.9, 0.1]],
+    )
+    got = collection.query(
+        query_embeddings=[[1.0, 0.0]],
+        n_results=5,
+        where={"source": "x"},
+    )
+    assert set(got["ids"][0]) == {"a", "c"}
+    for meta in got["metadatas"][0]:
+        assert meta["source"] == "x"
+
+
+def test_get_with_where_filter_returns_only_matching(
+    collection: BaseCollection,
+) -> None:
+    """get() honours a ``where`` metadata filter (equality on top-level keys)."""
+    collection.add(
+        ids=["a", "b", "c"],
+        documents=["doc-a", "doc-b", "doc-c"],
+        metadatas=[
+            {"source": "x"},
+            {"source": "y"},
+            {"source": "x"},
+        ],
+        embeddings=[[1.0, 0.0], [0.0, 1.0], [0.9, 0.1]],
+    )
+    got = collection.get(where={"source": "x"})
+    assert set(got["ids"]) == {"a", "c"}
+
+
+def test_get_with_offset_and_limit_paginates_correctly(
+    collection: BaseCollection,
+) -> None:
+    """get() with offset=2, limit=3 returns exactly 3 items starting at
+    index 2 of the underlying result order."""
+    ids = [f"id-{i}" for i in range(10)]
+    collection.add(
+        ids=ids,
+        documents=[f"doc-{i}" for i in range(10)],
+        embeddings=[[float(i), 0.0] for i in range(10)],
+    )
+    full = collection.get(ids=ids)["ids"]
+    page = collection.get(ids=ids, offset=2, limit=3)["ids"]
+    assert len(page) == 3
+    assert page == full[2:5]
