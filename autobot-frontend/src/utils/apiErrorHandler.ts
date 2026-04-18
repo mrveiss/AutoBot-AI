@@ -13,6 +13,7 @@
 
 import { ref, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
+import { useUnifiedLoading } from '@/composables/useUnifiedLoading'
 
 // Create scoped logger for apiErrorHandler
 const logger = createLogger('apiErrorHandler')
@@ -272,61 +273,20 @@ export async function handleApiCall<T>(
 }
 
 /**
- * Create a composable for API loading states
- *
- * @returns Loading state refs and helpers
- *
- * @example
- * ```typescript
- * const { loading, error, startLoading, stopLoading, setError, clearError } = useApiLoading()
- *
- * async function fetchData() {
- *   startLoading()
- *   try {
- *     const data = await apiClient.get('/api/data')
- *     // ... process data
- *   } catch (err) {
- *     setError(parseError(err))
- *   } finally {
- *     stopLoading()
- *   }
- * }
- * ```
- */
-export function useApiLoading() {
-  const loading: Ref<boolean> = ref(false)
-  const error: Ref<ApiError | null> = ref(null)
-
-  return {
-    loading,
-    error,
-    startLoading: () => {
-      loading.value = true
-      error.value = null
-    },
-    stopLoading: () => {
-      loading.value = false
-    },
-    setError: (err: ApiError) => {
-      error.value = err
-      loading.value = false
-    },
-    clearError: () => {
-      error.value = null
-    },
-    isLoading: () => loading.value,
-    hasError: () => error.value !== null
-  }
-}
-
-/**
  * Create a composable that wraps API calls with loading state
  *
+ * Loading-state tracking is delegated to the canonical `useUnifiedLoading`
+ * composable. The structured `ApiError` shape is preserved — callers of
+ * `useApiRequest` see the same `{ loading, error, execute }` surface, with
+ * `error` typed as `ApiError | null` (not a plain string).
+ *
+ * @param componentKey Optional key for scoping the shared loading state
+ *                     registry; defaults to a unique per-instance key.
  * @returns API call wrapper with built-in loading state
  *
  * @example
  * ```typescript
- * const { loading, error, execute } = useApiRequest()
+ * const { loading, error, execute } = useApiRequest('UserList')
  *
  * const result = await execute(
  *   () => apiClient.get('/api/users'),
@@ -334,28 +294,29 @@ export function useApiLoading() {
  * )
  * ```
  */
-export function useApiRequest<T = unknown>() {
-  const { loading, error, startLoading, stopLoading, setError, clearError } = useApiLoading()
+export function useApiRequest<T = unknown>(componentKey?: string) {
+  const unified = useUnifiedLoading(componentKey)
+  const error: Ref<ApiError | null> = ref(null)
 
   async function execute(
     apiCall: () => Promise<T>,
     options: ErrorHandlerOptions = {}
   ): Promise<ApiResult<T>> {
-    startLoading()
-    clearError()
+    error.value = null
+    unified.setLoading(true)
 
     const result = await handleApiCall(apiCall, options)
 
     if (!result.success && result.error) {
-      setError(result.error)
+      error.value = result.error
     }
 
-    stopLoading()
+    unified.setLoading(false)
     return result
   }
 
   return {
-    loading,
+    loading: unified.isLoading,
     error,
     execute
   }

@@ -325,38 +325,6 @@ export function useAsyncHandler<T = unknown>(
 }
 
 // ========================================
-// Loading State Helper
-// ========================================
-
-export function useLoadingState(initialState = false) {
-  const loading = ref(initialState)
-
-  const startLoading = () => {
-    loading.value = true
-  }
-
-  const stopLoading = () => {
-    loading.value = false
-  }
-
-  const withLoading = async <T>(operation: () => Promise<T>): Promise<T> => {
-    try {
-      loading.value = true
-      return await operation()
-    } finally {
-      loading.value = false
-    }
-  }
-
-  return {
-    loading,
-    startLoading,
-    stopLoading,
-    withLoading
-  }
-}
-
-// ========================================
 // Retry Utility
 // ========================================
 

@@ -535,9 +535,9 @@ const performOperation = async () => {
 
 **After** (8 lines):
 ```typescript
-import { useLoadingState } from '@/composables/useErrorHandler'
+import { useUnifiedLoading } from '@/composables/useUnifiedLoading'
 
-const { loading: isLoading, withLoading } = useLoadingState()
+const { isLoading, withLoading } = useUnifiedLoading('MyComponent')
 
 const performOperation = () => withLoading(async () => {
   await someAsyncOperation()
