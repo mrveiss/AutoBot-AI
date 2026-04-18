@@ -79,4 +79,53 @@ describe('useKnowledgeStats', () => {
       expect(result).toBe(null)
     })
   })
+
+  describe('reactive refs + refresh (#5149)', () => {
+    it('should expose stats/isLoading/error refs and populate them on refresh', async () => {
+      const mockStats: KnowledgeStats = {
+        total_facts: 42,
+        total_documents: 10,
+      }
+      vi.mocked(apiClient.get).mockResolvedValue(mockStats)
+
+      const { stats, isLoading, error, refresh } = useKnowledgeStats()
+
+      expect(stats.value).toBe(null)
+      expect(isLoading.value).toBe(false)
+      expect(error.value).toBe(null)
+
+      const promise = refresh()
+      // isLoading flips true synchronously inside refresh
+      expect(isLoading.value).toBe(true)
+
+      const data = await promise
+      expect(data).toEqual(mockStats)
+      expect(stats.value).toEqual(mockStats)
+      expect(isLoading.value).toBe(false)
+      expect(error.value).toBe(null)
+    })
+
+    it('should populate error ref and reset isLoading when refresh throws', async () => {
+      vi.mocked(apiClient.get).mockRejectedValue(new Error('boom'))
+
+      const { stats, isLoading, error, refresh } = useKnowledgeStats()
+
+      await expect(refresh()).rejects.toThrow('boom')
+      expect(stats.value).toBe(null)
+      expect(isLoading.value).toBe(false)
+      expect(error.value).toBeInstanceOf(Error)
+      expect(error.value?.message).toBe('boom')
+    })
+
+    it('refreshBasic should populate basicStats ref on success', async () => {
+      const mockStats: KnowledgeStats = { total_facts: 5, total_documents: 1 }
+      vi.mocked(apiClient.get).mockResolvedValue(mockStats)
+
+      const { basicStats, refreshBasic } = useKnowledgeStats()
+      const data = await refreshBasic()
+
+      expect(data).toEqual(mockStats)
+      expect(basicStats.value).toEqual(mockStats)
+    })
+  })
 })

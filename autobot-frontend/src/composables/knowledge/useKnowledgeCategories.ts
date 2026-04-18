@@ -7,8 +7,14 @@
  * ApiClient already logs retries + final failure and never returns null.
  * Structural validation (Array.isArray / typeof) preserved — it is real
  * business logic, not error-hiding.
+ *
+ * Reactive refs layer (#5149): the composable now owns loading/error state
+ * for `refresh` (categories list) and `refreshCategorizedFacts`. The bare
+ * imperative functions remain exported at module scope for the
+ * `useKnowledgeBase` BC shim and non-reactive consumers.
  */
 
+import { ref, readonly, type Ref } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import { formatCategoryName as formatCategoryHelper } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'
@@ -58,95 +64,167 @@ export function getCategoryIcon(category: string): string {
   return 'fas fa-folder'
 }
 
-export function useKnowledgeCategories() {
-  /**
-   * Fetch all categories with counts
-   * Returns list of categories with document counts for filtering.
-   */
-  const fetchCategories = async (): Promise<KnowledgeCategoryItem[]> => {
-    const data = await apiClient.get<CategoriesListResponse>(`${getApiBase()}/knowledge_base/categories`)
+// ==================== Bare imperative API ====================
 
-    // Structural validation — real business logic, not error hiding
-    if (!data || !Array.isArray(data.categories)) {
-      throw new Error('Invalid categories response format')
-    }
+/**
+ * Fetch all categories with counts.
+ * Returns list of categories with document counts for filtering.
+ */
+export const fetchCategories = async (): Promise<KnowledgeCategoryItem[]> => {
+  const data = await apiClient.get<CategoriesListResponse>(`${getApiBase()}/knowledge_base/categories`)
 
-    return data.categories
+  // Structural validation — real business logic, not error hiding
+  if (!data || !Array.isArray(data.categories)) {
+    throw new Error('Invalid categories response format')
   }
 
-  /**
-   * Fetch knowledge by category
-   */
-  const fetchCategory = (category: string): Promise<CategoryResponse> =>
-    apiClient.get<CategoryResponse>(`${getApiBase()}/knowledge_base/category/${category}`)
+  return data.categories
+}
 
-  /**
-   * Fetch facts grouped by category for browsing
-   * Uses GET /api/knowledge_base/facts/by_category endpoint.
-   * @param category - Optional category filter (null for all categories)
-   * @param limit - Maximum number of facts per category (default: 100)
-   */
-  const getCategorizedFacts = async (
+/**
+ * Fetch knowledge by category.
+ */
+export const fetchCategory = (category: string): Promise<CategoryResponse> =>
+  apiClient.get<CategoryResponse>(`${getApiBase()}/knowledge_base/category/${category}`)
+
+/**
+ * Fetch facts grouped by category for browsing.
+ * Uses GET /api/knowledge_base/facts/by_category endpoint.
+ * @param category - Optional category filter (null for all categories)
+ * @param limit - Maximum number of facts per category (default: 100)
+ */
+export const getCategorizedFacts = async (
+  category: string | null = null,
+  limit: number = 100
+): Promise<CategorizedFactsResponse> => {
+  const params = new URLSearchParams()
+  if (category) {
+    params.append('category', category)
+  }
+  params.append('limit', String(limit))
+
+  const url = `${getApiBase()}/knowledge_base/facts/by_category?${params.toString()}`
+  const data = await apiClient.get<CategorizedFactsResponse>(url)
+
+  // Structural validation
+  if (!data || typeof data.categories !== 'object') {
+    throw new Error('Invalid categorized facts response format')
+  }
+
+  logger.debug(
+    `Fetched categorized facts: ${data.total_facts} total facts across ${Object.keys(data.categories).length} categories`
+  )
+
+  return data
+}
+
+/**
+ * Build category filter options from categorized facts.
+ * Pure helper — does not fetch, no state needed.
+ */
+export const buildCategoryFilterOptions = (
+  categorizedFacts: CategorizedFactsResponse
+): CategoryFilterOption[] => {
+  const options: CategoryFilterOption[] = [
+    {
+      value: null,
+      label: 'All Categories',
+      icon: 'fas fa-th-large',
+      count: categorizedFacts.total_facts,
+    },
+  ]
+
+  for (const [categoryName, facts] of Object.entries(categorizedFacts.categories)) {
+    options.push({
+      value: categoryName,
+      label: formatCategoryHelper(categoryName),
+      icon: getCategoryIcon(categoryName),
+      count: facts.length,
+    })
+  }
+
+  // Sort by count (descending), keeping "All" at the top
+  options.sort((a, b) => {
+    if (a.value === null) return -1
+    if (b.value === null) return 1
+    return b.count - a.count
+  })
+
+  return options
+}
+
+// ==================== Reactive composable ====================
+
+export interface UseKnowledgeCategoriesReturn {
+  /** Latest categories list. */
+  categories: Readonly<Ref<KnowledgeCategoryItem[]>>
+  /** Latest categorized-facts result. */
+  categorizedFacts: Readonly<Ref<CategorizedFactsResponse | null>>
+  /** True while a refresh is in-flight. */
+  isLoading: Readonly<Ref<boolean>>
+  /** Last error raised by a refresh, cleared on the next call. */
+  error: Readonly<Ref<Error | null>>
+  /** Fetch the categories list, update `categories` + state refs. */
+  refresh: () => Promise<KnowledgeCategoryItem[]>
+  /** Fetch categorized facts, update `categorizedFacts` + state refs. */
+  refreshCategorizedFacts: (
+    category?: string | null,
+    limit?: number
+  ) => Promise<CategorizedFactsResponse>
+  // Imperative passthroughs — BC with pre-#5149 callers
+  fetchCategories: typeof fetchCategories
+  fetchCategory: typeof fetchCategory
+  getCategorizedFacts: typeof getCategorizedFacts
+  buildCategoryFilterOptions: typeof buildCategoryFilterOptions
+  getCategoryIcon: typeof getCategoryIcon
+}
+
+export function useKnowledgeCategories(): UseKnowledgeCategoriesReturn {
+  const categories = ref<KnowledgeCategoryItem[]>([])
+  const categorizedFacts = ref<CategorizedFactsResponse | null>(null)
+  const isLoading = ref(false)
+  const error = ref<Error | null>(null)
+
+  const refresh = async (): Promise<KnowledgeCategoryItem[]> => {
+    isLoading.value = true
+    error.value = null
+    try {
+      const data = await fetchCategories()
+      categories.value = data
+      return data
+    } catch (err) {
+      error.value = err instanceof Error ? err : new Error(String(err))
+      throw err
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  const refreshCategorizedFacts = async (
     category: string | null = null,
     limit: number = 100
   ): Promise<CategorizedFactsResponse> => {
-    const params = new URLSearchParams()
-    if (category) {
-      params.append('category', category)
+    isLoading.value = true
+    error.value = null
+    try {
+      const data = await getCategorizedFacts(category, limit)
+      categorizedFacts.value = data
+      return data
+    } catch (err) {
+      error.value = err instanceof Error ? err : new Error(String(err))
+      throw err
+    } finally {
+      isLoading.value = false
     }
-    params.append('limit', String(limit))
-
-    const url = `${getApiBase()}/knowledge_base/facts/by_category?${params.toString()}`
-    const data = await apiClient.get<CategorizedFactsResponse>(url)
-
-    // Structural validation
-    if (!data || typeof data.categories !== 'object') {
-      throw new Error('Invalid categorized facts response format')
-    }
-
-    logger.debug(
-      `Fetched categorized facts: ${data.total_facts} total facts across ${Object.keys(data.categories).length} categories`
-    )
-
-    return data
-  }
-
-  /**
-   * Build category filter options from categorized facts
-   * Helper to create CategoryFilterOption[] for dropdowns/tabs.
-   */
-  const buildCategoryFilterOptions = (
-    categorizedFacts: CategorizedFactsResponse
-  ): CategoryFilterOption[] => {
-    const options: CategoryFilterOption[] = [
-      {
-        value: null,
-        label: 'All Categories',
-        icon: 'fas fa-th-large',
-        count: categorizedFacts.total_facts,
-      },
-    ]
-
-    for (const [categoryName, facts] of Object.entries(categorizedFacts.categories)) {
-      options.push({
-        value: categoryName,
-        label: formatCategoryHelper(categoryName),
-        icon: getCategoryIcon(categoryName),
-        count: facts.length,
-      })
-    }
-
-    // Sort by count (descending), keeping "All" at the top
-    options.sort((a, b) => {
-      if (a.value === null) return -1
-      if (b.value === null) return 1
-      return b.count - a.count
-    })
-
-    return options
   }
 
   return {
+    categories: readonly(categories) as Readonly<Ref<KnowledgeCategoryItem[]>>,
+    categorizedFacts: readonly(categorizedFacts) as Readonly<Ref<CategorizedFactsResponse | null>>,
+    isLoading: readonly(isLoading),
+    error: readonly(error),
+    refresh,
+    refreshCategorizedFacts,
     fetchCategories,
     fetchCategory,
     getCategorizedFacts,

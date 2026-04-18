@@ -132,4 +132,36 @@ describe('useMachineKnowledge', () => {
       expect(result.status).toBe('queued')
     })
   })
+
+  describe('reactive refs + refresh (#5149)', () => {
+    it('refreshProfiles populates profiles ref + isLoading cycle', async () => {
+      const mockProfiles: MachineProfile[] = [
+        { machine_id: 'host1', os_type: 'linux' },
+      ]
+      vi.mocked(apiClient.get).mockResolvedValue(mockProfiles)
+
+      const { profiles, isLoading, refreshProfiles } = useMachineKnowledge()
+      expect(profiles.value).toEqual([])
+      expect(isLoading.value).toBe(false)
+
+      const promise = refreshProfiles()
+      expect(isLoading.value).toBe(true)
+
+      const data = await promise
+      expect(data).toEqual(mockProfiles)
+      expect(profiles.value).toEqual(mockProfiles)
+      expect(isLoading.value).toBe(false)
+    })
+
+    it('refreshProfile populates profile ref', async () => {
+      const mockProfile: MachineProfile = { machine_id: 'host1', os_type: 'linux' }
+      vi.mocked(apiClient.get).mockResolvedValue(mockProfile)
+
+      const { profile, refreshProfile } = useMachineKnowledge()
+      const data = await refreshProfile('host1')
+
+      expect(data).toEqual(mockProfile)
+      expect(profile.value).toEqual(mockProfile)
+    })
+  })
 })

@@ -114,4 +114,35 @@ describe('useManPages', () => {
       expect(result).toEqual(mockResponse)
     })
   })
+
+  describe('reactive refs + refresh (#5149)', () => {
+    it('refresh populates summary ref + isLoading cycle', async () => {
+      const mockSummary: ManPagesSummary = { status: 'ready', processed: 150 }
+      vi.mocked(apiClient.get).mockResolvedValue(mockSummary)
+
+      const { summary, isLoading, refresh } = useManPages()
+      expect(summary.value).toBe(null)
+      expect(isLoading.value).toBe(false)
+
+      const promise = refresh()
+      expect(isLoading.value).toBe(true)
+
+      const data = await promise
+      expect(data).toEqual(mockSummary)
+      expect(summary.value).toEqual(mockSummary)
+      expect(isLoading.value).toBe(false)
+    })
+
+    it('refresh returns null + populates summary with null when bare fn swallows error', async () => {
+      vi.mocked(apiClient.get).mockRejectedValue(new Error('HTTP 500'))
+
+      const { summary, refresh, isLoading } = useManPages()
+      const data = await refresh()
+
+      // fetchManPagesSummary swallows errors and returns null
+      expect(data).toBe(null)
+      expect(summary.value).toBe(null)
+      expect(isLoading.value).toBe(false)
+    })
+  })
 })
