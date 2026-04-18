@@ -6,21 +6,23 @@
  * Workflow Templates API composable
  * Issue #778 - Workflow Templates Enhancement
  *
- * GET-fetchers route through `useAnalyticsEndpoint` per #5154 (POC migration).
- * The endpoint composable was introduced for analytics in #5137; this is the
- * proof point that it generalises outside the analytics domain. Workflow
- * templates are global (no source-id concept), so every endpoint opts out of
- * source scoping via `scopeToSource: false`.
+ * GET-fetchers route through `useFetchEndpoint` (POC migrated in #5154,
+ * rehomed from `analytics/useAnalyticsEndpoint` in #5153 scope C). The
+ * rehomed composable defaults `scopeToSource: false` and makes `deps`
+ * optional, so non-analytics callers like this one no longer need the
+ * `scopeToSource: false` + `noScope` shim per call site.
  *
  * POSTs (`createWorkflowFromTemplate`, `executeTemplate`) are intentionally
- * left untouched — `useAnalyticsEndpoint` is GET-only.
+ * left untouched — `useFetchEndpoint` also supports POST now (#5157) but
+ * these endpoints have non-standard response handling (direct `.json()`
+ * return) that doesn't fit `pickData`.
  */
 
 import { ref, computed, watch } from 'vue'
 import appConfig from '@/config/AppConfig.js'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
-import { useAnalyticsEndpoint } from '@/composables/analytics/useAnalyticsEndpoint'
+import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import type {
   WorkflowTemplateSummary,
   WorkflowTemplateDetail,
@@ -32,13 +34,6 @@ import type {
 } from '@/types/workflowTemplates'
 
 const logger = createLogger('useWorkflowTemplates')
-
-/**
- * No-op source-scoper required by `useAnalyticsEndpoint`'s deps contract.
- * Workflow templates are global; every call site sets `scopeToSource: false`
- * so this identity wrap never actually fires, but the deps shape is required.
- */
-const noScope = { withSourceId: (url: string) => url }
 
 export function useWorkflowTemplates() {
   const loading = ref(false)
@@ -58,66 +53,50 @@ export function useWorkflowTemplates() {
   // Endpoints that need a path parameter (`fetchTemplateDetail`,
   // `previewTemplate`) are constructed inside their wrapper function below.
 
-  const templatesEndpoint = useAnalyticsEndpoint<
+  const templatesEndpoint = useFetchEndpoint<
     { templates?: WorkflowTemplateSummary[] },
     WorkflowTemplateSummary[]
-  >(
-    {
-      path: '/api/templates/templates',
-      scopeToSource: false,
-      label: 'Templates list',
-      pickData: (raw) => raw.templates ?? [],
-      onSuccess: (d) => { templates.value = d },
-      onError: (msg) => { error.value = `Failed to fetch templates: ${msg}` },
-    },
-    noScope,
-  )
+  >({
+    path: '/api/templates/templates',
+    label: 'Templates list',
+    pickData: (raw) => raw.templates ?? [],
+    onSuccess: (d) => { templates.value = d },
+    onError: (msg) => { error.value = `Failed to fetch templates: ${msg}` },
+  })
 
-  const searchEndpoint = useAnalyticsEndpoint<
+  const searchEndpoint = useFetchEndpoint<
     { results?: WorkflowTemplateSummary[] },
     WorkflowTemplateSummary[]
-  >(
-    {
-      path: '/api/templates/templates/search',
-      scopeToSource: false,
-      label: 'Templates search',
-      pickData: (raw) => raw.results ?? [],
-      onError: (msg) => { error.value = `Failed to search templates: ${msg}` },
-    },
-    noScope,
-  )
+  >({
+    path: '/api/templates/templates/search',
+    label: 'Templates search',
+    pickData: (raw) => raw.results ?? [],
+    onError: (msg) => { error.value = `Failed to search templates: ${msg}` },
+  })
 
-  const categoriesEndpoint = useAnalyticsEndpoint<
+  const categoriesEndpoint = useFetchEndpoint<
     { categories?: TemplateCategoryInfo[] },
     TemplateCategoryInfo[]
-  >(
-    {
-      path: '/api/templates/templates/categories',
-      scopeToSource: false,
-      label: 'Templates categories',
-      pickData: (raw) => raw.categories ?? [],
-      onSuccess: (d) => { categories.value = d },
-      // Original `fetchCategories` logs but does NOT surface to error.value.
-      onError: () => { /* logger.error already fired inside endpoint */ },
-    },
-    noScope,
-  )
+  >({
+    path: '/api/templates/templates/categories',
+    label: 'Templates categories',
+    pickData: (raw) => raw.categories ?? [],
+    onSuccess: (d) => { categories.value = d },
+    // Original `fetchCategories` logs but does NOT surface to error.value.
+    onError: () => { /* logger.error already fired inside endpoint */ },
+  })
 
-  const statsEndpoint = useAnalyticsEndpoint<
+  const statsEndpoint = useFetchEndpoint<
     { statistics?: TemplateStatsResponse['statistics'] },
     TemplateStatsResponse['statistics']
-  >(
-    {
-      path: '/api/templates/templates/stats',
-      scopeToSource: false,
-      label: 'Templates stats',
-      pickData: (raw) => raw.statistics ?? null,
-      onSuccess: (d) => { stats.value = d },
-      // Original `fetchStats` logs but does NOT surface to error.value.
-      onError: () => { /* logger.error already fired inside endpoint */ },
-    },
-    noScope,
-  )
+  >({
+    path: '/api/templates/templates/stats',
+    label: 'Templates stats',
+    pickData: (raw) => raw.statistics ?? null,
+    onSuccess: (d) => { stats.value = d },
+    // Original `fetchStats` logs but does NOT surface to error.value.
+    onError: () => { /* logger.error already fired inside endpoint */ },
+  })
 
   // Bridge per-endpoint loading flags into the composable-level `loading` ref
   // so the public API (consumers reading `loading.value`) is preserved.
@@ -160,23 +139,19 @@ export function useWorkflowTemplates() {
     error.value = null
     ondemandLoading.value = true
     try {
-      const detailEndpoint = useAnalyticsEndpoint<
+      const detailEndpoint = useFetchEndpoint<
         { template?: WorkflowTemplateDetail },
         WorkflowTemplateDetail
-      >(
-        {
-          path: `/api/templates/templates/${templateId}`,
-          scopeToSource: false,
-          label: 'Template detail',
-          pickData: (raw) => raw.template ?? null,
-          onSuccess: (d) => { selectedTemplate.value = d },
-          // Original assigned `data.template` (possibly undefined) unconditionally.
-          // Preserve "clear on missing" behaviour via onNoData.
-          onNoData: () => { selectedTemplate.value = null },
-          onError: (msg) => { error.value = `Failed to fetch template: ${msg}` },
-        },
-        noScope,
-      )
+      >({
+        path: `/api/templates/templates/${templateId}`,
+        label: 'Template detail',
+        pickData: (raw) => raw.template ?? null,
+        onSuccess: (d) => { selectedTemplate.value = d },
+        // Original assigned `data.template` (possibly undefined) unconditionally.
+        // Preserve "clear on missing" behaviour via onNoData.
+        onNoData: () => { selectedTemplate.value = null },
+        onError: (msg) => { error.value = `Failed to fetch template: ${msg}` },
+      })
       await detailEndpoint.load()
       return detailEndpoint.data.value
     } finally {
@@ -211,20 +186,16 @@ export function useWorkflowTemplates() {
       if (variables && Object.keys(variables).length > 0) {
         query.variables = JSON.stringify(variables)
       }
-      const previewEndpoint = useAnalyticsEndpoint<
+      const previewEndpoint = useFetchEndpoint<
         TemplatePreviewResponse,
         TemplatePreviewResponse
-      >(
-        {
-          path: `/api/templates/templates/${templateId}/preview`,
-          scopeToSource: false,
-          label: 'Template preview',
-          pickData: (raw) => raw,
-          onSuccess: (d) => { preview.value = d },
-          onError: (msg) => { error.value = `Failed to preview template: ${msg}` },
-        },
-        noScope,
-      )
+      >({
+        path: `/api/templates/templates/${templateId}/preview`,
+        label: 'Template preview',
+        pickData: (raw) => raw,
+        onSuccess: (d) => { preview.value = d },
+        onError: (msg) => { error.value = `Failed to preview template: ${msg}` },
+      })
       await previewEndpoint.load(query)
       return previewEndpoint.data.value
     } finally {
