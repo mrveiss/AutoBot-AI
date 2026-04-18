@@ -155,10 +155,10 @@ import {
   OPERATION_TYPE_LABELS,
   OPERATION_TYPE_ICONS,
   PRIORITY_CONFIG,
-  formatDuration,
   canCancel,
   canResume
 } from '@/types/operations'
+import { formatDuration } from '@/utils/formatHelpers'
 import { useClipboard } from '@/composables/useClipboard'
 import OperationProgress from './OperationProgress.vue'
 
