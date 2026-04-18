@@ -5,12 +5,22 @@
 /**
  * Workflow Templates API composable
  * Issue #778 - Workflow Templates Enhancement
+ *
+ * GET-fetchers route through `useAnalyticsEndpoint` per #5154 (POC migration).
+ * The endpoint composable was introduced for analytics in #5137; this is the
+ * proof point that it generalises outside the analytics domain. Workflow
+ * templates are global (no source-id concept), so every endpoint opts out of
+ * source scoping via `scopeToSource: false`.
+ *
+ * POSTs (`createWorkflowFromTemplate`, `executeTemplate`) are intentionally
+ * left untouched — `useAnalyticsEndpoint` is GET-only.
  */
 
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import appConfig from '@/config/AppConfig.js'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
+import { useAnalyticsEndpoint } from '@/composables/analytics/useAnalyticsEndpoint'
 import type {
   WorkflowTemplateSummary,
   WorkflowTemplateDetail,
@@ -23,6 +33,13 @@ import type {
 
 const logger = createLogger('useWorkflowTemplates')
 
+/**
+ * No-op source-scoper required by `useAnalyticsEndpoint`'s deps contract.
+ * Workflow templates are global; every call site sets `scopeToSource: false`
+ * so this identity wrap never actually fires, but the deps shape is required.
+ */
+const noScope = { withSourceId: (url: string) => url }
+
 export function useWorkflowTemplates() {
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -34,124 +51,193 @@ export function useWorkflowTemplates() {
   const selectedTemplate = ref<WorkflowTemplateDetail | null>(null)
   const preview = ref<TemplatePreviewResponse | null>(null)
 
-  async function getBackendUrl(): Promise<string> {
-    return await appConfig.getServiceUrl('backend')
-  }
+  // ---------------------------------------------------------------------------
+  // GET endpoints (#5154 — routed through useAnalyticsEndpoint)
+  // ---------------------------------------------------------------------------
+  // Per-instance endpoints whose path is known at composable-construction time.
+  // Endpoints that need a path parameter (`fetchTemplateDetail`,
+  // `previewTemplate`) are constructed inside their wrapper function below.
+
+  const templatesEndpoint = useAnalyticsEndpoint<
+    { templates?: WorkflowTemplateSummary[] },
+    WorkflowTemplateSummary[]
+  >(
+    {
+      path: '/api/templates/templates',
+      scopeToSource: false,
+      label: 'Templates list',
+      pickData: (raw) => raw.templates ?? [],
+      onSuccess: (d) => { templates.value = d },
+      onError: (msg) => { error.value = `Failed to fetch templates: ${msg}` },
+    },
+    noScope,
+  )
+
+  const searchEndpoint = useAnalyticsEndpoint<
+    { results?: WorkflowTemplateSummary[] },
+    WorkflowTemplateSummary[]
+  >(
+    {
+      path: '/api/templates/templates/search',
+      scopeToSource: false,
+      label: 'Templates search',
+      pickData: (raw) => raw.results ?? [],
+      onError: (msg) => { error.value = `Failed to search templates: ${msg}` },
+    },
+    noScope,
+  )
+
+  const categoriesEndpoint = useAnalyticsEndpoint<
+    { categories?: TemplateCategoryInfo[] },
+    TemplateCategoryInfo[]
+  >(
+    {
+      path: '/api/templates/templates/categories',
+      scopeToSource: false,
+      label: 'Templates categories',
+      pickData: (raw) => raw.categories ?? [],
+      onSuccess: (d) => { categories.value = d },
+      // Original `fetchCategories` logs but does NOT surface to error.value.
+      onError: () => { /* logger.error already fired inside endpoint */ },
+    },
+    noScope,
+  )
+
+  const statsEndpoint = useAnalyticsEndpoint<
+    { statistics?: TemplateStatsResponse['statistics'] },
+    TemplateStatsResponse['statistics']
+  >(
+    {
+      path: '/api/templates/templates/stats',
+      scopeToSource: false,
+      label: 'Templates stats',
+      pickData: (raw) => raw.statistics ?? null,
+      onSuccess: (d) => { stats.value = d },
+      // Original `fetchStats` logs but does NOT surface to error.value.
+      onError: () => { /* logger.error already fired inside endpoint */ },
+    },
+    noScope,
+  )
+
+  // Bridge per-endpoint loading flags into the composable-level `loading` ref
+  // so the public API (consumers reading `loading.value`) is preserved.
+  // Endpoints that only set state (templates/categories/stats) AND on-demand
+  // endpoints (search/detail/preview) flip the same flag.
+  const ondemandLoading = ref(false)
+  watch(
+    [
+      templatesEndpoint.loading,
+      searchEndpoint.loading,
+      categoriesEndpoint.loading,
+      statsEndpoint.loading,
+      ondemandLoading,
+    ],
+    (flags: boolean[]) => {
+      loading.value = flags.some(Boolean)
+    },
+  )
+
+  // ---------------------------------------------------------------------------
+  // Public API — wrappers preserve names, signatures, and return types verbatim.
+  // ---------------------------------------------------------------------------
 
   async function fetchTemplates(
     category?: TemplateCategory,
     tags?: string[],
     complexity?: string
   ): Promise<void> {
-    loading.value = true
     error.value = null
-    try {
-      const backendUrl = await getBackendUrl()
-      const params = new URLSearchParams()
-      if (category) params.append('category', category)
-      if (tags?.length) params.append('tags', tags.join(','))
-      if (complexity) params.append('complexity', complexity)
-
-      const url = `${backendUrl}/api/templates/templates${params.toString() ? '?' + params.toString() : ''}`
-      const response = await fetchWithAuth(url)
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const data = await response.json()
-      templates.value = data.templates || []
-    } catch (e) {
-      error.value = `Failed to fetch templates: ${e}`
-      logger.error('fetchTemplates failed:', e)
-    } finally {
-      loading.value = false
-    }
+    const query: Record<string, string> = {}
+    if (category) query.category = category
+    if (tags?.length) query.tags = tags.join(',')
+    if (complexity) query.complexity = complexity
+    await templatesEndpoint.load(query)
   }
 
-  async function fetchTemplateDetail(templateId: string): Promise<WorkflowTemplateDetail | null> {
-    loading.value = true
+  async function fetchTemplateDetail(
+    templateId: string
+  ): Promise<WorkflowTemplateDetail | null> {
     error.value = null
+    ondemandLoading.value = true
     try {
-      const backendUrl = await getBackendUrl()
-      const response = await fetchWithAuth(`${backendUrl}/api/templates/templates/${templateId}`)
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const data = await response.json()
-      selectedTemplate.value = data.template
-      return data.template
-    } catch (e) {
-      error.value = `Failed to fetch template: ${e}`
-      logger.error('fetchTemplateDetail failed:', e)
-      return null
-    } finally {
-      loading.value = false
-    }
-  }
-
-  async function searchTemplates(query: string): Promise<WorkflowTemplateSummary[]> {
-    loading.value = true
-    error.value = null
-    try {
-      const backendUrl = await getBackendUrl()
-      const response = await fetchWithAuth(
-        `${backendUrl}/api/templates/templates/search?q=${encodeURIComponent(query)}`
+      const detailEndpoint = useAnalyticsEndpoint<
+        { template?: WorkflowTemplateDetail },
+        WorkflowTemplateDetail
+      >(
+        {
+          path: `/api/templates/templates/${templateId}`,
+          scopeToSource: false,
+          label: 'Template detail',
+          pickData: (raw) => raw.template ?? null,
+          onSuccess: (d) => { selectedTemplate.value = d },
+          // Original assigned `data.template` (possibly undefined) unconditionally.
+          // Preserve "clear on missing" behaviour via onNoData.
+          onNoData: () => { selectedTemplate.value = null },
+          onError: (msg) => { error.value = `Failed to fetch template: ${msg}` },
+        },
+        noScope,
       )
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const data = await response.json()
-      return data.results || []
-    } catch (e) {
-      error.value = `Failed to search templates: ${e}`
-      logger.error('searchTemplates failed:', e)
-      return []
+      await detailEndpoint.load()
+      return detailEndpoint.data.value
     } finally {
-      loading.value = false
+      ondemandLoading.value = false
     }
+  }
+
+  async function searchTemplates(
+    query: string
+  ): Promise<WorkflowTemplateSummary[]> {
+    error.value = null
+    await searchEndpoint.load({ q: query })
+    return searchEndpoint.data.value ?? []
   }
 
   async function fetchCategories(): Promise<void> {
-    try {
-      const backendUrl = await getBackendUrl()
-      const response = await fetchWithAuth(`${backendUrl}/api/templates/templates/categories`)
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const data = await response.json()
-      categories.value = data.categories || []
-    } catch (e) {
-      logger.error('fetchCategories failed:', e)
-    }
+    await categoriesEndpoint.load()
   }
 
   async function fetchStats(): Promise<void> {
-    try {
-      const backendUrl = await getBackendUrl()
-      const response = await fetchWithAuth(`${backendUrl}/api/templates/templates/stats`)
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const data = await response.json()
-      stats.value = data.statistics
-    } catch (e) {
-      logger.error('fetchStats failed:', e)
-    }
+    await statsEndpoint.load()
   }
 
   async function previewTemplate(
     templateId: string,
     variables?: Record<string, string>
   ): Promise<TemplatePreviewResponse | null> {
-    loading.value = true
     error.value = null
+    ondemandLoading.value = true
     try {
-      const backendUrl = await getBackendUrl()
-      let url = `${backendUrl}/api/templates/templates/${templateId}/preview`
+      const query: Record<string, string> = {}
       if (variables && Object.keys(variables).length > 0) {
-        url += `?variables=${encodeURIComponent(JSON.stringify(variables))}`
+        query.variables = JSON.stringify(variables)
       }
-      const response = await fetchWithAuth(url)
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const data = await response.json()
-      preview.value = data
-      return data
-    } catch (e) {
-      error.value = `Failed to preview template: ${e}`
-      logger.error('previewTemplate failed:', e)
-      return null
+      const previewEndpoint = useAnalyticsEndpoint<
+        TemplatePreviewResponse,
+        TemplatePreviewResponse
+      >(
+        {
+          path: `/api/templates/templates/${templateId}/preview`,
+          scopeToSource: false,
+          label: 'Template preview',
+          pickData: (raw) => raw,
+          onSuccess: (d) => { preview.value = d },
+          onError: (msg) => { error.value = `Failed to preview template: ${msg}` },
+        },
+        noScope,
+      )
+      await previewEndpoint.load(query)
+      return previewEndpoint.data.value
     } finally {
-      loading.value = false
+      ondemandLoading.value = false
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // POST endpoints (out of scope for #5154 — useAnalyticsEndpoint is GET-only).
+  // ---------------------------------------------------------------------------
+
+  async function getBackendUrl(): Promise<string> {
+    return await appConfig.getServiceUrl('backend')
   }
 
   async function createWorkflowFromTemplate(
