@@ -38,11 +38,11 @@ Usage:
 
 import json
 import logging
-import time
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.time_utils import utc_timestamp_z as _utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -338,13 +338,6 @@ class WorkflowVersionStore:
 # ---------------------------------------------------------------------------
 # Pure helpers
 # ---------------------------------------------------------------------------
-
-
-def _utc_now() -> str:
-    """Return current UTC time as an ISO-8601 string with Z suffix."""
-    # Use time.gmtime to avoid importing datetime for a one-liner
-    t = time.gmtime()
-    return f"{t.tm_year:04d}-{t.tm_mon:02d}-{t.tm_mday:02d}T" f"{t.tm_hour:02d}:{t.tm_min:02d}:{t.tm_sec:02d}Z"
 
 
 def _summary(record: Dict[str, Any]) -> Dict[str, Any]:
