@@ -197,7 +197,6 @@
 import { ref, onMounted } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
-import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { formatFileSize, formatTimeAgo } from '@/utils/formatHelpers'
 import BaseButton from '@/components/base/BaseButton.vue'
 import DeduplicationManager from '@/components/knowledge/DeduplicationManager.vue'
@@ -247,8 +246,7 @@ const loadHealthDashboard = async () => {
   isLoadingHealth.value = true
 
   try {
-    const response = await apiClient.get(`${getApiBase()}/knowledge-maintenance/health/dashboard`)
-    const data = await parseApiResponse<Record<string, any>>(response)
+    const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge-maintenance/health/dashboard`)
 
     if (data) {
       healthDashboard.value = data

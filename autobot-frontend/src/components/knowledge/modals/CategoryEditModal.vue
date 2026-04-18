@@ -18,7 +18,6 @@ import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
-import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
 
@@ -160,10 +159,9 @@ watch(() => props.category, (newCategory) => {
 async function loadFactCount(categoryId: string): Promise<void> {
   isLoadingFactCount.value = true
   try {
-    const response = await apiClient.get(
+    const data = await apiClient.get<Record<string, any>>(
       `${getApiBase()}/knowledge_base/categories/${encodeURIComponent(categoryId)}/facts?limit=1`
     )
-    const data = await parseApiResponse<Record<string, any>>(response)
     factCount.value = data?.total_count ?? 0
   } catch (err) {
     logger.error('Failed to load fact count:', err)
@@ -181,11 +179,10 @@ async function saveChanges(): Promise<void> {
   successMessage.value = null
 
   try {
-    const response = await apiClient.put(
+    const data = await apiClient.put<Record<string, any>>(
       `${getApiBase()}/knowledge_base/categories/${encodeURIComponent(props.category.id)}`,
       formData.value
     )
-    const data = await parseApiResponse<Record<string, any>>(response)
 
     if (data?.status === 'success') {
       successMessage.value = t('knowledge.modals.categoryEdit.updateSuccess')
@@ -213,10 +210,9 @@ async function deleteCategory(): Promise<void> {
   error.value = null
 
   try {
-    const response = await apiClient.delete(
+    const data = await apiClient.delete<Record<string, any>>(
       `${getApiBase()}/knowledge_base/categories/${encodeURIComponent(props.category.id)}`
     )
-    const data = await parseApiResponse<Record<string, any>>(response)
 
     if (data?.status === 'success') {
       emit('deleted', props.category.id)

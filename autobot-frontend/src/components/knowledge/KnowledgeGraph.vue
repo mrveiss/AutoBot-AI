@@ -383,7 +383,6 @@ import cytoscape, { type Core, type NodeSingular } from 'cytoscape'
 import fcose from 'cytoscape-fcose'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
-import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { getCssVar } from '@/composables/useCssVars'
 import { useDebouncedFn } from '@/composables/useDebounce'
@@ -867,12 +866,10 @@ async function refreshGraph(): Promise<void> {
 
   try {
     // Fetch from unified knowledge graph endpoint (includes categories + facts)
-    const unifiedResponse = await apiClient.get(`${getApiBase()}/knowledge_base/unified/graph?max_facts=100&include_categories=true`)
-    const unifiedData = await parseApiResponse<Record<string, any>>(unifiedResponse)
+    const unifiedData = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/unified/graph?max_facts=100&include_categories=true`)
 
     // Also fetch memory entities for backward compatibility
-    const memoryResponse = await apiClient.get(`${getApiBase()}/memory/entities/all`)
-    const memoryData = await parseApiResponse<Record<string, any>>(memoryResponse)
+    const memoryData = await apiClient.get<Record<string, any>>(`${getApiBase()}/memory/entities/all`)
 
     // Merge entities from both sources
     const unifiedEntities = unifiedData?.data?.entities || []
@@ -932,8 +929,7 @@ async function fetchMemoryRelations(memoryEntities: Entity[]): Promise<void> {
 
   const relationResults = await Promise.allSettled(
     memoryEntities.map(async (entity) => {
-      const response = await apiClient.get(`${getApiBase()}/memory/entities/${entity.id}/relations`)
-      const parsedResponse = await parseApiResponse<Record<string, any>>(response)
+      const parsedResponse = await apiClient.get<Record<string, any>>(`${getApiBase()}/memory/entities/${entity.id}/relations`)
       return { entity, parsedResponse }
     })
   )
@@ -989,13 +985,12 @@ async function createEntity(): Promise<void> {
       .map(o => o.trim())
       .filter(o => o.length > 0)
 
-    const response = await apiClient.post(`${getApiBase()}/memory/entities`, {
+    const parsedResponse = await apiClient.post<Record<string, any>>(`${getApiBase()}/memory/entities`, {
       name: newEntity.value.name,
       entity_type: newEntity.value.type,
       observations
     })
 
-    const parsedResponse = await parseApiResponse<Record<string, any>>(response)
     const responseData = parsedResponse?.data || parsedResponse
 
     let createdEntity: Entity | null = null

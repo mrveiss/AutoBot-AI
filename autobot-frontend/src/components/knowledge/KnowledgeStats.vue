@@ -389,7 +389,6 @@ import DocumentChangeFeed from '@/components/knowledge/DocumentChangeFeed.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
-import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import {
   formatFileSize,
   formatTimeAgo,
@@ -786,8 +785,7 @@ const refreshVectorStats = async () => {
 
     // Fetch category fact counts (secondary API call - only when needed)
     try {
-      const factsResponse = await apiClient.get(`${getApiBase()}/knowledge_base/facts/by_category`)
-      const factsData = await parseApiResponse<Record<string, any>>(factsResponse)
+      const factsData = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/facts/by_category`)
 
       if (factsData && factsData.categories) {
         const counts: Record<string, number> = {}

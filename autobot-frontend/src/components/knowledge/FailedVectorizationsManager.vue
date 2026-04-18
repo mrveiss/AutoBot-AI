@@ -102,7 +102,6 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
-import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { formatDateTime } from '@/utils/formatHelpers'
 import { useAsyncOperation } from '@/composables/useAsyncOperation'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -130,8 +129,7 @@ const { execute: fetchFailedJobs, loading, error } = useAsyncOperation()
 
 // Fetch failed jobs
 const fetchFailedJobsFn = async () => {
-  const response = await apiClient.get(`${getApiBase()}/knowledge_base/vectorize_jobs/failed`)
-  const data = await parseApiResponse<Record<string, any>>(response)
+  const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/vectorize_jobs/failed`)
 
   if (data.status === 'success') {
     failedJobs.value = data.failed_jobs
@@ -150,8 +148,7 @@ const retryJob = async (jobId: string) => {
   retryingJobs.value.add(jobId)
 
   try {
-    const response = await apiClient.post(`${getApiBase()}/knowledge_base/vectorize_jobs/${jobId}/retry`)
-    const data = await parseApiResponse<Record<string, any>>(response)
+    const data = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/vectorize_jobs/${jobId}/retry`)
 
     if (data.status === 'success') {
       // Remove from failed list
@@ -176,8 +173,7 @@ const deleteJob = async (jobId: string) => {
   }
 
   await fetchFailedJobs(async () => {
-    const response = await apiClient.delete(`${getApiBase()}/knowledge_base/vectorize_jobs/${jobId}`)
-    const data = await parseApiResponse<Record<string, any>>(response)
+    const data = await apiClient.delete<Record<string, any>>(`${getApiBase()}/knowledge_base/vectorize_jobs/${jobId}`)
 
     if (data.status === 'success') {
       // Remove from list
@@ -195,8 +191,7 @@ const clearAllFailed = async () => {
   }
 
   await fetchFailedJobs(async () => {
-    const response = await apiClient.delete(`${getApiBase()}/knowledge_base/vectorize_jobs/failed/clear`)
-    const data = await parseApiResponse<Record<string, any>>(response)
+    const data = await apiClient.delete<Record<string, any>>(`${getApiBase()}/knowledge_base/vectorize_jobs/failed/clear`)
 
     if (data.status === 'success') {
       failedJobs.value = []
