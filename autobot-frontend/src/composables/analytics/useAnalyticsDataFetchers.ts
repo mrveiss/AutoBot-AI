@@ -26,6 +26,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import type { ToastType } from '@/composables/useToast'
 import { useAnalyticsEndpoint } from './useAnalyticsEndpoint'
+import { runTimed } from './useTimedNotify'
 import {
   CODE_SMELL_TYPES,
   type Problem,
@@ -386,6 +387,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   /**
    * Shared wrapper for the three toast-emitting loaders. Preserves the
    * count + timing + (for hardcodes) types summary shown to the user.
+   * Timing + try/catch kernel lives in `runTimed` (#5153 D-2).
    */
   const notifyTimed = async (
     flag: 'declarations' | 'duplicates' | 'hardcodes',
@@ -398,28 +400,25 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   ) => {
     loadingProgress[flag] = true
     progressStatus.value = t(statusKey)
-    const startTime = Date.now()
-    try {
-      const result = await runner()
-      const time = Date.now() - startTime
-      if (result === null) {
-        notify(t(failedKey, { error: 'request failed', time }), 'error')
-        return
-      }
-      notify(
-        t(foundKey, { count: result.count, time, ...result.extra }),
-        'success',
-      )
-    } catch (error: unknown) {
-      const time = Date.now() - startTime
-      const errorMessage =
-        error instanceof Error ? error.message : String(error)
-      logger.error(`${flag} failed:`, error)
-      notify(t(failedKey, { error: errorMessage, time }), 'error')
-    } finally {
-      loadingProgress[flag] = false
-      progressStatus.value = t('analytics.codebase.status.ready')
-    }
+    await runTimed(
+      runner,
+      (result, time) => {
+        if (result === null) {
+          notify(t(failedKey, { error: 'request failed', time }), 'error')
+          return
+        }
+        notify(
+          t(foundKey, { count: result.count, time, ...result.extra }),
+          'success',
+        )
+      },
+      (errorMessage, time, err) => {
+        logger.error(`${flag} failed:`, err)
+        notify(t(failedKey, { error: errorMessage, time }), 'error')
+      },
+    )
+    loadingProgress[flag] = false
+    progressStatus.value = t('analytics.codebase.status.ready')
   }
 
   const getDeclarationsData = () =>
