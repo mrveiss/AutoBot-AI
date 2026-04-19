@@ -12,6 +12,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
+from autobot_shared.time_utils import utc_timestamp
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
 
@@ -306,6 +307,6 @@ class FeedbackTracker:
     def mark_retrain_completed(self):
         """Mark that retraining has completed."""
         self.redis_client.set(
-            self.last_retrain_key, datetime.utcnow().isoformat().encode()
+            self.last_retrain_key, utc_timestamp().encode()
         )
         logger.info("Marked retraining as completed")

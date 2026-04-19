@@ -13,13 +13,13 @@ import json
 import logging
 import time
 import uuid
-from datetime import datetime
 from typing import Dict, List, Optional
 from urllib.parse import urljoin
 
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.time_utils import utc_timestamp
 from constants.network_constants import NetworkConstants
 from type_defs.common import Metadata
 
@@ -296,7 +296,7 @@ class AIStackClient:
             return {
                 "status": "healthy",
                 "ai_stack_response": response,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
             }
         except AIStackError as e:
             prev = self.connection_status
@@ -311,7 +311,7 @@ class AIStackClient:
             return {
                 "status": "unhealthy",
                 "error": e.message,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
             }
 
     async def list_available_agents(self) -> Metadata:

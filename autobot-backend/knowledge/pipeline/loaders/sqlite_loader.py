@@ -9,12 +9,12 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 
 import json
 import logging
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import aiosqlite
 
+from autobot_shared.time_utils import utc_timestamp
 from knowledge.pipeline.base import BaseLoader, PipelineContext
 from knowledge.pipeline.registry import TaskRegistry
 
@@ -217,7 +217,7 @@ class SQLiteLoader(BaseLoader):
                 (
                     run_id,
                     str(context.document_id or ""),
-                    datetime.utcnow().isoformat(),
+                    utc_timestamp(),
                     len(context.entities),
                     len(context.relationships),
                     len(context.events),

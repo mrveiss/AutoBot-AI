@@ -42,10 +42,10 @@ Usage:
 import json
 import logging
 import uuid
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.time_utils import utc_timestamp
 from services.workflow_serializer import WorkflowSerializer
 
 logger = logging.getLogger(__name__)
@@ -78,7 +78,7 @@ def _share_record(
         "owner_id": owner_id,
         "public": public,
         "target_user_id": target_user_id,
-        "created_at": datetime.utcnow().isoformat() + "Z",
+        "created_at": utc_timestamp() + "Z",
         "workflow": export_doc,
     }
 
