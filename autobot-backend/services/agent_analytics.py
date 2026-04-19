@@ -24,6 +24,7 @@ from enum import Enum
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.time_utils import utc_timestamp
 from constants.ttl_constants import TTL_1_HOUR, TTL_30_DAYS
 
 logger = logging.getLogger(__name__)
@@ -244,7 +245,7 @@ class AgentAnalytics:
             task_id=task_id,
             task_name=task_name,
             status=TaskStatus.RUNNING.value,
-            started_at=datetime.utcnow().isoformat(),
+            started_at=utc_timestamp(),
             input_size=input_size,
             metadata=metadata or {},
         )

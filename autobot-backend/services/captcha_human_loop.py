@@ -45,6 +45,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 
+from autobot_shared.time_utils import utc_timestamp
 from playwright.async_api import Page
 
 from constants.network_constants import NetworkConstants
@@ -515,7 +516,7 @@ class CaptchaHumanLoop:
                 "screenshot": screenshot_b64,
                 "vnc_url": self.vnc_url,
                 "timeout_seconds": self.timeout_seconds,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
                 "message": f"CAPTCHA detected at {url}. Please solve manually via VNC.",
             },
         )
@@ -527,7 +528,7 @@ class CaptchaHumanLoop:
             {
                 "captcha_id": captcha_id,
                 "url": url,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
                 "message": f"CAPTCHA resolution timed out for {url}. Source will be skipped.",
             },
         )
@@ -542,7 +543,7 @@ class CaptchaHumanLoop:
                 "captcha_id": captcha_id,
                 "url": url,
                 "status": status.value,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
             },
         )
 

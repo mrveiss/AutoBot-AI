@@ -26,9 +26,9 @@ Usage:
 import logging
 import uuid
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.time_utils import utc_timestamp
 from services.workflow_automation.manager import WorkflowAutomationManager
 from services.workflow_automation.models import AutomationMode, WorkflowStep
 
@@ -140,7 +140,7 @@ class WorkflowSerializer:
 
         doc = WorkflowExportFormat(
             schema_version=SCHEMA_VERSION,
-            exported_at=datetime.utcnow().isoformat() + "Z",
+            exported_at=utc_timestamp() + "Z",
             workflow_id=workflow.workflow_id,
             name=workflow.name,
             description=workflow.description,

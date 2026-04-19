@@ -24,6 +24,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.time_utils import utc_timestamp
 from constants.model_constants import (
     EXPENSIVE_MODEL_MARKER_GPT4,
     EXPENSIVE_MODEL_MARKER_OPUS,
@@ -253,7 +254,7 @@ class AnalyticsService:
         )
 
         return {
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": utc_timestamp(),
             "period_days": days,
             "health": {
                 "score": health_score,
@@ -823,7 +824,7 @@ class AnalyticsService:
         days = (end_date - start_date).days
         report = {
             "report_type": report_type,
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": utc_timestamp(),
             "period": {
                 "start": start_date.isoformat(),
                 "end": end_date.isoformat(),

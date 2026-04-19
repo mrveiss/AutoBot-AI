@@ -13,6 +13,8 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
+from autobot_shared.time_utils import utc_timestamp
+
 try:
     import modal
 except ImportError:
@@ -173,7 +175,7 @@ class ModalBackend(ExecutionBackend):
             # In production, create actual Modal function
             self._function_cache[language] = {
                 "language": language,
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": utc_timestamp(),
             }
 
         return self._function_cache[language]

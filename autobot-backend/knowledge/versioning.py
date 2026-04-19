@@ -16,8 +16,9 @@ Features:
 import asyncio
 import json
 import logging
-from datetime import datetime
 from typing import TYPE_CHECKING, Any, Dict, List
+
+from autobot_shared.time_utils import utc_timestamp
 
 if TYPE_CHECKING:
     import aioredis
@@ -82,7 +83,7 @@ class VersioningMixin:
                 mapping={
                     "current_version": str(version_num),
                     "total_versions": str(min(version_num, MAX_VERSIONS)),
-                    "last_updated": datetime.utcnow().isoformat(),
+                    "last_updated": utc_timestamp(),
                 },
             )
 
@@ -105,7 +106,7 @@ class VersioningMixin:
                 "version": version_num,
                 "content": content,
                 "metadata": metadata or {},
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": utc_timestamp(),
                 "created_by": created_by,
                 "change_summary": change_summary,
             }

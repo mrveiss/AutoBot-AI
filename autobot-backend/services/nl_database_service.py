@@ -25,6 +25,8 @@ import re
 import sqlite3
 import time
 from datetime import datetime
+
+from autobot_shared.time_utils import utc_timestamp
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
@@ -440,7 +442,7 @@ class NLDatabaseService:
             "db_id": db_id,
             "row_count": len(results),
             "user_id": user_id or "anonymous",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_timestamp(),
             "elapsed_ms": elapsed_ms,
         }
         await self._save_history(entry, user_id)
