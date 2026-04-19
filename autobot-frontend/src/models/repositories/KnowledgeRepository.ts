@@ -534,30 +534,45 @@ export class KnowledgeRepository extends ApiRepository {
   // ==========================================================================
 
   /**
-   * List all connectors with their statuses
+   * List all connectors with their statuses.
+   *
+   * Backend returns `{connectors: [{config, status}, ...], total}` — an array
+   * of wrapped pairs. Here we unpack into two parallel structures so the
+   * store and components can key status lookups by `connector_id` (#5200).
    */
   async listConnectors(): Promise<{
     connectors: ConnectorConfig[]
     statuses: Record<string, ConnectorStatus>
   }> {
-    const response = await this.get(
-      `${getApiBase()}/knowledge_base/connectors`,
-      { skipCache: true }
-    )
-    return response.data as { connectors: ConnectorConfig[]; statuses: Record<string, ConnectorStatus> }
+    const response = await this.get<{
+      connectors: Array<{ config: ConnectorConfig; status: ConnectorStatus }>
+      total: number
+    }>(`${getApiBase()}/knowledge_base/connectors`, { skipCache: true })
+
+    const configs: ConnectorConfig[] = []
+    const statuses: Record<string, ConnectorStatus> = {}
+    for (const entry of response.data?.connectors ?? []) {
+      if (!entry?.config?.connector_id) continue
+      configs.push(entry.config)
+      statuses[entry.config.connector_id] = entry.status
+    }
+    return { connectors: configs, statuses }
   }
 
   /**
-   * Create a new connector
+   * Create a new connector.
+   *
+   * Backend returns `{connector_id, config}`; we extract `.config` so callers
+   * get a flat `ConnectorConfig` matching the declared return type (#5200).
    */
   async createConnector(
     config: Partial<ConnectorConfig>
   ): Promise<ConnectorConfig> {
-    const response = await this.post(
-      `${getApiBase()}/knowledge_base/connectors`,
-      config
-    )
-    return response.data as ConnectorConfig
+    const response = await this.post<{
+      connector_id: string
+      config: ConnectorConfig
+    }>(`${getApiBase()}/knowledge_base/connectors`, config)
+    return response.data.config
   }
 
   /**
@@ -574,17 +589,23 @@ export class KnowledgeRepository extends ApiRepository {
   }
 
   /**
-   * Update connector configuration
+   * Update connector configuration.
+   *
+   * Backend returns `{connector_id, config}`; we extract `.config` so callers
+   * get a flat `ConnectorConfig` matching the declared return type (#5200).
    */
   async updateConnector(
     id: string,
     updates: Partial<ConnectorConfig>
   ): Promise<ConnectorConfig> {
-    const response = await this.put(
+    const response = await this.put<{
+      connector_id: string
+      config: ConnectorConfig
+    }>(
       `${getApiBase()}/knowledge_base/connectors/${encodeURIComponent(id)}`,
       updates
     )
-    return response.data as ConnectorConfig
+    return response.data.config
   }
 
   /**
