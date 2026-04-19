@@ -16,6 +16,12 @@ import type {
   ConnectorStatus,
   SyncResult
 } from '@/types/knowledgeBase'
+// Issue #5209: canonical request types generated from backend OpenAPI schema.
+// Prefer these over hand-written duplicates for wire-format types.
+import type {
+  CreateConnectorRequest,
+  UpdateConnectorRequest
+} from '@/types/api-contract'
 import { getApiBase } from '@/config/ssot-config'
 
 // Re-export types for convenience
@@ -564,9 +570,12 @@ export class KnowledgeRepository extends ApiRepository {
    *
    * Backend returns `{connector_id, config}`; we extract `.config` so callers
    * get a flat `ConnectorConfig` matching the declared return type (#5200).
+   *
+   * Body type aligns with backend `CreateConnectorRequest` Pydantic schema
+   * (generated — see `@/types/api-contract`).
    */
   async createConnector(
-    config: Partial<ConnectorConfig>
+    config: Partial<ConnectorConfig> | CreateConnectorRequest
   ): Promise<ConnectorConfig> {
     const response = await this.post<{
       connector_id: string
@@ -593,10 +602,13 @@ export class KnowledgeRepository extends ApiRepository {
    *
    * Backend returns `{connector_id, config}`; we extract `.config` so callers
    * get a flat `ConnectorConfig` matching the declared return type (#5200).
+   *
+   * Body type aligns with backend `UpdateConnectorRequest` Pydantic schema
+   * (generated — see `@/types/api-contract`).
    */
   async updateConnector(
     id: string,
-    updates: Partial<ConnectorConfig>
+    updates: Partial<ConnectorConfig> | UpdateConnectorRequest
   ): Promise<ConnectorConfig> {
     const response = await this.put<{
       connector_id: string
