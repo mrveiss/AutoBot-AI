@@ -7,7 +7,7 @@
  *
  * Code smell detection and health score calculation.
  * Extracted from useCodeIntelAnalysis (Issue #2260).
- * Routed through useAnalyticsEndpoint<T> (Issue #5153 wave 2).
+ * Routed through useFetchEndpoint<T> (Issue #5153 wave 2).
  *
  * The two backing endpoints live under `/api/code-intelligence/*` and are
  * NOT source-scoped (they take the repo root path directly), so both
@@ -20,7 +20,8 @@ import type {
   CodeSmellsReportData,
   CodeHealthScoreData,
 } from './codeIntelTypes'
-import { useAnalyticsEndpoint } from './useAnalyticsEndpoint'
+import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
+import { runTimed } from '@/composables/api/useTimedNotify'
 
 interface AnalyzeResponse {
   report?: CodeSmellsReportData
@@ -45,28 +46,7 @@ export function useCodeSmellAnalysis(deps: UseCodeIntelAnalysisDeps) {
       : t('analytics.codebase.progress.analyzingSmells')
   })
 
-  // Times an async load, toggles the shared analyzing flag, and fans out
-  // to per-endpoint success / failure toasts with the elapsed duration.
-  const notifyTimed = async (
-    fn: () => Promise<void>,
-    onFinish: (responseTimeMs: number) => void,
-    onFail: (responseTimeMs: number, message: string) => void,
-  ): Promise<void> => {
-    const startTime = Date.now()
-    analyzingCodeSmells.value = true
-    try {
-      await fn()
-      onFinish(Date.now() - startTime)
-    } catch (err: unknown) {
-      const responseTime = Date.now() - startTime
-      const message = err instanceof Error ? err.message : String(err)
-      onFail(responseTime, message)
-    } finally {
-      analyzingCodeSmells.value = false
-    }
-  }
-
-  const smellsEndpoint = useAnalyticsEndpoint<
+  const smellsEndpoint = useFetchEndpoint<
     AnalyzeResponse,
     CodeSmellsReportData
   >(
@@ -98,7 +78,7 @@ export function useCodeSmellAnalysis(deps: UseCodeIntelAnalysisDeps) {
     { withSourceId },
   )
 
-  const healthEndpoint = useAnalyticsEndpoint<
+  const healthEndpoint = useFetchEndpoint<
     CodeHealthScoreData,
     CodeHealthScoreData
   >(
@@ -126,14 +106,14 @@ export function useCodeSmellAnalysis(deps: UseCodeIntelAnalysisDeps) {
       )
       return
     }
-    await notifyTimed(
+    await runTimed(
       async () => {
         await smellsEndpoint.load()
         if (smellsEndpoint.error.value) {
           throw new Error(smellsEndpoint.error.value)
         }
       },
-      (responseTime) => {
+      (_result, responseTime) => {
         // CodeSmellsReportData is index-signatured; narrow the fields we
         // actually read from the /analyze backend contract.
         const report = codeSmellsReport.value as
@@ -152,7 +132,7 @@ export function useCodeSmellAnalysis(deps: UseCodeIntelAnalysisDeps) {
           totalIssues > 0 ? 'warning' : 'success',
         )
       },
-      (responseTime, message) => {
+      (message, responseTime) => {
         notify(
           t('analytics.codebase.notify.codeSmellsFailed', {
             error: message,
@@ -161,6 +141,7 @@ export function useCodeSmellAnalysis(deps: UseCodeIntelAnalysisDeps) {
           'error',
         )
       },
+      { loadingRef: analyzingCodeSmells },
     )
   }
 
@@ -173,14 +154,14 @@ export function useCodeSmellAnalysis(deps: UseCodeIntelAnalysisDeps) {
       )
       return
     }
-    await notifyTimed(
+    await runTimed(
       async () => {
         await healthEndpoint.load({ path: rootPath.value })
         if (healthEndpoint.error.value) {
           throw new Error(healthEndpoint.error.value)
         }
       },
-      (responseTime) => {
+      (_result, responseTime) => {
         const h = codeHealthScore.value as
           | (CodeHealthScoreData & { total_issues?: number })
           | null
@@ -197,7 +178,7 @@ export function useCodeSmellAnalysis(deps: UseCodeIntelAnalysisDeps) {
           score >= 70 ? 'success' : 'warning',
         )
       },
-      (responseTime, message) => {
+      (message, responseTime) => {
         notify(
           t('analytics.codebase.notify.healthScoreFailed', {
             error: message,
@@ -206,6 +187,7 @@ export function useCodeSmellAnalysis(deps: UseCodeIntelAnalysisDeps) {
           'error',
         )
       },
+      { loadingRef: analyzingCodeSmells },
     )
   }
 

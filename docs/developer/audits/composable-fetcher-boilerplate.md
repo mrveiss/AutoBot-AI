@@ -1,23 +1,37 @@
 # Composable Fetcher Boilerplate Audit (Issue #5154)
 
+> **Rehome update (#5168, #5174, Apr 2026):** the composable is now at
+> [`autobot-frontend/src/composables/api/useFetchEndpoint.ts`](../../../autobot-frontend/src/composables/api/useFetchEndpoint.ts)
+> with `deps` optional and `scopeToSource` defaulting to **false**.
+> The former analytics-domain alias at `composables/analytics/useAnalyticsEndpoint.ts`
+> was kept as a deprecated thin wrapper through the one-release cycle mandated
+> in Recommendation 1, then deleted in #5174 along with its test file. The 14
+> analytics call-sites now import `useFetchEndpoint` directly and pass explicit
+> `scopeToSource: true`. References to `useAnalyticsEndpoint` below describe
+> the historical state; the analysis conclusions still apply to the rehomed
+> composable unchanged.
+>
 > Origin: PR #5137 (issue #5112) introduced
-> [`autobot-frontend/src/composables/analytics/useAnalyticsEndpoint.ts`](../../../autobot-frontend/src/composables/analytics/useAnalyticsEndpoint.ts)
-> — a 144-line generic GET-fetcher that collapsed 14 near-identical fetchers
+> the 144-line generic GET-fetcher that collapsed 14 near-identical fetchers
 > in `useAnalyticsDataFetchers.ts` (1147 LOC -> 693 LOC, **-40%**).
 >
 > This audit walks every non-analytics composable in `autobot-frontend/src/composables/`
-> that calls `fetchWithAuth(...)` and decides whether `useAnalyticsEndpoint`
+> that calls `fetchWithAuth(...)` and decides whether `useFetchEndpoint`
 > generalises. Every claim cites a file path and line number.
 >
-> **Headline finding (validated by POC migration):** `useAnalyticsEndpoint` only
-> shrinks a file when the file has a critical mass of homogeneous fetchers
-> (analytics had 14, all sharing the same `withSourceId` axis). For
-> 6-fetcher files like `useWorkflowTemplates.ts`, the per-endpoint
-> configuration ceremony (12 lines x N endpoints + bridge `watch()` + path
-> factories for parameterised paths) **outweighs** the per-fetcher boilerplate
-> savings. The composable still works correctly outside analytics — but the
-> case for migrating files with <8 fetchers on LOC grounds alone is weak.
-> See "POC migration measurement" below.
+> **Headline finding (validated by POC migration, and partially reversed by
+> the rehome's ergonomic fixes):** the composable only shrinks a file when
+> the file has a critical mass of homogeneous fetchers (analytics had 14,
+> all sharing the same `withSourceId` axis). For 6-fetcher files like
+> `useWorkflowTemplates.ts`, the per-endpoint configuration ceremony
+> (12 lines x N endpoints + bridge `watch()` + path factories for
+> parameterised paths) **outweighs** the per-fetcher boilerplate savings.
+> The #5168 rehome (dropping the mandatory `deps` and the default-true
+> `scopeToSource`) shrank `useWorkflowTemplates.ts` from **337 -> 308 LOC**,
+> partially reversing the +86 LOC regression originally flagged here.
+> The critical-mass threshold (\>= 8 GET fetchers) still applies for
+> LOC-positive migration; below that, value is uniformity + bug prevention
+> + testability, not LOC. See "POC migration measurement" below.
 
 ## Pattern under audit
 

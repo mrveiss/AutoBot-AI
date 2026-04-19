@@ -15,8 +15,7 @@
  */
 
 import { ref, computed } from 'vue'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import appConfig from '@/config/AppConfig.js'
+import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { useCodeIntelligence } from '@/composables/useCodeIntelligence'
 import { createLogger } from '@/utils/debugUtils'
 import type {
@@ -80,44 +79,43 @@ export function useCodeIntelAnalysis(
 
   const clearingCache = ref(false)
 
-  const clearCache = async (
+  // #5174: routed through useFetchEndpoint DELETE. The caller injects
+  // withSourceId; localStateResetFn fires on success; toasts come from the
+  // composable's hooks. `clearingCache` is the public loading ref.
+  async function clearCache(
     withSourceIdFn: (url: string) => string,
     localStateResetFn: () => void,
-  ) => {
+  ) {
+    const cacheEndpoint = useFetchEndpoint<
+      { deleted_keys?: number; message?: string },
+      number
+    >(
+      {
+        path: '/api/analytics/codebase/cache',
+        method: 'DELETE',
+        scopeToSource: true,
+        pickData: (raw) => raw.deleted_keys ?? 0,
+        onSuccess: (count) => {
+          localStateResetFn()
+          notify(
+            t('analytics.codebase.notify.cacheCleared', { count }),
+            'success',
+          )
+        },
+        onError: (message) => {
+          logger.error('Cache clear failed:', message)
+          notify(
+            t('analytics.codebase.notify.cacheClearFailed', { error: message }),
+            'error',
+          )
+        },
+        label: 'Cache clear',
+      },
+      { withSourceId: withSourceIdFn },
+    )
     clearingCache.value = true
     try {
-      const backendUrl = await appConfig.getServiceUrl('backend')
-      const response = await fetchWithAuth(
-        withSourceIdFn(
-          `${backendUrl}/api/analytics/codebase/cache`,
-        ),
-        {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-        },
-      )
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`Status ${response.status}: ${errorText}`)
-      }
-      const result = await response.json()
-      localStateResetFn()
-      notify(
-        t('analytics.codebase.notify.cacheCleared', {
-          count: result.deleted_keys || 0,
-        }),
-        'success',
-      )
-    } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error)
-      logger.error('Cache clear failed:', error)
-      notify(
-        t('analytics.codebase.notify.cacheClearFailed', {
-          error: errorMessage,
-        }),
-        'error',
-      )
+      await cacheEndpoint.load()
     } finally {
       clearingCache.value = false
     }
