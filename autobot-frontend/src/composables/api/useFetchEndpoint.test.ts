@@ -3,18 +3,18 @@
 // Author: mrveiss
 
 /**
- * Unit tests for the rehomed useFetchEndpoint.
+ * Unit tests for useFetchEndpoint.
  *
- * Focuses on the DIFFERENCES from the analytics-domain alias:
- *   - `deps` is OPTIONAL
- *   - `scopeToSource` defaults FALSE
- *   - warns but doesn't throw when scopeToSource=true without withSourceId
+ * Covers:
+ *   - default behavior: `deps` optional, `scopeToSource` defaults FALSE
+ *   - explicit opt-in: `scopeToSource: true` + deps.withSourceId wraps the URL
+ *   - fallback to identity when scopeToSource=true without a withSourceId
+ *   - HTTP methods: GET (default), POST + body factory, DELETE + body
+ *   - loading/error/data lifecycle, onSuccess/onNoData/onError hooks
+ *   - queryExtras appending + empty-value skipping
  *
- * The analytics alias is covered by the pre-existing
- * composables/analytics/useAnalyticsEndpoint.test.ts (which exercises the
- * default-true scopeToSource path through the alias).
- *
- * Issue #5153 scope C.
+ * Issues #5153 (umbrella), #5174 (consolidated from the deleted analytics
+ * alias test file).
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -49,6 +49,65 @@ function jsonResponse(body: unknown, status = 200): Response {
 describe('useFetchEndpoint (rehomed)', () => {
   beforeEach(() => {
     mockedFetch.mockReset()
+  })
+
+  it('cycles loading: false -> true -> false across load()', async () => {
+    mockedFetch.mockResolvedValueOnce(
+      jsonResponse({ ok: true, value: 1 }),
+    )
+    const { loading, load } = useFetchEndpoint<RawPayload, number>({
+      path: '/api/anything',
+      pickData: (raw) => (raw.ok ? (raw.value ?? null) : null),
+    })
+    expect(loading.value).toBe(false)
+    const p = load()
+    expect(loading.value).toBe(true)
+    await p
+    expect(loading.value).toBe(false)
+  })
+
+  it('onSuccess receives both picked data AND the raw envelope', async () => {
+    const rawEnvelope = { ok: true, value: 7 }
+    mockedFetch.mockResolvedValueOnce(jsonResponse(rawEnvelope))
+    const onSuccess = vi.fn()
+    const { load } = useFetchEndpoint<RawPayload, number>({
+      path: '/api/anything',
+      pickData: (raw) => (raw.ok ? (raw.value ?? null) : null),
+      onSuccess,
+    })
+    await load()
+    expect(onSuccess).toHaveBeenCalledWith(7, rawEnvelope)
+  })
+
+  it('DELETE method routes correctly and supports a body', async () => {
+    mockedFetch.mockResolvedValueOnce(
+      jsonResponse({ ok: true, value: 3 }),
+    )
+    const { load } = useFetchEndpoint<RawPayload, number>({
+      path: '/api/analytics/codebase/cache',
+      method: 'DELETE',
+      body: () => ({ reason: 'manual' }),
+      pickData: (raw) => (raw.ok ? (raw.value ?? null) : null),
+    })
+    await load()
+    const init = mockedFetch.mock.calls[0]?.[1] as RequestInit | undefined
+    expect(init?.method).toBe('DELETE')
+    expect(init?.body).toBe(JSON.stringify({ reason: 'manual' }))
+  })
+
+  it('DELETE without a body sends no body', async () => {
+    mockedFetch.mockResolvedValueOnce(
+      jsonResponse({ ok: true, value: 1 }),
+    )
+    const { load } = useFetchEndpoint<RawPayload, number>({
+      path: '/api/thing/123',
+      method: 'DELETE',
+      pickData: (raw) => (raw.ok ? (raw.value ?? null) : null),
+    })
+    await load()
+    const init = mockedFetch.mock.calls[0]?.[1] as RequestInit | undefined
+    expect(init?.method).toBe('DELETE')
+    expect(init?.body).toBeUndefined()
   })
 
   it('works with NO deps argument (deps is optional)', async () => {

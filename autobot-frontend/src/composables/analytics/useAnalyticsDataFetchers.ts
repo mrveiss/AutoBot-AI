@@ -10,11 +10,12 @@
  * dependency/import-tree task loaders, and cached/full scan orchestration.
  *
  * Issues #2228, #2230: Extracted from CodebaseAnalytics.vue.
- * Issue #5112: the 14x GET-fetcher boilerplate now routes through
- * `useAnalyticsEndpoint`, which defaults `scopeToSource: true` — making the
- * #5111 class of bugs (forgetting `withSourceId`) structurally impossible
- * for callers that don't explicitly opt out. Domain types live in
- * `./analyticsTypes`.
+ * Issue #5112: the 14x GET-fetcher boilerplate routes through
+ * `useFetchEndpoint`. Every call-site opts in to source scoping with an
+ * explicit `scopeToSource: true`; `/api/unified/report` is the one
+ * exception that stays global. Domain types live in `./analyticsTypes`.
+ * Issue #5174: migrated off the deprecated `useAnalyticsEndpoint` alias
+ * to the rehomed `@/composables/api/useFetchEndpoint`.
  */
 
 import { ref, reactive, computed, watch, type Ref, type ComputedRef } from 'vue'
@@ -25,8 +26,8 @@ import { useAnalyticsScanRunner } from '@/composables/useAnalyticsScanRunner'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import type { ToastType } from '@/composables/useToast'
-import { useAnalyticsEndpoint } from './useAnalyticsEndpoint'
-import { runTimed } from './useTimedNotify'
+import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
+import { runTimed } from '@/composables/api/useTimedNotify'
 import {
   CODE_SMELL_TYPES,
   type Problem,
@@ -129,12 +130,13 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
 
   // --- Generic endpoint-backed fetchers (#5112) ---
 
-  const chartEndpoint = useAnalyticsEndpoint<
+  const chartEndpoint = useFetchEndpoint<
     { status: string; chart_data?: ChartData },
     ChartData
   >(
     {
       path: '/api/analytics/codebase/analytics/charts',
+      scopeToSource: true,
       label: 'Chart data endpoint',
       pickData: (raw) =>
         raw.status === 'success' && raw.chart_data ? raw.chart_data : null,
@@ -151,7 +153,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     { withSourceId },
   )
 
-  const unifiedEndpoint = useAnalyticsEndpoint<
+  const unifiedEndpoint = useFetchEndpoint<
     UnifiedReportData & { status: string },
     UnifiedReportData
   >(
@@ -173,7 +175,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   // Mirror to the historical `unifiedReport` ref shape consumers expect.
   watch(unifiedEndpoint.data, (v) => { unifiedReport.value = v })
 
-  const callGraphEndpoint = useAnalyticsEndpoint<
+  const callGraphEndpoint = useFetchEndpoint<
     {
       status: string
       call_graph?: DependencyGraph
@@ -184,6 +186,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   >(
     {
       path: '/api/analytics/codebase/analytics/call-graph',
+      scopeToSource: true,
       label: 'Call graph endpoint',
       pickData: (raw) =>
         raw.status === 'success' && raw.call_graph
@@ -209,12 +212,13 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
 
   // --- Silent loaders (populate array state, no toasts) ---
 
-  const declarationsSilent = useAnalyticsEndpoint<
+  const declarationsSilent = useFetchEndpoint<
     { declarations?: Declaration[] },
     Declaration[]
   >(
     {
       path: '/api/analytics/codebase/declarations',
+      scopeToSource: true,
       label: 'Declarations endpoint',
       pickData: (raw) => raw.declarations ?? [],
       onSuccess: (d) => { declarationAnalysis.value = d },
@@ -222,12 +226,13 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     { withSourceId },
   )
 
-  const hardcodesSilent = useAnalyticsEndpoint<
+  const hardcodesSilent = useFetchEndpoint<
     { hardcodes?: HardcodedValue[] },
     HardcodedValue[]
   >(
     {
       path: '/api/analytics/codebase/hardcodes',
+      scopeToSource: true,
       label: 'Hardcodes endpoint',
       pickData: (raw) => raw.hardcodes ?? [],
       onSuccess: (d) => { hardcodeAnalysis.value = d },
@@ -235,12 +240,13 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     { withSourceId },
   )
 
-  const duplicatesSilent = useAnalyticsEndpoint<
+  const duplicatesSilent = useFetchEndpoint<
     { duplicates?: DuplicateCode[] },
     DuplicateCode[]
   >(
     {
       path: '/api/analytics/codebase/duplicates',
+      scopeToSource: true,
       label: 'Duplicates endpoint',
       pickData: (raw) => raw.duplicates ?? [],
       onSuccess: (d) => { duplicateAnalysis.value = d },
@@ -248,12 +254,13 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     { withSourceId },
   )
 
-  const statsEndpoint = useAnalyticsEndpoint<
+  const statsEndpoint = useFetchEndpoint<
     { status: string; stats?: Record<string, unknown> },
     Record<string, unknown>
   >(
     {
       path: '/api/analytics/codebase/stats',
+      scopeToSource: true,
       label: 'Stats endpoint',
       pickData: (raw) =>
         raw.status === 'success' && raw.stats ? raw.stats : null,
@@ -266,12 +273,13 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     { withSourceId },
   )
 
-  const problemsEndpoint = useAnalyticsEndpoint<
+  const problemsEndpoint = useFetchEndpoint<
     { status?: string; problems?: Problem[] },
     Problem[]
   >(
     {
       path: '/api/analytics/codebase/problems',
+      scopeToSource: true,
       label: 'Problems endpoint',
       pickData: (raw) => (raw.status === 'no_data' ? [] : raw.problems ?? []),
       onSuccess: (d) => { problemsReport.value = d },
@@ -279,12 +287,13 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     { withSourceId },
   )
 
-  const cachedDuplicatesEndpoint = useAnalyticsEndpoint<
+  const cachedDuplicatesEndpoint = useFetchEndpoint<
     { status: string; duplicates?: DuplicateCode[] },
     DuplicateCode[]
   >(
     {
       path: '/api/analytics/codebase/duplicates/cached',
+      scopeToSource: true,
       label: 'Cached duplicates endpoint',
       pickData: (raw) =>
         raw.status === 'success' && Array.isArray(raw.duplicates)
@@ -295,12 +304,13 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     { withSourceId },
   )
 
-  const cachedDependenciesEndpoint = useAnalyticsEndpoint<
+  const cachedDependenciesEndpoint = useFetchEndpoint<
     { status: string; dependency_data?: unknown },
     DependencyGraph
   >(
     {
       path: '/api/analytics/codebase/analytics/dependencies/cached',
+      scopeToSource: true,
       label: 'Cached dependencies endpoint',
       pickData: (raw) =>
         raw.status === 'success' && raw.dependency_data
@@ -311,12 +321,13 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     { withSourceId },
   )
 
-  const cachedImportTreeEndpoint = useAnalyticsEndpoint<
+  const cachedImportTreeEndpoint = useFetchEndpoint<
     { status: string; import_tree?: unknown },
     ImportTreeNode[]
   >(
     {
       path: '/api/analytics/codebase/analytics/import-tree/cached',
+      scopeToSource: true,
       label: 'Cached import tree endpoint',
       pickData: (raw) =>
         raw.status === 'success' && raw.import_tree

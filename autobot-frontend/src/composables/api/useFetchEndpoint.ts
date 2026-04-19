@@ -32,7 +32,7 @@ import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useFetchEndpoint')
 
-export type FetchEndpointMethod = 'GET' | 'POST'
+export type FetchEndpointMethod = 'GET' | 'POST' | 'DELETE'
 
 export interface UseFetchEndpointOptions<TRaw, TOut> {
   /** API path appended to the resolved backend URL, e.g. '/api/analytics/codebase/stats'. */
@@ -41,7 +41,9 @@ export interface UseFetchEndpointOptions<TRaw, TOut> {
   method?: FetchEndpointMethod
   /**
    * Factory returning the JSON body to send. Called at each `load()` so it
-   * reads fresh reactive state. Ignored when `method === 'GET'`.
+   * reads fresh reactive state. Serialised when `method` is anything other
+   * than 'GET' (POST and DELETE both accept a body; DELETE without a body
+   * simply omits it).
    */
   body?: () => unknown
   /**
@@ -145,7 +147,7 @@ export function useFetchEndpoint<TRaw, TOut>(
           'Content-Type': 'application/json',
         },
       }
-      if (method === 'POST' && opts.body) {
+      if (method !== 'GET' && opts.body) {
         init.body = JSON.stringify(opts.body())
       }
       const response = await fetchWithAuth(url, init)
