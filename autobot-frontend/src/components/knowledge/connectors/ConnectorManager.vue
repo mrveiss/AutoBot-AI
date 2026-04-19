@@ -89,12 +89,12 @@ function openEdit(id: string) {
 async function handleSync(id: string) {
   try {
     const result = await knowledgeRepository.syncConnector(id)
+    // Sync runs as a background task; only the enqueue is acknowledged here.
+    // Actual counts arrive via getConnectorHistory(id) once the job finishes.
     logger.info(
-      'Sync completed for %s: added=%d updated=%d deleted=%d',
+      'Sync started for %s (incremental=%s)',
       id,
-      result.added,
-      result.updated,
-      result.deleted
+      result.incremental
     )
     // Refresh the connector to get updated status
     await refreshConnectorStatus(id)
