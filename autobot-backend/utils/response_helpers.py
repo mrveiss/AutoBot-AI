@@ -14,9 +14,9 @@ Functions:
 """
 
 import logging
-from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from autobot_shared.time_utils import utc_timestamp
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 
@@ -46,7 +46,7 @@ def create_success_response(
         "success": True,
         "data": data,
         "message": message,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_timestamp(),
     }
 
 
@@ -86,7 +86,7 @@ def create_error_response(
     error_content = {
         "code": error_code,
         "message": message,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_timestamp(),
     }
 
     # Include request_id if provided

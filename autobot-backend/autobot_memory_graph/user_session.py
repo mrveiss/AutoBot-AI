@@ -15,8 +15,9 @@ Secret management is in secrets.py module.
 """
 
 import logging
-from datetime import datetime
 from typing import Any, Dict, List, Optional
+
+from autobot_shared.time_utils import utc_timestamp
 
 from .core import VALID_ACTIVITY_TYPES, AutoBotMemoryGraphCore
 
@@ -49,7 +50,7 @@ class UserSessionMixin:
                 "user_id": user_id,
                 "username": username,
                 "status": "active",
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": utc_timestamp(),
             }
         )
         return user_metadata
@@ -101,7 +102,7 @@ class UserSessionMixin:
                 "mode": "collaborative" if collaborators else "single_user",
                 "collaborators": collaborators or [],
                 "status": "active",
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": utc_timestamp(),
             }
         )
         return session_metadata
@@ -209,7 +210,7 @@ class UserSessionMixin:
                 "session_id": session_id,
                 "user_id": user_id,
                 "secrets_used": secrets_used or [],
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
             }
         )
         return activity_metadata

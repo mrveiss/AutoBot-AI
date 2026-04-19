@@ -70,9 +70,9 @@ return error_response(
 )
 """
 
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.time_utils import utc_timestamp
 from fastapi import HTTPException, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -93,7 +93,7 @@ class StandardResponse(BaseModel):
     message: Optional[str] = Field(None, description="Human-readable message")
     data: Optional[Any] = Field(None, description="Response data payload")
     timestamp: str = Field(
-        default_factory=lambda: datetime.utcnow().isoformat(),
+        default_factory=utc_timestamp,
         description="Response timestamp (ISO 8601)",
     )
 
@@ -120,7 +120,7 @@ class ErrorResponse(BaseModel):
     error_code: Optional[str] = Field(None, description="Machine-readable error code")
     details: Optional[Dict[str, Any]] = Field(None, description="Additional error details")
     timestamp: str = Field(
-        default_factory=lambda: datetime.utcnow().isoformat(),
+        default_factory=utc_timestamp,
         description="Error timestamp (ISO 8601)",
     )
 
@@ -159,7 +159,7 @@ class PaginatedResponse(BaseModel):
         },
     )
     timestamp: str = Field(
-        default_factory=lambda: datetime.utcnow().isoformat(),
+        default_factory=utc_timestamp,
         description="Response timestamp",
     )
 
@@ -205,7 +205,7 @@ def success_response(
     """
     response_data = {
         "success": True,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_timestamp(),
     }
 
     if message is not None:
@@ -275,7 +275,7 @@ def paginated_response(
         "success": True,
         "data": items,
         "pagination": _build_pagination_metadata(page, page_size, total),
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_timestamp(),
     }
 
     if message:
@@ -331,7 +331,7 @@ def error_response(
     response_data = {
         "success": False,
         "error": message,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_timestamp(),
     }
 
     if error_code:

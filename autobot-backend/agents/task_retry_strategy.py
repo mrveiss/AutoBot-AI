@@ -11,8 +11,9 @@ using LLM to adapt strategy on retry.
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Any, List
+
+from autobot_shared.time_utils import utc_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ class RetryApproach:
     tool_sequence: List[str] = field(default_factory=list)
     rationale: str = ""
     confidence: float = 0.5
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=utc_timestamp)
 
 
 class TaskRetryStrategy:
