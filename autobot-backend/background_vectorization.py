@@ -87,7 +87,7 @@ class BackgroundVectorizer:
 
     async def _get_vectorization_status(self, kb, batch: list) -> list:
         """Get vectorization status for a batch (Issue #336 - extracted helper)."""
-        async with kb.aioredis_client.pipeline() as pipe:
+        async with kb.redis().pipeline() as pipe:
             for fact_key in batch:
                 await pipe.hget(fact_key, "vectorization_status")
             return await pipe.execute()
@@ -109,7 +109,7 @@ class BackgroundVectorizer:
         """Batch fetch fact data (Issue #336 - extracted helper)."""
         if not facts_to_process:
             return []
-        async with kb.aioredis_client.pipeline() as pipe:
+        async with kb.redis().pipeline() as pipe:
             for fact_key in facts_to_process:
                 await pipe.hgetall(fact_key)
             return await pipe.execute()
@@ -127,7 +127,7 @@ class BackgroundVectorizer:
     async def _mark_vectorization_complete(self, kb, fact_key: str) -> None:
         """Mark fact as vectorized (Issue #336 - extracted helper)."""
         try:
-            await kb.aioredis_client.hset(
+            await kb.redis().hset(
                 fact_key,
                 mapping={
                     "vectorization_status": "completed",

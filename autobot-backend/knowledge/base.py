@@ -533,6 +533,21 @@ class KnowledgeBaseCore:
                 "or get instance via get_knowledge_base() factory function."
             )
 
+    def redis(self) -> aioredis.Redis:
+        """Return the async Redis client configured for knowledge-base persistence.
+
+        Public accessor for cross-module callers so they don't have to reach
+        into the private ``aioredis_client`` attribute (#5184).
+
+        Raises:
+            RuntimeError: If called before ``initialize()`` completed.
+        """
+        if self.aioredis_client is None:
+            raise RuntimeError(
+                "KnowledgeBase.redis() called before initialize() completed"
+            )
+        return self.aioredis_client
+
     async def ping_redis(self) -> str:
         """Test Redis connection"""
         self.ensure_initialized()

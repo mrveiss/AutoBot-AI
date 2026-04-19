@@ -90,7 +90,7 @@ async def _get_redis(req: Request):
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None or kb.aioredis_client is None:
         raise HTTPException(status_code=503, detail="Knowledge base not available")
-    return kb.aioredis_client
+    return kb.redis()
 
 
 @with_error_handling(
