@@ -174,7 +174,7 @@ describe('KnowledgeRepository connector endpoints (#5200)', () => {
 
       expect(result).toEqual({
         success: true,
-        message: 'Connection healthy'
+        message: 'Connection OK'
       })
       expect(postSpy).toHaveBeenCalledWith(
         '/api/knowledge_base/connectors/id-1/test'

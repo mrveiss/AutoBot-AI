@@ -132,9 +132,15 @@ export class SystemRepository extends ApiRepository {
   }
 
   async getTerminalHistory(): Promise<CommandExecutionResponse[]> {
-    // Issue #552: Backend uses /api/agent-terminal/sessions for history
-    const response = await this.get(`${getApiBase()}/agent-terminal/sessions`)
-    return response.data as CommandExecutionResponse[]
+    // Issue #552: Backend uses /api/agent-terminal/sessions for history.
+    // Backend returns `{status, total, sessions}`; we extract `.sessions` so
+    // callers get a flat array matching the declared return type. (#5207 audit)
+    const response = await this.get<{
+      status?: string
+      total?: number
+      sessions?: CommandExecutionResponse[]
+    }>(`${getApiBase()}/agent-terminal/sessions`)
+    return response.data?.sessions ?? []
   }
 
   async clearTerminalHistory(): Promise<any> {
@@ -188,8 +194,17 @@ export class SystemRepository extends ApiRepository {
     if (level) params.append('level', level)
     if (limit) params.append('limit', limit.toString())
 
-    const response = await this.get(`${getApiBase()}/logs/recent?${params}`)
-    return response.data as any[]
+    // Backend returns `{entries, count, limit, source}`; we extract `.entries`
+    // so callers get a flat array matching the declared return type.
+    // Previously cast the whole envelope to `any[]`, so `.map()`/`.filter()`
+    // at call sites failed silently. (#5207 audit)
+    const response = await this.get<{
+      entries?: any[]
+      count?: number
+      limit?: number
+      source?: string
+    }>(`${getApiBase()}/logs/recent?${params}`)
+    return response.data?.entries ?? []
   }
 
   async clearLogs(): Promise<any> {

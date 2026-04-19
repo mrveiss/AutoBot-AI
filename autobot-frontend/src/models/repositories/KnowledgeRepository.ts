@@ -463,17 +463,36 @@ export class KnowledgeRepository extends ApiRepository {
   // ==========================================================================
 
   /**
-   * Get paginated list of sources pending verification
+   * Get paginated list of sources pending verification.
+   *
+   * Backend (api/knowledge_verification.py) returns
+   * `{status, pending, total, limit, offset, has_more}` — the array field is
+   * `pending` (not `sources`) and pagination is `offset`-based (not `page`).
+   * Unpacked here into the caller-friendly `{sources, total, page}` shape
+   * to preserve the existing component/store API. (#5207 audit)
    */
   async getPendingVerifications(
     page = 1,
     pageSize = 20
   ): Promise<{ sources: PendingSource[]; total: number; page: number }> {
-    const response = await this.get(
-      `${getApiBase()}/knowledge_base/verification/pending?page=${page}&page_size=${pageSize}`,
+    const offset = Math.max(0, (page - 1) * pageSize)
+    const response = await this.get<{
+      status?: string
+      pending?: PendingSource[]
+      total?: number
+      limit?: number
+      offset?: number
+      has_more?: boolean
+    }>(
+      `${getApiBase()}/knowledge_base/verification/pending?limit=${pageSize}&offset=${offset}`,
       { skipCache: true }
     )
-    return response.data as { sources: PendingSource[]; total: number; page: number }
+    const raw = response.data ?? {}
+    return {
+      sources: raw.pending ?? [],
+      total: raw.total ?? 0,
+      page
+    }
   }
 
   /**
@@ -506,14 +525,20 @@ export class KnowledgeRepository extends ApiRepository {
   }
 
   /**
-   * Get current verification configuration
+   * Get current verification configuration.
+   *
+   * Backend returns `{status, config}`; we extract `.config` so callers get a
+   * flat `VerificationConfig` matching the declared return type. (#5207 audit)
    */
   async getVerificationConfig(): Promise<VerificationConfig> {
-    const response = await this.get(
+    const response = await this.get<{
+      status?: string
+      config: VerificationConfig
+    }>(
       `${getApiBase()}/knowledge_base/verification/config`,
       { skipCache: true }
     )
-    return response.data as VerificationConfig
+    return response.data.config
   }
 
   /**
@@ -620,56 +645,81 @@ export class KnowledgeRepository extends ApiRepository {
   /**
    * Test a connector's connection.
    *
-   * Backend returns `{connector_id, healthy}`; we translate the boolean
-   * into the `{success, message}` shape callers expect (#5203).
+   * Backend returns `{connector_id, healthy}`; we normalise into the
+   * `{success, message}` shape the UI expects. Message is synthesised from
+   * `healthy` because the backend does not currently expose a diagnostic
+   * string. (#5203, #5207 audit)
    */
   async testConnector(
     id: string
   ): Promise<{ success: boolean; message: string }> {
-    const response = await this.post<{ connector_id: string; healthy: boolean }>(
+    const response = await this.post<{
+      connector_id?: string
+      healthy?: boolean
+    }>(
       `${getApiBase()}/knowledge_base/connectors/${encodeURIComponent(id)}/test`
     )
-    const healthy = response.data.healthy
+    const healthy = response.data?.healthy === true
     return {
       success: healthy,
-      message: healthy ? 'Connection healthy' : 'Connection failed',
+      message: healthy ? 'Connection OK' : 'Connection failed',
     }
   }
 
   /**
    * Trigger a sync for a connector.
    *
-   * Sync runs as a background task on the backend; the response only
-   * acknowledges the enqueue (`{connector_id, status: 'sync_started',
-   * incremental}`). Actual counts arrive later via
-   * {@link getConnectorHistory} (#5204).
+   * The POST endpoint only _starts_ a background sync and returns
+   * `{connector_id, status: "sync_started", incremental}` — it does NOT
+   * return a completed `SyncResult`. Callers that want the actual result
+   * must poll `getConnectorHistory(id)` after sync completes.
+   *
+   * Previously declared `Promise<SyncResult>` which made callers read
+   * `.added/.updated/.deleted` that never existed. (#5204, #5207 audit)
    */
   async syncConnector(
     id: string,
     incremental = true
-  ): Promise<{ connector_id: string; status: string; incremental: boolean }> {
+  ): Promise<{
+    connector_id: string
+    status: string
+    incremental: boolean
+  }> {
     const response = await this.post<{
-      connector_id: string
-      status: string
-      incremental: boolean
+      connector_id?: string
+      status?: string
+      incremental?: boolean
     }>(
       `${getApiBase()}/knowledge_base/connectors/${encodeURIComponent(id)}/sync?incremental=${incremental}`
     )
-    return response.data
+    return {
+      connector_id: response.data?.connector_id ?? id,
+      status: response.data?.status ?? 'unknown',
+      incremental: response.data?.incremental ?? incremental
+    }
   }
 
   /**
-   * Get sync history for a connector
+   * Get sync history for a connector.
+   *
+   * Backend returns `{connector_id, history, total}`; we extract `.history`
+   * so callers get a flat `SyncResult[]` matching the declared return type.
+   * Previously cast the whole envelope to `SyncResult[]`, which silently
+   * became a non-iterable object. (#5207 audit)
    */
   async getConnectorHistory(
     id: string,
     limit = 20
   ): Promise<SyncResult[]> {
-    const response = await this.get(
+    const response = await this.get<{
+      connector_id?: string
+      history?: SyncResult[]
+      total?: number
+    }>(
       `${getApiBase()}/knowledge_base/connectors/${encodeURIComponent(id)}/history?limit=${limit}`,
       { skipCache: true }
     )
-    return response.data as SyncResult[]
+    return response.data?.history ?? []
   }
 
 
