@@ -77,6 +77,9 @@ def _make_app(fake_redis: _FakeRedis) -> FastAPI:
     class _FakeKB:
         aioredis_client = fake_redis
 
+        def redis(self):
+            return self.aioredis_client
+
     async def _fake_get_kb(app, force_refresh=False):  # noqa: ANN001
         return _FakeKB()
 
