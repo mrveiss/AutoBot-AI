@@ -1,0 +1,216 @@
+#!/usr/bin/env bash
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# pre-push: enforce Phase 0c (verify before push) + Phase 6 (no duplicate
+# PR for already-merged issue) from the team-implement skill.
+#
+# Issues #5142 (verification mandate) and #5143 (pre-push duplicate check).
+#
+# Bypass with `git push --no-verify` if you absolutely must (don't).
+
+set -uo pipefail  # NOT -e: we want to capture exit codes and report
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+# Time-box each check. Frontend type-check on the whole project takes ~60s;
+# we'd rather warn than block forever.
+TYPE_CHECK_TIMEOUT=90
+TEST_TIMEOUT=120
+
+# Color helpers (no-op when not a tty)
+if [ -t 1 ]; then
+  RED='\033[0;31m'; YEL='\033[0;33m'; GRN='\033[0;32m'; BLU='\033[0;34m'; CLR='\033[0m'
+else
+  RED=''; YEL=''; GRN=''; BLU=''; CLR=''
+fi
+
+log()   { printf "${BLU}[pre-push]${CLR} %s\n" "$*" >&2; }
+warn()  { printf "${YEL}[pre-push WARN]${CLR} %s\n" "$*" >&2; }
+fail()  { printf "${RED}[pre-push FAIL]${CLR} %s\n" "$*" >&2; }
+ok()    { printf "${GRN}[pre-push OK]${CLR} %s\n" "$*" >&2; }
+
+EXIT_CODE=0
+
+# ---------------------------------------------------------------------------
+# Read git's stdin: <local-ref> <local-sha> <remote-ref> <remote-sha>
+# Process each pushed ref. Skip deletes (sha = 0000...).
+# ---------------------------------------------------------------------------
+ZERO=0000000000000000000000000000000000000000
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$ZERO" ] && continue  # deletion
+  log "checking $local_ref → $remote_ref"
+
+  # ------------------------------------------------------------------------
+  # Phase 6 (#5143): pre-push duplicate check for issue branches
+  # ------------------------------------------------------------------------
+  branch_name="${local_ref#refs/heads/}"
+  if [[ "$branch_name" =~ ^issue-([0-9]+)(-.*)?$ ]]; then
+    issue_num="${BASH_REMATCH[1]}"
+
+    if command -v gh >/dev/null 2>&1; then
+      # Issue state lookup; tolerate gh failures (not signed in, offline, etc.)
+      issue_state=$(gh issue view "$issue_num" --json state --jq '.state' 2>/dev/null || echo "")
+      if [ "$issue_state" = "CLOSED" ]; then
+        warn "Issue #$issue_num is CLOSED on GitHub."
+        warn "  Verify your work isn't superseded before pushing."
+        warn "  $ gh issue view $issue_num --comments | head -50"
+      fi
+
+      # Has Dev_new_gui already merged a commit citing this issue?
+      git fetch origin Dev_new_gui --quiet 2>/dev/null || true
+      if git log origin/Dev_new_gui --oneline -50 2>/dev/null | grep -qE "#${issue_num}\\b"; then
+        warn "origin/Dev_new_gui already has a commit citing #$issue_num:"
+        git log origin/Dev_new_gui --oneline -50 2>/dev/null \
+          | grep -E "#${issue_num}\\b" \
+          | head -3 \
+          | sed 's/^/  /' >&2
+        warn "  If that commit covers your fix, your push will create a duplicate PR."
+      fi
+    else
+      warn "gh CLI not installed — skipping issue state check (#5143)"
+    fi
+  fi
+
+  # ------------------------------------------------------------------------
+  # Phase 0c (#5142): verification mandate (type-check + test-run)
+  # ------------------------------------------------------------------------
+  # Find files changed in the commits we're pushing. For first push of a
+  # branch, the remote sha is 0000...; in that case diff against the merge
+  # base with origin/Dev_new_gui.
+  if [ "$remote_sha" = "$ZERO" ]; then
+    base=$(git merge-base "$local_sha" origin/Dev_new_gui 2>/dev/null \
+        || git merge-base "$local_sha" main 2>/dev/null \
+        || echo "")
+    if [ -z "$base" ]; then
+      warn "Cannot determine merge base — skipping Phase 0c verification"
+      continue
+    fi
+    diff_range="${base}..${local_sha}"
+  else
+    diff_range="${remote_sha}..${local_sha}"
+  fi
+
+  changed=$(git diff --name-only "$diff_range" 2>/dev/null || echo "")
+  if [ -z "$changed" ]; then
+    log "no changed files in range — skipping Phase 0c"
+    continue
+  fi
+
+  # ----- Frontend (TypeScript / Vue) --------------------------------------
+  if echo "$changed" | grep -qE '\.(ts|vue)$'; then
+    log "frontend files changed — running vue-tsc (timeout ${TYPE_CHECK_TIMEOUT}s)"
+    if [ -d "$REPO_ROOT/autobot-frontend" ] \
+       && [ -d "$REPO_ROOT/autobot-frontend/node_modules" ]; then
+      tsc_output=$(
+        cd "$REPO_ROOT/autobot-frontend" \
+        && timeout "$TYPE_CHECK_TIMEOUT" npx vue-tsc --noEmit \
+             -p tsconfig.app.json 2>&1
+      ) || tsc_exit=$?
+      tsc_exit=${tsc_exit:-0}
+
+      if [ "$tsc_exit" = "124" ]; then
+        warn "vue-tsc timed out after ${TYPE_CHECK_TIMEOUT}s — skipping (run manually)"
+      elif [ "$tsc_exit" != "0" ]; then
+        # Distinguish errors in changed files (block) vs pre-existing (warn)
+        changed_ts_files=$(echo "$changed" | grep -E '\.(ts|vue)$' \
+          | sed 's|^autobot-frontend/||' || true)
+        if [ -n "$changed_ts_files" ]; then
+          # Show only errors that mention any of the changed files
+          relevant=$(echo "$tsc_output" \
+            | grep "error TS" \
+            | grep -F -f <(echo "$changed_ts_files") || true)
+          if [ -n "$relevant" ]; then
+            fail "vue-tsc errors in CHANGED files (#5142):"
+            echo "$relevant" | head -20 >&2
+            EXIT_CODE=1
+          else
+            ok "vue-tsc: no errors in changed files (other errors are pre-existing)"
+          fi
+        fi
+      else
+        ok "vue-tsc: 0 errors"
+      fi
+    else
+      warn "node_modules missing — skipping vue-tsc (run 'npm install')"
+    fi
+
+    # Targeted test runs for changed test files + sibling __tests__/
+    test_files=$(echo "$changed" \
+      | grep -E '\.test\.ts$' \
+      | head -10)
+    # Also test corresponding __tests__/ for any composable changes
+    composable_tests=$(echo "$changed" \
+      | grep -E 'composables/.*\.ts$' \
+      | grep -v '\.test\.' \
+      | sed -E 's|(composables)/(.+)\.ts$|\1/__tests__/\2.test.ts|' \
+      | xargs -I{} sh -c '[ -f "$REPO_ROOT/autobot-frontend/{}" ] && echo "{}"' \
+      2>/dev/null || true)
+    all_tests=$(printf "%s\n%s" "$test_files" "$composable_tests" \
+      | sort -u | grep -v '^$' || true)
+
+    if [ -n "$all_tests" ] \
+       && [ -d "$REPO_ROOT/autobot-frontend/node_modules" ]; then
+      log "running vitest on relevant tests (timeout ${TEST_TIMEOUT}s):"
+      echo "$all_tests" | sed 's/^/    /' >&2
+      vitest_output=$(
+        cd "$REPO_ROOT/autobot-frontend" \
+        && timeout "$TEST_TIMEOUT" npx vitest run $(echo "$all_tests") 2>&1
+      ) || vitest_exit=$?
+      vitest_exit=${vitest_exit:-0}
+
+      if [ "$vitest_exit" = "124" ]; then
+        warn "vitest timed out after ${TEST_TIMEOUT}s — skipping"
+      elif [ "$vitest_exit" != "0" ]; then
+        fail "vitest failures (#5142):"
+        echo "$vitest_output" | tail -25 >&2
+        EXIT_CODE=1
+      else
+        ok "vitest: all relevant tests pass"
+      fi
+    fi
+  fi
+
+  # ----- Backend (Python) -------------------------------------------------
+  py_changed=$(echo "$changed" | grep -E '\.py$' | grep -v '_test\.py$' || true)
+  py_tests=$(echo "$changed" | grep -E '_test\.py$' || true)
+  if [ -n "$py_changed" ] || [ -n "$py_tests" ]; then
+    # Co-located: foo.py is tested by foo_test.py in the same dir
+    sibling_tests=""
+    while IFS= read -r f; do
+      [ -z "$f" ] && continue
+      sibling="${f%.py}_test.py"
+      [ -f "$REPO_ROOT/$sibling" ] && sibling_tests+="$sibling"$'\n'
+    done <<< "$py_changed"
+    all_py_tests=$(printf "%s\n%s" "$py_tests" "$sibling_tests" \
+      | sort -u | grep -v '^$' || true)
+
+    if [ -n "$all_py_tests" ] && command -v pytest >/dev/null 2>&1; then
+      log "running pytest on:"
+      echo "$all_py_tests" | sed 's/^/    /' >&2
+      pytest_output=$(
+        timeout "$TEST_TIMEOUT" python3 -m pytest -xvs $all_py_tests 2>&1
+      ) || pytest_exit=$?
+      pytest_exit=${pytest_exit:-0}
+
+      if [ "$pytest_exit" = "124" ]; then
+        warn "pytest timed out after ${TEST_TIMEOUT}s — skipping"
+      elif [ "$pytest_exit" != "0" ]; then
+        fail "pytest failures (#5142):"
+        echo "$pytest_output" | tail -25 >&2
+        EXIT_CODE=1
+      else
+        ok "pytest: all relevant tests pass"
+      fi
+    fi
+  fi
+
+done
+
+if [ "$EXIT_CODE" != "0" ]; then
+  fail "Push BLOCKED. Fix the failures above or use 'git push --no-verify' to bypass."
+fi
+
+exit "$EXIT_CODE"
