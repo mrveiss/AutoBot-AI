@@ -11,9 +11,7 @@
  * @module apiErrorHandler
  */
 
-import { ref, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
-import { useUnifiedLoading } from '@/composables/useUnifiedLoading'
 
 // Create scoped logger for apiErrorHandler
 const logger = createLogger('apiErrorHandler')
@@ -270,56 +268,6 @@ export async function handleApiCall<T>(
 
   // Should not reach here, but return error just in case
   return { success: false, error: lastError || parseError(new Error('Unknown error')) }
-}
-
-/**
- * Create a composable that wraps API calls with loading state
- *
- * Loading-state tracking is delegated to the canonical `useUnifiedLoading`
- * composable. The structured `ApiError` shape is preserved — callers of
- * `useApiRequest` see the same `{ loading, error, execute }` surface, with
- * `error` typed as `ApiError | null` (not a plain string).
- *
- * @param componentKey Optional key for scoping the shared loading state
- *                     registry; defaults to a unique per-instance key.
- * @returns API call wrapper with built-in loading state
- *
- * @example
- * ```typescript
- * const { loading, error, execute } = useApiRequest('UserList')
- *
- * const result = await execute(
- *   () => apiClient.get('/api/users'),
- *   { componentName: 'UserList' }
- * )
- * ```
- */
-export function useApiRequest<T = unknown>(componentKey?: string) {
-  const unified = useUnifiedLoading(componentKey)
-  const error: Ref<ApiError | null> = ref(null)
-
-  async function execute(
-    apiCall: () => Promise<T>,
-    options: ErrorHandlerOptions = {}
-  ): Promise<ApiResult<T>> {
-    error.value = null
-    unified.setLoading(true)
-
-    const result = await handleApiCall(apiCall, options)
-
-    if (!result.success && result.error) {
-      error.value = result.error
-    }
-
-    unified.setLoading(false)
-    return result
-  }
-
-  return {
-    loading: unified.isLoading,
-    error,
-    execute
-  }
 }
 
 // Export default options for customization
