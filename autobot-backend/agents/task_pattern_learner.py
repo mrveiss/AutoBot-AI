@@ -11,8 +11,9 @@ Persists learned patterns to Redis for orchestrator routing decisions.
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Any, Dict, List, Optional
+
+from autobot_shared.time_utils import utc_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ class LearnedStrategy:
     sample_size: int
     confidence: float
     failure_patterns: List[str] = field(default_factory=list)
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=utc_timestamp)
 
 
 class TaskPatternLearner:

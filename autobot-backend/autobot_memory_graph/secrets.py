@@ -13,8 +13,9 @@ Part of the modular autobot_memory_graph package (Issue #716).
 """
 
 import logging
-from datetime import datetime
 from typing import Any, Dict, List, Optional
+
+from autobot_shared.time_utils import utc_timestamp
 
 from .core import AutoBotMemoryGraphCore
 
@@ -122,7 +123,7 @@ class SecretManagementMixin:
                 "session_id": session_id,
                 "shared_with": shared_with or [],
                 "usage_count": 0,
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": utc_timestamp(),
             }
         )
         return secret_metadata
@@ -207,7 +208,7 @@ class SecretManagementMixin:
                 "user_id": user_id,
                 "activity_type": activity_type,
                 "activity_id": activity_id,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
             }
 
             entity = await self.create_entity(

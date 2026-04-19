@@ -11,9 +11,9 @@ and efficiency. Stores outcomes in Redis for pattern learning.
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Any, Dict, List
 
+from autobot_shared.time_utils import utc_timestamp
 from judges import BaseLLMJudge, JudgmentDimension, JudgmentResult
 
 logger = logging.getLogger(__name__)
@@ -34,7 +34,7 @@ class TaskOutcomeRecord:
     strategy_used: str
     score: float
     rationale: str
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=utc_timestamp)
 
 
 class TaskOutcomeJudge(BaseLLMJudge):
