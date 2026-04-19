@@ -175,7 +175,6 @@ import { useI18n } from 'vue-i18n'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import ApiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
-import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -318,8 +317,7 @@ const populateSystemCommands = async () => {
     startProgress(t('knowledge.advanced.progressPopulatingSystemCommands'), 150)
     progressDetails.value = t('knowledge.advanced.progressAddingCommands')
 
-    const apiResponse = await ApiClient.post(`${getApiBase()}/knowledge_base/populate_system_commands`, {})
-    const response = await parseApiResponse<Record<string, any>>(apiResponse)
+    const response = await ApiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/populate_system_commands`, {})
 
     if (response.status === 'success') {
       populateStatus.value.systemCommands = 'success'
@@ -357,8 +355,7 @@ const populateManPages = async () => {
     startProgress(t('knowledge.advanced.progressPopulatingManPages'), 50)
     progressDetails.value = t('knowledge.advanced.progressAddingManPages')
 
-    const apiResponse = await ApiClient.post(`${getApiBase()}/knowledge_base/populate_man_pages`, {})
-    const response = await parseApiResponse<Record<string, any>>(apiResponse)
+    const response = await ApiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/populate_man_pages`, {})
 
     if (response.status === 'success') {
       populateStatus.value.manPages = 'success'
@@ -396,8 +393,7 @@ const populateAutoBotDocs = async () => {
     startProgress(t('knowledge.advanced.progressPopulatingAutobotDocs'), 30)
     progressDetails.value = t('knowledge.advanced.progressAddingAutobotDocs')
 
-    const apiResponse = await ApiClient.post(`${getApiBase()}/knowledge_base/populate_autobot_docs`, {})
-    const response = await parseApiResponse<Record<string, any>>(apiResponse)
+    const response = await ApiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/populate_autobot_docs`, {})
 
     if (response.status === 'success') {
       populateStatus.value.autobotDocs = 'success'
@@ -450,8 +446,7 @@ const clearAllKnowledge = async () => {
     startProgress(t('knowledge.advanced.progressClearingKB'), 1)
     progressDetails.value = t('knowledge.advanced.progressRemovingEntries')
 
-    const apiResponse = await ApiClient.post(`${getApiBase()}/knowledge_base/clear_all`, {})
-    const response = await parseApiResponse<Record<string, any>>(apiResponse)
+    const response = await ApiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/clear_all`, {})
 
     if (response.status === 'success') {
       addStatusMessage('success', t('knowledge.advanced.clearSuccess'),

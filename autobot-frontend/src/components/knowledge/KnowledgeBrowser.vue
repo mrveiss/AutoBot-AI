@@ -193,7 +193,6 @@ import { createLogger } from '@/utils/debugUtils'
 
 // Create scoped logger for KnowledgeBrowser
 const logger = createLogger('KnowledgeBrowser')
-import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
 import { useKnowledgeVectorization } from '@/composables/useKnowledgeVectorization'
 import { useAsyncOperation } from '@/composables/useAsyncOperation'
@@ -307,8 +306,7 @@ const fetchEntries = async (cursor: string) => {
     limit: '100',
     cursor: cursor || '0'
   })
-  const response = await apiClient.get(`${getApiBase()}/knowledge_base/entries?${params}`)
-  const data = await parseApiResponse<Record<string, any>>(response)
+  const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/entries?${params}`)
 
   // Handle both cursor-based and offset-based formats
   if (data.next_cursor !== undefined) {
@@ -569,8 +567,7 @@ const selectMainCategory = (mainCatId: string) => {
 
 const loadMainCategories = async () => {
   try {
-    const response = await apiClient.get(`${getApiBase()}/knowledge_base/categories/main`)
-    const data = await parseApiResponse<Record<string, any>>(response)
+    const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/categories/main`)
 
     if (data && data.categories) {
       mainCategories.value = data.categories
@@ -654,8 +651,7 @@ const refreshVectorizationStatus = async () => {
 // Load main knowledge tree with useAsyncOperation wrapper
 const loadKnowledgeTreeFn = async () => {
   // Load facts from knowledge base by category
-  const response = await apiClient.get(`${getApiBase()}/knowledge_base/facts/by_category`)
-  const data = await parseApiResponse<Record<string, any>>(response)
+  const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/facts/by_category`)
 
   if (data && data.categories) {
     // Build tree structure from categories
@@ -934,12 +930,11 @@ const handleImport = () => {
 const loadFolderContents = async (folder: TreeNode) => {
   try {
     // Load files for this category
-    const response = await apiClient.post(`${getApiBase()}/knowledge_base/search`, {
+    const data = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/search`, {
       query: '',
       category: folder.category,
       n_results: 100
     })
-    const data = await parseApiResponse<Record<string, any>>(response)
 
     if (data.results && Array.isArray(data.results)) {
       folder.children = data.results.map((item: any, idx: number) => ({
@@ -973,8 +968,7 @@ const loadFileContent = async (file: TreeNode) => {
 
       if (factKey) {
         // Fetch full fact data from backend
-        const apiResponse = await apiClient.get(`${getApiBase()}/knowledge_base/fact/${factKey}`)
-        const response = await parseApiResponse<Record<string, any>>(apiResponse)
+        const response = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/fact/${factKey}`)
 
         if (response && response.content) {
           fileContent.value = response.content
