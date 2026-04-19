@@ -619,8 +619,28 @@ async function loadCytoscapeLibrary() {
   }
 }
 
+/**
+ * Load the library (idempotent) AND perform the matching init for the
+ * current view mode. Consolidates the three places that previously repeated
+ * `await loadCytoscapeLibrary(); if (error) return; initCytoscape(); update()`.
+ * Exposed so the error-state Retry button (#5173) re-runs BOTH the library
+ * load and the init — previously the retry only re-loaded, leaving the
+ * graph container empty on success.
+ */
+async function initAfterLoad() {
+  await loadCytoscapeLibrary()
+  if (cytoscapeError.value) return
+  if (viewMode.value === 'network' && cytoscapeContainer.value && !cy) {
+    initCytoscape()
+    updateCytoscapeElements()
+  } else if (viewMode.value === 'stats' && clusterContainer.value && !clusterCy) {
+    initClusterCytoscape()
+    updateClusterElements()
+  }
+}
+
 function retryCytoscape() {
-  loadCytoscapeLibrary()
+  initAfterLoad()
 }
 
 // ============================================================================
@@ -1299,10 +1319,7 @@ function truncateFunc(funcId: string): string {
 onMounted(async () => {
   await nextTick()
   if (cytoscapeContainer.value && props.data?.nodes?.length) {
-    await loadCytoscapeLibrary()
-    if (cytoscapeError.value) return
-    initCytoscape()
-    updateCytoscapeElements()
+    await initAfterLoad()
   }
 })
 
@@ -1322,11 +1339,10 @@ watch(() => props.data, async (newData) => {
   if (newData?.nodes?.length) {
     await nextTick()
     if (!cy && cytoscapeContainer.value) {
-      await loadCytoscapeLibrary()
-      if (cytoscapeError.value) return
-      initCytoscape()
+      await initAfterLoad()
+    } else {
+      updateCytoscapeElements()
     }
-    updateCytoscapeElements()
 
     // Auto-expand top functions in list view
     const sorted = [...newData.nodes].sort((a, b) => {
@@ -1347,19 +1363,16 @@ watch(viewMode, async (newMode) => {
   if (newMode === 'network') {
     await nextTick()
     if (!cy && cytoscapeContainer.value) {
-      await loadCytoscapeLibrary()
-      if (cytoscapeError.value) return
-      initCytoscape()
-      updateCytoscapeElements()
+      await initAfterLoad()
     }
   } else if (newMode === 'stats') {
     await nextTick()
     if (!clusterCy && clusterContainer.value) {
-      await loadCytoscapeLibrary()
-      if (cytoscapeError.value) return
-      initClusterCytoscape()
+      await initAfterLoad()
+    } else {
+      // clusterCy already built — just push current data into it.
+      updateClusterElements()
     }
-    updateClusterElements()
   }
 })
 </script>

@@ -462,8 +462,25 @@ async function loadCytoscapeLibrary() {
   }
 }
 
+/**
+ * Load the library (idempotent) AND perform network-view init if needed.
+ * Consolidates the `loadCytoscapeLibrary(); initCytoscape(); updateCytoscapeElements()`
+ * sequence and fixes the Retry button (#5173): previously `retryCytoscape`
+ * only re-loaded the library but never re-ran init, leaving the container
+ * empty after a successful retry.
+ */
+async function initAfterLoad() {
+  await loadCytoscapeLibrary()
+  if (cytoscapeError.value) return
+  await nextTick()
+  if (viewMode.value === 'network' && !cy && cytoscapeContainer.value) {
+    initCytoscape()
+    updateCytoscapeElements()
+  }
+}
+
 function retryCytoscape() {
-  loadCytoscapeLibrary()
+  initAfterLoad()
 }
 
 // ============================================================================
@@ -784,10 +801,7 @@ function clearHighlight() {
 // Watch for view mode changes to lazy-load Cytoscape
 watch(() => viewMode.value, async (newMode) => {
   if (newMode === 'network' && !cy && !cytoscapeLoading.value) {
-    await loadCytoscapeLibrary()
-    await nextTick()
-    initCytoscape()
-    updateCytoscapeElements()
+    await initAfterLoad()
   }
 })
 
