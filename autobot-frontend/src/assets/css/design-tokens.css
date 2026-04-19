@@ -259,13 +259,12 @@
   --spacing-24: 6rem;
   --spacing-32: 8rem;
 
-  /* Sub-half-unit micro spacing — used in dense UI (badges, chips, voice controls) */
-  --spacing-micro-1: 0.1rem;   /* ~1.6px */
-  --spacing-micro-2: 0.15rem;  /* ~2.4px */
+  /* Sub-half-unit micro spacing — used in dense UI (badges, chips, voice controls).
+   * Unused (micro-1, micro-2, micro-6) removed in #5036 audit.
+   * Remaining values are rem-based, so they scale with user font size. */
   --spacing-micro-3: 0.2rem;   /* ~3.2px */
   --spacing-micro-4: 0.3rem;   /* ~4.8px */
   --spacing-micro-5: 0.4rem;   /* ~6.4px */
-  --spacing-micro-6: 0.45rem;  /* ~7.2px */
 
   /* Semantic accessibility tokens */
   --touch-target-min: 44px; /* WCAG 2.5.8 minimum touch target size */
