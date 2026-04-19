@@ -7,41 +7,37 @@
  *
  * API endpoint coverage scanning and endpoint group management.
  * Extracted from useSpecializedAnalysis (Issue #2372).
+ * Migrated from useAnalyticsFetch + hand-rolled fetchWithAuth to a
+ * single useFetchEndpoint instance (Issue #5208).
  */
 
-import { reactive, ref } from 'vue'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import appConfig from '@/config/AppConfig.js'
-import { useAnalyticsFetch } from '@/composables/useAnalyticsFetch'
-import { createLogger } from '@/utils/debugUtils'
+import { reactive } from 'vue'
+import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
+import { runTimed } from '@/composables/api/useTimedNotify'
 import type {
   UseCodeIntelAnalysisDeps,
   ApiEndpointAnalysisResult,
 } from './codeIntelTypes'
-import { getApiBase } from '@/config/ssot-config'
 
-const logger = createLogger('useApiEndpointAnalysis')
+interface EndpointAnalysisRaw {
+  status: string
+  analysis?: ApiEndpointAnalysisResult
+}
 
-export function useApiEndpointAnalysis(
-  deps: UseCodeIntelAnalysisDeps,
-) {
-  const { sourceIdQuery, withSourceId, t, notify } = deps
+export function useApiEndpointAnalysis(deps: UseCodeIntelAnalysisDeps) {
+  const { withSourceId, t, notify } = deps
 
-  const coverageError = ref<string>('')
-
-  const {
-    data: apiEndpointAnalysis,
-    loading: loadingApiEndpoints,
-    error: apiEndpointsError,
-    load: _loadApiEndpoints,
-  } = useAnalyticsFetch<ApiEndpointAnalysisResult>(
-    `${getApiBase()}/analytics/codebase/endpoint-analysis`,
-    (r) => {
-      if (r.status === 'success' && r.analysis) {
-        return r.analysis as unknown as ApiEndpointAnalysisResult
-      }
-      return undefined
+  const endpoint = useFetchEndpoint<
+    EndpointAnalysisRaw,
+    ApiEndpointAnalysisResult
+  >(
+    {
+      path: '/api/analytics/codebase/endpoint-analysis',
+      scopeToSource: true,
+      pickData: (r) =>
+        r.status === 'success' && r.analysis ? r.analysis : null,
     },
+    { withSourceId },
   )
 
   const expandedApiEndpointGroups = reactive({
@@ -50,68 +46,44 @@ export function useApiEndpointAnalysis(
     used: false,
   })
 
-  const loadApiEndpointAnalysis = () =>
-    _loadApiEndpoints(sourceIdQuery.value)
+  // Silent cached load — callers read endpoint.data reactively.
+  const loadApiEndpointAnalysis = () => endpoint.load()
 
-  const getApiEndpointCoverage = async () => {
-    loadingApiEndpoints.value = true
-    coverageError.value = ''
-    const startTime = Date.now()
-    try {
-      const backendUrl = await appConfig.getServiceUrl('backend')
-      const response = await fetchWithAuth(
-        withSourceId(
-          `${backendUrl}/api/analytics/codebase/endpoint-analysis`,
-        ),
-        {
-          method: 'GET',
-          headers: {
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-          },
-        },
-      )
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`Status ${response.status}: ${errorText}`)
-      }
-      const data = await response.json()
-      const responseTime = Date.now() - startTime
-      if (data.status === 'success' && data.analysis) {
-        apiEndpointAnalysis.value = data.analysis
-        const coverage =
-          data.analysis.coverage_percentage?.toFixed(1) || 0
-        const orphaned = data.analysis.orphaned_endpoints || 0
-        const missing = data.analysis.missing_endpoints || 0
+  // User-initiated coverage refresh — identical endpoint, adds a timed
+  // success/error toast with coverage metrics.
+  const getApiEndpointCoverage = () =>
+    runTimed(
+      async () => {
+        await endpoint.load()
+        if (endpoint.error.value) {
+          throw new Error(endpoint.error.value)
+        }
+      },
+      (_result, time) => {
+        const a = endpoint.data.value
+        const coverage = a?.coverage_percentage?.toFixed(1) ?? 0
+        const orphaned = a?.orphaned_endpoints ?? 0
+        const missing = a?.missing_endpoints ?? 0
         notify(
           t('analytics.codebase.notify.apiCoverageResult', {
             coverage,
             orphaned,
             missing,
-            time: responseTime,
+            time,
           }),
           'success',
         )
-      } else {
-        throw new Error('Invalid response format')
-      }
-    } catch (error: unknown) {
-      const responseTime = Date.now() - startTime
-      const errorMessage =
-        error instanceof Error ? error.message : String(error)
-      logger.error('API Endpoint analysis failed:', error)
-      coverageError.value = errorMessage
-      notify(
-        t('analytics.codebase.notify.apiAnalysisFailed', {
-          error: errorMessage,
-          time: responseTime,
-        }),
-        'error',
-      )
-    } finally {
-      loadingApiEndpoints.value = false
-    }
-  }
+      },
+      (message, time) => {
+        notify(
+          t('analytics.codebase.notify.apiAnalysisFailed', {
+            error: message,
+            time,
+          }),
+          'error',
+        )
+      },
+    )
 
   const getCoverageClass = (percentage: number): string => {
     if (!percentage || percentage < 50) return 'critical'
@@ -121,9 +93,9 @@ export function useApiEndpointAnalysis(
   }
 
   return {
-    apiEndpointAnalysis,
-    loadingApiEndpoints,
-    apiEndpointsError,
+    apiEndpointAnalysis: endpoint.data,
+    loadingApiEndpoints: endpoint.loading,
+    apiEndpointsError: endpoint.error,
     expandedApiEndpointGroups,
     loadApiEndpointAnalysis,
     getApiEndpointCoverage,

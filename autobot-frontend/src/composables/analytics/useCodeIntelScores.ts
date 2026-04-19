@@ -7,13 +7,18 @@
  *
  * Security, performance, and Redis health scores plus detailed findings
  * and toggle logic. Extracted from useCodeIntelAnalysis (Issue #2260).
+ * Migrated from useAnalyticsFetch to useFetchEndpoint (Issue #5208).
+ *
+ * /code-intelligence/* endpoints are NOT source-scoped (they take the raw
+ * repo path directly), so every migrated endpoint keeps the default
+ * `scopeToSource: false`.
  */
 
 import { ref } from 'vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import appConfig from '@/config/AppConfig.js'
 import { useTaskLoader } from '@/composables/useTaskLoader'
-import { useAnalyticsFetch } from '@/composables/useAnalyticsFetch'
+import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { createLogger } from '@/utils/debugUtils'
 import type {
   UseCodeIntelAnalysisDeps,
@@ -28,10 +33,26 @@ import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useCodeIntelScores')
 
+interface PerfScoreRaw {
+  status: string
+  performance_score?: number
+  grade?: string
+  status_message?: string
+  total_issues?: number
+  files_analyzed?: number
+  severity_breakdown?: Record<string, number>
+  issue_type_breakdown?: Record<string, number>
+}
+
+interface FindingsRaw<T> {
+  status: string
+  findings?: T[]
+}
+
 export function useCodeIntelScores(deps: UseCodeIntelAnalysisDeps) {
   const { rootPath, withSourceId } = deps
 
-  // --- Security score (useTaskLoader) ---
+  // --- Security score (useTaskLoader — polling, different pattern) ---
 
   const {
     data: securityScore,
@@ -61,96 +82,78 @@ export function useCodeIntelScores(deps: UseCodeIntelAnalysisDeps) {
     },
   )
 
-  // --- Performance score (useAnalyticsFetch) ---
+  // --- Performance score (GET; scopeToSource: false for /code-intelligence/*) ---
 
-  const {
-    data: performanceScore,
-    loading: loadingPerformanceScore,
-    error: performanceScoreError,
-    load: _loadPerformanceScore,
-  } = useAnalyticsFetch<PerformanceScoreResult>(
-    `${getApiBase()}/code-intelligence/performance/score`,
-    (r) => {
-      if (r.status === 'success') {
-        return {
-          performance_score: (r.performance_score as number) || 0,
-          grade: (r.grade as string) || 'N/A',
-          status_message: (r.status_message as string) || '',
-          total_issues: (r.total_issues as number) || 0,
-          files_analyzed: (r.files_analyzed as number) || 0,
-          severity_breakdown:
-            (r.severity_breakdown as Record<string, number>) || {},
-          issue_type_breakdown:
-            (r.issue_type_breakdown as Record<string, number>) || {},
-        }
-      }
-      if (r.status === 'no_data') return undefined
-      return undefined
-    },
-  )
+  const performanceScoreEndpoint = useFetchEndpoint<
+    PerfScoreRaw,
+    PerformanceScoreResult
+  >({
+    path: '/api/code-intelligence/performance/score',
+    pickData: (r) =>
+      r.status === 'success'
+        ? {
+            performance_score: r.performance_score ?? 0,
+            grade: r.grade ?? 'N/A',
+            status_message: r.status_message ?? '',
+            total_issues: r.total_issues ?? 0,
+            files_analyzed: r.files_analyzed ?? 0,
+            severity_breakdown: r.severity_breakdown ?? {},
+            issue_type_breakdown: r.issue_type_breakdown ?? {},
+          }
+        : null,
+  })
 
-  // --- Redis health ---
+  // --- Redis health (hand-rolled — complex 504 timeout handling, not migrated) ---
 
   const redisHealth = ref<RedisHealthResult | null>(null)
   const loadingRedisHealth = ref(false)
   const redisHealthError = ref('')
 
-  // --- Detailed findings (useAnalyticsFetch POST) ---
+  // --- Detailed findings (POST with body factory) ---
 
-  const {
-    data: securityFindings,
-    loading: loadingSecurityFindings,
-    load: _loadSecurityFindings,
-  } = useAnalyticsFetch<SecurityFindingDetail[]>(
-    `${getApiBase()}/code-intelligence/security/analyze`,
-    (r) =>
-      r.status === 'success' && r.findings
-        ? (r.findings as unknown as SecurityFindingDetail[])
-        : [],
-    { method: 'POST' },
-  )
+  const securityFindingsEndpoint = useFetchEndpoint<
+    FindingsRaw<SecurityFindingDetail>,
+    SecurityFindingDetail[]
+  >({
+    path: '/api/code-intelligence/security/analyze',
+    method: 'POST',
+    body: () => ({ path: rootPath.value }),
+    pickData: (r) => (r.status === 'success' && r.findings ? r.findings : []),
+  })
   const showSecurityDetails = ref(false)
 
-  const {
-    data: performanceFindings,
-    loading: loadingPerformanceFindings,
-    load: _loadPerformanceFindings,
-  } = useAnalyticsFetch<PerformanceFindingDetail[]>(
-    `${getApiBase()}/code-intelligence/performance/analyze`,
-    (r) =>
-      r.status === 'success' && r.findings
-        ? (r.findings as unknown as PerformanceFindingDetail[])
-        : [],
-    { method: 'POST' },
-  )
+  const performanceFindingsEndpoint = useFetchEndpoint<
+    FindingsRaw<PerformanceFindingDetail>,
+    PerformanceFindingDetail[]
+  >({
+    path: '/api/code-intelligence/performance/analyze',
+    method: 'POST',
+    body: () => ({ path: rootPath.value }),
+    pickData: (r) => (r.status === 'success' && r.findings ? r.findings : []),
+  })
   const showPerformanceDetails = ref(false)
 
-  const {
-    data: redisOptimizations,
-    loading: loadingRedisOptimizations,
-    load: _loadRedisOptimizations,
-  } = useAnalyticsFetch<RedisOptimization[]>(
-    `${getApiBase()}/code-intelligence/redis/analyze`,
-    (r) =>
-      r.status === 'success' && r.findings
-        ? (r.findings as unknown as RedisOptimization[])
-        : [],
-    { method: 'POST' },
-  )
+  const redisOptimizationsEndpoint = useFetchEndpoint<
+    FindingsRaw<RedisOptimization>,
+    RedisOptimization[]
+  >({
+    path: '/api/code-intelligence/redis/analyze',
+    method: 'POST',
+    body: () => ({ path: rootPath.value }),
+    pickData: (r) => (r.status === 'success' && r.findings ? r.findings : []),
+  })
   const showRedisDetails = ref(false)
 
   // --- Score loaders ---
 
   const loadSecurityScore = async () => {
     if (!rootPath.value) return
-    await _loadSecurityScoreTask(undefined, {
-      path: rootPath.value,
-    })
+    await _loadSecurityScoreTask(undefined, { path: rootPath.value })
   }
 
   const loadPerformanceScore = async () => {
     if (!rootPath.value) return
-    await _loadPerformanceScore({ path: rootPath.value })
+    await performanceScoreEndpoint.load({ path: rootPath.value })
   }
 
   const loadRedisHealth = async () => {
@@ -169,17 +172,16 @@ export function useCodeIntelScores(deps: UseCodeIntelAnalysisDeps) {
     redisHealthError.value = ''
     try {
       const backendUrl = await appConfig.getServiceUrl('backend')
-      const url = withSourceId(`${backendUrl}/api/code-intelligence/redis/health-score?path=${encodeURIComponent(rootPath.value)}`)
-      const response = await fetchWithAuth(
-        url,
-        {
-          method: 'GET',
-          headers: {
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-          },
-        },
+      const url = withSourceId(
+        `${backendUrl}/api/code-intelligence/redis/health-score?path=${encodeURIComponent(rootPath.value)}`,
       )
+      const response = await fetchWithAuth(url, {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+      })
       if (!response.ok) {
         if (response.status === 504) {
           throw new Error(
@@ -222,24 +224,27 @@ export function useCodeIntelScores(deps: UseCodeIntelAnalysisDeps) {
 
   const loadSecurityFindings = async () => {
     if (!rootPath.value) return
-    await _loadSecurityFindings(undefined, { path: rootPath.value })
+    await securityFindingsEndpoint.load()
   }
 
   const loadPerformanceFindings = async () => {
     if (!rootPath.value) return
-    await _loadPerformanceFindings(undefined, { path: rootPath.value })
+    await performanceFindingsEndpoint.load()
   }
 
   const loadRedisOptimizations = async () => {
     if (!rootPath.value) return
-    await _loadRedisOptimizations(undefined, { path: rootPath.value })
+    await redisOptimizationsEndpoint.load()
   }
 
   // --- Toggle functions ---
 
   const toggleSecurityDetails = async () => {
     showSecurityDetails.value = !showSecurityDetails.value
-    if (showSecurityDetails.value && !securityFindings.value?.length) {
+    if (
+      showSecurityDetails.value &&
+      !securityFindingsEndpoint.data.value?.length
+    ) {
       await loadSecurityFindings()
     }
   }
@@ -248,7 +253,7 @@ export function useCodeIntelScores(deps: UseCodeIntelAnalysisDeps) {
     showPerformanceDetails.value = !showPerformanceDetails.value
     if (
       showPerformanceDetails.value &&
-      !performanceFindings.value?.length
+      !performanceFindingsEndpoint.data.value?.length
     ) {
       await loadPerformanceFindings()
     }
@@ -256,12 +261,15 @@ export function useCodeIntelScores(deps: UseCodeIntelAnalysisDeps) {
 
   const toggleRedisDetails = async () => {
     showRedisDetails.value = !showRedisDetails.value
-    if (showRedisDetails.value && !redisOptimizations.value?.length) {
+    if (
+      showRedisDetails.value &&
+      !redisOptimizationsEndpoint.data.value?.length
+    ) {
       await loadRedisOptimizations()
     }
   }
 
-  // --- Cached security score loader ---
+  // --- Cached security score loader (hand-rolled — out of scope) ---
 
   const loadCachedSecurityScore = async () => {
     const backendUrl = await appConfig.getServiceUrl('backend')
@@ -270,10 +278,7 @@ export function useCodeIntelScores(deps: UseCodeIntelAnalysisDeps) {
     )
     if (!resp.ok) return
     const data = await resp.json()
-    if (
-      data.status === 'success' &&
-      data.security_score !== undefined
-    ) {
+    if (data.status === 'success' && data.security_score !== undefined) {
       securityScore.value = {
         security_score: data.security_score ?? 0,
         grade: data.grade ?? 'N/A',
@@ -294,9 +299,9 @@ export function useCodeIntelScores(deps: UseCodeIntelAnalysisDeps) {
     securityScore,
     loadingSecurityScore,
     securityScoreError,
-    performanceScore,
-    loadingPerformanceScore,
-    performanceScoreError,
+    performanceScore: performanceScoreEndpoint.data,
+    loadingPerformanceScore: performanceScoreEndpoint.loading,
+    performanceScoreError: performanceScoreEndpoint.error,
     redisHealth,
     loadingRedisHealth,
     redisHealthError,
@@ -304,14 +309,14 @@ export function useCodeIntelScores(deps: UseCodeIntelAnalysisDeps) {
     loadPerformanceScore,
     loadRedisHealth,
     // Detailed findings
-    securityFindings,
-    loadingSecurityFindings,
+    securityFindings: securityFindingsEndpoint.data,
+    loadingSecurityFindings: securityFindingsEndpoint.loading,
     showSecurityDetails,
-    performanceFindings,
-    loadingPerformanceFindings,
+    performanceFindings: performanceFindingsEndpoint.data,
+    loadingPerformanceFindings: performanceFindingsEndpoint.loading,
     showPerformanceDetails,
-    redisOptimizations,
-    loadingRedisOptimizations,
+    redisOptimizations: redisOptimizationsEndpoint.data,
+    loadingRedisOptimizations: redisOptimizationsEndpoint.loading,
     showRedisDetails,
     loadSecurityFindings,
     loadPerformanceFindings,
