@@ -25,6 +25,8 @@
     "test:playwright:headed": "playwright test --headed",
     "test:playwright:ui": "playwright test --ui",
     "test:playwright:report": "playwright show-report",
+    "test:visual": "playwright test --config playwright.visual.config.ts",
+    "test:visual:update": "playwright test --config playwright.visual.config.ts --update-snapshots",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:all": "run-s test:unit test:integration test:playwright",
     "build-only": "vite build",
