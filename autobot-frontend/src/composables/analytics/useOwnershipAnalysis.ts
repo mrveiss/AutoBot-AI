@@ -7,10 +7,11 @@
  *
  * Code ownership mapping and knowledge gap analysis.
  * Extracted from useSpecializedAnalysis (Issue #2372).
+ * Migrated from useAnalyticsFetch to useFetchEndpoint (Issue #5208).
  */
 
 import { ref } from 'vue'
-import { useAnalyticsFetch } from '@/composables/useAnalyticsFetch'
+import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import type {
   UseCodeIntelAnalysisDeps,
   OwnershipAnalysisResult,
@@ -21,57 +22,60 @@ import type {
   KnowledgeGap,
   OwnershipMetrics,
 } from './codeIntelTypes'
-import { getApiBase } from '@/config/ssot-config'
 
-export function useOwnershipAnalysis(
-  deps: UseCodeIntelAnalysisDeps,
-) {
-  const { rootPath, sourceIdQuery } = deps
+interface OwnershipRaw {
+  status: string
+  analysis_time_seconds?: number
+  summary?: OwnershipSummary
+  file_ownership?: FileOwnership[]
+  directory_ownership?: DirectoryOwnership[]
+  expertise_scores?: ExpertiseScore[]
+  knowledge_gaps?: KnowledgeGap[]
+  metrics?: OwnershipMetrics
+}
 
-  const {
-    data: ownershipAnalysis,
-    loading: loadingOwnership,
-    error: ownershipError,
-    load: _loadOwnership,
-  } = useAnalyticsFetch<OwnershipAnalysisResult>(
-    `${getApiBase()}/analytics/codebase/ownership/analysis`,
-    (r) => {
-      if (r.status === 'success') {
-        return {
-          status: r.status as string,
-          analysis_time_seconds:
-            (r.analysis_time_seconds as number) || 0,
-          summary: (r.summary as OwnershipSummary) || {
-            total_files: 0,
-            total_directories: 0,
-            total_contributors: 0,
-            knowledge_gaps_count: 0,
-            critical_gaps: 0,
-            high_risk_gaps: 0,
-          },
-          file_ownership:
-            (r.file_ownership as FileOwnership[]) || [],
-          directory_ownership:
-            (r.directory_ownership as DirectoryOwnership[]) || [],
-          expertise_scores:
-            (r.expertise_scores as ExpertiseScore[]) || [],
-          knowledge_gaps:
-            (r.knowledge_gaps as KnowledgeGap[]) || [],
-          metrics: (r.metrics as OwnershipMetrics) || {
-            total_lines_analyzed: 0,
-            total_files_analyzed: 0,
-            overall_bus_factor: 1,
-            bus_factor_distribution: {},
-            knowledge_risk_distribution: {},
-            top_contributors: [],
-            ownership_concentration: 0,
-            team_coverage: 0,
-          },
-        }
-      }
-      if (r.status === 'error') return undefined
-      return undefined
+const EMPTY_SUMMARY: OwnershipSummary = {
+  total_files: 0,
+  total_directories: 0,
+  total_contributors: 0,
+  knowledge_gaps_count: 0,
+  critical_gaps: 0,
+  high_risk_gaps: 0,
+}
+
+const EMPTY_METRICS: OwnershipMetrics = {
+  total_lines_analyzed: 0,
+  total_files_analyzed: 0,
+  overall_bus_factor: 1,
+  bus_factor_distribution: {},
+  knowledge_risk_distribution: {},
+  top_contributors: [],
+  ownership_concentration: 0,
+  team_coverage: 0,
+}
+
+export function useOwnershipAnalysis(deps: UseCodeIntelAnalysisDeps) {
+  const { rootPath, withSourceId } = deps
+
+  const endpoint = useFetchEndpoint<OwnershipRaw, OwnershipAnalysisResult>(
+    {
+      path: '/api/analytics/codebase/ownership/analysis',
+      scopeToSource: true,
+      pickData: (r) =>
+        r.status === 'success'
+          ? {
+              status: r.status,
+              analysis_time_seconds: r.analysis_time_seconds ?? 0,
+              summary: r.summary ?? EMPTY_SUMMARY,
+              file_ownership: r.file_ownership ?? [],
+              directory_ownership: r.directory_ownership ?? [],
+              expertise_scores: r.expertise_scores ?? [],
+              knowledge_gaps: r.knowledge_gaps ?? [],
+              metrics: r.metrics ?? EMPTY_METRICS,
+            }
+          : null,
     },
+    { withSourceId },
   )
 
   const ownershipViewMode = ref<
@@ -80,16 +84,13 @@ export function useOwnershipAnalysis(
 
   const loadOwnershipAnalysis = async () => {
     if (!rootPath.value) return
-    await _loadOwnership({
-      path: rootPath.value,
-      ...sourceIdQuery.value,
-    })
+    await endpoint.load({ path: rootPath.value })
   }
 
   return {
-    ownershipAnalysis,
-    loadingOwnership,
-    ownershipError,
+    ownershipAnalysis: endpoint.data,
+    loadingOwnership: endpoint.loading,
+    ownershipError: endpoint.error,
     ownershipViewMode,
     loadOwnershipAnalysis,
   }

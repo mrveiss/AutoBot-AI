@@ -218,9 +218,15 @@ Uses **axios** (L13, L94-100), not `fetchWithAuth`. All 6 fetchers (L125-288) us
 
 ---
 
-### 10. `autobot-frontend/src/composables/useAnalyticsFetch.ts` — 127 LOC (the older attempt)
+### 10. `autobot-frontend/src/composables/useAnalyticsFetch.ts` — **DELETED in #5208** (Apr 2026)
 
-**Reconciliation note** for the open design question in #5154.
+**Reconciliation (Recommendation 2) complete.** The historical analysis below is preserved for
+context. All 4 consumers were migrated to `composables/api/useFetchEndpoint` (rehomed from
+`useAnalyticsEndpoint` in #5168/#5187), and `useAnalyticsFetch.ts` was deleted along with
+any test coverage. `grep -rn 'useAnalyticsFetch'` returns only historical JSDoc mentions in
+migration notes.
+
+**Reconciliation note** for the now-resolved design question in #5154.
 
 `useAnalyticsFetch` (older, narrower) and `useAnalyticsEndpoint` (newer, the #5137 abstraction) are **siblings doing 90% the same job**:
 
