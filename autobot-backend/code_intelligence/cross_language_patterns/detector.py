@@ -195,7 +195,7 @@ class CrossLanguagePatternDetector:
 
     async def _get_embedding(self, text: str) -> Optional[List[float]]:
         """
-        Get embedding for text using LLM.
+        Get embedding for text using the canonical NPU/Ollama fallback helper.
 
         Uses caching to avoid redundant embedding generation.
         """
@@ -211,30 +211,17 @@ class CrossLanguagePatternDetector:
                 return cached
             self._cache_misses += 1
 
-        # Generate embedding using Ollama
         try:
-            import aiohttp
+            from services.npu_client import generate_embedding_with_fallback
 
-            from autobot_shared.ssot_config import get_config
-
-            ssot = get_config()
-            url = f"{ssot.ollama_url}/api/embeddings"
-
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    url,
-                    json={"model": self.embedding_model, "prompt": text},
-                    timeout=aiohttp.ClientTimeout(total=30),
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        embedding = data.get("embedding")
-                        if embedding:
-                            self._embeddings_generated += 1
-                            # Cache the embedding
-                            if cache:
-                                await cache.put(text, embedding)
-                            return embedding
+            embedding = await generate_embedding_with_fallback(
+                text, model_name=self.embedding_model
+            )
+            if embedding:
+                self._embeddings_generated += 1
+                if cache:
+                    await cache.put(text, embedding)
+                return embedding
         except Exception as e:
             logger.warning("Failed to generate embedding: %s", e)
 

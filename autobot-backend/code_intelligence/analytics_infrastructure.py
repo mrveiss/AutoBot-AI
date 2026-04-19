@@ -348,7 +348,7 @@ class AnalyticsInfrastructureMixin:
 
     async def _get_embedding_via_ollama(self, text: str) -> Optional[List[float]]:
         """
-        Generate embedding using Ollama (fallback method).
+        Generate embedding using the canonical NPU/Ollama fallback helper.
 
         Args:
             text: Text to embed
@@ -357,30 +357,15 @@ class AnalyticsInfrastructureMixin:
             Embedding vector or None if failed
         """
         try:
-            import aiohttp
+            from services.npu_client import generate_embedding_with_fallback
 
-            from autobot_shared.ssot_config import get_config
-
-            ssot = get_config()
-            url = f"{ssot.ollama_url}/api/embeddings"
-
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    url,
-                    json={"model": self._embedding_model, "prompt": text},
-                    timeout=aiohttp.ClientTimeout(total=30),
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        embedding = data.get("embedding")
-                        if embedding:
-                            logger.debug("Embedding generated via Ollama")
-                            return embedding
+            return await generate_embedding_with_fallback(
+                text, model_name=self._embedding_model
+            )
         except Exception as e:
-            logger.warning("Ollama embedding generation failed: %s", e)
+            logger.warning("Embedding generation failed: %s", e)
             self._metrics.add_error(f"Embedding generation failed: {e}")
-
-        return None
+            return None
 
     async def _get_embeddings_batch(
         self, texts: List[str], max_concurrent: int = 5
