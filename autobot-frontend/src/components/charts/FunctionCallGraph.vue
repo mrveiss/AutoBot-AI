@@ -349,16 +349,17 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-// Type imports only - actual implementation loaded dynamically (#5158)
+// Type imports only — runtime load handled by the shared composable (#5206).
+// The default namespace import below gives type-only access to helpers
+// like `cytoscape.StylesheetStyle` / `cytoscape.LayoutOptions` used in
+// annotations throughout this file.
 import type cytoscape from 'cytoscape'
 import type { Core, NodeSingular } from 'cytoscape'
+import { useCytoscapeLibrary } from '@/composables/charts/useCytoscapeLibrary'
 // Issue #711: Virtual scrolling for large orphaned function lists
 import { useVirtualScrollSimple } from '@/composables/useVirtualScroll'
 import { getCssVar } from '@/composables/useCssVars'
 import { useDebounce } from '@/composables/useTimeout'
-
-// Register fcose layout
-// cytoscape.use(fcose) // Registered dynamically after loading
 
 const { t } = useI18n()
 
@@ -458,11 +459,25 @@ const clusterContainer = ref<HTMLElement | null>(null)
 let cy: Core | null = null
 let clusterCy: Core | null = null
 
-// Cytoscape lazy-loading state
-const cytoscapeLoading = ref(false)
-const cytoscapeError = ref('')
-let cytoscapeModule: typeof cytoscape | null = null
-let fcoseModule: any = null
+// Cytoscape lazy-loading state is owned by the shared composable (#5206).
+// `onReady` below is the chart-specific init callback that runs after a
+// successful library load or retry. It is captured at setup so `retry()`
+// on the Retry button re-runs the same view-mode-aware init logic.
+const {
+  loading: cytoscapeLoading,
+  error: cytoscapeError,
+  cytoscapeModule,
+  ensureReady: ensureCytoscapeReady,
+  retry: retryCytoscape,
+} = useCytoscapeLibrary(() => {
+  if (viewMode.value === 'network' && cytoscapeContainer.value && !cy) {
+    initCytoscape()
+    updateCytoscapeElements()
+  } else if (viewMode.value === 'stats' && clusterContainer.value && !clusterCy) {
+    initClusterCytoscape()
+    updateClusterElements()
+  }
+})
 const clusterZoomLevel = ref(1)
 const clusterLayoutMode = ref<'force' | 'grid'>('force')
 const isFullscreen = ref(false)
@@ -593,64 +608,13 @@ const filteredNodes = computed(() => {
 
 
 // ============================================================================
-// Cytoscape Lazy Loading (#5158 — completes the partial refactor from #3998)
-// ============================================================================
-
-async function loadCytoscapeLibrary() {
-  if (cytoscapeModule) return // Already loaded
-  try {
-    cytoscapeLoading.value = true
-    cytoscapeError.value = ''
-    const [cyModule, fcoseModuleImport] = await Promise.all([
-      import('cytoscape'),
-      // @ts-expect-error - cytoscape-fcose has no type declarations
-      import('cytoscape-fcose'),
-    ])
-    cytoscapeModule = cyModule.default
-    fcoseModule = fcoseModuleImport.default
-    if (cytoscapeModule) {
-      cytoscapeModule.use(fcoseModule)
-    }
-  } catch (err) {
-    cytoscapeError.value = `Failed to load visualization library: ${err instanceof Error ? err.message : 'Unknown error'}`
-    console.error('Cytoscape lazy-load error:', err)
-  } finally {
-    cytoscapeLoading.value = false
-  }
-}
-
-/**
- * Load the library (idempotent) AND perform the matching init for the
- * current view mode. Consolidates the three places that previously repeated
- * `await loadCytoscapeLibrary(); if (error) return; initCytoscape(); update()`.
- * Exposed so the error-state Retry button (#5173) re-runs BOTH the library
- * load and the init — previously the retry only re-loaded, leaving the
- * graph container empty on success.
- */
-async function initAfterLoad() {
-  await loadCytoscapeLibrary()
-  if (cytoscapeError.value) return
-  if (viewMode.value === 'network' && cytoscapeContainer.value && !cy) {
-    initCytoscape()
-    updateCytoscapeElements()
-  } else if (viewMode.value === 'stats' && clusterContainer.value && !clusterCy) {
-    initClusterCytoscape()
-    updateClusterElements()
-  }
-}
-
-function retryCytoscape() {
-  initAfterLoad()
-}
-
-// ============================================================================
 // Cytoscape Methods
 // ============================================================================
 
 function initCytoscape() {
-  if (!cytoscapeModule || !cytoscapeContainer.value) return
+  if (!cytoscapeModule.value || !cytoscapeContainer.value) return
 
-  cy = cytoscapeModule({
+  cy = cytoscapeModule.value({
     container: cytoscapeContainer.value,
     style: getCytoscapeStyles(),
     elements: [],
@@ -952,9 +916,9 @@ function toggleFullscreen() {
 // ============================================================================
 
 function initClusterCytoscape() {
-  if (!cytoscapeModule || !clusterContainer.value) return
+  if (!cytoscapeModule.value || !clusterContainer.value) return
 
-  clusterCy = cytoscapeModule({
+  clusterCy = cytoscapeModule.value({
     container: clusterContainer.value,
     style: getClusterCytoscapeStyles(),
     elements: [],
@@ -1319,7 +1283,7 @@ function truncateFunc(funcId: string): string {
 onMounted(async () => {
   await nextTick()
   if (cytoscapeContainer.value && props.data?.nodes?.length) {
-    await initAfterLoad()
+    await ensureCytoscapeReady()
   }
 })
 
@@ -1339,7 +1303,7 @@ watch(() => props.data, async (newData) => {
   if (newData?.nodes?.length) {
     await nextTick()
     if (!cy && cytoscapeContainer.value) {
-      await initAfterLoad()
+      await ensureCytoscapeReady()
     } else {
       updateCytoscapeElements()
     }
@@ -1363,12 +1327,12 @@ watch(viewMode, async (newMode) => {
   if (newMode === 'network') {
     await nextTick()
     if (!cy && cytoscapeContainer.value) {
-      await initAfterLoad()
+      await ensureCytoscapeReady()
     }
   } else if (newMode === 'stats') {
     await nextTick()
     if (!clusterCy && clusterContainer.value) {
-      await initAfterLoad()
+      await ensureCytoscapeReady()
     } else {
       // clusterCy already built — just push current data into it.
       updateClusterElements()

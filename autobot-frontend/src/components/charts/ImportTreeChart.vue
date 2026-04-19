@@ -233,9 +233,9 @@ import { useI18n } from 'vue-i18n'
 import { getCssVar } from '@/composables/useCssVars'
 import { useDebounce } from '@/composables/useTimeout'
 
-// Type imports only - actual implementation loaded dynamically
-import type cytoscape from 'cytoscape'
+// Type imports only — runtime load handled by the shared composable (#5206)
 import type { Core, NodeSingular } from 'cytoscape'
+import { useCytoscapeLibrary } from '@/composables/charts/useCytoscapeLibrary'
 
 const { t } = useI18n()
 
@@ -296,17 +296,26 @@ const selectedNode = ref<{
 } | null>(null)
 const isFullscreen = ref(false)
 
-// Cytoscape lazy-loading state
-const cytoscapeLoading = ref(false)
-const cytoscapeError = ref('')
-
 // Cytoscape instance
 const cytoscapeContainer = ref<HTMLElement | null>(null)
 let cy: Core | null = null
 
-// Dynamic import module reference
-let cytoscapeModule: typeof cytoscape | null = null
-let fcoseModule: any = null
+// Cytoscape lazy-load state is owned by the shared composable (#5206).
+// `onReady` below is the chart-specific init for the network view; retry
+// re-invokes it if the initial load failed.
+const {
+  loading: cytoscapeLoading,
+  error: cytoscapeError,
+  cytoscapeModule,
+  ensureReady: ensureCytoscapeReady,
+  retry: retryCytoscape,
+} = useCytoscapeLibrary(async () => {
+  await nextTick()
+  if (viewMode.value === 'network' && !cy && cytoscapeContainer.value) {
+    initCytoscape()
+    updateCytoscapeElements()
+  }
+})
 
 // Computed
 const containerHeight = computed(() => {
@@ -430,67 +439,13 @@ function handleSearch() {
 }
 
 // ============================================================================
-// Cytoscape Lazy Loading
-// ============================================================================
-
-async function loadCytoscapeLibrary() {
-  if (cytoscapeModule) return // Already loaded
-
-  try {
-    cytoscapeLoading.value = true
-    cytoscapeError.value = ''
-
-    // Dynamically import Cytoscape and fcose
-    const [cyModule, fcoseModuleImport] = await Promise.all([
-      import('cytoscape'),
-      import('cytoscape-fcose')
-    ])
-
-    cytoscapeModule = cyModule.default
-    fcoseModule = fcoseModuleImport.default
-
-    // Register fcose layout plugin
-    if (cytoscapeModule) {
-      cytoscapeModule.use(fcoseModule)
-    }
-
-    cytoscapeLoading.value = false
-  } catch (err) {
-    cytoscapeLoading.value = false
-    cytoscapeError.value = `Failed to load visualization library: ${err instanceof Error ? err.message : 'Unknown error'}`
-    console.error('Cytoscape lazy-load error:', err)
-  }
-}
-
-/**
- * Load the library (idempotent) AND perform network-view init if needed.
- * Consolidates the `loadCytoscapeLibrary(); initCytoscape(); updateCytoscapeElements()`
- * sequence and fixes the Retry button (#5173): previously `retryCytoscape`
- * only re-loaded the library but never re-ran init, leaving the container
- * empty after a successful retry.
- */
-async function initAfterLoad() {
-  await loadCytoscapeLibrary()
-  if (cytoscapeError.value) return
-  await nextTick()
-  if (viewMode.value === 'network' && !cy && cytoscapeContainer.value) {
-    initCytoscape()
-    updateCytoscapeElements()
-  }
-}
-
-function retryCytoscape() {
-  initAfterLoad()
-}
-
-// ============================================================================
 // Cytoscape Methods
 // ============================================================================
 
 function initCytoscape() {
-  if (!cytoscapeModule || !cytoscapeContainer.value) return
+  if (!cytoscapeModule.value || !cytoscapeContainer.value) return
 
-  cy = cytoscapeModule({
+  cy = cytoscapeModule.value({
     container: cytoscapeContainer.value,
     style: getCytoscapeStyles(),
     elements: [],
@@ -801,7 +756,7 @@ function clearHighlight() {
 // Watch for view mode changes to lazy-load Cytoscape
 watch(() => viewMode.value, async (newMode) => {
   if (newMode === 'network' && !cy && !cytoscapeLoading.value) {
-    await initAfterLoad()
+    await ensureCytoscapeReady()
   }
 })
 
