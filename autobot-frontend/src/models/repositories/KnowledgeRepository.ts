@@ -618,28 +618,44 @@ export class KnowledgeRepository extends ApiRepository {
   }
 
   /**
-   * Test a connector's connection
+   * Test a connector's connection.
+   *
+   * Backend returns `{connector_id, healthy}`; we translate the boolean
+   * into the `{success, message}` shape callers expect (#5203).
    */
   async testConnector(
     id: string
   ): Promise<{ success: boolean; message: string }> {
-    const response = await this.post(
+    const response = await this.post<{ connector_id: string; healthy: boolean }>(
       `${getApiBase()}/knowledge_base/connectors/${encodeURIComponent(id)}/test`
     )
-    return response.data as { success: boolean; message: string }
+    const healthy = response.data.healthy
+    return {
+      success: healthy,
+      message: healthy ? 'Connection healthy' : 'Connection failed',
+    }
   }
 
   /**
-   * Trigger a sync for a connector
+   * Trigger a sync for a connector.
+   *
+   * Sync runs as a background task on the backend; the response only
+   * acknowledges the enqueue (`{connector_id, status: 'sync_started',
+   * incremental}`). Actual counts arrive later via
+   * {@link getConnectorHistory} (#5204).
    */
   async syncConnector(
     id: string,
     incremental = true
-  ): Promise<SyncResult> {
-    const response = await this.post(
+  ): Promise<{ connector_id: string; status: string; incremental: boolean }> {
+    const response = await this.post<{
+      connector_id: string
+      status: string
+      incremental: boolean
+    }>(
       `${getApiBase()}/knowledge_base/connectors/${encodeURIComponent(id)}/sync?incremental=${incremental}`
     )
-    return response.data as SyncResult
+    return response.data
   }
 
   /**

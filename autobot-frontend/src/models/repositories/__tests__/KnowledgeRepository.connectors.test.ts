@@ -163,4 +163,75 @@ describe('KnowledgeRepository connector endpoints (#5200)', () => {
       )
     })
   })
+
+  describe('testConnector — translates {healthy} into {success, message} (#5203)', () => {
+    it('maps healthy=true to success=true with "Connection healthy" message', async () => {
+      postSpy.mockResolvedValue({
+        data: { connector_id: 'id-1', healthy: true }
+      })
+
+      const result = await repo.testConnector('id-1')
+
+      expect(result).toEqual({
+        success: true,
+        message: 'Connection healthy'
+      })
+      expect(postSpy).toHaveBeenCalledWith(
+        '/api/knowledge_base/connectors/id-1/test'
+      )
+    })
+
+    it('maps healthy=false to success=false with "Connection failed" message', async () => {
+      postSpy.mockResolvedValue({
+        data: { connector_id: 'id-2', healthy: false }
+      })
+
+      const result = await repo.testConnector('id-2')
+
+      expect(result).toEqual({
+        success: false,
+        message: 'Connection failed'
+      })
+    })
+  })
+
+  describe('syncConnector — returns backend enqueue shape (#5204)', () => {
+    it('returns the {connector_id, status, incremental} payload directly', async () => {
+      postSpy.mockResolvedValue({
+        data: {
+          connector_id: 'id-1',
+          status: 'sync_started',
+          incremental: true
+        }
+      })
+
+      const result = await repo.syncConnector('id-1')
+
+      expect(result).toEqual({
+        connector_id: 'id-1',
+        status: 'sync_started',
+        incremental: true
+      })
+      expect(postSpy).toHaveBeenCalledWith(
+        '/api/knowledge_base/connectors/id-1/sync?incremental=true'
+      )
+    })
+
+    it('forwards incremental=false to the backend', async () => {
+      postSpy.mockResolvedValue({
+        data: {
+          connector_id: 'id-2',
+          status: 'sync_started',
+          incremental: false
+        }
+      })
+
+      const result = await repo.syncConnector('id-2', false)
+
+      expect(result.incremental).toBe(false)
+      expect(postSpy).toHaveBeenCalledWith(
+        '/api/knowledge_base/connectors/id-2/sync?incremental=false'
+      )
+    })
+  })
 })
