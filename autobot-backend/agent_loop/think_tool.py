@@ -350,29 +350,19 @@ class ThinkTool:
             # Use provided client
             return await self.llm_client.generate(prompt)
 
-        # Use Ollama directly
-        import httpx
-
+        # Use Ollama directly via the shared helper
         from autobot_shared.ssot_config import get_config
+        from llm_providers.ollama_helpers import call_ollama_generate
 
         ssot = get_config()
-        ollama_url = f"{ssot.ollama_url}/api/generate"
-
-        async with httpx.AsyncClient(timeout=self.config.timeout_ms / 1000) as client:
-            response = await client.post(
-                ollama_url,
-                json={
-                    "model": self.config.model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {
-                        "temperature": self.config.temperature,
-                        "num_predict": self.config.max_tokens,
-                    },
-                },
-            )
-            response.raise_for_status()
-            return response.json().get("response", "")
+        return await call_ollama_generate(
+            prompt=prompt,
+            model=self.config.model,
+            base_url=ssot.ollama_url,
+            temperature=self.config.temperature,
+            max_tokens=self.config.max_tokens,
+            timeout_ms=self.config.timeout_ms,
+        )
 
     def _parse_response(
         self,
