@@ -656,7 +656,9 @@ class KnowledgeBaseCore:
     def __del__(self):
         """Destructor to ensure cleanup"""
         # Only log, don't perform async operations in __del__
-        if self.initialized:
+        # Use getattr so __new__'d instances (tests that skip __init__) don't
+        # raise AttributeError during GC (#5357).
+        if getattr(self, "initialized", False):
             logger.debug(
                 "KnowledgeBase instance deleted while still initialized - "
                 "consider calling await close() explicitly"
