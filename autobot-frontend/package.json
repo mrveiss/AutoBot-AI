@@ -125,7 +125,7 @@
     "start-server-and-test": "^3.0.2",
     "tailwindcss": "^4.2.2",
     "typescript": "~6.0.3",
-    "vite": "^8.0.5",
+    "vite": "^8.0.9",
     "vite-plugin-vue-devtools": "^8.1.1",
     "vitest": "^4.1.4",
     "vue-tsc": "^3.2.6"
