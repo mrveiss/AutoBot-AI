@@ -177,8 +177,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import appConfig from '@/config/AppConfig.js'
+import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { createLogger } from '@/utils/debugUtils'
 import AddSourceModal from '@/components/analytics/AddSourceModal.vue'
 
@@ -216,54 +215,46 @@ const _pollDeadline = ref<number>(0)
 const POLL_INTERVAL_MS = 4000
 const POLL_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
 
-// ---- API helpers ----------------------------------------------------------
+// ---- Endpoint composables (#5153 B) --------------------------------------
 
-async function getBackendUrl(): Promise<string> {
-  return appConfig.getServiceUrl('backend')
-}
+const sourcesEndpoint = useFetchEndpoint<
+  { sources?: CodeSource[] },
+  CodeSource[]
+>({
+  path: '/api/analytics/codebase/sources',
+  label: 'Sources list',
+  pickData: (r) => r.sources ?? [],
+  onSuccess: (list) => {
+    sources.value = list
+  },
+})
+
+const summariesEndpoint = useFetchEndpoint<
+  { summaries?: Record<string, SourceSummary> },
+  Record<string, SourceSummary>
+>({
+  path: '/api/analytics/codebase/sources/summary',
+  label: 'Sources summary',
+  pickData: (r) => r.summaries ?? {},
+  onSuccess: (map) => {
+    summaries.value = map
+  },
+})
 
 // ---- Data Loading ---------------------------------------------------------
 
 async function loadSources() {
   loading.value = true
   try {
-    const backendUrl = await getBackendUrl()
-    const response = await fetchWithAuth(
-      `${backendUrl}/api/analytics/codebase/sources`
-    )
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
-    }
-    const data = await response.json()
-    sources.value = data.sources ?? []
-
+    await sourcesEndpoint.load()
     await loadSummaries()
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err)
-    logger.error('Failed to load sources:', msg)
   } finally {
     loading.value = false
   }
 }
 
 async function loadSummaries() {
-  const backendUrl = await getBackendUrl()
-  try {
-    const resp = await fetchWithAuth(
-      `${backendUrl}/api/analytics/codebase/sources/summary`
-    )
-    if (!resp.ok) {
-      logger.warn('Batch summary failed, HTTP %d', resp.status)
-      return
-    }
-    const data = await resp.json()
-    summaries.value = data.summaries ?? {}
-  } catch (err: unknown) {
-    logger.error(
-      'Failed to load summaries:',
-      err instanceof Error ? err.message : String(err)
-    )
-  }
+  await summariesEndpoint.load()
 }
 
 // ---- Navigation -----------------------------------------------------------
@@ -305,28 +296,32 @@ function getAccessIcon(access: string): string {
   return icons[access] ?? 'fas fa-lock'
 }
 
-// ---- Source Actions (#1468) ------------------------------------------------
+// ---- Source Actions (#1468, #5153 B) ---------------------------------------
+// Per-source endpoints: path contains the source id, so construct the
+// endpoint instance inside the wrapper function (same pattern as
+// useWorkflowTemplates.fetchTemplateDetail).
 
 async function syncSource(source: CodeSource) {
   syncingId.value = source.id
+  const syncEndpoint = useFetchEndpoint<unknown, true>({
+    path: `/api/analytics/codebase/sources/${source.id}/sync`,
+    method: 'POST',
+    pickData: () => true,
+    onSuccess: () => {
+      logger.info('Sync started for source:', source.name)
+    },
+    onResponse: async (response) => {
+      const text = await response.text().catch(() => '')
+      return `HTTP ${response.status}${text ? `: ${text}` : ''}`
+    },
+    label: 'Source sync',
+  })
   try {
-    const backendUrl = await getBackendUrl()
-    const response = await fetchWithAuth(
-      `${backendUrl}/api/analytics/codebase/sources/${source.id}/sync`,
-      { method: 'POST' }
-    )
-    if (!response.ok) {
-      const text = await response.text()
-      throw new Error(`HTTP ${response.status}: ${text}`)
+    await syncEndpoint.load()
+    if (!syncEndpoint.error.value) {
+      await loadSources()
+      _startPolling()
     }
-    logger.info('Sync started for source:', source.name)
-    await loadSources()
-    _startPolling()
-  } catch (err: unknown) {
-    logger.error(
-      'Sync failed:',
-      err instanceof Error ? err.message : String(err)
-    )
   } finally {
     syncingId.value = null
   }
@@ -338,23 +333,24 @@ async function deleteSource(source: CodeSource) {
   )
   if (!confirm(msg)) return
   deletingId.value = source.id
+  const deleteEndpoint = useFetchEndpoint<unknown, true>({
+    path: `/api/analytics/codebase/sources/${source.id}`,
+    method: 'DELETE',
+    pickData: () => true,
+    onSuccess: () => {
+      logger.info('Deleted source:', source.name)
+    },
+    onResponse: async (response) => {
+      const text = await response.text().catch(() => '')
+      return `HTTP ${response.status}${text ? `: ${text}` : ''}`
+    },
+    label: 'Source delete',
+  })
   try {
-    const backendUrl = await getBackendUrl()
-    const response = await fetchWithAuth(
-      `${backendUrl}/api/analytics/codebase/sources/${source.id}`,
-      { method: 'DELETE' }
-    )
-    if (!response.ok) {
-      const text = await response.text()
-      throw new Error(`HTTP ${response.status}: ${text}`)
+    await deleteEndpoint.load()
+    if (!deleteEndpoint.error.value) {
+      await loadSources()
     }
-    logger.info('Deleted source:', source.name)
-    await loadSources()
-  } catch (err: unknown) {
-    logger.error(
-      'Delete failed:',
-      err instanceof Error ? err.message : String(err)
-    )
   } finally {
     deletingId.value = null
   }
@@ -380,22 +376,19 @@ async function _pollTick(): Promise<void> {
     _stopPolling()
     return
   }
-  try {
-    const backendUrl = await getBackendUrl()
-    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/sources`)
-    if (!response.ok) {
-      logger.warn('Poll request failed, HTTP %d', response.status)
-      return
-    }
-    const data = await response.json()
-    sources.value = data.sources ?? []
-    if (!_hasSyncingSource()) {
-      _stopPolling()
-      await loadSummaries()
-      logger.info('All sources resolved — polling complete')
-    }
-  } catch (err: unknown) {
-    logger.error('Poll error:', err instanceof Error ? err.message : String(err))
+  // #5153 B: reuses `sourcesEndpoint` so the poll shares the single fetch
+  // path and error handling. sources.value is updated via the endpoint's
+  // onSuccess hook; we only need to react to the syncing state afterwards.
+  // Errors are already logged inside the composable — no extra try/catch.
+  await sourcesEndpoint.load()
+  if (sourcesEndpoint.error.value) {
+    logger.warn('Poll request failed:', sourcesEndpoint.error.value)
+    return
+  }
+  if (!_hasSyncingSource()) {
+    _stopPolling()
+    await loadSummaries()
+    logger.info('All sources resolved — polling complete')
   }
 }
 
