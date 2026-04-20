@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 import yaml
 
+from autobot_shared.time_utils import utc_timestamp
 from constants.threshold_constants import TimingConstants
 from event_manager import event_manager
 from models.npu_models import (
@@ -389,7 +390,7 @@ class NPUWorkerManager(AsyncInitializable):
                 "data": {
                     "status": worker_details.status.status.value,
                     "current_load": worker_details.status.current_load,
-                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "timestamp": utc_timestamp(),
                 },
             }
 
@@ -581,7 +582,7 @@ class NPUWorkerManager(AsyncInitializable):
             {
                 "event": "worker.removed",
                 "worker_id": worker_id,
-                "data": {"timestamp": datetime.utcnow().isoformat() + "Z"},
+                "data": {"timestamp": utc_timestamp()},
             },
         )
 
