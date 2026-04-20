@@ -10,7 +10,7 @@
  * - Better UX - waits for user to finish typing
  */
 
-import { ref, watch, onUnmounted, type Ref } from 'vue'
+import { ref, watch, onScopeDispose, getCurrentScope, type Ref } from 'vue'
 
 /**
  * Debounce a reactive value
@@ -52,13 +52,15 @@ export function useDebounce<T>(value: Ref<T>, delay: number = 300): Ref<T> {
     { immediate: false }
   )
 
-  // Cleanup on unmount
-  onUnmounted(() => {
-    if (timeoutId !== null) {
-      clearTimeout(timeoutId)
-    }
-    unwatch()
-  })
+  // Cleanup when effect scope disposes (component unmount or scope.stop())
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId)
+      }
+      unwatch()
+    })
+  }
 
   return debouncedValue
 }
@@ -107,10 +109,12 @@ export function useDebouncedFn<T extends (...args: any[]) => any>(
     }, delay)
   }
 
-  // Cleanup on unmount
-  onUnmounted(() => {
-    cancel()
-  })
+  // Cleanup when effect scope disposes (component unmount or scope.stop())
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      cancel()
+    })
+  }
 
   return {
     debouncedFn,
@@ -170,13 +174,15 @@ export function useDebounceWithLoading<T>(
     { immediate: false }
   )
 
-  // Cleanup on unmount
-  onUnmounted(() => {
-    if (timeoutId !== null) {
-      clearTimeout(timeoutId)
-    }
-    unwatch()
-  })
+  // Cleanup when effect scope disposes (component unmount or scope.stop())
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId)
+      }
+      unwatch()
+    })
+  }
 
   return {
     debouncedValue,
