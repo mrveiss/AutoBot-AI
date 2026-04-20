@@ -38,14 +38,24 @@ export interface Declaration {
   is_exported?: boolean
 }
 
+/**
+ * Hardcoded value record (Issue #5290: contract aligned with backend).
+ *
+ * Canonical shape emitted by `/api/analytics/codebase/hardcodes`:
+ * - `file`, `line`, `value`, `type`, `severity` are always present
+ *   (backend response-boundary normalizer fills `file` + default
+ *   `severity` for legacy records without them).
+ * - `variable_name` / `suggested_env_var` are populated by the LLM path
+ *   only; AST/regex detections omit them.
+ */
 export interface HardcodedValue {
   file: string
   line: number
-  variable_name?: string
   value: string
   type: string
   severity: string
-  suggested_env_var: string
+  variable_name?: string
+  suggested_env_var?: string
   context?: string
   current_usage?: string
 }
