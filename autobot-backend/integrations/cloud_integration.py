@@ -11,6 +11,7 @@ Provides read-only operations for listing resources and getting account info.
 import hashlib
 import hmac
 import logging
+import time
 from datetime import datetime
 from typing import Any, Dict, List
 from urllib.parse import quote
@@ -39,7 +40,7 @@ class AWSIntegration(BaseIntegration):
 
     async def test_connection(self) -> IntegrationHealth:
         """Test AWS connection by calling STS GetCallerIdentity."""
-        start_time = datetime.utcnow()
+        start_time = time.monotonic()
         if not self.access_key or not self.secret_key:
             return IntegrationHealth(
                 provider="aws",
@@ -49,7 +50,7 @@ class AWSIntegration(BaseIntegration):
 
         try:
             result = await self._call_sts_action("GetCallerIdentity")
-            latency = (datetime.utcnow() - start_time).total_seconds() * 1000
+            latency = (time.monotonic() - start_time) * 1000
 
             if result.get("status_code") == 200:
                 identity = (
@@ -322,7 +323,7 @@ class AzureIntegration(BaseIntegration):
 
     async def test_connection(self) -> IntegrationHealth:
         """Test Azure connection by getting subscription details."""
-        start_time = datetime.utcnow()
+        start_time = time.monotonic()
         if not self.access_token or not self.subscription_id:
             return IntegrationHealth(
                 provider="azure",
@@ -336,7 +337,7 @@ class AzureIntegration(BaseIntegration):
                 f"{self.subscription_id}?api-version=2020-01-01"
             )
             result = await self._make_azure_request("GET", url)
-            latency = (datetime.utcnow() - start_time).total_seconds() * 1000
+            latency = (time.monotonic() - start_time) * 1000
 
             if result.get("status_code") == 200:
                 sub_data = result.get("body", {})
@@ -507,7 +508,7 @@ class GCPIntegration(BaseIntegration):
 
     async def test_connection(self) -> IntegrationHealth:
         """Test GCP connection by getting project details."""
-        start_time = datetime.utcnow()
+        start_time = time.monotonic()
         if not self.access_token or not self.project_id:
             return IntegrationHealth(
                 provider="gcp",
@@ -521,7 +522,7 @@ class GCPIntegration(BaseIntegration):
                 f"projects/{self.project_id}"
             )
             result = await self._make_gcp_request("GET", url)
-            latency = (datetime.utcnow() - start_time).total_seconds() * 1000
+            latency = (time.monotonic() - start_time) * 1000
 
             if result.get("status_code") == 200:
                 project = result.get("body", {})
