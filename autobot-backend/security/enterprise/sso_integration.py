@@ -28,6 +28,8 @@ from cryptography.hazmat.primitives.serialization import (
     load_pem_public_key,
 )
 
+from autobot_shared.time_utils import utc_timestamp
+
 from autobot_shared.http_client import get_http_client
 from constants.path_constants import PATH
 
@@ -758,7 +760,7 @@ class SSOIntegrationFramework:
             # Update statistics
             self.stats["successful_authentications"] += 1
             self.stats["active_sessions"] = len(self.active_sessions)
-            self.stats["last_authentication"] = datetime.utcnow().isoformat()
+            self.stats["last_authentication"] = utc_timestamp()
 
             provider_name = provider.name
             self.stats["authentications_by_provider"][provider_name] = (

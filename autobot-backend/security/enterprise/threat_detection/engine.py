@@ -25,6 +25,7 @@ from sklearn.cluster import DBSCAN
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
+from autobot_shared.time_utils import utc_timestamp
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 
@@ -618,7 +619,7 @@ class ThreatDetectionEngine:
                 len(event.get("action", "")),
                 len(event.get("resource", "")),
                 datetime.fromisoformat(
-                    event.get("timestamp", datetime.utcnow().isoformat())
+                    event.get("timestamp", utc_timestamp())
                 ).hour,
                 1 if event.get("outcome") == "success" else 0,
                 len(event.get("details", {})),

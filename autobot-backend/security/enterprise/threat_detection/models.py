@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
+from autobot_shared.time_utils import utc_timestamp
+
 from .types import FILE_OPERATION_ACTIONS, ThreatCategory, ThreatLevel
 
 
@@ -47,7 +49,7 @@ class SecurityEvent:
     @property
     def timestamp(self) -> datetime:
         """Get event timestamp as datetime object."""
-        timestamp_str = self.raw_event.get("timestamp", datetime.utcnow().isoformat())
+        timestamp_str = self.raw_event.get("timestamp", utc_timestamp())
         return datetime.fromisoformat(timestamp_str)
 
     @property
@@ -143,7 +145,7 @@ class EventHistory:
 
         for event in reversed(self.events):
             event_time = datetime.fromisoformat(
-                event.get("timestamp", datetime.utcnow().isoformat())
+                event.get("timestamp", utc_timestamp())
             )
             if event_time < cutoff_time:
                 break
@@ -168,7 +170,7 @@ class EventHistory:
 
         for event in reversed(self.events):
             event_time = datetime.fromisoformat(
-                event.get("timestamp", datetime.utcnow().isoformat())
+                event.get("timestamp", utc_timestamp())
             )
             if event_time < cutoff_time:
                 break
@@ -188,7 +190,7 @@ class EventHistory:
 
         for event in reversed(self.events):
             event_time = datetime.fromisoformat(
-                event.get("timestamp", datetime.utcnow().isoformat())
+                event.get("timestamp", utc_timestamp())
             )
             if event_time < cutoff_time:
                 break
@@ -206,7 +208,7 @@ class EventHistory:
 
         for event in reversed(self.events):
             event_time = datetime.fromisoformat(
-                event.get("timestamp", datetime.utcnow().isoformat())
+                event.get("timestamp", utc_timestamp())
             )
             if event_time < cutoff_time:
                 break
@@ -244,7 +246,7 @@ class EventHistory:
             for event in self.events
             if event.get("user_id") == user_id
             and datetime.fromisoformat(
-                event.get("timestamp", datetime.utcnow().isoformat())
+                event.get("timestamp", utc_timestamp())
             ).hour
             < 6
         )

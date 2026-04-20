@@ -26,6 +26,7 @@ from fastapi.responses import PlainTextResponse, Response
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import utc_timestamp
 from services.agent_analytics import get_agent_analytics
 from services.llm_cost_tracker import get_cost_tracker
 
@@ -241,7 +242,7 @@ async def export_full_json(
 
     export_data = {
         "export_info": {
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": utc_timestamp(),
             "period_days": days,
             "start_date": start_date.isoformat(),
             "end_date": end_date.isoformat(),

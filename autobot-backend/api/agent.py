@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import utc_timestamp
 from constants.threshold_constants import TimingConstants
 from dependencies import get_config, get_knowledge_base
 from monitoring.prometheus_metrics import get_metrics_manager
@@ -1218,7 +1219,7 @@ async def execute_enhanced_goal(
                 "result": result,
                 "enhanced_context_used": enhanced_context is not None,
                 "knowledge_base_integrated": payload.use_knowledge_base,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
             }
         )
 
@@ -1503,7 +1504,7 @@ async def enhanced_agent_health():
             "ai_stack_available": health_status["status"] == "healthy",
             "multi_agent_coordination": health_status["status"] == "healthy",
             "enhanced_capabilities": health_status["status"] == "healthy",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_timestamp(),
         }
 
     except Exception:
@@ -1513,5 +1514,5 @@ async def enhanced_agent_health():
             "multi_agent_coordination": False,
             "enhanced_capabilities": False,
             "error": "Internal server error",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_timestamp(),
         }

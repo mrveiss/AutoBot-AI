@@ -20,6 +20,7 @@ from uuid import uuid4
 
 import yaml
 
+from autobot_shared.time_utils import utc_timestamp
 from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
@@ -970,7 +971,7 @@ class SecurityPolicyManager:
 
         return {
             "framework": framework,
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": utc_timestamp(),
             "policy_coverage": policy_coverage,
             "violations_summary": self._calculate_violations_summary(),
             "compliance_score": compliance_score,
@@ -983,7 +984,7 @@ class SecurityPolicyManager:
         self.stats["active_policies"] = len(
             [p for p in self.policies.values() if p.status == PolicyStatus.ACTIVE]
         )
-        self.stats["last_policy_update"] = datetime.utcnow().isoformat()
+        self.stats["last_policy_update"] = utc_timestamp()
 
         # Calculate compliance score
         if self.stats["total_policies"] > 0:
