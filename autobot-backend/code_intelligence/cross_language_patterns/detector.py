@@ -233,16 +233,20 @@ class CrossLanguagePatternDetector:
         concurrency: int = EMBEDDING_BATCH_CONCURRENCY,
     ) -> List[Optional[List[float]]]:
         """
-        Get embeddings for multiple texts in parallel.
+        Get embeddings for multiple texts via the canonical batch helper.
 
         Issue #659: Batch embedding generation with semaphore-limited concurrency.
-        Provides 5-10x speedup vs sequential calls by overlapping network latency.
+        Issue #5231: Delegates NPU-first fallback to
+        ``services.npu_client.generate_embeddings_batch_with_fallback`` (which
+        uses NPU's native batch endpoint when available, then falls back to
+        parallel Ollama requests).
 
-        500 texts × 100-200ms = 50-100s sequential → 5-10s with 10 concurrent requests
+        Cache lookups still happen in this wrapper so repeated texts never hit
+        the network. Only cache misses are forwarded to the canonical helper.
 
         Args:
             texts: List of texts to embed
-            concurrency: Maximum concurrent requests (default: 10)
+            concurrency: Maximum concurrent requests for fallback path
 
         Returns:
             List of embeddings (same order as input texts, None for failures)
@@ -250,14 +254,46 @@ class CrossLanguagePatternDetector:
         if not self.use_llm or not texts:
             return [None] * len(texts)
 
-        semaphore = asyncio.Semaphore(concurrency)
+        cache = await self._get_embedding_cache()
 
-        async def get_one(text: str) -> Optional[List[float]]:
-            async with semaphore:
-                return await self._get_embedding(text)
+        # Resolve cache hits up front; forward only misses to the canonical.
+        results: List[Optional[List[float]]] = [None] * len(texts)
+        miss_indices: List[int] = []
+        miss_texts: List[str] = []
+        for idx, text in enumerate(texts):
+            if not text or not text.strip():
+                continue
+            if cache:
+                cached = await cache.get(text)
+                if cached:
+                    self._cache_hits += 1
+                    results[idx] = cached
+                    continue
+                self._cache_misses += 1
+            miss_indices.append(idx)
+            miss_texts.append(text)
 
-        # Execute all embedding requests in parallel with semaphore limiting
-        results = await asyncio.gather(*[get_one(text) for text in texts])
+        if miss_texts:
+            try:
+                from services.npu_client import (
+                    generate_embeddings_batch_with_fallback,
+                )
+
+                fetched = await generate_embeddings_batch_with_fallback(
+                    miss_texts,
+                    model_name=self.embedding_model,
+                    max_concurrent=concurrency,
+                )
+            except Exception as e:
+                logger.warning("Batch embedding generation failed: %s", e)
+                fetched = [None] * len(miss_texts)
+
+            for idx, text, embedding in zip(miss_indices, miss_texts, fetched):
+                if embedding:
+                    results[idx] = embedding
+                    self._embeddings_generated += 1
+                    if cache:
+                        await cache.put(text, embedding)
 
         logger.info(
             "Batch generated %d embeddings (%d concurrent)",
@@ -265,7 +301,7 @@ class CrossLanguagePatternDetector:
             concurrency,
         )
 
-        return list(results)
+        return results
 
     async def _normalize_pattern(self, pattern: Dict[str, Any]) -> str:
         """
