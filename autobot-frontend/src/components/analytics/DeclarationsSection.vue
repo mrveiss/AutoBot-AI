@@ -44,7 +44,7 @@
             @click="toggleDeclarationType(String(type))"
           >
             <div class="header-info">
-              <i :class="expandedDeclarationTypes[type] ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+              <i :class="isExpandedType(type) ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
               <span class="header-name">{{ formatDeclarationType(String(type)) }}</span>
               <span class="header-count">({{ typeData.declarations.length.toLocaleString() }})</span>
             </div>
@@ -55,7 +55,7 @@
             </div>
           </div>
           <transition name="accordion">
-            <div v-if="expandedDeclarationTypes[type]" class="accordion-items">
+            <div v-if="isExpandedType(type)" class="accordion-items">
               <div
                 v-for="(declaration, index) in typeData.declarations.slice(0, 30)"
                 :key="index"
@@ -98,9 +98,10 @@
  * Issue #704: Migrated to design tokens
  */
 
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useGroupingMemo } from '@/composables/useComputedMemo'
+import { useExpansion } from '@/composables/useExpansion'
 import EmptyState from '@/components/ui/EmptyState.vue'
 
 const { t } = useI18n()
@@ -122,7 +123,8 @@ const emit = defineEmits<{
   export: [format: 'md' | 'json']
 }>()
 
-const expandedDeclarationTypes = ref<Record<string, boolean>>({})
+const typeExpansion = useExpansion<string>()
+const isExpandedType = typeExpansion.isExpanded
 
 // Issue #4036: Memoized type grouping with export counts
 const declarationsByType = useGroupingMemo(
@@ -143,7 +145,7 @@ const declarationsByType = useGroupingMemo(
 )
 
 const toggleDeclarationType = (type: string) => {
-  expandedDeclarationTypes.value[type] = !expandedDeclarationTypes.value[type]
+  typeExpansion.toggle(type)
 }
 
 const formatDeclarationType = (type: string): string => {

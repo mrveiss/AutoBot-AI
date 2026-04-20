@@ -173,9 +173,9 @@
               <span class="category-icon">{{ getCategoryIcon(category.id) }}</span>
               <span class="category-name">{{ category.name }}</span>
               <span class="category-count">{{ category.enabled }}/{{ category.total }}</span>
-              <span class="expand-icon">{{ expandedCategories.includes(category.id) ? '▼' : '▶' }}</span>
+              <span class="expand-icon">{{ isCategoryExpanded(category.id) ? '▼' : '▶' }}</span>
             </div>
-            <div v-if="expandedCategories.includes(category.id)" class="category-checks">
+            <div v-if="isCategoryExpanded(category.id)" class="category-checks">
               <div
                 v-for="check in getChecksForCategory(category.id)"
                 :key="check.id"
@@ -295,6 +295,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
+import { useExpansion } from '@/composables/useExpansion'
 import api from '@/services/api'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
@@ -377,7 +378,8 @@ const summary = ref<Summary>({
   total_checks: 0
 })
 const activeSeverity = ref('all')
-const expandedCategories = ref<string[]>(['security', 'debug'])
+const categoryExpansion = useExpansion<string>(['security', 'debug'])
+const isCategoryExpanded = categoryExpansion.isExpanded
 
 // Severity filters
 const severities = computed(() => [
@@ -461,12 +463,7 @@ function getChecksForCategory(category: string): Check[] {
 }
 
 function toggleCategory(category: string) {
-  const idx = expandedCategories.value.indexOf(category)
-  if (idx >= 0) {
-    expandedCategories.value.splice(idx, 1)
-  } else {
-    expandedCategories.value.push(category)
-  }
+  categoryExpansion.toggle(category)
 }
 
 function formatTime(timestamp: string): string {
