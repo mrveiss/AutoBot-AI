@@ -10,7 +10,6 @@
  * Migrated from useAnalyticsFetch to useFetchEndpoint (Issue #5208).
  */
 
-import { ref } from 'vue'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import type {
   UseCodeIntelAnalysisDeps,
@@ -78,10 +77,6 @@ export function useOwnershipAnalysis(deps: UseCodeIntelAnalysisDeps) {
     { withSourceId },
   )
 
-  const ownershipViewMode = ref<
-    'overview' | 'files' | 'contributors' | 'gaps'
-  >('overview')
-
   const loadOwnershipAnalysis = async () => {
     if (!rootPath.value) return
     await endpoint.load({ path: rootPath.value })
@@ -91,7 +86,6 @@ export function useOwnershipAnalysis(deps: UseCodeIntelAnalysisDeps) {
     ownershipAnalysis: endpoint.data,
     loadingOwnership: endpoint.loading,
     ownershipError: endpoint.error,
-    ownershipViewMode,
     loadOwnershipAnalysis,
   }
 }
