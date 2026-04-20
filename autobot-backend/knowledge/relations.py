@@ -63,11 +63,11 @@ class RelationsMixin:
 
     async def _fact_exists(self, fact_id: str) -> bool:
         """Check whether a fact key exists in Redis."""
-        return bool(await self.aioredis_client.exists(f"fact:{fact_id}"))
+        return bool(await self.redis().exists(f"fact:{fact_id}"))
 
     async def _get_fact_content(self, fact_id: str) -> Optional[dict]:
         """Return decoded fact hash or None."""
-        raw = await self.aioredis_client.hgetall(f"fact:{fact_id}")
+        raw = await self.redis().hgetall(f"fact:{fact_id}")
         if not raw:
             return None
         decoded = {}
@@ -130,7 +130,7 @@ class RelationsMixin:
         out_key = self._rel_out_key(source_fact_id)
         in_key = self._rel_in_key(target_fact_id)
 
-        pipe = self.aioredis_client.pipeline()
+        pipe = self.redis().pipeline()
         pipe.rpush(out_key, json.dumps(out_entry))
         pipe.rpush(in_key, json.dumps(in_entry))
         await pipe.execute()
@@ -155,7 +155,7 @@ class RelationsMixin:
         removed = 0
         # Filter outgoing
         out_key = self._rel_out_key(source_fact_id)
-        raw_out = await self.aioredis_client.lrange(out_key, 0, -1)
+        raw_out = await self.redis().lrange(out_key, 0, -1)
         if raw_out:
             kept = []
             for entry_bytes in raw_out:
@@ -166,13 +166,13 @@ class RelationsMixin:
                     removed += 1
                 else:
                     kept.append(entry_bytes)
-            await self.aioredis_client.delete(out_key)
+            await self.redis().delete(out_key)
             if kept:
-                await self.aioredis_client.rpush(out_key, *kept)
+                await self.redis().rpush(out_key, *kept)
 
         # Filter incoming
         in_key = self._rel_in_key(target_fact_id)
-        raw_in = await self.aioredis_client.lrange(in_key, 0, -1)
+        raw_in = await self.redis().lrange(in_key, 0, -1)
         if raw_in:
             kept = []
             for entry_bytes in raw_in:
@@ -183,9 +183,9 @@ class RelationsMixin:
                     pass  # drop
                 else:
                     kept.append(entry_bytes)
-            await self.aioredis_client.delete(in_key)
+            await self.redis().delete(in_key)
             if kept:
-                await self.aioredis_client.rpush(in_key, *kept)
+                await self.redis().rpush(in_key, *kept)
 
         if removed == 0:
             return {
@@ -207,7 +207,7 @@ class RelationsMixin:
         relations: List[Dict[str, Any]] = []
 
         if direction in ("outgoing", "both"):
-            raw = await self.aioredis_client.lrange(self._rel_out_key(fact_id), 0, -1)
+            raw = await self.redis().lrange(self._rel_out_key(fact_id), 0, -1)
             for entry_bytes in raw:
                 entry = json.loads(entry_bytes)
                 if relation_type and entry["type"] != relation_type:
@@ -224,7 +224,7 @@ class RelationsMixin:
                 relations.append(rel)
 
         if direction in ("incoming", "both"):
-            raw = await self.aioredis_client.lrange(self._rel_in_key(fact_id), 0, -1)
+            raw = await self.redis().lrange(self._rel_in_key(fact_id), 0, -1)
             for entry_bytes in raw:
                 entry = json.loads(entry_bytes)
                 if relation_type and entry["type"] != relation_type:
@@ -278,7 +278,7 @@ class RelationsMixin:
             if depth >= max_depth:
                 continue
 
-            raw = await self.aioredis_client.lrange(
+            raw = await self.redis().lrange(
                 self._rel_out_key(current_id), 0, -1
             )
             for entry_bytes in raw:
@@ -366,11 +366,11 @@ class RelationsMixin:
 
         cursor = b"0"
         while True:
-            cursor, keys = await self.aioredis_client.scan(
+            cursor, keys = await self.redis().scan(
                 cursor=cursor, match="kb:rel:out:*", count=200
             )
             for key in keys:
-                raw = await self.aioredis_client.lrange(key, 0, -1)
+                raw = await self.redis().lrange(key, 0, -1)
                 for entry_bytes in raw:
                     entry = json.loads(entry_bytes)
                     total += 1

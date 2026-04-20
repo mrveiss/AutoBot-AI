@@ -863,7 +863,7 @@ class FactsMixin:
 
             # Batch fetch facts
             facts = []
-            pipeline = self.aioredis_client.pipeline()
+            pipeline = self.redis().pipeline()
             for key in fact_keys:
                 pipeline.hgetall(key)
             facts_data = await pipeline.execute()
@@ -1206,7 +1206,7 @@ class FactsMixin:
 
         try:
             # Use pipeline for batch fetch
-            pipeline = self.aioredis_client.pipeline()
+            pipeline = self.redis().pipeline()
             for fact_id in fact_ids:
                 pipeline.hgetall("fact:%s" % fact_id)
 

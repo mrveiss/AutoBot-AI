@@ -53,7 +53,7 @@ class StatsMixin:
         """Atomically increment a stats counter field."""
         if self.aioredis_client:
             try:
-                await self.aioredis_client.hincrby(self._stats_key, field, amount)
+                await self.redis().hincrby(self._stats_key, field, amount)
                 logger.debug("Incremented %s by %d", field, amount)
             except Exception as e:
                 logger.warning("Failed to increment stat %s: %s", field, e)
@@ -63,7 +63,7 @@ class StatsMixin:
         if self.aioredis_client:
             try:
                 # Use hincrby with negative value for atomic decrement
-                await self.aioredis_client.hincrby(self._stats_key, field, -amount)
+                await self.redis().hincrby(self._stats_key, field, -amount)
                 logger.debug("Decremented %s by %d", field, amount)
             except Exception as e:
                 logger.warning("Failed to decrement stat %s: %s", field, e)
@@ -72,7 +72,7 @@ class StatsMixin:
         """Get a single stats counter value (O(1))."""
         if self.aioredis_client:
             try:
-                value = await self.aioredis_client.hget(self._stats_key, field)
+                value = await self.redis().hget(self._stats_key, field)
                 if value is not None:
                     return int(value)
             except Exception as e:
@@ -91,7 +91,7 @@ class StatsMixin:
         """
         if self.aioredis_client:
             try:
-                stats = await self.aioredis_client.hgetall(self._stats_key)
+                stats = await self.redis().hgetall(self._stats_key)
                 result = {}
                 for k, v in stats.items():
                     key = k.decode() if isinstance(k, bytes) else k
@@ -114,7 +114,7 @@ class StatsMixin:
 
     async def _set_initial_counters(self, fact_count: int, vector_count: int) -> None:
         """Set initial counter values in Redis (Issue #398: extracted)."""
-        await self.aioredis_client.hset(
+        await self.redis().hset(
             self._stats_key,
             mapping={
                 "total_facts": fact_count,
@@ -134,7 +134,7 @@ class StatsMixin:
             return
 
         try:
-            exists = await self.aioredis_client.exists(self._stats_key)
+            exists = await self.redis().exists(self._stats_key)
             if exists:
                 logger.info("Stats counters already initialized")
                 return
@@ -142,7 +142,7 @@ class StatsMixin:
             logger.info("Initializing stats counters from existing data...")
 
             fact_count = 0
-            async for _ in self.aioredis_client.scan_iter(match="fact:*", count=1000):
+            async for _ in self.redis().scan_iter(match="fact:*", count=1000):
                 fact_count += 1
 
             vector_count = 0
@@ -160,7 +160,7 @@ class StatsMixin:
     async def _count_actual_facts(self) -> int:
         """Count actual facts via Redis scan (Issue #398: extracted)."""
         count = 0
-        async for _ in self.aioredis_client.scan_iter(match="fact:*", count=1000):
+        async for _ in self.redis().scan_iter(match="fact:*", count=1000):
             count += 1
         return count
 
@@ -178,7 +178,7 @@ class StatsMixin:
         self, actual_facts: int, actual_vectors: int
     ) -> None:
         """Correct stats counters to actual values (Issue #398: extracted)."""
-        await self.aioredis_client.hset(
+        await self.redis().hset(
             self._stats_key,
             mapping={
                 "total_facts": actual_facts,
@@ -259,7 +259,7 @@ class StatsMixin:
 
         categories = set()
         try:
-            async with self.aioredis_client.pipeline() as pipe:
+            async with self.redis().pipeline() as pipe:
                 for key in fact_keys_sample:
                     await pipe.hget(key, "metadata")
                 all_metadata = await pipe.execute()
@@ -337,7 +337,7 @@ class StatsMixin:
         """Sample fact keys for category extraction (Issue #315)."""
         fact_keys = []
         try:
-            async for key in self.aioredis_client.scan_iter(
+            async for key in self.redis().scan_iter(
                 match="fact:*", count=limit
             ):
                 fact_keys.append(key)
@@ -350,7 +350,7 @@ class StatsMixin:
     async def _get_redis_memory_size(self) -> int:
         """Get Redis memory usage (Issue #315)."""
         try:
-            info = await self.aioredis_client.info("memory")
+            info = await self.redis().info("memory")
             return info.get("used_memory", 0)
         except Exception as e:
             logger.debug("Could not get Redis memory info: %s", e)
@@ -474,7 +474,7 @@ class StatsMixin:
         timestamps = []
         for fact_key in fact_keys:
             try:
-                fact_data = await self.aioredis_client.hgetall(fact_key)
+                fact_data = await self.redis().hgetall(fact_key)
                 if fact_data and "timestamp" in fact_data:
                     timestamps.append(fact_data["timestamp"])
             except Exception:  # nosec B112
