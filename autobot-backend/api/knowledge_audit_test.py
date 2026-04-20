@@ -59,6 +59,8 @@ def _make_kb(audit_log=None):
 @pytest.mark.asyncio
 async def test_org_audit_log_admin_allowed():
     """Admin role can access org audit log."""
+    from autobot_shared.models.pagination import PaginationParams
+
     from api.knowledge_audit import get_organization_audit_log
 
     user = {"user_id": "u1", "org_id": "org1", "role": "admin"}
@@ -69,7 +71,9 @@ async def test_org_audit_log_admin_allowed():
         new=AsyncMock(return_value=kb),
     ):
         result = await get_organization_audit_log(
-            request=_make_request(kb), current_user=user
+            request=_make_request(kb),
+            current_user=user,
+            pagination=PaginationParams(limit=50, offset=0),
         )
 
     assert result["organization_id"] == "org1"
@@ -79,6 +83,8 @@ async def test_org_audit_log_admin_allowed():
 @pytest.mark.asyncio
 async def test_org_audit_log_org_admin_allowed():
     """org_admin role can access org audit log."""
+    from autobot_shared.models.pagination import PaginationParams
+
     from api.knowledge_audit import get_organization_audit_log
 
     user = {"user_id": "u2", "org_id": "org1", "role": "org_admin"}
@@ -89,7 +95,9 @@ async def test_org_audit_log_org_admin_allowed():
         new=AsyncMock(return_value=kb),
     ):
         result = await get_organization_audit_log(
-            request=_make_request(kb), current_user=user
+            request=_make_request(kb),
+            current_user=user,
+            pagination=PaginationParams(limit=50, offset=0),
         )
 
     assert result["organization_id"] == "org1"
@@ -215,7 +223,7 @@ async def test_compliance_summary_org_admin_allowed():
         new=AsyncMock(return_value=kb),
     ):
         result = await get_compliance_summary(
-            request=_make_request(kb), current_user=user
+            request=_make_request(kb), current_user=user, days=30
         )
 
     assert "summary_period_days" in result
