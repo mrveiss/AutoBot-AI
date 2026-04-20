@@ -88,9 +88,14 @@ def _board_entry(board_id: str, name: str, description: str) -> dict:
 async def _get_redis(req: Request):
     """Return the async Redis client from the KB instance."""
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
-    if kb is None or kb.aioredis_client is None:
+    if kb is None:
         raise HTTPException(status_code=503, detail="Knowledge base not available")
-    return kb.redis()
+    try:
+        return kb.redis()
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=503, detail="Knowledge base not available"
+        ) from exc
 
 
 @with_error_handling(
