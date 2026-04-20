@@ -34,7 +34,6 @@ import {
   type DuplicateCode,
   type Declaration,
   type HardcodedValue,
-  type RefactoringSuggestion,
   type ChartData,
   type DependencyGraph,
   type ImportTreeNode,
@@ -108,7 +107,6 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   const duplicateAnalysis = ref<DuplicateCode[]>([])
   const declarationAnalysis = ref<Declaration[]>([])
   const hardcodeAnalysis = ref<HardcodedValue[]>([])
-  const refactoringSuggestions = ref<RefactoringSuggestion[]>([])
   const unifiedReport = ref<UnifiedReportData | null>(null)
   const selectedCategory = ref('all')
   const callGraphData = ref<DependencyGraph>({ nodes: [], edges: [] })
@@ -650,7 +648,6 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     duplicateAnalysis,
     declarationAnalysis,
     hardcodeAnalysis,
-    refactoringSuggestions,
     chartData: chartEndpoint.data,
     chartDataLoading: chartEndpoint.loading,
     chartDataError: chartEndpoint.error,
