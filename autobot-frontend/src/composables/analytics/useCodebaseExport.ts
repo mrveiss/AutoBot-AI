@@ -8,6 +8,7 @@
  */
 import type { Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
+import type { HardcodedValue } from '@/composables/analytics/analyticsTypes'
 
 const logger = createLogger('CodebaseExport')
 
@@ -48,17 +49,7 @@ interface EnvExportData {
   total_hardcoded_values?: number
   high_priority_count?: number
   categories?: Record<string, number>
-  hardcoded_values?: Array<{
-    type: string
-    severity: string
-    value: string
-    file?: string
-    line?: number
-    variable_name?: string
-    suggested_env_var?: string
-    context?: string
-    current_usage?: string
-  }>
+  hardcoded_values?: HardcodedValue[]
   recommendations?: Array<{
     priority?: string
     description?: string
@@ -147,15 +138,8 @@ function _generateDeclarationsMd(data: unknown): string {
 function _generateHardcodesMd(data: unknown): string {
   // #5277: dedicated markdown for the array form returned by
   // `/api/analytics/codebase/hardcodes` (distinct from env-analysis export).
-  const hcs = data as Array<{
-    file: string
-    line: number
-    variable_name?: string
-    value: string
-    type: string
-    severity: string
-    suggested_env_var?: string
-  }>
+  // #5311: use canonical `HardcodedValue` instead of inline shape.
+  const hcs = data as HardcodedValue[]
   let md = `## Hardcoded Values\n\n**Total Values Found:** ${hcs.length}\n\n`
   if (hcs.length === 0) return md
   const groups: Record<string, typeof hcs> = { high: [], medium: [], low: [] }

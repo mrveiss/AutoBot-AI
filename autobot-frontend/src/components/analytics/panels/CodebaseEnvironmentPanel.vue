@@ -213,16 +213,8 @@
 
 <script setup lang="ts">
 import EmptyState from '@/components/ui/EmptyState.vue'
-
-interface HardcodedValue {
-  file: string
-  line: number
-  variable_name?: string
-  value: string
-  type: string
-  severity: string
-  suggested_env_var: string
-}
+// #5311: canonical HardcodedValue from analyticsTypes — was inline-duplicated here.
+import type { HardcodedValue } from '@/composables/analytics/analyticsTypes'
 
 interface EnvRecommendation {
   env_var_name: string
