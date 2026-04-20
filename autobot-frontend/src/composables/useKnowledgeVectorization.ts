@@ -9,6 +9,7 @@
 import { ref, computed } from 'vue'
 import { useKnowledgeBase } from './useKnowledgeBase'
 import { usePollingJob } from './usePollingJob'
+import { useBatchSelection } from './useBatchSelection'
 import apiClient from '@/utils/ApiClient'
 import appConfig from '@/config/AppConfig.js'
 import { createLogger } from '@/utils/debugUtils'
@@ -54,7 +55,6 @@ export function useKnowledgeVectorization() {
 
   // State
   const documentStates = ref<Map<string, DocumentVectorizationState>>(new Map())
-  const selectedDocuments = ref<Set<string>>(new Set())
   const globalProgress = ref<VectorizationProgress>({
     total: 0,
     completed: 0,
@@ -65,12 +65,20 @@ export function useKnowledgeVectorization() {
   // Request deduplication cache (Issue #4006)
   const requestCache = new Map<string, CachedRequest>()
 
-  // Computed
-  const hasSelection = computed(() => selectedDocuments.value.size > 0)
+  // Batch selection state (#5192). This composable never owned a reactive list
+  // of document IDs — selection was always driven by caller-supplied IDs — so
+  // we wire `useBatchSelection` against an empty items source and expose
+  // id-centric shims below. The shared Set<Key> state, toggle/select/deselect
+  // primitives, and selectedCount derivation are reused.
+  const selection = useBatchSelection<string, string>(ref<string[]>([]))
 
-  const selectionCount = computed(() => selectedDocuments.value.size)
-
-  const selectedDocumentsList = computed(() => Array.from(selectedDocuments.value))
+  // Preserve the existing public API shape (Ref<Set<string>>, string[]).
+  // `selection.selected` is typed `Readonly<Ref<Set<string>>>` because we
+  // instantiated `useBatchSelection<string, string>` above.
+  const selectedDocuments = selection.selected
+  const selectionCount = selection.selectedCount
+  const hasSelection = computed(() => selection.selectedCount.value > 0)
+  const selectedDocumentsList = computed<string[]>(() => Array.from(selection.selected.value))
 
   const canVectorizeSelection = computed(() => {
     return selectedDocumentsList.value.some(docId => {
@@ -287,52 +295,18 @@ export function useKnowledgeVectorization() {
   }
 
   // ==================== BATCH SELECTION MANAGEMENT ====================
+  // Thin id-centric shims around `useBatchSelection` (#5192) to preserve this
+  // composable's historical public API. The underlying state lives on
+  // `selection` declared above.
 
-  /**
-   * Toggle document selection
-   */
-  const toggleDocumentSelection = (documentId: string) => {
-    if (selectedDocuments.value.has(documentId)) {
-      selectedDocuments.value.delete(documentId)
-    } else {
-      selectedDocuments.value.add(documentId)
-    }
-  }
-
-  /**
-   * Select document
-   */
-  const selectDocument = (documentId: string) => {
-    selectedDocuments.value.add(documentId)
-  }
-
-  /**
-   * Deselect document
-   */
-  const deselectDocument = (documentId: string) => {
-    selectedDocuments.value.delete(documentId)
-  }
-
-  /**
-   * Select all documents
-   */
+  const toggleDocumentSelection = (documentId: string) => selection.toggle(documentId)
+  const selectDocument = (documentId: string) => selection.select(documentId)
+  const deselectDocument = (documentId: string) => selection.deselect(documentId)
   const selectAll = (documentIds: string[]) => {
-    documentIds.forEach(id => selectedDocuments.value.add(id))
+    documentIds.forEach(id => selection.select(id))
   }
-
-  /**
-   * Deselect all documents
-   */
-  const deselectAll = () => {
-    selectedDocuments.value.clear()
-  }
-
-  /**
-   * Check if document is selected
-   */
-  const isDocumentSelected = (documentId: string): boolean => {
-    return selectedDocuments.value.has(documentId)
-  }
+  const deselectAll = () => selection.clear()
+  const isDocumentSelected = (documentId: string): boolean => selection.isSelected(documentId)
 
   // ==================== VECTORIZATION OPERATIONS ====================
 
