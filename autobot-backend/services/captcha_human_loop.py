@@ -39,9 +39,9 @@ import base64
 import logging
 import os
 import threading
+import time
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 
@@ -174,7 +174,7 @@ class CaptchaHumanLoop:
         self,
         captcha_id: str,
         url: str,
-        start_time: datetime,
+        start_time: float,
         solution: str,
         confidence: str,
     ) -> CaptchaResolutionResult:
@@ -183,7 +183,7 @@ class CaptchaHumanLoop:
 
         Issue #620.
         """
-        duration = (datetime.utcnow() - start_time).total_seconds()
+        duration = time.monotonic() - start_time
         return CaptchaResolutionResult(
             success=True,
             status=CaptchaResolutionStatus.AUTO_SOLVED,
@@ -202,7 +202,7 @@ class CaptchaHumanLoop:
         captcha_input_selector: Optional[str],
         captcha_id: str,
         url: str,
-        start_time: datetime,
+        start_time: float,
     ) -> Optional[CaptchaResolutionResult]:
         """
         Attempt automatic CAPTCHA solving.
@@ -267,7 +267,7 @@ class CaptchaHumanLoop:
         self,
         captcha_id: str,
         url: str,
-        start_time: datetime,
+        start_time: float,
         error_message: str,
     ) -> CaptchaResolutionResult:
         """Build error result for CAPTCHA intervention failures.
@@ -286,7 +286,7 @@ class CaptchaHumanLoop:
             status=CaptchaResolutionStatus.ERROR,
             captcha_id=captcha_id,
             url=url,
-            duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
+            duration_seconds=time.monotonic() - start_time,
             error_message=error_message,
         )
 
@@ -343,7 +343,7 @@ class CaptchaHumanLoop:
         status: CaptchaResolutionStatus,
         captcha_id: str,
         url: str,
-        start_time: datetime,
+        start_time: float,
     ) -> CaptchaResolutionResult:
         """Build final CAPTCHA resolution result.
 
@@ -362,7 +362,7 @@ class CaptchaHumanLoop:
             status=status,
             captcha_id=captcha_id,
             url=url,
-            duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
+            duration_seconds=time.monotonic() - start_time,
         )
 
     async def _try_auto_solve_flow(
@@ -372,7 +372,7 @@ class CaptchaHumanLoop:
         captcha_input_selector: Optional[str],
         captcha_id: str,
         url: str,
-        start_time: datetime,
+        start_time: float,
     ) -> tuple[Optional[CaptchaResolutionResult], str]:
         """Attempt auto-solve and return result with screenshot base64.
 
@@ -444,7 +444,7 @@ class CaptchaHumanLoop:
             CaptchaResolutionResult with success status and details.
         """
         captcha_id = str(uuid.uuid4())
-        start_time = datetime.utcnow()
+        start_time = time.monotonic()
         logger.info("Handling CAPTCHA at %s (type: %s)", url, captcha_type)
 
         try:
