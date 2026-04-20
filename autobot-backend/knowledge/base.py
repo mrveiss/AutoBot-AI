@@ -553,7 +553,7 @@ class KnowledgeBaseCore:
         self.ensure_initialized()
         try:
             if self.aioredis_client:
-                pong = await self.aioredis_client.ping()
+                pong = await self.redis().ping()
                 return "healthy" if pong else "unhealthy"
             else:
                 return "no_client"
@@ -586,7 +586,7 @@ class KnowledgeBaseCore:
 
         try:
             keys = []
-            async for key in self.aioredis_client.scan_iter(match=pattern):
+            async for key in self.redis().scan_iter(match=pattern):
                 if isinstance(key, bytes):
                     keys.append(key.decode("utf-8"))
                 else:
@@ -620,8 +620,8 @@ class KnowledgeBaseCore:
 
         try:
             # Look for model metadata in existing facts
-            async for key in self.aioredis_client.scan_iter(match="fact:*", count=10):
-                metadata_json = await self.aioredis_client.hget(key, "metadata")
+            async for key in self.redis().scan_iter(match="fact:*", count=10):
+                metadata_json = await self.redis().hget(key, "metadata")
                 model = _extract_embedding_model_from_metadata(metadata_json)
                 if model:
                     return model
