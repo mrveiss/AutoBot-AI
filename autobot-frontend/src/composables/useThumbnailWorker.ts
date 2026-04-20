@@ -25,7 +25,7 @@
  * ```
  */
 
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onScopeDispose, getCurrentScope } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useThumbnailWorker')
@@ -381,21 +381,23 @@ export function useThumbnailWorker() {
   }
 
   /**
-   * Cleanup on unmount
+   * Cleanup when effect scope disposes (component unmount or scope.stop())
    */
-  onUnmounted(() => {
-    // Revoke blob URLs to free memory
-    blobUrls.forEach(url => {
-      URL.revokeObjectURL(url)
-    })
-    blobUrls.clear()
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      // Revoke blob URLs to free memory
+      blobUrls.forEach(url => {
+        URL.revokeObjectURL(url)
+      })
+      blobUrls.clear()
 
-    // Terminate worker if no longer needed
-    if (workerInstance && pendingRequests.size === 0) {
-      workerInstance.terminate()
-      workerInstance = null
-    }
-  })
+      // Terminate worker if no longer needed
+      if (workerInstance && pendingRequests.size === 0) {
+        workerInstance.terminate()
+        workerInstance = null
+      }
+    })
+  }
 
   return {
     isSupported,
