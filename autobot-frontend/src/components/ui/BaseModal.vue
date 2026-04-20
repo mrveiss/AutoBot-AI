@@ -20,7 +20,7 @@
           class="dialog"
           :class="[sizeClass, { 'dialog-scrollable': scrollable }]"
           @click.stop
-          @keydown="handleKeydown"
+          @keydown="onFocusTrapKeydown"
           tabindex="-1"
         >
           <!-- Header -->
@@ -55,6 +55,7 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, onUnmounted, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useFocusTrap, FOCUSABLE_SELECTOR } from '@/composables/useFocusTrap'
 import Icon from './Icon.vue'
 
 /**
@@ -119,6 +120,7 @@ const { t } = useI18n()
 
 // Refs
 const dialogRef = ref<HTMLElement | null>(null)
+const { onKeydown: onFocusTrapKeydown } = useFocusTrap(dialogRef)
 let previousActiveElement: HTMLElement | null = null
 
 // Stable unique IDs for ARIA labeling (Vue 3.5+ useId)
@@ -157,9 +159,7 @@ const onAfterEnter = async () => {
 
   // Focus the dialog or first focusable element
   if (dialogRef.value) {
-    const firstFocusable = dialogRef.value.querySelector<HTMLElement>(
-      'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
-    )
+    const firstFocusable = dialogRef.value.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
 
     if (firstFocusable) {
       firstFocusable.focus()
@@ -180,33 +180,6 @@ const onAfterLeave = () => {
 
   // Unlock body scroll
   document.body.style.overflow = ''
-}
-
-/**
- * Real focus trap via Tab/Shift+Tab wrap. Only intercepts when focus would
- * leave the dialog — otherwise falls through to browser default, allowing
- * natural navigation plus outside clicks (e.g. devtools) to remain usable.
- */
-const handleKeydown = (event: KeyboardEvent) => {
-  if (event.key !== 'Tab' || !dialogRef.value) return
-
-  const focusable = dialogRef.value.querySelectorAll<HTMLElement>(
-    'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
-  )
-  if (focusable.length === 0) return
-
-  const first = focusable[0]
-  const last = focusable[focusable.length - 1]
-  const active = document.activeElement
-
-  if (event.shiftKey && active === first) {
-    event.preventDefault()
-    last.focus()
-  } else if (!event.shiftKey && active === last) {
-    event.preventDefault()
-    first.focus()
-  }
-  // Otherwise allow default Tab behavior
 }
 
 // Cleanup on unmount
