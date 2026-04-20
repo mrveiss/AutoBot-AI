@@ -70,6 +70,11 @@ class _FakeKB(FactsMixin):
         self.redis_client = MagicMock()
         self.aioredis_client = AsyncMock()
 
+    def redis(self):
+        """Shim for the KB.redis() public accessor so this fake survives the
+        pending ``aioredis_client`` -> ``_aioredis_client`` rename (#5225)."""
+        return self.aioredis_client
+
     def ensure_initialized(self):
         pass
 

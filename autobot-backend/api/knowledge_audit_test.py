@@ -44,10 +44,14 @@ def _make_audit_log():
 
 
 def _make_kb(audit_log=None):
-    """Return a mock knowledge base with an audit_log."""
+    """Return a mock knowledge base with an audit_log.
+
+    ``kb`` is a MagicMock so ``kb.redis()`` auto-creates a child mock; the RBAC
+    tests here do not exercise any Redis-backed code paths, so no explicit
+    redis() or aioredis_client setup is required.
+    """
     kb = MagicMock()
     kb.audit_log = audit_log or _make_audit_log()
-    kb.aioredis_client = MagicMock()
     return kb
 
 
