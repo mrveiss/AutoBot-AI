@@ -646,8 +646,7 @@ const cancelSelection = () => {
 }
 
 const toggleSelection = (sessionId: string) => {
-  const session = store.sessions.find(s => s.id === sessionId)
-  if (session) sessionSelection.toggle(session)
+  sessionSelection.toggleByKey(sessionId)
 }
 
 const deleteSelectedSessions = async () => {

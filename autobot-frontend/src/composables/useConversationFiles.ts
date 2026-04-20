@@ -415,13 +415,7 @@ export function useConversationFiles(sessionId: string) {
   // Bulk & sort operations
 
   const toggleFileSelection = (fileId: string) => {
-    const file = files.value.find(f => f.file_id === fileId)
-    if (file) {
-      fileSelection.toggle(file)
-    } else {
-      // File already removed from the list — drop any stale selection entry.
-      fileSelection.deselectByKey(fileId)
-    }
+    fileSelection.toggleByKey(fileId)
   }
 
   const selectAllFiles = () => {
