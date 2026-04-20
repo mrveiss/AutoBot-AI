@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from utils.chromadb_client import get_all_paginated
 
-from ..analyzers import DEFAULT_HARDCODE_SEVERITY
+from ..analyzers import normalize_hardcode_record
 from ..scanner import _tasks_sync_lock, indexing_tasks
 from ..storage import get_code_collection, get_redis_connection
 from .shared import (
@@ -326,23 +326,9 @@ def _fetch_hardcodes_from_memory(storage, hardcode_type: Optional[str]) -> list:
     return results
 
 
-def _normalize_hardcode_record(record: dict) -> dict:
-    """Normalize a hardcode record to the canonical shape (Issue #5290).
-
-    Old records use ``file_path``; new producers emit ``file``. Similarly
-    ``severity`` was absent on many AST/regex detections — fill from the
-    type's default so the frontend ``HardcodedValue`` contract holds.
-
-    Issue #5312: default-severity map lives in ``analyzers.py`` as the
-    single source of truth, imported here instead of duplicated.
-    """
-    normalized = dict(record)
-    if "file" not in normalized and "file_path" in normalized:
-        normalized["file"] = normalized["file_path"]
-    normalized.setdefault("file", "")
-    if not normalized.get("severity"):
-        normalized["severity"] = DEFAULT_HARDCODE_SEVERITY.get(normalized.get("type", ""), "low")
-    return normalized
+# Issue #5367: promoted to ``analyzers.normalize_hardcode_record`` so
+# other endpoints (env-analysis) can share the same boundary contract.
+_normalize_hardcode_record = normalize_hardcode_record
 
 
 @router.get("/hardcodes")

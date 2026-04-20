@@ -789,6 +789,27 @@ def _default_severity_for(hardcode_type: str) -> str:
     return DEFAULT_HARDCODE_SEVERITY.get(hardcode_type, "low")
 
 
+def normalize_hardcode_record(record: dict) -> dict:
+    """Normalize a hardcode record to the canonical shape.
+
+    Issue #5290: ``/hardcodes`` endpoint applies this to legacy records
+    stored in Redis before the producer shape was fixed (``file_path``
+    → ``file`` and severity backfill).
+
+    Issue #5367: promoted from ``endpoints/stats.py`` to be importable
+    by other endpoints (``env-analysis``) for defensive parity — both
+    paths serve the same conceptual records and should return the same
+    shape on the wire.
+    """
+    normalized = dict(record)
+    if "file" not in normalized and "file_path" in normalized:
+        normalized["file"] = normalized["file_path"]
+    normalized.setdefault("file", "")
+    if not normalized.get("severity"):
+        normalized["severity"] = DEFAULT_HARDCODE_SEVERITY.get(normalized.get("type", ""), "low")
+    return normalized
+
+
 def _check_hardcoded_ip(ip: str, line_num: int, line_content: str, file_path: str) -> Optional[Dict]:
     """Check if IP address is a known infrastructure IP."""
     # Issue #380: Use module-level constant for local IP prefixes
