@@ -19,11 +19,14 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import yaml
 
 from constants.path_constants import PATH
+
+if TYPE_CHECKING:
+    from knowledge.backends import BaseClient, BaseCollection
 
 logger = logging.getLogger(__name__)
 
@@ -143,24 +146,27 @@ class CognitionSeeder:
     """
 
     def __init__(self) -> None:
-        self._client = None
+        # Backend-agnostic handles (#5062, #5194). Resolved in
+        # ``_ensure_initialized()`` to a ``BaseClient``; the concrete
+        # production backend is ChromaDB today.
+        self._client: Optional["BaseClient"] = None
         self._embed_model = None
         self._initialized = False
         self._root_dir: Path = PATH.PROJECT_ROOT
 
     async def _ensure_initialized(self) -> bool:
-        """Lazy-initialize ChromaDB client and embedding model."""
+        """Lazy-initialize vector-store client and embedding model."""
         if self._initialized:
             return True
         try:
             from llama_index.embeddings.ollama import OllamaEmbedding
 
             from autobot_shared.ssot_config import get_ollama_url
-            from utils.chromadb_client import get_chromadb_client
+            from knowledge.backends import get_default_client
 
             chromadb_path = self._root_dir / "data" / "chromadb"
             self._client = await asyncio.to_thread(
-                get_chromadb_client, str(chromadb_path)
+                get_default_client, db_path=str(chromadb_path)
             )
             ollama_url = get_ollama_url()
             self._embed_model = OllamaEmbedding(

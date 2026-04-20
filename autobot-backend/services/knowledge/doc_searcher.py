@@ -10,11 +10,14 @@ Contains DocumentationSearcher for AutoBot documentation search integration.
 
 import re
 import threading
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.ssot_config import get_ollama_url
 from constants.path_constants import PATH
+
+if TYPE_CHECKING:
+    from knowledge.backends import BaseClient, BaseCollection
 
 logger = get_llm_logger("doc_searcher")
 
@@ -51,11 +54,14 @@ class DocumentationSearcher:
         Initialize the documentation searcher.
 
         Args:
-            collection_name: ChromaDB collection name for documentation
+            collection_name: Vector-store collection name for documentation
         """
         self.collection_name = collection_name
-        self._client = None
-        self._collection = None
+        # Backend-agnostic handles (#5062, #5194). Resolved in ``initialize()``
+        # to a ``BaseClient`` / ``BaseCollection``; the concrete production
+        # backend is ChromaDB today.
+        self._client: Optional["BaseClient"] = None
+        self._collection: Optional["BaseCollection"] = None
         self._embed_model = None
         self._initialized = False
         self._doc_patterns = [
@@ -75,11 +81,11 @@ class DocumentationSearcher:
         try:
             from llama_index.embeddings.ollama import OllamaEmbedding
 
-            from utils.chromadb_client import get_chromadb_client
+            from knowledge.backends import get_default_client
 
-            # Initialize ChromaDB
+            # Initialize ChromaDB via pluggable backend seam (#5062, #5194).
             chromadb_path = PROJECT_ROOT / "data" / "chromadb"
-            self._client = get_chromadb_client(str(chromadb_path))
+            self._client = get_default_client(db_path=str(chromadb_path))
 
             # Get documentation collection (don't create if not exists)
             try:
