@@ -76,6 +76,24 @@ repos:
       - id: mixed-line-ending
         args: [--fix=lf]
 
+  # AutoBot custom: regression-prevention for #5178 datetime migration.
+  # Blocks datetime.utcnow().isoformat() (#5178), datetime.utcnow().isoformat()
+  # + "Z" mixed format (#5238), and bare time.strftime("%Y-%m-%dT...") (#5178
+  # bug-fix). Use autobot_shared.time_utils.utc_timestamp() instead.
+  # Only fires on staged Python files — does not block pre-existing
+  # violations until those files are touched. Broader DTZ003 enforcement
+  # gated on #5211 completion.
+  - repo: local
+    hooks:
+      - id: no-utcnow-isoformat
+        name: Block datetime.utcnow().isoformat() and friends (#5178 #5238)
+        entry: tools/lint/check_no_utcnow_isoformat.py
+        language: python
+        files: \.py$
+        # Stage matches the existing record-branch hook above.
+        stages: [pre-commit]
+        description: "Use autobot_shared.time_utils.utc_timestamp() instead of datetime.utcnow().isoformat()"
+
   # Python-specific checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
