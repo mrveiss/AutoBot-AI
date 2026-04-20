@@ -24,7 +24,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
-from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.model_constants import (
     EXPENSIVE_MODEL_MARKER_GPT4,
     EXPENSIVE_MODEL_MARKER_OPUS,
@@ -72,7 +72,7 @@ class MaintenanceRecommendation:
     confidence: float  # 0.0 to 1.0
     recommended_action: str
     estimated_impact: str
-    detected_at: datetime = field(default_factory=datetime.utcnow)
+    detected_at: datetime = field(default_factory=now_utc)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:

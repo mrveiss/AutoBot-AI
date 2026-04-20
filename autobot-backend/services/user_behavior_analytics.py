@@ -22,7 +22,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
-from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.ttl_constants import TTL_24_HOURS, TTL_30_DAYS, TTL_90_DAYS
 
 logger = logging.getLogger(__name__)
@@ -36,7 +36,7 @@ class UserEvent:
     feature: str  # chat, knowledge, tools, monitoring, etc.
     user_id: Optional[str] = None
     session_id: Optional[str] = None
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=now_utc)
     duration_ms: Optional[int] = None
     metadata: dict = field(default_factory=dict)
 

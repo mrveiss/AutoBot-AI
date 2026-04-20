@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.time_utils import now_utc
+
 
 @dataclass
 class SourceInfo:
@@ -64,7 +66,7 @@ class ConnectorConfig:
     enabled: bool = True
     verification_mode: str = "collaborative"  # "autonomous" or "collaborative"
     schedule_cron: Optional[str] = None  # cron-like expression; None = manual only
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=now_utc)
     last_sync_at: Optional[datetime] = None
     include_patterns: List[str] = field(default_factory=list)
     exclude_patterns: List[str] = field(default_factory=list)

@@ -14,6 +14,8 @@ from enum import Enum
 from typing import Any, Dict, List
 from uuid import uuid4
 
+from autobot_shared.time_utils import now_utc
+
 
 class ChannelType(str, Enum):
     """Communication channel types."""
@@ -83,7 +85,7 @@ class UnifiedMessage:
     message_type: MessageType = MessageType.USER_TEXT
     content: Any = None
     metadata: Dict[str, Any] = field(default_factory=dict)
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=now_utc)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert message to dictionary."""
@@ -140,8 +142,8 @@ class GatewaySession:
     context: Dict[str, Any] = field(default_factory=dict)
     message_history: List[str] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    last_activity: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=now_utc)
+    last_activity: datetime = field(default_factory=now_utc)
     rate_limit_tokens: int = 100  # Default rate limit
 
     def update_activity(self) -> None:

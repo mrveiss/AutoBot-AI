@@ -17,6 +17,7 @@ from enum import Enum, auto
 from typing import Any, Dict
 
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+from autobot_shared.time_utils import now_utc
 
 
 class ReflectionVerdict(Enum):
@@ -44,7 +45,7 @@ class ReflectionResult:
     critique: str = ""
     refinement_hint: str = ""
     iteration: int = 1
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=now_utc)
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize for event stream / logging."""

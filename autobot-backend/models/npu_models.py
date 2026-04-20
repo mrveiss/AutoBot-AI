@@ -11,6 +11,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 
+from autobot_shared.time_utils import now_utc
 from pydantic import BaseModel, Field, validator
 
 from constants.network_constants import NetworkConstants
@@ -159,7 +160,7 @@ class NPUWorkerMetrics(BaseModel):
         default=None, description="Timestamp of last error"
     )
     metrics_timestamp: datetime = Field(
-        default_factory=datetime.utcnow, description="Metrics collection timestamp"
+        default_factory=now_utc, description="Metrics collection timestamp"
     )
 
     class Config:

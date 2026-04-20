@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
-from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.time_utils import now_utc, utc_timestamp
 
 from .types import FILE_OPERATION_ACTIONS, ThreatCategory, ThreatLevel
 
@@ -282,7 +282,7 @@ class UserProfile:
     file_access_patterns: Dict[str, int] = field(default_factory=dict)
     api_usage_patterns: Dict[str, float] = field(default_factory=dict)
     risk_score: float = 0.5
-    last_updated: datetime = field(default_factory=datetime.utcnow)
+    last_updated: datetime = field(default_factory=now_utc)
 
     def is_anomalous_time(self, hour: int) -> bool:
         """Check if access hour is anomalous for this user"""
