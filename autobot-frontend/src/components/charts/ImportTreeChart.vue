@@ -229,6 +229,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { useExpansion } from '@/composables/useExpansion'
 import { useI18n } from 'vue-i18n'
 import { getCssVar } from '@/composables/useCssVars'
 import { useDebounce } from '@/composables/useTimeout'
@@ -283,7 +284,8 @@ const emit = defineEmits<{
 
 // State
 const searchQuery = ref('')
-const expandedNodes = ref<Set<string>>(new Set())
+const nodeExpansion = useExpansion<string>()
+const expandedNodes = nodeExpansion.expanded
 const viewMode = ref<'network' | 'tree'>('network') // Default to network view
 const zoomLevel = ref(1)
 const layoutMode = ref<'force' | 'grid'>('force')
@@ -368,13 +370,7 @@ function normalizeImports(imports: ImportInfo[] | string[] | undefined): ImportI
 }
 
 function toggleNode(path: string) {
-  if (expandedNodes.value.has(path)) {
-    expandedNodes.value.delete(path)
-  } else {
-    expandedNodes.value.add(path)
-  }
-  // Force reactivity
-  expandedNodes.value = new Set(expandedNodes.value)
+  nodeExpansion.toggle(path)
 }
 
 function getFileName(path: string): string {

@@ -187,6 +187,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useExpansion } from '@/composables/useExpansion'
 import { useRouter } from 'vue-router'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
@@ -257,7 +258,8 @@ interface CategoryOption {
 
 // State
 const treeData = ref<TreeNode[]>([])
-const expandedNodes = ref<Set<string>>(new Set())
+const nodeExpansion = useExpansion<string>()
+const expandedNodes = nodeExpansion.expanded
 const selectedFile = ref<TreeNode | null>(null)
 const fileContent = ref('')
 const searchQuery = ref('')
@@ -460,7 +462,7 @@ const filteredTree = computed(() => {
 
         // Auto-expand matching folders
         if (node.type === 'folder' && (matches || children.length > 0)) {
-          expandedNodes.value.add(node.id)
+          nodeExpansion.expand(node.id)
         }
       }
 
@@ -759,11 +761,9 @@ const buildTreeFromEntries = (entries: any[]) => {
 }
 
 const toggleNode = (nodeId: string) => {
-  if (expandedNodes.value.has(nodeId)) {
-    expandedNodes.value.delete(nodeId)
-  } else {
-    expandedNodes.value.add(nodeId)
-
+  const wasExpanded = nodeExpansion.isExpanded(nodeId)
+  nodeExpansion.toggle(nodeId)
+  if (!wasExpanded) {
     // Load folder contents if not already loaded
     const node = findNode(treeData.value, nodeId)
     if (node && node.type === 'folder' && (!node.children || node.children.length === 0)) {
@@ -1042,7 +1042,7 @@ const restoreExpandedState = (nodes: TreeNode[], expandedPaths: Set<string>) => 
   }
 
   restorePaths(nodes)
-  expandedNodes.value = newExpandedIds
+  nodeExpansion.expandAll(newExpandedIds)
 }
 
 const clearSelection = () => {
@@ -1060,13 +1060,13 @@ const clearSearch = () => {
   searchQuery.value = ''
   debouncedSearchQuery.value = ''
   updateDebouncedSearch.cancel()
-  expandedNodes.value.clear()
+  nodeExpansion.collapseAll()
 }
 
 // Utility functions (now using composable)
 const getFileIcon = (node: TreeNode): string => {
   if (node.type === 'folder') {
-    return expandedNodes.value.has(node.id) ? 'fas fa-folder-open' : 'fas fa-folder'
+    return nodeExpansion.isExpanded(node.id) ? 'fas fa-folder-open' : 'fas fa-folder'
   }
 
   return getFileIconUtil(node.name, false)
@@ -1093,7 +1093,7 @@ watch(() => props.mode, () => {
   resetPagination()
   loadKnowledgeTree(loadKnowledgeTreeFn)
   clearSelection()
-  expandedNodes.value.clear()
+  nodeExpansion.collapseAll()
 })
 </script>
 

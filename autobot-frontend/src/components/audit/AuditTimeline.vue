@@ -107,6 +107,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useExpansion } from '@/composables/useExpansion'
 import type { AuditEntry } from '@/types/audit'
 import { AUDIT_RESULT_CONFIG } from '@/types/audit'
 
@@ -128,7 +129,8 @@ const props = withDefaults(defineProps<Props>(), {
 
 defineEmits<Emits>()
 
-const expandedIds = ref<Set<string>>(new Set())
+const idExpansion = useExpansion<string>()
+const expandedIds = idExpansion.expanded
 
 const formatDateRange = computed(() => {
   if (props.entries.length === 0) return ''
@@ -175,11 +177,7 @@ function formatDetails(details: Record<string, unknown>): string {
 }
 
 function toggleDetails(id: string) {
-  if (expandedIds.value.has(id)) {
-    expandedIds.value.delete(id)
-  } else {
-    expandedIds.value.add(id)
-  }
+  idExpansion.toggle(id)
 }
 </script>
 
