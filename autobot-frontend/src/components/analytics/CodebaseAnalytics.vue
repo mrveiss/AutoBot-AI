@@ -783,6 +783,7 @@ const { exportReport, exportSection } = useCodebaseExport({
   progressStatus,
   fetchWithAuth: fetchWithAuth as typeof fetch,
   getBackendUrl: () => appConfig.getServiceUrl('backend'),
+  withSourceId,
   notify,
   t,
 })
