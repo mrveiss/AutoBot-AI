@@ -131,11 +131,43 @@ def _is_used_in_file(source: str, name: str) -> bool:
     return len(matches) >= 3
 
 
-def _scan_file(path: Path) -> List[OrphanRef]:
+def _is_written_cross_file(search_root: Path, composable_path: Path, name: str) -> bool:
+    """Is the ref's ``.value`` written from any OTHER file in the tree?
+
+    Handles two legitimate patterns that look like orphans from a single
+    file's perspective:
+
+    1. Dependency injection: ``useComposableA({ exportingReport })`` and
+       composable B writes ``deps.exportingReport.value = ...`` (cross-file).
+    2. External template write: ``<input @input=\"foo.silenceThreshold.value = x\">``
+       inside a .vue consumer.
+
+    A cross-file grep for ``.NAME.value\\s*=`` is enough to catch both.
+    We exclude the composable's own file to avoid counting declaration-
+    local writes we'd already have caught via ``_is_used_in_file``.
+    """
+    pattern = rf"\.{re.escape(name)}\.value\s*="
+    compiled = re.compile(pattern)
+    for path in search_root.rglob("*"):
+        if path == composable_path:
+            continue
+        if path.suffix not in {".ts", ".vue"}:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        if compiled.search(text):
+            return True
+    return False
+
+
+def _scan_file(path: Path, search_root: Path) -> List[OrphanRef]:
     """Return every orphan ref declared in ``path``.
 
     Orphan = declared + returned + never referenced outside the
-    declaration and return. Matches the #5340 bug shape exactly.
+    declaration and return, AND never written via dependency injection
+    or external template assignment. Matches the #5340 bug shape.
     """
     source = path.read_text(encoding="utf-8")
     orphans: List[OrphanRef] = []
@@ -145,6 +177,9 @@ def _scan_file(path: Path) -> List[OrphanRef]:
             # ref (fine) or dead code. Out of scope for this check.
             continue
         if _is_used_in_file(source, name):
+            continue
+        if _is_written_cross_file(search_root, path, name):
+            # DI or external .vue write — legitimate.
             continue
         orphans.append(OrphanRef(file=path, name=name, line=line))
     return orphans
@@ -163,12 +198,13 @@ def main(argv: List[str]) -> int:
         )
         return 2
 
+    src_root = root / "autobot-frontend" / "src"
     orphans: List[OrphanRef] = []
     for ts_file in composables_dir.rglob("*.ts"):
         # Skip test files and type-only files.
         if ts_file.name.endswith(".test.ts") or ts_file.name.endswith(".spec.ts"):
             continue
-        orphans.extend(_scan_file(ts_file))
+        orphans.extend(_scan_file(ts_file, src_root))
 
     if not orphans:
         return 0

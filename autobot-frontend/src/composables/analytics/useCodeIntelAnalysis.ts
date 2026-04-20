@@ -22,6 +22,7 @@ import type {
   SecurityFinding,
   PerformanceFinding,
   RedisOptimizationFinding,
+  Severity,
 } from '@/types/codeIntelligence'
 
 import { useCodeIntelScores } from './useCodeIntelScores'
@@ -61,9 +62,8 @@ export function useCodeIntelAnalysis(
     getAnalysisHistory: codeIntelGetAnalysisHistory,
     batchAnalyze: codeIntelBatchAnalyze,
   } = useCodeIntelligence()
-  const codeIntelSecurityFindings = ref<SecurityFinding[]>([])
-  const codeIntelPerformanceFindings = ref<PerformanceFinding[]>([])
-  const codeIntelRedisFindings = ref<RedisOptimizationFinding[]>([])
+  // #5365: codeIntel{Security,Performance,Redis}Findings are declared
+  // as computed adapters further down, after `scores` is constructed.
   const codeIntelFindingsLoading = ref(false)
   const codeIntelFindingsFetched = ref({
     security: false,
@@ -136,8 +136,17 @@ export function useCodeIntelAnalysis(
     }
     codeIntelFindingsLoading.value = true
     try {
-      await codeIntelAnalyzeCode({ code: rootPath.value })
-      await codeIntelGetSuggestions(rootPath.value)
+      // #5365: fire the analyze endpoints so securityFindings,
+      // performanceFindings, and redisOptimizations (scores sub-composable)
+      // are populated. The adapter computeds below re-expose them under
+      // the legacy `codeIntel*Findings` names for the panel.
+      await Promise.all([
+        codeIntelAnalyzeCode({ code: rootPath.value }),
+        codeIntelGetSuggestions(rootPath.value),
+        scores.loadSecurityFindings(),
+        scores.loadPerformanceFindings(),
+        scores.loadRedisOptimizations(),
+      ])
       codeIntelFindingsFetched.value = {
         security: true,
         performance: true,
@@ -208,6 +217,54 @@ export function useCodeIntelAnalysis(
   const smells = useCodeSmellAnalysis(deps)
   const bugs = useBugPrediction(deps)
   const specialized = useSpecializedAnalysis(deps)
+
+  // #5365: Previously these three refs were declared as empty
+  // `ref<Type[]>([])` and never written — declared + returned + unwritten.
+  // CodebaseSecurityPanel therefore showed empty findings on every
+  // render regardless of scan results (same bug class as #5277).
+  //
+  // The live data is produced by `useCodeIntelScores` via POST to
+  // `/api/code-intelligence/{security,performance,redis}/analyze` into
+  // `securityFindings`, `performanceFindings`, `redisOptimizations` —
+  // but those use the `SecurityFindingDetail` shape (fields `line`,
+  // `description`, `recommendation`), while the panel prop types use
+  // the `SecurityFinding` shape (fields `line_number`, `message`,
+  // `remediation`). These computed adapters map between the two
+  // without changing the panel contract or consumer bindings.
+  const codeIntelSecurityFindings = computed<SecurityFinding[]>(() =>
+    (scores.securityFindings.value || []).map((f) => ({
+      severity: f.severity as Severity,
+      vulnerability_type: f.vulnerability_type,
+      file_path: f.file_path,
+      line_number: f.line ?? 0,
+      code_snippet: f.code_snippet ?? '',
+      message: f.description,
+      remediation: f.recommendation ?? '',
+      owasp_category: f.owasp_category ?? '',
+    })),
+  )
+  const codeIntelPerformanceFindings = computed<PerformanceFinding[]>(() =>
+    (scores.performanceFindings.value || []).map((f) => ({
+      issue_type: f.issue_type,
+      severity: f.severity as Severity,
+      file_path: f.file_path,
+      line_number: f.line ?? 0,
+      message: f.description,
+      recommendation: f.recommendation ?? '',
+      estimated_impact: '',
+    })),
+  )
+  const codeIntelRedisFindings = computed<RedisOptimizationFinding[]>(() =>
+    (scores.redisOptimizations.value || []).map((f) => ({
+      optimization_type: f.optimization_type,
+      severity: f.severity as Severity,
+      file_path: f.file_path,
+      line_number: f.line ?? 0,
+      message: f.description,
+      recommendation: f.recommendation ?? '',
+      category: f.category ?? '',
+    })),
+  )
 
   return {
     // Code Intelligence (facade-owned)

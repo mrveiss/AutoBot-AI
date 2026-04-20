@@ -96,7 +96,7 @@ class TestDetectionContract:
     def test_5340_pattern_flagged(self, tmp_path: Path):
         composable = tmp_path / "useX.ts"
         composable.write_text("const refactoringSuggestions = ref([])\n" "return { refactoringSuggestions }\n")
-        orphans = _mod._scan_file(composable)
+        orphans = _mod._scan_file(composable, tmp_path)
         assert len(orphans) == 1
         assert orphans[0].name == "refactoringSuggestions"
 
@@ -105,7 +105,7 @@ class TestDetectionContract:
         composable.write_text(
             "const data = ref([])\n" "async function load() { data.value = await fetch() }\n" "return { data, load }\n"
         )
-        orphans = _mod._scan_file(composable)
+        orphans = _mod._scan_file(composable, tmp_path)
         assert orphans == []
 
     def test_v_model_target_not_flagged(self, tmp_path: Path):
@@ -118,14 +118,35 @@ class TestDetectionContract:
             "const filtered = computed(() => items.filter(i => i.cat === selectedCategory.value))\n"
             "return { selectedCategory, filtered }\n"
         )
-        orphans = _mod._scan_file(composable)
+        orphans = _mod._scan_file(composable, tmp_path)
         assert orphans == []
 
     def test_internal_ref_not_in_return_not_flagged(self, tmp_path: Path):
         composable = tmp_path / "useW.ts"
         composable.write_text("const internal = ref(0)\n" "function tick() { internal.value++ }\n" "return { tick }\n")
-        orphans = _mod._scan_file(composable)
+        orphans = _mod._scan_file(composable, tmp_path)
         # `internal` is not in the return — out of scope for this check.
+        assert orphans == []
+
+    def test_cross_file_di_write_not_flagged(self, tmp_path: Path):
+        # Dependency-injection pattern: one composable declares the ref,
+        # another writes to it via its deps argument. Script must not
+        # flag this as orphan.
+        composable = tmp_path / "useA.ts"
+        composable.write_text("const exporting = ref(false)\n" "return { exporting }\n")
+        consumer = tmp_path / "useB.ts"
+        consumer.write_text("function go(deps) { deps.exporting.value = true }\n")
+        orphans = _mod._scan_file(composable, tmp_path)
+        assert orphans == []
+
+    def test_cross_file_vue_template_write_not_flagged(self, tmp_path: Path):
+        # External .vue template write pattern: consumer component
+        # writes ``obj.silenceThreshold.value = x`` in an event handler.
+        composable = tmp_path / "useVoice.ts"
+        composable.write_text("const silenceThreshold = ref(1500)\n" "return { silenceThreshold }\n")
+        consumer = tmp_path / "Panel.vue"
+        consumer.write_text('<input @input="voice.silenceThreshold.value = Number($event.target.value)" />')
+        orphans = _mod._scan_file(composable, tmp_path)
         assert orphans == []
 
 

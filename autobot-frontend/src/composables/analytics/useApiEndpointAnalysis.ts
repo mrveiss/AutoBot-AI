@@ -11,7 +11,6 @@
  * single useFetchEndpoint instance (Issue #5208).
  */
 
-import { reactive } from 'vue'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { runTimed } from '@/composables/api/useTimedNotify'
 import type {
@@ -39,12 +38,6 @@ export function useApiEndpointAnalysis(deps: UseCodeIntelAnalysisDeps) {
     },
     { withSourceId },
   )
-
-  const expandedApiEndpointGroups = reactive({
-    orphaned: false,
-    missing: false,
-    used: false,
-  })
 
   // Silent cached load — callers read endpoint.data reactively.
   const loadApiEndpointAnalysis = () => endpoint.load()
@@ -96,7 +89,6 @@ export function useApiEndpointAnalysis(deps: UseCodeIntelAnalysisDeps) {
     apiEndpointAnalysis: endpoint.data,
     loadingApiEndpoints: endpoint.loading,
     apiEndpointsError: endpoint.error,
-    expandedApiEndpointGroups,
     loadApiEndpointAnalysis,
     getApiEndpointCoverage,
     getCoverageClass,

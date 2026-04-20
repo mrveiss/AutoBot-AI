@@ -35,7 +35,6 @@ export function useServiceDiscovery() {
   const userStore = useUserStore()
   const services = ref<Map<string, ServiceDiscoveryState>>(new Map())
   const isGlobalLoading = ref(false)
-  const globalError = ref<string | null>(null)
 
   /**
    * Get the auth token from user store.
@@ -139,7 +138,6 @@ export function useServiceDiscovery() {
     discoverUrl,
     getServiceState,
     isLoading,
-    globalError,
     clearAll,
     services,
   }

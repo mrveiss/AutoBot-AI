@@ -76,7 +76,6 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
   const sessions = ref<BrowserSession[]>([])
   const currentSession = ref<BrowserSession | null>(null)
   const screenshots = ref<ScreenshotResult[]>([])
-  const scripts = ref<AutomationScript[]>([])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
 
@@ -324,7 +323,6 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
     sessions,
     currentSession,
     screenshots,
-    scripts,
     isLoading,
     error,
 
