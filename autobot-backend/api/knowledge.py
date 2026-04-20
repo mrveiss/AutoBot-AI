@@ -444,6 +444,17 @@ async def get_main_categories(
         kb is not None,
         redis_client is not None,
     )
+    if redis_client is None:
+        # Issue #5319: surface kb_connected=false as a log line + Prometheus
+        # counter so operators see the outage, not just the frontend banner.
+        logger.warning(
+            "KB categories returning kb_connected=false - Redis unreachable"
+        )
+        from knowledge.metrics import autobot_kb_redis_unreachable_total
+
+        autobot_kb_redis_unreachable_total.labels(
+            endpoint="categories_main"
+        ).inc()
 
     category_counts = {
         KnowledgeCategory.AUTOBOT_DOCUMENTATION: 0,

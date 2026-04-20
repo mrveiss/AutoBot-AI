@@ -572,6 +572,12 @@ async def run_rag_benchmark(
     redis = await get_async_redis_client(database="analytics")
     if redis is None:
         logger.warning("run_rag_benchmark: Redis unavailable; benchmark events dropped")
+        # Issue #5319: emit ops-visible counter alongside the warning.
+        from knowledge.metrics import autobot_kb_redis_unreachable_total
+
+        autobot_kb_redis_unreachable_total.labels(
+            endpoint="rag_benchmark"
+        ).inc()
         return {
             "published": 0,
             "total": len(report.results),
