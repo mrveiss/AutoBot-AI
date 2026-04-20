@@ -8,7 +8,12 @@
     @click.self="$emit('close')"
     @keydown.escape="$emit('close')"
   >
-    <div ref="panelRef" class="entity-detail" tabindex="-1">
+    <div
+      ref="panelRef"
+      class="entity-detail"
+      tabindex="-1"
+      @keydown="onFocusTrapKeydown"
+    >
       <!-- Header -->
       <div class="detail-header">
         <div class="header-left">
@@ -130,6 +135,7 @@ import {
   useKnowledgeGraph,
   type Entity,
 } from '@/composables/useKnowledgeGraph'
+import { useFocusTrap } from '@/composables/useFocusTrap'
 import { getEntityTypeColor as getTypeColor } from '../constants'
 import RelationshipViewer from './RelationshipViewer.vue'
 
@@ -143,27 +149,10 @@ defineEmits<{
 }>()
 
 const panelRef = ref<HTMLElement | null>(null)
+const { onKeydown: onFocusTrapKeydown } = useFocusTrap(panelRef)
 let previouslyFocused: Element | null = null
 
-function trapFocus(e: KeyboardEvent): void {
-  if (e.key !== 'Tab' || !panelRef.value) return
-  const focusable = panelRef.value.querySelectorAll<HTMLElement>(
-    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-  )
-  if (focusable.length === 0) return
-  const first = focusable[0]
-  const last = focusable[focusable.length - 1]
-  if (e.shiftKey && document.activeElement === first) {
-    e.preventDefault()
-    last.focus()
-  } else if (!e.shiftKey && document.activeElement === last) {
-    e.preventDefault()
-    first.focus()
-  }
-}
-
 onUnmounted(() => {
-  document.removeEventListener('keydown', trapFocus)
   if (previouslyFocused instanceof HTMLElement) {
     previouslyFocused.focus()
   }
@@ -181,7 +170,6 @@ function formatValue(value: unknown): string {
 
 onMounted(async () => {
   previouslyFocused = document.activeElement
-  document.addEventListener('keydown', trapFocus)
   await nextTick()
   panelRef.value?.focus()
 })

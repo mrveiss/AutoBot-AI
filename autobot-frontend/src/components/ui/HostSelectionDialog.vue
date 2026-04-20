@@ -12,7 +12,7 @@
       :aria-labelledby="dialogTitleId"
       :aria-describedby="dialogDescId"
       tabindex="-1"
-      @keydown="handleDialogKeydown"
+      @keydown="onFocusTrapKeydown"
     >
       <div class="dialog-header">
         <div class="dialog-icon" aria-hidden="true">
@@ -188,6 +188,7 @@ import { getBackendUrl } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
 import Icon, { type IconName } from '@/components/ui/Icon.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
+import { useFocusTrap } from '@/composables/useFocusTrap';
 
 const logger = createLogger('HostSelectionDialog');
 const { t } = useI18n();
@@ -242,6 +243,7 @@ const hostListLabelId = `host-list-label-${_uid}`;
 
 // Focus management
 const dialogRef = ref<HTMLElement | null>(null);
+const { onKeydown: onFocusTrapKeydown } = useFocusTrap(dialogRef);
 let previousActiveElement: HTMLElement | null = null;
 
 // State
@@ -415,33 +417,6 @@ const handleEscape = (event: KeyboardEvent) => {
   if (event.key === 'Escape' && showDialog.value && !isProcessing.value) {
     handleCancel();
   }
-};
-
-/**
- * Real focus trap via Tab/Shift+Tab wrap. Only intercepts when focus would
- * leave the dialog boundary — otherwise falls through to browser default,
- * which keeps outside clicks (devtools, etc.) from being yanked back.
- */
-const handleDialogKeydown = (event: KeyboardEvent) => {
-  if (event.key !== 'Tab' || !dialogRef.value) return;
-
-  const focusable = dialogRef.value.querySelectorAll<HTMLElement>(
-    'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
-  );
-  if (focusable.length === 0) return;
-
-  const first = focusable[0];
-  const last = focusable[focusable.length - 1];
-  const active = document.activeElement;
-
-  if (event.shiftKey && active === first) {
-    event.preventDefault();
-    last.focus();
-  } else if (!event.shiftKey && active === last) {
-    event.preventDefault();
-    first.focus();
-  }
-  // Otherwise allow default Tab behavior
 };
 
 // Watchers
