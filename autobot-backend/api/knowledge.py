@@ -51,6 +51,12 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from exceptions import InternalError
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
+from knowledge.schemas.stats import (
+    DetailedKnowledgeStats,
+    KnowledgeCategoriesResponse,
+    KnowledgeMainCategoriesResponse,
+    KnowledgeStatsBasic,
+)
 
 # NOTE: Pydantic models moved to knowledge_maintenance.py (Issue #185 - split oversized files)
 # NOTE: Tag-related models moved to knowledge_tags.py
@@ -322,29 +328,35 @@ async def test_main_categories(
     operation="get_knowledge_stats_basic",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/stats/basic")
+@router.get("/stats/basic", response_model=KnowledgeStatsBasic)
 async def get_knowledge_stats_basic(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
-):
+) -> KnowledgeStatsBasic:
     """Get basic knowledge base statistics for quick display
 
     Issue #744: Requires admin authentication.
+    Issue #5248: response typed as Pydantic model so OpenAPI captures schema.
     """
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
-        return {"total_facts": 0, "total_vectors": 0, "status": "offline"}
+        return KnowledgeStatsBasic(
+            status="offline",
+            total_facts=0,
+            total_vectors=0,
+            categories=[],
+        )
 
     stats = await kb_to_use.get_stats()
 
     # Return lightweight basic stats
-    return {
-        "total_facts": stats.get("total_facts", 0),
-        "total_vectors": stats.get("total_vectors", 0),
-        "categories": stats.get("categories", []),
-        "status": "online" if stats.get("initialized", False) else "offline",
-    }
+    return KnowledgeStatsBasic(
+        total_facts=stats.get("total_facts", 0),
+        total_vectors=stats.get("total_vectors", 0),
+        categories=stats.get("categories", []),
+        status="online" if stats.get("initialized", False) else "offline",
+    )
 
 
 def _get_category_cache_keys(KnowledgeCategory) -> dict:
@@ -403,15 +415,16 @@ def _build_main_categories(CATEGORY_METADATA, category_counts: dict) -> list:
     operation="get_main_categories",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/categories/main")
+@router.get("/categories/main", response_model=KnowledgeMainCategoriesResponse)
 async def get_main_categories(
     current_user: dict = Depends(get_current_user),
     req: Request = None,
-):
+) -> KnowledgeMainCategoriesResponse:
     """Get the 3 main knowledge base categories with their metadata and stats.
 
     Issue #910: Available to all authenticated users (not admin-only).
     The 3 top-level categories are non-sensitive public metadata.
+    Issue #5248: response typed as Pydantic model so OpenAPI captures schema.
     """
     from knowledge_categories import (
         CATEGORY_METADATA,
@@ -449,7 +462,10 @@ async def get_main_categories(
             logger.error("Error categorizing facts: %s", e)
 
     main_categories = _build_main_categories(CATEGORY_METADATA, category_counts)
-    return {"categories": main_categories, "total": len(main_categories)}
+    return KnowledgeMainCategoriesResponse(
+        categories=main_categories,
+        total=len(main_categories),
+    )
 
 
 @with_error_handling(
@@ -457,19 +473,20 @@ async def get_main_categories(
     operation="get_knowledge_categories",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/categories")
+@router.get("/categories", response_model=KnowledgeCategoriesResponse)
 async def get_knowledge_categories(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
-):
+) -> KnowledgeCategoriesResponse:
     """Get all knowledge base categories with fact counts
 
     Issue #744: Requires admin authentication.
+    Issue #5248: response typed as Pydantic model so OpenAPI captures schema.
     """
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
-        return {"categories": [], "total": 0}
+        return KnowledgeCategoriesResponse(categories=[], total=0)
 
     # Get stats - await async method
     stats = await kb_to_use.get_stats() if hasattr(kb_to_use, "get_stats") else {}
@@ -520,7 +537,10 @@ async def get_knowledge_categories(
             "Could not fetch doc_indexer stats (non-critical): %s", doc_idx_err
         )
 
-    return {"categories": categories, "total": len(categories)}
+    return KnowledgeCategoriesResponse(
+        categories=categories,
+        total=len(categories),
+    )
 
 
 def _extract_add_text_fields(request: dict) -> tuple:
@@ -1637,18 +1657,19 @@ def _compute_size_metrics(fact_sizes: list) -> dict:
     operation="get_detailed_stats",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/detailed_stats")
+@router.get("/detailed_stats", response_model=DetailedKnowledgeStats)
 async def get_detailed_stats(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
-):
+) -> DetailedKnowledgeStats:
     """Get detailed knowledge base statistics with additional metrics.
 
     Issue #744: Requires admin authentication.
+    Issue #5248: response typed as Pydantic model so OpenAPI captures schema.
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
-        return _create_offline_stats_response()
+        return DetailedKnowledgeStats(**_create_offline_stats_response())
 
     basic_stats = await kb.get_stats()
     try:
@@ -1661,15 +1682,15 @@ async def get_detailed_stats(
     cat_counts, src_counts, type_counts, sizes = _analyze_facts_for_stats(
         all_facts_data
     )
-    return {
-        "status": "online" if basic_stats.get("initialized") else "offline",
-        "basic_stats": basic_stats,
-        "category_breakdown": cat_counts,
-        "source_breakdown": src_counts,
-        "type_breakdown": type_counts,
-        "size_metrics": _compute_size_metrics(sizes),
-        "rag_available": RAG_AVAILABLE,
-    }
+    return DetailedKnowledgeStats(
+        status="online" if basic_stats.get("initialized") else "offline",
+        basic_stats=basic_stats,
+        category_breakdown=cat_counts,
+        source_breakdown=src_counts,
+        type_breakdown=type_counts,
+        size_metrics=_compute_size_metrics(sizes),
+        rag_available=RAG_AVAILABLE,
+    )
 
 
 @with_error_handling(
