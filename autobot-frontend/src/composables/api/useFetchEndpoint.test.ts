@@ -254,4 +254,96 @@ describe('useFetchEndpoint (rehomed)', () => {
     expect(error.value).toBe('')
     expect(onNoData).toHaveBeenCalledTimes(1)
   })
+
+  // ───────── #5235: onResponse hook + reset() ─────────
+
+  it('onResponse return string overrides the default `${label} returned ${status}` error message', async () => {
+    mockedFetch.mockResolvedValueOnce(jsonResponse({}, 504))
+    const { error, load } = useFetchEndpoint<RawPayload, number>({
+      path: '/api/slow',
+      label: 'Slow endpoint',
+      pickData: (raw) => (raw.ok ? (raw.value ?? null) : null),
+      onResponse: (response) =>
+        response.status === 504
+          ? 'Analysis timed out -- codebase too large for real-time scan'
+          : undefined,
+    })
+    await load()
+    expect(error.value).toBe(
+      'Analysis timed out -- codebase too large for real-time scan',
+    )
+  })
+
+  it('onResponse async return (e.g. parses `{ detail }` JSON body) is awaited', async () => {
+    mockedFetch.mockResolvedValueOnce(
+      jsonResponse({ detail: 'Backend rejected: rootPath not indexed' }, 400),
+    )
+    const { error, load } = useFetchEndpoint<RawPayload, number>({
+      path: '/api/analyze',
+      label: 'Analyze endpoint',
+      pickData: (raw) => (raw.ok ? (raw.value ?? null) : null),
+      onResponse: async (response) => {
+        const body = (await response.json().catch(() => null)) as
+          | { detail?: string }
+          | null
+        return body?.detail
+      },
+    })
+    await load()
+    expect(error.value).toBe('Backend rejected: rootPath not indexed')
+  })
+
+  it('onResponse returning undefined falls through to the default error format', async () => {
+    mockedFetch.mockResolvedValueOnce(jsonResponse({}, 500))
+    const { error, load } = useFetchEndpoint<RawPayload, number>({
+      path: '/api/boom',
+      label: 'Boom endpoint',
+      pickData: (raw) => (raw.ok ? (raw.value ?? null) : null),
+      onResponse: () => undefined,
+    })
+    await load()
+    expect(error.value).toBe('Boom endpoint returned 500')
+  })
+
+  it('onResponse is NOT called on a successful (ok=true) response', async () => {
+    mockedFetch.mockResolvedValueOnce(
+      jsonResponse({ ok: true, value: 42 }),
+    )
+    const onResponse = vi.fn()
+    const { data, load } = useFetchEndpoint<RawPayload, number>({
+      path: '/api/ok',
+      pickData: (raw) => (raw.ok ? (raw.value ?? null) : null),
+      onResponse,
+    })
+    await load()
+    expect(data.value).toBe(42)
+    expect(onResponse).not.toHaveBeenCalled()
+  })
+
+  it('reset() clears data, loading, and error back to initial state', async () => {
+    mockedFetch.mockResolvedValueOnce(jsonResponse({}, 500))
+    const { data, error, load, reset } = useFetchEndpoint<RawPayload, number>({
+      path: '/api/boom',
+      pickData: (raw) => (raw.ok ? (raw.value ?? null) : null),
+    })
+    await load()
+    expect(error.value).not.toBe('')
+    reset()
+    expect(error.value).toBe('')
+    expect(data.value).toBeNull()
+  })
+
+  it('reset() after a successful load clears data', async () => {
+    mockedFetch.mockResolvedValueOnce(
+      jsonResponse({ ok: true, value: 99 }),
+    )
+    const { data, load, reset } = useFetchEndpoint<RawPayload, number>({
+      path: '/api/ok',
+      pickData: (raw) => (raw.ok ? (raw.value ?? null) : null),
+    })
+    await load()
+    expect(data.value).toBe(99)
+    reset()
+    expect(data.value).toBeNull()
+  })
 })
