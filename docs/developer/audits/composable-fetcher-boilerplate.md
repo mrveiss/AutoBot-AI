@@ -243,16 +243,16 @@ migration notes.
 | Error type | `ComputedRef<string \| null>` (multi-error array) | `Ref<string>` (single error) |
 | Logger label | derived from `path` | explicit `opts.label` |
 
-**Active consumers of `useAnalyticsFetch` (5):**
-- `autobot-frontend/src/composables/analytics/useCodeIntelScores.ts` (L16, used 5x — security/performance/redis)
+**Active consumers of `useAnalyticsFetch` at audit time (4 confirmed; `useSourceRegistry.ts` had only a stale JSDoc reference, not an import):**
+- `autobot-frontend/src/composables/analytics/useCodeIntelScores.ts` (used 4x — performance score, security/performance/redis findings)
 - `autobot-frontend/src/composables/analytics/useOwnershipAnalysis.ts`
 - `autobot-frontend/src/composables/analytics/useConfigDuplicates.ts`
 - `autobot-frontend/src/composables/analytics/useApiEndpointAnalysis.ts`
-- `autobot-frontend/src/composables/analytics/useSourceRegistry.ts`
 
-**Status:** Both helpers live under `composables/` (one at root, one nested), both used inside `analytics/`. `useAnalyticsFetch` is NOT dead code; it has 5 consumers. The two abstractions have meaningfully different APIs (return-from-load vs side-effect-into-data, single vs multi-error, POST support vs GET-only) so a mechanical merge would break consumers.
+**Status (final, after #5223 + #5232 + #5235):**
+All 4 consumers migrated to `composables/api/useFetchEndpoint`. `useAnalyticsFetch.ts` + any test coverage deleted. `#5235` additionally migrated the two hand-rolled `fetchWithAuth` fetchers inside `useCodeIntelScores.ts` (`loadRedisHealth` + `loadCachedSecurityScore`) after adding `onResponse` (for 504 / `detail` error extraction) and `reset()` to `useFetchEndpoint`. The file no longer imports `fetchWithAuth` or `appConfig` at all.
 
-**Recommendation:** see Recommendations section below.
+**Resolution of Recommendation 2:** complete. `useFetchEndpoint` is the single canonical GET/POST/DELETE fetcher primitive. The broader four-helper sprawl (`useApi` / `useApiLoading` / `useUnifiedLoading` / …) remains scoped to #5108 for loading-state rationalisation; it was never in scope for this audit.
 
 ---
 

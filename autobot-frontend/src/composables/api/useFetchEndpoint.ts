@@ -68,6 +68,23 @@ export interface UseFetchEndpointOptions<TRaw, TOut> {
    * resolved error message (same value that lands in `error.value`).
    */
   onError?: (message: string, err: unknown) => void
+  /**
+   * Hook fired with the raw Response **before** the default `!ok` throw.
+   * Return a string to override the default `${label} returned ${status}`
+   * error message (useful for status-specific copy like 504 -> "timeout"
+   * or for parsing a `{ detail }` JSON body). Return `undefined` / void
+   * to fall through to the default error handling.
+   *
+   * Only called when `response.ok === false`. Does NOT prevent the throw
+   * — the return value only shapes the error message that ends up in
+   * `error.value` and in `onError(message, err)`.
+   *
+   * Introduced in #5235 to unblock migration of fetchers with special-
+   * case error handling (504 timeout copy, `detail` field extraction).
+   */
+  onResponse?: (
+    response: Response,
+  ) => string | undefined | Promise<string | undefined>
   /** Human-readable label used only for log messages. */
   label?: string
 }
@@ -85,6 +102,11 @@ export interface UseFetchEndpointReturn<TOut> {
   loading: Ref<boolean>
   error: Ref<string>
   load: (queryExtras?: Record<string, string>) => Promise<void>
+  /**
+   * Clear `data`, `loading`, and `error` back to their initial state.
+   * Parity with the deleted `useAnalyticsFetch` (#5208/#5235).
+   */
+  reset: () => void
 }
 
 function appendQueryExtras(
@@ -152,7 +174,12 @@ export function useFetchEndpoint<TRaw, TOut>(
       }
       const response = await fetchWithAuth(url, init)
       if (!response.ok) {
-        throw new Error(`${label} returned ${response.status}`)
+        const overrideMsg = opts.onResponse
+          ? await opts.onResponse(response)
+          : undefined
+        throw new Error(
+          overrideMsg ?? `${label} returned ${response.status}`,
+        )
       }
       const raw = (await response.json()) as TRaw
       const picked = opts.pickData(raw)
@@ -174,5 +201,11 @@ export function useFetchEndpoint<TRaw, TOut>(
     }
   }
 
-  return { data, loading, error, load }
+  const reset = (): void => {
+    data.value = null
+    loading.value = false
+    error.value = ''
+  }
+
+  return { data, loading, error, load, reset }
 }
