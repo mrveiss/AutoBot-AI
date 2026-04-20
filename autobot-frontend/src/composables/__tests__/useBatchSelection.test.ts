@@ -227,6 +227,80 @@ describe('useBatchSelection', () => {
     })
   })
 
+  describe('deselectByKey', () => {
+    it('removes selection when only the key is known', () => {
+      const docs: Doc[] = [
+        { id: 'd1', name: 'Doc 1' },
+        { id: 'd2', name: 'Doc 2' }
+      ]
+      const sel = useBatchSelection<Doc, string>(ref(docs), (d) => d.id)
+
+      sel.selectAll()
+      sel.deselectByKey('d1')
+
+      expect(sel.selected.value.has('d1')).toBe(false)
+      expect(sel.selected.value.has('d2')).toBe(true)
+    })
+
+    it('is idempotent for missing keys', () => {
+      const sel = useBatchSelection<string>(ref(['a', 'b']))
+
+      sel.deselectByKey('a')
+      sel.deselectByKey('a')
+      expect(sel.selectedCount.value).toBe(0)
+    })
+
+    it('works after the underlying item is removed from the items source', async () => {
+      const items = ref([{ id: 'd1' }, { id: 'd2' }])
+      const sel = useBatchSelection<{ id: string }, string>(items, (d) => d.id)
+
+      sel.select(items.value[0])
+      items.value = [{ id: 'd2' }]
+      await nextTick()
+
+      sel.deselectByKey('d1')
+      expect(sel.selected.value.has('d1')).toBe(false)
+    })
+  })
+
+  describe('setSelected', () => {
+    it('replaces the entire selection with given keys', () => {
+      const sel = useBatchSelection<string>(ref(['a', 'b', 'c']))
+
+      sel.select('a')
+      sel.setSelected(['b', 'c'])
+
+      expect(sel.isSelected('a')).toBe(false)
+      expect(sel.isSelected('b')).toBe(true)
+      expect(sel.isSelected('c')).toBe(true)
+      expect(sel.selectedCount.value).toBe(2)
+    })
+
+    it('accepts cross-page keys not in the items source', () => {
+      const sel = useBatchSelection<string>(ref(['a', 'b']))
+
+      sel.setSelected(['x', 'y', 'z'])
+
+      expect(sel.selectedCount.value).toBe(3)
+      expect(sel.selected.value.has('x')).toBe(true)
+    })
+
+    it('accepts an iterable (Set)', () => {
+      const sel = useBatchSelection<string>(ref(['a', 'b']))
+
+      sel.setSelected(new Set(['a', 'b']))
+      expect(sel.selectedCount.value).toBe(2)
+    })
+
+    it('clearing via empty iterable works', () => {
+      const sel = useBatchSelection<string>(ref(['a', 'b']))
+
+      sel.selectAll()
+      sel.setSelected([])
+      expect(sel.selectedCount.value).toBe(0)
+    })
+  })
+
   describe('readonly return surface', () => {
     it('selected ref is wrapped readonly — direct mutation does not leak to internal state', () => {
       const sel = useBatchSelection<string>(ref(['a']))

@@ -66,7 +66,7 @@
 
     <!-- Issue #747: Bulk Actions Toolbar -->
     <BulkActionsToolbar
-      :selected-count="selectedEntries.length"
+      :selected-count="selection.selectedCount.value"
       :total-count="filteredDocuments.length"
       :page-count="paginatedEntries.length"
       :all-page-selected="allSelected"
@@ -181,13 +181,13 @@
           <tr
             v-for="entry in displayedEntries"
             :key="entry.id"
-            :class="{ 'selected': selectedEntries.includes(entry.id) }"
+            :class="{ 'selected': selection.isSelected(entry) }"
           >
             <td class="checkbox-column">
               <input
                 type="checkbox"
-                :checked="selectedEntries.includes(entry.id)"
-                @change="toggleSelection(entry.id)"
+                :checked="selection.isSelected(entry)"
+                @change="selection.toggle(entry)"
               />
             </td>
             <td class="title-cell" @click="viewEntry(entry)">
@@ -451,6 +451,7 @@ import { formatDate, formatDateTime } from '@/utils/formatHelpers'
 import { getDocumentTypeIcon } from '@/utils/iconMappings'
 import { useDebounce } from '@/composables/useDebounce'
 import { useVirtualScroll } from '@/composables/useVirtualScroll'
+import { useBatchSelection } from '@/composables/useBatchSelection'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
@@ -479,8 +480,13 @@ const sortBy = ref('updatedAt')
 const currentPage = ref(1)
 const itemsPerPage = 20
 
-// Selection state
-const selectedEntries = ref<string[]>([])
+// Selection state — useBatchSelection's `items` source is the current page,
+// so `selection.selectAll` / `selection.allSelected` are page-level. Cross-page
+// "select all matching the filter" is handled below via setSelected(...).
+const selection = useBatchSelection<{ id: string }, string>(
+  () => paginatedEntries.value,
+  (item) => item.id
+)
 const allMatchingSelected = ref(false)
 
 // Bulk edit state (Issue #747)
@@ -571,15 +577,13 @@ const paginatedEntries = computed(() => {
   return filteredDocuments.value.slice(start, end)
 })
 
-const allSelected = computed(() =>
-  paginatedEntries.value.length > 0 &&
-  paginatedEntries.value.every(entry => selectedEntries.value.includes(entry.id))
-)
+// `selection.allSelected` covers this — derived from selection × current page.
+const allSelected = selection.allSelected
 
 // Issue #747: Bulk edit computed properties
 const selectedBulkEditEntries = computed<BulkEditEntry[]>(() => {
   return store.documents
-    .filter(doc => selectedEntries.value.includes(doc.id))
+    .filter(doc => selection.isSelected(doc))
     .map(doc => ({
       id: doc.id,
       title: doc.title || t('knowledge.entries.untitled'),
@@ -606,30 +610,22 @@ const sortEntries = () => {
 }
 
 const toggleSelection = (id: string) => {
-  const index = selectedEntries.value.indexOf(id)
-  if (index > -1) {
-    selectedEntries.value.splice(index, 1)
+  // Use deselectByKey/select since callers pass IDs, not items.
+  if (selection.selected.value.has(id)) {
+    selection.deselectByKey(id)
   } else {
-    selectedEntries.value.push(id)
+    const item = paginatedEntries.value.find(e => e.id === id)
+    if (item) selection.select(item)
   }
 }
 
 const toggleSelectAll = () => {
-  if (allSelected.value) {
+  if (selection.allSelected.value) {
     // Deselect all on current page
-    paginatedEntries.value.forEach(entry => {
-      const index = selectedEntries.value.indexOf(entry.id)
-      if (index > -1) {
-        selectedEntries.value.splice(index, 1)
-      }
-    })
+    paginatedEntries.value.forEach(entry => selection.deselectByKey(entry.id))
   } else {
     // Select all on current page
-    paginatedEntries.value.forEach(entry => {
-      if (!selectedEntries.value.includes(entry.id)) {
-        selectedEntries.value.push(entry.id)
-      }
-    })
+    selection.selectAll()
   }
 }
 
@@ -661,11 +657,11 @@ const deleteEntry = async (entry: KnowledgeDocument) => {
 }
 
 const deleteSelected = async () => {
-  if (!confirm(t('knowledge.entries.confirmDeleteSelected', { count: selectedEntries.value.length }))) return
+  if (!confirm(t('knowledge.entries.confirmDeleteSelected', { count: selection.selectedCount.value }))) return
 
   try {
-    await controller.bulkDeleteDocuments(selectedEntries.value)
-    selectedEntries.value = []
+    await controller.bulkDeleteDocuments([...selection.selected.value])
+    selection.clear()
   } catch (error) {
     logger.error('Failed to delete entries:', error)
   }
@@ -678,7 +674,7 @@ const exportSelected = async () => {
 // Issue #747: Enhanced export with multiple formats
 const handleExport = (format: ExportFormat) => {
   const entries = store.documents.filter(doc =>
-    selectedEntries.value.includes(doc.id)
+    selection.selected.value.has(doc.id)
   )
 
   let content: string
@@ -780,20 +776,16 @@ const downloadFile = (content: string, filename: string, mimeType: string) => {
 // Issue #747: Bulk actions toolbar handlers
 const selectAllPage = () => {
   allMatchingSelected.value = false
-  paginatedEntries.value.forEach(entry => {
-    if (!selectedEntries.value.includes(entry.id)) {
-      selectedEntries.value.push(entry.id)
-    }
-  })
+  selection.selectAll()
 }
 
 const selectAllMatching = () => {
   allMatchingSelected.value = true
-  selectedEntries.value = filteredDocuments.value.map(doc => doc.id)
+  selection.setSelected(filteredDocuments.value.map(doc => doc.id))
 }
 
 const clearSelection = () => {
-  selectedEntries.value = []
+  selection.clear()
   allMatchingSelected.value = false
 }
 
@@ -814,7 +806,7 @@ const openBulkRemoveTags = () => {
 
 const handleBulkEditConfirm = async (payload: { mode: BulkEditMode; value: string | string[] | { scope: string; groupIds: string[] } }) => {
   try {
-    const ids = selectedEntries.value
+    const ids = [...selection.selected.value]
 
     if (payload.mode === 'category') {
       await controller.bulkUpdateCategory(ids, payload.value as string)

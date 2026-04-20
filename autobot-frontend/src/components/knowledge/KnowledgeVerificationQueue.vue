@@ -70,14 +70,14 @@
     </div>
 
     <!-- Bulk Actions -->
-    <div v-if="selectedIds.length > 0" class="bulk-toolbar">
+    <div v-if="selection.selectedCount.value > 0" class="bulk-toolbar">
       <span class="bulk-count">
-        {{ $t('knowledge.verification.selectedCount', { count: selectedIds.length }) }}
+        {{ $t('knowledge.verification.selectedCount', { count: selection.selectedCount.value }) }}
       </span>
       <BaseButton
         variant="ghost"
         size="sm"
-        @click="selectAllVisible"
+        @click="selection.selectAll"
       >
         {{ $t('knowledge.verification.selectAll') }}
       </BaseButton>
@@ -102,7 +102,7 @@
       <BaseButton
         variant="ghost"
         size="sm"
-        @click="clearSelection"
+        @click="selection.clear"
       >
         {{ $t('knowledge.verification.clearSelection') }}
       </BaseButton>
@@ -128,13 +128,13 @@
         v-for="source in store.pendingVerifications"
         :key="source.fact_id"
         class="source-card"
-        :class="{ selected: selectedIds.includes(source.fact_id) }"
+        :class="{ selected: selection.isSelected(source) }"
       >
         <div class="card-header">
           <input
             type="checkbox"
-            :checked="selectedIds.includes(source.fact_id)"
-            @change="toggleSelection(source.fact_id)"
+            :checked="selection.isSelected(source)"
+            @change="selection.toggle(source)"
             class="card-checkbox"
           />
           <div class="card-title-row">
@@ -245,6 +245,7 @@ import { useUserStore } from '@/stores/useUserStore'
 import { knowledgeRepository } from '@/models/repositories/KnowledgeRepository'
 import type { VerificationConfig } from '@/types/knowledgeBase'
 import { formatDate } from '@/utils/formatHelpers'
+import { useBatchSelection } from '@/composables/useBatchSelection'
 import BaseButton from '@/components/base/BaseButton.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import QualityScoreBadge from './QualityScoreBadge.vue'
@@ -261,7 +262,10 @@ const currentPage = ref(1)
 const pageSize = 20
 const todayApproved = ref(0)
 const todayRejected = ref(0)
-const selectedIds = ref<string[]>([])
+const selection = useBatchSelection<{ fact_id: string }, string>(
+  () => store.pendingVerifications,
+  (item) => item.fact_id
+)
 const actionLoadingId = ref<string | null>(null)
 const bulkProcessing = ref(false)
 const configLoading = ref(false)
@@ -310,7 +314,7 @@ async function approveSource(factId: string) {
     await knowledgeRepository.approveSource(factId, currentUser.value)
     store.removePendingSource(factId)
     todayApproved.value++
-    selectedIds.value = selectedIds.value.filter(id => id !== factId)
+    selection.deselectByKey(factId)
     logger.info('Source approved: %s', factId)
   } catch (error) {
     logger.error('Failed to approve source %s: %s', factId, error)
@@ -329,7 +333,7 @@ async function rejectSource(factId: string) {
     )
     store.removePendingSource(factId)
     todayRejected.value++
-    selectedIds.value = selectedIds.value.filter(id => id !== factId)
+    selection.deselectByKey(factId)
     logger.info('Source rejected: %s', factId)
   } catch (error) {
     logger.error('Failed to reject source %s: %s', factId, error)
@@ -359,10 +363,10 @@ async function setMode(mode: VerificationConfig['mode']) {
 
 // Bulk operations
 async function bulkApprove() {
-  if (selectedIds.value.length === 0) return
+  if (selection.selectedCount.value === 0) return
   bulkProcessing.value = true
   try {
-    const ids = [...selectedIds.value]
+    const ids = [...selection.selected.value]
     const results = await Promise.allSettled(
       ids.map(id =>
         knowledgeRepository.approveSource(id, currentUser.value)
@@ -376,7 +380,7 @@ async function bulkApprove() {
       }
     })
     todayApproved.value += approved
-    selectedIds.value = []
+    selection.clear()
     logger.info('Bulk approved %d sources', approved)
   } catch (error) {
     logger.error('Bulk approve failed: %s', error)
@@ -386,10 +390,10 @@ async function bulkApprove() {
 }
 
 async function bulkReject() {
-  if (selectedIds.value.length === 0) return
+  if (selection.selectedCount.value === 0) return
   bulkProcessing.value = true
   try {
-    const ids = [...selectedIds.value]
+    const ids = [...selection.selected.value]
     const results = await Promise.allSettled(
       ids.map(id =>
         knowledgeRepository.rejectSource(id, currentUser.value, false)
@@ -403,7 +407,7 @@ async function bulkReject() {
       }
     })
     todayRejected.value += rejected
-    selectedIds.value = []
+    selection.clear()
     logger.info('Bulk rejected %d sources', rejected)
   } catch (error) {
     logger.error('Bulk reject failed: %s', error)
@@ -412,28 +416,10 @@ async function bulkReject() {
   }
 }
 
-// Selection
-function toggleSelection(factId: string) {
-  const index = selectedIds.value.indexOf(factId)
-  if (index > -1) {
-    selectedIds.value.splice(index, 1)
-  } else {
-    selectedIds.value.push(factId)
-  }
-}
-
-function selectAllVisible() {
-  selectedIds.value = store.pendingVerifications.map(s => s.fact_id)
-}
-
-function clearSelection() {
-  selectedIds.value = []
-}
-
 // Pagination
 function goToPage(page: number) {
   currentPage.value = page
-  selectedIds.value = []
+  selection.clear()
   loadPendingVerifications()
 }
 
