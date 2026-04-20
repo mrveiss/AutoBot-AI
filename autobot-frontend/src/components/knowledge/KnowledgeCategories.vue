@@ -170,7 +170,9 @@ import { useI18n } from 'vue-i18n'
 import { useRouter, useRoute } from 'vue-router'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
-import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
+import { useKnowledgeStats } from '@/composables/knowledge/useKnowledgeStats'
+import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
+import { formatDate, formatCategoryName, formatFileSize } from '@/utils/formatHelpers'
 import KnowledgeBrowser from './KnowledgeBrowser.vue'
 import DocumentChangeFeed from './DocumentChangeFeed.vue'
 import CategoryEditModal from './modals/CategoryEditModal.vue'
@@ -185,15 +187,9 @@ const { t } = useI18n()
 // Import shared document feed wrapper styles
 import '@/styles/document-feed-wrapper.css'
 
-// Use the shared composable
-const {
-  fetchBasicStats,
-  formatDateOnly: formatDate,
-  formatCategoryName,
-  getCategoryIcon,
-  getTypeIcon,
-  formatFileSize
-} = useKnowledgeBase()
+// Domain composables (migrated from useKnowledgeBase BC shim in #5193)
+const { fetchBasicStats } = useKnowledgeStats()
+const { getCategoryIcon, getTypeIcon } = useKnowledgeIcons()
 
 // Router
 const router = useRouter()

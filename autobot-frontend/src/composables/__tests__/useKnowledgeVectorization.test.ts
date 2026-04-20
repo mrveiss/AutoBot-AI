@@ -17,9 +17,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { ref } from 'vue'
 import { useKnowledgeVectorization } from '../useKnowledgeVectorization'
 
-// Mock useKnowledgeBase composable
-vi.mock('../useKnowledgeBase', () => ({
-  useKnowledgeBase: vi.fn(() => ({
+// Mock useKnowledgeJobs composable (migrated from useKnowledgeBase BC shim in #5193)
+vi.mock('../knowledge/useKnowledgeJobs', () => ({
+  useKnowledgeJobs: vi.fn(() => ({
     vectorizeFacts: vi.fn(),
     getVectorizationStatus: vi.fn()
   }))
@@ -388,7 +388,7 @@ describe('useKnowledgeVectorization', () => {
     })
 
     it('should update global progress on poll', async () => {
-      const { useKnowledgeBase } = await import('../useKnowledgeBase')
+      const { useKnowledgeJobs } = await import('../knowledge/useKnowledgeJobs')
       const mockGetStatus = vi.fn().mockResolvedValue({
         status: 'in_progress',
         total_facts: 100,
@@ -396,9 +396,9 @@ describe('useKnowledgeVectorization', () => {
         pending_vectorization: 55
       })
 
-      vi.mocked(useKnowledgeBase).mockReturnValue({
+      vi.mocked(useKnowledgeJobs).mockReturnValue({
         getVectorizationStatus: mockGetStatus
-      } as unknown as ReturnType<typeof useKnowledgeBase>)
+      } as unknown as ReturnType<typeof useKnowledgeJobs>)
 
       const freshComposable = useKnowledgeVectorization()
       await freshComposable.pollStatus()
@@ -411,7 +411,7 @@ describe('useKnowledgeVectorization', () => {
     })
 
     it('should stop polling when job completes', async () => {
-      const { useKnowledgeBase } = await import('../useKnowledgeBase')
+      const { useKnowledgeJobs } = await import('../knowledge/useKnowledgeJobs')
       const mockGetStatus = vi.fn().mockResolvedValue({
         status: 'completed',
         total_facts: 100,
@@ -419,9 +419,9 @@ describe('useKnowledgeVectorization', () => {
         pending_vectorization: 0
       })
 
-      vi.mocked(useKnowledgeBase).mockReturnValue({
+      vi.mocked(useKnowledgeJobs).mockReturnValue({
         getVectorizationStatus: mockGetStatus
-      } as unknown as ReturnType<typeof useKnowledgeBase>)
+      } as unknown as ReturnType<typeof useKnowledgeJobs>)
 
       const freshComposable = useKnowledgeVectorization()
       freshComposable.startPolling(100)
@@ -433,12 +433,12 @@ describe('useKnowledgeVectorization', () => {
     })
 
     it('should handle polling errors gracefully', async () => {
-      const { useKnowledgeBase } = await import('../useKnowledgeBase')
+      const { useKnowledgeJobs } = await import('../knowledge/useKnowledgeJobs')
       const mockGetStatus = vi.fn().mockRejectedValue(new Error('API error'))
 
-      vi.mocked(useKnowledgeBase).mockReturnValue({
+      vi.mocked(useKnowledgeJobs).mockReturnValue({
         getVectorizationStatus: mockGetStatus
-      } as unknown as ReturnType<typeof useKnowledgeBase>)
+      } as unknown as ReturnType<typeof useKnowledgeJobs>)
 
       const freshComposable = useKnowledgeVectorization()
 

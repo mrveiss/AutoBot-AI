@@ -194,7 +194,11 @@ import { createLogger } from '@/utils/debugUtils'
 
 // Create scoped logger for KnowledgeBrowser
 const logger = createLogger('KnowledgeBrowser')
-import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
+import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
+import { useKnowledgeCategories } from '@/composables/knowledge/useKnowledgeCategories'
+import { useMachineKnowledge } from '@/composables/knowledge/useMachineKnowledge'
+import { useManPages } from '@/composables/knowledge/useManPages'
+import { formatDate, formatFileSize, formatCategoryName } from '@/utils/formatHelpers'
 import { useKnowledgeVectorization } from '@/composables/useKnowledgeVectorization'
 import { useAsyncOperation } from '@/composables/useAsyncOperation'
 import { usePagination } from '@/composables/usePagination'
@@ -207,18 +211,11 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import KnowledgeMainCategories from './KnowledgeMainCategories.vue'
 
-// Use the shared composables
-const {
-  formatCategoryName,
-  getFileIcon: getFileIconUtil,
-  formatFileSize,
-  formatDateOnly: formatDate,
-  getCategoryIcon,
-  populateAutoBotDocs,
-  refreshSystemKnowledge,
-  getCategorizedFacts,
-  buildCategoryFilterOptions
-} = useKnowledgeBase()
+// Domain composables (migrated from useKnowledgeBase BC shim in #5193)
+const { getCategoryIcon, getFileIcon: getFileIconUtil } = useKnowledgeIcons()
+const { getCategorizedFacts, buildCategoryFilterOptions } = useKnowledgeCategories()
+const { refreshSystemKnowledge } = useMachineKnowledge()
+const { populateAutoBotDocs } = useManPages()
 
 const {
   documentStates,

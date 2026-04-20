@@ -323,7 +323,10 @@ import { createLogger } from '@/utils/debugUtils'
 
 // Create scoped logger for ManPageManager
 const logger = createLogger('ManPageManager')
-import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
+import { useMachineKnowledge } from '@/composables/knowledge/useMachineKnowledge'
+import { useManPages } from '@/composables/knowledge/useManPages'
+import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
+import { formatDate } from '@/utils/formatHelpers'
 import { useAsyncOperation } from '@/composables/useAsyncOperation'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -339,18 +342,17 @@ export default {
   setup() {
     const { t } = useI18n()
 
-    // Use the shared composable
+    // Domain composables (migrated from useKnowledgeBase BC shim in #5193)
     const {
       fetchMachineProfile: fetchMachineProfileAPI,
-      fetchManPagesSummary: fetchManPagesSummaryAPI,
       initializeMachineKnowledge: initializeMachineKnowledgeAPI,
+    } = useMachineKnowledge()
+    const {
+      fetchManPagesSummary: fetchManPagesSummaryAPI,
       integrateManPages: integrateManPagesAPI,
       searchManPages: searchManPagesAPI,
-      formatDate,
-      getOSBadgeClass,
-      getMessageIcon,
-      formatTime
-    } = useKnowledgeBase()
+    } = useManPages()
+    const { getOSBadgeClass, getMessageIcon, formatTime } = useKnowledgeIcons()
 
     // Reactive data
     const machineProfile = ref(null)

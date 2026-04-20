@@ -419,7 +419,7 @@ import { useKnowledgeController } from '@/models/controllers'
 import { formatFileSize } from '@/utils/formatHelpers'
 import { parseTags } from '@/utils/tagHelpers'
 import { resetFormFields } from '@/utils/formHelpers'
-import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
+import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
 import { useUploadProgress } from '@/composables/useUploadProgress'
 import BaseAlert from '@/components/ui/BaseAlert.vue'
 import { createLogger } from '@/utils/debugUtils'
@@ -451,7 +451,7 @@ interface FileItem {
 
 const store = useKnowledgeStore()
 const controller = useKnowledgeController()
-const { getFileIcon } = useKnowledgeBase()
+const { getFileIcon } = useKnowledgeIcons()
 const {
   progress: uploadProgress,
   startProgress,

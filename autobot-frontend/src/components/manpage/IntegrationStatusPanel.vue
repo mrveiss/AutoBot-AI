@@ -92,7 +92,7 @@
 
 import BasePanel from '@/components/base/BasePanel.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
-import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
+import { formatDate } from '@/utils/formatHelpers'
 
 interface IntegrationStatus {
   status: 'not_integrated' | 'error' | 'integrated' | string
@@ -119,8 +119,6 @@ withDefaults(defineProps<Props>(), {
 })
 
 defineEmits<Emits>()
-
-const { formatDate } = useKnowledgeBase()
 </script>
 
 <style scoped>

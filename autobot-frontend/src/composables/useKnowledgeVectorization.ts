@@ -7,7 +7,7 @@
  */
 
 import { ref, computed } from 'vue'
-import { useKnowledgeBase } from './useKnowledgeBase'
+import { useKnowledgeJobs } from './knowledge/useKnowledgeJobs'
 import { usePollingJob } from './usePollingJob'
 import { useBatchSelection } from './useBatchSelection'
 import apiClient from '@/utils/ApiClient'
@@ -51,7 +51,7 @@ export interface VectorizationProgress {
 }
 
 export function useKnowledgeVectorization() {
-  const { vectorizeFacts, getVectorizationStatus } = useKnowledgeBase()
+  const { vectorizeFacts, getVectorizationStatus } = useKnowledgeJobs()
 
   // State
   const documentStates = ref<Map<string, DocumentVectorizationState>>(new Map())
