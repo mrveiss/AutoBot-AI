@@ -207,14 +207,17 @@ export interface KnowledgeCategory {
 // System Models
 // ============================================================================
 
-export interface SystemMetrics {
-  cpu_usage: number
-  memory_usage: number
-  disk_usage: number
-  uptime: number
-  active_connections: number
-  last_updated: string
-}
+/**
+ * Deprecated re-export alias for backwards compatibility (#5212).
+ *
+ * The previous flat shape (`cpu_usage`, `memory_usage`, `disk_usage`,
+ * `active_connections`, `last_updated`) described fields the backend never
+ * returned. The authoritative shape now lives in
+ * `@/models/repositories/SystemRepository` as `SystemMetricsResponse`.
+ *
+ * @deprecated Import `SystemMetricsResponse` from `@/models/repositories/SystemRepository` instead.
+ */
+export type { SystemMetricsResponse as SystemMetrics } from '@/models/repositories/SystemRepository'
 
 export interface LLMStatus {
   status: 'connected' | 'disconnected' | 'error'

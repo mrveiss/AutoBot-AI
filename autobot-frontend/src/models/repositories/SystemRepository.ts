@@ -1,34 +1,72 @@
 import { ApiRepository } from './ApiRepository'
-import type { AutoBotSettings, SystemMetrics, DiagnosticsReport } from '@/types/models'
+import type { AutoBotSettings, DiagnosticsReport } from '@/types/models'
 import { getApiBase } from '@/config/ssot-config'
 
+/**
+ * Backend `/api/system/health` response shape (#5212).
+ *
+ * Previously declared a fabricated `{version, uptime, services: {status, latency, message}}`
+ * envelope that the backend never returned. Rewritten to match the actual payload —
+ * `components` are string values (`"healthy"`, `"unhealthy"`, ...), not status objects.
+ */
 export interface HealthCheckResponse {
-  status: 'healthy' | 'unhealthy' | 'degraded' | 'warning' | 'error'
-  version: string
-  uptime: number
-  services: Record<string, {
-    status: 'up' | 'down' | 'degraded' | 'healthy' | 'unhealthy'
-    latency?: number
+  status: string
+  timestamp?: string
+  initialization?: {
+    status: string
     message?: string
-  }>
+  }
+  components?: Record<string, string>
 }
 
+/**
+ * Backend `/api/system/info` response shape (#5212).
+ *
+ * Previously declared a fabricated nested `{system, runtime, application}` envelope.
+ * Rewritten to match the actual flat payload returned by FastAPI.
+ */
 export interface SystemInfoResponse {
+  name: string
+  version: string
+  python_version: string
+  timestamp?: string
+  features?: Record<string, boolean>
+}
+
+/**
+ * Backend `/api/system/metrics` response shape (#5212).
+ *
+ * Replaces the flat `SystemMetrics` from `types/models.ts`, which described
+ * `cpu_usage/memory_usage/disk_usage/active_connections` fields the backend
+ * never produced. The real payload is nested under `system`/`python`/`cache`.
+ */
+export interface SystemMetricsResponse {
+  timestamp: string
   system: {
-    platform: string
-    architecture: string
-    cpu_count: number
-    memory_total: number
-    disk_space: number
+    cpu_percent: number
+    memory: {
+      total: number
+      available: number
+      percent: number
+      used: number
+      free: number
+    }
+    disk: {
+      total: number
+      used: number
+      free: number
+      percent: number
+    }
   }
-  runtime: {
-    python_version: string
-    pip_packages: Record<string, string>
-  }
-  application: {
+  python?: {
     version: string
-    environment: string
-    debug_mode: boolean
+    executable: string
+  }
+  cache?: {
+    status: string
+    total_keys: number
+    memory_usage: string
+    default_ttl: number
   }
 }
 
@@ -50,25 +88,64 @@ export interface CommandExecutionResponse {
 
 export class SystemRepository extends ApiRepository {
   // Health and status
+  // Issue #5212: Backend returns {status, timestamp, initialization, components}.
+  // Previously mis-typed as {version, uptime, services} — fields that never existed.
   async checkHealth(): Promise<HealthCheckResponse> {
-    const response = await this.get(`${getApiBase()}/system/health`)
-    return response.data as HealthCheckResponse
+    const response = await this.get<HealthCheckResponse>(`${getApiBase()}/system/health`)
+    const data = response.data
+    return {
+      status: data?.status ?? 'unknown',
+      timestamp: data?.timestamp,
+      initialization: data?.initialization,
+      components: data?.components ?? {}
+    }
   }
 
-  async getSystemStatus(): Promise<any> {
+  async getSystemStatus(): Promise<SystemInfoResponse> {
     // Issue #552: /api/system/status doesn't exist, use /api/system/info instead
-    const response = await this.get(`${getApiBase()}/system/info`)
-    return response.data as any
+    return this.getSystemInfo()
   }
 
+  // Issue #5212: Backend returns flat {name, version, python_version, timestamp, features}.
+  // Previously mis-typed as nested {system, runtime, application} — entirely fabricated.
   async getSystemInfo(): Promise<SystemInfoResponse> {
-    const response = await this.get(`${getApiBase()}/system/info`)
-    return response.data as SystemInfoResponse
+    const response = await this.get<SystemInfoResponse>(`${getApiBase()}/system/info`)
+    const data = response.data
+    return {
+      name: data?.name ?? 'unknown',
+      version: data?.version ?? 'unknown',
+      python_version: data?.python_version ?? 'unknown',
+      timestamp: data?.timestamp,
+      features: data?.features ?? {}
+    }
   }
 
-  async getSystemMetrics(): Promise<SystemMetrics> {
-    const response = await this.get(`${getApiBase()}/system/metrics`)
-    return response.data as SystemMetrics
+  // Issue #5212: Backend returns nested {timestamp, system: {cpu_percent, memory, disk}, python, cache}.
+  // Previously mis-typed as flat {cpu_usage, memory_usage, disk_usage, active_connections} — never returned.
+  async getSystemMetrics(): Promise<SystemMetricsResponse> {
+    const response = await this.get<SystemMetricsResponse>(`${getApiBase()}/system/metrics`)
+    const data = response.data
+    return {
+      timestamp: data?.timestamp ?? '',
+      system: {
+        cpu_percent: data?.system?.cpu_percent ?? 0,
+        memory: {
+          total: data?.system?.memory?.total ?? 0,
+          available: data?.system?.memory?.available ?? 0,
+          percent: data?.system?.memory?.percent ?? 0,
+          used: data?.system?.memory?.used ?? 0,
+          free: data?.system?.memory?.free ?? 0
+        },
+        disk: {
+          total: data?.system?.disk?.total ?? 0,
+          used: data?.system?.disk?.used ?? 0,
+          free: data?.system?.disk?.free ?? 0,
+          percent: data?.system?.disk?.percent ?? 0
+        }
+      },
+      python: data?.python,
+      cache: data?.cache
+    }
   }
 
   // Settings management
