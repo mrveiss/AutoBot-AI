@@ -13,7 +13,6 @@ Provides a single endpoint that aggregates all analytics data from:
 """
 
 import logging
-from datetime import datetime
 from typing import Any, Dict
 
 import aiohttp
@@ -22,6 +21,7 @@ from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
+from autobot_shared.time_utils import utc_timestamp
 
 logger = logging.getLogger(__name__)
 # Issue #3355: prefix moved to router registry (analytics_routers.py)
@@ -254,7 +254,7 @@ def _build_unified_report_response(
 
     return {
         "status": "success",
-        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "generated_at": utc_timestamp(),
         "summary": {
             "health_score": health_score,
             "grade": get_grade(health_score),
@@ -356,7 +356,7 @@ async def get_quick_summary():
             "total_issues": total_issues,
             "high_priority": severity_totals.get("high", 0)
             + severity_totals.get("critical", 0),
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": utc_timestamp(),
         }
     )
 

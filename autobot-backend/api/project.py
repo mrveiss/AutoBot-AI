@@ -14,9 +14,9 @@ URLs. This module exposes the correct /api/project/* paths.
 """
 
 import logging
-from datetime import datetime
 from typing import Dict, Optional
 
+from autobot_shared.time_utils import utc_timestamp
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -108,7 +108,7 @@ async def get_project_report() -> ProjectReportResponse:
             current_phase=raw.get("current_phase", "unknown"),
             total_phases=raw.get("total_phases", 0),
             completed_phases=raw.get("completed_phases", 0),
-            generated_at=datetime.utcnow().isoformat() + "Z",
+            generated_at=utc_timestamp(),
         )
     except Exception as exc:
         logger.error("Error generating project report: %s", exc)
