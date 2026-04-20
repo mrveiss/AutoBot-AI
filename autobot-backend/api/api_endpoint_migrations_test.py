@@ -2681,7 +2681,7 @@ class TestVectorizeExistingFactsEndpoint:
 
         # Should have inner try-catch for fact processing
         assert "for fact_key in batch:" in source
-        assert "fact_data = await kb.aioredis_client.hgetall(fact_key)" in source
+        assert "fact_data = await kb.redis().hgetall(fact_key)" in source
         # Inner exception handling preserved
         assert "except Exception as e:" in source
         assert "failed_count += 1" in source
