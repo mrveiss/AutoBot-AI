@@ -1879,6 +1879,25 @@
         "low": "Low Similarity"
       }
     },
+    "hardcodes": {
+      "title": "Hardcoded Values",
+      "values": "values",
+      "totalValues": "Total Values",
+      "highLabel": "High",
+      "mediumLabel": "Medium",
+      "lowLabel": "Low",
+      "uniqueTypes": "Unique Types",
+      "variable": "Variable",
+      "value": "Value",
+      "suggestedEnvVar": "Suggested Env Var",
+      "showingOf": "Showing {shown} of {total}",
+      "emptyMessage": "No hardcoded values detected",
+      "severityGroups": {
+        "high": "High Severity",
+        "medium": "Medium Severity",
+        "low": "Low Severity"
+      }
+    },
     "problems": {
       "title": "Problems Report",
       "total": "Total",

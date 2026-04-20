@@ -183,6 +183,12 @@
         @export="(fmt: string) => exportSection('declarations', fmt as 'md' | 'json')"
       />
 
+      <!-- Hardcoded Values (#5277: wire orphan data flow) -->
+      <HardcodesSection
+        :hardcodes="hardcodeAnalysis"
+        @export="(fmt: string) => exportSection('hardcodes', fmt as 'md' | 'json')"
+      />
+
       <!-- Issue #527: API Endpoint Checker Section (#1469: extracted to CodebaseApiEndpointsPanel) -->
       <CodebaseApiEndpointsPanel
         :analysis="apiEndpointAnalysis"
@@ -456,6 +462,7 @@ import CodebaseSecurityPanel from '@/components/analytics/CodebaseSecurityPanel.
 import CodeSmellsSection from '@/components/analytics/CodeSmellsSection.vue'
 import DuplicatesSection from '@/components/analytics/DuplicatesSection.vue'
 import DeclarationsSection from '@/components/analytics/DeclarationsSection.vue'
+import HardcodesSection from '@/components/analytics/HardcodesSection.vue'
 import SourceManager from '@/components/analytics/SourceManager.vue'
 import AddSourceModal from '@/components/analytics/AddSourceModal.vue'
 import ShareSourceModal from '@/components/analytics/ShareSourceModal.vue'
@@ -778,6 +785,7 @@ const { exportReport, exportSection } = useCodebaseExport({
     'environment': environmentAnalysis as Ref<unknown>,
     'statistics': codebaseStats as Ref<unknown>,
     'ownership': ownershipAnalysis as Ref<unknown>,
+    'hardcodes': hardcodeAnalysis as Ref<unknown>,
   },
   exportingReport,
   progressStatus,

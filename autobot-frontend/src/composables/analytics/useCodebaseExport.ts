@@ -16,6 +16,7 @@ export type SectionType =
   | 'bug-prediction' | 'code-smells' | 'problems' | 'duplicates'
   | 'declarations' | 'api-endpoints' | 'cross-language' | 'config-duplicates'
   | 'code-intelligence' | 'environment' | 'statistics' | 'ownership'
+  | 'hardcodes'
 
 interface OwnershipExportData {
   summary: {
@@ -139,6 +140,46 @@ function _generateDeclarationsMd(data: unknown): string {
   if (decls.length > 0) {
     md += `| File | Name | Type | Line |\n|------|------|------|------|\n`
     decls.forEach(d => { md += `| ${d.file} | ${d.name} | ${d.type} | ${d.line} |\n` })
+  }
+  return md
+}
+
+function _generateHardcodesMd(data: unknown): string {
+  // #5277: dedicated markdown for the array form returned by
+  // `/api/analytics/codebase/hardcodes` (distinct from env-analysis export).
+  const hcs = data as Array<{
+    file: string
+    line: number
+    variable_name?: string
+    value: string
+    type: string
+    severity: string
+    suggested_env_var?: string
+  }>
+  let md = `## Hardcoded Values\n\n**Total Values Found:** ${hcs.length}\n\n`
+  if (hcs.length === 0) return md
+  const groups: Record<string, typeof hcs> = { high: [], medium: [], low: [] }
+  hcs.forEach(h => {
+    const sev = (h.severity || 'low').toLowerCase()
+    if (sev === 'high' || sev === 'critical') groups.high.push(h)
+    else if (sev === 'medium') groups.medium.push(h)
+    else groups.low.push(h)
+  })
+  const levels = [
+    { key: 'high', emoji: '🔴' },
+    { key: 'medium', emoji: '🟡' },
+    { key: 'low', emoji: '🟢' },
+  ]
+  for (const { key, emoji } of levels) {
+    if (groups[key].length === 0) continue
+    md += `### ${emoji} ${key.charAt(0).toUpperCase() + key.slice(1)} Severity (${groups[key].length})\n\n`
+    md += `| Type | File | Line | Variable | Value | Suggested Env Var |\n`
+    md += `|------|------|------|----------|-------|-------------------|\n`
+    groups[key].forEach(h => {
+      const val = String(h.value).substring(0, 50) + (String(h.value).length > 50 ? '...' : '')
+      md += `| ${h.type} | ${h.file} | ${h.line} | ${h.variable_name || '-'} | \`${val}\` | ${h.suggested_env_var ? '`' + h.suggested_env_var + '`' : '-'} |\n`
+    })
+    md += `\n`
   }
   return md
 }
@@ -296,6 +337,7 @@ const sectionGenerators: Record<SectionType, (data: unknown) => string> = {
   'environment': _generateEnvironmentMd,
   'code-intelligence': _generateCodeIntelligenceMd,
   'ownership': _generateOwnershipMd,
+  'hardcodes': _generateHardcodesMd,
 }
 
 /**
@@ -450,6 +492,7 @@ export function useCodebaseExport(deps: {
       'cross-language': 'cross-language', 'config-duplicates': 'config-duplicates',
       'code-intelligence': 'code-intelligence-scores', 'environment': 'environment-analysis',
       'statistics': 'codebase-statistics', 'ownership': 'ownership-analysis',
+      'hardcodes': 'hardcoded-values',
     }
     const baseName = nameMap[section] || section
     const ext = format === 'json' ? '.json' : '.md'
