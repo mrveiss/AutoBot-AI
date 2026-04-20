@@ -149,14 +149,16 @@ export class SystemRepository extends ApiRepository {
   }
 
   // Settings management
+  // Backend returns the section-keyed settings dict directly (no envelope) —
+  // see #5214 for the audit history and the rewritten AutoBotSettings shape.
   async getSettings(): Promise<AutoBotSettings> {
-    const response = await this.get(`${getApiBase()}/settings/`)
-    return response.data as AutoBotSettings
+    const response = await this.get<AutoBotSettings>(`${getApiBase()}/settings/`)
+    return (response.data ?? {}) as AutoBotSettings
   }
 
   async updateSettings(settings: Partial<AutoBotSettings>): Promise<AutoBotSettings> {
-    const response = await this.post(`${getApiBase()}/settings/`, settings)
-    return response.data as AutoBotSettings
+    const response = await this.post<AutoBotSettings>(`${getApiBase()}/settings/`, settings)
+    return (response.data ?? {}) as AutoBotSettings
   }
 
   async getBackendSettings(): Promise<any> {
@@ -169,23 +171,10 @@ export class SystemRepository extends ApiRepository {
     return response.data as any
   }
 
-  async getConfigFiles(): Promise<string[]> {
-    // Issue #552: Backend uses /api/settings/config for config file operations
-    const response = await this.get(`${getApiBase()}/settings/config`)
-    return response.data as string[]
-  }
-
-  async getConfigFile(filename: string): Promise<string> {
-    // Issue #552: Backend uses /api/settings/config with query param
-    const response = await this.get(`${getApiBase()}/settings/config?file=${encodeURIComponent(filename)}`)
-    return response.data as string
-  }
-
-  async updateConfigFile(filename: string, content: string): Promise<any> {
-    // Issue #552: Backend uses POST /api/settings/config
-    const response = await this.post(`${getApiBase()}/settings/config`, { file: filename, content })
-    return response.data as any
-  }
+  // Config-file methods removed for #5214: backend /api/settings/config returns
+  // the same section-keyed settings dict as /api/settings/ (query params ignored),
+  // not a filename list or file-content string. The file-based abstraction these
+  // methods declared no longer exists in the backend; audit found zero call sites.
 
   // Terminal operations
   // Issue #552: Fixed paths - backend uses /api/agent-terminal/* not /api/terminal/*
