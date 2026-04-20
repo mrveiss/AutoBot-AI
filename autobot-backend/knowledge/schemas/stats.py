@@ -156,9 +156,16 @@ class KnowledgeMainCategoryEntry(BaseModel):
 
 
 class KnowledgeMainCategoriesResponse(BaseModel):
-    """Shape of ``GET /api/knowledge_base/categories/main``."""
+    """Shape of ``GET /api/knowledge_base/categories/main``.
+
+    ``kb_connected`` (issue #5201) lets the UI distinguish an empty knowledge
+    base (counts == 0 because nothing has been indexed yet) from an
+    unreachable knowledge base (Redis unavailable) — both otherwise return
+    all-zero counts.
+    """
 
     model_config = ConfigDict(extra="allow")
 
     categories: List[KnowledgeMainCategoryEntry] = Field(default_factory=list)
     total: int = 0
+    kb_connected: bool = True
