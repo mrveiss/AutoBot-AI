@@ -21,7 +21,7 @@ import time
 
 import pytest
 
-from knowledge_base import KnowledgeBase
+from knowledge import KnowledgeBase
 
 
 class TestKnowledgeBaseRedisIntegration:

@@ -62,7 +62,7 @@ class TestInitRedisConnections:
     """Verify that _init_redis_connections properly awaits the async client."""
 
     def _make_kb(self):
-        from knowledge.base import KnowledgeBase
+        from knowledge import KnowledgeBase
 
         kb = KnowledgeBase.__new__(KnowledgeBase)
         kb.redis_client = None
