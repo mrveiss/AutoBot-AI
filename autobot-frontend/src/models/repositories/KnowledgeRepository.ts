@@ -123,30 +123,80 @@ export interface AddFileOptions {
 }
 
 /**
- * Basic knowledge base statistics
+ * Basic knowledge base statistics as returned by `/api/knowledge_base/stats/basic`.
+ *
+ * Issue #5215 (found in #5207 audit): the previous declaration claimed
+ * `total_documents`, `total_categories`, `total_size`, `last_updated` plus a
+ * `categories: {name, document_count}[]` list. The backend actually returns
+ * `total_facts`, `total_vectors`, a bare string list of category names, and a
+ * `status` field — none of the previously declared fields exist at the top
+ * level. Callers relying on `stats.categories[i].name` got `undefined.name`
+ * at runtime.
  */
 export interface KnowledgeStats {
-  total_documents: number
-  total_categories: number
-  total_size: number
-  last_updated: string
-  categories: Array<{
-    name: string
-    document_count: number
-  }>
+  total_facts: number
+  total_vectors: number
+  categories: string[]
+  status: string
 }
 
 /**
- * Detailed knowledge base statistics with additional metrics
+ * Size-breakdown block inside `DetailedKnowledgeStats`.
  */
-export interface DetailedKnowledgeStats extends KnowledgeStats {
-  documents_by_type: Record<string, number>
-  recent_additions: KnowledgeDocument[]
-  top_categories: Array<{
-    name: string
-    document_count: number
-    total_size: number
-  }>
+export interface DetailedKnowledgeSizeMetrics {
+  total_content_size: number
+  average_fact_size: number
+  median_fact_size: number
+  largest_fact_size: number
+  smallest_fact_size: number
+}
+
+/**
+ * Detailed knowledge base statistics as returned by
+ * `/api/knowledge_base/detailed_stats`.
+ *
+ * Issue #5215: the previous declaration (`extends KnowledgeStats` + flat
+ * `documents_by_type` / `recent_additions` / `top_categories`) did not match
+ * the nested envelope the backend actually returns. All fields in
+ * `basic_stats` are keyed by the concrete backend response; extra diagnostic
+ * keys (`embedding_cache`, `chromadb_path`, etc.) are preserved via
+ * `Record<string, unknown>` so stats-renderers can display them without a
+ * fresh contract bump.
+ */
+export interface DetailedKnowledgeStats {
+  status: string
+  basic_stats: KnowledgeStats & {
+    total_documents?: number
+    total_chunks?: number
+    db_size?: number
+    last_updated?: string | null
+    redis_db?: number | string | null
+    vector_store?: string | null
+    chromadb_collection?: string | null
+    initialized?: boolean
+    llama_index_configured?: boolean
+    embedding_model?: string | null
+    embedding_dimensions?: number | null
+    index_available?: boolean
+    indexed_documents?: number
+    chromadb_path?: string | null
+    embedding_cache?: Record<string, unknown>
+    [key: string]: unknown
+  }
+  category_breakdown: Record<string, number>
+  source_breakdown: Record<string, number>
+  type_breakdown: Record<string, number>
+  size_metrics: DetailedKnowledgeSizeMetrics
+  rag_available: boolean
+}
+
+/**
+ * A single category row from `/api/knowledge_base/categories`.
+ */
+export interface KnowledgeCategoryEntry {
+  name: string
+  count: number
+  id: string
 }
 
 /**
@@ -338,27 +388,75 @@ export class KnowledgeRepository extends ApiRepository {
   }
 
   /**
-   * Get basic knowledge base statistics
+   * Get basic knowledge base statistics from `/api/knowledge_base/stats/basic`.
+   *
+   * Issue #5215 (#5207 audit): the previous declaration was a lie — it
+   * promised `total_documents` / `total_categories` / `total_size` /
+   * `last_updated` and a structured `categories` list, none of which the
+   * backend returns. Nulls in the envelope collapse to a safe empty default
+   * rather than propagating `undefined` into render code.
    */
   async getKnowledgeStats(): Promise<KnowledgeStats> {
     const response = await this.get<KnowledgeStats>(`${getApiBase()}/knowledge_base/stats/basic`)
-    return response.data
+    const data = response?.data
+    return {
+      total_facts: data?.total_facts ?? 0,
+      total_vectors: data?.total_vectors ?? 0,
+      categories: Array.isArray(data?.categories) ? data.categories : [],
+      status: data?.status ?? 'unknown'
+    }
   }
 
   /**
-   * Get detailed knowledge base statistics
+   * Get detailed knowledge base statistics from
+   * `/api/knowledge_base/detailed_stats`.
+   *
+   * Issue #5215 (#5207 audit): the backend returns a nested envelope
+   * (`basic_stats`, `category_breakdown`, `source_breakdown`,
+   * `type_breakdown`, `size_metrics`, `rag_available`). The previous type
+   * claimed a flat shape with `documents_by_type` / `recent_additions` /
+   * `top_categories` that the backend never emits.
    */
   async getDetailedKnowledgeStats(): Promise<DetailedKnowledgeStats> {
     const response = await this.get<DetailedKnowledgeStats>(`${getApiBase()}/knowledge_base/detailed_stats`)
-    return response.data
+    const data = response?.data
+    return {
+      status: data?.status ?? 'unknown',
+      basic_stats: data?.basic_stats ?? {
+        total_facts: 0,
+        total_vectors: 0,
+        categories: [],
+        status: 'unknown'
+      },
+      category_breakdown: data?.category_breakdown ?? {},
+      source_breakdown: data?.source_breakdown ?? {},
+      type_breakdown: data?.type_breakdown ?? {},
+      size_metrics: data?.size_metrics ?? {
+        total_content_size: 0,
+        average_fact_size: 0,
+        median_fact_size: 0,
+        largest_fact_size: 0,
+        smallest_fact_size: 0
+      },
+      rag_available: data?.rag_available ?? false
+    }
   }
 
   /**
-   * Get all categories in knowledge base
+   * Get all categories in knowledge base from `/api/knowledge_base/categories`.
+   *
+   * Issue #5215: backend returns `{categories: KnowledgeCategoryEntry[], total}`;
+   * the previous declaration promised `string[]`. We unwrap the envelope so
+   * callers (e.g. `KnowledgeController.loadCategories`) receive real
+   * `{name, count, id}` rows instead of having to probe the unexpected shape.
    */
-  async getCategories(): Promise<string[]> {
-    const response = await this.get<string[]>(`${getApiBase()}/knowledge_base/categories`)
-    return response.data
+  async getCategories(): Promise<KnowledgeCategoryEntry[]> {
+    const response = await this.get<{
+      categories: KnowledgeCategoryEntry[]
+      total: number
+    }>(`${getApiBase()}/knowledge_base/categories`)
+    const list = response?.data?.categories
+    return Array.isArray(list) ? list : []
   }
 
   /**

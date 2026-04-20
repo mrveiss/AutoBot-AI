@@ -369,18 +369,19 @@ export class KnowledgeController {
   // Category operations
   async loadCategories(): Promise<void> {
     try {
-      const stats = await knowledgeRepository.getKnowledgeStats()
+      // Issue #5215: switch to /api/knowledge_base/categories — the stats
+      // endpoint returns category names as a bare string list with no
+      // document_count, so populating cards from `stats.categories.map(cat =>
+      // cat.document_count)` was yielding undefined everywhere.
+      const categoryRows = await knowledgeRepository.getCategories()
 
-      // Update categories in store
-      const categories = stats.categories.map((cat: { name: string; document_count: number }) => ({
-        id: generateCategoryId(),
+      this.knowledgeStore.categories = categoryRows.map(cat => ({
+        id: cat.id ?? generateCategoryId(),
         name: cat.name,
         description: `Documents related to ${cat.name}`,
-        documentCount: cat.document_count,
+        documentCount: cat.count ?? 0,
         updatedAt: new Date()
       }))
-
-      this.knowledgeStore.categories = categories
 
     } catch (error: unknown) {
       logger.warn('Failed to load categories:', error)
@@ -415,13 +416,15 @@ export class KnowledgeController {
   // Statistics and maintenance
   async refreshStats(): Promise<void> {
     try {
-      const stats = await knowledgeRepository.getKnowledgeStats()
+      // Issue #5215: the stats/basic endpoint doesn't provide per-category
+      // counts, so refreshing category totals has to go through the dedicated
+      // /categories endpoint which actually returns {name, count, id} rows.
+      const categoryRows = await knowledgeRepository.getCategories()
 
-      // Update local categories with counts
-      stats.categories.forEach((catStat: { name: string; document_count: number }) => {
+      categoryRows.forEach(catStat => {
         const category = this.knowledgeStore.categories.find(c => c.name === catStat.name)
         if (category) {
-          category.documentCount = catStat.document_count
+          category.documentCount = catStat.count ?? 0
         }
       })
 
