@@ -773,7 +773,7 @@ def _extract_class_info(node: ast.ClassDef) -> Dict:
 # Issue #5290: canonical severity by hardcode type when the detector
 # doesn't set one explicitly. Consumed by the per-line detectors and by
 # the endpoint-boundary normalizer in stats.py.
-_DEFAULT_HARDCODE_SEVERITY: Dict[str, str] = {
+DEFAULT_HARDCODE_SEVERITY: Dict[str, str] = {
     "ip": "high",
     "api_key": "high",
     "password": "high",
@@ -786,7 +786,7 @@ _DEFAULT_HARDCODE_SEVERITY: Dict[str, str] = {
 
 
 def _default_severity_for(hardcode_type: str) -> str:
-    return _DEFAULT_HARDCODE_SEVERITY.get(hardcode_type, "low")
+    return DEFAULT_HARDCODE_SEVERITY.get(hardcode_type, "low")
 
 
 def _check_hardcoded_ip(ip: str, line_num: int, line_content: str, file_path: str) -> Optional[Dict]:

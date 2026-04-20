@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from utils.chromadb_client import get_all_paginated
 
-from ..analyzers import _DEFAULT_HARDCODE_SEVERITY
+from ..analyzers import DEFAULT_HARDCODE_SEVERITY
 from ..scanner import _tasks_sync_lock, indexing_tasks
 from ..storage import get_code_collection, get_redis_connection
 from .shared import (
@@ -341,7 +341,7 @@ def _normalize_hardcode_record(record: dict) -> dict:
         normalized["file"] = normalized["file_path"]
     normalized.setdefault("file", "")
     if not normalized.get("severity"):
-        normalized["severity"] = _DEFAULT_HARDCODE_SEVERITY.get(normalized.get("type", ""), "low")
+        normalized["severity"] = DEFAULT_HARDCODE_SEVERITY.get(normalized.get("type", ""), "low")
     return normalized
 
 
