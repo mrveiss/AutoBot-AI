@@ -318,6 +318,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useExpansion } from '@/composables/useExpansion'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
 
@@ -357,7 +358,8 @@ const emit = defineEmits<{
 const PAGE_SIZE = 50
 const activeFilter = ref<'all' | 'high' | 'medium' | 'low'>('all')
 const visibleCount = ref(PAGE_SIZE)
-const expandedFiles = ref<Set<string>>(new Set())
+const fileExpansion = useExpansion<string>()
+const expandedFiles = fileExpansion.expanded
 
 // Single pass over the file list to derive all three risk-bucket counts.
 // Replaces three separate .filter() traversals that each iterated the full
@@ -434,12 +436,7 @@ function setFilter(filter: 'high' | 'medium' | 'low'): void {
 }
 
 function toggleFileExpand(filePath: string): void {
-  if (expandedFiles.value.has(filePath)) {
-    expandedFiles.value.delete(filePath)
-  } else {
-    expandedFiles.value.add(filePath)
-  }
-  expandedFiles.value = new Set(expandedFiles.value)
+  fileExpansion.toggle(filePath)
 }
 
 function getSeverityForFactor(

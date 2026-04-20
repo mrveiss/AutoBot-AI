@@ -10,6 +10,7 @@
  */
 
 import { ref, computed } from 'vue'
+import { useExpansion } from '@/composables/useExpansion'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import appConfig from '@/config/AppConfig.js'
 import { useBackgroundTask } from '@/composables/useBackgroundTask'
@@ -53,7 +54,8 @@ export function useBugPrediction(deps: UseCodeIntelAnalysisDeps) {
   const bugRiskFilter = ref<'all' | 'high' | 'medium' | 'low'>('all')
   const BUG_RISK_PAGE_SIZE = 50
   const bugRiskVisibleCount = ref(BUG_RISK_PAGE_SIZE)
-  const expandedBugRiskFiles = ref<Set<string>>(new Set())
+  const bugRiskExpansion = useExpansion<string>()
+  const expandedBugRiskFiles = bugRiskExpansion.expanded
 
   // --- Loaders ---
 
@@ -90,14 +92,7 @@ export function useBugPrediction(deps: UseCodeIntelAnalysisDeps) {
   }
 
   function toggleBugRiskFileExpand(filePath: string): void {
-    if (expandedBugRiskFiles.value.has(filePath)) {
-      expandedBugRiskFiles.value.delete(filePath)
-    } else {
-      expandedBugRiskFiles.value.add(filePath)
-    }
-    expandedBugRiskFiles.value = new Set(
-      expandedBugRiskFiles.value,
-    )
+    bugRiskExpansion.toggle(filePath)
   }
 
   function getFilteredBugRiskFiles(): BugPredictionFile[] {

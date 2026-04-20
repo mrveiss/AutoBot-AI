@@ -16,6 +16,7 @@
  */
 
 import { ref, computed, onMounted, watch } from 'vue'
+import { useExpansion } from '@/composables/useExpansion'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import apiClient from '@/utils/ApiClient'
@@ -68,7 +69,8 @@ const searchQuery = ref('')
 const categories = ref<DocCategory[]>([])
 const selectedCategory = ref<DocCategory | null>(null)
 const selectedDoc = ref<SystemDoc | null>(null)
-const expandedCategories = ref<Set<string>>(new Set())
+const categoryExpansion = useExpansion<string>()
+const expandedCategories = categoryExpansion.expanded
 
 // Export state
 const isExporting = ref(false)
@@ -183,15 +185,11 @@ function selectDoc(doc: SystemDoc): void {
 }
 
 function toggleCategory(categoryId: string): void {
-  if (expandedCategories.value.has(categoryId)) {
-    expandedCategories.value.delete(categoryId)
-  } else {
-    expandedCategories.value.add(categoryId)
-  }
+  categoryExpansion.toggle(categoryId)
 }
 
 function isCategoryExpanded(categoryId: string): boolean {
-  return expandedCategories.value.has(categoryId)
+  return categoryExpansion.isExpanded(categoryId)
 }
 
 async function copyToClipboard(): Promise<void> {

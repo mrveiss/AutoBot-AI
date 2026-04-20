@@ -348,6 +348,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { useExpansion } from '@/composables/useExpansion'
 import { useI18n } from 'vue-i18n'
 // Type imports only — runtime load handled by the shared composable (#5206).
 // The default namespace import below gives type-only access to helpers
@@ -443,7 +444,8 @@ const searchQuery = ref('')
 const filterModule = ref('')
 const resolvedFilter = ref<'all' | 'resolved' | 'unresolved'>('all')
 const viewMode = ref<'network' | 'list' | 'stats' | 'orphaned'>('network') // Default to network view
-const expandedFuncs = ref<Set<string>>(new Set())
+const funcExpansion = useExpansion<string>()
+const expandedFuncs = funcExpansion.expanded
 const selectedFunc = ref<string | null>(null)
 const zoomLevel = ref(1)
 const layoutMode = ref<'force' | 'grid'>('force')
@@ -1237,12 +1239,7 @@ function getNodeName(nodeId: string): string {
 }
 
 function toggleFunction(funcId: string) {
-  if (expandedFuncs.value.has(funcId)) {
-    expandedFuncs.value.delete(funcId)
-  } else {
-    expandedFuncs.value.add(funcId)
-  }
-  expandedFuncs.value = new Set(expandedFuncs.value)
+  funcExpansion.toggle(funcId)
   selectedFunc.value = funcId
   emit('select', funcId)
 }
@@ -1314,11 +1311,12 @@ watch(() => props.data, async (newData) => {
       const bCount = getOutgoingCalls(b.id).length + getIncomingCalls(b.id).length
       return bCount - aCount
     })
-    sorted.slice(0, 3).forEach(node => {
-      if (getOutgoingCalls(node.id).length || getIncomingCalls(node.id).length) {
-        expandedFuncs.value.add(node.id)
-      }
-    })
+    funcExpansion.expandAll(
+      sorted
+        .slice(0, 3)
+        .filter(node => getOutgoingCalls(node.id).length || getIncomingCalls(node.id).length)
+        .map(node => node.id)
+    )
   }
 }, { immediate: true })
 
