@@ -10,6 +10,7 @@
 
 import type { Ref, ComputedRef } from 'vue'
 import type { ToastType } from '@/composables/useToast'
+import type { HardcodedValue } from '@/composables/analytics/analyticsTypes'
 
 // --- Dependencies interface ---
 
@@ -177,17 +178,8 @@ export interface EnvironmentAnalysisResult {
   recommendations_count: number
   categories: Record<string, number>
   analysis_time_seconds: number
-  hardcoded_values: Array<{
-    file: string
-    line: number
-    variable_name?: string
-    value: string
-    type: string
-    severity: string
-    suggested_env_var: string
-    context?: string
-    current_usage?: string
-  }>
+  // #5311: use canonical HardcodedValue from analyticsTypes.
+  hardcoded_values: HardcodedValue[]
   recommendations: EnvRecommendation[]
   is_truncated?: boolean
 }
