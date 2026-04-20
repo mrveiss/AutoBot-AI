@@ -35,8 +35,12 @@ export interface UseBatchSelectionReturn<T, Key extends string | number = string
   select: (item: T) => void
   /** Deselect one item (idempotent). */
   deselect: (item: T) => void
+  /** Deselect by key (when only the ID is available). */
+  deselectByKey: (key: Key) => void
   /** Select every item currently in the list. */
   selectAll: () => void
+  /** Replace the entire selection with the given keys. */
+  setSelected: (keys: Iterable<Key>) => void
   /** Clear all selections. */
   clear: () => void
   /** True if the given item is selected. */
@@ -101,7 +105,15 @@ export function useBatchSelection<T, Key extends string | number = string | numb
   }
 
   function deselect(item: T): void {
-    const key = keyFn(item)
+    deselectByKey(keyFn(item))
+  }
+
+  /**
+   * Deselect by key directly. Useful when consumers only have the ID
+   * (e.g. after an action processed an item by ID and the item object
+   * is no longer in the items list). Idempotent.
+   */
+  function deselectByKey(key: Key): void {
     if (selected.value.has(key)) {
       const next = new Set(selected.value)
       next.delete(key)
@@ -111,6 +123,16 @@ export function useBatchSelection<T, Key extends string | number = string | numb
 
   function selectAll(): void {
     selected.value = new Set(currentItems.value.map(keyFn))
+  }
+
+  /**
+   * Replace the entire selection with the given keys. Useful for
+   * "select all matching the current filter" patterns where the items
+   * to select aren't in the composable's `items` source (e.g. cross-page
+   * selection in a paginated list whose `items` is just the current page).
+   */
+  function setSelected(keys: Iterable<Key>): void {
+    selected.value = new Set(keys)
   }
 
   function clear(): void {
@@ -130,7 +152,9 @@ export function useBatchSelection<T, Key extends string | number = string | numb
     toggle,
     select,
     deselect,
+    deselectByKey,
     selectAll,
+    setSelected,
     clear,
     isSelected
   }
