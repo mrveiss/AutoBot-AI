@@ -193,6 +193,7 @@ import { useKnowledgeJobs } from '@/composables/knowledge/useKnowledgeJobs';
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore';  // NEW: Use shared store
 import { useAsyncOperation } from '@/composables/useAsyncOperation';
 import { usePollingJob } from '@/composables/usePollingJob';
+import { formatCategoryName as formatKey } from '@/utils/formatHelpers';
 import appConfig from '@/config/AppConfig.js';
 import BaseButton from '@/components/base/BaseButton.vue';
 import BasePanel from '@/components/base/BasePanel.vue';
@@ -212,9 +213,10 @@ export default {
     const { t } = useI18n();
 
     // Domain composables (migrated from useKnowledgeBase BC shim in #5193).
-    // Note: `formatKey` was destructured from the shim but never defined on
-    // it — dropping it preserves the prior `undefined` behavior and will be
-    // addressed separately (template at line ~152 calls formatKey(key)).
+    // `formatKey` is now imported from @/utils/formatHelpers as an alias for
+    // `formatCategoryName` (snake_case/kebab-case → Title Case). It was
+    // previously destructured from the shim but never defined there —
+    // runtime `undefined` would have thrown in the template at line ~152.
     const {
       initializeMachineKnowledge: initializeMachineKnowledgeAPI,
       refreshSystemKnowledge: refreshSystemKnowledgeAPI,
@@ -227,7 +229,6 @@ export default {
       pollJobStatus: pollJobStatusAPI,  // NEW: Job status polling
       vectorizeFacts: vectorizeFactsAPI,
     } = useKnowledgeJobs();
-    const formatKey = undefined;
 
     // NEW: Use shared Pinia store instead of local state
     const knowledgeStore = useKnowledgeStore();
