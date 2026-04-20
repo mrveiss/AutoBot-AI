@@ -12,7 +12,7 @@
 <template>
   <div class="theme-toggle" :class="{ 'theme-toggle--compact': compact }">
     <label v-if="showLabel" class="theme-toggle__label">
-      <i class="fas fa-palette"></i>
+      <Icon name="palette" size="sm" />
       <span>{{ t('ui.themeToggle.theme') }}</span>
     </label>
 
@@ -32,7 +32,7 @@
           {{ themeLabels[themeOption] }}
         </option>
       </select>
-      <i class="fas fa-chevron-down theme-toggle__dropdown-icon"></i>
+      <Icon name="chevron-down" size="sm" class="theme-toggle__dropdown-icon" />
     </div>
 
     <!-- Button group mode -->
@@ -48,7 +48,7 @@
         :title="themeLabels[themeOption]"
         @click="setTheme(themeOption)"
       >
-        <i :class="getThemeIcon(themeOption)"></i>
+        <Icon :name="getThemeIcon(themeOption)" size="sm" />
         <span v-if="!compact">{{ themeLabels[themeOption] }}</span>
       </button>
     </div>
@@ -60,7 +60,7 @@
       :aria-label="isDark ? t('ui.themeToggle.switchToLight') : t('ui.themeToggle.switchToDark')"
       @click="toggleTheme"
     >
-      <i :class="isDark ? 'fas fa-sun' : 'fas fa-moon'"></i>
+      <Icon :name="isDark ? 'sun' : 'moon'" size="sm" />
       <span v-if="!compact">{{ isDark ? t('ui.themeToggle.light') : t('ui.themeToggle.dark') }}</span>
     </button>
   </div>
@@ -84,6 +84,7 @@
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useTheme, type Theme } from '@/composables/useTheme'
+import Icon, { type IconName } from '@/components/ui/Icon.vue'
 
 interface Props {
   mode?: 'dropdown' | 'buttons' | 'toggle'
@@ -116,13 +117,13 @@ function handleThemeChange(): void {
 }
 
 /**
- * Get icon class for theme option
+ * Get icon name for theme option
  */
-function getThemeIcon(themeOption: Theme): string {
-  const icons: Record<Theme, string> = {
-    dark: 'fas fa-moon',
-    light: 'fas fa-sun',
-    system: 'fas fa-desktop'
+function getThemeIcon(themeOption: Theme): IconName {
+  const icons: Record<Theme, IconName> = {
+    dark: 'moon',
+    light: 'sun',
+    system: 'desktop'
   }
   return icons[themeOption]
 }

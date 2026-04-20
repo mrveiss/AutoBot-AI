@@ -10,7 +10,7 @@
           :aria-atomic="true"
         >
           <div class="toast-icon">
-            <i :class="getIcon(toast.type)" aria-hidden="true"></i>
+            <Icon :name="getIcon(toast.type)" size="md" />
           </div>
           <div class="toast-content">
             <span class="toast-message">{{ toast.message }}</span>
@@ -20,7 +20,7 @@
             @click="removeToast(toast.id)"
             :aria-label="t('ui.toastContainer.dismissNotification')"
           >
-            <i class="fas fa-times" aria-hidden="true"></i>
+            <Icon name="times" size="md" />
           </button>
         </div>
       </TransitionGroup>
@@ -40,21 +40,22 @@
  */
 import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
+import Icon, { type IconName } from '@/components/ui/Icon.vue'
 
 const { t } = useI18n()
 const { toasts, removeToast } = useToast()
 
-const getIcon = (type: string): string => {
+const getIcon = (type: string): IconName => {
   switch (type) {
     case 'success':
-      return 'fas fa-check-circle'
+      return 'check-circle'
     case 'error':
-      return 'fas fa-exclamation-circle'
+      return 'exclamation-circle'
     case 'warning':
-      return 'fas fa-exclamation-triangle'
+      return 'exclamation-triangle'
     case 'info':
     default:
-      return 'fas fa-info-circle'
+      return 'info-circle'
   }
 }
 </script>

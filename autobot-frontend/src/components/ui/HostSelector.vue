@@ -7,18 +7,18 @@
       @click="toggleExpanded"
     >
       <div class="selected-host" v-if="selectedHost">
-        <i :class="getHostIcon(selectedHost)"></i>
+        <Icon :name="getHostIcon(selectedHost)" size="sm" />
         <span class="host-name">{{ selectedHost.name }}</span>
         <span class="host-address">{{ selectedHost.host }}</span>
         <span class="connection-status" :class="connectionStatus">
-          <i :class="getStatusIcon()"></i>
+          <Icon :name="getStatusIcon().name" :spin="getStatusIcon().spin" size="sm" />
         </span>
       </div>
       <div class="no-host-selected" v-else>
-        <i class="fas fa-server"></i>
+        <Icon name="server" size="sm" />
         <span>{{ t('ui.hostSelector.selectHost') }}</span>
       </div>
-      <i class="fas fa-chevron-down expand-icon"></i>
+      <Icon name="chevron-down" size="sm" class="expand-icon" />
     </div>
 
     <!-- Expanded state - shows host list -->
@@ -26,7 +26,7 @@
       <div class="selector-header">
         <h4>{{ t('ui.hostSelector.infrastructureHosts') }}</h4>
         <button class="btn-close" @click="toggleExpanded">
-          <i class="fas fa-times"></i>
+          <Icon name="times" size="sm" />
         </button>
       </div>
 
@@ -37,14 +37,14 @@
           :class="{ active: capabilityFilter === 'ssh' }"
           @click="setCapabilityFilter('ssh')"
         >
-          <i class="fas fa-terminal"></i> SSH
+          <Icon name="terminal" size="sm" /> SSH
         </button>
         <button
           class="filter-btn"
           :class="{ active: capabilityFilter === 'vnc' }"
           @click="setCapabilityFilter('vnc')"
         >
-          <i class="fas fa-desktop"></i> VNC
+          <Icon name="desktop" size="sm" /> VNC
         </button>
         <button
           class="filter-btn"
@@ -65,7 +65,7 @@
           @click="selectHost(host)"
         >
           <div class="host-icon" :style="{ background: getHostColor(host) }">
-            <i :class="getHostIcon(host)"></i>
+            <Icon :name="getHostIcon(host)" size="sm" />
           </div>
           <div class="host-info">
             <span class="host-name">{{ host.name }}</span>
@@ -88,7 +88,7 @@
 
         <!-- Empty state -->
         <div v-if="filteredHosts.length === 0" class="empty-state">
-          <i class="fas fa-server"></i>
+          <Icon name="server" size="lg" />
           <p v-if="hosts.length === 0">
             {{ t('ui.hostSelector.noHostsConfigured') }}
           </p>
@@ -100,17 +100,17 @@
 
       <!-- Loading state -->
       <div v-else class="loading-state">
-        <i class="fas fa-spinner fa-spin"></i>
+        <LoadingSpinner size="md" />
         <span>{{ t('ui.hostSelector.loadingHosts') }}</span>
       </div>
 
       <!-- Actions -->
       <div class="selector-actions">
         <button class="btn-secondary" @click="refreshHosts">
-          <i class="fas fa-sync-alt"></i> {{ t('ui.hostSelector.refresh') }}
+          <Icon name="sync-alt" size="sm" /> {{ t('ui.hostSelector.refresh') }}
         </button>
         <button class="btn-primary" @click="openSecretsManager">
-          <i class="fas fa-plus"></i> {{ t('ui.hostSelector.addHost') }}
+          <Icon name="plus" size="sm" /> {{ t('ui.hostSelector.addHost') }}
         </button>
       </div>
     </div>
@@ -123,6 +123,8 @@ import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { getApiBase } from '@/config/ssot-config'
+import Icon, { type IconName } from '@/components/ui/Icon.vue'
+import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 
 const logger = createLogger('HostSelector');
 const { t } = useI18n();
@@ -252,11 +254,11 @@ const openSecretsManager = () => {
   emit('open-secrets-manager');
 };
 
-const getHostIcon = (host: InfrastructureHost) => {
+const getHostIcon = (host: InfrastructureHost): IconName => {
   if (host.capabilities?.includes('vnc')) {
-    return 'fas fa-desktop';
+    return 'desktop';
   }
-  return 'fas fa-terminal';
+  return 'terminal';
 };
 
 const getHostColor = (host: InfrastructureHost) => {
@@ -271,14 +273,14 @@ const getHostColor = (host: InfrastructureHost) => {
   return colors[hash % colors.length];
 };
 
-const getStatusIcon = () => {
+const getStatusIcon = (): { name: IconName; spin: boolean } => {
   switch (connectionStatus.value) {
     case 'connected':
-      return 'fas fa-check-circle';
+      return { name: 'check-circle', spin: false };
     case 'connecting':
-      return 'fas fa-spinner fa-spin';
+      return { name: 'sync-alt', spin: true };
     default:
-      return 'fas fa-circle';
+      return { name: 'circle', spin: false };
   }
 };
 
