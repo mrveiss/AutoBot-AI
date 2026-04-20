@@ -12,6 +12,7 @@ window) with automatic Retry-After and X-RateLimit-Reset handling.
 
 import asyncio
 import logging
+import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -73,7 +74,7 @@ class GitHubIntegration(BaseIntegration):
 
     async def test_connection(self) -> IntegrationHealth:
         """Test GitHub API connectivity by fetching the authenticated user."""
-        start = datetime.utcnow()
+        start = time.monotonic()
         try:
             result = await self._github_request("GET", "/user")
         except asyncio.TimeoutError:
@@ -84,7 +85,7 @@ class GitHubIntegration(BaseIntegration):
                 last_checked=datetime.utcnow(),
             )
 
-        latency_ms = (datetime.utcnow() - start).total_seconds() * 1000
+        latency_ms = (time.monotonic() - start) * 1000
         status_code = result.get("status_code", 0)
         body = result.get("body", {})
 

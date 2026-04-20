@@ -15,6 +15,7 @@ and CRUD operations for tasks/issues/cards.
 
 import base64
 import logging
+import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -49,10 +50,10 @@ class JiraIntegration(BaseIntegration):
 
     async def test_connection(self) -> IntegrationHealth:
         """Test Jira connection by fetching server info."""
-        start_time = datetime.utcnow()
+        start_time = time.monotonic()
         try:
             result = await self._jira_request("GET", "/rest/api/3/serverInfo")
-            latency = (datetime.utcnow() - start_time).total_seconds() * 1000
+            latency = (time.monotonic() - start_time) * 1000
 
             if result.get("status_code") == 200:
                 self._status = IntegrationStatus.CONNECTED
@@ -297,10 +298,10 @@ class TrelloIntegration(BaseIntegration):
 
     async def test_connection(self) -> IntegrationHealth:
         """Test Trello connection by fetching member info."""
-        start_time = datetime.utcnow()
+        start_time = time.monotonic()
         try:
             result = await self._trello_request("GET", "/members/me")
-            latency = (datetime.utcnow() - start_time).total_seconds() * 1000
+            latency = (time.monotonic() - start_time) * 1000
 
             if result.get("status_code") == 200:
                 self._status = IntegrationStatus.CONNECTED
@@ -518,10 +519,10 @@ class AsanaIntegration(BaseIntegration):
 
     async def test_connection(self) -> IntegrationHealth:
         """Test Asana connection by fetching user info."""
-        start_time = datetime.utcnow()
+        start_time = time.monotonic()
         try:
             result = await self._asana_request("GET", "/users/me")
-            latency = (datetime.utcnow() - start_time).total_seconds() * 1000
+            latency = (time.monotonic() - start_time) * 1000
 
             if result.get("status_code") == 200:
                 self._status = IntegrationStatus.CONNECTED

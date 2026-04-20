@@ -19,6 +19,7 @@ Supported actions:
 """
 
 import logging
+import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -59,10 +60,10 @@ class NotionIntegration(BaseIntegration):
 
     async def test_connection(self) -> IntegrationHealth:
         """Test Notion connection by fetching the bot user info."""
-        start = datetime.utcnow()
+        start = time.monotonic()
         try:
             result = await self._notion_request("GET", "/users/me")
-            latency_ms = (datetime.utcnow() - start).total_seconds() * 1000
+            latency_ms = (time.monotonic() - start) * 1000
 
             if result.get("status_code") == 200:
                 self._status = IntegrationStatus.CONNECTED

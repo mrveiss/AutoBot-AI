@@ -11,6 +11,7 @@ and executing read-only queries.
 
 import logging
 import re
+import time
 from datetime import datetime
 from typing import Any, Dict, List
 
@@ -69,7 +70,7 @@ class PostgreSQLIntegration(BaseIntegration):
 
     async def test_connection(self) -> IntegrationHealth:
         """Test PostgreSQL connection and return health status."""
-        start_time = datetime.utcnow()
+        start_time = time.monotonic()
         try:
             import asyncpg
 
@@ -89,7 +90,7 @@ class PostgreSQLIntegration(BaseIntegration):
             version = await conn.fetchval("SELECT version()")
             await conn.close()
 
-            elapsed = (datetime.utcnow() - start_time).total_seconds() * 1000
+            elapsed = (time.monotonic() - start_time) * 1000
             self._status = IntegrationStatus.CONNECTED
 
             return IntegrationHealth(
@@ -101,7 +102,7 @@ class PostgreSQLIntegration(BaseIntegration):
             )
 
         except Exception as exc:
-            elapsed = (datetime.utcnow() - start_time).total_seconds() * 1000
+            elapsed = (time.monotonic() - start_time) * 1000
             self._status = IntegrationStatus.ERROR
             self.logger.error("PostgreSQL connection failed: %s", exc)
 
@@ -230,7 +231,7 @@ class MySQLIntegration(BaseIntegration):
 
     async def test_connection(self) -> IntegrationHealth:
         """Test MySQL connection and return health status."""
-        start_time = datetime.utcnow()
+        start_time = time.monotonic()
         try:
             import aiomysql
 
@@ -254,7 +255,7 @@ class MySQLIntegration(BaseIntegration):
 
             conn.close()
 
-            elapsed = (datetime.utcnow() - start_time).total_seconds() * 1000
+            elapsed = (time.monotonic() - start_time) * 1000
             self._status = IntegrationStatus.CONNECTED
 
             return IntegrationHealth(
@@ -266,7 +267,7 @@ class MySQLIntegration(BaseIntegration):
             )
 
         except Exception as exc:
-            elapsed = (datetime.utcnow() - start_time).total_seconds() * 1000
+            elapsed = (time.monotonic() - start_time) * 1000
             self._status = IntegrationStatus.ERROR
             self.logger.error("MySQL connection failed: %s", exc)
 
@@ -398,7 +399,7 @@ class MongoDBIntegration(BaseIntegration):
 
     async def test_connection(self) -> IntegrationHealth:
         """Test MongoDB connection and return health status."""
-        start_time = datetime.utcnow()
+        start_time = time.monotonic()
         try:
             from motor.motor_asyncio import AsyncIOMotorClient
 
@@ -423,7 +424,7 @@ class MongoDBIntegration(BaseIntegration):
 
             client.close()
 
-            elapsed = (datetime.utcnow() - start_time).total_seconds() * 1000
+            elapsed = (time.monotonic() - start_time) * 1000
             self._status = IntegrationStatus.CONNECTED
 
             return IntegrationHealth(
@@ -435,7 +436,7 @@ class MongoDBIntegration(BaseIntegration):
             )
 
         except Exception as exc:
-            elapsed = (datetime.utcnow() - start_time).total_seconds() * 1000
+            elapsed = (time.monotonic() - start_time) * 1000
             self._status = IntegrationStatus.ERROR
             self.logger.error("MongoDB connection failed: %s", exc)
 
