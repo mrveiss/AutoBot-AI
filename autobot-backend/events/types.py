@@ -25,6 +25,8 @@ from datetime import datetime
 from enum import Enum, auto
 from typing import Any, Optional
 
+from autobot_shared.time_utils import now_utc
+
 logger = logging.getLogger(__name__)
 
 
@@ -107,7 +109,7 @@ class AgentEvent:
     event_type: EventType = EventType.MESSAGE
 
     # Timing
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=now_utc)
 
     # Content
     content: dict = field(default_factory=dict)

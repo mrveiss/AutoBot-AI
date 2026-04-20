@@ -53,6 +53,30 @@ def utc_timestamp() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def now_utc() -> datetime:
+    """Return current UTC time as a tz-aware ``datetime``.
+
+    Companion to :func:`utc_timestamp` for callers that need the
+    ``datetime`` object itself (e.g. dataclass / Pydantic
+    ``default_factory=``, ORM column ``default=``, arithmetic with
+    ``timedelta``) rather than the ISO-8601 string.
+
+    Equivalent to ``datetime.now(timezone.utc)`` but importable as a
+    module-level callable so dataclass / Pydantic field defaults can
+    pass it directly without a lambda::
+
+        timestamp: datetime = field(default_factory=now_utc)
+        # vs
+        timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    Replaces ``datetime.utcnow`` (which Python 3.12 deprecates and
+    which returns a tz-NAIVE datetime that mis-compares against
+    tz-aware values) — see #5211 audit at
+    ``docs/developer/audits/datetime-utcnow-non-isoformat-audit.md``.
+    """
+    return datetime.now(timezone.utc)
+
+
 def utc_timestamp_z() -> str:
     """Return current UTC time as ISO-8601 with ``Z`` suffix. **DEPRECATED.**
 

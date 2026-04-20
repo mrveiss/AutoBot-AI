@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, List, Optional, Set, Tuple
 
+from autobot_shared.time_utils import now_utc
+
 
 @dataclass
 class CompletionContext:
@@ -23,7 +25,7 @@ class CompletionContext:
 
     # Metadata
     context_id: str
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=now_utc)
 
     # File-level context
     file_path: str = ""

@@ -15,6 +15,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
+from autobot_shared.time_utils import now_utc
+
 
 class StepStatus(Enum):
     """Status of a plan step"""
@@ -145,7 +147,7 @@ class ExecutionPlan:
     current_step_number: int = 0
 
     # Timing
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=now_utc)
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
