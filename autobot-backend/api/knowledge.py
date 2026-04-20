@@ -360,7 +360,7 @@ async def _get_or_compute_category_counts(
     kb, cache_keys: dict, get_category_for_source, category_counts: dict
 ) -> None:
     """Get cached counts or compute from facts (Issue #398: extracted)."""
-    cached_values = await kb.aioredis_client.mget(list(cache_keys.values()))
+    cached_values = await kb.redis().mget(list(cache_keys.values()))
     if all(v is not None for v in cached_values):
         # Use cached values
         for i, cat_id in enumerate(cache_keys.keys()):
@@ -377,7 +377,7 @@ async def _get_or_compute_category_counts(
         logger.info("Category counts: %s", category_counts)
         # Cache for 1 hour
         for cat_id, cache_key in cache_keys.items():
-            await kb.aioredis_client.set(
+            await kb.redis().set(
                 cache_key, category_counts[cat_id], ex=CATEGORY_CACHE_TTL
             )
 

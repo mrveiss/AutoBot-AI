@@ -317,12 +317,12 @@ async def get_knowledge_by_scope(
         # If scope filter provided, filter results
         if scope:
             fact_ids = await _filter_fact_ids_by_scope(
-                fact_ids, scope, kb.aioredis_client
+                fact_ids, scope, kb.redis()
             )
 
         # Fetch full fact data
         facts = await _fetch_facts_from_redis(
-            fact_ids, kb.aioredis_client, include_title_only=False
+            fact_ids, kb.redis(), include_title_only=False
         )
 
         return {"facts": facts, "count": len(facts), "total": len(fact_ids)}
@@ -372,7 +372,7 @@ async def get_organization_knowledge(
             offset=pagination.offset,
         )
         facts = await _fetch_facts_from_redis(
-            fact_ids, kb.aioredis_client, include_title_only=True
+            fact_ids, kb.redis(), include_title_only=True
         )
         return {"facts": facts, "count": len(facts)}
 
@@ -418,7 +418,7 @@ async def get_group_knowledge(
             group_id=group_id, limit=pagination.limit, offset=pagination.offset
         )
         facts = await _fetch_facts_from_redis(
-            fact_ids, kb.aioredis_client, include_title_only=True
+            fact_ids, kb.redis(), include_title_only=True
         )
         return {"facts": facts, "count": len(facts)}
 
@@ -461,7 +461,7 @@ async def share_knowledge(
     try:
         user_id, _, _ = extract_user_context_from_request(current_user)
         metadata = await _verify_fact_ownership(
-            fact_id, user_id, kb.aioredis_client, "share"
+            fact_id, user_id, kb.redis(), "share"
         )
 
         updated_metadata = await kb.ownership_manager.share_fact(
@@ -471,7 +471,7 @@ async def share_knowledge(
             fact_metadata=metadata,
         )
 
-        await kb.aioredis_client.hset(
+        await kb.redis().hset(
             f"fact:{fact_id}", "metadata", json.dumps(updated_metadata)
         )
 
@@ -528,14 +528,14 @@ async def unshare_knowledge(
     try:
         user_id, _, _ = extract_user_context_from_request(current_user)
         metadata = await _verify_fact_ownership(
-            fact_id, user_id, kb.aioredis_client, "unshare"
+            fact_id, user_id, kb.redis(), "unshare"
         )
 
         updated_metadata = await _unshare_fact_by_entity(
             fact_id, entity_id, entity_type, metadata, kb.ownership_manager
         )
 
-        await kb.aioredis_client.hset(
+        await kb.redis().hset(
             f"fact:{fact_id}", "metadata", json.dumps(updated_metadata)
         )
 
@@ -585,7 +585,7 @@ async def update_knowledge_permissions(
     try:
         # Fetch metadata and verify the caller is the owner
         user_id, user_org_id, _ = extract_user_context_from_request(current_user)
-        metadata = await _fetch_and_verify_owner(fact_id, user_id, kb.aioredis_client)
+        metadata = await _fetch_and_verify_owner(fact_id, user_id, kb.redis())
 
         # Apply visibility changes and org-level guard to metadata dict
         old_visibility = metadata.get("visibility")
@@ -601,7 +601,7 @@ async def update_knowledge_permissions(
             permissions_request=permissions_request,
             old_visibility=old_visibility,
             ownership_manager=kb.ownership_manager,
-            aioredis_client=kb.aioredis_client,
+            aioredis_client=kb.redis(),
         )
 
         return {
@@ -641,7 +641,7 @@ async def get_knowledge_access_info(
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     try:
-        metadata = await _fetch_fact_metadata(fact_id, kb.aioredis_client)
+        metadata = await _fetch_fact_metadata(fact_id, kb.redis())
         user_id, user_org_id, user_group_ids = extract_user_context_from_request(
             current_user
         )
