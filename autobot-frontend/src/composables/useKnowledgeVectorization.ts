@@ -8,6 +8,7 @@
 
 import { ref, computed } from 'vue'
 import { useKnowledgeBase } from './useKnowledgeBase'
+import { usePollingJob } from './usePollingJob'
 import apiClient from '@/utils/ApiClient'
 import appConfig from '@/config/AppConfig.js'
 import { createLogger } from '@/utils/debugUtils'
@@ -54,8 +55,6 @@ export function useKnowledgeVectorization() {
   // State
   const documentStates = ref<Map<string, DocumentVectorizationState>>(new Map())
   const selectedDocuments = ref<Set<string>>(new Set())
-  const isPolling = ref(false)
-  const pollInterval = ref<number | null>(null)
   const globalProgress = ref<VectorizationProgress>({
     total: 0,
     completed: 0,
@@ -528,26 +527,39 @@ export function useKnowledgeVectorization() {
 
   // ==================== STATUS POLLING ====================
 
+  // Issue #5191: Back status polling with usePollingJob for auto-cleanup + race protection.
+  type StatusResult = Awaited<ReturnType<typeof getVectorizationStatus>>
+
+  const applyStatusUpdate = (status: StatusResult | null) => {
+    if (!status) return
+    globalProgress.value = {
+      total: status.total_facts || 0,
+      completed: status.vectorized_facts || 0,
+      failed: 0,
+      inProgress: status.pending_vectorization || 0
+    }
+  }
+
+  const fetchStatus = async (): Promise<StatusResult | null> => {
+    const status = await getVectorizationStatus()
+    applyStatusUpdate(status ?? null)
+    return status ?? null
+  }
+
+  // Mirrors the polling job's lifecycle; allows callers to configure intervalMs on each start.
+  const isPolling = ref(false)
+  let statusJob: ReturnType<typeof usePollingJob<StatusResult | null>> | null = null
+
   /**
-   * Poll vectorization status from backend
+   * Poll vectorization status from backend (standalone — one-shot status fetch).
+   * Preserved for direct invocation by consumers that want a single status read.
+   * Does NOT start or drive the polling loop.
    */
   const pollStatus = async () => {
     try {
-      const status = await getVectorizationStatus()
-
-      if (status) {
-        // Update global progress using correct property names
-        globalProgress.value = {
-          total: status.total_facts || 0,
-          completed: status.vectorized_facts || 0,
-          failed: 0, // Not provided by backend, calculate from document states if needed
-          inProgress: status.pending_vectorization || 0
-        }
-
-        // Stop polling if complete
-        if (status.status === 'completed' || status.status === 'idle') {
-          stopPolling()
-        }
+      const status = await fetchStatus()
+      if (status && (status.status === 'completed' || status.status === 'idle')) {
+        stopPolling()
       }
     } catch (error) {
       logger.error('Failed to poll vectorization status:', error)
@@ -555,22 +567,33 @@ export function useKnowledgeVectorization() {
   }
 
   /**
-   * Start polling for status updates
+   * Start polling for status updates.
+   * No-op if already polling (idempotent, preserves legacy contract).
    */
   const startPolling = (intervalMs: number = 2000) => {
     if (isPolling.value) return
 
+    statusJob = usePollingJob<StatusResult | null>(fetchStatus, {
+      intervalMs,
+      maxAttempts: Number.MAX_SAFE_INTEGER, // lifecycle is caller-managed
+      isComplete: (status) =>
+        status?.status === 'completed' || status?.status === 'idle',
+      onDone: () => {
+        isPolling.value = false
+      }
+    })
+
     isPolling.value = true
-    pollInterval.value = window.setInterval(pollStatus, intervalMs)
+    statusJob.start('')
   }
 
   /**
    * Stop polling for status updates
    */
   const stopPolling = () => {
-    if (pollInterval.value) {
-      clearInterval(pollInterval.value)
-      pollInterval.value = null
+    if (statusJob) {
+      statusJob.stop()
+      statusJob = null
     }
     isPolling.value = false
   }
