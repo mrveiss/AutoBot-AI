@@ -168,4 +168,111 @@ describe('useKnowledgeFacts', () => {
       expect(result.success).toBe(true)
     })
   })
+
+  describe('reactive refs + managed actions (#5195)', () => {
+    it('should expose initial ref state as null/false/null', () => {
+      const { searchResults, lastAddedFact, isSearching, isAdding, error } =
+        useKnowledgeFacts()
+
+      expect(searchResults.value).toBe(null)
+      expect(lastAddedFact.value).toBe(null)
+      expect(isSearching.value).toBe(false)
+      expect(isAdding.value).toBe(false)
+      expect(error.value).toBe(null)
+    })
+
+    it('search() should flip isSearching true while in-flight and populate searchResults on success', async () => {
+      const mockResults: SearchResponse = {
+        results: [{ id: '1', fact: 'hit', similarity_score: 0.9 }],
+        total_results: 1,
+      }
+      vi.mocked(apiClient.post).mockResolvedValue(mockResults)
+
+      const { searchResults, isSearching, error, search } = useKnowledgeFacts()
+
+      const promise = search('q')
+      expect(isSearching.value).toBe(true)
+
+      const data = await promise
+      expect(data).toEqual(mockResults)
+      expect(searchResults.value).toEqual(mockResults)
+      expect(isSearching.value).toBe(false)
+      expect(error.value).toBe(null)
+    })
+
+    it('search() should populate error ref and reset isSearching when it throws', async () => {
+      vi.mocked(apiClient.post).mockRejectedValue(new Error('boom'))
+
+      const { searchResults, isSearching, error, search } = useKnowledgeFacts()
+
+      await expect(search('q')).rejects.toThrow('boom')
+      expect(searchResults.value).toBe(null)
+      expect(isSearching.value).toBe(false)
+      expect(error.value).toBeInstanceOf(Error)
+      expect(error.value?.message).toBe('boom')
+    })
+
+    it('runAdvancedSearch() should populate searchResults + state refs', async () => {
+      const mockResults: SearchResponse = { results: [], total_results: 0 }
+      vi.mocked(apiClient.post).mockResolvedValue(mockResults)
+
+      const { searchResults, isSearching, error, runAdvancedSearch } =
+        useKnowledgeFacts()
+
+      const data = await runAdvancedSearch({ query: 'q', mode: 'hybrid' })
+      expect(data).toEqual(mockResults)
+      expect(searchResults.value).toEqual(mockResults)
+      expect(isSearching.value).toBe(false)
+      expect(error.value).toBe(null)
+    })
+
+    it('runAdvancedSearch() should wrap non-Error throw as Error instance', async () => {
+      vi.mocked(apiClient.post).mockRejectedValue('string failure')
+
+      const { error, runAdvancedSearch } = useKnowledgeFacts()
+
+      await expect(runAdvancedSearch({ query: 'q' })).rejects.toBeDefined()
+      expect(error.value).toBeInstanceOf(Error)
+      expect(error.value?.message).toBe('string failure')
+    })
+
+    it('submitFact() should flip isAdding, populate lastAddedFact, clear error on success', async () => {
+      const mockAdd: AddFactResponse = {
+        success: true,
+        fact_id: 'f-1',
+        fact: {
+          id: 'f-1',
+          fact: 'x',
+          category: 'c',
+          created_at: 'now',
+          updated_at: 'now',
+        },
+      }
+      vi.mocked(apiClient.post).mockResolvedValue(mockAdd)
+
+      const { lastAddedFact, isAdding, error, submitFact } = useKnowledgeFacts()
+
+      const promise = submitFact({ content: 'x', category: 'c' })
+      expect(isAdding.value).toBe(true)
+
+      const data = await promise
+      expect(data).toEqual(mockAdd)
+      expect(lastAddedFact.value).toEqual(mockAdd)
+      expect(isAdding.value).toBe(false)
+      expect(error.value).toBe(null)
+    })
+
+    it('submitFact() error should set error ref as Error instance, not raw string', async () => {
+      vi.mocked(apiClient.post).mockRejectedValue(new Error('add fail'))
+
+      const { error, isAdding, submitFact } = useKnowledgeFacts()
+
+      await expect(submitFact({ content: 'x', category: 'c' })).rejects.toThrow(
+        'add fail'
+      )
+      expect(isAdding.value).toBe(false)
+      expect(error.value).toBeInstanceOf(Error)
+      expect(typeof error.value).not.toBe('string')
+    })
+  })
 })
