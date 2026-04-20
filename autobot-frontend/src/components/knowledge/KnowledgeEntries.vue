@@ -610,13 +610,7 @@ const sortEntries = () => {
 }
 
 const toggleSelection = (id: string) => {
-  // Use deselectByKey/select since callers pass IDs, not items.
-  if (selection.selected.value.has(id)) {
-    selection.deselectByKey(id)
-  } else {
-    const item = paginatedEntries.value.find(e => e.id === id)
-    if (item) selection.select(item)
-  }
+  selection.toggleByKey(id)
 }
 
 const toggleSelectAll = () => {

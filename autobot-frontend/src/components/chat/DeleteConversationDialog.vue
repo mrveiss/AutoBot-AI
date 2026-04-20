@@ -312,8 +312,7 @@ watch(() => props.kbFacts, (newFacts) => {
 }, { immediate: true })
 
 const toggleFactSelection = (factId: string) => {
-  const fact = props.kbFacts?.find(f => f.id === factId)
-  if (fact) factSelection.toggle(fact)
+  factSelection.toggleByKey(factId)
 }
 
 const selectAllFacts = () => factSelection.selectAll()

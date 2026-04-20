@@ -33,10 +33,14 @@ export interface UseBatchSelectionReturn<T, Key extends string | number = string
   toggle: (item: T) => void
   /** Select one item (idempotent). */
   select: (item: T) => void
+  /** Select one item by key (idempotent). Use when only the ID is available. */
+  selectByKey: (key: Key) => void
   /** Deselect one item (idempotent). */
   deselect: (item: T) => void
   /** Deselect by key (when only the ID is available). */
   deselectByKey: (key: Key) => void
+  /** Toggle selection by key. Use when only the ID is available. */
+  toggleByKey: (key: Key) => void
   /** Select every item currently in the list. */
   selectAll: () => void
   /** Replace the entire selection with the given keys. */
@@ -121,6 +125,35 @@ export function useBatchSelection<T, Key extends string | number = string | numb
     }
   }
 
+  /**
+   * Select by key directly. Mirror of `deselectByKey` for the common case
+   * where consumers have an ID in hand (from a checkbox change event,
+   * a URL param, a cross-page selection, etc.) and shouldn't have to
+   * reach into the items list just to get an item reference. Idempotent.
+   */
+  function selectByKey(key: Key): void {
+    if (!selected.value.has(key)) {
+      const next = new Set(selected.value)
+      next.add(key)
+      selected.value = next
+    }
+  }
+
+  /**
+   * Toggle by key directly. Mirror of `toggle` for ID-only call sites —
+   * replaces the `items.find(i => keyFn(i) === id)` + `toggle(item)` shim
+   * with one O(1) call.
+   */
+  function toggleByKey(key: Key): void {
+    const next = new Set(selected.value)
+    if (next.has(key)) {
+      next.delete(key)
+    } else {
+      next.add(key)
+    }
+    selected.value = next
+  }
+
   function selectAll(): void {
     selected.value = new Set(currentItems.value.map(keyFn))
   }
@@ -151,8 +184,10 @@ export function useBatchSelection<T, Key extends string | number = string | numb
     someSelected,
     toggle,
     select,
+    selectByKey,
     deselect,
     deselectByKey,
+    toggleByKey,
     selectAll,
     setSelected,
     clear,

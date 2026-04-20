@@ -263,6 +263,72 @@ describe('useBatchSelection', () => {
     })
   })
 
+  describe('selectByKey / toggleByKey', () => {
+    it('selectByKey adds the key without needing the item', () => {
+      const sel = useBatchSelection<Doc, string>(
+        ref([{ id: 'd1', name: 'Doc 1' }]),
+        (d) => d.id,
+      )
+
+      sel.selectByKey('d1')
+      expect(sel.selected.value.has('d1')).toBe(true)
+      expect(sel.selectedCount.value).toBe(1)
+    })
+
+    it('selectByKey is idempotent', () => {
+      const sel = useBatchSelection<string>(ref(['a', 'b']))
+
+      sel.selectByKey('a')
+      sel.selectByKey('a')
+      sel.selectByKey('a')
+      expect(sel.selectedCount.value).toBe(1)
+    })
+
+    it('selectByKey accepts keys not in the items source (cross-page)', () => {
+      const sel = useBatchSelection<string>(ref(['a', 'b']))
+
+      sel.selectByKey('z')
+      expect(sel.selected.value.has('z')).toBe(true)
+    })
+
+    it('toggleByKey flips state on each call', () => {
+      const sel = useBatchSelection<Doc, string>(
+        ref([{ id: 'd1', name: 'Doc 1' }]),
+        (d) => d.id,
+      )
+
+      sel.toggleByKey('d1')
+      expect(sel.isSelected({ id: 'd1', name: 'Doc 1' })).toBe(true)
+      sel.toggleByKey('d1')
+      expect(sel.selected.value.has('d1')).toBe(false)
+      sel.toggleByKey('d1')
+      expect(sel.selected.value.has('d1')).toBe(true)
+    })
+
+    it('toggleByKey works for keys not in the items source', () => {
+      const sel = useBatchSelection<string>(ref(['a', 'b']))
+
+      sel.toggleByKey('ghost')
+      expect(sel.selected.value.has('ghost')).toBe(true)
+      sel.toggleByKey('ghost')
+      expect(sel.selected.value.has('ghost')).toBe(false)
+    })
+
+    it('reactivity fires on selectByKey / toggleByKey mutations', async () => {
+      const sel = useBatchSelection<string>(ref(['a', 'b']))
+      const countSnapshot = computed(() => sel.selectedCount.value)
+
+      expect(countSnapshot.value).toBe(0)
+      sel.selectByKey('a')
+      await nextTick()
+      expect(countSnapshot.value).toBe(1)
+
+      sel.toggleByKey('a')
+      await nextTick()
+      expect(countSnapshot.value).toBe(0)
+    })
+  })
+
   describe('setSelected', () => {
     it('replaces the entire selection with given keys', () => {
       const sel = useBatchSelection<string>(ref(['a', 'b', 'c']))
