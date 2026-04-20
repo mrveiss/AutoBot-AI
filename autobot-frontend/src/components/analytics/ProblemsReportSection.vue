@@ -55,7 +55,7 @@
             @click="toggleProblemType(String(type))"
           >
             <div class="header-info">
-              <i :class="expandedProblemTypes[type] ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+              <i :class="isTypeExpanded(type) ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
               <span class="header-name">{{ formatProblemType(String(type)) }}</span>
               <span class="header-count">({{ typeData.problems.length.toLocaleString() }})</span>
             </div>
@@ -75,7 +75,7 @@
             </div>
           </div>
           <transition name="accordion">
-            <div v-if="expandedProblemTypes[type]" class="accordion-items">
+            <div v-if="isTypeExpanded(type)" class="accordion-items">
               <div
                 v-for="(problem, index) in typeData.problems.slice(0, 20)"
                 :key="index"
@@ -121,8 +121,8 @@
  * Issue #184: Split oversized Vue components
  */
 
-import { ref } from 'vue'
 import { useGroupingMemo } from '@/composables/useComputedMemo'
+import { useExpansion } from '@/composables/useExpansion'
 import EmptyState from '@/components/ui/EmptyState.vue'
 
 interface Problem {
@@ -147,7 +147,8 @@ const emit = defineEmits<{
   export: [format: string]
 }>()
 
-const expandedProblemTypes = ref<Record<string, boolean>>({})
+const typeExpansion = useExpansion<string>()
+const isTypeExpanded = typeExpansion.isExpanded
 
 // Issue #4036: Memoized grouping - avoid recalculating on every render
 const problemsBySeverity = useGroupingMemo(
@@ -190,7 +191,7 @@ const problemsByType = useGroupingMemo(
 )
 
 const toggleProblemType = (type: string) => {
-  expandedProblemTypes.value[type] = !expandedProblemTypes.value[type]
+  typeExpansion.toggle(type)
 }
 
 const formatProblemType = (type: string): string => {

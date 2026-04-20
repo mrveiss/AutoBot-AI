@@ -52,7 +52,7 @@
             @click="toggleDuplicateGroup(String(similarity))"
           >
             <div class="header-info">
-              <i :class="expandedDuplicateGroups[similarity] ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+              <i :class="isGroupExpanded(similarity) ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
               <span class="header-name">{{ formatSimilarityGroup(String(similarity)) }}</span>
               <span class="header-count">({{ group.length }})</span>
             </div>
@@ -63,7 +63,7 @@
             </div>
           </div>
           <transition name="accordion">
-            <div v-if="expandedDuplicateGroups[similarity]" class="accordion-items">
+            <div v-if="isGroupExpanded(similarity)" class="accordion-items">
               <div
                 v-for="(duplicate, index) in group.slice(0, 20)"
                 :key="index"
@@ -109,10 +109,11 @@
  * Issue #184: Split oversized Vue components
  */
 
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { useAggregationMemo } from '@/composables/useComputedMemo'
+import { useExpansion } from '@/composables/useExpansion'
 
 const { t } = useI18n()
 
@@ -132,7 +133,8 @@ const emit = defineEmits<{
   export: [format: 'md' | 'json']
 }>()
 
-const expandedDuplicateGroups = ref<Record<string, boolean>>({})
+const groupExpansion = useExpansion<string>()
+const isGroupExpanded = groupExpansion.isExpanded
 
 const duplicatesBySimilarity = computed(() => {
   const groups: Record<string, Duplicate[]> = { high: [], medium: [], low: [] }
@@ -152,7 +154,7 @@ const totalDuplicateLines = useAggregationMemo(
 )
 
 const toggleDuplicateGroup = (similarity: string) => {
-  expandedDuplicateGroups.value[similarity] = !expandedDuplicateGroups.value[similarity]
+  groupExpansion.toggle(similarity)
 }
 
 const formatSimilarityGroup = (similarity: string): string => {

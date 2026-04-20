@@ -52,7 +52,7 @@
             @click="toggleGroup(String(severity))"
           >
             <div class="header-info">
-              <i :class="expandedGroups[severity] ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+              <i :class="isGroupExpanded(severity) ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
               <span class="header-name">{{ formatSeverityGroup(String(severity)) }}</span>
               <span class="header-count">({{ group.length }})</span>
             </div>
@@ -61,7 +61,7 @@
             </div>
           </div>
           <transition name="accordion">
-            <div v-if="expandedGroups[severity]" class="accordion-items">
+            <div v-if="isGroupExpanded(severity)" class="accordion-items">
               <div
                 v-for="(hc, index) in group.slice(0, 20)"
                 :key="index"
@@ -115,9 +115,10 @@
  * Issue #5277: wire previously-fetched hardcodeAnalysis data into the UI.
  */
 
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import { useExpansion } from '@/composables/useExpansion'
 import type { HardcodedValue } from '@/composables/analytics/analyticsTypes'
 
 const { t } = useI18n()
@@ -131,7 +132,8 @@ const emit = defineEmits<{
   export: [format: 'md' | 'json']
 }>()
 
-const expandedGroups = ref<Record<string, boolean>>({})
+const groupExpansion = useExpansion<string>()
+const isGroupExpanded = groupExpansion.isExpanded
 
 const hardcodesBySeverity = computed(() => {
   const groups: Record<string, HardcodedValue[]> = { high: [], medium: [], low: [] }
@@ -149,7 +151,7 @@ const uniqueTypeCount = computed(
 )
 
 const toggleGroup = (severity: string) => {
-  expandedGroups.value[severity] = !expandedGroups.value[severity]
+  groupExpansion.toggle(severity)
 }
 
 const formatSeverityGroup = (severity: string): string => {

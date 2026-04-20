@@ -54,7 +54,7 @@
             @click="toggleCodeSmellType(String(smellType))"
           >
             <div class="header-info">
-              <i :class="expandedCodeSmellTypes[smellType] ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+              <i :class="isSmellTypeExpanded(smellType) ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
               <span class="header-name">{{ formatCodeSmellType(String(smellType)) }}</span>
               <span class="header-count">({{ group.smells.length.toLocaleString() }})</span>
             </div>
@@ -76,7 +76,7 @@
 
           <!-- Expanded smell items -->
           <transition name="accordion">
-            <div v-if="expandedCodeSmellTypes[smellType]" class="accordion-items">
+            <div v-if="isSmellTypeExpanded(smellType)" class="accordion-items">
               <div
                 v-for="(smell, idx) in group.smells.slice(0, 20)"
                 :key="idx"
@@ -124,8 +124,9 @@
  * Issue #184: Split oversized Vue components
  */
 
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import { useGroupingMemo } from '@/composables/useComputedMemo'
+import { useExpansion } from '@/composables/useExpansion'
 import EmptyState from '@/components/ui/EmptyState.vue'
 
 interface CodeSmell {
@@ -152,7 +153,8 @@ const emit = defineEmits<{
   export: [format: 'md' | 'json']
 }>()
 
-const expandedCodeSmellTypes = ref<Record<string, boolean>>({})
+const smellTypeExpansion = useExpansion<string>()
+const isSmellTypeExpanded = smellTypeExpansion.isExpanded
 
 const severitySummary = computed(() => {
   const counts = { critical: 0, high: 0, medium: 0, low: 0 }
@@ -187,7 +189,7 @@ const smellsByType = useGroupingMemo(
 )
 
 const toggleCodeSmellType = (type: string) => {
-  expandedCodeSmellTypes.value[type] = !expandedCodeSmellTypes.value[type]
+  smellTypeExpansion.toggle(type)
 }
 
 const formatCodeSmellType = (type: string): string => {
