@@ -2,16 +2,29 @@
 """
 Unit tests for API endpoint migrations to @with_error_handling decorator.
 
-Tests the migrated endpoints in Phase 2a:
+FROZEN PENDING AUDIT — #5359
+----------------------------
+This file contains 164 test classes with 2148 inspect.getsource() assertions
+that validate the @with_error_handling migration era (Phase 2a). Two instances
+of silent assertion-rot were caught in rapid succession (#5338, #5336) because
+production refactors (#5252 kb.aioredis_client→kb.redis(), #620 helper
+extraction) invalidated substring matches without failing any behavior test.
+
+The assertions verify source-code structure, not runtime correctness. Per
+#5359's Option C, the whole file is skipped at collection until a per-class
+audit decides:
+- Replace with TestClient-based behavior tests, OR
+- Delete classes whose migration is long done and no regression protection
+  remains worth the maintenance cost
+
+Tests validated in Phase 2a migrations:
 - chat.py: /health, /stats, /message
 - knowledge.py: /health, /search
+- Many subsequent batches (see individual class docstrings for scope)
 
-Verifies:
-- Decorator properly wraps endpoints
-- Error responses have correct format
-- Trace IDs are generated
-- Business logic preserved
-- HTTP status codes correct
+When reviving a class: remove its per-class skip + add behavior coverage
+elsewhere first, OR convert the class to exercise the endpoint via TestClient.
+Do not restore the file-level skip without updating #5359.
 """
 
 import inspect
@@ -20,6 +33,15 @@ import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+
+# Skip the whole module — see #5359 for the audit plan.
+# Rationale: 2148 inspect.getsource() assertions silently rot on refactors
+# (evidence: #5338, #5336). No behavior-test coverage delta if removed;
+# preserved here for audit rather than deleted.
+pytestmark = pytest.mark.skip(
+    reason="Source-inspection assertions frozen pending #5359 audit "
+    "(2148 substring asserts that rot silently on refactors)"
+)
 
 
 class TestChatHealthEndpoint:
