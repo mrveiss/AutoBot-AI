@@ -11,7 +11,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.time_utils import now_utc, utc_timestamp
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -146,7 +146,7 @@ class IncrementalTrainer:
 
     def _fetch_recent_feedback(self, db, time_window_hours: int):
         """Helper for update_from_feedback. Ref: #1088."""
-        since = datetime.utcnow() - timedelta(hours=time_window_hours)
+        since = now_utc() - timedelta(hours=time_window_hours)
         return (
             db.query(CompletionFeedback)
             .filter(

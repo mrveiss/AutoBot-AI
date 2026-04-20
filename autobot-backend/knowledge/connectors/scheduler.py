@@ -12,6 +12,7 @@ Parses simple interval expressions (e.g. "*/15" for every 15 minutes,
 import asyncio
 import logging
 import re
+import time
 from datetime import datetime
 from typing import Dict, Optional
 
@@ -182,7 +183,7 @@ class ConnectorScheduler:
             return
 
         logger.info("Scheduler triggering sync for connector %s", connector_id)
-        started_at = datetime.utcnow()
+        started_at = time.monotonic()
         try:
             result = await connector.sync(incremental=True)
             logger.info(
@@ -196,7 +197,7 @@ class ConnectorScheduler:
                 len(result.errors),
             )
         except Exception as exc:
-            elapsed = (datetime.utcnow() - started_at).total_seconds()
+            elapsed = time.monotonic() - started_at
             logger.error(
                 "Scheduled sync failed: connector=%s elapsed=%.1fs error=%s",
                 connector_id,

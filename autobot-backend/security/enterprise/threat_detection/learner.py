@@ -31,7 +31,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Optional
 
 from autobot_shared.redis_client import get_redis_client
-from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.time_utils import now_utc, utc_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -230,7 +230,7 @@ class ThreatDetectionLearner:
         """
         pruned = 0
         flagged = 0
-        cutoff = datetime.utcnow() - timedelta(days=_INACTIVE_DAYS)
+        cutoff = now_utc() - timedelta(days=_INACTIVE_DAYS)
 
         try:
             pattern_keys = self._redis.keys(_OUTCOME_KEY_PREFIX + "*")
