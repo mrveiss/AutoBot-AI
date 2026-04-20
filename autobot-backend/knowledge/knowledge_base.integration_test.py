@@ -34,7 +34,7 @@ class TestKnowledgeBaseRedisIntegration:
         await kb._ensure_redis_initialized()
 
         # Verify Redis is actually connected
-        if not kb.aioredis_client:
+        if not kb._aioredis_client:
             pytest.skip("Redis not available at 10.0.0.4:6379")
 
         yield kb
@@ -51,7 +51,7 @@ class TestKnowledgeBaseRedisIntegration:
     async def test_redis_connection_established(self, kb):
         """Test that Redis connection is properly established"""
         # Verify connection exists
-        assert kb.aioredis_client is not None
+        assert kb._aioredis_client is not None
         assert kb.redis_manager is not None
 
         # Verify connection works with ping
@@ -321,14 +321,14 @@ class TestKnowledgeBaseRedisIntegration:
     async def test_connection_persistence(self, kb):
         """Test that connections are properly reused and persist across operations"""
         # Get initial connection
-        initial_client = kb.aioredis_client
+        initial_client = kb._aioredis_client
 
         # Perform multiple operations
         for i in range(20):
             await kb.store_fact(f"Persistence test {i}", {"test": "persistence"})
 
         # Verify same connection is being used
-        assert kb.aioredis_client is initial_client
+        assert kb._aioredis_client is initial_client
 
         # Verify connection is still healthy
         assert await kb.redis().ping() is True
@@ -443,7 +443,7 @@ class TestKnowledgeBaseAsyncRedisManagerIntegration:
     async def test_async_redis_manager_initialized(self, kb):
         """Test that AsyncRedisManager is properly initialized"""
         assert kb.redis_manager is not None
-        assert kb.aioredis_client is not None
+        assert kb._aioredis_client is not None
 
     @pytest.mark.asyncio
     async def test_connection_pooling_metrics(self, kb):
@@ -476,7 +476,7 @@ class TestKnowledgeBasePerformanceIntegration:
         kb = KnowledgeBase()
         await kb._ensure_redis_initialized()
 
-        if not kb.aioredis_client:
+        if not kb._aioredis_client:
             pytest.skip("Redis not available")
 
         yield kb

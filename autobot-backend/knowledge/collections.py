@@ -45,7 +45,7 @@ class CollectionsMixin:
 
     # Type hints for attributes from base class
     redis_client: "redis.Redis"
-    aioredis_client: "aioredis.Redis"
+    _aioredis_client: "aioredis.Redis"
 
     # =========================================================================
     # COLLECTION CRUD OPERATIONS (Issue #412)
@@ -93,7 +93,7 @@ class CollectionsMixin:
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Create a new collection (Issue #398: refactored)."""
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -130,7 +130,7 @@ class CollectionsMixin:
         Returns:
             Dict with success status and collection data
         """
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -175,7 +175,7 @@ class CollectionsMixin:
         self, limit: int = 100, offset: int = 0, sort_by: str = "name"
     ) -> Dict[str, Any]:
         """List all collections (Issue #398: refactored)."""
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -230,7 +230,7 @@ class CollectionsMixin:
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Update collection metadata (Issue #398: refactored)."""
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -284,7 +284,7 @@ class CollectionsMixin:
         self, collection_id: str, delete_facts: bool = False
     ) -> Dict[str, Any]:
         """Delete a collection (Issue #398: refactored)."""
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -367,7 +367,7 @@ class CollectionsMixin:
         self, collection_id: str, fact_ids: List[str]
     ) -> Dict[str, Any]:
         """Add facts to a collection (Issue #398: refactored)."""
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -431,7 +431,7 @@ class CollectionsMixin:
         self, collection_id: str, fact_ids: List[str]
     ) -> Dict[str, Any]:
         """Remove facts from a collection (Issue #398: refactored)."""
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -498,7 +498,7 @@ class CollectionsMixin:
         include_content: bool = False,
     ) -> Dict[str, Any]:
         """Get all facts in a collection (Issue #398: refactored)."""
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -556,7 +556,7 @@ class CollectionsMixin:
         Returns:
             Dict with list of collections
         """
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -637,7 +637,7 @@ class CollectionsMixin:
         include_metadata: bool = True,
     ) -> Dict[str, Any]:
         """Export all facts in a collection (Issue #398: refactored)."""
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -714,7 +714,7 @@ class CollectionsMixin:
         self, collection_id: str, confirm: bool = False
     ) -> Dict[str, Any]:
         """Delete all facts in a collection (Issue #398: refactored)."""
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         if not confirm:

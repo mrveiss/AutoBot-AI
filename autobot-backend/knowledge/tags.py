@@ -40,7 +40,7 @@ class TagsMixin:
 
     # Type hints for attributes from base class
     redis_client: "redis.Redis"
-    aioredis_client: "aioredis.Redis"
+    _aioredis_client: "aioredis.Redis"
 
     def _normalize_tags(self, tags: List[str]) -> List[str]:
         """Normalize tags to lowercase and strip whitespace (Issue #398: extracted)."""

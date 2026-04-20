@@ -6,7 +6,7 @@ Covers _init_redis_connections() which uses get_async_redis_client() (#3962).
 Root cause of #3962: the original code called get_redis_client(async_client=True)
 without await.  get_redis_client is a *sync* function that returns the coroutine
 produced by RedisConnectionManager.get_async_client() without awaiting it.
-Storing that coroutine in self.aioredis_client then caused:
+Storing that coroutine in self._aioredis_client then caused:
     AttributeError: 'coroutine' object has no attribute 'ping'
 
 Fix: autobot_shared.redis_client now exposes get_async_redis_client(), a true
@@ -66,7 +66,7 @@ class TestInitRedisConnections:
 
         kb = KnowledgeBase.__new__(KnowledgeBase)
         kb.redis_client = None
-        kb.aioredis_client = None
+        kb._aioredis_client = None
         kb.redis_db = 1
         return kb
 
@@ -79,7 +79,7 @@ class TestInitRedisConnections:
     async def test_stores_real_client_not_coroutine(self, mock_async_redis):
         """
         get_async_redis_client() must resolve to the actual Redis instance.
-        self.aioredis_client must never be a coroutine object. (#3962)
+        self._aioredis_client must never be a coroutine object. (#3962, #5225)
         """
         kb = self._make_kb()
         sync_client = self._make_sync_client()
@@ -90,11 +90,11 @@ class TestInitRedisConnections:
         ):
             await kb._init_redis_connections()
 
-        assert kb.aioredis_client is mock_async_redis, (
-            "aioredis_client should be the Redis instance, not a coroutine"
+        assert kb._aioredis_client is mock_async_redis, (
+            "_aioredis_client should be the Redis instance, not a coroutine"
         )
-        assert not inspect.iscoroutine(kb.aioredis_client), (
-            "aioredis_client must not be a coroutine after _init_redis_connections"
+        assert not inspect.iscoroutine(kb._aioredis_client), (
+            "_aioredis_client must not be a coroutine after _init_redis_connections"
         )
 
     @pytest.mark.asyncio

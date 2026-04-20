@@ -68,12 +68,13 @@ class _FakeKB(FactsMixin):
     def __init__(self, vector_store=None):
         self.vector_store = vector_store
         self.redis_client = MagicMock()
-        self.aioredis_client = AsyncMock()
+        self._aioredis_client = AsyncMock()
 
     def redis(self):
-        """Shim for the KB.redis() public accessor so this fake survives the
-        pending ``aioredis_client`` -> ``_aioredis_client`` rename (#5225)."""
-        return self.aioredis_client
+        """Shim for the KB.redis() public accessor (#5225: attribute renamed
+        from the pre-existing public ``aioredis_client`` to private
+        ``_aioredis_client``)."""
+        return self._aioredis_client
 
     def ensure_initialized(self):
         pass
@@ -233,7 +234,7 @@ class TestStoreFact:
         kb.redis_client.hset = MagicMock()
         kb.redis_client.set = MagicMock()
         kb.redis_client.sadd = MagicMock()
-        kb.aioredis_client.get = AsyncMock(return_value=None)
+        kb._aioredis_client.get = AsyncMock(return_value=None)
         return kb
 
     @pytest.mark.asyncio
@@ -326,7 +327,7 @@ class TestStoreFact:
         kb.redis_client.hset = MagicMock()
         kb.redis_client.set = MagicMock()
         kb.redis_client.sadd = MagicMock()
-        kb.aioredis_client.get = AsyncMock(return_value=None)
+        kb._aioredis_client.get = AsyncMock(return_value=None)
 
         with (
             patch.object(
