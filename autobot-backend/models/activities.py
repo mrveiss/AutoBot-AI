@@ -20,6 +20,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
+from autobot_shared.time_utils import now_utc
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -92,7 +93,7 @@ class TerminalActivityModel(Base):
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=datetime.utcnow,
+        default=now_utc,
         index=True,
     )
 
@@ -169,7 +170,7 @@ class FileActivityModel(Base):
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=datetime.utcnow,
+        default=now_utc,
         index=True,
     )
 
@@ -248,7 +249,7 @@ class BrowserActivityModel(Base):
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=datetime.utcnow,
+        default=now_utc,
         index=True,
     )
 
@@ -328,7 +329,7 @@ class DesktopActivityModel(Base):
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=datetime.utcnow,
+        default=now_utc,
         index=True,
     )
 
@@ -414,7 +415,7 @@ class SecretUsageModel(Base):
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=datetime.utcnow,
+        default=now_utc,
         index=True,
     )
 
