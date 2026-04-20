@@ -88,24 +88,14 @@ export function useBatchSelection<T, Key extends string | number = string | numb
     return selected.value.has(keyFn(item))
   }
 
+  // Item-based methods delegate to their *ByKey primitives so mutation
+  // logic lives in exactly one place (#5331).
   function toggle(item: T): void {
-    const key = keyFn(item)
-    const next = new Set(selected.value)
-    if (next.has(key)) {
-      next.delete(key)
-    } else {
-      next.add(key)
-    }
-    selected.value = next
+    toggleByKey(keyFn(item))
   }
 
   function select(item: T): void {
-    const key = keyFn(item)
-    if (!selected.value.has(key)) {
-      const next = new Set(selected.value)
-      next.add(key)
-      selected.value = next
-    }
+    selectByKey(keyFn(item))
   }
 
   function deselect(item: T): void {
