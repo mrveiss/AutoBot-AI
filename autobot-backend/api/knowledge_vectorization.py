@@ -313,6 +313,11 @@ async def _perform_uncached_batch_check(
     return result
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="check_vectorization_status_batch",
+    error_code_prefix="KNOWLEDGE",
+)
 @router.post("/vectorization_status")
 async def check_vectorization_status_batch(
     request: dict, req: Request, _user: dict = Depends(get_current_user)
@@ -585,6 +590,11 @@ def _build_vectorization_response(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="vectorize_existing_facts",
+    error_code_prefix="KNOWLEDGE",
+)
 @router.post("/vectorize_facts")
 async def vectorize_existing_facts(
     req: Request,

@@ -2620,15 +2620,15 @@ class TestVectorizeExistingFactsEndpoint:
     """Test migrated POST /vectorize_facts endpoint"""
 
     def test_vectorize_existing_facts_has_decorator(self):
-        """Verify FastAPI route decorator is applied"""
+        """Verify @with_error_handling decorator is applied (restored in #5358)"""
         import inspect
 
         from api.knowledge_vectorization import vectorize_existing_facts
 
         source = inspect.getsource(vectorize_existing_facts)
-        # Issue #620 refactor removed @with_error_handling in favor of explicit
-        # HTTPException raises; only the @router.post decorator remains.
-        assert '@router.post("/vectorize_facts")' in source
+        assert "@with_error_handling" in source
+        assert "ErrorCategory.SERVER_ERROR" in source
+        assert 'error_code_prefix="KNOWLEDGE"' in source
 
     def test_vectorize_existing_facts_no_outer_try_catch(self):
         """Verify outer try-catch block was removed"""
