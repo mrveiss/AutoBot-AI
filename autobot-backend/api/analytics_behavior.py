@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import utc_timestamp
 from services.user_behavior_analytics import UserEvent, get_behavior_analytics
 
 logger = logging.getLogger(__name__)
@@ -222,7 +223,7 @@ async def get_feature_comparison(
     comparison.sort(key=lambda x: x["views"], reverse=True)
 
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_timestamp(),
         "comparison": comparison,
         "total_features": len(comparison),
     }
@@ -423,7 +424,7 @@ async def get_behavior_summary(
     )
 
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_timestamp(),
         "engagement": engagement.get("metrics", {}),
         "feature_popularity": engagement.get("feature_popularity", []),
         "most_popular_feature": engagement.get("most_popular_feature"),

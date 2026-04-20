@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import utc_timestamp
 from services.llm_cost_tracker import MODEL_PRICING, get_cost_tracker
 
 logger = logging.getLogger(__name__)
@@ -169,7 +170,7 @@ async def get_cost_by_model(
     )
 
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_timestamp(),
         "models": [
             {
                 "model": model,
@@ -468,7 +469,7 @@ async def set_budget_alert(
         "period": alert.period,
         "notify_at_percent": alert.notify_at_percent,
         "enabled": alert.enabled,
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": utc_timestamp(),
     }
 
     import json
@@ -684,7 +685,7 @@ async def get_cost_by_agent_all(
         )
 
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_timestamp(),
         "agents": result,
         "total_agents": len(result),
     }

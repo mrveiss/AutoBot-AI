@@ -20,6 +20,7 @@ from redis.exceptions import RedisError
 
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import utc_timestamp
 from background_vectorization import get_background_vectorizer
 from exceptions import InternalError
 from knowledge.pipeline.base import PipelineContext
@@ -1691,7 +1692,7 @@ async def _reindex_with_context_task(
     _reindex_state["is_running"] = True
     _reindex_state["enriched_count"] = 0
     _reindex_state["total_count"] = 0
-    _reindex_state["started_at"] = datetime.utcnow().isoformat()
+    _reindex_state["started_at"] = utc_timestamp()
     _reindex_state["completed_at"] = None
     _reindex_state["error"] = None
     try:
@@ -1701,7 +1702,7 @@ async def _reindex_with_context_task(
         logger.exception("Reindex task failed")
     finally:
         _reindex_state["is_running"] = False
-        _reindex_state["completed_at"] = datetime.utcnow().isoformat()
+        _reindex_state["completed_at"] = utc_timestamp()
 
 
 async def _run_reindex(collection_name: str, batch_size: int) -> None:

@@ -38,6 +38,7 @@ from pydantic import BaseModel, Field, validator
 from auth_middleware import check_admin_permission
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import utc_timestamp
 from type_defs.common import Metadata
 from utils.request_utils import generate_request_id
 
@@ -1541,7 +1542,7 @@ async def memory_health_check(
     try:
         health_status = {
             "status": "healthy",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_timestamp(),
             "components": {
                 "memory_graph": (
                     "healthy" if memory_graph.initialized else "unavailable"
@@ -1573,7 +1574,7 @@ async def memory_health_check(
             content={
                 "status": "unhealthy",
                 "error": "Internal server error",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
             },
         )
 

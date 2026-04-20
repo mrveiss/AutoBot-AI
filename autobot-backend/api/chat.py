@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import utc_timestamp
 from constants.threshold_constants import CategoryDefaults, TimingConstants
 
 # Import dependencies and utilities - Using available dependencies
@@ -475,7 +476,7 @@ async def _store_and_log_user_message(
         "id": user_message_id,
         "content": message.content,
         "role": message.role,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_timestamp(),
         "metadata": message.metadata,
         "session_id": session_id,
     }
@@ -497,7 +498,7 @@ async def _store_and_log_user_message(
                 "message_id": user_message_id,
                 "author_id": author_id,
                 "role": message.role,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
             },
         )
     except Exception:
@@ -649,7 +650,7 @@ async def _store_and_log_ai_response(
         "id": ai_message_id,
         "content": ai_response.get("content", ""),
         "role": "assistant",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_timestamp(),
         "metadata": ai_response.get("metadata", {}),
         "session_id": session_id,
     }
@@ -714,7 +715,7 @@ async def process_chat_message(
         "role": "assistant",
         "session_id": session_id,
         "message_id": ai_message_id,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_timestamp(),
         "metadata": ai_response.get("metadata", {}),
     }
 
@@ -741,7 +742,7 @@ async def _generate_llm_stream(
                     "type": "chunk",
                     "content": chunk.get("content", ""),
                     "session_id": session_id,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
                 yield f"data: {json.dumps(chunk_data)}\n\n"
         else:
@@ -757,7 +758,7 @@ async def _generate_llm_stream(
         error_data = {
             "type": "error",
             "content": "Error generating response",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_timestamp(),
         }
         yield f"data: {json.dumps(error_data)}\n\n"
 
@@ -985,7 +986,7 @@ async def chat_health_check(
 
     health_status = {
         "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_timestamp(),
         "components": {
             "chat_history_manager": chat_history_status,
             "llm_service": llm_status,
@@ -1529,7 +1530,7 @@ async def _store_enhanced_user_message(
         "id": user_message_id,
         "content": message.content,
         "role": message.role,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_timestamp(),
         "metadata": {
             **(message.metadata or {}),
             "ai_stack_enabled": message.use_ai_stack,
@@ -1714,7 +1715,7 @@ async def _store_enhanced_ai_response(
         "id": ai_message_id,
         "content": ai_response.get("content", ""),
         "role": "assistant",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_timestamp(),
         "metadata": ai_response.get("metadata", {}),
         "session_id": session_id,
     }
@@ -1786,7 +1787,7 @@ async def _execute_enhanced_chat_pipeline(
         "role": "assistant",
         "session_id": session_id,
         "message_id": ai_message_id,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_timestamp(),
         "metadata": ai_response.get("metadata", {}),
         "knowledge_sources": knowledge_sources if message.include_sources else None,
     }
@@ -1861,7 +1862,7 @@ async def _stream_ai_stack_response(
                     "type": "chunk",
                     "content": chunk,
                     "session_id": session_id,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             )
             await asyncio.sleep(TimingConstants.STREAMING_CHUNK_DELAY)
@@ -1881,7 +1882,7 @@ async def _stream_ai_stack_response(
             {
                 "type": "error",
                 "content": "Error generating enhanced response",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
             }
         )
 
@@ -1897,7 +1898,7 @@ def _stream_enhanced_fallback_response(session_id: str):
             "type": "chunk",
             "content": fallback_msg,
             "session_id": session_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_timestamp(),
         }
     )
 
@@ -1933,7 +1934,7 @@ async def _generate_enhanced_stream(
             {
                 "type": "error",
                 "content": "Error in enhanced streaming",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
             }
         )
 
@@ -2066,7 +2067,7 @@ async def enhanced_chat_health_check(
     try:
         health_status = {
             "status": "healthy",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_timestamp(),
             "components": {},
         }
 
@@ -2098,7 +2099,7 @@ async def enhanced_chat_health_check(
             content={
                 "status": "unhealthy",
                 "error": "Internal server error",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
             },
         )
 

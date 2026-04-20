@@ -25,6 +25,7 @@ from pydantic import BaseModel
 
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import utc_timestamp
 from services.llm_cost_tracker import get_cost_tracker
 
 
@@ -117,7 +118,7 @@ async def get_usage_by_user_all(
     users = await tracker.get_all_user_costs()
 
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_timestamp(),
         "users": users,
         "total_users": len(users),
     }

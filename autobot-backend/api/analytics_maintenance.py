@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import utc_timestamp
 from services.analytics_service import (
     MaintenancePriority,
     ResourceType,
@@ -123,7 +124,7 @@ async def get_maintenance_recommendations(
     recommendations = await service.get_predictive_maintenance()
 
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_timestamp(),
         "total_recommendations": len(recommendations),
         "by_priority": {
             "critical": sum(
@@ -204,7 +205,7 @@ async def get_maintenance_summary(
     ]
 
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_timestamp(),
         "summary": {
             "total_items": len(recommendations),
             "requires_immediate_action": len(critical_items),
@@ -266,7 +267,7 @@ async def get_resource_optimizations(
     )
 
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_timestamp(),
         "total_recommendations": len(optimizations),
         "potential_savings": {
             "cost_usd": round(total_cost_savings, 2),
@@ -337,7 +338,7 @@ async def get_quick_wins(
     ]
 
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_timestamp(),
         "total_quick_wins": len(quick_wins),
         "estimated_savings": sum(
             o.expected_savings.get("cost_usd", 0) for o in quick_wins
@@ -394,7 +395,7 @@ async def get_health_status(
     dashboard = await service.get_unified_dashboard(7)  # Last 7 days for health
 
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_timestamp(),
         "health": dashboard["health"],
         "indicators": {
             "cost_trend": dashboard["cost"]["trend"],
@@ -547,7 +548,7 @@ async def get_insights(
     insights.sort(key=lambda x: priority_order.get(x["priority"], 4))
 
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_timestamp(),
         "total_insights": len(insights),
         "insights": insights[:10],  # Top 10 insights
     }
@@ -578,7 +579,7 @@ async def get_trends_analysis(
     )
 
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_timestamp(),
         "period_days": days,
         "cost_trends": {
             "direction": cost_trends.get("trend", "stable"),
