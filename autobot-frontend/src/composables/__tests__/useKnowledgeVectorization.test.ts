@@ -33,10 +33,6 @@ vi.mock('@/utils/ApiClient', () => ({
   }
 }))
 
-// Mock API response helpers
-vi.mock('@/utils/apiResponseHelpers', () => ({
-  parseApiResponse: vi.fn((response) => response.json())
-}))
 
 describe('useKnowledgeVectorization', () => {
   let composable: ReturnType<typeof useKnowledgeVectorization>
@@ -191,17 +187,13 @@ describe('useKnowledgeVectorization', () => {
   describe('Batch Status Fetching', () => {
     it('should fetch batch status and update cache', async () => {
       const apiClient = await import('@/utils/ApiClient')
-      const mockResponse = {
-        json: vi.fn().mockResolvedValue({
+      apiClient.default.post = vi.fn().mockResolvedValue({
           statuses: {
             doc_1: { vectorized: true },
             doc_2: { vectorized: false },
             doc_3: { vectorized: true }
           }
         })
-      }
-
-      apiClient.default.post = vi.fn().mockResolvedValue(mockResponse)
 
       await composable.fetchBatchStatus(['doc_1', 'doc_2', 'doc_3'])
 
@@ -230,10 +222,7 @@ describe('useKnowledgeVectorization', () => {
 
     it('should batch requests in chunks of 1000', async () => {
       const apiClient = await import('@/utils/ApiClient')
-      const mockResponse = {
-        json: vi.fn().mockResolvedValue({ statuses: {} })
-      }
-      apiClient.default.post = vi.fn().mockResolvedValue(mockResponse)
+      apiClient.default.post = vi.fn().mockResolvedValue({ statuses: {} })
 
       // Create 2500 document IDs (should require 3 batches)
       const docIds = Array.from({ length: 2500 }, (_, i) => `doc_${i}`)
@@ -252,16 +241,12 @@ describe('useKnowledgeVectorization', () => {
   describe('Request Deduplication (Issue #4006)', () => {
     it('should deduplicate identical batch requests within TTL', async () => {
       const apiClient = await import('@/utils/ApiClient')
-      const mockResponse = {
-        json: vi.fn().mockResolvedValue({
+      apiClient.default.post = vi.fn().mockResolvedValue({
           statuses: {
             doc_1: { vectorized: true },
             doc_2: { vectorized: false }
           }
         })
-      }
-
-      apiClient.default.post = vi.fn().mockResolvedValue(mockResponse)
 
       // Make first request
       const docIds = ['doc_1', 'doc_2']
@@ -276,17 +261,13 @@ describe('useKnowledgeVectorization', () => {
 
     it('should deduplicate requests with different order but same IDs', async () => {
       const apiClient = await import('@/utils/ApiClient')
-      const mockResponse = {
-        json: vi.fn().mockResolvedValue({
+      apiClient.default.post = vi.fn().mockResolvedValue({
           statuses: {
             doc_1: { vectorized: true },
             doc_2: { vectorized: false },
             doc_3: { vectorized: true }
           }
         })
-      }
-
-      apiClient.default.post = vi.fn().mockResolvedValue(mockResponse)
 
       // First request: [doc_1, doc_2, doc_3]
       await composable.fetchBatchStatus(['doc_1', 'doc_2', 'doc_3'])
@@ -301,17 +282,13 @@ describe('useKnowledgeVectorization', () => {
 
     it('should make new request for different batch IDs', async () => {
       const apiClient = await import('@/utils/ApiClient')
-      const mockResponse = {
-        json: vi.fn().mockResolvedValue({
+      apiClient.default.post = vi.fn().mockResolvedValue({
           statuses: {
             doc_1: { vectorized: true },
             doc_2: { vectorized: false },
             doc_3: { vectorized: true }
           }
         })
-      }
-
-      apiClient.default.post = vi.fn().mockResolvedValue(mockResponse)
 
       // First request
       await composable.fetchBatchStatus(['doc_1', 'doc_2'])
@@ -325,22 +302,22 @@ describe('useKnowledgeVectorization', () => {
 
     it('should clear request cache on cleanup', async () => {
       const apiClient = await import('@/utils/ApiClient')
-      const mockResponse = {
-        json: vi.fn().mockResolvedValue({
+      apiClient.default.post = vi.fn().mockResolvedValue({
           statuses: {
             doc_1: { vectorized: true }
           }
         })
-      }
-
-      apiClient.default.post = vi.fn().mockResolvedValue(mockResponse)
 
       // Make a request to populate cache
       await composable.fetchBatchStatus(['doc_1'])
 
       // Clear mocks
       vi.clearAllMocks()
-      apiClient.default.post = vi.fn().mockResolvedValue(mockResponse)
+      apiClient.default.post = vi.fn().mockResolvedValue({
+        statuses: {
+          doc_1: { vectorized: true }
+        }
+      })
 
       // Cleanup should clear the cache
       composable.cleanup()
@@ -354,16 +331,12 @@ describe('useKnowledgeVectorization', () => {
 
     it('should handle concurrent requests to same batch', async () => {
       const apiClient = await import('@/utils/ApiClient')
-      const mockResponse = {
-        json: vi.fn().mockResolvedValue({
+      apiClient.default.post = vi.fn().mockResolvedValue({
           statuses: {
             doc_1: { vectorized: true },
             doc_2: { vectorized: false }
           }
         })
-      }
-
-      apiClient.default.post = vi.fn().mockResolvedValue(mockResponse)
 
       // Make concurrent requests for the same batch
       const docIds = ['doc_1', 'doc_2']
@@ -485,23 +458,15 @@ describe('useKnowledgeVectorization', () => {
       const apiClient = await import('@/utils/ApiClient')
 
       // Mock vectorize start
-      const mockStartResponse = {
-        json: vi.fn().mockResolvedValue({
+      // Mock job completion
+      apiClient.default.post = vi.fn().mockResolvedValue({
           status: 'success',
           job_id: 'job_123'
         })
-      }
-
-      // Mock job completion
-      const mockJobResponse = {
-        json: vi.fn().mockResolvedValue({
+      apiClient.default.get = vi.fn().mockResolvedValue({
           status: 'success',
           job: { status: 'completed', error: null }
         })
-      }
-
-      apiClient.default.post = vi.fn().mockResolvedValue(mockStartResponse)
-      apiClient.default.get = vi.fn().mockResolvedValue(mockJobResponse)
 
       const success = await composable.vectorizeDocument('doc_123')
 
@@ -512,14 +477,10 @@ describe('useKnowledgeVectorization', () => {
     it('should handle vectorization failure', async () => {
       const apiClient = await import('@/utils/ApiClient')
 
-      const mockResponse = {
-        json: vi.fn().mockResolvedValue({
+      apiClient.default.post = vi.fn().mockResolvedValue({
           status: 'error',
           message: 'Vectorization failed'
         })
-      }
-
-      apiClient.default.post = vi.fn().mockResolvedValue(mockResponse)
 
       const success = await composable.vectorizeDocument('doc_123')
 
@@ -533,17 +494,13 @@ describe('useKnowledgeVectorization', () => {
       // Fix (#2641): vectorizeBatch first calls _tryBatchEndpoint which expects
       // data.results array from POST /api/knowledge_base/vectorize_documents.
       // Mock the batch endpoint response format correctly.
-      const mockBatchResponse = {
-        json: vi.fn().mockResolvedValue({
+      apiClient.default.post = vi.fn().mockResolvedValue({
           results: [
             { id: 'doc_1', status: 'success' },
             { id: 'doc_2', status: 'success' },
             { id: 'doc_3', status: 'success' }
           ]
         })
-      }
-
-      apiClient.default.post = vi.fn().mockResolvedValue(mockBatchResponse)
 
       const result = await composable.vectorizeBatch(['doc_1', 'doc_2', 'doc_3'])
 
@@ -556,16 +513,12 @@ describe('useKnowledgeVectorization', () => {
       const apiClient = await import('@/utils/ApiClient')
 
       // Mock batch endpoint response for vectorizeSelected -> vectorizeBatch
-      const mockBatchResponse = {
-        json: vi.fn().mockResolvedValue({
+      apiClient.default.post = vi.fn().mockResolvedValue({
           results: [
             { id: 'doc_1', status: 'success' },
             { id: 'doc_2', status: 'success' }
           ]
         })
-      }
-
-      apiClient.default.post = vi.fn().mockResolvedValue(mockBatchResponse)
 
       await composable.vectorizeSelected()
 
@@ -614,14 +567,10 @@ describe('useKnowledgeVectorization', () => {
 
     it('should handle malformed API responses', async () => {
       const apiClient = await import('@/utils/ApiClient')
-      const mockResponse = {
-        json: vi.fn().mockResolvedValue({
+      apiClient.default.post = vi.fn().mockResolvedValue({
           // Missing expected fields
           invalid: 'response'
         })
-      }
-
-      apiClient.default.post = vi.fn().mockResolvedValue(mockResponse)
 
       await composable.fetchDocumentStatus('doc_123')
 
@@ -637,20 +586,12 @@ describe('useKnowledgeVectorization', () => {
       try {
         const apiClient = await import('@/utils/ApiClient')
 
-        const mockStartResponse = {
-          json: vi.fn().mockResolvedValue({ status: 'success', job_id: 'job_timeout' })
-        }
-
         // Mock job that never completes
-        const mockJobResponse = {
-          json: vi.fn().mockResolvedValue({
+        apiClient.default.post = vi.fn().mockResolvedValue({ status: 'success', job_id: 'job_timeout' })
+        apiClient.default.get = vi.fn().mockResolvedValue({
             status: 'success',
             job: { status: 'in_progress', error: null }
           })
-        }
-
-        apiClient.default.post = vi.fn().mockResolvedValue(mockStartResponse)
-        apiClient.default.get = vi.fn().mockResolvedValue(mockJobResponse)
 
         // Start vectorization (will enter polling loop)
         const promise = composable.vectorizeDocument('doc_timeout')
