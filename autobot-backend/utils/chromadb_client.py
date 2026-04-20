@@ -53,6 +53,7 @@ __all__ = [
     "get_async_chromadb_client",
     "get_all_paginated",
     "get_backend_client",
+    "get_async_default_client",
     "AsyncChromaClient",
     "AsyncChromaCollection",
     "wrap_collection_async",
@@ -439,3 +440,26 @@ def get_backend_client(
         anonymized_telemetry=anonymized_telemetry,
     )
     return ChromaDBClient(raw)
+
+
+async def get_async_default_client(
+    db_path: str = "",
+    allow_reset: bool = False,
+    anonymized_telemetry: bool = False,
+) -> Any:
+    """Return an async ``AsyncBaseClient`` wrapping the ChromaDB client.
+
+    Issue #5316: opt-in async seam. Mirrors ``get_backend_client`` but
+    returns an ``AsyncBaseClient`` (see ``knowledge.backends.async_base``)
+    for callers running in async contexts. Existing async callers keep
+    using ``get_async_chromadb_client`` unchanged.
+    """
+    # Lazy import to keep the backends package optional at import time.
+    from knowledge.backends.async_chromadb_adapter import AsyncChromaDBClient
+
+    raw = await get_async_chromadb_client(
+        db_path=db_path,
+        allow_reset=allow_reset,
+        anonymized_telemetry=anonymized_telemetry,
+    )
+    return AsyncChromaDBClient(raw)
