@@ -131,7 +131,7 @@ async def get_fact_access_log(
 
     try:
         # Verify user is the owner
-        fact_data = await kb.aioredis_client.hget(f"fact:{fact_id}", "metadata")
+        fact_data = await kb.redis().hget(f"fact:{fact_id}", "metadata")
         if not fact_data:
             raise HTTPException(status_code=404, detail="Fact not found")
 

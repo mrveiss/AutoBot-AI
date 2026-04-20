@@ -375,7 +375,7 @@ async def _fetch_batch_data(kb, batch: List[str], skip_existing: bool) -> tuple:
         Tuple of (all_fact_data, fact_ids, vector_exists_map)
     """
     # Batch fetch all fact data using pipeline - eliminates N+1 queries
-    async with kb.aioredis_client.pipeline() as pipe:
+    async with kb.redis().pipeline() as pipe:
         for fact_key in batch:
             await pipe.hgetall(fact_key)
         all_fact_data = await pipe.execute()
@@ -388,7 +388,7 @@ async def _fetch_batch_data(kb, batch: List[str], skip_existing: bool) -> tuple:
     # If skip_existing, also batch check vector existence
     vector_exists = {}
     if skip_existing:
-        async with kb.aioredis_client.pipeline() as pipe:
+        async with kb.redis().pipeline() as pipe:
             for fact_id in fact_ids:
                 await pipe.exists(f"llama_index/vector_{fact_id}")
             exists_results = await pipe.execute()
