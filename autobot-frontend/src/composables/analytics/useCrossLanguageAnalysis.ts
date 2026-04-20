@@ -8,12 +8,16 @@
  * Cross-language consistency analysis: summary, details, full scan,
  * DTO mismatches, API contract mismatches, validation duplications,
  * and semantic pattern matches.
+ *
  * Extracted from useSpecializedAnalysis (Issue #2372).
+ * Migrated from hand-rolled fetchWithAuth to useFetchEndpoint (#5253)
+ * using the `onResponse`, POST body factory, and path-parameterised
+ * per-call patterns established in #5208 + #5235.
  */
 
 import { ref, reactive } from 'vue'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import appConfig from '@/config/AppConfig.js'
+import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
+import { runTimed } from '@/composables/api/useTimedNotify'
 import { createLogger } from '@/utils/debugUtils'
 import type {
   UseCodeIntelAnalysisDeps,
@@ -25,6 +29,12 @@ import type {
 } from './codeIntelTypes'
 
 const logger = createLogger('useCrossLanguageAnalysis')
+
+interface CrossLanguageSummaryRaw {
+  status: string
+  summary?: Record<string, unknown>
+  message?: string
+}
 
 function _mapCrossLanguageSummary(
   summary: Record<string, unknown>,
@@ -57,30 +67,38 @@ function _mapCrossLanguageSummary(
   }
 }
 
+/**
+ * Fetch a single cross-language section (dto-mismatches / api-mismatches /
+ * validation-duplications / semantic-matches). Each section is a GET with
+ * a per-call path, so the endpoint instance is built inside the wrapper
+ * (same pattern as useWorkflowTemplates.fetchTemplateDetail).
+ *
+ * Returns `[]` on any failure — the caller is best-effort and logs once
+ * for the whole details batch rather than per-section.
+ */
 async function _fetchCrossLanguageSection(
-  backendUrl: string,
-  endpoint: string,
+  endpointPath: string,
   withSourceId: (url: string) => string,
   extractFn: (data: Record<string, unknown>) => unknown[],
 ): Promise<unknown[]> {
-  const response = await fetchWithAuth(
-    withSourceId(`${backendUrl}/api/analytics/codebase/cross-language/${endpoint}`),
+  const ep = useFetchEndpoint<Record<string, unknown>, unknown[]>(
+    {
+      path: `/api/analytics/codebase/cross-language/${endpointPath}`,
+      scopeToSource: true,
+      pickData: (data) =>
+        data.status === 'success' ? extractFn(data) : [],
+      label: `Cross-language ${endpointPath}`,
+    },
+    { withSourceId },
   )
-  if (!response.ok) return []
-  const data = await response.json()
-  if (data.status !== 'success') return []
-  return extractFn(data)
+  await ep.load()
+  return ep.data.value ?? []
 }
 
-export function useCrossLanguageAnalysis(
-  deps: UseCodeIntelAnalysisDeps,
-) {
+export function useCrossLanguageAnalysis(deps: UseCodeIntelAnalysisDeps) {
   const { withSourceId, t, notify } = deps
 
-  const crossLanguageAnalysis =
-    ref<CrossLanguageAnalysisResult | null>(null)
-  const loadingCrossLanguage = ref(false)
-  const crossLanguageError = ref('')
+  const crossLanguageAnalysis = ref<CrossLanguageAnalysisResult | null>(null)
   const expandedCrossLanguageGroups = reactive({
     dtoMismatches: false,
     apiMismatches: false,
@@ -88,166 +106,171 @@ export function useCrossLanguageAnalysis(
     semanticMatches: false,
   })
 
+  // --- Summary endpoint (#5253) --------------------------------------------
+
+  const summaryEndpoint = useFetchEndpoint<
+    CrossLanguageSummaryRaw,
+    Record<string, unknown>
+  >(
+    {
+      path: '/api/analytics/codebase/cross-language/summary',
+      scopeToSource: true,
+      pickData: (r) =>
+        r.status === 'success' && r.summary ? r.summary : null,
+      onNoData: () => {
+        crossLanguageAnalysis.value = null
+        logger.info('Cross-language analysis: No cached data available')
+      },
+      onResponse: async (response) => {
+        const text = await response.text().catch(() => '')
+        return `Status ${response.status}${text ? `: ${text}` : ''}`
+      },
+      label: 'Cross-language summary',
+    },
+    { withSourceId },
+  )
+
+  const loadingCrossLanguage = summaryEndpoint.loading
+  const crossLanguageError = summaryEndpoint.error
+
   const loadCrossLanguageDetails = async () => {
     if (!crossLanguageAnalysis.value) return
     try {
-      const backendUrl = await appConfig.getServiceUrl('backend')
       const analysis = crossLanguageAnalysis.value
 
       analysis.dto_mismatches = (await _fetchCrossLanguageSection(
-        backendUrl, 'dto-mismatches', withSourceId,
+        'dto-mismatches',
+        withSourceId,
         (d) => (d.mismatches as unknown[]) || [],
       )) as DTOMismatch[]
+
       analysis.api_contract_mismatches = (await _fetchCrossLanguageSection(
-        backendUrl, 'api-mismatches', withSourceId,
+        'api-mismatches',
+        withSourceId,
         (d) => {
-          const orphaned = ((d.orphaned as unknown[]) || []).map(
-            (m) => ({ ...(m as Record<string, unknown>), mismatch_type: 'orphaned_endpoint' }),
-          )
-          const missing = ((d.missing as unknown[]) || []).map(
-            (m) => ({ ...(m as Record<string, unknown>), mismatch_type: 'missing_endpoint' }),
-          )
+          const orphaned = ((d.orphaned as unknown[]) || []).map((m) => ({
+            ...(m as Record<string, unknown>),
+            mismatch_type: 'orphaned_endpoint',
+          }))
+          const missing = ((d.missing as unknown[]) || []).map((m) => ({
+            ...(m as Record<string, unknown>),
+            mismatch_type: 'missing_endpoint',
+          }))
           return [...missing, ...orphaned]
         },
       )) as APIContractMismatch[]
+
       analysis.validation_duplications = (await _fetchCrossLanguageSection(
-        backendUrl, 'validation-duplications', withSourceId,
+        'validation-duplications',
+        withSourceId,
         (d) => (d.duplications as unknown[]) || [],
       )) as ValidationDuplication[]
+
       analysis.pattern_matches = (await _fetchCrossLanguageSection(
-        backendUrl, 'semantic-matches?min_similarity=0.7&limit=20', withSourceId,
+        'semantic-matches?min_similarity=0.7&limit=20',
+        withSourceId,
         (d) => (d.matches as unknown[]) || [],
       )) as PatternMatch[]
     } catch (error: unknown) {
-      logger.warn(
-        'Failed to load some cross-language details:',
-        error,
-      )
+      logger.warn('Failed to load some cross-language details:', error)
     }
   }
 
-  function _handleCrossLanguageSuccess(
-    summary: Record<string, unknown>,
-    responseTime: number,
-  ) {
-    crossLanguageAnalysis.value = _mapCrossLanguageSummary(
-      summary,
-    ) as CrossLanguageAnalysisResult
-    const issues = summary.issues as Record<string, number> | undefined
-    notify(
-      t('analytics.codebase.notify.crossLanguageResult', {
-        total: issues?.total || 0,
-        critical: issues?.critical || 0,
-        high: issues?.high || 0,
-        time: responseTime,
-      }),
-      'success',
-    )
-  }
-
-  const getCrossLanguageAnalysis = async () => {
-    loadingCrossLanguage.value = true
-    crossLanguageError.value = ''
-    const startTime = Date.now()
-    try {
-      const backendUrl = await appConfig.getServiceUrl('backend')
-      const response = await fetchWithAuth(
-        withSourceId(
-          `${backendUrl}/api/analytics/codebase/cross-language/summary`,
-        ),
-      )
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`Status ${response.status}: ${errorText}`)
-      }
-      const data = await response.json()
-      if (data.status === 'success' && data.summary) {
-        _handleCrossLanguageSuccess(data.summary, Date.now() - startTime)
-        await loadCrossLanguageDetails()
-      } else if (data.status === 'empty') {
-        crossLanguageAnalysis.value = null
-        logger.info('Cross-language analysis: No cached data available')
-      } else {
-        throw new Error('Invalid response format')
-      }
-    } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error)
-      logger.error('Cross-language analysis failed:', error)
-      crossLanguageError.value = errorMessage
-      notify(
-        t('analytics.codebase.notify.crossLanguageFailed', {
-          error: errorMessage,
-          time: Date.now() - startTime,
-        }),
-        'error',
-      )
-    } finally {
-      loadingCrossLanguage.value = false
-    }
-  }
-
-  const runCrossLanguageAnalysis = async () => {
-    loadingCrossLanguage.value = true
-    crossLanguageError.value = ''
-    const startTime = Date.now()
-    try {
-      const backendUrl = await appConfig.getServiceUrl('backend')
-      const response = await fetchWithAuth(
-        withSourceId(
-          `${backendUrl}/api/analytics/codebase/cross-language/analyze`,
-        ),
-        {
-          method: 'POST',
-          headers: {
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            use_llm: true,
-            use_cache: true,
-          }),
-        },
-      )
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`Status ${response.status}: ${errorText}`)
-      }
-      const data = await response.json()
-      const responseTime = Date.now() - startTime
-      if (data.status === 'success') {
+  const getCrossLanguageAnalysis = () =>
+    runTimed(
+      async () => {
+        await summaryEndpoint.load()
+        if (summaryEndpoint.error.value) {
+          throw new Error(summaryEndpoint.error.value)
+        }
+        if (summaryEndpoint.data.value) {
+          crossLanguageAnalysis.value = _mapCrossLanguageSummary(
+            summaryEndpoint.data.value,
+          ) as CrossLanguageAnalysisResult
+        }
+      },
+      async (_result, responseTime) => {
+        if (!summaryEndpoint.data.value) return // no-data path already logged
+        const issues = summaryEndpoint.data.value.issues as
+          | Record<string, number>
+          | undefined
         notify(
-          t(
-            'analytics.codebase.notify.crossLanguageScanComplete',
-            { time: responseTime },
-          ),
+          t('analytics.codebase.notify.crossLanguageResult', {
+            total: issues?.total || 0,
+            critical: issues?.critical || 0,
+            high: issues?.high || 0,
+            time: responseTime,
+          }),
+          'success',
+        )
+        await loadCrossLanguageDetails()
+      },
+      (message, responseTime) => {
+        notify(
+          t('analytics.codebase.notify.crossLanguageFailed', {
+            error: message,
+            time: responseTime,
+          }),
+          'error',
+        )
+      },
+    )
+
+  // --- Run full analysis (POST) --------------------------------------------
+
+  interface AnalyzeScanRaw {
+    status: string
+    message?: string
+  }
+
+  const runAnalyzeEndpoint = useFetchEndpoint<AnalyzeScanRaw, true>(
+    {
+      path: '/api/analytics/codebase/cross-language/analyze',
+      method: 'POST',
+      scopeToSource: true,
+      body: () => ({ use_llm: true, use_cache: true }),
+      pickData: (r) => (r.status === 'success' ? true : null),
+      onResponse: async (response) => {
+        const text = await response.text().catch(() => '')
+        return `Status ${response.status}${text ? `: ${text}` : ''}`
+      },
+      label: 'Cross-language analyze',
+    },
+    { withSourceId },
+  )
+
+  const runCrossLanguageAnalysis = () =>
+    runTimed(
+      async () => {
+        await runAnalyzeEndpoint.load()
+        if (runAnalyzeEndpoint.error.value) {
+          throw new Error(runAnalyzeEndpoint.error.value)
+        }
+        if (!runAnalyzeEndpoint.data.value) {
+          throw new Error('Analysis failed')
+        }
+      },
+      async (_result, responseTime) => {
+        notify(
+          t('analytics.codebase.notify.crossLanguageScanComplete', {
+            time: responseTime,
+          }),
           'success',
         )
         await getCrossLanguageAnalysis()
-      } else {
-        throw new Error(data.message || 'Analysis failed')
-      }
-    } catch (error: unknown) {
-      const responseTime = Date.now() - startTime
-      const errorMessage =
-        error instanceof Error ? error.message : String(error)
-      logger.error('Cross-language analysis scan failed:', error)
-      crossLanguageError.value = errorMessage
-      notify(
-        t(
-          'analytics.codebase.notify.crossLanguageScanFailed',
-          { error: errorMessage, time: responseTime },
-        ),
-        'error',
-      )
-    } finally {
-      loadingCrossLanguage.value = false
-    }
-  }
+      },
+      (message, responseTime) => {
+        notify(
+          t('analytics.codebase.notify.crossLanguageScanFailed', {
+            error: message,
+            time: responseTime,
+          }),
+          'error',
+        )
+      },
+    )
 
-  const getCrossLanguageSeverityClass = (
-    severity: string,
-  ): string => {
+  const getCrossLanguageSeverityClass = (severity: string): string => {
     switch (severity?.toLowerCase()) {
       case 'critical':
         return 'critical'
