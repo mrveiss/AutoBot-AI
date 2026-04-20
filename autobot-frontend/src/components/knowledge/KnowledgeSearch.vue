@@ -245,7 +245,8 @@ import { useI18n } from 'vue-i18n'
 import { knowledgeRepository, type RagSearchResponse } from '@/models/repositories'
 import type { SearchResult } from '@/stores/useKnowledgeStore'
 import type { KnowledgeCategoryItem } from '@/types/knowledgeBase'
-import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
+import { useKnowledgeCategories } from '@/composables/knowledge/useKnowledgeCategories'
+import { formatCategoryName as formatCategory } from '@/utils/formatHelpers'
 import { useDebouncedFn } from '@/composables/useDebounce'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import KBSearchResultPanel from './KBSearchResultPanel.vue'
@@ -258,8 +259,8 @@ const { t } = useI18n()
 // Issue #3969: Use shared singleton — never instantiate a second KnowledgeRepository here
 const knowledgeRepo = knowledgeRepository
 
-// Knowledge base composable for category fetching
-const { fetchCategories, formatCategory } = useKnowledgeBase()
+// Domain composable (migrated from useKnowledgeBase BC shim in #5193)
+const { fetchCategories } = useKnowledgeCategories()
 
 // State
 const searchQuery = ref('')

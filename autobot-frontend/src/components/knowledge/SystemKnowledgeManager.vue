@@ -187,7 +187,9 @@
 <script>
 import { ref, onMounted, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useKnowledgeBase } from '@/composables/useKnowledgeBase';
+import { useMachineKnowledge } from '@/composables/knowledge/useMachineKnowledge';
+import { useManPages } from '@/composables/knowledge/useManPages';
+import { useKnowledgeJobs } from '@/composables/knowledge/useKnowledgeJobs';
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore';  // NEW: Use shared store
 import { useAsyncOperation } from '@/composables/useAsyncOperation';
 import { usePollingJob } from '@/composables/usePollingJob';
@@ -209,16 +211,23 @@ export default {
   setup() {
     const { t } = useI18n();
 
-    // Use the shared composable
+    // Domain composables (migrated from useKnowledgeBase BC shim in #5193).
+    // Note: `formatKey` was destructured from the shim but never defined on
+    // it — dropping it preserves the prior `undefined` behavior and will be
+    // addressed separately (template at line ~152 calls formatKey(key)).
     const {
       initializeMachineKnowledge: initializeMachineKnowledgeAPI,
       refreshSystemKnowledge: refreshSystemKnowledgeAPI,
-      pollJobStatus: pollJobStatusAPI,  // NEW: Job status polling
+    } = useMachineKnowledge();
+    const {
       populateManPages: populateManPagesAPI,
       populateAutoBotDocs: populateAutoBotDocsAPI,
+    } = useManPages();
+    const {
+      pollJobStatus: pollJobStatusAPI,  // NEW: Job status polling
       vectorizeFacts: vectorizeFactsAPI,
-      formatKey
-    } = useKnowledgeBase();
+    } = useKnowledgeJobs();
+    const formatKey = undefined;
 
     // NEW: Use shared Pinia store instead of local state
     const knowledgeStore = useKnowledgeStore();
