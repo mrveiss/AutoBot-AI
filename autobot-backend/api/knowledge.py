@@ -420,9 +420,16 @@ async def get_main_categories(
     )
 
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
-    has_redis = kb.aioredis_client is not None if kb else False
+    redis_client = None
+    if kb is not None:
+        try:
+            redis_client = kb.redis()
+        except RuntimeError:
+            redis_client = None
     logger.info(
-        "get_main_categories - kb: %s, has_redis: %s", kb is not None, has_redis
+        "get_main_categories - kb: %s, has_redis: %s",
+        kb is not None,
+        redis_client is not None,
     )
 
     category_counts = {
@@ -431,7 +438,7 @@ async def get_main_categories(
         KnowledgeCategory.USER_KNOWLEDGE: 0,
     }
 
-    if kb and kb.aioredis_client:
+    if redis_client is not None:
         logger.info("Attempting to get cached category counts...")
         try:
             cache_keys = _get_category_cache_keys(KnowledgeCategory)
