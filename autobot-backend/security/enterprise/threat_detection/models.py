@@ -140,7 +140,7 @@ class EventHistory:
         self, user_id: str, source_ip: str, window_minutes: int
     ) -> int:
         """Count recent authentication failures"""
-        cutoff_time = datetime.utcnow() - timedelta(minutes=window_minutes)
+        cutoff_time = now_utc() - timedelta(minutes=window_minutes)
         count = 0
 
         for event in reversed(self.events):
@@ -165,7 +165,7 @@ class EventHistory:
         self, user_id: str, source_ip: str, window_minutes: int
     ) -> int:
         """Count recent API requests"""
-        cutoff_time = datetime.utcnow() - timedelta(minutes=window_minutes)
+        cutoff_time = now_utc() - timedelta(minutes=window_minutes)
         count = 0
 
         for event in reversed(self.events):
@@ -185,7 +185,7 @@ class EventHistory:
         self, user_id: str, action: str, hours: int = 1
     ) -> int:
         """Count recent action frequency for a user"""
-        cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+        cutoff_time = now_utc() - timedelta(hours=hours)
         count = 0
 
         for event in reversed(self.events):
@@ -203,7 +203,7 @@ class EventHistory:
         self, user_id: str, endpoint: str, hours: int = 24
     ) -> int:
         """Get recent endpoint usage count"""
-        cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+        cutoff_time = now_utc() - timedelta(hours=hours)
         count = 0
 
         for event in reversed(self.events):

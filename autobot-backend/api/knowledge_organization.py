@@ -361,7 +361,9 @@ async def cleanup_organization_knowledge(
     Raises:
         403: If user is not an organization admin
     """
-    from datetime import datetime, timedelta
+    from datetime import timedelta
+
+    from autobot_shared.time_utils import now_utc
 
     org_id = current_user.get("org_id")
     if not org_id:
@@ -383,7 +385,7 @@ async def cleanup_organization_knowledge(
             organization_id=org_id
         )
 
-        cutoff_date = datetime.utcnow() - timedelta(days=retention_days)
+        cutoff_date = now_utc() - timedelta(days=retention_days)
         deleted_count = await _delete_expired_facts(kb, fact_ids, cutoff_date)
 
         logger.info(

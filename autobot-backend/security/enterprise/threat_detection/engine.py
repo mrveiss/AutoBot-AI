@@ -25,7 +25,7 @@ from sklearn.cluster import DBSCAN
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
-from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 
@@ -646,7 +646,7 @@ class ThreatDetectionEngine:
         """Clean up old data and maintain performance"""
         try:
             # Clean up old user sessions
-            cutoff_time = datetime.utcnow() - timedelta(hours=24)
+            cutoff_time = now_utc() - timedelta(hours=24)
             expired_sessions = []
 
             for session_id, session_data in self.user_sessions.items():
